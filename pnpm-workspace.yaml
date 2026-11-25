@@ -93,3 +93,5 @@ packages:
   - 'packages/eSignature/Providers/*'
   - 'packages/WorkQueue/*'
   - 'packages/Diagnostics/*'
+  - 'packages/Tours/*'
+  - 'packages/Tours/examples/*'

@@ -3,7 +3,8 @@ type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
     | CaptureDataSnapshotCommand
-    | ComposeEmailCommand;
+    | ComposeEmailCommand
+    | StartTourCommand;
 
 interface OpenResourceCommand {
     type: 'open:resource';  // Command type identifier
@@ -46,7 +47,10 @@ interface CaptureDataSnapshotCommand {
     followupMessage?: string;  // Optional follow-up text the host should pass back to the agent after
 }
 
-type AutomaticCommand = RefreshDataCommand | ShowNotificationCommand;
+type AutomaticCommand =
+    | RefreshDataCommand
+    | ShowNotificationCommand
+    | StartTourCommand;
 
 interface RefreshDataCommand {
     type: 'refresh:data';  // Command type identifier
@@ -77,6 +81,16 @@ interface ComposeEmailCommand {
     subject?: string;  // Subject line.
     body?: string;  // Body text. PLAIN TEXT only — see the note on this interface.
     artifactId?: string;  // Optional artifact holding the full draft.
+}
+
+interface StartTourCommand {
+    type: 'start:tour';  // Command type identifier
+    TourKey: string;  // Unique stable TourKey of the Guided Tour to start
+    Mode?: 'Visual' | 'Chat' | 'Voice';  // Guidance mode for the tour session
+    StartAtStepKey?: string;  // Optional StepKey to start the tour at
+    Label?: string;  // Optional button label shown to the user when rendered as an actionable command
+    label?: string;  // Optional lowercase label alias for uniform actionable-command rendering
+    icon?: string;  // Optional Font Awesome icon class to display on the button
 }
 
 interface MailtoURLResult {

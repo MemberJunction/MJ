@@ -1,0 +1,10 @@
+{
+  "entity": "MJ: Learning Paths",
+  "filePattern": "**/.*.json",
+  "relatedEntities": {
+    "MJ: Learning Path Tours": {
+      "entity": "MJ: Learning Path Tours",
+      "foreignKey": "LearningPathID"
+    }
+  }
+}

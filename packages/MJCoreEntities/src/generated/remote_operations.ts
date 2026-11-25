@@ -1927,6 +1927,117 @@ export interface TemplateRunOutput {
     executionTimeMs?: number;
 }
 
+/** Input payload for `Tours.ClaimGuestRuns` (attaches prior guest visitor tour runs to the newly authenticated MJ user). */
+export interface ToursClaimGuestRunsInput {
+  VisitorKey: string;
+  SurfaceKey?: string;
+}
+
+/** Output of `Tours.ClaimGuestRuns`. */
+export interface ToursClaimGuestRunsOutput {
+  Success: boolean;
+  ClaimedRunCount: number;
+  ErrorMessage?: string;
+}
+
+/** Input payload for `Tours.EvaluatePredicates` (batched server-side predicates evaluated as the current user or guest). */
+export interface ToursEvaluatePredicatesInput {
+  Predicates: Array<{
+    RequestKey: string;
+    PredicateType: string;
+    EntityName?: string;
+    ExtraFilter?: string;
+    QueryName?: string;
+    CategoryPath?: string;
+    QueryParams?: Record<string, string | number | boolean | null>;
+    AuthorizationName?: string;
+    CustomConfig?: Record<string, unknown>;
+  }>;
+}
+
+/** Output of `Tours.EvaluatePredicates`. */
+export interface ToursEvaluatePredicatesOutput {
+  Success: boolean;
+  Results: Record<string, {
+    Satisfied: boolean;
+    RowCount?: number;
+    ErrorMessage?: string;
+  }>;
+  ErrorMessage?: string;
+}
+
+/** Input payload for `Tours.GetSurfaceTours` (fetches published tours and visitor progress for an external embed surface). */
+export interface ToursGetSurfaceToursInput {
+  SurfaceKey: string;
+  CurrentUrl?: string;
+  Locale?: string;
+}
+
+/** Output of `Tours.GetSurfaceTours`. */
+export interface ToursGetSurfaceToursOutput {
+  Success: boolean;
+  SurfaceId?: string;
+  SurfaceKey?: string;
+  ConversationWidgetInstanceId?: string;
+  ToursJson: string;
+  RunsJson: string;
+  ErrorMessage?: string;
+}
+
+/** Input payload for `Tours.PublishTour` (creates an immutable `TourVersion` snapshot and activates the tour in Tour Studio). */
+export interface ToursPublishTourInput {
+  TourId: string;
+  ChangeSummary?: string;
+  Activate?: boolean;
+}
+
+/** Output of `Tours.PublishTour`. */
+export interface ToursPublishTourOutput {
+  Success: boolean;
+  TourId?: string;
+  TourVersionId?: string;
+  VersionNumber?: number;
+  UnchangedSnapshot?: boolean;
+  ErrorMessage?: string;
+}
+
+/** Input payload for `Tours.RecordEvents` (batched run & step telemetry for MJ users and surface guests). */
+export interface ToursRecordEventsInput {
+  Events: Array<{
+    RunClientId?: string;
+    RunId?: string;
+    TourId?: string;
+    TourKey: string;
+    TourVersionId?: string;
+    EventType: 'RunStarted' | 'StepEntered' | 'StepCompleted' | 'RunUpdated' | 'RunCompleted' | 'RunDismissed' | 'RunSnoozed' | 'GoalMet';
+    Timestamp: string;
+    GuideMode?: 'Visual' | 'Chat' | 'Voice';
+    DirectorType?: string;
+    LaunchSource?: 'Launcher' | 'Omnibar' | 'Agent' | 'Trigger' | 'Notification' | 'Link' | 'Learning Path' | 'Empty State';
+    CurrentStepKey?: string;
+    StepSequence?: number;
+    StepOutcome?: 'Completed' | 'Skipped' | 'Already Known' | 'Done By Agent' | 'Anchor Missing' | 'Dismissed';
+    AnchorResolution?: 'Registered' | 'Semantic' | 'Role' | 'Selector' | 'None' | 'Failed';
+    QuestionCountDelta?: number;
+    PathTakenJson?: string;
+    SnoozedUntil?: string;
+    IsHoldout?: boolean;
+    ConversationId?: string;
+    AgentSessionId?: string;
+    LaunchedByAgentRunId?: string;
+    DetailsJson?: string;
+  }>;
+}
+
+/** Output of `Tours.RecordEvents`. */
+export interface ToursRecordEventsOutput {
+  Success: boolean;
+  ProcessedCount: number;
+  RunIdsByClientId?: Record<string, string>;
+  AutoPausedTourKeys?: string[];
+  ErrorMessage?: string;
+}
+
 /** Input for `VideoStudio.SetupHealth`. */
 export interface VideoStudioSetupHealthInput {
     /** Optional timeout in milliseconds for the render worker health probe (default 10000, clamped to 1000..30000). */
@@ -3438,6 +3549,86 @@ export class TemplateRunOperation extends BaseRemotableOperation<TemplateRunInpu
     public readonly RequiredScope = "template:execute";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_d32222acd1f0921a";
+}
+
+// ============================================================
+// Tours.ClaimGuestRuns — Claim Guest Guided Tour Runs
+// ============================================================
+/**
+ * Claim Guest Guided Tour Runs
+ * Re-attributes guest VisitorKey tour runs to the authenticated MJ user on sign-in (RV4) so completed guest tours are not re-offered and goal-lift attribution is preserved.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Tours.ClaimGuestRuns'. This generated base provides the typed contract only (client-safe).
+ */
+export class ToursClaimGuestRunsOperation extends BaseRemotableOperation<ToursClaimGuestRunsInput, ToursClaimGuestRunsOutput> {
+    public readonly OperationKey = "Tours.ClaimGuestRuns";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_6ad851c75458908a";
+}
+
+// ============================================================
+// Tours.EvaluatePredicates — Evaluate Guided Tour Server Predicates
+// ============================================================
+/**
+ * Evaluate Guided Tour Server Predicates
+ * Evaluates batched server-side completion, prerequisite, and eligibility predicates (HasRecords, QueryReturnsRows, AuthorizationHeld, and custom BaseTourServerPredicate plugins) under the caller's permissions.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Tours.EvaluatePredicates'. This generated base provides the typed contract only (client-safe).
+ */
+export class ToursEvaluatePredicatesOperation extends BaseRemotableOperation<ToursEvaluatePredicatesInput, ToursEvaluatePredicatesOutput> {
+    public readonly OperationKey = "Tours.EvaluatePredicates";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_67f46d5937ac24f5";
+}
+
+// ============================================================
+// Tours.GetSurfaceTours — Get Surface Guided Tours
+// ============================================================
+/**
+ * Get Surface Guided Tours
+ * Returns published tour snapshots and prior visitor runs assigned to an external MJ: Tour Surfaces embed surface.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Tours.GetSurfaceTours'. This generated base provides the typed contract only (client-safe).
+ */
+export class ToursGetSurfaceToursOperation extends BaseRemotableOperation<ToursGetSurfaceToursInput, ToursGetSurfaceToursOutput> {
+    public readonly OperationKey = "Tours.GetSurfaceTours";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_de9ace9265a3c89d";
+}
+
+// ============================================================
+// Tours.PublishTour — Publish Guided Tour Version
+// ============================================================
+/**
+ * Publish Guided Tour Version
+ * Validates a tour's steps and pathway graph, snapshots an immutable MJ: Tour Versions record when canonical content changed, updates CurrentVersionID, and optionally sets Status to Active.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Tours.PublishTour'. This generated base provides the typed contract only (client-safe).
+ */
+export class ToursPublishTourOperation extends BaseRemotableOperation<ToursPublishTourInput, ToursPublishTourOutput> {
+    public readonly OperationKey = "Tours.PublishTour";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_fe64541fe9b79f0b";
+}
+
+// ============================================================
+// Tours.RecordEvents — Record Guided Tour Events
+// ============================================================
+/**
+ * Record Guided Tour Events
+ * Records batched Guided Tour run and step telemetry events for authenticated MJ users and isolated surface guests, deriving guest SurfaceID and VisitorKey strictly from verified JWT claims.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Tours.RecordEvents'. This generated base provides the typed contract only (client-safe).
+ */
+export class ToursRecordEventsOperation extends BaseRemotableOperation<ToursRecordEventsInput, ToursRecordEventsOutput> {
+    public readonly OperationKey = "Tours.RecordEvents";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_4bb7e1b1bd0d7450";
 }
 
 // ============================================================

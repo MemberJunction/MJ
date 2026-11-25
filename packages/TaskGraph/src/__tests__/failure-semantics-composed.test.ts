@@ -21,7 +21,7 @@ import {
     ConfirmSkipSeeds,
     type TaskGraphEdge,
     type TaskGraphNode,
-} from '@memberjunction/ai-core-plus';
+} from '@memberjunction/graph';
 import { DecideGate, type FailureSemantics } from '../condition-gate';
 
 /** Runs the dispatcher's ordinary-edge pipeline for one pass, as `loadGraphState` composes it. */

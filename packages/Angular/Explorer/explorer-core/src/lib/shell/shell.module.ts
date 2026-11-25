@@ -21,6 +21,8 @@ import { SearchModule } from '@memberjunction/ng-search';
 import { MJDiagnosticsModule } from '@memberjunction/ng-diagnostics';
 // Marks the main content area as a panel a call can share on its own ("This panel").
 import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
+import { MJ_TOUR_HOST, MJToursModule } from '@memberjunction/ng-tours';
+import { ExplorerTourHost } from '../tours/explorer-tour-host.service';
 
 @NgModule({
   declarations: [
@@ -47,10 +49,12 @@ import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
     RecordsHubPillComponent,
     RecordBarComponent,
     RecordSwitcherSheetComponent,
-    SharePanelDirective
+    SharePanelDirective,
+    MJToursModule
   ],
   providers: [
-    CommandPaletteService
+    CommandPaletteService,
+    { provide: MJ_TOUR_HOST, useExisting: ExplorerTourHost }
   ],
   exports: [
     ShellComponent,

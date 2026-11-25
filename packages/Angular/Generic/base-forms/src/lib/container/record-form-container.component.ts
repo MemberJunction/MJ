@@ -51,6 +51,13 @@ import {
   FormRecordCommentsCoordinatorService,
   type FormCommentAnchorNavigationRequest,
 } from '../comments/form-record-comments-coordinator.service';
+import {
+  type FormAnchorHostAdapter,
+  type FormAnchorTargetRequest,
+  NavigateToFormAnchor,
+  RegisterFormAnchorContainer,
+  UnregisterFormAnchorContainer,
+} from './form-anchor-navigator';
 
 // Ensure built-in toolbar actions are never tree-shaken before ClassFactory registration
 const _BUILTIN_TOOLBAR_ACTIONS = [RecordLinksToolbarAction, RecordCommentsToolbarAction];
@@ -176,6 +183,9 @@ export interface VariantPickerItem {
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css'],
+  host: {
+    '[attr.data-mj-form-entity]': 'EffectiveEntityInfo?.Name ?? null',
+  },
   // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator +
   // FormSectionIndicatorCoordinator scoped per-container. `providers` (not
   // viewProviders) so projected related-entity grids and slot-mounted panels
@@ -930,6 +940,15 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.CommentsCoordinator.NavigateToAnchor$.pipe(takeUntil(this.destroy$)).subscribe((req) => {
       this.OnNavigateToCommentAnchor(req);
     });
+    if (this.host?.nativeElement) {
+      const container = this;
+      RegisterFormAnchorContainer(this.host.nativeElement, {
+        get EntityName(): string | null {
+          return container.EffectiveEntityInfo?.Name ?? null;
+        },
+        NavigateToTourAnchor: (req) => container.NavigateToTourAnchor(req),
+      });
+    }
   }
 
   /**
@@ -969,6 +988,9 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   ngOnDestroy(): void {
     this.destroyed = true;
+    if (this.host?.nativeElement) {
+      UnregisterFormAnchorContainer(this.host.nativeElement);
+    }
     this.stopWatchingPhoneViewport?.();
     this.stopWatchingPhoneViewport = null;
     this.destroyToolbarActions();
@@ -3302,85 +3324,45 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
    * scrolls the element into view, and applies a brief highlight pulse.
    */
   public OnNavigateToCommentAnchor(req: FormCommentAnchorNavigationRequest): void {
-    const hostEl = this.host?.nativeElement;
-    if (!hostEl) return;
-
-    let targetSectionKey = (req.SectionKey ?? '').trim();
-    if (!targetSectionKey && req.AnchorType === 'Section' && req.AnchorKey) {
-      targetSectionKey = req.AnchorKey.trim();
+    let anchorType: FormAnchorTargetRequest['AnchorType'] | null = null;
+    if (req.AnchorType === 'Field') {
+      anchorType = 'Field';
+    } else if (req.AnchorType === 'Section' || (req.AnchorType === 'Contribution' && req.SectionKey)) {
+      anchorType = 'Section';
+    } else if (req.GroupKey) {
+      anchorType = 'RailGroup';
     }
-    if (!targetSectionKey && req.AnchorType === 'Field' && req.AnchorKey) {
-      const fKeyLower = req.AnchorKey.trim().toLowerCase();
-      for (const panel of this.allChromePanels()) {
-        if (panel.ClaimableFieldNames.some((n) => n.toLowerCase() === fKeyLower)) {
-          targetSectionKey = panel.SectionKey;
-          break;
-        }
-      }
-      if (!targetSectionKey) {
-        const escapedField = req.AnchorKey.trim().replace(/["\\]/g, '\\$&');
-        const fieldEl = hostEl.querySelector(`[data-field-name="${escapedField}"]`);
-        const closestPanel = fieldEl?.closest('mj-collapsible-panel[data-section-key]');
-        if (closestPanel) {
-          targetSectionKey = closestPanel.getAttribute('data-section-key')?.trim() ?? '';
-        }
-      }
-    }
+    if (!anchorType) return;
 
-    // 1. Activate left-nav rail group if applicable
-    if (this.ChromeLayout === 'left-nav') {
-      const groupKey = (req.GroupKey ?? '').trim();
-      const firstClassMatch = this.ChromeFirstClassGroups.find(
-        (g) =>
-          (groupKey && g.Key.toLowerCase() === groupKey.toLowerCase()) ||
-          (targetSectionKey && g.SectionKeys.some((k) => k.toLowerCase() === targetSectionKey.toLowerCase()))
-      );
-      if (firstClassMatch) {
-        this.OnChromeGroupActivate(firstClassMatch.Key);
-      } else {
-        const moreMatch = this.ChromeMoreItems.find(
-          (g) =>
-            (groupKey && g.Key.toLowerCase() === groupKey.toLowerCase()) ||
-            (targetSectionKey && g.SectionKeys.some((k) => k.toLowerCase() === targetSectionKey.toLowerCase()))
-        );
-        if (moreMatch) {
-          if (!this.MoreExpanded) {
-            this.chrome.ToggleMoreFolder();
-          }
-          this.OnChromeGroupActivate(moreMatch.Key);
-        }
-      }
-    }
+    void this.NavigateToTourAnchor({
+      AnchorType: anchorType,
+      AnchorKey: req.AnchorKey ?? req.GroupKey ?? '',
+      SectionKey: req.SectionKey ?? undefined,
+      GroupKey: req.GroupKey ?? undefined,
+      Pulse: true,
+    });
+  }
 
-    // 2. Expand target collapsible section if collapsed
-    if (targetSectionKey) {
-      this.Fc?.SetSectionExpanded?.(targetSectionKey, true);
-    }
-
-    this.cdr.detectChanges();
-
-    // 3. Scroll and pulse target element
-    setTimeout(() => {
-      if (this.destroyed) return;
-      let targetEl: HTMLElement | null = null;
-      if (req.AnchorType === 'Field' && req.AnchorKey) {
-        const escaped = req.AnchorKey.trim().replace(/["\\]/g, '\\$&');
-        targetEl = hostEl.querySelector(`mj-form-field[data-field-name="${escaped}"] .mj-forms-field`)
-          ?? hostEl.querySelector(`[data-field-name="${escaped}"]`);
-      } else if (targetSectionKey) {
-        const escaped = targetSectionKey.replace(/["\\]/g, '\\$&');
-        targetEl = hostEl.querySelector(`mj-collapsible-panel[data-section-key="${escaped}"] .mj-forms-panel`)
-          ?? hostEl.querySelector(`[data-section-key="${escaped}"]`);
-      }
-
-      if (targetEl) {
-        targetEl.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
-        targetEl.classList.add('mj-forms-comment-anchor-pulse');
-        setTimeout(() => {
-          targetEl?.classList.remove('mj-forms-comment-anchor-pulse');
-        }, 1800);
-      }
-    }, 60);
+  /**
+   * Navigates the form to the field, section, left-nav rail group, or toolbar action targeted
+   * by a Guided Tour step, returning the settled target element so spotlight cutouts and Floating UI
+   * popovers align after rail-switching, section expansion, and scrolling settle.
+   */
+  public NavigateToTourAnchor(req: FormAnchorTargetRequest): Promise<HTMLElement | null> {
+    const adapter: FormAnchorHostAdapter = {
+      HostElement: this.host?.nativeElement ?? null,
+      IsDestroyed: this.destroyed,
+      ChromeLayout: this.ChromeLayout,
+      MoreExpanded: this.MoreExpanded,
+      FirstClassGroups: this.ChromeFirstClassGroups,
+      MoreItems: this.ChromeMoreItems,
+      GetAllChromePanels: () => this.allChromePanels(),
+      ActivateChromeGroup: (groupKey: string) => this.OnChromeGroupActivate(groupKey),
+      ToggleMoreFolder: () => this.chrome.ToggleMoreFolder(),
+      ExpandSection: (sectionKey: string) => this.Fc?.SetSectionExpanded?.(sectionKey, true),
+      DetectChanges: () => this.cdr.detectChanges(),
+    };
+    return NavigateToFormAnchor(adapter, req);
   }
 
   OnLinksSummaryChanged(summary: FormAgentLinksSummary): void {

@@ -1,0 +1,58 @@
+[
+  {
+    "fields": {
+      "FeatureKey": "Tours.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Tours",
+      "DisplayName": "Enable Guided Tours",
+      "Description": "Master kill switch controlling Guided Tours offering, launcher UI, and playback across Explorer and MJ-connected apps.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "E9F2F141-196F-49C4-A17C-BC15DED83A70"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Tours.InterruptionBudget",
+      "Value": "{\"maxOffersPerSession\":1,\"maxBeaconsVisible\":2,\"cooldownHoursAfterDismiss\":24,\"quietWhenDirtyForm\":true,\"quietWhenModalOpen\":true,\"quietDuringRealtimeVoice\":true}",
+      "ValueType": "json",
+      "Category": "Tours",
+      "DisplayName": "Guided Tours Interruption Budget",
+      "Description": "JSON policy controlling proactive tour offer and beacon frequency, post-dismiss cooldown, and quiet-state guards.",
+      "DefaultValue": "{\"maxOffersPerSession\":1,\"maxBeaconsVisible\":2,\"cooldownHoursAfterDismiss\":24,\"quietWhenDirtyForm\":true,\"quietWhenModalOpen\":true,\"quietDuringRealtimeVoice\":true}"
+    },
+    "primaryKey": {
+      "ID": "9057ED15-BD1C-4846-95D1-7E35371ABD64"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Tours.DefaultGuideAgentID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Tours",
+      "DisplayName": "Default Tour Guide Agent ID",
+      "Description": "Optional AIAgent ID used when guiding tours in Chat or Voice mode if neither the tour nor its owning Application specifies a GuideAgentID (falls back to Sage when empty).",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "9A21406B-9033-4916-9DD6-06ACA8D7DBBB"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Tours.RunStepRetentionDays",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Tours",
+      "DisplayName": "Tour Run Step Retention Days",
+      "Description": "Optional number of days to retain granular MJ: Tour Run Steps rows before pruning. Empty keeps telemetry indefinitely.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "53F990C8-47D3-414A-AB0A-10F901741048"
+    }
+  }
+]

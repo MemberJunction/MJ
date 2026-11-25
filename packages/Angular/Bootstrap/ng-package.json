@@ -5,6 +5,7 @@
     "entryFile": "src/public-api.ts"
   },
   "allowedNonPeerDependencies": [
+    "@angular/elements",
     "@memberjunction/actions-base",
     "@memberjunction/ai-core-plus",
     "@memberjunction/ai-engine-base",
@@ -15,6 +16,7 @@
     "@memberjunction/core-entities",
     "@memberjunction/entity-communications-base",
     "@memberjunction/feature-pipelines",
+    "@memberjunction/graph",
     "@memberjunction/graphql-dataprovider",
     "@memberjunction/ng-artifacts",
     "@memberjunction/ng-auth-services",
@@ -30,8 +32,11 @@
     "@memberjunction/ng-explorer-settings",
     "@memberjunction/ng-file-storage",
     "@memberjunction/ng-shared",
+    "@memberjunction/ng-shared-generic",
+    "@memberjunction/ng-tours",
     "@memberjunction/rubrics-base",
     "@memberjunction/tag-engine-base",
+    "@memberjunction/tours-runtime",
     "rxjs"
   ]
 }

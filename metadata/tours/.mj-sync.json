@@ -1,0 +1,22 @@
+{
+  "entity": "MJ: Tours",
+  "filePattern": "**/.*.json",
+  "relatedEntities": {
+    "MJ: Tour Steps": {
+      "entity": "MJ: Tour Steps",
+      "foreignKey": "TourID"
+    },
+    "MJ: Tour Step Paths": {
+      "entity": "MJ: Tour Step Paths",
+      "foreignKey": "TourID"
+    },
+    "MJ: Tour Prerequisites": {
+      "entity": "MJ: Tour Prerequisites",
+      "foreignKey": "TourID"
+    },
+    "MJ: Tour Triggers": {
+      "entity": "MJ: Tour Triggers",
+      "foreignKey": "TourID"
+    }
+  }
+}

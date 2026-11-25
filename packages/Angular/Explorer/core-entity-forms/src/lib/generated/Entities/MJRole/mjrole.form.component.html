@@ -559,6 +559,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tour Overrides Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTourOverrides"
+        SectionName="Tour Overrides"
+        Icon="fa fa-sliders-h"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTourOverrides')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Overrides','RoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tour Overrides','RoleID')"
+                [AllowLoad]="IsSectionExpanded('mJTourOverrides')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTourOverrides', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tour Surfaces Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTourSurfaces"
+        SectionName="Tour Surfaces"
+        Icon="fa fa-desktop"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTourSurfaces')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Surfaces','GuestRoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tour Surfaces','GuestRoleID')"
+                [AllowLoad]="IsSectionExpanded('mJTourSurfaces')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTourSurfaces', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

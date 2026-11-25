@@ -61,6 +61,19 @@ export interface AgentContextUpdate {
 type AgentClientTools = NonNullable<AgentContextUpdate['AgentClientTools']>;
 
 /**
+ * Event emitted when a resource component finishes loading inside a tab.
+ * Consumed by Guided Tours (`Navigation` completion checks and `Prepare` waits)
+ * and other observers that need per-tab load readiness beyond the first-load shell gate.
+ */
+export interface ResourceLoadedEvent {
+  TabId: string;
+  ResourceType: string;
+  DriverClass?: string;
+  RecordId?: string;
+  AppId?: string;
+}
+
+/**
  * True when `a` and `b` show in the same tab: they are the same component, or both have the same tab id,
  * as the child dashboard of a resource wrapper does.
  */
@@ -109,6 +122,10 @@ export class NavigationService implements OnDestroy {
   private queryParamChanged$ = new Subject<QueryParamChangeEvent>();
   /** Observable that emits when query params change on a tab (back/forward navigation). */
   public QueryParamChanged$ = this.queryParamChanged$.asObservable();
+
+  private resourceLoaded$ = new Subject<ResourceLoadedEvent>();
+  /** Observable that emits whenever a resource component completes loading in a tab. */
+  public readonly ResourceLoaded$ = this.resourceLoaded$.asObservable();
 
   private dashboardEditModeRequests = new Subject<string>();
 
@@ -1717,6 +1734,34 @@ export class NavigationService implements OnDestroy {
 
     this.applyQueryParamsToTab(tabId, queryParams);
     return true;
+  }
+
+  /**
+   * Notify subscribers that a resource component in a tab has completed loading.
+   */
+  public NotifyResourceLoaded(event: ResourceLoadedEvent): void {
+    this.resourceLoaded$.next(event);
+  }
+
+  /**
+   * Resolve a nav item within an application by stable `Key` first, then `DriverClass`.
+   * Never matches by `Label`, since hosts may rename display labels.
+   */
+  public async FindNavItem(appId: string, keyOrDriverClass: string): Promise<NavItem | undefined> {
+    if (!appId || !keyOrDriverClass) {
+      return undefined;
+    }
+    const app =
+      this.appManager.GetAppById(appId) ??
+      this.appManager.GetAllApps().find(a => UUIDsEqual(a.ID, appId));
+    if (!app) {
+      return undefined;
+    }
+    const navItems = await app.GetNavItems();
+    return (
+      navItems.find(item => item.Key === keyOrDriverClass) ??
+      navItems.find(item => item.DriverClass === keyOrDriverClass)
+    );
   }
 
   /**

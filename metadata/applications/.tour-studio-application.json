@@ -1,0 +1,181 @@
+{
+  "fields": {
+    "Name": "Tour Studio",
+    "Description": "Author, validate, govern, and measure Guided Tours, branching pathways, learning paths, overrides, and embed surfaces.",
+    "Icon": "fa-solid fa-route",
+    "DefaultForNewUser": false,
+    "Color": "#0d9488",
+    "DefaultSequence": 1025,
+    "Status": "Active",
+    "DefaultNavItems": [
+      {
+        "Label": "Tour Studio",
+        "Icon": "fa-solid fa-route",
+        "ResourceType": "Custom",
+        "DriverClass": "TourStudioDashboard",
+        "isDefault": true
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": [
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tours",
+          "Sequence": 1,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "C05B69E3-2D3D-4BAB-AE1B-A143D9A0B362"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Versions",
+          "Sequence": 2,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "6DBEC368-9907-40CA-AA8C-14175309900C"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Steps",
+          "Sequence": 3,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "080E2E98-1E71-46D1-95F3-AE85ED896223"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Step Paths",
+          "Sequence": 4,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "824A41FC-5DDB-455E-85D5-D21DC01E68D8"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Step Types",
+          "Sequence": 5,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "364DBF3E-5760-4D73-BAC5-FF041FE24AF2"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Prerequisites",
+          "Sequence": 6,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "9D53232E-6D10-4227-8E31-AE18E049FFA5"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Triggers",
+          "Sequence": 7,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "5F837841-0516-4A91-B190-606B1BB1F98D"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Overrides",
+          "Sequence": 8,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "F8DCCD25-7FDA-43A2-8539-E50D82DF38FF"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Learning Paths",
+          "Sequence": 9,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "D837F6E2-D0C5-4FBC-AD5F-ED1A4635AD12"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Learning Path Tours",
+          "Sequence": 10,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "3D1D667E-37A8-44E5-B45B-3C6E9563C8BA"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Surfaces",
+          "Sequence": 11,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "E61BB431-B571-4D3C-85B1-84670ADBDAD6"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Surface Tours",
+          "Sequence": 12,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "3858FC58-C8E9-4521-B36F-59DFAFEB409F"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Runs",
+          "Sequence": 13,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "DEA0D78E-1E41-47A8-9DD0-4D6C8808964F"
+        }
+      },
+      {
+        "fields": {
+          "ApplicationID": "@parent:ID",
+          "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Run Steps",
+          "Sequence": 14,
+          "DefaultForNewUser": false
+        },
+        "primaryKey": {
+          "ID": "F79077CC-FF3B-44AA-A58A-F2E32E8F2DAC"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "80472E6F-287A-43AD-BBD4-6F04E575C68E"
+  }
+}

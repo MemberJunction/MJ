@@ -38,7 +38,8 @@ export type ActionableCommand =
     | OpenResourceCommand
     | OpenURLCommand
     | CaptureDataSnapshotCommand
-    | ComposeEmailCommand;
+    | ComposeEmailCommand
+    | StartTourCommand;
 
 /**
  * Command to open a resource in the MemberJunction UI.
@@ -276,7 +277,8 @@ export interface CaptureDataSnapshotCommand {
  */
 export type AutomaticCommand =
     | RefreshDataCommand
-    | ShowNotificationCommand;
+    | ShowNotificationCommand
+    | StartTourCommand;
 
 /**
  * Command to refresh data in the UI.
@@ -464,6 +466,45 @@ export interface ComposeEmailCommand {
      * and it is also what keeps the draft reachable after the turn has moved on.
      */
     artifactId?: string;
+}
+
+/**
+ * Command to launch a MemberJunction Guided Tour in the host UI.
+ *
+ * May be returned as an actionable command (rendered as a "Show me" button) or
+ * as an automatic command (launching the tour immediately when permitted).
+ *
+ * @example
+ * ```json
+ * {
+ *   "type": "start:tour",
+ *   "TourKey": "sales.close-won",
+ *   "Mode": "Visual",
+ *   "Label": "Show me how to close a deal"
+ * }
+ * ```
+ */
+export interface StartTourCommand {
+    /** Command type identifier */
+    type: 'start:tour';
+
+    /** Unique stable TourKey of the Guided Tour to start */
+    TourKey: string;
+
+    /** Guidance mode for the tour session */
+    Mode?: 'Visual' | 'Chat' | 'Voice';
+
+    /** Optional StepKey to start the tour at */
+    StartAtStepKey?: string;
+
+    /** Optional button label shown to the user when rendered as an actionable command */
+    Label?: string;
+
+    /** Optional lowercase label alias for uniform actionable-command rendering */
+    label?: string;
+
+    /** Optional Font Awesome icon class to display on the button */
+    icon?: string;
 }
 
 /**

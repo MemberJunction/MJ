@@ -1,0 +1,11 @@
+[
+  {
+    "fields": {
+      "Name": "Tour Guest",
+      "Description": "Isolated zero-CRUD role for anonymous public Tour Surface visitors. Grants no direct entity create, read, update, or delete permissions; guest sessions operate strictly through scoped Remote Operations (Tours.GetSurfaceTours, Tours.RecordEvents, and Tours.EvaluatePredicates) where SurfaceID and VisitorKey are derived from verified JWT claims."
+    },
+    "primaryKey": {
+      "ID": "CCAFF742-DBD5-4E2B-BFA8-DD5DD20A3721"
+    }
+  }
+]

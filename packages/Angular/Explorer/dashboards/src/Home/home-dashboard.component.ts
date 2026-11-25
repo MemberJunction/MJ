@@ -1,11 +1,31 @@
-import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, ElementRef, inject } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, ElementRef, inject, Inject, Optional } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration, IsDashboardEntity, SafeDetectChanges, BuildDashboardPinInput } from '@memberjunction/ng-shared';
 import { ResourceTypeForEntity } from '@memberjunction/ng-shared-generic';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError, LogError } from '@memberjunction/core';
-import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
+import {
+  ResourceData,
+  MJUserFavoriteEntity,
+  MJUserNotificationEntity,
+  UserInfoEngine,
+  DashboardEngine,
+  UserViewEngine,
+  QueryEngine,
+  MJLearningPathEntity,
+  MJLearningPathTourEntity,
+  MJTourEntity,
+  MJTourRunEntity,
+} from '@memberjunction/core-entities';
+import { MJ_TOUR_HOST } from '@memberjunction/ng-tours';
+import {
+  ITourHost,
+  TourDefinition,
+  TourLaunchSource,
+  TourSessionGuideMode,
+  TourSignals,
+} from '@memberjunction/tours-runtime';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
@@ -35,6 +55,50 @@ import { AutoInstallDashboardsApp, CreateBlankDashboard, DashboardNameMaxLength,
 
 /** User setting for the Pinned section: 'true' when collapsed, 'false' when open. A missing setting means open. */
 const PINNED_COLLAPSED_SETTING = 'HomeApp.PinnedCollapsed';
+
+/** User setting for the Learning Paths section: 'true' when collapsed, 'false' when open. */
+const LEARNING_PATHS_COLLAPSED_SETTING = 'HomeApp.LearningPathsCollapsed';
+
+interface TourLauncherHost extends ITourHost {
+  StartTour?(
+    tourKey: string,
+    options?: {
+      Mode?: TourSessionGuideMode;
+      LaunchSource?: TourLaunchSource;
+      StartAtStepKey?: string;
+      TourOverride?: TourDefinition;
+      SimulatedRoles?: string[];
+    },
+  ): Promise<unknown>;
+}
+
+export interface HomeLearningPathTourItem {
+  TourID: string;
+  TourKey: string;
+  Name: string;
+  Description: string;
+  EstimatedMinutes: number | null;
+  Sequence: number;
+  IsRequired: boolean;
+  Completed: boolean;
+  InProgress: boolean;
+}
+
+export interface HomeLearningPathCard {
+  ID: string;
+  PathKey: string;
+  Name: string;
+  Description: string;
+  Application: string | null;
+  TotalCount: number;
+  CompletedCount: number;
+  RequiredTotalCount: number;
+  RequiredCompletedCount: number;
+  PercentComplete: number;
+  NextTourKey: string | null;
+  NextTourName: string | null;
+  Tours: HomeLearningPathTourItem[];
+}
 
 /** The query param that names the dashboard Home shows in place of its overview. */
 const DASHBOARD_QUERY_PARAM = 'dashboard';
@@ -101,6 +165,11 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   private pinService = inject(HomeAppPinService);
   private confirmService = inject(MJConfirmService);
   private hostElement = inject<ElementRef<HTMLElement>>(ElementRef);
+  private tourHost = inject(MJ_TOUR_HOST, { optional: true }) as TourLauncherHost | null;
+
+  public LearningPathsExpanded = true;
+  public LearningPathsLoading = false;
+  public LearningPathCards: HomeLearningPathCard[] = [];
 
   @ViewChild('appConfigDialog') AppConfigDialog!: UserAppConfigComponent;
   @ViewChild('pinMenu') private pinMenuEl?: ElementRef<HTMLElement>;
@@ -500,6 +569,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // Load favorites and recents asynchronously (don't block rendering)
     this.loadFavorites();
     this.loadRecents();
+    void this.loadLearningPaths();
 
     // Load pin empty-state dismissal preference
     const hideSetting = UserInfoEngine.Instance.GetSetting('HomeApp.HidePinEmptyState');
@@ -694,6 +764,155 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
         Handler: async (params: Record<string, unknown>) => this.toolSwitchHomeDashboard(params),
       },
     ]);
+  }
+
+  public OnLearningPathsExpandedChange(expanded: boolean): void {
+    this.LearningPathsExpanded = expanded;
+    const userEngine = UserInfoEngine.GetProviderInstance<UserInfoEngine>(this.ProviderToUse, UserInfoEngine) as UserInfoEngine;
+    userEngine.SetSettingDebounced(
+      LEARNING_PATHS_COLLAPSED_SETTING,
+      expanded ? 'false' : 'true',
+      this.ProviderToUse.CurrentUser,
+    );
+    this.cdr.markForCheck();
+  }
+
+  public LaunchLearningPathTour(tourKey: string): void {
+    if (this.tourHost?.StartTour) {
+      void this.tourHost.StartTour(tourKey, { LaunchSource: 'Learning Path' });
+      return;
+    }
+    TourSignals.Instance.Emit('core.tour.launchRequest', {
+      tourKey,
+      launchSource: 'Learning Path',
+    });
+  }
+
+  private async loadLearningPaths(): Promise<void> {
+    this.LearningPathsLoading = true;
+    try {
+      const userEngine = UserInfoEngine.GetProviderInstance<UserInfoEngine>(this.ProviderToUse, UserInfoEngine) as UserInfoEngine;
+      const collapsed = userEngine.GetSetting(LEARNING_PATHS_COLLAPSED_SETTING);
+      if (collapsed === 'true') {
+        this.LearningPathsExpanded = false;
+      }
+
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const userId = this.ProviderToUse.CurrentUser?.ID;
+
+      const [pathsRes, membersRes, toursRes, runsRes] = await rv.RunViews([
+        {
+          EntityName: 'MJ: Learning Paths',
+          ExtraFilter: `Status = 'Active'`,
+          OrderBy: 'Name ASC',
+          ResultType: 'entity_object',
+        },
+        {
+          EntityName: 'MJ: Learning Path Tours',
+          OrderBy: 'Sequence ASC',
+          ResultType: 'entity_object',
+        },
+        {
+          EntityName: 'MJ: Tours',
+          ExtraFilter: `Status = 'Active'`,
+          ResultType: 'entity_object',
+        },
+        userId
+          ? {
+              EntityName: 'MJ: Tour Runs',
+              ExtraFilter: `UserID = '${userId}'`,
+              ResultType: 'entity_object',
+            }
+          : {
+              EntityName: 'MJ: Tour Runs',
+              ExtraFilter: '1 = 0',
+              ResultType: 'entity_object',
+            },
+      ]);
+
+      const paths = (pathsRes?.Results ?? []) as MJLearningPathEntity[];
+      const members = (membersRes?.Results ?? []) as MJLearningPathTourEntity[];
+      const tours = (toursRes?.Results ?? []) as MJTourEntity[];
+      const runs = (runsRes?.Results ?? []) as MJTourRunEntity[];
+
+      const tourById = new Map<string, MJTourEntity>();
+      for (const tour of tours) {
+        tourById.set(tour.ID.toLowerCase(), tour);
+      }
+
+      const completedTourIds = new Set<string>();
+      const inProgressTourIds = new Set<string>();
+      for (const run of runs) {
+        const tid = run.TourID.toLowerCase();
+        if (run.Status === 'Completed') {
+          completedTourIds.add(tid);
+        } else if (run.Status === 'In Progress') {
+          inProgressTourIds.add(tid);
+        }
+      }
+
+      const membersByPathId = GroupByUUID(members, (m) => m.LearningPathID);
+      const cards: HomeLearningPathCard[] = [];
+      for (const lp of paths) {
+        const lpMembers = [...(membersByPathId.Get(lp.ID) ?? [])]
+          .sort((a, b) => a.Sequence - b.Sequence);
+
+        const resolvedTours: HomeLearningPathTourItem[] = [];
+        for (const member of lpMembers) {
+          const tourEntity = tourById.get(member.TourID.toLowerCase());
+          if (!tourEntity) {
+            continue;
+          }
+          const tid = tourEntity.ID.toLowerCase();
+          resolvedTours.push({
+            TourID: tourEntity.ID,
+            TourKey: tourEntity.TourKey,
+            Name: tourEntity.Name,
+            Description: tourEntity.Description ?? '',
+            EstimatedMinutes: tourEntity.EstimatedMinutes ?? null,
+            Sequence: member.Sequence,
+            IsRequired: member.IsRequired,
+            Completed: completedTourIds.has(tid),
+            InProgress: inProgressTourIds.has(tid) && !completedTourIds.has(tid),
+          });
+        }
+
+        if (resolvedTours.length === 0) {
+          continue;
+        }
+
+        const completedCount = resolvedTours.filter((t) => t.Completed).length;
+        const requiredTours = resolvedTours.filter((t) => t.IsRequired);
+        const requiredCompletedCount = requiredTours.filter((t) => t.Completed).length;
+        const nextTour =
+          requiredTours.find((t) => !t.Completed) ??
+          resolvedTours.find((t) => !t.Completed) ??
+          null;
+
+        cards.push({
+          ID: lp.ID,
+          PathKey: lp.PathKey,
+          Name: lp.Name,
+          Description: lp.Description ?? '',
+          Application: lp.Application ?? null,
+          TotalCount: resolvedTours.length,
+          CompletedCount: completedCount,
+          RequiredTotalCount: requiredTours.length,
+          RequiredCompletedCount: requiredCompletedCount,
+          PercentComplete: Math.round((completedCount / resolvedTours.length) * 100),
+          NextTourKey: nextTour?.TourKey ?? null,
+          NextTourName: nextTour?.Name ?? null,
+          Tours: resolvedTours,
+        });
+      }
+
+      this.LearningPathCards = cards;
+    } catch {
+      this.LearningPathCards = [];
+    } finally {
+      this.LearningPathsLoading = false;
+      SafeDetectChanges(this.cdr);
+    }
   }
 
   /** Resolve an app by name (exact then partial, case-insensitive) and switch to it. */

@@ -26,7 +26,8 @@ export class MJComponentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJComponentLibraryLinks', sectionName: 'Component Library Links', isExpanded: false },
             { sectionKey: 'mJComponentDependenciesDependencyComponentID', sectionName: 'Component Dependencies (Dependency Component ID)', isExpanded: false },
             { sectionKey: 'mJEntityFormOverrides', sectionName: 'Entity Form Overrides', isExpanded: false },
-            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false }
+            { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
+            { sectionKey: 'mJTourStepTypes', sectionName: 'Tour Step Types', isExpanded: false }
         ]);
     }
 }

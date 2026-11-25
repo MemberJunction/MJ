@@ -70,6 +70,7 @@ export * from './lib/field/fk-lookup-strategy';
 export * from './lib/field/default-fk-lookup-strategy';
 export * from './lib/field/linked-field-options';
 export * from './lib/panel/collapsible-panel.component';
+export * from './lib/container/form-anchor-navigator';
 export * from './lib/container/record-form-container.component';
 export * from './lib/section-manager/section-manager.component';
 export * from './lib/section-loader-component';

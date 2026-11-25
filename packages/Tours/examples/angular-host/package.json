@@ -1,0 +1,22 @@
+{
+  "name": "@memberjunction/tours-example-angular-host",
+  "version": "6.3.0-edge.1",
+  "private": true,
+  "description": "Minimal non-Explorer Angular reference host demonstrating @memberjunction/ng-tours over custom ITourHost + InlineTourSource.",
+  "mjUILayer": "widgets",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
+    "@memberjunction/ng-tours": "6.3.0-edge.1",
+    "@memberjunction/tours-runtime": "6.3.0-edge.1",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "@angular/compiler-cli": "21.2.22",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,242 @@
+[
+  {
+    "fields": {
+      "Name": "Welcome to MemberJunction",
+      "TourKey": "core.welcome",
+      "Description": "A quick five-step orientation covering the application switcher, global Omnibar search, workspace focus selection, and Sage.",
+      "ApplicationID": null,
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 100,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User visits an application from the switcher or chooses a starting track."
+      },
+      "StartLocation": {
+        "Application": "Home"
+      },
+      "Configuration": {
+        "localizations": {
+          "es": {
+            "name": "Bienvenido a MemberJunction",
+            "description": "Un recorrido rápido de cinco pasos por el selector de aplicaciones, la búsqueda Omnibar y Sage."
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "1619DA7E-6119-49A9-85DD-683E2B788B40"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "welcome-card",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Welcome to MemberJunction",
+            "Body": "Take two minutes to see how applications, search, workspaces, and Sage fit together.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Show me around",
+              "SecondaryButtonText": "Not now",
+              "ShowProgress": true,
+              "localizations": {
+                "es": {
+                  "Title": "Bienvenido a MemberJunction",
+                  "Body": "Tómate dos minutos para conocer las aplicaciones, la búsqueda global y Sage.",
+                  "NextButtonText": "Empezar"
+                }
+              }
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9CF718C9-4552-48A2-A921-E8C03FF60111"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "app-switcher",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Switch between applications",
+            "Body": "Open the application switcher anytime to move between Home, Data Explorer, Chat, Admin, and domain apps.",
+            "Configuration": {
+              "ShowProgress": true,
+              "AllowTargetClick": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.app-switcher"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "D47009CC-33BA-4A05-B626-F261ED046465"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "omnibar",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Jump anywhere with the Omnibar",
+            "Body": "Search records, views, dashboards, or launch guided tours directly from the Omnibar.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.omnibar"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "63A146D0-C904-469E-95FE-3750D63F0FD9"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "workspace-pick",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=EmbeddedComponent",
+            "Title": "Choose your starting focus",
+            "Body": "Pick the area that matches what you want to accomplish first.",
+            "Configuration": {
+              "ComponentID": "@lookup:MJ: Components.Name=Tour Workspace Quick Configurator&Namespace=Tours/Interactive",
+              "InputProps": {
+                "heading": "Where would you like to focus first?"
+              },
+              "CompletionEventName": "core.welcome.workspace-selected",
+              "AllowNextButtonFallback": true
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "Signal",
+              "Signal": "core.welcome.workspace-selected"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2C5FDDA6-C5A0-4BA6-BC1C-077E0B9FDCBE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "sage-assistant",
+            "Sequence": 5,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Ask Sage whenever you need help",
+            "Body": "Open Sage from the header to ask questions, find data, or ask for a guided walkthrough.",
+            "Configuration": {
+              "ShowProgress": true,
+              "NextButtonText": "Finish"
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.chat"
+            },
+            "Placement": "Bottom",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "CB52A19B-89EA-459E-9275-FABA2527FFF4"
+          }
+        }
+      ],
+      "MJ: Tour Step Paths": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "2C5FDDA6-C5A0-4BA6-BC1C-077E0B9FDCBE",
+            "ToStepID": "CB52A19B-89EA-459E-9275-FABA2527FFF4",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "chat"
+                }
+              ]
+            },
+            "Label": "Collaborate with Sage",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "EF9859FF-F045-4035-A2D4-AD449F31984E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "2C5FDDA6-C5A0-4BA6-BC1C-077E0B9FDCBE",
+            "ToStepID": "CB52A19B-89EA-459E-9275-FABA2527FFF4",
+            "Condition": null,
+            "Label": "Continue",
+            "Priority": 100,
+            "Sequence": 2,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "21A194C5-C7C6-4243-BF6B-6E37D356AF5E"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Home"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 100,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "388D88B4-ACA0-4BAA-8764-0D2F41BC262B"
+          }
+        }
+      ]
+    }
+  }
+]

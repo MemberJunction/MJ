@@ -1,0 +1,601 @@
+[
+  {
+    "fields": {
+      "Name": "Start Tour For User",
+      "Description": "Creates a Pending Guided Tour run for a target user and delivers a clickable MJ: User Notifications entry whose ResourceConfiguration opens and starts the tour.",
+      "Type": "Custom",
+      "DriverClass": "Start Tour For User",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "E96C755E-0BC6-4314-B370-EE7948E080AC"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TourKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Stable TourKey of the active tour to start (e.g. 'core.welcome').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "51CF046A-115B-4FEF-BA62-B41E94519382"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Target MJ User ID. Defaults to the current ContextUser when omitted.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "374064B8-998E-4E03-8908-9497091243CF"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GuideMode",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Guide mode: Visual, Chat, or Voice.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7E6C5BF2-67D2-4420-80AD-98ADAB4A0DBE"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotificationTitle",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional custom notification title.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E7C3E619-E770-47E6-867B-B23D82E7F82B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotificationMessage",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional custom notification body message.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DA870470-48ED-440A-889F-A83BBC6F0CD2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LaunchedByAgentRunID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional AIAgentRun ID attributing the tour launch.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9B83FEAF-B2BD-4CAE-BA4E-9FAB3C4F2B28"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreateNotification",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to insert a clickable MJ: User Notifications row (default true).",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "BF973764-E4C6-4FCD-A898-64AE1E72B3BC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created MJ: Tour Runs primary key.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1ADF7C48-970E-4B31-8D6F-FBE5E79D94B3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NotificationID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Created MJ: User Notifications ID when CreateNotification is true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1C7DD1D0-F133-4639-B4DC-CC3D9FF3B647"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TourID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolved MJ: Tours ID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E9E88405-9F4B-408A-BF84-A30CF25DB907"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TourVersionID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Resolved published MJ: Tour Versions ID pinned by the run.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8E8D13F2-4539-4A13-802E-C48D658B8188"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Pending tour run and notification created."
+          },
+          "primaryKey": {
+            "ID": "1C8D72B7-435B-4A7E-B401-16A107829715"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required TourKey parameter was omitted."
+          },
+          "primaryKey": {
+            "ID": "28C7AD5D-05D4-40AB-8265-27D59DC11EFB"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "START_TOUR_FAILED",
+            "IsSuccess": false,
+            "Description": "Tour was not found, inactive, unpublished, or failed saving."
+          },
+          "primaryKey": {
+            "ID": "F4BDBE95-269E-4006-9A12-DC5B65644349"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Suggest Tours",
+      "Description": "Returns ranked, eligible active Guided Tours for a user based on priority, unmet prerequisites, prior completions, and optional app/entity/query context.",
+      "Type": "Custom",
+      "DriverClass": "Suggest Tours",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "3BE7DE4B-BB88-4EC3-8DDB-A496C0955EF9"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Target MJ User ID (defaults to ContextUser).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "85277BB2-67B3-4973-ADDB-85F14DFC3380"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ApplicationName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional application name to boost relevant tours.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2EEF327E-DF71-4820-BB03-BC4886AF277F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional active record entity name to boost contextual tours.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A2288E78-C63E-43FF-B87E-85C4A297F199"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional search keywords.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4727A6F2-2E3B-4B38-A219-2A9D3E3CDCBA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Limit",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of suggestions to return (default 5).",
+            "IsRequired": false,
+            "DefaultValue": "5"
+          },
+          "primaryKey": {
+            "ID": "5BF121D0-88C4-4580-B00C-D6715205907E"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Tours",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Ranked array of suggested tours.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "79683C0E-3044-47E1-A131-DDD74AE21496"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Returned ranked tour suggestions."
+          },
+          "primaryKey": {
+            "ID": "446C9E99-7D4C-4E7B-8C8C-7D295F7D3473"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUGGEST_TOURS_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed loading tour metadata or run history."
+          },
+          "primaryKey": {
+            "ID": "E2FF66D1-619C-4FB9-9C86-4001CBE5118E"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Tour Progress",
+      "Description": "Summarizes a user's progress across Guided Tours and Learning Paths, including completed, pending, and goal-achieved counts.",
+      "Type": "Custom",
+      "DriverClass": "Get Tour Progress",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "56F4CC0D-5A94-4515-B5DF-B8A14658A6D8"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Target MJ User ID (defaults to ContextUser).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AA3F7200-F83D-45BD-B424-2E4323802037"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TourKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional TourKey filter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B614B414-6F3B-45C9-BD3D-87064B70DDA7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LearningPathKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional LearningPathKey filter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77E20D6D-0250-4F20-8769-84E5527C5ED4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Progress",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Tour and learning path progress summary.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "927415BD-9E95-44AD-B771-51CBB0EBAA66"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Progress summary returned."
+          },
+          "primaryKey": {
+            "ID": "04749CD7-C4EA-41C1-AA5C-2602658435F0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GET_PROGRESS_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed querying progress ledger."
+          },
+          "primaryKey": {
+            "ID": "7C38B3B9-45B9-4826-B1AB-13F2B4208785"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Assign Learning Path",
+      "Description": "Assigns a Guided Tour Learning Path to a target user or every active user holding a target role, creating Pending runs and Tour notifications.",
+      "Type": "Custom",
+      "DriverClass": "Assign Learning Path",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=System",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved"
+    },
+    "primaryKey": {
+      "ID": "09D2C359-2631-4EAE-938B-7E853081E260"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LearningPathKey",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "PathKey of the active Learning Path to assign.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0104EA85-42E7-43C4-8535-FB45AD332A36"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetUserID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional single User ID to assign.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CA9647B1-EA65-4BF1-A72B-9365EA0AD085"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetRoleName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ Role Name to assign all active members.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D2C3BB9D-8009-40B2-BA87-4598114E35D8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetRoleID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional MJ Role ID to assign all active members.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0AF7CA33-799A-4248-BD14-2AEF780AD90D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreateNotifications",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to send clickable Tour notifications (default true).",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "0D5D71E5-0F1D-45E9-9051-EC39AD578319"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssignedUserCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of distinct users assigned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4FB0B8C2-4EFA-44DD-A559-F61AA22DEF91"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedRunCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of Pending TourRun records created.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "29C6DB52-C4A1-44DA-B073-BFFC38D7D270"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedNotificationCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of User Notifications created.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9B63407C-DF31-4753-9DC8-EDBC98D9D1C7"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Learning path assigned to target user(s)."
+          },
+          "primaryKey": {
+            "ID": "89894F3C-8B12-4DC0-8123-7F632B235468"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETER",
+            "IsSuccess": false,
+            "Description": "Required LearningPathKey parameter was omitted."
+          },
+          "primaryKey": {
+            "ID": "E6F0E46F-4EE7-4315-A30B-C0B312D6DC02"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ASSIGN_LEARNING_PATH_FAILED",
+            "IsSuccess": false,
+            "Description": "Learning path was missing, inactive, or had no active tours."
+          },
+          "primaryKey": {
+            "ID": "6F77B193-A850-4F66-8BFF-80FACF19985F"
+          }
+        }
+      ]
+    }
+  }
+]

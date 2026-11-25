@@ -316,11 +316,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Details Section -->
+    <!-- Conversation Hierarchy Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="conversationHierarchy"
+        SectionName="Conversation Hierarchy"
+        Icon="fa fa-sitemap"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -701,6 +701,31 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationsParentID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tour Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTourRuns"
+        SectionName="Tour Runs"
+        Icon="fa fa-route"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTourRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tour Runs','ConversationID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tour Runs','ConversationID')"
+                [AllowLoad]="IsSectionExpanded('mJTourRuns')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTourRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

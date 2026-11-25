@@ -38,6 +38,45 @@ export interface AppContextAgentRef {
 }
 
 /**
+ * Summary of the user's currently active Guided Tour session, if any.
+ * Matches `TourActiveContextSnapshot['ActiveTour']` from `@memberjunction/tours-runtime`.
+ */
+export interface ActiveTourContextSnapshot {
+    /** Stable namespaced key of the running tour (e.g. "sales.close-won") */
+    TourKey: string;
+    /** Display name of the running tour */
+    Name: string;
+    /** Stable key of the current step */
+    StepKey: string;
+    /** Title of the current step */
+    StepTitle: string;
+    /** Zero-based index of the current step */
+    StepIndex: number;
+    /** Total number of steps in the tour */
+    StepCount: number;
+    /** Guidance mode for the session (e.g. "Visual", "Chat", "Voice") */
+    Mode: 'Visual' | 'Chat' | 'Voice' | string;
+    /** Active director ClassFactory key */
+    DirectorType: string;
+    /** ISO-8601 timestamp when the run started */
+    StartedAt: string;
+}
+
+/**
+ * Concise summary of an eligible Guided Tour available at the user's current location.
+ */
+export interface AvailableTourSummary {
+    /** Stable namespaced key of the tour */
+    TourKey: string;
+    /** Display name of the tour */
+    Name: string;
+    /** Brief description of what the tour covers */
+    Description: string;
+    /** Optional estimated duration in minutes */
+    EstimatedMinutes?: number;
+}
+
+/**
  * Snapshot of the user's current application context.
  * Injected into agent system prompts via the `{{ appContext }}` template variable.
  *
@@ -111,6 +150,16 @@ export interface AppContextSnapshot {
         /** Currently-valid `invoke_agent` delegation targets. */
         Agents?: AppContextAgentRef[];
     };
+
+    /**
+     * Active Guided Tour session state, if a tour is currently running.
+     */
+    ActiveTour?: ActiveTourContextSnapshot | null;
+
+    /**
+     * Up to 3 eligible Guided Tours relevant to the user's current location.
+     */
+    AvailableTours?: AvailableTourSummary[];
 }
 
 /**
@@ -130,6 +179,8 @@ export interface AppContextSnapshotInputs {
     AdditionalContext?: Record<string, unknown>;
     View?: AppContextSnapshot['View'];
     Capabilities?: AppContextSnapshot['Capabilities'];
+    ActiveTour?: ActiveTourContextSnapshot | null;
+    AvailableTours?: ReadonlyArray<AvailableTourSummary>;
 }
 
 /**
@@ -189,6 +240,17 @@ export function BuildAppContextSnapshot(inputs: AppContextSnapshotInputs): AppCo
     }
     if (inputs.Capabilities) {
         snap.Capabilities = inputs.Capabilities;
+    }
+    if (inputs.ActiveTour !== undefined) {
+        snap.ActiveTour = inputs.ActiveTour;
+    }
+    if (inputs.AvailableTours && inputs.AvailableTours.length > 0) {
+        snap.AvailableTours = inputs.AvailableTours.map(t => ({
+            TourKey: t.TourKey,
+            Name: t.Name,
+            Description: t.Description,
+            EstimatedMinutes: t.EstimatedMinutes,
+        }));
     }
     return snap;
 }
@@ -308,6 +370,20 @@ function canonicalAppKey(snapshot: AppContextSnapshot): string {
     return Array.from(names).sort().join('\u0000');
 }
 
+function formatActiveTourKey(tour: ActiveTourContextSnapshot | null | undefined): string {
+    if (!tour) {
+        return '';
+    }
+    return `${tour.TourKey}\u0000${tour.Name}\u0000${tour.StepKey}\u0000${tour.StepTitle}\u0000${tour.StepIndex}\u0000${tour.StepCount}\u0000${tour.Mode}\u0000${tour.DirectorType}`;
+}
+
+function formatAvailableToursKey(tours: ReadonlyArray<AvailableTourSummary> | undefined): string {
+    if (!tours || tours.length === 0) {
+        return '';
+    }
+    return tours.map(t => `${t.TourKey}\u0000${t.Name}\u0000${t.EstimatedMinutes ?? ''}`).join('\n');
+}
+
 /**
  * Computes the minimal {@link Partial} {@link AppContextSnapshot} delta between `previous` and `next`
  * for live wire streaming via {@link FormatAppContextNote}.
@@ -361,6 +437,16 @@ export function DiffAppContextSnapshot(
     const agentsChanged = prevAgentSigs.join('\n') !== nextAgentSigs.join('\n');
     const agentsCleared = prevAgentSigs.length > 0 && nextAgentSigs.length === 0;
 
+    const prevTourKey = formatActiveTourKey(previous.ActiveTour);
+    const nextTourKey = formatActiveTourKey(next.ActiveTour);
+    const activeTourChanged = prevTourKey !== nextTourKey;
+    const activeTourCleared = prevTourKey.length > 0 && nextTourKey.length === 0;
+
+    const prevAvailableToursKey = formatAvailableToursKey(previous.AvailableTours);
+    const nextAvailableToursKey = formatAvailableToursKey(next.AvailableTours);
+    const availableToursChanged = prevAvailableToursKey !== nextAvailableToursKey;
+    const availableToursCleared = prevAvailableToursKey.length > 0 && nextAvailableToursKey.length === 0;
+
     if (
         !locationChanged &&
         !viewChanged &&
@@ -368,13 +454,23 @@ export function DiffAppContextSnapshot(
         !otherNavItemsChanged &&
         !navigableAppsChanged &&
         !toolsChanged &&
-        !agentsChanged
+        !agentsChanged &&
+        !activeTourChanged &&
+        !availableToursChanged
     ) {
         return null;
     }
 
     const delta: Partial<AppContextSnapshot> = {};
-    if (locationChanged || viewCleared || ctxCleared || toolsCleared || agentsCleared) {
+    if (
+        locationChanged ||
+        viewCleared ||
+        ctxCleared ||
+        toolsCleared ||
+        agentsCleared ||
+        activeTourCleared ||
+        availableToursCleared
+    ) {
         delta.App = next.App;
         delta.ActiveNavItem = next.ActiveNavItem;
     }
@@ -395,6 +491,12 @@ export function DiffAppContextSnapshot(
             ...(toolsChanged && next.Capabilities?.Tools ? { Tools: next.Capabilities.Tools } : {}),
             ...(agentsChanged && next.Capabilities?.Agents ? { Agents: next.Capabilities.Agents } : {}),
         };
+    }
+    if (activeTourChanged && next.ActiveTour) {
+        delta.ActiveTour = next.ActiveTour;
+    }
+    if (availableToursChanged && next.AvailableTours && next.AvailableTours.length > 0) {
+        delta.AvailableTours = next.AvailableTours;
     }
 
     return FormatAppContextNote(delta).length > 0 ? delta : null;
@@ -424,6 +526,27 @@ export function FormatAppContextNote(snapshot: Partial<AppContextSnapshot>): str
 
     // WHAT the user sees (structured View)
     lines.push(...formatViewLines(snapshot.View));
+
+    // ACTIVE GUIDED TOUR state (if a tour is running) and eligible tours at this location
+    if (snapshot.ActiveTour) {
+        const tour = snapshot.ActiveTour;
+        const stepNumber = tour.StepCount > 0
+            ? Math.min(Math.max(1, tour.StepIndex + 1), tour.StepCount)
+            : tour.StepIndex + 1;
+        lines.push(`User is on step ${stepNumber} of ${tour.StepCount} of the tour *${tour.Name}* (${tour.Mode})`);
+        if (tour.StepTitle || tour.StepKey) {
+            const stepDesc = tour.StepTitle
+                ? `${tour.StepTitle}${tour.StepKey ? ` (${tour.StepKey})` : ''}`
+                : tour.StepKey;
+            lines.push(`active tour step: ${stepDesc}, director: ${tour.DirectorType}`);
+        }
+    }
+    if (snapshot.AvailableTours && snapshot.AvailableTours.length > 0) {
+        const tourList = snapshot.AvailableTours
+            .map(t => `${t.Name} [${t.TourKey}]${t.EstimatedMinutes ? ` (~${t.EstimatedMinutes}m)` : ''}`)
+            .join(', ');
+        lines.push(`available tours (StartTour TourKey): ${tourList}`);
+    }
 
     // The rich state the active surface published (counts, filters, selected items, available views/queries/etc.)
     if (snapshot.AdditionalContext) {

@@ -1759,6 +1759,9 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
       // loading overlay. Without this, single-tab mode navigation to a cached resource
       // leaves the overlay blocking all user interaction.
       this.emitFirstLoadCompleteOnce();
+      if (cachedInstance.LoadComplete) {
+        this.notifyResourceLoaded(activeTab.id, resourceData, driverClass, activeTab.applicationId);
+      }
 
       return;
     }
@@ -1802,6 +1805,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
     // Wire up events
     instance.LoadCompleteEvent = () => {
       this.emitFirstLoadCompleteOnce();
+      this.notifyResourceLoaded(activeTab.id, resourceData, driverClass, activeTab.applicationId);
     };
 
     // Wire up display name change for single-resource mode.
@@ -2395,6 +2399,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         if (instance.LoadComplete) {
           this.updateTabTitleFromResource(tabId, instance, resourceData);
           this.emitFirstLoadCompleteOnce();
+          this.notifyResourceLoaded(tabId, resourceData, driverClass, tab.applicationId);
         }
 
         return;
@@ -2437,6 +2442,7 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         // Tab content loaded - update tab title with resource display name
         this.updateTabTitleFromResource(tabId, instance, resourceData);
         this.emitFirstLoadCompleteOnce();
+        this.notifyResourceLoaded(tabId, resourceData, driverClass, tab.applicationId);
       };
 
       instance.ResourceRecordSavedEvent = (entity: BaseEntity) => {
@@ -3469,6 +3475,17 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
    */
   private emitFirstLoadCompleteOnce(): void {
     this.FirstResourceLoadComplete.emit(); // do this each time to be sure we don't suppress messages
+  }
+
+  /** Emits per-tab resource load completion on NavigationService for Guided Tours and observers. */
+  private notifyResourceLoaded(tabId: string, resourceData: ResourceData, driverClass: string, appId: string): void {
+    this.navigationService.NotifyResourceLoaded({
+      TabId: tabId,
+      ResourceType: resourceData.ResourceType,
+      DriverClass: driverClass,
+      RecordId: resourceData.ResourceRecordID || undefined,
+      AppId: appId
+    });
   }
 
   /**

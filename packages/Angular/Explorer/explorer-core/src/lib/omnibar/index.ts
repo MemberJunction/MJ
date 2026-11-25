@@ -3,6 +3,7 @@ export * from './providers/omnibar-search.provider';
 export * from './providers/omnibar-record.provider';
 export * from './providers/omnibar-command.provider';
 export * from './providers/omnibar-agent.provider';
+export * from './providers/omnibar-tours.provider';
 export * from './omnibar-palette.component';
 export * from './omnibar-semantic-index.service';
 export * from './omnibar-user-setting';
@@ -12,6 +13,7 @@ import { LoadOmnibarSearchProvider } from './providers/omnibar-search.provider';
 import { LoadOmnibarRecordProvider } from './providers/omnibar-record.provider';
 import { LoadOmnibarCommandProvider } from './providers/omnibar-command.provider';
 import { LoadOmnibarAgentProvider } from './providers/omnibar-agent.provider';
+import { LoadOmnibarToursProvider } from './providers/omnibar-tours.provider';
 
 /**
  * Tree-shaking guard: referencing each provider's Load* keeps its
@@ -23,4 +25,5 @@ export function LoadOmnibarProviders(): void {
     LoadOmnibarRecordProvider();
     LoadOmnibarCommandProvider();
     LoadOmnibarAgentProvider();
+    LoadOmnibarToursProvider();
 }

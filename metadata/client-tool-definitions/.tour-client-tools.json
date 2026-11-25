@@ -1,0 +1,74 @@
+[
+  {
+    "fields": {
+      "Name": "StartTour",
+      "Description": "Start a Guided Tour for the user by TourKey in Visual, Chat, or Voice guide mode, optionally jumping to a specific step key.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"TourKey\":{\"type\":\"string\",\"description\":\"Stable TourKey of the tour to launch (e.g., 'core.welcome', 'core.records')\"},\"Mode\":{\"type\":\"string\",\"enum\":[\"Visual\",\"Chat\",\"Voice\"],\"description\":\"Guide mode (defaults to the tour's DefaultGuideMode or Visual)\"},\"StartAtStepKey\":{\"type\":\"string\",\"description\":\"Optional step key within the tour to start at\"}},\"required\":[\"TourKey\"]}",
+      "DefaultTimeoutMs": 30000
+    },
+    "primaryKey": {
+      "ID": "6B045D6A-B26D-4EBF-B2D6-E59B15EF5884"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ListTours",
+      "Description": "List active Guided Tours available to the current user, optionally filtered to the user's current screen location or a text search query.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"ForCurrentLocation\":{\"type\":\"boolean\",\"description\":\"When true, restrict to tours matching the user's current app or open record\"},\"Query\":{\"type\":\"string\",\"description\":\"Optional search text matching tour name, description, or step titles\"}}}",
+      "DefaultTimeoutMs": 15000
+    },
+    "primaryKey": {
+      "ID": "45C97943-33DB-4C95-9D84-23C165F534E5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GetActiveTour",
+      "Description": "Return the currently active Guided Tour run state, current step details, completed step keys, and progress summary.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{}}",
+      "DefaultTimeoutMs": 10000
+    },
+    "primaryKey": {
+      "ID": "CD0BCF1F-D4FB-460B-9874-1545232A8AED"
+    }
+  },
+  {
+    "fields": {
+      "Name": "PauseTour",
+      "Description": "Pause or snooze the currently running Guided Tour while preserving progress so the user can resume later.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"SnoozeMinutes\":{\"type\":\"number\",\"description\":\"Optional snooze duration in minutes\"}}}",
+      "DefaultTimeoutMs": 10000
+    },
+    "primaryKey": {
+      "ID": "1FD4CF51-8744-4F27-8F33-1108C45F8E86"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ResumeTour",
+      "Description": "Resume the user's paused or most recent in-progress Guided Tour from the current step.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"TourKey\":{\"type\":\"string\",\"description\":\"Optional TourKey to resume if multiple paused runs exist\"}}}",
+      "DefaultTimeoutMs": 15000
+    },
+    "primaryKey": {
+      "ID": "4A051E25-5950-4D72-BA56-DBC45246E994"
+    }
+  },
+  {
+    "fields": {
+      "Name": "StopTour",
+      "Description": "Dismiss and close the currently active Guided Tour session.",
+      "Category": "navigation",
+      "InputSchemaJSON": "{\"type\":\"object\",\"properties\":{\"Reason\":{\"type\":\"string\",\"description\":\"Optional dismissal note\"}}}",
+      "DefaultTimeoutMs": 10000
+    },
+    "primaryKey": {
+      "ID": "5E1BCF11-9089-484F-A75F-B4545071AB15"
+    }
+  }
+]

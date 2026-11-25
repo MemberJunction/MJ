@@ -11,7 +11,7 @@
  * @module @memberjunction/ai-agents
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
-import type { GraphEdge, GraphNode, IConditionEvaluator, IGraphRepository } from '@memberjunction/ai-core-plus';
+import type { GraphEdge, GraphNode, IConditionEvaluator, IGraphRepository } from '@memberjunction/graph';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIAgentStepEntity, MJAIAgentStepPathEntity } from '@memberjunction/core-entities';
 

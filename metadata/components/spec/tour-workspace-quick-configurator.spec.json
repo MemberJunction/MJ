@@ -1,0 +1,41 @@
+{
+  "name": "Tour Workspace Quick Configurator",
+  "title": "Workspace Quick Configurator",
+  "description": "Interactive workspace track picker rendered inside Guided Tour EmbeddedComponent steps, emitting chooseBranch and completeStep callbacks for live TourSession branching.",
+  "type": "other",
+  "location": "embedded",
+  "functionalRequirements": "Displays 3 clickable workspace tracks (Explore Data, Collaborate with Sage, Manage & Build) with keyboard-accessible selection cards and completion actions that emit 'chooseBranch' (with payload { choiceKey }) and 'completeStep' events through callbacks.OnEvent.",
+  "technicalDesign": "React component receiving standard MJ ComponentSpec props (data, step, callbacks). Uses useState hooks directly from the MJ sandbox runtime, styled with --mj-* design tokens and safe fallbacks, and dispatches callbacks.OnEvent('chooseBranch', { choiceKey }) and callbacks.OnEvent('completeStep', { choiceKey, completed: true }).",
+  "dataRequirements": {
+    "mode": "none",
+    "description": "Operates purely on InputProps/data passed by the EmbeddedComponent tour step renderer."
+  },
+  "properties": [
+    {
+      "name": "heading",
+      "type": "string",
+      "description": "Optional heading displayed above the workspace options",
+      "required": false,
+      "defaultValue": "Where would you like to focus first?"
+    },
+    {
+      "name": "tracks",
+      "type": "array",
+      "description": "Optional array of track descriptors { key, title, subtitle }",
+      "required": false
+    }
+  ],
+  "events": [
+    {
+      "name": "chooseBranch",
+      "description": "Emitted when the user picks a track and advances to the corresponding branch step (payload: { choiceKey: string })"
+    },
+    {
+      "name": "completeStep",
+      "description": "Emitted when the user confirms completion of the configurator step"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../code/tour-workspace-quick-configurator.js",
+  "usageExample": "<TourWorkspaceQuickConfigurator data={{ heading: 'Choose your starting workspace' }} callbacks={{ OnEvent: (type, payload) => console.log(type, payload) }} />"
+}

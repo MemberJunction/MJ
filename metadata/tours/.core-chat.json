@@ -1,0 +1,169 @@
+[
+  {
+    "fields": {
+      "Name": "Working with Sage",
+      "TourKey": "core.chat",
+      "Description": "Learn how to open Sage, compose grounded prompts, and collaborate in chat-guided walkthroughs.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Chat",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Signal",
+        "Signal": "core.chat.completed",
+        "Description": "User interacts with the Chat composer and learns how Sage grounds tours."
+      },
+      "StartLocation": {
+        "Application": "Chat"
+      }
+    },
+    "primaryKey": {
+      "ID": "039F00EB-B5A8-4746-96F2-DAF0AD6B8DD4"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "chat-entry",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Open Sage Anytime",
+            "Body": "Use the header chat button from any app to open the Sage overlay or switch into full Conversations mode.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.chat"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "D032D7A8-8C1D-4465-906B-1D2EC85B764F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "chat-composer",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Action",
+            "Title": "Focus the Composer",
+            "Body": "Click into the message composer to ask a question or type 'Show me around' to launch a guided tour.",
+            "Configuration": {
+              "ShowWaitingIndicator": true,
+              "WaitingMessage": "Click the Sage composer box to continue",
+              "AllowManualSkip": true,
+              "SkipButtonText": "Next"
+            },
+            "Anchor": {
+              "Strategy": "ChatComposer"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "AnchorInteraction",
+              "Event": "focus"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "0FD88972-33C4-4035-83BA-F4EE7F7B85BC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "chat-knowledge-check",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Choice",
+            "Title": "Quick Check: Grounded Guidance",
+            "Body": "Confirm how Sage keeps guided tours accurate.",
+            "Configuration": {
+              "Question": "Where does Sage get the UI targets it highlights during a guided tour?",
+              "Options": [
+                {
+                  "Key": "registry",
+                  "Label": "From verified visible anchors and authored tour steps",
+                  "IsCorrect": true,
+                  "Feedback": "Exact match — TourSession restricts navigation and highlights to authored steps and live visible anchors."
+                },
+                {
+                  "Key": "guess",
+                  "Label": "By inventing unverified steps on the fly",
+                  "IsCorrect": false,
+                  "Feedback": "Not quite — TourGoToStep and TourHighlight enforce authored pathways and verified anchors."
+                }
+              ],
+              "IsKnowledgeCheck": true,
+              "ShowFeedbackBeforeAdvance": true
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "BA8F4FFC-B612-4DF7-8BB8-57902DC483AF"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "chat-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Ready to Collaborate with Sage",
+            "Body": "Ask Sage about records, queries, or workflows anytime — and ask for a tour whenever you want visual guidance.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "DB34A431-E2B5-4B5B-BF19-0B70DEC1CBF4"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Chat"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 14,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7BD187CC-D621-4E7F-B8FD-8760F8382F59"
+          }
+        }
+      ]
+    }
+  }
+]

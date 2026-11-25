@@ -67,7 +67,8 @@ export function BuildRealtimeAgentFraming(
     targetName: string,
     interactiveSurfaceClause = '',
     colleagues: RealtimeColleague[] = [],
-    hasDirectTools = false
+    hasDirectTools = false,
+    hasActiveTour = false
 ): string {
     const workGuidance = hasDirectTools
         ? `When work is required that matches one of your directly-available tools, ` +
@@ -82,7 +83,7 @@ export function BuildRealtimeAgentFraming(
         `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
         `third person. ${workGuidance}` +
         BuildColleaguesClause(colleagues) +
-        BuildTourGuidanceClause() +
+        BuildTourGuidanceClause(hasActiveTour) +
         interactiveSurfaceClause
     );
 }
@@ -94,10 +95,17 @@ export function BuildRealtimeAgentFraming(
  * app-context manifest — with deliberate PACING. The emphasis is depth over breadth: stop, show a
  * little, actually do something, pause, then move on — never a rushed flyover.
  *
- * Kept as its own clause (not inlined) so it can later be lifted into a dedicated Tour skill once
- * that agent primitive exists, without disturbing the identity framing.
+ * When a scripted Guided Tour session is active (`hasActiveTour === true`), this clause defers to the
+ * Guided Tour skill and deterministic tour session tools rather than improvising an unscripted tour.
  */
-export function BuildTourGuidanceClause(): string {
+export function BuildTourGuidanceClause(hasActiveTour = false): string {
+    if (hasActiveTour) {
+        return (
+            ` ACTIVE GUIDED TOUR: A scripted Guided Tour session is currently active. Defer to the Guided Tour ` +
+            `skill and use the active tour session tools (such as TourGetState, TourGetVisibleAnchors, ` +
+            `TourHighlight, and TourGoToStep) rather than improvising an unscripted walkthrough.`
+        );
+    }
     return (
         ` GIVING A TOUR: When the user asks for a tour, a walkthrough, a demo, or to be "shown around" ` +
         `(one app or several), become a guide and PACE YOURSELF — never rush or zip through. Work one ` +

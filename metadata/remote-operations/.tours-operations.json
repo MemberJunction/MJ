@@ -1,0 +1,112 @@
+[
+  {
+    "fields": {
+      "Name": "Record Guided Tour Events",
+      "OperationKey": "Tours.RecordEvents",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Guided Tours",
+      "Description": "Records batched Guided Tour run and step telemetry events for authenticated MJ users and isolated surface guests, deriving guest SurfaceID and VisitorKey strictly from verified JWT claims.",
+      "InputTypeName": "ToursRecordEventsInput",
+      "InputTypeDefinition": "@file:types/tours-record-events.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ToursRecordEventsOutput",
+      "OutputTypeDefinition": "@file:types/tours-record-events.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "7E6E57EB-5BA9-42A7-AEB6-0758901BD5A6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Evaluate Guided Tour Server Predicates",
+      "OperationKey": "Tours.EvaluatePredicates",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Guided Tours",
+      "Description": "Evaluates batched server-side completion, prerequisite, and eligibility predicates (HasRecords, QueryReturnsRows, AuthorizationHeld, and custom BaseTourServerPredicate plugins) under the caller's permissions.",
+      "InputTypeName": "ToursEvaluatePredicatesInput",
+      "InputTypeDefinition": "@file:types/tours-evaluate-predicates.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ToursEvaluatePredicatesOutput",
+      "OutputTypeDefinition": "@file:types/tours-evaluate-predicates.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9BF286F4-2598-47E0-B817-08DC549782D8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Surface Guided Tours",
+      "OperationKey": "Tours.GetSurfaceTours",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Guided Tours",
+      "Description": "Returns published tour snapshots and prior visitor runs assigned to an external MJ: Tour Surfaces embed surface.",
+      "InputTypeName": "ToursGetSurfaceToursInput",
+      "InputTypeDefinition": "@file:types/tours-get-surface-tours.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ToursGetSurfaceToursOutput",
+      "OutputTypeDefinition": "@file:types/tours-get-surface-tours.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5E18BD54-0EF3-41F9-90EB-3D442EDB052C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Claim Guest Guided Tour Runs",
+      "OperationKey": "Tours.ClaimGuestRuns",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Guided Tours",
+      "Description": "Re-attributes guest VisitorKey tour runs to the authenticated MJ user on sign-in (RV4) so completed guest tours are not re-offered and goal-lift attribution is preserved.",
+      "InputTypeName": "ToursClaimGuestRunsInput",
+      "InputTypeDefinition": "@file:types/tours-claim-guest-runs.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ToursClaimGuestRunsOutput",
+      "OutputTypeDefinition": "@file:types/tours-claim-guest-runs.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9FA7975A-1D4F-447D-8653-83E7ABB53D43"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Publish Guided Tour Version",
+      "OperationKey": "Tours.PublishTour",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Guided Tours",
+      "Description": "Validates a tour's steps and pathway graph, snapshots an immutable MJ: Tour Versions record when canonical content changed, updates CurrentVersionID, and optionally sets Status to Active.",
+      "InputTypeName": "ToursPublishTourInput",
+      "InputTypeDefinition": "@file:types/tours-publish-tour.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "ToursPublishTourOutput",
+      "OutputTypeDefinition": "@file:types/tours-publish-tour.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "85A01579-89DA-414E-B05E-82CC55380941"
+    }
+  }
+]

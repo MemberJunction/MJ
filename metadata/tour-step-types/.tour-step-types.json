@@ -1,0 +1,275 @@
+[
+  {
+    "fields": {
+      "Name": "Spotlight",
+      "Description": "Highlights one or more UI anchors through an SVG cutout mask and displays a floating guidance popover.",
+      "DriverClass": "Spotlight",
+      "RendererClass": "Spotlight",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "NextButtonText": { "type": "string" },
+          "BackButtonText": { "type": "string" },
+          "DismissButtonText": { "type": "string" },
+          "ShowProgress": { "type": "boolean" },
+          "PaddingPx": { "type": "number" },
+          "AllowTargetClick": { "type": "boolean" },
+          "ExtraAnchors": { "type": "array" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-bullseye",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2D681D4C-9B67-4C24-8E90-B482CCB6E24A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Action",
+      "Description": "Guides the user to interact with a target control, edit a field, or emit a completion signal; supports Guide and gated Do modes.",
+      "DriverClass": "Action",
+      "RendererClass": "Action",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "ShowWaitingIndicator": { "type": "boolean" },
+          "WaitingMessage": { "type": "string" },
+          "AllowManualSkip": { "type": "boolean" },
+          "SkipButtonText": { "type": "string" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide,Do",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-hand-pointer",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3E581301-E4EA-4703-A601-8493887CD522"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Beacon",
+      "Description": "Places a pulsing non-intrusive beacon indicator beside an anchor that expands into a tip card when clicked or hovered.",
+      "DriverClass": "Beacon",
+      "RendererClass": "Beacon",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "PulseDurationMs": { "type": "number" },
+          "DismissButtonText": { "type": "string" },
+          "OpenOnHover": { "type": "boolean" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-circle-dot",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0FB1658A-CE6D-42CC-B6F7-7505FE9DBA04"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modal",
+      "Description": "Displays a centered modal dialog for welcome cards, announcements, checkpoints, or tour summaries.",
+      "DriverClass": "Modal",
+      "RendererClass": "Modal",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "Variant": { "type": "string" },
+          "PrimaryButtonText": { "type": "string" },
+          "SecondaryButtonText": { "type": "string" },
+          "NextTourKey": { "type": "string" },
+          "LearningPathKey": { "type": "string" },
+          "ShowProgress": { "type": "boolean" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-window-maximize",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E9BCFA4F-2DCF-4BBD-A6D0-D1D073A7110D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Banner",
+      "Description": "Renders an inline or top-of-workspace notification banner with an optional call-to-action link or TourSignal trigger.",
+      "DriverClass": "Banner",
+      "RendererClass": "Banner",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "Tone": { "type": "string" },
+          "CtaText": { "type": "string" },
+          "CtaUrl": { "type": "string" },
+          "CtaSignalKey": { "type": "string" },
+          "Dismissible": { "type": "boolean" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-rectangle-ad",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B8F60A2C-7ED1-4CE9-89E6-C60C30589B90"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Choice",
+      "Description": "Presents 2-4 structured options for branching pathways or knowledge checks with optional instant feedback.",
+      "DriverClass": "Choice",
+      "RendererClass": "Choice",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "required": ["Options"],
+        "properties": {
+          "Question": { "type": "string" },
+          "Options": { "type": "array" },
+          "IsKnowledgeCheck": { "type": "boolean" },
+          "ShowFeedbackBeforeAdvance": { "type": "boolean" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-code-branch",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "2F9F306A-7A21-4741-B35A-C8738084D058"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Media",
+      "Description": "Embeds an annotated video, diagram image, or animated GIF walkthrough inside a tour step.",
+      "DriverClass": "Media",
+      "RendererClass": "Media",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "required": ["MediaType", "SourceUrl", "AltText"],
+        "properties": {
+          "MediaType": { "type": "string" },
+          "SourceUrl": { "type": "string" },
+          "CaptionsUrl": { "type": "string" },
+          "AltText": { "type": "string" },
+          "PosterUrl": { "type": "string" },
+          "AutoAdvanceOnEnd": { "type": "boolean" },
+          "NextButtonText": { "type": "string" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-photo-film",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DCE9ABAA-DE79-4A72-9944-6D8D5BC08BB5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "EmbeddedComponent",
+      "Description": "Renders an MJ ComponentSpec interactive React widget or component inline inside a step and advances on callbacks.OnEvent.",
+      "DriverClass": "EmbeddedComponent",
+      "RendererClass": "EmbeddedComponent",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "ComponentID": { "type": "string" },
+          "ComponentName": { "type": "string" },
+          "ComponentSpec": { "type": "object" },
+          "InputProps": { "type": "object" },
+          "CompletionEventName": { "type": "string" },
+          "AllowNextButtonFallback": { "type": "boolean" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-puzzle-piece",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "33888230-88FD-4176-A4EE-29D8518CD37F"
+    }
+  },
+  {
+    "fields": {
+      "Name": "AskAgent",
+      "Description": "Opens an AI Agent prompt with curated seed context for the active record, screen, or tour step.",
+      "DriverClass": "AskAgent",
+      "RendererClass": "AskAgent",
+      "ComponentID": null,
+      "ConfigSchema": {
+        "type": "object",
+        "required": ["SeedPrompt"],
+        "properties": {
+          "SeedPrompt": { "type": "string" },
+          "AgentID": { "type": "string" },
+          "PreferVoice": { "type": "boolean" },
+          "AllowNextButtonFallback": { "type": "boolean" },
+          "NextButtonText": { "type": "string" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Show,Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-sparkles",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "67E836ED-9382-42F2-80B4-7BC5BC508E3C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Interactive Readiness Check",
+      "Description": "Zero-deploy interactive step type backed by the Tour Interactive Readiness Check ComponentSpec for verifying tour publishing readiness.",
+      "DriverClass": "EmbeddedComponent",
+      "RendererClass": "EmbeddedComponent",
+      "ComponentID": "@lookup:MJ: Components.Name=Tour Interactive Readiness Check&Namespace=Tours/Interactive",
+      "ConfigSchema": {
+        "type": "object",
+        "properties": {
+          "InputProps": { "type": "object" },
+          "CompletionEventName": { "type": "string" },
+          "AllowNextButtonFallback": { "type": "boolean" },
+          "localizations": { "type": "object" }
+        }
+      },
+      "SupportedModes": "Guide",
+      "IsAgentCapable": true,
+      "Icon": "fa-solid fa-clipboard-check",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "295A9CC2-44A0-45A1-8E7F-D5D1BDB4D162"
+    }
+  }
+]

@@ -1,0 +1,60 @@
+{
+  "Version": "1.0.0",
+  "Package": "@memberjunction/ng-tours",
+  "Anchors": [
+    {
+      "Key": "core.shell.app-switcher",
+      "Description": "Explorer shell application switcher trigger"
+    },
+    {
+      "Key": "core.shell.omnibar",
+      "Description": "Explorer shell global omnibar search trigger"
+    },
+    {
+      "Key": "core.shell.chat",
+      "Description": "Explorer shell Sage chat overlay toggle"
+    },
+    {
+      "Key": "core.shell.notifications",
+      "Description": "Explorer shell user notifications bell button"
+    },
+    {
+      "Key": "core.shell.user-menu",
+      "Description": "Explorer shell user profile and preferences menu"
+    },
+    {
+      "Key": "core.shell.tab-strip",
+      "Description": "Explorer shell workspace tab strip"
+    },
+    {
+      "Key": "core.shell.home",
+      "Description": "Explorer shell home dashboard navigation button"
+    },
+    {
+      "Key": "core.shell.tours-launcher",
+      "Description": "Explorer shell Tours & Help header launcher"
+    }
+  ],
+  "SemanticCapabilities": [
+    {
+      "Strategy": "FormField",
+      "Selector": "[data-field-name]",
+      "Description": "Core entity form field hook managed by FormAnchorNavigator"
+    },
+    {
+      "Strategy": "FormSection",
+      "Selector": "[data-section-key]",
+      "Description": "Core entity form collapsible section hook managed by FormAnchorNavigator"
+    },
+    {
+      "Strategy": "FormRailGroup",
+      "Selector": "[data-rail-key]",
+      "Description": "Core entity form left-nav rail group hook managed by FormAnchorNavigator"
+    },
+    {
+      "Strategy": "FormToolbarAction",
+      "Selector": "[data-form-toolbar-action]",
+      "Description": "Core entity form toolbar action hook managed by FormAnchorNavigator"
+    }
+  ]
+}

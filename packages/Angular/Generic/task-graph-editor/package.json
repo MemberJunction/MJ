@@ -41,6 +41,7 @@
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
+    "@memberjunction/graph": "6.3.0-edge.1",
     "@memberjunction/ng-base-types": "6.3.0-edge.1",
     "@memberjunction/ng-flow-editor": "6.3.0-edge.1",
     "@memberjunction/ng-ui-components": "6.3.0-edge.1",

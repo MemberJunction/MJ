@@ -9,8 +9,8 @@ import {
     ComputeTasksToBlock,
     type TaskGraphEdge,
     type TaskGraphNode,
-    type TaskGraphSpec,
-} from '@memberjunction/ai-core-plus';
+} from '@memberjunction/graph';
+import type { TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { FlowNodeConfidence, FlowNodeXRayItem } from '@memberjunction/ng-flow-editor';
 import type { TaskGraphRunFrame } from './task-graph-run-view.component';

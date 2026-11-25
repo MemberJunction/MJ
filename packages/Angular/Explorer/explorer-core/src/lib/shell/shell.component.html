@@ -87,6 +87,7 @@
       @if (ShowSearchBar) {
         @if (UseOmnibar) {
           <button class="search-btn" title="Search everything"
+            data-mj-tour-anchor="core.shell.omnibar"
             [attr.aria-label]="'Search everything (' + OmnibarShortcutLabel + ')'"
             (click)="OnHeaderSearchClick()">
             <i class="fa-solid fa-magnifying-glass"></i>
@@ -157,8 +158,160 @@
           }
         </div>
       }
+      <!-- Guided Tours & Help Launcher -->
+      <div class="tours-launcher-wrap desktop-only">
+        <button
+          type="button"
+          class="icon-btn tours-launcher-btn"
+          [class.is-active-tour]="ActiveTourView && ActiveTourView.Status === 'In Progress'"
+          data-mj-tour-anchor="core.shell.tours-launcher"
+          aria-label="Tours & Help"
+          title="Tours & Help"
+          [attr.aria-expanded]="ToursMenuOpen"
+          aria-haspopup="dialog"
+          (click)="ToggleToursMenu($event)">
+          <i class="fa-solid fa-route" aria-hidden="true"></i>
+          @if (ActiveTourView && ActiveTourView.Status === 'In Progress') {
+            <span class="tours-active-dot" aria-hidden="true"></span>
+          }
+        </button>
+
+        @if (ToursMenuOpen) {
+          <div class="tours-launcher-popover" role="dialog" aria-label="Tours and Help" (click)="$event.stopPropagation()">
+            <div class="tours-popover-header">
+              <div class="tours-popover-title">
+                <i class="fa-solid fa-route" aria-hidden="true"></i>
+                <span>Tours &amp; Help</span>
+              </div>
+              @if (UseOmnibar && ShowSearchBar) {
+                <button type="button" class="tours-omnibar-link" (click)="OpenToursOmnibar()" title="Search all tours in Omnibar (?)">
+                  <kbd>?</kbd> Search
+                </button>
+              }
+            </div>
+
+            @if (ActiveTourView && ActiveTourView.Status === 'In Progress') {
+              <div class="tours-active-banner">
+                <div class="tours-active-meta">
+                  <span class="tours-active-status">{{ ActiveTourView.IsPaused ? 'Paused' : ActiveTourView.Status }}</span>
+                  <strong class="tours-active-name">{{ ActiveTourView.TourName }}</strong>
+                  @if (ActiveTourView.CurrentStep) {
+                    <span class="tours-active-step">
+                      Step {{ ActiveTourView.StepIndex + 1 }} of {{ ActiveTourView.StepCount }} · {{ ActiveTourView.CurrentStep.Title }}
+                    </span>
+                  }
+                </div>
+                <div class="tours-active-controls">
+                  @if (ActiveTourView.IsPaused) {
+                    <button type="button" mjButton variant="primary" size="sm" (click)="ResumeLauncherTour()">
+                      <i class="fa-solid fa-play" aria-hidden="true"></i> Resume
+                    </button>
+                  } @else {
+                    <button type="button" mjButton variant="secondary" size="sm" (click)="PauseLauncherTour()">
+                      <i class="fa-solid fa-pause" aria-hidden="true"></i> Pause
+                    </button>
+                  }
+                  <button type="button" mjButton variant="flat" size="sm" (click)="StopLauncherTour()">
+                    Stop
+                  </button>
+                </div>
+              </div>
+            }
+
+            <div class="tours-popover-body">
+              @if (ToursLoading) {
+                <div class="tours-popover-loading">
+                  <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                  <span>Finding tours for this screen…</span>
+                </div>
+              } @else {
+                <div class="tours-section">
+                  <div class="tours-section-title">Tours for this screen</div>
+                  @if (SuggestedTours.length === 0) {
+                    <div class="tours-empty-hint">No contextual tours match this screen right now.</div>
+                  } @else {
+                    <div class="tours-item-list">
+                      @for (entry of SuggestedTours; track entry.Tour.TourKey) {
+                        <button type="button" class="tours-item-row" (click)="StartLauncherTour(entry.Tour.TourKey)">
+                          <span class="tours-item-icon"><i class="fa-solid fa-compass" aria-hidden="true"></i></span>
+                          <span class="tours-item-copy">
+                            <span class="tours-item-name">{{ entry.Tour.Name }}</span>
+                            @if (entry.Tour.Description) {
+                              <span class="tours-item-desc">{{ entry.Tour.Description }}</span>
+                            }
+                            <span class="tours-item-meta">
+                              {{ entry.Tour.Steps.length }} steps
+                              @if (entry.Tour.EstimatedMinutes) {
+                                · ~{{ entry.Tour.EstimatedMinutes }} min
+                              }
+                            </span>
+                          </span>
+                          <i class="fa-solid fa-chevron-right tours-item-arrow" aria-hidden="true"></i>
+                        </button>
+                      }
+                    </div>
+                  }
+                </div>
+
+                @if (LauncherLearningPaths.length > 0) {
+                  <div class="tours-section">
+                    <div class="tours-section-title">Learning Paths</div>
+                    <div class="tours-path-list">
+                      @for (lp of LauncherLearningPaths; track lp.Path.ID) {
+                        <div class="tours-path-row">
+                          <div class="tours-path-head">
+                            <span class="tours-path-name">{{ lp.Path.Name }}</span>
+                            <span class="tours-path-pct">{{ lp.CompletedCount }}/{{ lp.TotalCount }}</span>
+                          </div>
+                          <div class="tours-path-bar" role="progressbar" [attr.aria-valuenow]="lp.PercentComplete" aria-valuemin="0" aria-valuemax="100">
+                            <div class="tours-path-bar-fill" [style.width.%]="lp.PercentComplete"></div>
+                          </div>
+                          @if (lp.NextTourKey) {
+                            <button type="button" class="tours-path-next" (click)="StartLauncherTour(lp.NextTourKey)">
+                              <i class="fa-solid fa-play" aria-hidden="true"></i> Next: {{ lp.NextTourName }}
+                            </button>
+                          }
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+
+            <div class="tours-popover-prefs">
+              <div class="tours-section-title">Preferences</div>
+              <label class="tours-pref-toggle">
+                <input type="checkbox" [checked]="TourPrefs.OffersEnabled" (change)="ToggleTourOffersPref()" />
+                <span>Show proactive tour offers</span>
+              </label>
+              <label class="tours-pref-toggle">
+                <input type="checkbox" [checked]="TourPrefs.ShowBeacons" (change)="ToggleTourBeaconsPref()" />
+                <span>Show feature hints &amp; beacons</span>
+              </label>
+              <div class="tours-pref-modes">
+                <span class="tours-pref-mode-label">Guide mode:</span>
+                <div class="tours-mode-pills">
+                  @for (mode of TourGuideModeOptions; track mode) {
+                    <button
+                      type="button"
+                      class="tours-mode-pill"
+                      [class.active]="TourPrefs.PreferredGuideMode === mode"
+                      (click)="SetPreferredGuideMode(mode)">
+                      {{ mode }}
+                    </button>
+                  }
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
       @if (ShowNotifications) {
-        <button class="icon-btn desktop-only notification-btn" title="Notifications" (click)="showNotifications()">
+        <button class="icon-btn desktop-only notification-btn" title="Notifications"
+          data-mj-tour-anchor="core.shell.notifications"
+          (click)="showNotifications()">
           <i class="fa-solid fa-bell"></i>
           @if (unreadNotificationCount > 0) {
             <span class="notification-badge">
@@ -187,6 +340,7 @@
 
       <div class="user-menu">
         <button class="avatar-btn" (click)="toggleUserMenu($event)"
+          data-mj-tour-anchor="core.shell.user-menu"
           [attr.aria-label]="avatarAriaLabel"
           [attr.aria-expanded]="userMenuVisible">
           @if (userImageURL) {
@@ -332,6 +486,12 @@
           <span>Search</span>
         </button>
       }
+      @if (UseOmnibar && ShowSearchBar) {
+        <button class="mobile-nav-action" title="Tours & Help" (click)="OpenToursOmnibar(); closeMobileNav()">
+          <i class="fa-solid fa-route"></i>
+          <span>Tours &amp; Help</span>
+        </button>
+      }
       @if (ShowNotifications) {
         <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
           <i class="fa-solid fa-bell"></i>
@@ -364,6 +524,7 @@
       id="mj-main-content"
       role="main"
       tabindex="-1"
+      data-mj-tour-anchor="core.shell.tab-strip"
       mjSharePanel="Main content"
       mjSharePanelIcon="fa-solid fa-table-cells-large"
       [class.hide-tab-bar]="!tabBarVisible"
@@ -462,3 +623,6 @@
   [IsVisible]="DiagnosticDialogOpen"
   (Closed)="DiagnosticDialogOpen = false">
 </mj-diagnostic-report-problem-dialog>
+
+<!-- Guided Tours Host Overlay -->
+<mj-tour-host [Provider]="ProviderToUse" (SessionChanged)="OnTourHostSessionChanged()"></mj-tour-host>

@@ -1,7 +1,7 @@
 import { AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, HostListener, OnDestroy, ViewChild } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJTaskDependencyEntity, MJTaskEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
-import { ComputeTasksToBlock, type TaskGraphNode, type TaskGraphEdge } from '@memberjunction/ai-core-plus';
+import { ComputeTasksToBlock, type TaskGraphNode, type TaskGraphEdge } from '@memberjunction/graph';
 import { ParseJSONOptions, ParseJSONRecursive, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboard, BaseResourceComponent } from '@memberjunction/ng-shared';
 import { TaskGraphDebuggerComponent, type TaskGraphRunFrame } from '@memberjunction/ng-task-graph-editor';

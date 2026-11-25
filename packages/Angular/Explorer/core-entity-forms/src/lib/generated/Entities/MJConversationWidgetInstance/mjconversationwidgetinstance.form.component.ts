@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJConversationWidgetInstanceEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: Conversation Widget Instances') // Tell MemberJunction about this class
 @Component({
@@ -15,7 +16,8 @@ export class MJConversationWidgetInstanceFormComponent extends BaseFormComponent
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
+            { sectionKey: 'mJTourSurfaces', sectionName: 'Tour Surfaces', isExpanded: false }
         ]);
     }
 }

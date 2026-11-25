@@ -120,6 +120,8 @@
     "@memberjunction/task-graph": "6.3.0-edge.1",
     "@memberjunction/templates": "6.3.0-edge.1",
     "@memberjunction/testing-engine": "6.3.0-edge.1",
+    "@memberjunction/tours-runtime": "6.3.0-edge.1",
+    "@memberjunction/tours-server": "6.3.0-edge.1",
     "@memberjunction/video-studio": "6.3.0-edge.1",
     "@memberjunction/work-queue-engine": "6.3.0-edge.1",
     "@memberjunction/work-queue-samples": "6.3.0-edge.1"

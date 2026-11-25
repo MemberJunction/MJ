@@ -27,7 +27,8 @@ export class MJAIAgentSessionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentSessions', sectionName: 'AI Agent Sessions', isExpanded: false },
             { sectionKey: 'mJAIAgentSessionBridges', sectionName: 'AI Agent Session Bridges', isExpanded: false },
             { sectionKey: 'mJInteractions', sectionName: 'Interactions', isExpanded: false },
-            { sectionKey: 'mJAIAgentSessionRecordingShards', sectionName: 'AI Agent Session Recording Shards', isExpanded: false }
+            { sectionKey: 'mJAIAgentSessionRecordingShards', sectionName: 'AI Agent Session Recording Shards', isExpanded: false },
+            { sectionKey: 'mJTourRuns', sectionName: 'Tour Runs', isExpanded: false }
         ]);
     }
 }

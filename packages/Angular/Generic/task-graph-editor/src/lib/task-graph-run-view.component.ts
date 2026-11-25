@@ -35,9 +35,11 @@ import { TaskGraphRunPrefsStore, type TaskGraphRunPrefs } from './task-graph-run
 import {
     GraphLayoutBounds,
     LayoutGraphNodes,
-    ProjectTaskRowsToSpec,
     type GraphLayoutEdge,
     type GraphNodePosition,
+} from '@memberjunction/graph';
+import {
+    ProjectTaskRowsToSpec,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { BuildRuntimeStatus, IsRuntimeSettled, NormalizeRuntimeState } from './task-graph-runtime-source';

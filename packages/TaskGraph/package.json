@@ -25,6 +25,7 @@
     "@memberjunction/core": "6.3.0-edge.1",
     "@memberjunction/core-entities": "6.3.0-edge.1",
     "@memberjunction/global": "6.3.0-edge.1",
+    "@memberjunction/graph": "6.3.0-edge.1",
     "@memberjunction/notifications": "6.3.0-edge.1",
     "@memberjunction/sql-dialect": "6.3.0-edge.1"
   },

@@ -318,6 +318,8 @@ import { MJInteractionOfferFormComponent } from "./Entities/MJInteractionOffer/m
 import { MJJurisdictionFormComponent } from "./Entities/MJJurisdiction/mjjurisdiction.form.component";
 import { MJJurisdictionMemberFormComponent } from "./Entities/MJJurisdictionMember/mjjurisdictionmember.form.component";
 import { MJKnowledgeHubSavedSearchFormComponent } from "./Entities/MJKnowledgeHubSavedSearch/mjknowledgehubsavedsearch.form.component";
+import { MJLearningPathFormComponent } from "./Entities/MJLearningPath/mjlearningpath.form.component";
+import { MJLearningPathTourFormComponent } from "./Entities/MJLearningPathTour/mjlearningpathtour.form.component";
 import { MJLibraryFormComponent } from "./Entities/MJLibrary/mjlibrary.form.component";
 import { MJLibraryItemFormComponent } from "./Entities/MJLibraryItem/mjlibraryitem.form.component";
 import { MJListCategoryFormComponent } from "./Entities/MJListCategory/mjlistcategory.form.component";
@@ -467,6 +469,18 @@ import { MJTestSuiteRunFormComponent } from "./Entities/MJTestSuiteRun/mjtestsui
 import { MJTestSuiteTestFormComponent } from "./Entities/MJTestSuiteTest/mjtestsuitetest.form.component";
 import { MJTestTypeFormComponent } from "./Entities/MJTestType/mjtesttype.form.component";
 import { MJThemeFormComponent } from "./Entities/MJTheme/mjtheme.form.component";
+import { MJTourFormComponent } from "./Entities/MJTour/mjtour.form.component";
+import { MJTourOverrideFormComponent } from "./Entities/MJTourOverride/mjtouroverride.form.component";
+import { MJTourPrerequisiteFormComponent } from "./Entities/MJTourPrerequisite/mjtourprerequisite.form.component";
+import { MJTourRunFormComponent } from "./Entities/MJTourRun/mjtourrun.form.component";
+import { MJTourRunStepFormComponent } from "./Entities/MJTourRunStep/mjtourrunstep.form.component";
+import { MJTourStepFormComponent } from "./Entities/MJTourStep/mjtourstep.form.component";
+import { MJTourStepPathFormComponent } from "./Entities/MJTourStepPath/mjtoursteppath.form.component";
+import { MJTourStepTypeFormComponent } from "./Entities/MJTourStepType/mjtoursteptype.form.component";
+import { MJTourSurfaceFormComponent } from "./Entities/MJTourSurface/mjtoursurface.form.component";
+import { MJTourSurfaceTourFormComponent } from "./Entities/MJTourSurfaceTour/mjtoursurfacetour.form.component";
+import { MJTourTriggerFormComponent } from "./Entities/MJTourTrigger/mjtourtrigger.form.component";
+import { MJTourVersionFormComponent } from "./Entities/MJTourVersion/mjtourversion.form.component";
 import { MJUserApplicationEntityFormComponent } from "./Entities/MJUserApplicationEntity/mjuserapplicationentity.form.component";
 import { MJUserApplicationFormComponent } from "./Entities/MJUserApplication/mjuserapplication.form.component";
 import { MJUserFavoriteFormComponent } from "./Entities/MJUserFavorite/mjuserfavorite.form.component";
@@ -548,7 +562,8 @@ declarations: [
     MJKnowledgeHubSavedSearchFormComponent,
     MJMagicLinkInviteFormComponent,
     MJMaterializedResultFormComponent,
-    MJMeetingParticipantFormComponent
+    MJMeetingParticipantFormComponent,
+    MJTourVersionFormComponent
 ],
 imports: [
     CommonModule,
@@ -577,6 +592,7 @@ declarations: [
     MJEntityAIActionFormComponent,
     MJEntityFormComponent,
     MJIntegrationSourceTypeFormComponent,
+    MJLearningPathTourFormComponent,
     MJMLEvaluationProtocolFormComponent,
     MJScopedPromptPartFormComponent,
     MJSearchScopePermissionFormComponent,
@@ -743,7 +759,8 @@ declarations: [
     MJGeneratedCodeCategoryFormComponent,
     MJQueryFieldFormComponent,
     MJRSUPendingWorkFormComponent,
-    MJResourceTypeFormComponent
+    MJResourceTypeFormComponent,
+    MJTourPrerequisiteFormComponent
 ],
 imports: [
     CommonModule,
@@ -832,7 +849,8 @@ declarations: [
     MJQueryParameterFormComponent,
     MJRubricEvaluationScoreFormComponent,
     MJTagCoOccurrenceFormComponent,
-    MJTemplateContentFormComponent
+    MJTemplateContentFormComponent,
+    MJTourRunFormComponent
 ],
 imports: [
     CommonModule,
@@ -862,7 +880,9 @@ declarations: [
     MJQueryFormComponent,
     MJRecordCloneLogFormComponent,
     MJTestRunOutputFormComponent,
-    MJTestRunOutputTypeFormComponent
+    MJTestRunOutputTypeFormComponent,
+    MJTourStepFormComponent,
+    MJTourStepTypeFormComponent
 ],
 imports: [
     CommonModule,
@@ -932,7 +952,8 @@ declarations: [
     MJInteractionOfferFormComponent,
     MJMagicLinkInviteAllowedDomainFormComponent,
     MJRowLevelSecurityFilterFormComponent,
-    MJSignatureRequestRecipientFormComponent
+    MJSignatureRequestRecipientFormComponent,
+    MJTourFormComponent
 ],
 imports: [
     CommonModule,
@@ -966,6 +987,7 @@ declarations: [
     MJSchemaInfoFormComponent,
     MJSignatureProviderFormComponent,
     MJTaggedItemFormComponent,
+    MJTourStepPathFormComponent,
     MJUserFormComponent,
     MJWebSearchProviderFormComponent
 ],
@@ -1062,6 +1084,7 @@ declarations: [
     MJMagicLinkRedemptionFormComponent,
     MJScheduledJobTypeFormComponent,
     MJSignatureRequestDocumentFormComponent,
+    MJTourTriggerFormComponent,
     MJUserViewFormComponent
 ],
 imports: [
@@ -1295,6 +1318,7 @@ declarations: [
     MJEntityFormOverrideFormComponent,
     MJFileStorageAccountPermissionFormComponent,
     MJGraphEdgeFormComponent,
+    MJLearningPathFormComponent,
     MJMCPServerToolFormComponent,
     MJMLAlgorithmUseCaseRankingFormComponent,
     MJMLTrainingPipelineFormComponent,
@@ -1302,6 +1326,7 @@ declarations: [
     MJRecordLinkFormComponent,
     MJTestRubricFormComponent,
     MJTestRunFormComponent,
+    MJTourRunStepFormComponent,
     MJUserRoutineFormComponent,
     MJWorkspaceFormComponent
 ],
@@ -1434,7 +1459,8 @@ declarations: [
     MJRubricCategoryFormComponent,
     MJSearchProviderFormComponent,
     MJSignatureAccountFormComponent,
-    MJTaskTypeFormComponent
+    MJTaskTypeFormComponent,
+    MJTourSurfaceFormComponent
 ],
 imports: [
     CommonModule,
@@ -1461,7 +1487,8 @@ declarations: [
     MJExternalDataSourceFormComponent,
     MJFileCategoryFormComponent,
     MJRecordProcessFormComponent,
-    MJTemplateFormComponent
+    MJTemplateFormComponent,
+    MJTourOverrideFormComponent
 ],
 imports: [
     CommonModule,
@@ -1492,6 +1519,7 @@ declarations: [
     MJRecordGeoCodeFormComponent,
     MJScheduledJobRunFormComponent,
     MJTemplateParamFormComponent,
+    MJTourSurfaceTourFormComponent,
     MJUserFavoriteFormComponent
 ],
 imports: [

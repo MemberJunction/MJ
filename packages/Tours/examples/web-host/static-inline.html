@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MJ Guided Tours — Static Inline Mode (Zero Backend)</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 32px;
+    }
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <button id="start-btn" type="button">Start Static Tour</button>
+    <button type="button" data-mj-tour-anchor="static.export">Export CSV</button>
+  </div>
+
+  <script src="../../../Angular/Generic/tours/dist/element/mj-tours.js"></script>
+  <script>
+    const staticDefinitions = [
+      {
+        TourKey: 'static.welcome',
+        Name: 'Static Page Tour',
+        Status: 'Active',
+        VersionNumber: 1,
+        Steps: [
+          {
+            StepKey: 'intro',
+            Sequence: 10,
+            StepType: 'Modal',
+            Title: 'Zero-Backend Tour',
+            Body: 'Running from inline JSON with in-memory progress storage.'
+          },
+          {
+            StepKey: 'export',
+            Sequence: 20,
+            StepType: 'Spotlight',
+            Title: 'Export Your Data',
+            Body: 'Click here anytime to export your table as CSV.',
+            Anchor: { Strategy: 'Registered', Key: 'static.export' },
+            Placement: 'bottom'
+          }
+        ]
+      }
+    ];
+
+    document.getElementById('start-btn').addEventListener('click', async () => {
+      const tours = await window.MJTours.MountTours({
+        Definitions: staticDefinitions,
+        Store: 'memory'
+      });
+      await tours.Start('static.welcome');
+    });
+  </script>
+</body>
+</html>

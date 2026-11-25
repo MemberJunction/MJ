@@ -4,6 +4,7 @@ import type { NavigationService } from '@memberjunction/ng-shared';
 import type { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { SearchService } from '@memberjunction/ng-search';
 import type { CommandPaletteService } from '../command-palette/command-palette.service';
+import type { ExplorerTourHost } from '../tours/explorer-tour-host.service';
 
 /**
  * What selecting an omnibar suggestion DOES. Every {@link OmnibarProvider}
@@ -20,7 +21,8 @@ export type OmnibarNavPayload =
     | { kind: 'agent'; agentName: string }
     | { kind: 'file'; fileName: string; rawMetadata?: string }
     | { kind: 'dashboard'; dashboardId: string; dashboardName: string }
-    | { kind: 'view'; viewId: string; viewName: string };
+    | { kind: 'view'; viewId: string; viewName: string }
+    | { kind: 'tour'; tourKey: string; guideMode?: string; learningPathKey?: string };
 
 /** Key under which the nav payload rides in `MentionSuggestion.data`. */
 export const OMNIBAR_NAV_KEY = 'nav';
@@ -42,6 +44,7 @@ export interface OmnibarContext {
     Apps?: ApplicationManager;
     PaletteService?: CommandPaletteService;
     Navigation?: NavigationService;
+    TourHost?: ExplorerTourHost;
     /** When true, providers run local/offline search only with zero PreviewSearch GraphQL calls. */
     OfflineOnly?: boolean;
 }

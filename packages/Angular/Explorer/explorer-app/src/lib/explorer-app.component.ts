@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef, viewChild } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef, viewChild, inject } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -27,16 +27,17 @@ import { LoginDesignTokens, LoginThemeTokens, type LoginBlock, type LoginDesign,
 import { WorkspaceInitializerService } from '@memberjunction/ng-workspace-initializer';
 import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '@memberjunction/ng-bootstrap/types';
 import { ValidateExplorerEnvironment } from './environment-validation';
-import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent } from '@memberjunction/ng-explorer-core';
+import { SystemValidationService, ServerConnectivityService, ServerConnectivityBannerComponent, ShellComponent, ExplorerTourHost } from '@memberjunction/ng-explorer-core';
 import { NavigationService, AgentContextUpdate, RecordSourceContext, ThemeService } from '@memberjunction/ng-shared';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ClientToolResultEvent } from '@memberjunction/ai-agent-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { ConversationBridgeService, RealtimeSessionService } from '@memberjunction/ng-conversations';
+import { ConversationBridgeService, RealtimeSessionService, UICommandHandlerService } from '@memberjunction/ng-conversations';
 import { EnableChannelFrameCapture } from '@memberjunction/ng-realtime-channels';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot, ClientToolMetadata } from '@memberjunction/ai-core-plus';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
+import { ITourHostAgentBridge, TourActiveContextSnapshot, TourClientToolDefinition, TourSessionGuideMode } from '@memberjunction/tours-runtime';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
@@ -47,6 +48,30 @@ const REALTIME_GLOBAL_TOOL_OWNER = 'explorer.global';
 
 /** Owner key of the active surface's client tools in the realtime ContextTool registry (replaced on every surface change, cleared on an app switch). */
 const REALTIME_SURFACE_TOOL_OWNER = 'explorer.surface';
+
+/** Owner key of an active guided tour's session-scoped client tools in the realtime ContextTool registry. */
+const REALTIME_TOUR_SESSION_TOOL_OWNER = 'explorer.tourSession';
+
+/** App context snapshot extended with live Guided Tours state. */
+type ExplorerAppContextSnapshot = AppContextSnapshot & {
+  ActiveTour?: TourActiveContextSnapshot['ActiveTour'];
+  AvailableTours?: TourActiveContextSnapshot['AvailableTours'];
+};
+
+interface StartTourCommandPayload {
+  type: 'start:tour';
+  tourKey: string;
+  guideMode?: TourSessionGuideMode;
+  startAtStepKey?: string;
+}
+
+function isStartTourCommand(command: unknown): command is StartTourCommandPayload {
+  if (typeof command !== 'object' || command === null) {
+    return false;
+  }
+  const obj = command as Record<string, unknown>;
+  return obj['type'] === 'start:tour' && typeof obj['tourKey'] === 'string' && obj['tourKey'].trim().length > 0;
+}
 
 import { CarryAdditionalContext, SurfaceContextTracker } from './app-context-snapshot';
 import { IsStandaloneRoute } from './standalone-routes';
@@ -372,7 +397,14 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /** Application context snapshot for AI agent awareness — updated on every app/tab transition */
-  public AppContextSnapshot: AppContextSnapshot | null = null;
+  public AppContextSnapshot: ExplorerAppContextSnapshot | null = null;
+
+  private readonly tourHost = inject(ExplorerTourHost, { optional: true });
+  private readonly uiCommandHandler = inject(UICommandHandlerService, { optional: true });
+  private latestTourContext: TourActiveContextSnapshot | null = null;
+  private tourGlobalToolNames: string[] = [];
+  private tourSessionToolNames: string[] = [];
+  private tourSessionToolManifest: ClientToolMetadata[] = [];
 
   /** Shell-header height in pixels — matches `.shell-header { height: 60px }`. */
   private static readonly SHELL_HEADER_PX = 60;
@@ -571,6 +603,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
         // Chat overlay can now render — workspace is initialized
         this.IsChatOverlayReady = true;
+        if (this.tourHost) {
+          this.tourHost.SetProvider(this.ProviderToUse);
+          void this.tourHost.EnsureToolkit();
+        }
         this.cdr.detectChanges();
 
         // Check if a pre-shell guard wants to block the shell (e.g., onboarding wizard)
@@ -771,6 +807,23 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       .pipe(takeUntil(this.destroy$))
       .subscribe((update) => this.handleAgentContextUpdate(update));
 
+    // Wire guided tours global + session client tools, live tour context, and 'start:tour' UI commands
+    if (this.tourHost) {
+      this.tourHost.SetProvider(this.ProviderToUse);
+      this.attachTourAgentBridge();
+    }
+    this.uiCommandHandler?.ActionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((request) => {
+        if (isStartTourCommand(request.command)) {
+          void this.tourHost?.StartTour(request.command.tourKey, {
+            Mode: request.command.guideMode,
+            StartAtStepKey: request.command.startAtStepKey,
+            LaunchSource: 'Agent',
+          });
+        }
+      });
+
     // Apply saved or OS-preferred theme for the login page
     this.applyLoginTheme();
 
@@ -910,7 +963,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
     if (!activeApp) {
       // No specific app is open, but the co-agent must STILL be able to navigate the user into one
       // and run the global tools — so ship a navigable baseline instead of a null (thin) snapshot.
-      this.AppContextSnapshot = {
+      this.AppContextSnapshot = this.applyTourContext({
         App: { Name: 'MemberJunction', Description: 'No specific app is open right now — you can open one.' },
         ActiveNavItem: { Name: '(none)' },
         OtherNavItems: [],
@@ -920,7 +973,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           Roles: currentUser?.UserRoles?.map(r => r.Role) || []
         },
         Capabilities: { Tools: this.currentToolManifest }
-      };
+      });
       this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
       this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
       this.cdr.detectChanges();
@@ -962,7 +1015,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
       Capabilities: { Tools: this.currentToolManifest }
     };
     // The attached surface's context (SetAgentContext) survives an app or nav change, like its tools do.
-    this.AppContextSnapshot = CarryAdditionalContext(rebuilt, this.activeSurfaceContext.Context);
+    this.AppContextSnapshot = this.applyTourContext(
+      CarryAdditionalContext(rebuilt, this.activeSurfaceContext.Context)
+    );
     // Publish to any embedded chat-area subscribers (Form Builder
     // cockpit, future domain dashboards). The floating overlay sees
     // the change directly via its [AppContext] template binding; this
@@ -997,7 +1052,9 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
 
     // Update AdditionalContext in the current snapshot
     if (this.trackSurfaceContext(update) && this.AppContextSnapshot) {
-      this.AppContextSnapshot = CarryAdditionalContext(this.AppContextSnapshot, this.activeSurfaceContext.Context);
+      this.AppContextSnapshot = this.applyTourContext(
+        CarryAdditionalContext(this.AppContextSnapshot, this.activeSurfaceContext.Context)
+      );
       // Republish so any embedded chat-area subscribers (Form Builder
       // cockpit, future dashboards with their own AI pane) pick up the
       // new dashboard slice — the floating overlay sees it via the
@@ -1132,7 +1189,126 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    *  registers — the proper place to clear/re-register per the tab lifecycle is the
    *  ComponentCacheManager (it already caches each component's AgentClientTools for that purpose). */
   private get currentToolManifest(): ClientToolMetadata[] {
-    return [...this.globalToolManifest, ...this.activeDashboardToolManifest];
+    return [...this.globalToolManifest, ...this.activeDashboardToolManifest, ...this.tourSessionToolManifest];
+  }
+
+  private applyTourContext(snapshot: AppContextSnapshot): ExplorerAppContextSnapshot {
+    if (!this.latestTourContext) {
+      return snapshot;
+    }
+    const available = this.latestTourContext.AvailableTours.slice(0, 3);
+    const additional = {
+      ...(snapshot.AdditionalContext ?? {}),
+      Tours: {
+        ActiveTour: this.latestTourContext.ActiveTour,
+        AvailableTours: available,
+      },
+    };
+    return {
+      ...snapshot,
+      AdditionalContext: additional,
+      ActiveTour: this.latestTourContext.ActiveTour,
+      AvailableTours: available,
+    };
+  }
+
+  private attachTourAgentBridge(): void {
+    if (!this.tourHost) {
+      return;
+    }
+    const bridge: ITourHostAgentBridge = {
+      RegisterGlobalTools: (tools: TourClientToolDefinition[]) => {
+        for (const existing of this.tourGlobalToolNames) {
+          this.agentClient.UnregisterTool(existing);
+        }
+        const ownedNames = new Set(this.tourGlobalToolNames);
+        this.globalAgentTools = this.globalAgentTools.filter((t) => !ownedNames.has(t.Name));
+        this.globalToolManifest = this.globalToolManifest.filter((t) => !ownedNames.has(t.Name));
+
+        this.tourGlobalToolNames = tools.map((t) => t.Name);
+        for (const tool of tools) {
+          const wrappedHandler = async (params: Record<string, unknown>) =>
+            tool.Handler(params) as Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>;
+          this.agentClient.RegisterTool({
+            Name: tool.Name,
+            Description: tool.Description,
+            ParameterSchema: tool.InputSchema,
+            Handler: wrappedHandler,
+          });
+          this.globalAgentTools.push({ Name: tool.Name, Handler: wrappedHandler });
+          this.globalToolManifest.push({
+            Name: tool.Name,
+            Description: tool.Description,
+            InputSchema: tool.InputSchema,
+          });
+        }
+
+        this.realtimeSession.RegisterAppClientTools(this.globalAgentTools, REALTIME_GLOBAL_TOOL_OWNER);
+        this.refreshSnapshotTools();
+      },
+      RegisterSessionTools: (tools: TourClientToolDefinition[]) => {
+        for (const existing of this.tourSessionToolNames) {
+          this.agentClient.UnregisterTool(existing);
+        }
+        this.tourSessionToolNames = tools.map((t) => t.Name);
+        this.tourSessionToolManifest = tools.map((t) => ({
+          Name: t.Name,
+          Description: t.Description,
+          InputSchema: t.InputSchema,
+        }));
+        for (const tool of tools) {
+          this.agentClient.RegisterTool({
+            Name: tool.Name,
+            Description: tool.Description,
+            ParameterSchema: tool.InputSchema,
+            Handler: (params) =>
+              tool.Handler(params) as Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }>,
+          });
+        }
+        this.realtimeSession.RegisterAppClientTools(
+          tools.map((t) => ({
+            Name: t.Name,
+            Description: t.Description,
+            InputSchema: t.InputSchema,
+            Handler: async (params: Record<string, unknown>) => WithoutMedia(await t.Handler(params)),
+          })),
+          REALTIME_TOUR_SESSION_TOOL_OWNER,
+        );
+        this.refreshSnapshotTools();
+      },
+      ClearSessionTools: () => {
+        for (const existing of this.tourSessionToolNames) {
+          this.agentClient.UnregisterTool(existing);
+        }
+        this.tourSessionToolNames = [];
+        this.tourSessionToolManifest = [];
+        this.realtimeSession.UnregisterAppClientTools(REALTIME_TOUR_SESSION_TOOL_OWNER);
+        this.refreshSnapshotTools();
+      },
+      UpdateContextSnapshot: (tourSnapshot: TourActiveContextSnapshot) => {
+        this.latestTourContext = tourSnapshot;
+        if (this.AppContextSnapshot) {
+          this.AppContextSnapshot = this.applyTourContext(this.AppContextSnapshot);
+          this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+          this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
+          this.cdr.detectChanges();
+        }
+      },
+    };
+    this.tourHost.AttachAgentBridge(bridge);
+  }
+
+  private refreshSnapshotTools(): void {
+    if (!this.AppContextSnapshot) {
+      return;
+    }
+    this.AppContextSnapshot = {
+      ...this.AppContextSnapshot,
+      Capabilities: { ...this.AppContextSnapshot.Capabilities, Tools: this.currentToolManifest },
+    };
+    this.navigationService.PublishAppContextSnapshot(this.AppContextSnapshot);
+    this.realtimeSession.UpdateAppContext(this.AppContextSnapshot);
+    this.cdr.detectChanges();
   }
 
   /** Register Explorer-specific client tool handlers with the AgentClientService */

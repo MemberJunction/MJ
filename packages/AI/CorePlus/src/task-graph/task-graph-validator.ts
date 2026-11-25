@@ -31,7 +31,7 @@ import {
     type RoutedTaskGraphEdge,
     type TaskGraphEdge,
     type TaskGraphNode,
-} from './graph-algorithms';
+} from '@memberjunction/graph';
 import { IsTaskGraphIsolationLevel, TASK_GRAPH_ISOLATION_LEVELS } from '@memberjunction/core';
 import {
     ConfigOf,

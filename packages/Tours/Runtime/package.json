@@ -1,0 +1,33 @@
+{
+  "name": "@memberjunction/tours-runtime",
+  "type": "module",
+  "version": "6.3.0-edge.1",
+  "description": "MemberJunction Guided Tours L0 pure TypeScript runtime — session state machine, pathway compiler, plugin base classes, standard plugins, host contracts, and agent toolkit",
+  "mjUILayer": "runtime",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/global": "6.3.0-edge.1",
+    "@memberjunction/core": "6.3.0-edge.1",
+    "@memberjunction/graph": "6.3.0-edge.1",
+    "rxjs": "^7.8.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

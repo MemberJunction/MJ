@@ -357,11 +357,13 @@ import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactCompl
 import { LoadArtifactEvaluateAiFormulaOperation } from './operations/ArtifactEvaluateAiFormulaServerOperation.js';
 import { LoadArtifactGuestShareOperations } from './operations/ArtifactGuestShareServerOperations.js';
 import { LoadCommsAdminOperations } from './operations/CommsAdminOperations.js';
+import { LoadToursServer } from '@memberjunction/tours-server';
 LoadSynthesizeArtifactFromSourcesOperation();
 LoadArtifactComplianceAuditOperation();
 LoadArtifactEvaluateAiFormulaOperation();
 LoadArtifactGuestShareOperations();
 LoadCommsAdminOperations();
+LoadToursServer();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { GraphQLSchema } from 'graphql';

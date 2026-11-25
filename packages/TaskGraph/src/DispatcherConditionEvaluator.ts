@@ -8,7 +8,7 @@
  * @module @memberjunction/task-graph
  */
 import { SafeExpressionEvaluator } from '@memberjunction/global';
-import type { IConditionEvaluator } from '@memberjunction/ai-core-plus';
+import type { IConditionEvaluator } from '@memberjunction/graph';
 
 export class DispatcherConditionEvaluator implements IConditionEvaluator {
     private readonly evaluator = new SafeExpressionEvaluator();

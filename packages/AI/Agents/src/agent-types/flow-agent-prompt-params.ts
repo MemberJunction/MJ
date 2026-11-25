@@ -7,7 +7,7 @@
  *
  * @module @memberjunction/ai-agents
  */
-import type { TraversalMode, JoinMode } from '@memberjunction/ai-core-plus';
+import type { TraversalMode, JoinMode } from '@memberjunction/graph';
 
 /** Configuration parameters for Flow Agent Type. */
 export interface FlowAgentTypePromptParams {

@@ -2,6 +2,12 @@
  * Navigation item displayed in the app header
  */
 export interface NavItem {
+  /**
+   * Optional stable identifier for this nav item (used by Guided Tours `NavItem` anchors,
+   * resolved before `DriverClass` and never matched by `Label` which hosts may rename).
+   */
+  Key?: string;
+
   /** Display label for the nav item */
   Label: string;
 

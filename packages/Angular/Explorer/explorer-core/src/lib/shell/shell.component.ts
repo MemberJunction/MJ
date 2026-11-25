@@ -51,6 +51,18 @@ import {
 import { SetReadinessBeacon } from './readiness-beacon';
 import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
 import { ApplyDeepLinkToRestoredWorkspace } from './deep-link-workspace';
+import {
+  DEFAULT_TOUR_PREFERENCES,
+  ExplorerLearningPathSummary,
+  ExplorerTourHost,
+} from '../tours/explorer-tour-host.service';
+import {
+  TourDefinition,
+  TourPreferences,
+  TourSessionGuideMode,
+  TourSessionView,
+} from '@memberjunction/tours-runtime';
+import { AnchorRegistry, DomTourAnchorBridge, MJTourHostComponent } from '@memberjunction/ng-tours';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -838,7 +850,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private reactAdapter = inject(AngularAdapterService);
   private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
   private readonly shellChromePolicyService = inject(ShellChromePolicyService, { optional: true });
+  private readonly tourHost = inject(ExplorerTourHost, { optional: true });
+  @ViewChild(MJTourHostComponent) private tourHostComponent?: MJTourHostComponent;
   public DiagnosticDialogOpen = false;
+
+  // Guided Tours & Help launcher state
+  public ToursMenuOpen = false;
+  public ToursLoading = false;
+  public ActiveTourView: TourSessionView | null = null;
+  public SuggestedTours: Array<{ Tour: TourDefinition; RecommendedPrerequisites?: string[] }> = [];
+  public LauncherLearningPaths: ExplorerLearningPathSummary[] = [];
+  public TourPrefs: TourPreferences = { ...DEFAULT_TOUR_PREFERENCES };
+  public readonly TourGuideModeOptions: TourSessionGuideMode[] = ['Visual', 'Chat', 'Voice'];
 
   constructor(
     private appManager: ApplicationManager,
@@ -877,6 +900,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.workspaceManager.Provider = providerForServices;
     this.DeveloperModeService.Provider = providerForServices;
     this.startupValidationService.Provider = providerForServices;
+    this.tourHost?.SetProvider(providerForServices);
     if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
 
     // Initialize theme immediately so loading UI shows correct colors from the start
@@ -1012,6 +1036,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const user = md.CurrentUser;
     if (!user) {
       throw new Error('No current user found');
+    }
+
+    if (this.tourHost) {
+      this.tourHost.SetProvider(md);
+      this.TourPrefs = this.tourHost.GetPreferences();
+      this.subscriptions.push(
+        this.tourHost.ActiveSessionView$.pipe(takeUntil(this.destroy$)).subscribe((view) => {
+          this.ActiveTourView = view;
+          this.cdr.markForCheck();
+        }),
+        this.tourHost.Location$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+          if (this.ToursMenuOpen) {
+            void this.refreshToursLauncher();
+          }
+        }),
+      );
     }
 
     // Diagnostics capture runs in memory until this status arrives; a status with capture off stops it
@@ -2617,6 +2657,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   ngAfterViewInit(): void {
     // Layout initialization happens in TabContainerComponent
+    this.tourHost?.AttachTourHostComponent(
+      this.tourHostComponent,
+      new DomTourAnchorBridge({ Registry: AnchorRegistry.Instance }),
+    );
+  }
+
+  public OnTourHostSessionChanged(): void {
+    this.tourHost?.SyncFromTourHostComponent();
   }
 
   /**
@@ -3993,6 +4041,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
+      if (event.key === 'Escape' && this.ToursMenuOpen) {
+          this.ToursMenuOpen = false;
+          this.cdr.markForCheck();
+          return;
+      }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (!isCtrlOrCmd) {
@@ -4153,12 +4206,113 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return this.ClearFinishedActivity();
   }
 
-  /** Close the Activity drawer when clicking anywhere outside it. */
+  /** Close the Activity drawer or Tours & Help popover when clicking anywhere outside them. */
   @HostListener('document:click')
   onDocumentClickCloseActivity(): void {
+    let changed = false;
     if (this.ActivityOpen) {
       this.ActivityOpen = false;
+      changed = true;
+    }
+    if (this.ToursMenuOpen) {
+      this.ToursMenuOpen = false;
+      changed = true;
+    }
+    if (changed) {
       this.cdr.detectChanges();
+    }
+  }
+
+  // ========================================
+  // GUIDED TOURS & HELP LAUNCHER
+  // ========================================
+
+  public ToggleToursMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    this.ActivityOpen = false;
+    this.UserMenuVisible = false;
+    this.ToursMenuOpen = !this.ToursMenuOpen;
+    if (this.ToursMenuOpen) {
+      void this.refreshToursLauncher();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public CloseToursMenu(): void {
+    if (this.ToursMenuOpen) {
+      this.ToursMenuOpen = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public async refreshToursLauncher(): Promise<void> {
+    if (!this.tourHost) {
+      return;
+    }
+    this.ToursLoading = true;
+    this.TourPrefs = this.tourHost.GetPreferences();
+    this.cdr.markForCheck();
+    try {
+      const [suggested, paths] = await Promise.all([
+        this.tourHost.GetEligibleTours(true),
+        this.tourHost.GetLearningPathSummaries(),
+      ]);
+      this.SuggestedTours = suggested.slice(0, 6);
+      this.LauncherLearningPaths = paths.slice(0, 4);
+    } catch {
+      this.SuggestedTours = [];
+      this.LauncherLearningPaths = [];
+    } finally {
+      this.ToursLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public StartLauncherTour(tourKey: string): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    void this.tourHost?.StartTour(tourKey, { LaunchSource: 'Launcher' });
+  }
+
+  public ResumeLauncherTour(): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    void this.tourHost?.ResumeActiveTour();
+  }
+
+  public PauseLauncherTour(): void {
+    void this.tourHost?.PauseActiveTour();
+  }
+
+  public StopLauncherTour(): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    void this.tourHost?.StopActiveTour('User stopped from Tours & Help menu');
+  }
+
+  public ToggleTourOffersPref(): void {
+    this.TourPrefs = { ...this.TourPrefs, OffersEnabled: !this.TourPrefs.OffersEnabled };
+    this.tourHost?.SavePreferences(this.TourPrefs);
+    this.cdr.markForCheck();
+  }
+
+  public ToggleTourBeaconsPref(): void {
+    this.TourPrefs = { ...this.TourPrefs, ShowBeacons: !this.TourPrefs.ShowBeacons };
+    this.tourHost?.SavePreferences(this.TourPrefs);
+    this.cdr.markForCheck();
+  }
+
+  public SetPreferredGuideMode(mode: TourSessionGuideMode): void {
+    this.TourPrefs = { ...this.TourPrefs, PreferredGuideMode: mode };
+    this.tourHost?.SavePreferences(this.TourPrefs);
+    this.cdr.markForCheck();
+  }
+
+  public OpenToursOmnibar(): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    if (this.UseOmnibar) {
+      this.OpenOmnibar('?');
     }
   }
 

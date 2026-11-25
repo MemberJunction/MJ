@@ -64,6 +64,7 @@ import { ThemeStudioResourceComponent } from './ThemeStudio/theme-studio-resourc
 import { ThemeManagerDashboardComponent } from './ThemeStudio/theme-manager-dashboard.component';
 import { ThemeManagerResourceComponent } from './ThemeStudio/theme-manager-resource.component';
 import { LoginStudioResourceComponent } from './LoginStudio/login-studio-resource.component';
+import { TourStudioDashboardComponent } from './TourStudio/tour-studio-dashboard.component';
 // Developer Tools
 import { AppStateInspectorComponent } from './DevTools/app-state-inspector.component';
 import { LayoutInspectorComponent } from './DevTools/layout-inspector.component';
@@ -128,6 +129,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ThemeStudioResourceComponent,
     ThemeManagerDashboardComponent,
     ThemeManagerResourceComponent,
+    TourStudioDashboardComponent,
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
@@ -237,6 +239,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ThemeStudioResourceComponent,
     ThemeManagerDashboardComponent,
     ThemeManagerResourceComponent,
+    TourStudioDashboardComponent,
     SystemDiagnosticsComponent,
     HealthObservatoryComponent,
     AdminLimitsResourceComponent,

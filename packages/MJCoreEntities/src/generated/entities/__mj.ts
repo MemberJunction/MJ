@@ -306,6 +306,8 @@ import type {
   MJJurisdictionEntityType,
   MJKnowledgeHubSavedSearchEntityType,
   MJvwLatestFeatureValuesEntityType,
+  MJLearningPathTourEntityType,
+  MJLearningPathEntityType,
   MJLibraryEntityType,
   MJLibraryItemEntityType,
   MJListCategoryEntityType,
@@ -455,6 +457,18 @@ import type {
   MJTestTypeEntityType,
   MJTestEntityType,
   MJThemeEntityType,
+  MJTourOverrideEntityType,
+  MJTourPrerequisiteEntityType,
+  MJTourRunStepEntityType,
+  MJTourRunEntityType,
+  MJTourStepPathEntityType,
+  MJTourStepTypeEntityType,
+  MJTourStepEntityType,
+  MJTourSurfaceTourEntityType,
+  MJTourSurfaceEntityType,
+  MJTourTriggerEntityType,
+  MJTourVersionEntityType,
+  MJTourEntityType,
   MJUserApplicationEntityEntityType,
   MJUserApplicationEntityType,
   MJUserFavoriteEntityType,
@@ -12457,6 +12471,38 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
     }
 
     /**
+    * Validate() method override for MJ: AI Agent User Policies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * AutoApproveAmountThreshold: The auto-approve amount threshold cannot be negative, but it can be left blank if no threshold is specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAutoApproveAmountThresholdNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The auto-approve amount threshold cannot be negative, but it can be left blank if no threshold is specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAutoApproveAmountThresholdNonNegative(result: ValidationResult) {
+    	if (this.AutoApproveAmountThreshold != null && this.AutoApproveAmountThreshold < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"AutoApproveAmountThreshold",
+    			"Auto-approve amount threshold must be greater than or equal to zero.",
+    			this.AutoApproveAmountThreshold,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -13053,7 +13099,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
     * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * * MaxSubAgentConsultRounds: Maximum sub-agent consult rounds must be greater than zero when specified.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
+    * * Table-Level: An agent cannot reference itself as its base agent.
     * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
     * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
     * * Table-Level: This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
@@ -13069,7 +13117,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
         this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMaxMessagesGreaterThanZero(result);
+        this.ValidateMaxSubAgentConsultRoundsGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunNonNegative(result);
+        this.ValidateBaseAgentIDNotSelf(result);
         this.ValidateContextCompressionFieldsWhenEnabled(result);
         this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
         this.ValidateParentIDRequiresExposeAsActionFalse(result);
@@ -13166,6 +13216,23 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     }
 
     /**
+    * Maximum sub-agent consult rounds must be greater than zero when specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateMaxSubAgentConsultRoundsGreaterThanZero(result: ValidationResult) {
+    		if (this.MaxSubAgentConsultRounds != null && this.MaxSubAgentConsultRounds <= 0) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"MaxSubAgentConsultRounds",
+    				"Max Sub-Agent Consult Rounds must be greater than 0.",
+    				this.MaxSubAgentConsultRounds,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
     * This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -13174,6 +13241,23 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     public ValidateMinExecutionsPerRunNonNegative(result: ValidationResult) {
     	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
     		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be less than zero.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * An agent cannot reference itself as its base agent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBaseAgentIDNotSelf(result: ValidationResult) {
+    	if (this.BaseAgentID != null && this.ID != null && UUIDsEqual(this.BaseAgentID, this.ID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BaseAgentID",
+    			"An agent cannot reference itself as its base agent.",
+    			this.BaseAgentID,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -14654,7 +14738,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: RootBaseAgentID
-    * * Display Name: Root Base Agent ID
+    * * Display Name: Root Base Agent
     * * SQL Data Type: uniqueidentifier
     */
     get RootBaseAgentID(): string | null {
@@ -25140,6 +25224,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * * CacheSimilarityThreshold: This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
     * * CacheTTLSeconds: This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
     * * EffortLevel: This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
+    * * TimeoutMS: Timeout (in milliseconds) must be greater than 0 when provided.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
     * * Table-Level: This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
@@ -25154,6 +25239,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
         this.ValidateCacheSimilarityThresholdBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsIsPositive(result);
         this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateTimeoutMSGreaterThanZero(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result);
         this.ValidateOutputExampleRequiredWhenOutputTypeIsObject(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
@@ -25197,6 +25283,23 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
     	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort Level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * Timeout (in milliseconds) must be greater than 0 when provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTimeoutMSGreaterThanZero(result: ValidationResult) {
+    	if (this.TimeoutMS != null && this.TimeoutMS <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TimeoutMS",
+    			"Timeout in milliseconds must be greater than 0.",
+    			this.TimeoutMS,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -32882,6 +32985,95 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Agent Channels entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ConsecutiveAgentTurns: Consecutive agent turns must be zero or a positive number to accurately track agent turn sequences.
+    * * HourlyWakeCount: Hourly wake count must be zero or greater.
+    * * MaxConsecutiveAgentTurns: Maximum consecutive agent turns must be at least 1.
+    * * MaxHourlyWakes: Maximum hourly wakes must be at least 1.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateConsecutiveAgentTurnsNonNegative(result);
+        this.ValidateHourlyWakeCountNonNegative(result);
+        this.ValidateMaxConsecutiveAgentTurnsMinimum(result);
+        this.ValidateMaxHourlyWakesAtLeastOne(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Consecutive agent turns must be zero or a positive number to accurately track agent turn sequences.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateConsecutiveAgentTurnsNonNegative(result: ValidationResult) {
+    	if (this.ConsecutiveAgentTurns != null && this.ConsecutiveAgentTurns < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ConsecutiveAgentTurns",
+    			"Consecutive agent turns cannot be negative.",
+    			this.ConsecutiveAgentTurns,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Hourly wake count must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateHourlyWakeCountNonNegative(result: ValidationResult) {
+    	if (this.HourlyWakeCount != null && this.HourlyWakeCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"HourlyWakeCount",
+    			"Hourly wake count cannot be negative.",
+    			this.HourlyWakeCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Maximum consecutive agent turns must be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxConsecutiveAgentTurnsMinimum(result: ValidationResult) {
+    	if (this.MaxConsecutiveAgentTurns != null && this.MaxConsecutiveAgentTurns < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxConsecutiveAgentTurns",
+    			"Maximum consecutive agent turns must be at least 1.",
+    			this.MaxConsecutiveAgentTurns,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Maximum hourly wakes must be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxHourlyWakesAtLeastOne(result: ValidationResult) {
+    	if (this.MaxHourlyWakes != null && this.MaxHourlyWakes < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxHourlyWakes",
+    			"Maximum hourly wakes must be at least 1.",
+    			this.MaxHourlyWakes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -34380,6 +34572,38 @@ export class MJArchiveConfigurationEntityEntity extends BaseEntity<MJArchiveConf
     }
 
     /**
+    * Validate() method override for MJ: Archive Configuration Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetentionDays: Retention days must be a non-negative number (zero or greater) when specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetentionDaysNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Retention days must be a non-negative number (zero or greater) when specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetentionDaysNonNegative(result: ValidationResult) {
+    	if (this.RetentionDays != null && this.RetentionDays < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RetentionDays",
+    			"Retention days must be greater than or equal to 0.",
+    			this.RetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -34626,6 +34850,38 @@ export class MJArchiveConfigurationEntity extends BaseEntity<MJArchiveConfigurat
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Archive Configurations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultRetentionDays: Default retention days must be zero or a positive number.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDefaultRetentionDaysNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Default retention days must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultRetentionDaysNonNegative(result: ValidationResult) {
+    	if (this.DefaultRetentionDays != null && this.DefaultRetentionDays < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DefaultRetentionDays",
+    			"Default retention days must be greater than or equal to 0.",
+    			this.DefaultRetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -37007,6 +37263,48 @@ export class MJArtifactEntity extends BaseEntity<MJArtifactEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Artifacts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Delegate Entity and Delegate Record must either both be provided or both be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDelegateEntityAndRecordPair(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Delegate Entity and Delegate Record must either both be provided or both be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDelegateEntityAndRecordPair(result: ValidationResult) {
+    	const hasEntity = this.DelegateEntityID != null;
+    	const hasRecord = this.DelegateRecordID != null;
+    
+    	if (hasEntity !== hasRecord) {
+    		const message = "Delegate Entity and Delegate Record must either both have values or both be empty.";
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DelegateEntityID",
+    			message,
+    			this.DelegateEntityID,
+    			ValidationErrorType.Failure
+    		));
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DelegateRecordID",
+    			message,
+    			this.DelegateRecordID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -38242,6 +38540,41 @@ export class MJBrandKitAssetEntity extends BaseEntity<MJBrandKitAssetEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Brand Kit Assets entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Assets flagged as generation references must be of an image, video, logo, logo mark, or screenshot type.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAssetTypeForGenerationReference(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Assets flagged as generation references must be of an image, video, logo, logo mark, or screenshot type.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAssetTypeForGenerationReference(result: ValidationResult) {
+    	if (this.IsGenerationReference) {
+    		const allowedTypes = ['Video', 'LogoMark', 'Logo', 'Screenshot', 'Image'];
+    		if (!allowedTypes.includes(this.AssetType)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				'AssetType',
+    				'Generation reference assets must be one of the following types: ' + allowedTypes.join(', ') + '. Current type is ' + this.AssetType + '.', 
+    				this.AssetType,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -41881,6 +42214,41 @@ export class MJCommunicationConsentAuditLogEntity extends BaseEntity<MJCommunica
     }
 
     /**
+    * Validate() method override for MJ: Communication Consent Audit Logs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must be linked to either a communication suppression or a communication principal preference, but not both at the same time.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCommunicationSuppressionOrPreferenceExclusivity(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must be linked to either a communication suppression or a communication principal preference, but not both at the same time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCommunicationSuppressionOrPreferenceExclusivity(result: ValidationResult) {
+    	const hasSuppression = this.CommunicationSuppressionID != null;
+    	const hasPreference = this.CommunicationPrincipalPreferenceID != null;
+    
+    	if ((hasSuppression && hasPreference) || (!hasSuppression && !hasPreference)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CommunicationSuppressionID",
+    			"Exactly one of Communication Suppression or Communication Principal Preference must be specified.",
+    			this.CommunicationSuppressionID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -42273,6 +42641,67 @@ export class MJCommunicationEndpointEntity extends BaseEntity<MJCommunicationEnd
     }
 
     /**
+    * Validate() method override for MJ: Communication Endpoints entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * SoftBounceCount: Soft bounce count cannot be negative; it must be zero or greater.
+    * * Table-Level: Records with a status of 'Erased' must not have a normalized value, while records with any other status are required to have a normalized value.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSoftBounceCountNonNegative(result);
+        this.ValidateNormalizedValueByStatus(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Soft bounce count cannot be negative; it must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSoftBounceCountNonNegative(result: ValidationResult) {
+    	if (this.SoftBounceCount != null && this.SoftBounceCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SoftBounceCount",
+    			"Soft bounce count cannot be negative.",
+    			this.SoftBounceCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records with a status of 'Erased' must not have a normalized value, while records with any other status are required to have a normalized value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNormalizedValueByStatus(result: ValidationResult): void {
+    	const isErased = this.Status === 'Erased';
+    	const hasNormalizedValue = this.NormalizedValue != null && this.NormalizedValue.trim() !== '';
+    
+    	if (isErased && hasNormalizedValue) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'NormalizedValue',
+    			'Normalized value must be empty when status is Erased.',
+    			this.NormalizedValue,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (!isErased && !hasNormalizedValue) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'NormalizedValue',
+    			'Normalized value is required when status is not Erased.',
+    			this.NormalizedValue,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -42485,6 +42914,41 @@ export class MJCommunicationLogEntity extends BaseEntity<MJCommunicationLogEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Logs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Entity and Record identifiers must either both be specified or both be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEntityIDAndRecordIDPair(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Entity and Record identifiers must either both be specified or both be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDAndRecordIDPair(result: ValidationResult) {
+    	const hasEntityID = this.EntityID != null && this.EntityID.trim() !== "";
+    	const hasRecordID = this.RecordID != null && this.RecordID.trim() !== "";
+    
+    	if ((hasEntityID && !hasRecordID) || (!hasEntityID && hasRecordID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EntityID",
+    			"Entity ID and Record ID must either both be provided or both be left blank.",
+    			this.EntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -43157,6 +43621,40 @@ export class MJCommunicationPrincipalPreferenceEntity extends BaseEntity<MJCommu
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Principal Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Records in 'Pending' state must use the Double opt-in method and cannot have a confirmation date set.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePendingStateOptInMethodAndConfirmedAt(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Records in 'Pending' state must use the Double opt-in method and cannot have a confirmation date set.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePendingStateOptInMethodAndConfirmedAt(result: ValidationResult): void {
+    	if (this.State === 'Pending') {
+    		if (this.OptInMethod !== 'Double' || this.ConfirmedAt != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"State",
+    				"Records in 'Pending' state must have an Opt-In Method of 'Double' and cannot have a confirmation date.",
+    				this.State,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -44301,6 +44799,57 @@ export class MJCommunicationRunChunkEntity extends BaseEntity<MJCommunicationRun
     }
 
     /**
+    * Validate() method override for MJ: Communication Run Chunks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ChunkIndex: Chunk index must be zero or a positive number.
+    * * RecipientCount: Recipient count cannot be negative
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateChunkIndexNonNegative(result);
+        this.ValidateRecipientCountNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Chunk index must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateChunkIndexNonNegative(result: ValidationResult) {
+    	if (this.ChunkIndex != null && this.ChunkIndex < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ChunkIndex",
+    			"Chunk index must be zero or greater.",
+    			this.ChunkIndex,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Recipient count cannot be negative
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRecipientCountNonNegative(result: ValidationResult) {
+    	if (this.RecipientCount != null && this.RecipientCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RecipientCount",
+    			"Recipient count cannot be negative.",
+    			this.RecipientCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -44458,6 +45007,38 @@ export class MJCommunicationRunEntity extends BaseEntity<MJCommunicationRunEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ChunkCount: Chunk count, if provided, must be a positive number greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateChunkCountGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Chunk count, if provided, must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateChunkCountGreaterThanZero(result: ValidationResult) {
+    	if (this.ChunkCount != null && this.ChunkCount <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ChunkCount",
+    			"Chunk count must be greater than 0.",
+    			this.ChunkCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -44660,6 +45241,41 @@ export class MJCommunicationSenderPermissionEntity extends BaseEntity<MJCommunic
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Sender Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must be assigned to either a role or a user, but cannot be assigned to both or neither.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRoleIDOrUserIDMutualExclusion(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must be assigned to either a role or a user, but cannot be assigned to both or neither.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRoleIDOrUserIDMutualExclusion(result: ValidationResult) {
+    	const hasRole = this.RoleID != null;
+    	const hasUser = this.UserID != null;
+    
+    	if ((hasRole && hasUser) || (!hasRole && !hasUser)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RoleID",
+    			"Exactly one of Role or User must be specified.",
+    			this.RoleID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -44984,6 +45600,38 @@ export class MJCommunicationSenderEntity extends BaseEntity<MJCommunicationSende
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Senders entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: A communication sender cannot be set as its own parent sender.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateParentSenderIDNotSelf(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * A communication sender cannot be set as its own parent sender.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentSenderIDNotSelf(result: ValidationResult) {
+    	if (this.ParentSenderID != null && this.ID != null && UUIDsEqual(this.ParentSenderID, this.ID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParentSenderID",
+    			"A communication sender cannot have itself as its parent sender.",
+    			this.ParentSenderID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -45719,6 +46367,105 @@ export class MJCommunicationSuppressionEntity extends BaseEntity<MJCommunication
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Communication Suppressions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Either a communication endpoint or an entity must be specified so the record is associated with a target.
+    * * Table-Level: When the suppression reason is set to 'Policy', a specific communication suppression policy must be specified.
+    * * Table-Level: Entity ID and Record ID must either both be specified or both be left empty to ensure consistent entity record association.
+    * * Table-Level: Records marked with 'Revoked' status must have a revocation date, while records with any other status cannot have a revocation date set.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCommunicationEndpointOrEntityRequired(result);
+        this.ValidateCommunicationSuppressionPolicyForPolicyReason(result);
+        this.ValidateEntityIDAndRecordIDCoexistence(result);
+        this.ValidateStatusAndRevokedAt(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Either a communication endpoint or an entity must be specified so the record is associated with a target.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCommunicationEndpointOrEntityRequired(result: ValidationResult) {
+    	if (this.CommunicationEndpointID == null && this.EntityID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CommunicationEndpointID",
+    			"At least one of Communication Endpoint or Entity must be provided.",
+    			this.CommunicationEndpointID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * When the suppression reason is set to 'Policy', a specific communication suppression policy must be specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCommunicationSuppressionPolicyForPolicyReason(result: ValidationResult) {
+    	if (this.Reason === 'Policy' && this.CommunicationSuppressionPolicyID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CommunicationSuppressionPolicyID",
+    			"A communication suppression policy must be selected when the reason is 'Policy'.",
+    			this.CommunicationSuppressionPolicyID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Entity ID and Record ID must either both be specified or both be left empty to ensure consistent entity record association.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDAndRecordIDCoexistence(result: ValidationResult) {
+    	const hasEntityID = this.EntityID != null;
+    	const hasRecordID = this.RecordID != null && this.RecordID.trim() !== "";
+    
+    	if (hasEntityID !== hasRecordID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EntityID",
+    			"Entity ID and Record ID must either both be provided or both be left blank.",
+    			this.EntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records marked with 'Revoked' status must have a revocation date, while records with any other status cannot have a revocation date set.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusAndRevokedAt(result: ValidationResult) {
+    	if (this.Status === 'Revoked' && this.RevokedAt == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RevokedAt",
+    			"Revocation date must be provided when status is 'Revoked'.",
+    			this.RevokedAt,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (this.Status !== 'Revoked' && this.RevokedAt != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RevokedAt",
+    			"Revocation date cannot be set unless status is 'Revoked'.",
+    			this.RevokedAt,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -50940,6 +51687,38 @@ export class MJContentItemChunkEntity extends BaseEntity<MJContentItemChunkEntit
     }
 
     /**
+    * Validate() method override for MJ: Content Item Chunks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetryCount: Retry count cannot be negative and must be zero or greater.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetryCountNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Retry count cannot be negative and must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryCountNonNegative(result: ValidationResult) {
+    	if (this.RetryCount != null && this.RetryCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RetryCount",
+    			"Retry count must be greater than or equal to 0.",
+    			this.RetryCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -51813,6 +52592,38 @@ export class MJContentItemEntity extends BaseEntity<MJContentItemEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Content Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetryCount: Retry count cannot be negative.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetryCountNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Retry count cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryCountNonNegative(result: ValidationResult) {
+    	if (this.RetryCount != null && this.RetryCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RetryCount",
+    			"Retry count must be 0 or greater.",
+    			this.RetryCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -58015,6 +58826,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: If an anchor type is specified, both a linked entity and a linked record must be provided.
     * * Table-Level: Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
     * * Table-Level: Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
     * @public
@@ -58023,11 +58835,29 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateAnchorTypeRequiresLinkedEntityAndRecord(result);
         this.ValidateApplicationScopeAndIDConsistency(result);
         this.ValidateLinkedEntityAndRecordCoexistence(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * If an anchor type is specified, both a linked entity and a linked record must be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAnchorTypeRequiresLinkedEntityAndRecord(result: ValidationResult) {
+    	if (this.AnchorType != null && (this.LinkedEntityID == null || this.LinkedRecordID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"AnchorType",
+    			"When an Anchor Type is specified, both Linked Entity and Linked Record must also be provided.",
+    			this.AnchorType,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -58663,7 +59493,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ParentIDDepth
-    * * Display Name: Parent ID Depth
+    * * Display Name: Parent Depth
     * * SQL Data Type: int
     */
     get ParentIDDepth(): number | null {
@@ -58672,7 +59502,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ParentIDPath
-    * * Display Name: Parent ID Path
+    * * Display Name: Parent Path
     * * SQL Data Type: nvarchar(MAX)
     */
     get ParentIDPath(): string | null {
@@ -58681,7 +59511,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ParentIDIsLeaf
-    * * Display Name: Parent ID Is Leaf
+    * * Display Name: Is Leaf
     * * SQL Data Type: bit
     */
     get ParentIDIsLeaf(): boolean | null {
@@ -58690,7 +59520,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
 
     /**
     * * Field Name: ParentIDChildCount
-    * * Display Name: Parent ID Child Count
+    * * Display Name: Child Count
     * * SQL Data Type: int
     */
     get ParentIDChildCount(): number | null {
@@ -68170,6 +69000,107 @@ export class MJEntityAlternateBaseViewEntity extends BaseEntity<MJEntityAlternat
     }
 
     /**
+    * Validate() method override for MJ: Entity Alternate Base Views entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Name: Name cannot be empty or whitespace only, cannot contain pipe (|) or colon (:) characters, and cannot start with double slashes (//).
+    * * SchemaName: Schema name is optional, but if provided, it must be between 1 and 128 characters long, begin with a letter or underscore, and contain only letters, numbers, and underscores.
+    * * ViewName: View name must be between 1 and 128 characters long, must begin with a letter or underscore, and can only contain letters, numbers, and underscores.
+    * * Table-Level: An entity or item cannot be its own parent.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameFormat(result);
+        this.ValidateSchemaNameFormat(result);
+        this.ValidateViewNameFormat(result);
+        this.ValidateParentIDNotEqualToID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Name cannot be empty or whitespace only, cannot contain pipe (|) or colon (:) characters, and cannot start with double slashes (//).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameFormat(result: ValidationResult) {
+    	if (this.Name != null) {
+    		const trimmed = this.Name.trim();
+    		const trimmedStart = this.Name.trimStart();
+    		if (trimmed.length === 0 || this.Name.includes("|") || this.Name.includes(":") || trimmedStart.startsWith("//")) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Name",
+    				"Name cannot be blank, cannot contain '|' or ':', and cannot start with '//'.",
+    				this.Name,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Schema name is optional, but if provided, it must be between 1 and 128 characters long, begin with a letter or underscore, and contain only letters, numbers, and underscores.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateSchemaNameFormat(result: ValidationResult) {
+    		if (this.SchemaName != null) {
+    			const trimmed = this.SchemaName.trim();
+    			const isValidPattern = /^[A-Za-z_][A-Za-z0-9_]*$/.test(this.SchemaName);
+    			if (trimmed.length === 0 || this.SchemaName.length > 128 || !isValidPattern) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"SchemaName",
+    					"Schema name must be between 1 and 128 characters, start with a letter or underscore, and contain only letters, numbers, and underscores.",
+    					this.SchemaName,
+    					ValidationErrorType.Failure
+    				));
+    			}
+    		}
+    	}
+
+    /**
+    * View name must be between 1 and 128 characters long, must begin with a letter or underscore, and can only contain letters, numbers, and underscores.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateViewNameFormat(result: ValidationResult) {
+    	if (this.ViewName != null) {
+    		const trimmed = this.ViewName.trim();
+    		const regex = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    		if (trimmed.length === 0 || this.ViewName.length > 128 || !regex.test(this.ViewName)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ViewName",
+    				"View name must be between 1 and 128 characters, start with a letter or underscore, and contain only letters, numbers, and underscores.",
+    				this.ViewName,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * An entity or item cannot be its own parent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentIDNotEqualToID(result: ValidationResult): void {
+    	if (this.ParentID != null && this.ID != null && UUIDsEqual(this.ParentID, this.ID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParentID",
+    			"An item cannot be its own parent.",
+    			this.ParentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -76700,6 +77631,94 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Feature Values entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Input as-of date and time must be on or before the effective as-of date and time.
+    * * Table-Level: Validates that required metadata is populated depending on the Source: Pipeline records require RecordProcessID; Human records require either RecordProcessID or MLModelScoringBindingID; and Model records require MLModelScoringBindingID, MLModelID, MLScoringRunID, EffectiveAsOf, and InTraining.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateInputAsOfBeforeOrEqualEffectiveAsOf(result);
+        this.ValidateSourceDependencies(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Input as-of date and time must be on or before the effective as-of date and time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputAsOfBeforeOrEqualEffectiveAsOf(result: ValidationResult) {
+    	if (this.InputAsOf != null && this.EffectiveAsOf != null) {
+    		const inputTime = new Date(this.InputAsOf).getTime();
+    		const effectiveTime = new Date(this.EffectiveAsOf).getTime();
+    		if (inputTime > effectiveTime) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"InputAsOf",
+    				"Input as-of timestamp must be earlier than or equal to the effective as-of timestamp.",
+    				this.InputAsOf,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Validates that required metadata is populated depending on the Source: Pipeline records require RecordProcessID; Human records require either RecordProcessID or MLModelScoringBindingID; and Model records require MLModelScoringBindingID, MLModelID, MLScoringRunID, EffectiveAsOf, and InTraining.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateSourceDependencies(result: ValidationResult) {
+    		if (this.Source === 'Pipeline') {
+    			if (this.RecordProcessID == null) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"RecordProcessID",
+    					"Record Process is required when Source is 'Pipeline'.",
+    					this.RecordProcessID,
+    					ValidationErrorType.Failure
+    				));
+    			}
+    		} else if (this.Source === 'Human') {
+    			if (this.RecordProcessID == null && this.MLModelScoringBindingID == null) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"Source",
+    					"Either Record Process or ML Model Scoring Binding must be provided when Source is 'Human'.",
+    					this.Source,
+    					ValidationErrorType.Failure
+    				));
+    			}
+    		} else if (this.Source === 'Model') {
+    			if (
+    				this.MLModelScoringBindingID == null ||
+    				this.MLModelID == null ||
+    				this.MLScoringRunID == null ||
+    				this.EffectiveAsOf == null ||
+    				this.InTraining == null
+    			) {
+    				result.Errors.push(new ValidationErrorInfo(
+    					"Source",
+    					"Model records require ML Model Scoring Binding, ML Model, ML Scoring Run, Effective As Of, and In Training to be set.",
+    					this.Source,
+    					ValidationErrorType.Failure
+    				));
+    			}
+    		} else {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Source",
+    				"Source must be 'Pipeline', 'Human', or 'Model'.",
+    				this.Source,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -77266,6 +78285,38 @@ export class MJFieldSuggestionEntity extends BaseEntity<MJFieldSuggestionEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Field Suggestions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Confidence: Confidence score must be between 0 and 1 inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateConfidenceRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Confidence score must be between 0 and 1 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateConfidenceRange(result: ValidationResult) {
+    	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Confidence",
+    			"Confidence must be a value between 0 and 1.",
+    			this.Confidence,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -79787,6 +80838,38 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Graph Concepts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: An item cannot be its own parent.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateParentIDNotEqualToID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * An item cannot be its own parent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentIDNotEqualToID(result: ValidationResult) {
+    	if (this.ParentID != null && this.ID != null && UUIDsEqual(this.ParentID, this.ID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ParentID",
+    			"An item cannot be its own parent.",
+    			this.ParentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -80325,6 +81408,38 @@ export class MJGraphEdgeTypeEntity extends BaseEntity<MJGraphEdgeTypeEntityType>
     }
 
     /**
+    * Validate() method override for MJ: Graph Edge Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultWeight: Default weight must be between 0 and 1 inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDefaultWeightRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Default weight must be between 0 and 1 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultWeightRange(result: ValidationResult) {
+    	if (this.DefaultWeight != null && (this.DefaultWeight < 0 || this.DefaultWeight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DefaultWeight",
+    			"Default weight must be between 0 and 1.",
+    			this.DefaultWeight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -80490,6 +81605,76 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Graph Edges entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Confidence: Confidence score must be between 0 and 1 inclusive, when provided.
+    * * Weight: Weight must be between 0 and 1 inclusive.
+    * * Table-Level: An edge cannot connect a record to itself; the source and target entity and record cannot both match.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateConfidenceRange(result);
+        this.ValidateWeightRange(result);
+        this.ValidateSelfReferencingEdge(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Confidence score must be between 0 and 1 inclusive, when provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateConfidenceRange(result: ValidationResult) {
+    	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Confidence",
+    			"Confidence must be a value between 0 and 1.",
+    			this.Confidence,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Weight must be between 0 and 1 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateWeightRange(result: ValidationResult) {
+    	if (this.Weight != null && (this.Weight < 0 || this.Weight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Weight",
+    			"Weight must be between 0 and 1.",
+    			this.Weight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * An edge cannot connect a record to itself; the source and target entity and record cannot both match.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSelfReferencingEdge(result: ValidationResult): void {
+    	if (UUIDsEqual(this.SourceEntityID, this.TargetEntityID) && this.SourceRecordID === this.TargetRecordID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetRecordID",
+    			"An edge cannot link a record to itself. The source and target must be different.",
+    			this.TargetRecordID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -83520,6 +84705,7 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     /**
     * Validate() method override for MJ: Interaction Offers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: The expiration date and time must be after the offered date and time to ensure the offer has a valid duration.
+    * * Table-Level: Response date and time must occur at or after the offered date and time.
     * @public
     * @method
     * @override
@@ -83527,6 +84713,7 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateExpiresAtAfterOfferedAt(result);
+        this.ValidateRespondedAtAfterOfferedAt(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -83550,6 +84737,23 @@ export class MJInteractionOfferEntity extends BaseEntity<MJInteractionOfferEntit
     				ValidationErrorType.Failure
     			));
     		}
+    	}
+    }
+
+    /**
+    * Response date and time must occur at or after the offered date and time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRespondedAtAfterOfferedAt(result: ValidationResult) {
+    	if (this.RespondedAt != null && this.OfferedAt != null && new Date(this.RespondedAt) < new Date(this.OfferedAt)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RespondedAt",
+    			"Responded date/time must be at or after the offered date/time.",
+    			this.RespondedAt,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -83799,6 +85003,7 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
     * Validate() method override for MJ: Interactions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * CostEstimate: The cost estimate, if provided, must be greater than or equal to zero.
     * * Table-Level: The time a session is answered must be at or after the time the session started.
+    * * Table-Level: End date and time must occur at or after the start date and time.
     * @public
     * @method
     * @override
@@ -83807,6 +85012,7 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
         const result = super.Validate();
         this.ValidateCostEstimateGreaterThanOrEqualToZero(result);
         this.ValidateAnsweredAtAfterStartedAt(result);
+        this.ValidateEndedAtOnOrAfterStartedAt(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -83843,6 +85049,25 @@ export class MJInteractionEntity extends BaseEntity<MJInteractionEntityType> {
     				"AnsweredAt",
     				"The answered date and time cannot be earlier than the start date and time.",
     				this.AnsweredAt,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * End date and time must occur at or after the start date and time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEndedAtOnOrAfterStartedAt(result: ValidationResult) {
+    	if (this.EndedAt != null && this.StartedAt != null) {
+    		if (new Date(this.EndedAt).getTime() < new Date(this.StartedAt).getTime()) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"EndedAt",
+    				"End time must be greater than or equal to the start time.",
+    				this.EndedAt,
     				ValidationErrorType.Failure
     			));
     		}
@@ -84125,6 +85350,38 @@ export class MJJurisdictionMemberEntity extends BaseEntity<MJJurisdictionMemberE
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Jurisdiction Members entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: A group jurisdiction cannot be the same as its member jurisdiction.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateGroupJurisdictionDifferentFromMemberJurisdiction(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * A group jurisdiction cannot be the same as its member jurisdiction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGroupJurisdictionDifferentFromMemberJurisdiction(result: ValidationResult) {
+    	if (this.GroupJurisdictionID != null && this.MemberJurisdictionID != null && UUIDsEqual(this.GroupJurisdictionID, this.MemberJurisdictionID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MemberJurisdictionID",
+    			"A group jurisdiction cannot include itself as a member.",
+    			this.MemberJurisdictionID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -84833,6 +86090,368 @@ export class MJvwLatestFeatureValuesEntity extends BaseEntity<MJvwLatestFeatureV
     }
     set Confidence(value: number | null) {
         this.Set('Confidence', value);
+    }
+}
+
+
+/**
+ * MJ: Learning Path Tours - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: LearningPathTour
+ * * Base View: vwLearningPathTours
+ * * @description Membership join table linking Learning Paths to ordered Guided Tours.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Learning Path Tours')
+export class MJLearningPathTourEntity extends BaseEntity<MJLearningPathTourEntityType> {
+    /**
+    * Loads the MJ: Learning Path Tours record from the database
+    * @param ID: string - primary key value to load the MJ: Learning Path Tours record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJLearningPathTourEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the learning path membership row.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: LearningPathID
+    * * Display Name: Learning Path
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Learning Paths (vwLearningPaths.ID)
+    * * Description: Parent learning path.
+    */
+    get LearningPathID(): string {
+        return this.Get('LearningPathID');
+    }
+    set LearningPathID(value: string) {
+        this.Set('LearningPathID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Member tour included in the learning path.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and progression order of this tour within the learning path.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, this tour is mandatory and cannot be skipped in the checklist.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LearningPath
+    * * Display Name: Learning Path Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LearningPath(): string | null {
+        return this.Get('LearningPath');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+}
+
+
+/**
+ * Learning path configuration and localization overrides stored on `MJ: Learning Paths.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display overrides for a learning path. */
+export interface MJLearningPathEntity_ILearningPathLocalization {
+    /** Localized learning path title. */
+    name?: string;
+    /** Localized learning path description. */
+    description?: string;
+}
+
+/** LearningPath.Configuration — localizations and checklist presentation options. */
+export interface MJLearningPathEntity_ILearningPathConfiguration {
+    /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJLearningPathEntity_ILearningPathLocalization>;
+    /** Font Awesome icon class displayed on the learning-path checklist card. */
+    icon?: string;
+    /** Whether this learning path renders on the Explorer Home checklist card. */
+    showOnHome?: boolean;
+    /** Whether this learning path appears inside the Tours & Help launcher. */
+    showInLauncher?: boolean;
+    /** When true, tours must be completed in `LearningPathTour.Sequence` order. */
+    enforceOrder?: boolean;
+    /** Optional badge label awarded upon completing all required tours in the path. */
+    completionBadge?: string;
+    /** Extensible learning-path settings. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Learning Paths - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: LearningPath
+ * * Base View: vwLearningPaths
+ * * @description A curated sequence of guided tours rendered as a user onboarding checklist on Home and in the tour launcher.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Learning Paths')
+export class MJLearningPathEntity extends BaseEntity<MJLearningPathEntityType> {
+    /**
+    * Loads the MJ: Learning Paths record from the database
+    * @param ID: string - primary key value to load the MJ: Learning Paths record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJLearningPathEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the learning path.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display title of the learning path.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: PathKey
+    * * Display Name: Path Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable unique key identifying the learning path (for example mj.essentials).
+    */
+    get PathKey(): string {
+        return this.Get('PathKey');
+    }
+    set PathKey(value: string) {
+        this.Set('PathKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary of the curriculum and who it is designed for.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Owning MJ Application. NULL indicates a framework-wide learning path.
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: AudienceFilter
+    * * Display Name: Audience Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: CompositeFilter JSON expression restricting which users see this learning path.
+    */
+    get AudienceFilter(): string | null {
+        return this.Get('AudienceFilter');
+    }
+    set AudienceFilter(value: string | null) {
+        this.Set('AudienceFilter', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Retired
+    * * Description: Lifecycle status of the learning path: Draft, Active, or Retired.
+    */
+    get Status(): 'Active' | 'Draft' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Draft' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJLearningPathEntity_ILearningPathConfiguration
+    * * Description: JSON ILearningPathConfiguration holding localizations, icon, and checklist presentation options.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJLearningPathEntity_ILearningPathConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJLearningPathEntity_ILearningPathConfiguration | null {
+        return this.GetJSONFieldObject<MJLearningPathEntity_ILearningPathConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJLearningPathEntity_ILearningPathConfiguration | null) {
+        this.SetJSONFieldObject<MJLearningPathEntity_ILearningPathConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
     }
 }
 
@@ -85780,6 +87399,38 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Lists entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: A record cannot be linked to both a source view and a source query simultaneously; at most one source can be specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSourceViewIDAndSourceQueryIDMutualExclusion(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * A record cannot be linked to both a source view and a source query simultaneously; at most one source can be specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSourceViewIDAndSourceQueryIDMutualExclusion(result: ValidationResult) {
+    	if (this.SourceViewID != null && this.SourceQueryID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SourceViewID",
+    			"Cannot specify both a Source View and a Source Query. Please select only one source.",
+    			this.SourceViewID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -88300,6 +89951,86 @@ export class MJMLEvaluationProtocolEntity extends BaseEntity<MJMLEvaluationProto
     }
 
     /**
+    * Validate() method override for MJ: ML Evaluation Protocols entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MinMinorityClassRows: Minimum minority class rows must be at least 1.
+    * * Version: Version must be a positive number of at least 1.
+    * * Table-Level: Version 1 records must reference themselves as the lineage root, while subsequent versions must reference a different record as their lineage root.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMinMinorityClassRowsMinimum(result);
+        this.ValidateVersionAtLeastOne(result);
+        this.ValidateVersionLineageRootID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Minimum minority class rows must be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinMinorityClassRowsMinimum(result: ValidationResult) {
+    	if (this.MinMinorityClassRows != null && this.MinMinorityClassRows < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MinMinorityClassRows",
+    			"Min minority class rows must be at least 1.",
+    			this.MinMinorityClassRows,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Version must be a positive number of at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionAtLeastOne(result: ValidationResult) {
+    	if (this.Version < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Version",
+    			"Version must be greater than or equal to 1.",
+    			this.Version,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Version 1 records must reference themselves as the lineage root, while subsequent versions must reference a different record as their lineage root.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionLineageRootID(result: ValidationResult) {
+    	if (this.Version != null && this.LineageRootID != null && this.ID != null) {
+    		const isSelfRoot = UUIDsEqual(this.LineageRootID, this.ID);
+    		if (this.Version === 1 && !isSelfRoot) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"LineageRootID",
+    				"For version 1, the Lineage Root ID must match the record's ID.",
+    				this.LineageRootID,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (this.Version > 1 && isSelfRoot) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"LineageRootID",
+    				"For versions greater than 1, the Lineage Root ID must be different from the record's ID.",
+    				this.LineageRootID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -88906,6 +90637,314 @@ export class MJMLModelPublishRecordEntity extends BaseEntity<MJMLModelPublishRec
     }
 
     /**
+    * Validate() method override for MJ: ML Model Publish Records entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: When the approver type is a user, a valid User ID must be provided; when the approver is an automated gate, the User ID must be left empty.
+    * * Table-Level: Records must include both evidence and its SHA256 checksum unless the kind is set to refusal.
+    * * Table-Level: Records with a kind of 'publish' must specify a gate decision.
+    * * Table-Level: Initiator and OverridesFlags must be valid JSON strings, and Evidence, GateDecision, and Refusal must also contain valid JSON if they are provided.
+    * * Table-Level: Records with a kind of 'refusal' must specify a refusal reason, whereas other record types cannot specify a refusal reason and must not be marked as transient.
+    * * Table-Level: Sign-off records must have an approver kind of 'user' and a decision of either 'reject' or 'approve'. All other record kinds must not have a decision specified and must have empty override flags ('[]').
+    * * Table-Level: Records with a purpose of 'adopt' must have their kind set to 'publish'.
+    * * Table-Level: Records with a purpose other than 'evaluate' must have an associated model, while records evaluated without a model are only permitted if categorized as a refusal.
+    * * Table-Level: Each record must be associated with at least one target by specifying either a Model or a Training Run (or both).
+    * * Table-Level: A reason must be provided whenever override flags are specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateApproverKindUserID(result);
+        this.ValidateEvidenceRequiredUnlessRefusal(result);
+        this.ValidateGateDecisionWhenKindIsPublish(result);
+        this.ValidateJsonFields(result);
+        this.ValidateKindAndRefusalRequirements(result);
+        this.ValidateKindDecisionAndOverrides(result);
+        this.ValidateKindForAdoptPurpose(result);
+        this.ValidateModelIDAndPurposeConsistency(result);
+        this.ValidateModelIDOrTrainingRunIDRequired(result);
+        this.ValidateReasonWhenOverridesFlagsSet(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * When the approver type is a user, a valid User ID must be provided; when the approver is an automated gate, the User ID must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateApproverKindUserID(result: ValidationResult) {
+    	if (this.ApproverKind === 'user' && this.UserID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"A User ID is required when the approver kind is 'user'.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (this.ApproverKind === 'automated-gate' && this.UserID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"User ID must be empty when the approver kind is 'automated-gate'.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (this.ApproverKind !== 'user' && this.ApproverKind !== 'automated-gate') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApproverKind",
+    			"Approver kind must be either 'user' or 'automated-gate'.",
+    			this.ApproverKind,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records must include both evidence and its SHA256 checksum unless the kind is set to refusal.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEvidenceRequiredUnlessRefusal(result: ValidationResult) {
+    	if (this.Kind !== 'refusal' && (this.Evidence == null || this.EvidenceSha256 == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Evidence",
+    			"Evidence and EvidenceSha256 must both be provided unless the Kind is 'refusal'.",
+    			this.Evidence,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records with a kind of 'publish' must specify a gate decision.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGateDecisionWhenKindIsPublish(result: ValidationResult): void {
+    	if (this.Kind === 'publish' && (this.GateDecision == null || this.GateDecision.trim() === '')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"GateDecision",
+    			"A gate decision is required when the record kind is 'publish'.",
+    			this.GateDecision,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Initiator and OverridesFlags must be valid JSON strings, and Evidence, GateDecision, and Refusal must also contain valid JSON if they are provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateJsonFields(result: ValidationResult) {
+    	const isValidJson = (value: string | null | undefined): boolean => {
+    		if (value == null) return false;
+    		try {
+    			JSON.parse(value);
+    			return true;
+    		} catch {
+    			return false;
+    		}
+    	};
+    
+    	if (this.Initiator == null || !isValidJson(this.Initiator)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Initiator",
+    			"Initiator must be a valid JSON string.",
+    			this.Initiator,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.OverridesFlags == null || !isValidJson(this.OverridesFlags)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"OverridesFlags",
+    			"OverridesFlags must be a valid JSON string.",
+    			this.OverridesFlags,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.Evidence != null && !isValidJson(this.Evidence)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Evidence",
+    			"Evidence must be a valid JSON string when provided.",
+    			this.Evidence,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.GateDecision != null && !isValidJson(this.GateDecision)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"GateDecision",
+    			"GateDecision must be a valid JSON string when provided.",
+    			this.GateDecision,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.Refusal != null && !isValidJson(this.Refusal)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Refusal",
+    			"Refusal must be a valid JSON string when provided.",
+    			this.Refusal,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records with a kind of 'refusal' must specify a refusal reason, whereas other record types cannot specify a refusal reason and must not be marked as transient.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateKindAndRefusalRequirements(result: ValidationResult) {
+    	const isRefusal = this.Kind === 'refusal';
+    	if (isRefusal) {
+    		if (this.Refusal == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Refusal",
+    				"A refusal reason must be provided when the kind is 'refusal'.",
+    				this.Refusal,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else {
+    		if (this.Refusal != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Refusal",
+    				"A refusal reason cannot be provided when the kind is not 'refusal'.",
+    				this.Refusal,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.Transient) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Transient",
+    				"The record cannot be marked as transient when the kind is not 'refusal'.",
+    				this.Transient,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Sign-off records must have an approver kind of 'user' and a decision of either 'reject' or 'approve'. All other record kinds must not have a decision specified and must have empty override flags ('[]').
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateKindDecisionAndOverrides(result: ValidationResult): void {
+    	const isSignOff = this.Kind === 'sign-off';
+    	if (isSignOff) {
+    		const hasValidApprover = this.ApproverKind === 'user';
+    		const hasValidDecision = this.Decision === 'reject' || this.Decision === 'approve';
+    		if (!hasValidApprover || !hasValidDecision) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Decision",
+    				"Sign-off records must have an ApproverKind of 'user' and a Decision of either 'reject' or 'approve'.",
+    				this.Decision,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else {
+    		const isDecisionNull = this.Decision == null;
+    		const hasEmptyOverrides = this.OverridesFlags === '[]';
+    		if (!isDecisionNull || !hasEmptyOverrides) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Kind",
+    				"Records that are not sign-offs must not have a Decision and OverridesFlags must be set to '[]'.",
+    				this.Kind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Records with a purpose of 'adopt' must have their kind set to 'publish'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateKindForAdoptPurpose(result: ValidationResult): void {
+    	if (this.Purpose === 'adopt' && this.Kind !== 'publish') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Kind",
+    			"Kind must be 'publish' when Purpose is 'adopt'.",
+    			this.Kind,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records with a purpose other than 'evaluate' must have an associated model, while records evaluated without a model are only permitted if categorized as a refusal.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateModelIDAndPurposeConsistency(result: ValidationResult): void {
+    	const hasModel = this.ModelID != null;
+    	const isEvaluate = this.Purpose === 'evaluate';
+    	const isRefusal = this.Kind === 'refusal';
+    
+    	const isValid = (hasModel && !isEvaluate) || (!hasModel && isRefusal && isEvaluate);
+    
+    	if (!isValid) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ModelID",
+    			"A Model must be specified unless the purpose is 'evaluate' with a kind of 'refusal'.",
+    			this.ModelID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Each record must be associated with at least one target by specifying either a Model or a Training Run (or both).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateModelIDOrTrainingRunIDRequired(result: ValidationResult) {
+    	if (this.ModelID == null && this.TrainingRunID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ModelID",
+    			"At least one of Model ID or Training Run ID must be provided.",
+    			this.ModelID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * A reason must be provided whenever override flags are specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReasonWhenOverridesFlagsSet(result: ValidationResult): void {
+    	const hasOverrides = this.OverridesFlags != null && this.OverridesFlags !== '[]';
+    	const reasonTrimmed = this.Reason != null ? this.Reason.trim() : '';
+    
+    	if (hasOverrides && reasonTrimmed.length === 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Reason",
+    			"A reason is required when override flags are specified.",
+    			this.Reason,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -89297,6 +91336,57 @@ export class MJMLModelScoringBindingEntity extends BaseEntity<MJMLModelScoringBi
     }
 
     /**
+    * Validate() method override for MJ: ML Model Scoring Bindings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetentionDays: Retention days must be greater than zero when specified.
+    * * Table-Level: If a target column is specified, a target column source must also be provided.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetentionDaysPositive(result);
+        this.ValidateTargetColumnSourceRequiredWhenTargetColumnSet(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Retention days must be greater than zero when specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetentionDaysPositive(result: ValidationResult) {
+    	if (this.RetentionDays != null && this.RetentionDays <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RetentionDays",
+    			"Retention days must be greater than 0.",
+    			this.RetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * If a target column is specified, a target column source must also be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetColumnSourceRequiredWhenTargetColumnSet(result: ValidationResult) {
+    	if (this.TargetColumn != null && this.TargetColumn.trim() !== "" && (this.TargetColumnSource == null || this.TargetColumnSource.trim() === "")) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetColumnSource",
+    			"A target column source must be specified when a target column is defined.",
+    			this.TargetColumnSource,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -89666,6 +91756,84 @@ export class MJMLModelEntity extends BaseEntity<MJMLModelEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: ML Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that CodeVersion, OutputSemantics, and Delivery fields contain valid JSON formatted strings when populated.
+    * * Table-Level: Serving while unevaluated can only be enabled when the status is 'Unevaluated'.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateJsonFieldsFormat(result);
+        this.ValidateServingWhileUnevaluatedWithStatus(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that CodeVersion, OutputSemantics, and Delivery fields contain valid JSON formatted strings when populated.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateJsonFieldsFormat(result: ValidationResult): void {
+    	const isValidJson = (value: string): boolean => {
+    		try {
+    			JSON.parse(value);
+    			return true;
+    		} catch {
+    			return false;
+    		}
+    	};
+    
+    	if (this.CodeVersion != null && this.CodeVersion.trim() !== '' && !isValidJson(this.CodeVersion)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CodeVersion",
+    			"CodeVersion must be a valid JSON string.",
+    			this.CodeVersion,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.OutputSemantics != null && this.OutputSemantics.trim() !== '' && !isValidJson(this.OutputSemantics)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"OutputSemantics",
+    			"OutputSemantics must be a valid JSON string.",
+    			this.OutputSemantics,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.Delivery != null && this.Delivery.trim() !== '' && !isValidJson(this.Delivery)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Delivery",
+    			"Delivery must be a valid JSON string.",
+    			this.Delivery,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Serving while unevaluated can only be enabled when the status is 'Unevaluated'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateServingWhileUnevaluatedWithStatus(result: ValidationResult): void {
+    	if (this.ServingWhileUnevaluated && this.Status !== 'Unevaluated') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ServingWhileUnevaluated",
+    			"Serving while unevaluated can only be enabled when the status is 'Unevaluated'.",
+    			this.ServingWhileUnevaluated,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -91041,6 +93209,119 @@ export class MJMLPredictionUnitEntity extends BaseEntity<MJMLPredictionUnitEntit
     }
 
     /**
+    * Validate() method override for MJ: ML Prediction Units entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * LabelGapDays: Label gap days must be zero or a positive number.
+    * * LabelWindowDays: Label window days must be greater than zero.
+    * * Version: Version number must be at least 1.
+    * * Table-Level: Label version must be at least 1 and cannot exceed the current version number.
+    * * Table-Level: Version 1 records must reference themselves as the lineage root, while versions greater than 1 must reference a different record as their lineage root.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateLabelGapDaysNonNegative(result);
+        this.ValidateLabelWindowDaysGreaterThanZero(result);
+        this.ValidateVersionAtLeastOne(result);
+        this.ValidateLabelVersionRange(result);
+        this.ValidateVersionLineageRootID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Label gap days must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLabelGapDaysNonNegative(result: ValidationResult) {
+    	if (this.LabelGapDays != null && this.LabelGapDays < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LabelGapDays",
+    			"Label gap days cannot be negative. It must be zero or greater.",
+    			this.LabelGapDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Label window days must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLabelWindowDaysGreaterThanZero(result: ValidationResult) {
+    	if (this.LabelWindowDays != null && this.LabelWindowDays <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LabelWindowDays",
+    			"Label window days must be greater than 0.",
+    			this.LabelWindowDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Version number must be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionAtLeastOne(result: ValidationResult) {
+    	if (this.Version != null && this.Version < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Version",
+    			"Version must be greater than or equal to 1.",
+    			this.Version,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Label version must be at least 1 and cannot exceed the current version number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLabelVersionRange(result: ValidationResult) {
+    	if (this.LabelVersion != null && (this.LabelVersion < 1 || (this.Version != null && this.LabelVersion > this.Version))) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LabelVersion",
+    			"Label version must be at least 1 and cannot exceed the version number.",
+    			this.LabelVersion,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Version 1 records must reference themselves as the lineage root, while versions greater than 1 must reference a different record as their lineage root.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionLineageRootID(result: ValidationResult) {
+    	if (this.Version != null && this.LineageRootID != null && this.ID != null) {
+    		const isVersionOneValid = this.Version === 1 && UUIDsEqual(this.LineageRootID, this.ID);
+    		const isSubsequentVersionValid = this.Version > 1 && !UUIDsEqual(this.LineageRootID, this.ID);
+    
+    		if (!isVersionOneValid && !isSubsequentVersionValid) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"LineageRootID",
+    				"Version 1 records must have their LineageRootID match their ID, while records with Version greater than 1 must have a LineageRootID different from their ID.",
+    				this.LineageRootID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -91463,6 +93744,163 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: ML Scoring Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Dry run executions cannot write records; if dry run is enabled, the written count must be zero.
+    * * Table-Level: Scope, ReadPolicy, and RequestedBy must be valid JSON strings, and EntityMapping, Refusal, and FirstErrors must also be valid JSON strings if provided.
+    * * Table-Level: Records must specify both a model and a model version unless the status is set to refused.
+    * * Table-Level: If a record's status is refused, a refusal reason must be provided and no records can be written.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDryRunWritten(result);
+        this.ValidateJsonFields(result);
+        this.ValidateModelInfoRequiredUnlessRefused(result);
+        this.ValidateStatusRefusedRequiresRefusalAndZeroWritten(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Dry run executions cannot write records; if dry run is enabled, the written count must be zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateDryRunWritten(result: ValidationResult) {
+    		if (this.DryRun && this.Written !== 0) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Written",
+    				"Written count must be 0 when DryRun is enabled.",
+    				this.Written,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * Scope, ReadPolicy, and RequestedBy must be valid JSON strings, and EntityMapping, Refusal, and FirstErrors must also be valid JSON strings if provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateJsonFields(result: ValidationResult) {
+    	const isValidJson = (value: string | null | undefined): boolean => {
+    		if (value == null) {
+    			return false;
+    		}
+    		try {
+    			JSON.parse(value);
+    			return true;
+    		} catch {
+    			return false;
+    		}
+    	};
+    
+    	if (!isValidJson(this.Scope)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Scope",
+    			"Scope must be a valid JSON string.",
+    			this.Scope,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (!isValidJson(this.ReadPolicy)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ReadPolicy",
+    			"ReadPolicy must be a valid JSON string.",
+    			this.ReadPolicy,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (!isValidJson(this.RequestedBy)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RequestedBy",
+    			"RequestedBy must be a valid JSON string.",
+    			this.RequestedBy,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.EntityMapping != null && !isValidJson(this.EntityMapping)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EntityMapping",
+    			"EntityMapping must be a valid JSON string when provided.",
+    			this.EntityMapping,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.Refusal != null && !isValidJson(this.Refusal)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Refusal",
+    			"Refusal must be a valid JSON string when provided.",
+    			this.Refusal,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.FirstErrors != null && !isValidJson(this.FirstErrors)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FirstErrors",
+    			"FirstErrors must be a valid JSON string when provided.",
+    			this.FirstErrors,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Records must specify both a model and a model version unless the status is set to refused.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateModelInfoRequiredUnlessRefused(result: ValidationResult): void {
+    	const isRefused = typeof this.Status === 'string' && this.Status.trim().toLowerCase() === 'refused';
+    	if (!isRefused && (this.ModelID == null || this.ModelVersion == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ModelID",
+    			"Model and Model Version are required unless the status is 'refused'.",
+    			this.ModelID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * If a record's status is refused, a refusal reason must be provided and no records can be written.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStatusRefusedRequiresRefusalAndZeroWritten(result: ValidationResult) {
+    	if (this.Status === 'refused') {
+    		if (this.Refusal == null || this.Refusal.trim() === '') {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Refusal",
+    				"A refusal reason is required when the status is refused.",
+    				this.Refusal,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.Written !== 0) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Written",
+    				"Written count must be 0 when the status is refused.",
+    				this.Written,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -92356,6 +94794,38 @@ export class MJMLTrainingRunEntity extends BaseEntity<MJMLTrainingRunEntityType>
     }
 
     /**
+    * Validate() method override for MJ: ML Training Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ComputeSeconds: Compute seconds must be greater than or equal to zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateComputeSecondsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Compute seconds must be greater than or equal to zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateComputeSecondsNonNegative(result: ValidationResult) {
+    	if (this.ComputeSeconds != null && this.ComputeSeconds < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ComputeSeconds",
+    			"Compute seconds must be greater than or equal to zero.",
+    			this.ComputeSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -92698,6 +95168,198 @@ export class MJMLTrainingSnapshotEntity extends BaseEntity<MJMLTrainingSnapshotE
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: ML Training Snapshots entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ReadComplete: Ensures that the read operation is marked as complete for this record.
+    * * Table-Level: ContentHash, MatrixSha256, RowManifestSha256, ProvenanceSha256, and FeatureSchemaHash must each be exactly 64 characters long.
+    * * Table-Level: Both the label version and the feature specification version must be at least 1.
+    * * Table-Level: Row counts for manifest, holdout, read rows, and various excluded row categories must be non-negative. Additionally, the holdout row count cannot exceed the manifest row count, and the total rows read must be at least equal to the manifest row count.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateReadCompleteIsTrue(result);
+        this.ValidateHashLengths(result);
+        this.ValidateLabelAndFeatureSpecVersionMinimums(result);
+        this.ValidateRowCounts(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the read operation is marked as complete for this record.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateReadCompleteIsTrue(result: ValidationResult) {
+    		if (!this.ReadComplete) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ReadComplete",
+    				"Read Complete must be set to true.",
+    				this.ReadComplete,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * ContentHash, MatrixSha256, RowManifestSha256, ProvenanceSha256, and FeatureSchemaHash must each be exactly 64 characters long.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateHashLengths(result: ValidationResult) {
+    	if (this.ContentHash != null && this.ContentHash.length !== 64) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContentHash",
+    			"ContentHash must be exactly 64 characters long.",
+    			this.ContentHash,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.MatrixSha256 != null && this.MatrixSha256.length !== 64) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MatrixSha256",
+    			"MatrixSha256 must be exactly 64 characters long.",
+    			this.MatrixSha256,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.RowManifestSha256 != null && this.RowManifestSha256.length !== 64) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RowManifestSha256",
+    			"RowManifestSha256 must be exactly 64 characters long.",
+    			this.RowManifestSha256,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.ProvenanceSha256 != null && this.ProvenanceSha256.length !== 64) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ProvenanceSha256",
+    			"ProvenanceSha256 must be exactly 64 characters long.",
+    			this.ProvenanceSha256,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.FeatureSchemaHash != null && this.FeatureSchemaHash.length !== 64) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FeatureSchemaHash",
+    			"FeatureSchemaHash must be exactly 64 characters long.",
+    			this.FeatureSchemaHash,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Both the label version and the feature specification version must be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLabelAndFeatureSpecVersionMinimums(result: ValidationResult) {
+    	if (this.LabelVersion != null && this.LabelVersion < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LabelVersion",
+    			"Label version must be at least 1.",
+    			this.LabelVersion,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.FeatureSpecVersion != null && this.FeatureSpecVersion < 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FeatureSpecVersion",
+    			"Feature specification version must be at least 1.",
+    			this.FeatureSpecVersion,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Row counts for manifest, holdout, read rows, and various excluded row categories must be non-negative. Additionally, the holdout row count cannot exceed the manifest row count, and the total rows read must be at least equal to the manifest row count.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRowCounts(result: ValidationResult) {
+    	if (this.ManifestRowCount != null && this.ManifestRowCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ManifestRowCount",
+    			"Manifest row count cannot be negative.",
+    			this.ManifestRowCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.HoldoutRowCount != null && this.HoldoutRowCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"HoldoutRowCount",
+    			"Holdout row count cannot be negative.",
+    			this.HoldoutRowCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.HoldoutRowCount != null && this.ManifestRowCount != null && this.HoldoutRowCount > this.ManifestRowCount) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"HoldoutRowCount",
+    			"Holdout row count cannot exceed manifest row count.",
+    			this.HoldoutRowCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.RowsRead != null && this.ManifestRowCount != null && this.RowsRead < this.ManifestRowCount) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RowsRead",
+    			"Rows read must be greater than or equal to manifest row count.",
+    			this.RowsRead,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.CensoredRowsExcluded != null && this.CensoredRowsExcluded < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CensoredRowsExcluded",
+    			"Censored rows excluded cannot be negative.",
+    			this.CensoredRowsExcluded,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.LabelKnownRowsExcluded != null && this.LabelKnownRowsExcluded < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LabelKnownRowsExcluded",
+    			"Label known rows excluded cannot be negative.",
+    			this.LabelKnownRowsExcluded,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.EmptyLabelRowsExcluded != null && this.EmptyLabelRowsExcluded < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EmptyLabelRowsExcluded",
+    			"Empty label rows excluded cannot be negative.",
+    			this.EmptyLabelRowsExcluded,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.DuplicateRowsRemoved != null && this.DuplicateRowsRemoved < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DuplicateRowsRemoved",
+    			"Duplicate rows removed cannot be negative.",
+    			this.DuplicateRowsRemoved,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -94695,6 +97357,8 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
     * Validate() method override for MJ: Meeting Participants entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * ExternalPhone: If an external phone number is provided, it must be in international format starting with '+' followed by a non-zero digit, contain only numbers, and be between 5 and 16 characters in length.
     * * Table-Level: An agent identifier must be provided if and only if the role is set to 'Agent'.
+    * * Table-Level: If a leave time is recorded, a join time must also be recorded, and the leave time must be at or after the join time.
+    * * Table-Level: Each participant must be linked to exactly one identity type: either an existing user, an existing agent, or external contact details (email or phone).
     * @public
     * @method
     * @override
@@ -94703,6 +97367,8 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
         const result = super.Validate();
         this.ValidateExternalPhoneFormat(result);
         this.ValidateAgentIdAndRoleMatch(result);
+        this.ValidateLeftAtAfterJoinedAt(result);
+        this.ValidateParticipantIdentityType(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -94753,6 +97419,54 @@ export class MJMeetingParticipantEntity extends BaseEntity<MJMeetingParticipantE
     			"AgentID",
     			"An Agent ID can only be assigned to users with the 'Agent' role.",
     			this.AgentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * If a leave time is recorded, a join time must also be recorded, and the leave time must be at or after the join time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLeftAtAfterJoinedAt(result: ValidationResult) {
+    	if (this.LeftAt != null) {
+    		if (this.JoinedAt == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"LeftAt",
+    				"A join time must be set if a leave time is recorded.",
+    				this.LeftAt,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (new Date(this.LeftAt).getTime() < new Date(this.JoinedAt).getTime()) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"LeftAt",
+    				"The leave time must be at or after the join time.",
+    				this.LeftAt,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * Each participant must be linked to exactly one identity type: either an existing user, an existing agent, or external contact details (email or phone).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParticipantIdentityType(result: ValidationResult) {
+    	const hasUser = this.UserID != null ? 1 : 0;
+    	const hasAgent = this.AgentID != null ? 1 : 0;
+    	const hasExternal = (this.ExternalEmail != null || this.ExternalPhone != null) ? 1 : 0;
+    
+    	const totalIdentities = hasUser + hasAgent + hasExternal;
+    	if (totalIdentities !== 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"A participant must be associated with exactly one identifier: a User, an Agent, or external contact information (Email/Phone).",
+    			this.UserID,
     			ValidationErrorType.Failure
     		));
     	}
@@ -95001,6 +97715,8 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
     * Validate() method override for MJ: Meetings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DialInCode: The dial-in code, if provided, must consist only of numeric digits and be between 6 and 20 characters in length.
     * * Table-Level: If phone dial-in is allowed, both a dial-in phone number and a dial-in code must be provided.
+    * * Table-Level: If an end time is specified, a start time must also be recorded and the end time must be on or after the start time.
+    * * Table-Level: If a scheduled end time is specified, a scheduled start time must also be provided and the scheduled end time must be after the start time.
     * @public
     * @method
     * @override
@@ -95009,6 +97725,8 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
         const result = super.Validate();
         this.ValidateDialInCodeFormatAndLength(result);
         this.ValidateDialInInformationWhenPhoneDialInAllowed(result);
+        this.ValidateEndedAtAfterStartedAt(result);
+        this.ValidateScheduledEndAtAfterScheduledStartAt(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -95050,6 +97768,49 @@ export class MJMeetingEntity extends BaseEntity<MJMeetingEntityType> {
     				"AllowPhoneDialIn",
     				"When phone dial-in is enabled, both a dial-in phone number and a dial-in code must be provided.",
     				this.AllowPhoneDialIn,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If an end time is specified, a start time must also be recorded and the end time must be on or after the start time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
+    	if (this.EndedAt != null && (this.StartedAt == null || new Date(this.EndedAt) < new Date(this.StartedAt))) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EndedAt",
+    			"End time requires a start time to be set and must be on or after the start time.",
+    			this.EndedAt,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * If a scheduled end time is specified, a scheduled start time must also be provided and the scheduled end time must be after the start time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScheduledEndAtAfterScheduledStartAt(result: ValidationResult): void {
+    	if (this.ScheduledEndAt != null) {
+    		if (this.ScheduledStartAt == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ScheduledStartAt",
+    				"Scheduled start time must be provided when a scheduled end time is set.",
+    				this.ScheduledStartAt,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (this.ScheduledEndAt <= this.ScheduledStartAt) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"ScheduledEndAt",
+    				"Scheduled end time must be after the scheduled start time.",
+    				this.ScheduledEndAt,
     				ValidationErrorType.Failure
     			));
     		}
@@ -107393,6 +110154,9 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     * * GateMinimumScore: The gate minimum score must be between 0 and 1 (inclusive) if it is specified.
     * * Weight: The weight value must be greater than or equal to zero. Negative weights are not permitted.
     * * Table-Level: An item cannot be marked as both an Advisory and a Gate at the same time.
+    * * Table-Level: Items configured as a gate must have a minimum passing score specified.
+    * * Table-Level: Rollup method can only be specified for Group nodes; non-group nodes must have rollup method left blank.
+    * * Table-Level: Criteria must have an associated scale defined, while group nodes cannot have a scale.
     * @public
     * @method
     * @override
@@ -107402,6 +110166,9 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
         this.ValidateGateMinimumScoreRange(result);
         this.ValidateWeightGreaterThanOrEqualToZero(result);
         this.ValidateAdvisoryAndGateFlags(result);
+        this.ValidateGateMinimumScoreWhenIsGate(result);
+        this.ValidateRollupMethodAllowedForNodeType(result);
+        this.ValidateScaleIDByNodeType(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -107453,6 +110220,71 @@ export class MJRubricCriterionEntity extends BaseEntity<MJRubricCriterionEntityT
     			"IsAdvisory",
     			"An item cannot be marked as both an Advisory and a Gate simultaneously.",
     			this.IsAdvisory,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Items configured as a gate must have a minimum passing score specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGateMinimumScoreWhenIsGate(result: ValidationResult) {
+    	if (this.IsGate && this.GateMinimumScore == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"GateMinimumScore",
+    			"A gate minimum score must be provided when the item is marked as a gate.",
+    			this.GateMinimumScore,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Rollup method can only be specified for Group nodes; non-group nodes must have rollup method left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRollupMethodAllowedForNodeType(result: ValidationResult) {
+    	if (this.RollupMethod != null && this.NodeType !== 'Group') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RollupMethod",
+    			"Rollup method can only be set when node type is 'Group'.",
+    			this.RollupMethod,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Criteria must have an associated scale defined, while group nodes cannot have a scale.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScaleIDByNodeType(result: ValidationResult) {
+    	if (this.NodeType === 'Criterion' && this.ScaleID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ScaleID",
+    			"A scale must be provided when node type is Criterion.",
+    			this.ScaleID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (this.NodeType === 'Group' && this.ScaleID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ScaleID",
+    			"A scale cannot be assigned when node type is Group.",
+    			this.ScaleID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (this.NodeType !== 'Criterion' && this.NodeType !== 'Group') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NodeType",
+    			"Node type must be either Criterion or Group.",
+    			this.NodeType,
     			ValidationErrorType.Failure
     		));
     	}
@@ -108194,6 +111026,7 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     /**
     * Validate() method override for MJ: Rubric Evaluation Scores entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: If a record is marked as Not Applicable, it must not have a Scale Level, Raw Value, or Normalized Score associated with it.
+    * * Table-Level: Normalized score, effective weight, overall contribution, completeness, and confidence metrics must each fall between 0 and 1 (inclusive) when provided.
     * @public
     * @method
     * @override
@@ -108201,6 +111034,7 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateFieldsWhenNotApplicable(result);
+        this.ValidateScoreAndWeightRanges(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -108222,6 +111056,55 @@ export class MJRubricEvaluationScoreEntity extends BaseEntity<MJRubricEvaluation
     				ValidationErrorType.Failure
     			));
     		}
+    	}
+    }
+
+    /**
+    * Normalized score, effective weight, overall contribution, completeness, and confidence metrics must each fall between 0 and 1 (inclusive) when provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScoreAndWeightRanges(result: ValidationResult) {
+    	if (this.NormalizedScore != null && (this.NormalizedScore < 0 || this.NormalizedScore > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NormalizedScore",
+    			"Normalized score must be between 0 and 1.",
+    			this.NormalizedScore,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.EffectiveWeight != null && (this.EffectiveWeight < 0 || this.EffectiveWeight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EffectiveWeight",
+    			"Effective weight must be between 0 and 1.",
+    			this.EffectiveWeight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.OverallContribution != null && (this.OverallContribution < 0 || this.OverallContribution > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"OverallContribution",
+    			"Overall contribution must be between 0 and 1.",
+    			this.OverallContribution,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Completeness != null && (this.Completeness < 0 || this.Completeness > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Completeness",
+    			"Completeness must be between 0 and 1.",
+    			this.Completeness,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Confidence",
+    			"Confidence must be between 0 and 1.",
+    			this.Confidence,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -108873,6 +111756,9 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     /**
     * Validate() method override for MJ: Rubric Evaluations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * Table-Level: Context Entity ID and Context Record ID must either both be provided or both be left empty. This ensures that a context reference is never partially defined.
+    * * Table-Level: Evaluations performed by a human evaluator must specify the user ID of the evaluator.
+    * * Table-Level: Normalized score, pass threshold applied, completeness, and confidence values must each be between 0 and 1 (inclusive) when provided.
+    * * Table-Level: Evaluations that have been Submitted, Withdrawn, or Superseded must include both a submission date and an outcome.
     * @public
     * @method
     * @override
@@ -108880,6 +111766,9 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateContextEntityAndRecordCoexistence(result);
+        this.ValidateEvaluatorUserIDForHumanEvaluator(result);
+        this.ValidateScoreAndMetricRanges(result);
+        this.ValidateSubmittedStatusRequiresSubmittedAtAndOutcome(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -108903,6 +111792,91 @@ export class MJRubricEvaluationEntity extends BaseEntity<MJRubricEvaluationEntit
                 ValidationErrorType.Failure
             ));
         }
+    }
+
+    /**
+    * Evaluations performed by a human evaluator must specify the user ID of the evaluator.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEvaluatorUserIDForHumanEvaluator(result: ValidationResult) {
+    	if (this.EvaluatorType === 'Human' && this.EvaluatorUserID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EvaluatorUserID",
+    			"Evaluator User is required when Evaluator Type is Human.",
+    			this.EvaluatorUserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Normalized score, pass threshold applied, completeness, and confidence values must each be between 0 and 1 (inclusive) when provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScoreAndMetricRanges(result: ValidationResult) {
+    	if (this.NormalizedScore != null && (this.NormalizedScore < 0 || this.NormalizedScore > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"NormalizedScore",
+    			"Normalized score must be between 0 and 1.",
+    			this.NormalizedScore,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.PassThresholdApplied != null && (this.PassThresholdApplied < 0 || this.PassThresholdApplied > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"PassThresholdApplied",
+    			"Pass threshold applied must be between 0 and 1.",
+    			this.PassThresholdApplied,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Completeness != null && (this.Completeness < 0 || this.Completeness > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Completeness",
+    			"Completeness must be between 0 and 1.",
+    			this.Completeness,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.Confidence != null && (this.Confidence < 0 || this.Confidence > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Confidence",
+    			"Confidence must be between 0 and 1.",
+    			this.Confidence,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Evaluations that have been Submitted, Withdrawn, or Superseded must include both a submission date and an outcome.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSubmittedStatusRequiresSubmittedAtAndOutcome(result: ValidationResult) {
+    	if (this.Status === "Withdrawn" || this.Status === "Superseded" || this.Status === "Submitted") {
+    		if (this.SubmittedAt == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"SubmittedAt",
+    				"A submission date is required when the evaluation status is '" + this.Status + "'.",
+    				this.SubmittedAt,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.Outcome == null || this.Outcome.trim() === "") {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Outcome",
+    				"An outcome is required when the evaluation status is '" + this.Status + "'.",
+    				this.Outcome,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -110182,6 +113156,8 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
     * * MinimumCompleteness: Minimum completeness, if specified, must be a value between 0 and 1 (inclusive).
     * * PassThreshold: The pass threshold must be a value between 0 and 1 (inclusive) representing a percentage.
     * * Table-Level: If a rubric is not in 'Draft' status, it must have all versioning, hashing, publishing timestamp, and version bump details fully populated to ensure data integrity for published content.
+    * * Table-Level: The maximum display score must be greater than the minimum display score to ensure a valid scoring range.
+    * * Table-Level: Major, minor, and patch version numbers cannot be negative.
     * @public
     * @method
     * @override
@@ -110191,6 +113167,8 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
         this.ValidateMinimumCompletenessRange(result);
         this.ValidatePassThresholdRange(result);
         this.ValidatePublishedMetadataForNonDraftStatus(result);
+        this.ValidateScoreDisplayMaxGreaterThanScoreDisplayMin(result);
+        this.ValidateVersionNumbersNonNegative(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -110255,6 +113233,56 @@ export class MJRubricVersionEntity extends BaseEntity<MJRubricVersionEntityType>
     				ValidationErrorType.Failure
     			));
     		}
+    	}
+    }
+
+    /**
+    * The maximum display score must be greater than the minimum display score to ensure a valid scoring range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScoreDisplayMaxGreaterThanScoreDisplayMin(result: ValidationResult) {
+    	if (this.ScoreDisplayMax != null && this.ScoreDisplayMin != null && this.ScoreDisplayMax <= this.ScoreDisplayMin) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ScoreDisplayMax",
+    			"The maximum display score must be greater than the minimum display score.",
+    			this.ScoreDisplayMax,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Major, minor, and patch version numbers cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumbersNonNegative(result: ValidationResult): void {
+    	if (this.MajorVersion != null && this.MajorVersion < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MajorVersion",
+    			"Major version must be 0 or greater.",
+    			this.MajorVersion,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.MinorVersion != null && this.MinorVersion < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MinorVersion",
+    			"Minor version must be 0 or greater.",
+    			this.MinorVersion,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	if (this.PatchVersion != null && this.PatchVersion < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"PatchVersion",
+    			"Patch version must be 0 or greater.",
+    			this.PatchVersion,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -112087,6 +115115,57 @@ export class MJScopedNotificationConfigEntity extends BaseEntity<MJScopedNotific
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Scoped Notification Configs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: At least one delivery channel (In-App, Email, or SMS) must be specified for the notification.
+    * * Table-Level: If a primary scope record is specified, the corresponding primary scope entity must also be specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDeliveryChannelsProvided(result);
+        this.ValidatePrimaryScopeRecordIDRequiresEntityID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * At least one delivery channel (In-App, Email, or SMS) must be specified for the notification.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDeliveryChannelsProvided(result: ValidationResult) {
+    	if (this.InApp == null && this.Email == null && this.SMS == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InApp",
+    			"At least one notification delivery channel (InApp, Email, or SMS) must be provided.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * If a primary scope record is specified, the corresponding primary scope entity must also be specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePrimaryScopeRecordIDRequiresEntityID(result: ValidationResult) {
+    	if (this.PrimaryScopeRecordID != null && this.PrimaryScopeEntityID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"PrimaryScopeEntityID",
+    			"Primary Scope Entity is required when a Primary Scope Record ID is specified.",
+    			this.PrimaryScopeEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -123049,6 +126128,4236 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
 
 
 /**
+ * MJ: Tour Overrides - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourOverride
+ * * Base View: vwTourOverrides
+ * * @description Host-admin customizations layered over shipped tours at Global, Role, or User scope without modifying upgradeable tour records.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Overrides')
+export class MJTourOverrideEntity extends BaseEntity<MJTourOverrideEntityType> {
+    /**
+    * Loads the MJ: Tour Overrides record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Overrides record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourOverrideEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Overrides entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the assigned scope matches the target assignment: 'Global' requires both Role and User to be blank, 'Role' requires a Role and no User, and 'User' requires a User and no Role.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeTargetAssignment(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the assigned scope matches the target assignment: 'Global' requires both Role and User to be blank, 'Role' requires a Role and no User, and 'User' requires a User and no Role.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeTargetAssignment(result: ValidationResult) {
+    	const scope = this.Scope;
+    	const hasRole = this.RoleID != null;
+    	const hasUser = this.UserID != null;
+    
+    	let isValid = false;
+    	if (scope === 'Global') {
+    		isValid = !hasRole && !hasUser;
+    	} else if (scope === 'Role') {
+    		isValid = hasRole && !hasUser;
+    	} else if (scope === 'User') {
+    		isValid = hasUser && !hasRole;
+    	}
+    
+    	if (!isValid) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Scope",
+    			"Scope configuration is invalid: 'Global' requires no Role or User, 'Role' requires a Role and no User, and 'User' requires a User and no Role.",
+    			this.Scope,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour override.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour being customized by this override.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+    * * Description: Specificity scope of the override: Global, Role, or User.
+    */
+    get Scope(): 'Global' | 'Role' | 'User' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Global' | 'Role' | 'User') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Target MJ Role when Scope is Role.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Target MJ User when Scope is User.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Precedence
+    * * Display Name: Precedence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Tie-breaker precedence when multiple overrides apply at the same scope.
+    */
+    get Precedence(): number {
+        return this.Get('Precedence');
+    }
+    set Precedence(value: number) {
+        this.Set('Precedence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Whether this override record is Active or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: AudienceFilter
+    * * Display Name: Audience Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional CompositeFilter JSON overriding Tour.AudienceFilter for this scope.
+    */
+    get AudienceFilter(): string | null {
+        return this.Get('AudienceFilter');
+    }
+    set AudienceFilter(value: string | null) {
+        this.Set('AudienceFilter', value);
+    }
+
+    /**
+    * * Field Name: LaunchPolicy
+    * * Display Name: Launch Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON ITourLaunchPolicy overriding Tour.LaunchPolicy for this scope.
+    */
+    get LaunchPolicy(): string | null {
+        return this.Get('LaunchPolicy');
+    }
+    set LaunchPolicy(value: string | null) {
+        this.Set('LaunchPolicy', value);
+    }
+
+    /**
+    * * Field Name: IsDisabled
+    * * Display Name: Is Disabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, suppresses this tour completely for the targeted scope.
+    */
+    get IsDisabled(): boolean {
+        return this.Get('IsDisabled');
+    }
+    set IsDisabled(value: boolean) {
+        this.Set('IsDisabled', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON overrides for tour configuration settings at this scope.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Tour Prerequisites - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourPrerequisite
+ * * Base View: vwTourPrerequisites
+ * * @description Prerequisite rule that must be satisfied (Required) or is suggested (Recommended) before a user takes a tour.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Prerequisites')
+export class MJTourPrerequisiteEntity extends BaseEntity<MJTourPrerequisiteEntityType> {
+    /**
+    * Loads the MJ: Tour Prerequisites record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Prerequisites record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourPrerequisiteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Prerequisites entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: A tour cannot require itself as a prerequisite.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRequiredTourIDNotEqualToTourID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * A tour cannot require itself as a prerequisite.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateRequiredTourIDNotEqualToTourID(result: ValidationResult) {
+    		if (this.RequiredTourID != null && UUIDsEqual(this.RequiredTourID, this.TourID)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RequiredTourID",
+    				"A tour cannot be a prerequisite for itself.",
+    				this.RequiredTourID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour prerequisite.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour that declares this prerequisite.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: PrerequisiteType
+    * * Display Name: Prerequisite Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Application
+    *   * Authorization
+    *   * Data
+    *   * Role
+    *   * Tour
+    * * Description: Kind of prerequisite: Tour, Role, Authorization, Application, or Data.
+    */
+    get PrerequisiteType(): 'Application' | 'Authorization' | 'Data' | 'Role' | 'Tour' {
+        return this.Get('PrerequisiteType');
+    }
+    set PrerequisiteType(value: 'Application' | 'Authorization' | 'Data' | 'Role' | 'Tour') {
+        this.Set('PrerequisiteType', value);
+    }
+
+    /**
+    * * Field Name: RequiredTourID
+    * * Display Name: Required Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: When PrerequisiteType is Tour, the FK to the required prior tour.
+    */
+    get RequiredTourID(): string | null {
+        return this.Get('RequiredTourID');
+    }
+    set RequiredTourID(value: string | null) {
+        this.Set('RequiredTourID', value);
+    }
+
+    /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON condition specifying the role, authorization, application, or data predicate to evaluate.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
+    * * Field Name: Strength
+    * * Display Name: Strength
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Required
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Recommended
+    *   * Required
+    * * Description: Enforcement strength: Required blocks eligibility until met; Recommended prompts or summarizes the prior tour.
+    */
+    get Strength(): 'Recommended' | 'Required' {
+        return this.Get('Strength');
+    }
+    set Strength(value: 'Recommended' | 'Required') {
+        this.Set('Strength', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Evaluation and display order among prerequisites for the tour.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: RequiredTour
+    * * Display Name: Required Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RequiredTour(): string | null {
+        return this.Get('RequiredTour');
+    }
+}
+
+
+/**
+ * MJ: Tour Run Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourRunStep
+ * * Base View: vwTourRunSteps
+ * * @description Per-step execution telemetry for a Tour Run, capturing timing, outcome, anchor-resolution rung, and agent question count.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Run Steps')
+export class MJTourRunStepEntity extends BaseEntity<MJTourRunStepEntityType> {
+    /**
+    * Loads the MJ: Tour Run Steps record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Run Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourRunStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * QuestionCount: Question count cannot be negative
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateQuestionCountNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Question count cannot be negative
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateQuestionCountNonNegative(result: ValidationResult) {
+    	if (this.QuestionCount != null && this.QuestionCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"QuestionCount",
+    			"Question count must be greater than or equal to 0.",
+    			this.QuestionCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour run step telemetry record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourRunID
+    * * Display Name: Tour Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Runs (vwTourRuns.ID)
+    * * Description: Parent tour run.
+    */
+    get TourRunID(): string {
+        return this.Get('TourRunID');
+    }
+    set TourRunID(value: string) {
+        this.Set('TourRunID', value);
+    }
+
+    /**
+    * * Field Name: StepKey
+    * * Display Name: Step Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: StepKey from the pinned Tour Version.
+    */
+    get StepKey(): string {
+        return this.Get('StepKey');
+    }
+    set StepKey(value: string) {
+        this.Set('StepKey', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordinal sequence of this step visit within the run (supports revisiting steps).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: EnteredAt
+    * * Display Name: Entered At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the user entered this step.
+    */
+    get EnteredAt(): Date {
+        return this.Get('EnteredAt');
+    }
+    set EnteredAt(value: Date) {
+        this.Set('EnteredAt', value);
+    }
+
+    /**
+    * * Field Name: ExitedAt
+    * * Display Name: Exited At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the user exited or completed this step.
+    */
+    get ExitedAt(): Date | null {
+        return this.Get('ExitedAt');
+    }
+    set ExitedAt(value: Date | null) {
+        this.Set('ExitedAt', value);
+    }
+
+    /**
+    * * Field Name: Outcome
+    * * Display Name: Outcome
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Already Known
+    *   * Anchor Missing
+    *   * Completed
+    *   * Dismissed
+    *   * Done By Agent
+    *   * Skipped
+    * * Description: How the step concluded: Completed, Skipped, Already Known, Done By Agent, Anchor Missing, or Dismissed.
+    */
+    get Outcome(): 'Already Known' | 'Anchor Missing' | 'Completed' | 'Dismissed' | 'Done By Agent' | 'Skipped' | null {
+        return this.Get('Outcome');
+    }
+    set Outcome(value: 'Already Known' | 'Anchor Missing' | 'Completed' | 'Dismissed' | 'Done By Agent' | 'Skipped' | null) {
+        this.Set('Outcome', value);
+    }
+
+    /**
+    * * Field Name: AnchorResolution
+    * * Display Name: Anchor Resolution
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * None
+    *   * Registered
+    *   * Role
+    *   * Selector
+    *   * Semantic
+    * * Description: Which anchor ladder rung resolved the target element: Registered, Semantic, Role, Selector, None, or Failed.
+    */
+    get AnchorResolution(): 'Failed' | 'None' | 'Registered' | 'Role' | 'Selector' | 'Semantic' | null {
+        return this.Get('AnchorResolution');
+    }
+    set AnchorResolution(value: 'Failed' | 'None' | 'Registered' | 'Role' | 'Selector' | 'Semantic' | null) {
+        this.Set('AnchorResolution', value);
+    }
+
+    /**
+    * * Field Name: QuestionCount
+    * * Display Name: Question Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of off-path questions the user asked an agent while on this step.
+    */
+    get QuestionCount(): number {
+        return this.Get('QuestionCount');
+    }
+    set QuestionCount(value: number) {
+        this.Set('QuestionCount', value);
+    }
+
+    /**
+    * * Field Name: Details
+    * * Display Name: Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON diagnostics such as missing-anchor reason or completion evidence details.
+    */
+    get Details(): string | null {
+        return this.Get('Details');
+    }
+    set Details(value: string | null) {
+        this.Set('Details', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * Entry in the ordered step-traversal array stored on `MJ: Tour Runs.PathTaken`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** TourRun.PathTaken element (`JSONTypeIsArray: true`) — one visited step in a tour run. */
+export interface MJTourRunEntity_ITourRunPathEntry {
+    /** `StepKey` of the step visited. */
+    StepKey: string;
+    /** ISO-8601 timestamp when the user entered the step. */
+    EnteredAt: string;
+    /** ISO-8601 timestamp when the user exited the step. */
+    ExitedAt?: string;
+    /** Step completion outcome recorded on exit. */
+    Outcome?: 'Completed' | 'Skipped' | 'Already Known' | 'Done By Agent' | 'Anchor Missing' | 'Dismissed';
+    /** Selected choice key when the step was a `Choice` step. */
+    ChoiceKey?: string;
+}
+
+/**
+ * MJ: Tour Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourRun
+ * * Base View: vwTourRuns
+ * * @description Progress ledger for one attempt of a guided tour by an authenticated MJ user or an external-surface guest visitor, pinned to a specific TourVersion.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Runs')
+export class MJTourRunEntity extends BaseEntity<MJTourRunEntityType> {
+    /**
+    * Loads the MJ: Tour Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must have either a User ID or a Visitor Key specified to identify the user or visitor associated with the tour.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserOrVisitorIdentifier(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must have either a User ID or a Visitor Key specified to identify the user or visitor associated with the tour.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserOrVisitorIdentifier(result: ValidationResult) {
+    	if (this.UserID == null && (this.VisitorKey == null || this.VisitorKey.trim() === "")) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"At least one identifier (User ID or Visitor Key) must be provided.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour run.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Authenticated MJ user taking the tour. NULL for unauthenticated guest visitors.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: VisitorKey
+    * * Display Name: Visitor Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Guest visitor identifier (or mj_sid fallback when returning-visitor memory is off) from verified surface JWT claims.
+    */
+    get VisitorKey(): string | null {
+        return this.Get('VisitorKey');
+    }
+    set VisitorKey(value: string | null) {
+        this.Set('VisitorKey', value);
+    }
+
+    /**
+    * * Field Name: SurfaceID
+    * * Display Name: Surface
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Surfaces (vwTourSurfaces.ID)
+    * * Description: Optional FK to MJ: Tour Surfaces when the run occurred on an external or embed surface.
+    */
+    get SurfaceID(): string | null {
+        return this.Get('SurfaceID');
+    }
+    set SurfaceID(value: string | null) {
+        this.Set('SurfaceID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour being executed.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: TourVersionID
+    * * Display Name: Tour Version
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Versions (vwTourVersions.ID)
+    * * Description: Pinned immutable Tour Version snapshot this run executes against.
+    */
+    get TourVersionID(): string {
+        return this.Get('TourVersionID');
+    }
+    set TourVersionID(value: string) {
+        this.Set('TourVersionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: In Progress
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Abandoned
+    *   * Completed
+    *   * Dismissed
+    *   * Failed
+    *   * In Progress
+    *   * Pending
+    *   * Snoozed
+    * * Description: Current lifecycle status of the run: Pending, In Progress, Completed, Dismissed, Snoozed, Abandoned, or Failed.
+    */
+    get Status(): 'Abandoned' | 'Completed' | 'Dismissed' | 'Failed' | 'In Progress' | 'Pending' | 'Snoozed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Abandoned' | 'Completed' | 'Dismissed' | 'Failed' | 'In Progress' | 'Pending' | 'Snoozed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: GuideMode
+    * * Display Name: Guide Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Visual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Chat
+    *   * Visual
+    *   * Voice
+    * * Description: Active guidance modality for this run: Visual, Chat, or Voice.
+    */
+    get GuideMode(): 'Chat' | 'Visual' | 'Voice' {
+        return this.Get('GuideMode');
+    }
+    set GuideMode(value: 'Chat' | 'Visual' | 'Voice') {
+        this.Set('GuideMode', value);
+    }
+
+    /**
+    * * Field Name: DirectorType
+    * * Display Name: Director Type
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Visual
+    * * Description: ClassFactory key of the BaseTourDirector driving the session (for example Visual, Chat, Voice, Verify, Recorder).
+    */
+    get DirectorType(): string {
+        return this.Get('DirectorType');
+    }
+    set DirectorType(value: string) {
+        this.Set('DirectorType', value);
+    }
+
+    /**
+    * * Field Name: CurrentStepKey
+    * * Display Name: Current Step Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: StepKey of the step currently active in this run.
+    */
+    get CurrentStepKey(): string | null {
+        return this.Get('CurrentStepKey');
+    }
+    set CurrentStepKey(value: string | null) {
+        this.Set('CurrentStepKey', value);
+    }
+
+    /**
+    * * Field Name: PathTaken
+    * * Display Name: Path Taken
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJTourRunEntity_ITourRunPathEntry>
+    * * Description: JSON array of ITourRunPathEntry recording the ordered steps visited and their outcomes.
+    */
+    get PathTaken(): string | null {
+        return this.Get('PathTaken');
+    }
+    set PathTaken(value: string | null) {
+        this.Set('PathTaken', value);
+    }
+
+    /**
+    * Typed accessor for PathTaken — a live view of the parsed JSON as Array<MJTourRunEntity_ITourRunPathEntry>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PathTaken field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PathTakenObject(): Array<MJTourRunEntity_ITourRunPathEntry> | null {
+        return this.GetJSONFieldObject<Array<MJTourRunEntity_ITourRunPathEntry>>('PathTaken');
+    }
+    set PathTakenObject(value: Array<MJTourRunEntity_ITourRunPathEntry> | null) {
+        this.SetJSONFieldObject<Array<MJTourRunEntity_ITourRunPathEntry>>('PathTaken', value);
+    }
+
+    /**
+    * * Field Name: LaunchSource
+    * * Display Name: Launch Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Empty State
+    *   * Launcher
+    *   * Learning Path
+    *   * Link
+    *   * Notification
+    *   * Omnibar
+    *   * Trigger
+    * * Description: Entry point that initiated the run: Launcher, Omnibar, Agent, Trigger, Notification, Link, Learning Path, or Empty State.
+    */
+    get LaunchSource(): 'Agent' | 'Empty State' | 'Launcher' | 'Learning Path' | 'Link' | 'Notification' | 'Omnibar' | 'Trigger' {
+        return this.Get('LaunchSource');
+    }
+    set LaunchSource(value: 'Agent' | 'Empty State' | 'Launcher' | 'Learning Path' | 'Link' | 'Notification' | 'Omnibar' | 'Trigger') {
+        this.Set('LaunchSource', value);
+    }
+
+    /**
+    * * Field Name: LaunchedByAgentRunID
+    * * Display Name: Launched By Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional FK to MJ: AI Agent Runs when an agent initiated this tour run.
+    */
+    get LaunchedByAgentRunID(): string | null {
+        return this.Get('LaunchedByAgentRunID');
+    }
+    set LaunchedByAgentRunID(value: string | null) {
+        this.Set('LaunchedByAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the user or visitor actually started the run (NULL while Pending).
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the tour run reached Completed status.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: GoalMetAt
+    * * Display Name: Goal Met At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the tour's outcome Goal was verified as met.
+    */
+    get GoalMetAt(): Date | null {
+        return this.Get('GoalMetAt');
+    }
+    set GoalMetAt(value: Date | null) {
+        this.Set('GoalMetAt', value);
+    }
+
+    /**
+    * * Field Name: SnoozedUntil
+    * * Display Name: Snoozed Until
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp until which a Snoozed run should not be re-offered.
+    */
+    get SnoozedUntil(): Date | null {
+        return this.Get('SnoozedUntil');
+    }
+    set SnoozedUntil(value: Date | null) {
+        this.Set('SnoozedUntil', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: Optional FK to MJ: Conversations linking a Chat-guided run to its conversation thread.
+    */
+    get ConversationID(): string | null {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string | null) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: AgentSessionID
+    * * Display Name: Agent Session
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
+    * * Description: Optional FK to MJ: AI Agent Sessions linking a Voice-guided run to its realtime session.
+    */
+    get AgentSessionID(): string | null {
+        return this.Get('AgentSessionID');
+    }
+    set AgentSessionID(value: string | null) {
+        this.Set('AgentSessionID', value);
+    }
+
+    /**
+    * * Field Name: IsHoldout
+    * * Display Name: Is Holdout
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run represents a holdout assignment (suppressed offer) for goal-lift measurement.
+    */
+    get IsHoldout(): boolean {
+        return this.Get('IsHoldout');
+    }
+    set IsHoldout(value: boolean) {
+        this.Set('IsHoldout', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Details
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Surface
+    * * Display Name: Surface Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Surface(): string | null {
+        return this.Get('Surface');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: LaunchedByAgentRun
+    * * Display Name: Launched By Agent Run Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LaunchedByAgentRun(): string | null {
+        return this.Get('LaunchedByAgentRun');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+}
+
+
+/**
+ * Branch edge configuration and localization overrides stored on `MJ: Tour Step Paths.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display overrides for a branch edge. */
+export interface MJTourStepPathEntity_ITourStepPathLocalization {
+    /** Localized branch edge label. */
+    label?: string;
+}
+
+/** TourStepPath.Configuration — localizations and extensible edge metadata. */
+export interface MJTourStepPathEntity_ITourStepPathConfiguration {
+    /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourStepPathEntity_ITourStepPathLocalization>;
+    /** Choice option key matched when originating from a `Choice` step. */
+    choiceKey?: string;
+    /** Marks this branch as optional in graph evaluation. */
+    isOptional?: boolean;
+    /** Extensible edge settings for custom `BaseTourDriver` routing. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tour Step Paths - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourStepPath
+ * * Base View: vwTourStepPaths
+ * * @description Directed branching edge between two steps in a tour. Linear tours need no path rows and advance by TourStep.Sequence.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Step Paths')
+export class MJTourStepPathEntity extends BaseEntity<MJTourStepPathEntityType> {
+    /**
+    * Loads the MJ: Tour Step Paths record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Step Paths record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourStepPathEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: A step transition cannot connect a step to itself; the destination step must be different from the starting step.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateToStepIDNotEqualToFromStepID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * A step transition cannot connect a step to itself; the destination step must be different from the starting step.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateToStepIDNotEqualToFromStepID(result: ValidationResult) {
+    	if (this.FromStepID != null && this.ToStepID != null && UUIDsEqual(this.FromStepID, this.ToStepID)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ToStepID",
+    			"A step cannot transition to itself. The destination step must be different from the starting step.",
+    			this.ToStepID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour step path.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Parent tour containing both endpoints.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: FromStepID
+    * * Display Name: From Step
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Steps (vwTourSteps.ID)
+    * * Description: Source step where this edge originates.
+    */
+    get FromStepID(): string {
+        return this.Get('FromStepID');
+    }
+    set FromStepID(value: string) {
+        this.Set('FromStepID', value);
+    }
+
+    /**
+    * * Field Name: ToStepID
+    * * Display Name: To Step
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Steps (vwTourSteps.ID)
+    * * Description: Target step this edge transitions to.
+    */
+    get ToStepID(): string {
+        return this.Get('ToStepID');
+    }
+    set ToStepID(value: string) {
+        this.Set('ToStepID', value);
+    }
+
+    /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: CompositeFilter JSON or choice-key condition evaluated against session context to decide whether this edge is taken.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this branch edge in Tour Studio and Choice steps.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Evaluation priority when multiple outgoing edges match.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of this outgoing edge in editors and Choice lists.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this edge is taken when no conditional sibling edge matches.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepPathEntity_ITourStepPathConfiguration
+    * * Description: JSON ITourStepPathConfiguration holding localizations and extensible edge metadata.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourStepPathEntity_ITourStepPathConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourStepPathEntity_ITourStepPathConfiguration | null {
+        return this.GetJSONFieldObject<MJTourStepPathEntity_ITourStepPathConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourStepPathEntity_ITourStepPathConfiguration | null) {
+        this.SetJSONFieldObject<MJTourStepPathEntity_ITourStepPathConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: FromStep
+    * * Display Name: From Step
+    * * SQL Data Type: nvarchar(500)
+    */
+    get FromStep(): string | null {
+        return this.Get('FromStep');
+    }
+
+    /**
+    * * Field Name: ToStep
+    * * Display Name: To Step
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ToStep(): string | null {
+        return this.Get('ToStep');
+    }
+}
+
+
+/**
+ * MJ: Tour Step Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourStepType
+ * * Base View: vwTourStepTypes
+ * * @description Registry of guided tour step types (visual primitives and app-extended step plugins). Each row names the logic DriverClass, optional Angular/host RendererClass, optional runtime ComponentID, and JSON ConfigSchema.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Step Types')
+export class MJTourStepTypeEntity extends BaseEntity<MJTourStepTypeEntityType> {
+    /**
+    * Loads the MJ: Tour Step Types record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Step Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourStepTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour step type.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the step type (for example Spotlight, Action, Beacon, Modal, Banner, Choice, Media, EmbeddedComponent, AskAgent).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Author-facing description of how this step type presents and behaves.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory key of the BaseTourStepType logic subclass in @memberjunction/tours-runtime or an app package.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: RendererClass
+    * * Display Name: Renderer Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory key of the BaseTourStepRenderer UI subclass. When NULL, resolution falls back to the step type Name.
+    */
+    get RendererClass(): string | null {
+        return this.Get('RendererClass');
+    }
+    set RendererClass(value: string | null) {
+        this.Set('RendererClass', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Optional FK to MJ: Components enabling zero-deploy runtime ComponentSpec interactive step types.
+    */
+    get ComponentID(): string | null {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string | null) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: ConfigSchema
+    * * Display Name: Config Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema describing the Configuration object accepted by steps of this type, used by Tour Studio and server validation.
+    */
+    get ConfigSchema(): string | null {
+        return this.Get('ConfigSchema');
+    }
+    set ConfigSchema(value: string | null) {
+        this.Set('ConfigSchema', value);
+    }
+
+    /**
+    * * Field Name: SupportedModes
+    * * Display Name: Supported Modes
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Show,Guide
+    * * Description: Comma-separated list of supported step execution modes (Show, Guide, Do).
+    */
+    get SupportedModes(): string {
+        return this.Get('SupportedModes');
+    }
+    set SupportedModes(value: string) {
+        this.Set('SupportedModes', value);
+    }
+
+    /**
+    * * Field Name: IsAgentCapable
+    * * Display Name: Is Agent Capable
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, Chat and Voice agent directors can explain or drive steps of this type.
+    */
+    get IsAgentCapable(): boolean {
+        return this.Get('IsAgentCapable');
+    }
+    set IsAgentCapable(value: boolean) {
+        this.Set('IsAgentCapable', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class displayed for this step type in Tour Studio.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Lifecycle status of the step type: Active, Deprecated, or Disabled.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component Name
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string | null {
+        return this.Get('Component');
+    }
+}
+
+
+/**
+ * Step-level configuration and localization overrides stored on `MJ: Tour Steps.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display and narration overrides for a tour step. */
+export interface MJTourStepEntity_ITourStepLocalization {
+    /** Localized step heading. */
+    title?: string;
+    /** Localized Markdown step body. */
+    body?: string;
+    /** Localized voice narration script. */
+    voiceScript?: string;
+    /** Localized primary Next/Continue button label. */
+    nextLabel?: string;
+    /** Localized CTA label for Modal or Banner steps. */
+    ctaLabel?: string;
+}
+
+/** Selectable option rendered by `Choice` steps. */
+export interface MJTourStepEntity_ITourStepChoiceOption {
+    /** Stable key exposed to `TourStepPath` conditions. */
+    key: string;
+    /** Display label of the choice. */
+    label: string;
+    /** Optional supporting explanation shown under the label. */
+    description?: string;
+    /** Optional Font Awesome icon class. */
+    icon?: string;
+    /** Marks the correct answer when `choiceMode` is `'knowledgeCheck'`. */
+    isCorrect?: boolean;
+    /** Optional explanation shown after selecting this answer in knowledge-check mode. */
+    feedback?: string;
+}
+
+/** Single slide in a multi-image `Media` carousel step. */
+export interface MJTourStepEntity_ITourMediaSlide {
+    /** Image or video URL. */
+    mediaUrl: string;
+    /** Accessible alternative text describing the slide. */
+    altText: string;
+    /** Optional caption displayed below the slide. */
+    caption?: string;
+}
+
+/** TourStep.Configuration — typed options for the 9 standard step primitives, localizations, and custom step plugins. */
+export interface MJTourStepEntity_ITourStepConfiguration {
+    /** Locale-keyed copy overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourStepEntity_ITourStepLocalization>;
+    /** Explicit opt-in permitting a CSS `Selector` anchor fallback without failing the `tour-anchors` gate. */
+    tourAnchorsAllowSelector?: boolean;
+
+    // --- Spotlight ---
+    /** Padding in pixels around the spotlight SVG cutout. */
+    spotlightPadding?: number;
+    /** Border radius in pixels of the spotlight SVG cutout. */
+    spotlightRadius?: number;
+    /** Whether clicks inside the spotlight cutout pass through to the target element. */
+    allowInteraction?: boolean;
+    /** Additional registered anchor keys highlighted alongside the primary anchor. */
+    additionalAnchors?: string[];
+    /** Custom label for the Next button. */
+    nextLabel?: string;
+    /** Custom label for the Back button. */
+    backLabel?: string;
+
+    // --- Action ---
+    /** Short imperative instruction telling the user what action to perform. */
+    actionPrompt?: string;
+    /** Displays a waiting spinner/indicator while awaiting a background `Signal` or `EntityEvent`. */
+    showWaitingIndicator?: boolean;
+    /** Label shown beside the waiting indicator. */
+    waitingLabel?: string;
+    /** Automatically advances to the next step as soon as completion checks satisfy (default true). */
+    autoAdvanceOnComplete?: boolean;
+
+    // --- Beacon ---
+    /** Anchor corner or position for the pulsing beacon dot. */
+    beaconPosition?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'center';
+    /** Pulse animation duration in milliseconds (capped at 5000 ms for WCAG 2.2.2). */
+    beaconPulseDurationMs?: number;
+    /** Accessible label on the beacon trigger button. */
+    beaconLabel?: string;
+
+    // --- Modal ---
+    /** Visual variant of a Modal step: welcome card, announcement, or end-of-tour checkpoint recap. */
+    modalVariant?: 'welcome' | 'announcement' | 'checkpoint';
+    /** Primary call-to-action button label on Modal or Banner steps. */
+    ctaLabel?: string;
+    /** Optional follow-on tour key offered from a checkpoint Modal. */
+    nextTourKey?: string;
+    /** Optional learning path key linked from a checkpoint Modal. */
+    learningPathKey?: string;
+    /** Optional hero Font Awesome icon class for Modal cards. */
+    heroIcon?: string;
+
+    // --- Banner ---
+    /** Semantic color tone for a Banner step. */
+    bannerTone?: 'info' | 'success' | 'warning' | 'accent';
+    /** Whether a Banner step includes a dismiss button. */
+    dismissible?: boolean;
+    /** Optional destination URL opened by a Banner CTA button. */
+    ctaUrl?: string;
+
+    // --- Choice ---
+    /** Choices rendered by a `Choice` step (2-4 answers recommended). */
+    choices?: MJTourStepEntity_ITourStepChoiceOption[];
+    /** Whether `Choice` acts as a pathway branch selector or a knowledge check with feedback. */
+    choiceMode?: 'branch' | 'knowledgeCheck';
+    /** Displays immediate feedback after answer selection in `knowledgeCheck` mode. */
+    showFeedback?: boolean;
+
+    // --- Media ---
+    /** Media format rendered by `Media` steps. */
+    mediaType?: 'video' | 'image' | 'carousel';
+    /** Source URL for video or image media. */
+    mediaUrl?: string;
+    /** Required WebVTT captions track URL for video media. */
+    captionsUrl?: string;
+    /** Required inline transcript/captions text when `captionsUrl` is omitted. */
+    captionsText?: string;
+    /** Optional poster image URL for video media. */
+    posterUrl?: string;
+    /** Required accessible alt text for image media. */
+    altText?: string;
+    /** Slide list when `mediaType` is `'carousel'`. */
+    slides?: MJTourStepEntity_ITourMediaSlide[];
+
+    // --- EmbeddedComponent ---
+    /** Optional `MJ: Components` ID rendered inside an `EmbeddedComponent` step. */
+    componentId?: string;
+    /** Inline `ComponentSpec` definition rendered via `<mj-react-component>` when no `componentId` is set. */
+    componentSpec?: Record<string, unknown>;
+    /** Input properties bound into the embedded component host. */
+    hostProps?: Record<string, unknown>;
+    /** Event name emitted by the embedded component to complete the step. */
+    completeEvent?: string;
+
+    // --- AskAgent ---
+    /** Seeded prompt sent to Sage when entering an `AskAgent` step. */
+    agentPrompt?: string;
+    /** Preferred modality when opening the agent bridge from `AskAgent`. */
+    preferredMode?: 'Chat' | 'Voice';
+    /** Automatically submits `agentPrompt` when the step opens. */
+    autoSendPrompt?: boolean;
+    /** Requires explicit `AgentConfirmed` tool call before advancing. */
+    requireConfirmation?: boolean;
+
+    /** Extensible properties for custom `BaseTourStepType` plugins. */
+    [key: string]: unknown;
+}
+
+/**
+ * Anchor descriptor stored on `MJ: Tour Steps.Anchor`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Standard anchor resolution strategies shipped in `@memberjunction/tours-runtime` and `@memberjunction/ng-tours`. */
+export type MJTourStepEntity_StandardTourAnchorStrategy =
+    | 'Registered'
+    | 'FormField'
+    | 'FormSection'
+    | 'FormRailGroup'
+    | 'FormToolbarAction'
+    | 'NavItem'
+    | 'RailPage'
+    | 'AppSwitcher'
+    | 'GridColumn'
+    | 'Omnibar'
+    | 'ChatComposer'
+    | 'Role'
+    | 'Selector';
+
+/** Anchor resolution strategy key, including custom ClassFactory-registered app resolvers. */
+export type MJTourStepEntity_TourAnchorStrategy = MJTourStepEntity_StandardTourAnchorStrategy | (string & {});
+
+/** TourStep.Anchor — describes how to locate a UI target element and optional fallback anchors. */
+export interface MJTourStepEntity_ITourAnchor {
+    /** Resolution strategy key registered with `BaseTourAnchorResolver`. */
+    Strategy: MJTourStepEntity_TourAnchorStrategy;
+    /** Registered anchor key (`data-mj-tour-anchor`) or nav/rail/toolbar action key. */
+    Key?: string;
+    /** Entity name for semantic form/grid resolvers; supports `{{Context.Record.EntityName}}`. */
+    Entity?: string;
+    /** Field name for `FormField` or `GridColumn` resolvers. */
+    Field?: string;
+    /** Section key for `FormSection` resolvers. */
+    Section?: string;
+    /** Rail group key for `FormRailGroup` resolvers. */
+    RailGroup?: string;
+    /** Toolbar action key for `FormToolbarAction` resolvers. */
+    Action?: string;
+    /** Application name or ID for `NavItem` or `RailPage` resolvers. */
+    Application?: string;
+    /** Nav item `DriverClass` for stable `NavItem` resolution. */
+    DriverClass?: string;
+    /** Accessible ARIA role for `Role` resolvers. */
+    Role?: string;
+    /** Accessible name for `Role` resolvers. */
+    Name?: string;
+    /** CSS selector fallback for `Selector` resolvers (last resort; flagged by `tour-anchors` unless opted in). */
+    Selector?: string;
+    /** Optional ancestor region or CSS scope disambiguating matching elements. */
+    Scope?: string;
+    /** Maximum milliseconds to wait for the anchor to appear in the DOM (default 5000). */
+    TimeoutMs?: number;
+    /** Additional registered anchor keys to spotlight simultaneously with the primary target. */
+    AdditionalKeys?: string[];
+    /** Additional full anchor descriptors to spotlight simultaneously with the primary target. */
+    AdditionalAnchors?: MJTourStepEntity_ITourAnchor[];
+    /** Ordered fallback descriptors tried when the primary strategy does not resolve. */
+    Fallbacks?: MJTourStepEntity_ITourAnchor[];
+    /** Custom resolver options for app-specific `BaseTourAnchorResolver` plugins. */
+    Options?: Record<string, unknown>;
+}
+
+/**
+ * Pre-render navigation and make-visible actions stored on `MJ: Tour Steps.Prepare`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Single ordered action inside a step's `Prepare` phase. */
+export interface MJTourStepEntity_ITourPrepareAction {
+    /** Prepare action kind executed before the step resolves its anchor and renders. */
+    Type:
+        | 'SwitchApp'
+        | 'OpenNavItem'
+        | 'OpenRailPage'
+        | 'OpenRecord'
+        | 'NavigateUrl'
+        | 'SwitchRailGroup'
+        | 'ExpandSection'
+        | 'EmitSignal'
+        | 'Wait';
+    /** Application name or ID. */
+    Application?: string;
+    /** Nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Rail page `Id`. */
+    RailPage?: string;
+    /** Form rail group key. */
+    RailGroup?: string;
+    /** Form section key. */
+    Section?: string;
+    /** Entity name for `OpenRecord`. */
+    Entity?: string;
+    /** Record ID for `OpenRecord` (supports template expressions). */
+    RecordID?: string;
+    /** Destination URL for `NavigateUrl`. */
+    Url?: string;
+    /** Signal name for `EmitSignal`. */
+    Signal?: string;
+    /** Delay in milliseconds for `Wait`. */
+    DurationMs?: number;
+    /** Query parameters applied during navigation. */
+    QueryParams?: Record<string, string>;
+}
+
+/** TourStep.Prepare — cross-screen movement and UI reveal executed before step rendering. */
+export interface MJTourStepEntity_ITourStepPrepare {
+    /** Shorthand: target MJ Application to switch to. */
+    Application?: string;
+    /** Shorthand: target nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Shorthand: target rail page `Id`. */
+    RailPage?: string;
+    /** Shorthand: form rail group key to activate. */
+    RailGroup?: string;
+    /** Shorthand: form section key to expand. */
+    Section?: string;
+    /** Shorthand: entity name to open. */
+    Entity?: string;
+    /** Shorthand: record ID to open. */
+    RecordID?: string;
+    /** Shorthand: URL to navigate to on web hosts. */
+    Url?: string;
+    /** Query parameters applied during navigation. */
+    QueryParams?: Record<string, string>;
+    /** Whether to wait for the step anchor to register after prepare completes. */
+    WaitForAnchor?: boolean;
+    /** Maximum milliseconds to wait for anchor registration after prepare. */
+    WaitTimeoutMs?: number;
+    /** Custom polite live-region announcement (WCAG 4.1.3) spoken before the step renders. */
+    Announcement?: string;
+    /** Explicit ordered list of prepare actions when a step needs multiple setup moves. */
+    Actions?: MJTourStepEntity_ITourPrepareAction[];
+}
+
+/**
+ * Completion specification stored on `MJ: Tour Steps.Completion`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Standard completion check keys registered with `BaseTourCompletionCheck`. */
+export type MJTourStepEntity_StandardTourCompletionCheckType =
+    | 'NextButton'
+    | 'AnchorInteraction'
+    | 'Navigation'
+    | 'Signal'
+    | 'EntityEvent'
+    | 'FieldState'
+    | 'ServerPredicate'
+    | 'AgentConfirmed'
+    | 'All'
+    | 'Any';
+
+/** Completion check key, including custom ClassFactory-registered app checks. */
+export type MJTourStepEntity_TourCompletionCheckType = MJTourStepEntity_StandardTourCompletionCheckType | (string & {});
+
+/** Leaf predicate within a portable MJ filter expression. */
+export interface MJTourStepEntity_ITourCompletionSimpleFilter {
+    field: string;
+    operator: string;
+    value?: string | number | boolean | string[] | number[] | null;
+}
+
+/** Portable MJ CompositeFilter tree for `EntityEvent`, `FieldState`, and `Signal` checks. */
+export interface MJTourStepEntity_ITourCompletionFilter {
+    logic: 'and' | 'or';
+    filters: Array<MJTourStepEntity_ITourCompletionSimpleFilter | MJTourStepEntity_ITourCompletionFilter>;
+}
+
+/** Single completion check evaluated by `TourSession`. */
+export interface MJTourStepEntity_ITourCompletionCheck {
+    /** Check plugin key registered with `BaseTourCompletionCheck`. */
+    Type: MJTourStepEntity_TourCompletionCheckType;
+    /** DOM event for `AnchorInteraction` checks. */
+    Event?: 'click' | 'focus' | 'change' | 'input' | 'submit';
+    /** Signal name for `Signal` checks (emitted via `TourSignals.Emit`). */
+    Signal?: string;
+    /** Optional filter over signal payload properties. */
+    SignalFilter?: MJTourStepEntity_ITourCompletionFilter;
+    /** Entity name for `EntityEvent`, `FieldState`, or `HasRecords` checks. */
+    Entity?: string;
+    /** Entity write action for `EntityEvent` checks. */
+    Action?: 'Save' | 'Delete' | 'Create' | 'Update';
+    /** Field name for `FieldState` checks. */
+    Field?: string;
+    /** CompositeFilter evaluated against entity record, form field, or signal payload. */
+    Filter?: MJTourStepEntity_ITourCompletionFilter;
+    /** Route or URL pattern for `Navigation` checks. */
+    RoutePattern?: string;
+    /** Target application name or ID for `Navigation` checks. */
+    Application?: string;
+    /** Target nav item key or DriverClass for `Navigation` checks. */
+    NavItem?: string;
+    /** Server predicate ClassFactory key for `ServerPredicate` checks (`HasRecords`, `QueryReturnsRows`, `AuthorizationHeld`, etc.). */
+    Predicate?: string;
+    /** Parameters passed to `ServerPredicate` or custom completion check plugins. */
+    Params?: Record<string, unknown>;
+    /** Nested checks for `All` and `Any` combinators. */
+    Checks?: MJTourStepEntity_ITourCompletionCheck[];
+}
+
+/** TourStep.Completion — declares what satisfies and advances a step. */
+export interface MJTourStepEntity_ITourCompletion {
+    /** Checks evaluated to mark the step complete. */
+    Checks: MJTourStepEntity_ITourCompletionCheck[];
+    /** Combinator across top-level `Checks` (default `'All'`). */
+    Mode?: 'All' | 'Any';
+    /** Optional custom label for the `NextButton` control. */
+    NextLabel?: string;
+    /** Whether the user may manually click Next even when another check is pending. */
+    AllowManualAdvance?: boolean;
+}
+
+/**
+ * MJ: Tour Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourStep
+ * * Base View: vwTourSteps
+ * * @description An editable draft step within a guided tour: step type, copy, anchor descriptor, prepare actions, completion checks, and agent notes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Steps')
+export class MJTourStepEntity extends BaseEntity<MJTourStepEntityType> {
+    /**
+    * Loads the MJ: Tour Steps record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour step.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Parent tour this step belongs to.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: StepKey
+    * * Display Name: Step Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Stable key identifying this step within its tour (referenced by TourRun.CurrentStepKey and TourRunStep.StepKey).
+    */
+    get StepKey(): string {
+        return this.Get('StepKey');
+    }
+    set StepKey(value: string) {
+        this.Set('StepKey', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Default linear display order of the step when no explicit Tour Step Paths override traversal.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: StepTypeID
+    * * Display Name: Step Type
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Step Types (vwTourStepTypes.ID)
+    * * Description: FK to MJ: Tour Step Types determining the visual primitive or plugin behavior.
+    */
+    get StepTypeID(): string {
+        return this.Get('StepTypeID');
+    }
+    set StepTypeID(value: string) {
+        this.Set('StepTypeID', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional per-step ClassFactory key overriding the step type's DriverClass for this single step.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Step heading displayed to the user.
+    */
+    get Title(): string {
+        return this.Get('Title');
+    }
+    set Title(value: string) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Body
+    * * Display Name: Body
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Markdown step body supporting MJ template expressions.
+    */
+    get Body(): string | null {
+        return this.Get('Body');
+    }
+    set Body(value: string | null) {
+        this.Set('Body', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourStepConfiguration
+    * * Description: JSON ITourStepConfiguration validated against the step type's ConfigSchema, plus localizations.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourStepEntity_ITourStepConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourStepEntity_ITourStepConfiguration | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourStepConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourStepEntity_ITourStepConfiguration | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourStepConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Anchor
+    * * Display Name: Anchor
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourAnchor
+    * * Description: JSON ITourAnchor descriptor specifying how to locate the target UI element (registered key, semantic anchor, role, or selector fallback).
+    */
+    get Anchor(): string | null {
+        return this.Get('Anchor');
+    }
+    set Anchor(value: string | null) {
+        this.Set('Anchor', value);
+    }
+
+    /**
+    * Typed accessor for Anchor — a live view of the parsed JSON as MJTourStepEntity_ITourAnchor.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Anchor field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get AnchorObject(): MJTourStepEntity_ITourAnchor | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourAnchor>('Anchor');
+    }
+    set AnchorObject(value: MJTourStepEntity_ITourAnchor | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourAnchor>('Anchor', value);
+    }
+
+    /**
+    * * Field Name: Placement
+    * * Display Name: Placement
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Bottom
+    *   * Center
+    *   * Left
+    *   * Right
+    *   * Top
+    * * Description: Preferred popover placement relative to the anchor: Auto, Top, Bottom, Left, Right, or Center.
+    */
+    get Placement(): 'Auto' | 'Bottom' | 'Center' | 'Left' | 'Right' | 'Top' {
+        return this.Get('Placement');
+    }
+    set Placement(value: 'Auto' | 'Bottom' | 'Center' | 'Left' | 'Right' | 'Top') {
+        this.Set('Placement', value);
+    }
+
+    /**
+    * * Field Name: Mode
+    * * Display Name: Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Guide
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Do
+    *   * Guide
+    *   * Show
+    * * Description: Step interaction mode: Show (explain), Guide (wait for user action), or Do (agent executes with per-mutation confirmation).
+    */
+    get Mode(): 'Do' | 'Guide' | 'Show' {
+        return this.Get('Mode');
+    }
+    set Mode(value: 'Do' | 'Guide' | 'Show') {
+        this.Set('Mode', value);
+    }
+
+    /**
+    * * Field Name: Prepare
+    * * Display Name: Prepare Actions
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourStepPrepare
+    * * Description: JSON ITourStepPrepare describing cross-screen navigation or make-visible actions executed before the step renders.
+    */
+    get Prepare(): string | null {
+        return this.Get('Prepare');
+    }
+    set Prepare(value: string | null) {
+        this.Set('Prepare', value);
+    }
+
+    /**
+    * Typed accessor for Prepare — a live view of the parsed JSON as MJTourStepEntity_ITourStepPrepare.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Prepare field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PrepareObject(): MJTourStepEntity_ITourStepPrepare | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourStepPrepare>('Prepare');
+    }
+    set PrepareObject(value: MJTourStepEntity_ITourStepPrepare | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourStepPrepare>('Prepare', value);
+    }
+
+    /**
+    * * Field Name: Completion
+    * * Display Name: Completion Checks
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourCompletion
+    * * Description: JSON ITourCompletion defining the checks that mark this step done.
+    */
+    get Completion(): string | null {
+        return this.Get('Completion');
+    }
+    set Completion(value: string | null) {
+        this.Set('Completion', value);
+    }
+
+    /**
+    * Typed accessor for Completion — a live view of the parsed JSON as MJTourStepEntity_ITourCompletion.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Completion field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get CompletionObject(): MJTourStepEntity_ITourCompletion | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourCompletion>('Completion');
+    }
+    set CompletionObject(value: MJTourStepEntity_ITourCompletion | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourCompletion>('Completion', value);
+    }
+
+    /**
+    * * Field Name: SkipWhen
+    * * Display Name: Skip Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON condition or check specification evaluated to skip the step automatically when its outcome is already satisfied.
+    */
+    get SkipWhen(): string | null {
+        return this.Get('SkipWhen');
+    }
+    set SkipWhen(value: string | null) {
+        this.Set('SkipWhen', value);
+    }
+
+    /**
+    * * Field Name: OnMissing
+    * * Display Name: On Missing Anchor
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Center
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent Recover
+    *   * Center
+    *   * Skip
+    *   * Stall
+    * * Description: Fallback behavior if the step anchor cannot be resolved: Skip, Center, Stall, or Agent Recover.
+    */
+    get OnMissing(): 'Agent Recover' | 'Center' | 'Skip' | 'Stall' {
+        return this.Get('OnMissing');
+    }
+    set OnMissing(value: 'Agent Recover' | 'Center' | 'Skip' | 'Stall') {
+        this.Set('OnMissing', value);
+    }
+
+    /**
+    * * Field Name: IsOptional
+    * * Display Name: Is Optional
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the user or agent may skip this step without blocking tour completion.
+    */
+    get IsOptional(): boolean {
+        return this.Get('IsOptional');
+    }
+    set IsOptional(value: boolean) {
+        this.Set('IsOptional', value);
+    }
+
+    /**
+    * * Field Name: GuideNotes
+    * * Display Name: Guide Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent-only grounding context and cautions supplied to Chat and Voice directors, not shown in visual popovers.
+    */
+    get GuideNotes(): string | null {
+        return this.Get('GuideNotes');
+    }
+    set GuideNotes(value: string | null) {
+        this.Set('GuideNotes', value);
+    }
+
+    /**
+    * * Field Name: VoiceScript
+    * * Display Name: Voice Script
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional concise script tailored for Voice director narration (mirrored as text for accessibility).
+    */
+    get VoiceScript(): string | null {
+        return this.Get('VoiceScript');
+    }
+    set VoiceScript(value: string | null) {
+        this.Set('VoiceScript', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: StepType
+    * * Display Name: Step Type Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StepType(): string | null {
+        return this.Get('StepType');
+    }
+}
+
+
+/**
+ * Start location and context requirements stored on `MJ: Tours.StartLocation`
+ * and `MJ: Tour Surface Tours.StartLocationOverride`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Tour.StartLocation / TourSurfaceTour.StartLocationOverride — navigation target and context preconditions. */
+export interface MJTourSurfaceTourEntity_ITourStartLocation {
+    /** Target MJ Application name or ID. */
+    Application?: string;
+    /** Target nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Target Explorer resource type (for example `'Records'`, `'Dashboards'`, `'Custom'`). */
+    ResourceType?: string;
+    /** Target entity name when opening a record or entity view. */
+    Entity?: string;
+    /** Optional specific record ID to open. */
+    RecordID?: string;
+    /** Destination URL for web or external-surface hosts. */
+    Url?: string;
+    /** URL pattern restricting where the tour starts on web hosts. */
+    UrlPattern?: string;
+    /** When true, the tour requires an already-open record in the active host context. */
+    RequiresOpenRecord?: boolean;
+    /** Restricts contextual tours to an open record of the specified entity name. */
+    RequiresEntity?: string;
+    /** Query parameters applied when navigating to the start location. */
+    QueryParams?: Record<string, string>;
+}
+
+/**
+ * MJ: Tour Surface Tours - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourSurfaceTour
+ * * Base View: vwTourSurfaceTours
+ * * @description Many-to-many assignment of guided tours to external Tour Surfaces, with ordering and optional per-surface start location overrides.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Surface Tours')
+export class MJTourSurfaceTourEntity extends BaseEntity<MJTourSurfaceTourEntityType> {
+    /**
+    * Loads the MJ: Tour Surface Tours record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Surface Tours record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourSurfaceTourEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the surface-tour assignment.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SurfaceID
+    * * Display Name: Surface
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Surfaces (vwTourSurfaces.ID)
+    * * Description: Target Tour Surface.
+    */
+    get SurfaceID(): string {
+        return this.Get('SurfaceID');
+    }
+    set SurfaceID(value: string) {
+        this.Set('SurfaceID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour assigned to run on the surface.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this tour is the default entry tour for the surface.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and evaluation order of this tour on the surface.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: StartLocationOverride
+    * * Display Name: Start Location Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourSurfaceTourEntity_ITourStartLocation
+    * * Description: Optional JSON ITourStartLocation overriding Tour.StartLocation specifically for this surface.
+    */
+    get StartLocationOverride(): string | null {
+        return this.Get('StartLocationOverride');
+    }
+    set StartLocationOverride(value: string | null) {
+        this.Set('StartLocationOverride', value);
+    }
+
+    /**
+    * Typed accessor for StartLocationOverride — a live view of the parsed JSON as MJTourSurfaceTourEntity_ITourStartLocation.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying StartLocationOverride field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get StartLocationOverrideObject(): MJTourSurfaceTourEntity_ITourStartLocation | null {
+        return this.GetJSONFieldObject<MJTourSurfaceTourEntity_ITourStartLocation>('StartLocationOverride');
+    }
+    set StartLocationOverrideObject(value: MJTourSurfaceTourEntity_ITourStartLocation | null) {
+        this.SetJSONFieldObject<MJTourSurfaceTourEntity_ITourStartLocation>('StartLocationOverride', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Surface
+    * * Display Name: Surface Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Surface(): string | null {
+        return this.Get('Surface');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+}
+
+
+/**
+ * MJ: Tour Surfaces - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourSurface
+ * * Base View: vwTourSurfaces
+ * * @description External or non-Explorer host surface where guided tours run (custom Angular portal, public web page, or mobile app), with origin allowlists, guest identity, and optional widget link.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Surfaces')
+export class MJTourSurfaceEntity extends BaseEntity<MJTourSurfaceEntityType> {
+    /**
+    * Loads the MJ: Tour Surfaces record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Surfaces record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourSurfaceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Surfaces entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RateLimitPerMinute: Rate limit per minute must be greater than zero to ensure valid request throttling.
+    * * VisitorRetentionDays: Visitor retention days, if specified, must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRateLimitPerMinuteGreaterThanZero(result);
+        this.ValidateVisitorRetentionDaysGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Rate limit per minute must be greater than zero to ensure valid request throttling.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRateLimitPerMinuteGreaterThanZero(result: ValidationResult) {
+    	if (this.RateLimitPerMinute != null && this.RateLimitPerMinute <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RateLimitPerMinute",
+    			"Rate limit per minute must be greater than 0.",
+    			this.RateLimitPerMinute,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Visitor retention days, if specified, must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVisitorRetentionDaysGreaterThanZero(result: ValidationResult) {
+    	if (this.VisitorRetentionDays != null && this.VisitorRetentionDays <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"VisitorRetentionDays",
+    			"Visitor retention days must be greater than zero.",
+    			this.VisitorRetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour surface.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the tour surface.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: SurfaceKey
+    * * Display Name: Surface Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable unique key identifying this surface.
+    */
+    get SurfaceKey(): string {
+        return this.Get('SurfaceKey');
+    }
+    set SurfaceKey(value: string) {
+        this.Set('SurfaceKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Notes describing where this surface is mounted and what tours it hosts.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SurfaceType
+    * * Display Name: Surface Type
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Web Page
+    * * Value List Type: List
+    * * Possible Values 
+    *   * MJ Angular App
+    *   * Mobile App
+    *   * Web Page
+    * * Description: Host platform category: MJ Angular App, Web Page, or Mobile App.
+    */
+    get SurfaceType(): 'MJ Angular App' | 'Mobile App' | 'Web Page' {
+        return this.Get('SurfaceType');
+    }
+    set SurfaceType(value: 'MJ Angular App' | 'Mobile App' | 'Web Page') {
+        this.Set('SurfaceType', value);
+    }
+
+    /**
+    * * Field Name: PublicKey
+    * * Display Name: Public Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Publishable key embedded in client script tags or <mj-tour-host> elements to identify this surface.
+    */
+    get PublicKey(): string {
+        return this.Get('PublicKey');
+    }
+    set PublicKey(value: string) {
+        this.Set('PublicKey', value);
+    }
+
+    /**
+    * * Field Name: AllowedOrigins
+    * * Display Name: Allowed Origins
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array or newline-delimited list of allowed CORS/embed origins for this surface.
+    */
+    get AllowedOrigins(): string | null {
+        return this.Get('AllowedOrigins');
+    }
+    set AllowedOrigins(value: string | null) {
+        this.Set('AllowedOrigins', value);
+    }
+
+    /**
+    * * Field Name: AuthStrategy
+    * * Display Name: Auth Strategy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Guest
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Either
+    *   * Guest
+    *   * MJ User
+    * * Description: Authentication strategy accepted on this surface: MJ User, Guest, or Either.
+    */
+    get AuthStrategy(): 'Either' | 'Guest' | 'MJ User' {
+        return this.Get('AuthStrategy');
+    }
+    set AuthStrategy(value: 'Either' | 'Guest' | 'MJ User') {
+        this.Set('AuthStrategy', value);
+    }
+
+    /**
+    * * Field Name: GuestRoleID
+    * * Display Name: Guest Role
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Isolated MJ Role used when minting guest sessions for this surface (for example Tour Guest).
+    */
+    get GuestRoleID(): string | null {
+        return this.Get('GuestRoleID');
+    }
+    set GuestRoleID(value: string | null) {
+        this.Set('GuestRoleID', value);
+    }
+
+    /**
+    * * Field Name: ConversationWidgetInstanceID
+    * * Display Name: Conversation Widget Instance
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Widget Instances (vwConversationWidgetInstances.ID)
+    * * Description: Optional FK to MJ: Conversation Widget Instances providing an embedded chat or voice guide that shares the guest session.
+    */
+    get ConversationWidgetInstanceID(): string | null {
+        return this.Get('ConversationWidgetInstanceID');
+    }
+    set ConversationWidgetInstanceID(value: string | null) {
+        this.Set('ConversationWidgetInstanceID', value);
+    }
+
+    /**
+    * * Field Name: RateLimitPerMinute
+    * * Display Name: Rate Limit Per Minute
+    * * SQL Data Type: int
+    * * Default Value: 60
+    * * Description: Maximum guest session and telemetry requests permitted per minute per client.
+    */
+    get RateLimitPerMinute(): number {
+        return this.Get('RateLimitPerMinute');
+    }
+    set RateLimitPerMinute(value: number) {
+        this.Set('RateLimitPerMinute', value);
+    }
+
+    /**
+    * * Field Name: VisitorRetentionDays
+    * * Display Name: Visitor Retention Days
+    * * SQL Data Type: int
+    * * Description: Optional retention period in days for returning-visitor tour memory on this surface. NULL disables expiration.
+    */
+    get VisitorRetentionDays(): number | null {
+        return this.Get('VisitorRetentionDays');
+    }
+    set VisitorRetentionDays(value: number | null) {
+        this.Set('VisitorRetentionDays', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Retired
+    * * Description: Surface lifecycle status: Active, Disabled, or Retired.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Extensible JSON settings for this surface.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: GuestRole
+    * * Display Name: Guest Role Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get GuestRole(): string | null {
+        return this.Get('GuestRole');
+    }
+
+    /**
+    * * Field Name: ConversationWidgetInstance
+    * * Display Name: Conversation Widget Instance Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ConversationWidgetInstance(): string | null {
+        return this.Get('ConversationWidgetInstance');
+    }
+}
+
+
+/**
+ * Trigger configuration stored on `MJ: Tour Triggers.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** TourTrigger.Configuration — matching criteria for standard and custom `BaseTourTrigger` plugins. */
+export interface MJTourTriggerEntity_ITourTriggerConfiguration {
+    /** URL pattern matched by `FirstVisit` or route-scoped triggers on web hosts. */
+    UrlPattern?: string;
+    /** MJ Application name or ID matched by `FirstVisit` or `AppUpgraded`. */
+    Application?: string;
+    /** Nav item `Key` or `DriverClass` matched on first visit. */
+    NavItem?: string;
+    /** Entity name matched by `EntityFormOpened`. */
+    Entity?: string;
+    /** Form mode matched by `EntityFormOpened`. */
+    Mode?: 'Create' | 'Edit' | 'View' | 'Any';
+    /** Signal name matched by `Signal` triggers. */
+    Signal?: string;
+    /** Optional filter over signal payload properties. */
+    SignalFilter?: Record<string, unknown>;
+    /** Minimum Open App / release version matched by `AppUpgraded`. */
+    MinVersion?: string;
+    /** Explicit `VersionTag` matched by `AppUpgraded`. */
+    VersionTag?: string;
+    /** High-signal struggle indicators monitored by `Struggle` triggers. */
+    StruggleSignals?: Array<'RepeatedValidationFailure' | 'HowDoISearch'>;
+    /** Consecutive failure count threshold for `Struggle` triggers. */
+    FailureThreshold?: number;
+    /** Delay in milliseconds before surfacing the trigger offer. */
+    DelayMs?: number;
+    /** Cron schedule expression for `Schedule` triggers. */
+    CronExpression?: string;
+    /** Contextual hint for `AgentSuggested` triggers. */
+    PromptHint?: string;
+    /** Extensible properties for custom `BaseTourTrigger` plugins. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tour Triggers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourTrigger
+ * * Base View: vwTourTriggers
+ * * @description Trigger rule specifying when and how a tour is offered, beaconed, notified, or auto-launched.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Triggers')
+export class MJTourTriggerEntity extends BaseEntity<MJTourTriggerEntityType> {
+    /**
+    * Loads the MJ: Tour Triggers record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Triggers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourTriggerEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Triggers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CooldownDays: Cooldown days, if specified, must be zero or a positive number.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCooldownDaysNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Cooldown days, if specified, must be zero or a positive number.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCooldownDaysNonNegative(result: ValidationResult) {
+    	if (this.CooldownDays != null && this.CooldownDays < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CooldownDays",
+    			"Cooldown days must be zero or a positive number.",
+    			this.CooldownDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour trigger.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour offered when this trigger fires.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: TriggerType
+    * * Display Name: Trigger Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Open ClassFactory key of the BaseTourTrigger plugin (for example FirstVisit, EntityFormOpened, Signal, AppUpgraded, Struggle, Schedule, AgentSuggested, or custom app triggers).
+    */
+    get TriggerType(): string {
+        return this.Get('TriggerType');
+    }
+    set TriggerType(value: string) {
+        this.Set('TriggerType', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourTriggerEntity_ITourTriggerConfiguration
+    * * Description: JSON ITourTriggerConfiguration holding trigger-specific matching criteria.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourTriggerEntity_ITourTriggerConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourTriggerEntity_ITourTriggerConfiguration | null {
+        return this.GetJSONFieldObject<MJTourTriggerEntity_ITourTriggerConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourTriggerEntity_ITourTriggerConfiguration | null) {
+        this.SetJSONFieldObject<MJTourTriggerEntity_ITourTriggerConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Delivery
+    * * Display Name: Delivery
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Offer
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Beacon
+    *   * Notification
+    *   * Offer
+    * * Description: How the triggered tour is surfaced: Offer, Beacon, Notification, or Auto.
+    */
+    get Delivery(): 'Auto' | 'Beacon' | 'Notification' | 'Offer' {
+        return this.Get('Delivery');
+    }
+    set Delivery(value: 'Auto' | 'Beacon' | 'Notification' | 'Offer') {
+        this.Set('Delivery', value);
+    }
+
+    /**
+    * * Field Name: CooldownDays
+    * * Display Name: Cooldown Days
+    * * SQL Data Type: int
+    * * Description: Minimum number of days before this trigger may fire again for the same user or visitor.
+    */
+    get CooldownDays(): number | null {
+        return this.Get('CooldownDays');
+    }
+    set CooldownDays(value: number | null) {
+        this.Set('CooldownDays', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Priority used when multiple triggers fire concurrently.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+    * * Description: Operational status of the trigger: Active, Paused, or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Paused' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Paused') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+}
+
+
+/**
+ * Immutable published tour snapshot stored on `MJ: Tour Versions.Definition`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Immutable snapshot of a single `TourStep` at publish time. */
+export interface MJTourVersionEntity_ITourVersionStepSnapshot {
+    /** Original `TourStep.ID` at publish time. */
+    ID: string;
+    /** Stable step key within the tour. */
+    StepKey: string;
+    /** Linear sequence order. */
+    Sequence: number;
+    /** Step type ID (`MJ: Tour Step Types`). */
+    StepTypeID: string;
+    /** Step type name resolved at publish time (for example `'Spotlight'`). */
+    StepTypeName: string;
+    /** Step type `DriverClass` resolved at publish time. */
+    StepTypeDriverClass: string;
+    /** Optional step type `RendererClass`. */
+    StepTypeRendererClass?: string | null;
+    /** Optional step type `ComponentID` for runtime `ComponentSpec` step types. */
+    StepTypeComponentID?: string | null;
+    /** Optional per-step `DriverClass` override. */
+    DriverClass?: string | null;
+    /** Step heading. */
+    Title: string;
+    /** Markdown step body. */
+    Body?: string | null;
+    /** Parsed `ITourStepConfiguration` object. */
+    Configuration?: Record<string, unknown> | null;
+    /** Parsed `ITourAnchor` object. */
+    Anchor?: Record<string, unknown> | null;
+    /** Popover placement. */
+    Placement: 'Auto' | 'Top' | 'Bottom' | 'Left' | 'Right' | 'Center';
+    /** Step interaction mode. */
+    Mode: 'Show' | 'Guide' | 'Do';
+    /** Parsed `ITourStepPrepare` object. */
+    Prepare?: Record<string, unknown> | null;
+    /** Parsed `ITourCompletion` object. */
+    Completion?: Record<string, unknown> | null;
+    /** Parsed `SkipWhen` condition object. */
+    SkipWhen?: Record<string, unknown> | null;
+    /** Missing-anchor fallback behavior. */
+    OnMissing: 'Skip' | 'Center' | 'Stall' | 'Agent Recover';
+    /** Whether the step may be skipped. */
+    IsOptional: boolean;
+    /** Agent-only grounding notes. */
+    GuideNotes?: string | null;
+    /** Voice narration script. */
+    VoiceScript?: string | null;
+}
+
+/** Immutable snapshot of a single `TourStepPath` edge at publish time. */
+export interface MJTourVersionEntity_ITourVersionStepPathSnapshot {
+    /** Original `TourStepPath.ID` at publish time. */
+    ID: string;
+    /** Source step ID. */
+    FromStepID: string;
+    /** Source `StepKey`. */
+    FromStepKey: string;
+    /** Target step ID. */
+    ToStepID: string;
+    /** Target `StepKey`. */
+    ToStepKey: string;
+    /** Parsed branch condition (CompositeFilter or choice key). */
+    Condition?: Record<string, unknown> | string | null;
+    /** Branch edge label. */
+    Label?: string | null;
+    /** Evaluation priority. */
+    Priority: number;
+    /** Display sequence. */
+    Sequence: number;
+    /** Whether this edge is the default fallback branch. */
+    IsDefault: boolean;
+    /** Parsed `ITourStepPathConfiguration` object. */
+    Configuration?: Record<string, unknown> | null;
+}
+
+/** TourVersion.Definition — self-contained immutable tour definition pinned by `TourRun`. */
+export interface MJTourVersionEntity_ITourVersionDefinition {
+    /** Stable namespaced tour key. */
+    TourKey: string;
+    /** Tour title at publish time. */
+    Name: string;
+    /** Tour summary description at publish time. */
+    Description?: string | null;
+    /** Estimated completion minutes. */
+    EstimatedMinutes?: number | null;
+    /** Default guidance mode. */
+    DefaultGuideMode: 'Visual' | 'Chat' | 'Voice' | 'User Choice';
+    /** Whether confirmed Do-mode agent actions are permitted. */
+    AllowAgentActions: boolean;
+    /** Optional tour-level `DriverClass`. */
+    DriverClass?: string | null;
+    /** Optional tour-level `PresenterClass`. */
+    PresenterClass?: string | null;
+    /** Parsed `ITourGoal` object. */
+    Goal?: Record<string, unknown> | null;
+    /** Parsed `ITourStartLocation` object. */
+    StartLocation?: Record<string, unknown> | null;
+    /** Parsed `ITourConfiguration` object. */
+    Configuration?: Record<string, unknown> | null;
+    /** Ordered snapshot of all tour steps. */
+    Steps: MJTourVersionEntity_ITourVersionStepSnapshot[];
+    /** Snapshot of all tour branching paths. */
+    Paths: MJTourVersionEntity_ITourVersionStepPathSnapshot[];
+}
+
+/**
+ * MJ: Tour Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourVersion
+ * * Base View: vwTourVersions
+ * * @description Immutable published snapshot of a tour definition (steps, paths, goal, start location, configuration) pinned by Tour Runs so upgrades do not corrupt active runs.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Versions')
+export class MJTourVersionEntity extends BaseEntity<MJTourVersionEntityType> {
+    /**
+    * Loads the MJ: Tour Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tour Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * VersionNumber: Version number must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionNumberGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Version number must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.VersionNumber != null && this.VersionNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"VersionNumber",
+    			"Version number must be greater than 0.",
+    			this.VersionNumber,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the published tour version.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Parent tour this snapshot belongs to.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: VersionNumber
+    * * Display Name: Version Number
+    * * SQL Data Type: int
+    * * Description: Monotonically increasing version number per tour, starting at 1.
+    */
+    get VersionNumber(): number {
+        return this.Get('VersionNumber');
+    }
+    set VersionNumber(value: number) {
+        this.Set('VersionNumber', value);
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(128)
+    * * Description: SHA-256 hash of the canonical tour definition used to avoid minting duplicate snapshots on idempotent saves.
+    */
+    get ContentHash(): string | null {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string | null) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: Definition
+    * * Display Name: Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourVersionEntity_ITourVersionDefinition
+    * * Description: JSON ITourVersionDefinition containing the immutable snapshot of steps, paths, goal, start location, and configuration.
+    */
+    get Definition(): string {
+        return this.Get('Definition');
+    }
+    set Definition(value: string) {
+        this.Set('Definition', value);
+    }
+
+    /**
+    * Typed accessor for Definition — a live view of the parsed JSON as MJTourVersionEntity_ITourVersionDefinition.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Definition field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DefinitionObject(): MJTourVersionEntity_ITourVersionDefinition {
+        return this.GetJSONFieldObject<MJTourVersionEntity_ITourVersionDefinition>('Definition')!;
+    }
+    set DefinitionObject(value: MJTourVersionEntity_ITourVersionDefinition) {
+        this.SetJSONFieldObject<MJTourVersionEntity_ITourVersionDefinition>('Definition', value);
+    }
+
+    /**
+    * * Field Name: PublishedAt
+    * * Display Name: Published At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this version snapshot was published.
+    */
+    get PublishedAt(): Date {
+        return this.Get('PublishedAt');
+    }
+    set PublishedAt(value: Date) {
+        this.Set('PublishedAt', value);
+    }
+
+    /**
+    * * Field Name: PublishedByUserID
+    * * Display Name: Published By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who published this version snapshot, or NULL when published by automated sync.
+    */
+    get PublishedByUserID(): string | null {
+        return this.Get('PublishedByUserID');
+    }
+    set PublishedByUserID(value: string | null) {
+        this.Set('PublishedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ChangeSummary
+    * * Display Name: Change Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable summary of changes in this version.
+    */
+    get ChangeSummary(): string | null {
+        return this.Get('ChangeSummary');
+    }
+    set ChangeSummary(value: string | null) {
+        this.Set('ChangeSummary', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: PublishedByUser
+    * * Display Name: Published By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PublishedByUser(): string | null {
+        return this.Get('PublishedByUser');
+    }
+}
+
+
+/**
+ * Launch and throttling policy stored on `MJ: Tours.LaunchPolicy` and `MJ: Tour Overrides.LaunchPolicy`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Tour.LaunchPolicy / TourOverride.LaunchPolicy — controls offering, throttling, and holdouts. */
+export interface MJTourEntity_ITourLaunchPolicy {
+    /** Whether eligible triggers may auto-start the tour without user click (use sparingly for critical flows). */
+    AutoLaunch?: boolean;
+    /** Whether the tour may be proactively offered (banner/orb/beacon) rather than launch-on-demand only. */
+    OfferByDefault?: boolean;
+    /** Whether the tour appears in the shell Tours & Help launcher. */
+    AllowLauncher?: boolean;
+    /** Whether the tour is searchable in the Explorer omnibar. */
+    AllowOmnibar?: boolean;
+    /** Whether beacon triggers for this tour are enabled. */
+    AllowBeacons?: boolean;
+    /** Maximum times this tour may be offered to a single user across sessions. */
+    MaxOffersPerUser?: number;
+    /** Cooldown in days after a user dismisses or completes an offer. */
+    CooldownDays?: number;
+    /** Critical-bypass flag allowing an offer to ignore the global interruption budget. */
+    BypassBudget?: boolean;
+    /** Smart delay in milliseconds waiting for user inactivity before surfacing an unrequested offer. */
+    SmartDelayMs?: number;
+    /** Suppresses unrequested offers while any form on screen has unsaved edits (default true). */
+    SuppressWhenDirtyForm?: boolean;
+    /** Suppresses unrequested offers while a modal dialog is open (default true). */
+    SuppressWhenDialogOpen?: boolean;
+    /** Percentage (0-100) of eligible users placed into a holdout group for goal-lift measurement. */
+    HoldoutPercentage?: number;
+    /** Requires explicit user consent once per tour before cross-screen `Prepare` navigation runs. */
+    RequireNavigationConsent?: boolean;
+    /** Restricts which guide modes are permitted for this tour. */
+    AllowedDirections?: Array<'Visual' | 'Chat' | 'Voice'>;
+}
+
+/**
+ * Goal definition stored on `MJ: Tours.Goal`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Leaf predicate within a portable MJ filter expression. */
+export interface MJTourEntity_ITourGoalSimpleFilter {
+    field: string;
+    operator: string;
+    value?: string | number | boolean | string[] | number[] | null;
+}
+
+/** Portable MJ CompositeFilter tree for goal outcome verification. */
+export interface MJTourEntity_ITourGoalFilter {
+    logic: 'and' | 'or';
+    filters: Array<MJTourEntity_ITourGoalSimpleFilter | MJTourEntity_ITourGoalFilter>;
+}
+
+/** Tour.Goal — real-world outcome measured to evaluate goal conversion rather than step completion alone. */
+export interface MJTourEntity_ITourGoal {
+    /** Outcome mechanism evaluated to credit the tour's goal. */
+    Type: 'EntityEvent' | 'ServerPredicate' | 'Signal' | 'Navigation' | 'TourCompleted' | 'None' | (string & {});
+    /** Human-readable description of the target outcome shown in Tour Studio analytics. */
+    Description?: string;
+    /** Entity name observed for `EntityEvent` goals. */
+    Entity?: string;
+    /** Entity action observed for `EntityEvent` goals. */
+    Action?: 'Save' | 'Delete' | 'Create' | 'Update';
+    /** CompositeFilter matching the target record or payload. */
+    Filter?: MJTourEntity_ITourGoalFilter;
+    /** Server predicate key evaluated for `ServerPredicate` goals. */
+    Predicate?: string;
+    /** Parameters passed to the server predicate. */
+    PredicateParams?: Record<string, unknown>;
+    /** Signal name observed for `Signal` goals. */
+    Signal?: string;
+    /** Route or URL pattern observed for `Navigation` goals. */
+    RoutePattern?: string;
+    /** Attribution window in days after tour start for goal-conversion reporting. */
+    WindowDays?: number;
+}
+
+/**
+ * Start location and context requirements stored on `MJ: Tours.StartLocation`
+ * and `MJ: Tour Surface Tours.StartLocationOverride`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Tour.StartLocation / TourSurfaceTour.StartLocationOverride — navigation target and context preconditions. */
+export interface MJTourEntity_ITourStartLocation {
+    /** Target MJ Application name or ID. */
+    Application?: string;
+    /** Target nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Target Explorer resource type (for example `'Records'`, `'Dashboards'`, `'Custom'`). */
+    ResourceType?: string;
+    /** Target entity name when opening a record or entity view. */
+    Entity?: string;
+    /** Optional specific record ID to open. */
+    RecordID?: string;
+    /** Destination URL for web or external-surface hosts. */
+    Url?: string;
+    /** URL pattern restricting where the tour starts on web hosts. */
+    UrlPattern?: string;
+    /** When true, the tour requires an already-open record in the active host context. */
+    RequiresOpenRecord?: boolean;
+    /** Restricts contextual tours to an open record of the specified entity name. */
+    RequiresEntity?: string;
+    /** Query parameters applied when navigating to the start location. */
+    QueryParams?: Record<string, string>;
+}
+
+/**
+ * Tour-level configuration and localization overrides stored on `MJ: Tours.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display overrides for a tour. */
+export interface MJTourEntity_ITourLocalization {
+    /** Localized tour title. */
+    name?: string;
+    /** Localized tour summary description. */
+    description?: string;
+}
+
+/** Tour.Configuration — localizations and extensible tour-level UI/runtime options. */
+export interface MJTourEntity_ITourConfiguration {
+    /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourEntity_ITourLocalization>;
+    /** Whether the Back button is available during visual playback (default true). */
+    allowBack?: boolean;
+    /** Whether step progress ("2 of 5") is displayed (default true). */
+    showProgress?: boolean;
+    /** Whether the user can dismiss the tour mid-flight (default true). */
+    showDismiss?: boolean;
+    /** Whether the "Ask Sage about this step" action is displayed on steps. */
+    showAskAgent?: boolean;
+    /** Presenter-specific options passed to `BaseTourPresenter` (Overlay, SidePanel, Embedded, or custom). */
+    presenterOptions?: Record<string, unknown>;
+    /** CSS custom-property token overrides applied to this tour's Light DOM root. */
+    themeOverrides?: Record<string, string>;
+    /** Extensible tour-level settings for custom drivers or presenters. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tours - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Tour
+ * * Base View: vwTours
+ * * @description A guided tour definition: metadata, audience, launch policy, default guide mode, outcome goal, start location, and published version pointer.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tours')
+export class MJTourEntity extends BaseEntity<MJTourEntityType> {
+    /**
+    * Loads the MJ: Tours record from the database
+    * @param ID: string - primary key value to load the MJ: Tours record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tours entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EstimatedMinutes: Estimated minutes cannot be negative, though it can be left blank if unknown.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEstimatedMinutesNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Estimated minutes cannot be negative, though it can be left blank if unknown.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEstimatedMinutesNonNegative(result: ValidationResult): void {
+    	if (this.EstimatedMinutes != null && this.EstimatedMinutes < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EstimatedMinutes",
+    			"Estimated minutes cannot be negative.",
+    			this.EstimatedMinutes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable title of the tour shown in launchers, omnibar, and Tour Studio.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: TourKey
+    * * Display Name: Tour Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable namespaced key identifying the tour (for example core.welcome or sales.first-deal).
+    */
+    get TourKey(): string {
+        return this.Get('TourKey');
+    }
+    set TourKey(value: string) {
+        this.Set('TourKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary of what the user accomplishes by taking this tour.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Owning MJ Application. NULL indicates a framework core tour.
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RunInAuthenticatedHosts
+    * * Display Name: Run In Authenticated Hosts
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, this tour is eligible to run in MJ-authenticated hosts (Explorer and MJ-connected apps).
+    */
+    get RunInAuthenticatedHosts(): boolean {
+        return this.Get('RunInAuthenticatedHosts');
+    }
+    set RunInAuthenticatedHosts(value: boolean) {
+        this.Set('RunInAuthenticatedHosts', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Retired
+    * * Description: Tour lifecycle status: Draft, Active, or Retired.
+    */
+    get Status(): 'Active' | 'Draft' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Draft' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CurrentVersionID
+    * * Display Name: Current Version
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Versions (vwTourVersions.ID)
+    * * Description: FK to the currently published immutable snapshot in MJ: Tour Versions.
+    */
+    get CurrentVersionID(): string | null {
+        return this.Get('CurrentVersionID');
+    }
+    set CurrentVersionID(value: string | null) {
+        this.Set('CurrentVersionID', value);
+    }
+
+    /**
+    * * Field Name: EstimatedMinutes
+    * * Display Name: Estimated Minutes
+    * * SQL Data Type: int
+    * * Description: Estimated completion time in minutes shown to users before starting.
+    */
+    get EstimatedMinutes(): number | null {
+        return this.Get('EstimatedMinutes');
+    }
+    set EstimatedMinutes(value: number | null) {
+        this.Set('EstimatedMinutes', value);
+    }
+
+    /**
+    * * Field Name: AudienceFilter
+    * * Display Name: Audience Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: CompositeFilter JSON expression restricting which users or contexts are eligible for this tour.
+    */
+    get AudienceFilter(): string | null {
+        return this.Get('AudienceFilter');
+    }
+    set AudienceFilter(value: string | null) {
+        this.Set('AudienceFilter', value);
+    }
+
+    /**
+    * * Field Name: LaunchPolicy
+    * * Display Name: Launch Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourLaunchPolicy
+    * * Description: JSON ITourLaunchPolicy governing offering, auto-launch, interruption-budget bypass, and holdout percentage.
+    */
+    get LaunchPolicy(): string | null {
+        return this.Get('LaunchPolicy');
+    }
+    set LaunchPolicy(value: string | null) {
+        this.Set('LaunchPolicy', value);
+    }
+
+    /**
+    * Typed accessor for LaunchPolicy — a live view of the parsed JSON as MJTourEntity_ITourLaunchPolicy.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying LaunchPolicy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get LaunchPolicyObject(): MJTourEntity_ITourLaunchPolicy | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourLaunchPolicy>('LaunchPolicy');
+    }
+    set LaunchPolicyObject(value: MJTourEntity_ITourLaunchPolicy | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourLaunchPolicy>('LaunchPolicy', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Relative priority used to break ties when multiple eligible tours compete for the interruption budget.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: ThrottleTags
+    * * Display Name: Throttle Tags
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-separated tag-group names for per-group offer throttling.
+    */
+    get ThrottleTags(): string | null {
+        return this.Get('ThrottleTags');
+    }
+    set ThrottleTags(value: string | null) {
+        this.Set('ThrottleTags', value);
+    }
+
+    /**
+    * * Field Name: DefaultGuideMode
+    * * Display Name: Default Guide Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Visual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Chat
+    *   * User Choice
+    *   * Visual
+    *   * Voice
+    * * Description: Default guidance mode when launching this tour: Visual, Chat, Voice, or User Choice.
+    */
+    get DefaultGuideMode(): 'Chat' | 'User Choice' | 'Visual' | 'Voice' {
+        return this.Get('DefaultGuideMode');
+    }
+    set DefaultGuideMode(value: 'Chat' | 'User Choice' | 'Visual' | 'Voice') {
+        this.Set('DefaultGuideMode', value);
+    }
+
+    /**
+    * * Field Name: AllowAgentActions
+    * * Display Name: Allow Agent Actions
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, steps marked Mode = Do may execute confirmed agent mutations (subject to hard-banned action guards).
+    */
+    get AllowAgentActions(): boolean {
+        return this.Get('AllowAgentActions');
+    }
+    set AllowAgentActions(value: boolean) {
+        this.Set('AllowAgentActions', value);
+    }
+
+    /**
+    * * Field Name: GuideAgentID
+    * * Display Name: Guide Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Optional FK to MJ: AI Agents specifying the agent that guides this tour in Chat/Voice mode. NULL uses the app or instance default.
+    */
+    get GuideAgentID(): string | null {
+        return this.Get('GuideAgentID');
+    }
+    set GuideAgentID(value: string | null) {
+        this.Set('GuideAgentID', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory key of a BaseTourDriver subclass for tour-level logic. NULL uses the Default driver.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: PresenterClass
+    * * Display Name: Presenter Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory key of a BaseTourPresenter subclass (for example Overlay, SidePanel, or Embedded). NULL uses Overlay.
+    */
+    get PresenterClass(): string | null {
+        return this.Get('PresenterClass');
+    }
+    set PresenterClass(value: string | null) {
+        this.Set('PresenterClass', value);
+    }
+
+    /**
+    * * Field Name: Goal
+    * * Display Name: Goal
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourGoal
+    * * Description: JSON ITourGoal defining the real-world outcome measured to evaluate goal conversion for this tour.
+    */
+    get Goal(): string | null {
+        return this.Get('Goal');
+    }
+    set Goal(value: string | null) {
+        this.Set('Goal', value);
+    }
+
+    /**
+    * Typed accessor for Goal — a live view of the parsed JSON as MJTourEntity_ITourGoal.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Goal field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get GoalObject(): MJTourEntity_ITourGoal | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourGoal>('Goal');
+    }
+    set GoalObject(value: MJTourEntity_ITourGoal | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourGoal>('Goal', value);
+    }
+
+    /**
+    * * Field Name: StartLocation
+    * * Display Name: Start Location
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourStartLocation
+    * * Description: JSON ITourStartLocation specifying where to navigate or which context is required when starting this tour.
+    */
+    get StartLocation(): string | null {
+        return this.Get('StartLocation');
+    }
+    set StartLocation(value: string | null) {
+        this.Set('StartLocation', value);
+    }
+
+    /**
+    * Typed accessor for StartLocation — a live view of the parsed JSON as MJTourEntity_ITourStartLocation.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying StartLocation field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get StartLocationObject(): MJTourEntity_ITourStartLocation | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourStartLocation>('StartLocation');
+    }
+    set StartLocationObject(value: MJTourEntity_ITourStartLocation | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourStartLocation>('StartLocation', value);
+    }
+
+    /**
+    * * Field Name: VersionTag
+    * * Display Name: Version Tag
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Optional Open App or release version tag used to surface What's New offers when an app upgrades.
+    */
+    get VersionTag(): string | null {
+        return this.Get('VersionTag');
+    }
+    set VersionTag(value: string | null) {
+        this.Set('VersionTag', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourConfiguration
+    * * Description: JSON ITourConfiguration holding localizations and extensible tour-level UI/runtime options.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourEntity_ITourConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourEntity_ITourConfiguration | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourEntity_ITourConfiguration | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: GuideAgent
+    * * Display Name: Guide Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GuideAgent(): string | null {
+        return this.Get('GuideAgent');
+    }
+}
+
+
+/**
  * MJ: User Application Entities - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: UserApplicationEntity
@@ -124931,6 +132240,38 @@ export class MJUserRoutineEntity extends BaseEntity<MJUserRoutineEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: User Routines entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: A cron expression must be specified unless the schedule mode is set to OneShot.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCronExpressionRequiredUnlessOneShot(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * A cron expression must be specified unless the schedule mode is set to OneShot.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCronExpressionRequiredUnlessOneShot(result: ValidationResult) {
+    	if (this.ScheduleMode !== 'OneShot' && (this.CronExpression == null || this.CronExpression.trim() === '')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CronExpression",
+    			"A Cron Expression is required when the Schedule Mode is not OneShot.",
+    			this.CronExpression,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -128673,6 +136014,56 @@ export class MJVideoArchetypeEntity extends BaseEntity<MJVideoArchetypeEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Video Archetypes entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Minimum duration must be greater than zero, default duration must be at least the minimum duration, and maximum duration must be greater than or equal to the default duration.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDurationLimits(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Minimum duration must be greater than zero, default duration must be at least the minimum duration, and maximum duration must be greater than or equal to the default duration.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDurationLimits(result: ValidationResult) {
+    	if (this.MinDurationSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MinDurationSeconds",
+    			"Minimum duration must be greater than zero.",
+    			this.MinDurationSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.MinDurationSeconds > this.DefaultDurationSeconds) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DefaultDurationSeconds",
+    			"Default duration cannot be less than the minimum duration.",
+    			this.DefaultDurationSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	if (this.DefaultDurationSeconds > this.MaxDurationSeconds) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"MaxDurationSeconds",
+    			"Maximum duration cannot be less than the default duration.",
+    			this.MaxDurationSeconds,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**

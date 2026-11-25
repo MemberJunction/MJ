@@ -21,7 +21,7 @@ import type { MJAIAgentEntity, MJAIAgentStepEntity } from '@memberjunction/core-
 import { UUIDsEqual } from '@memberjunction/global';
 import { RewriteDecisionReferences } from './decision-conditions';
 import { ReadFlowDecisionStepConfiguration } from './flow-decision-step';
-import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from './graph-algorithms';
+import { DetectCycle, type TaskGraphEdge, type TaskGraphNode } from '@memberjunction/graph';
 import {
     TaskNode,
     type TaskGraphDependency,

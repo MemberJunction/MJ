@@ -1,0 +1,137 @@
+[
+  {
+    "fields": {
+      "Name": "Author a Guided Tour",
+      "TourKey": "builder.tour-authoring",
+      "Description": "Meta-tour for builders showing how to design concise tours in Tour Studio, verify readiness with an interactive ComponentSpec step, and publish immutable snapshots.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Tour Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 70,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "EntityEvent",
+        "Entity": "MJ: Tours",
+        "Event": "Save",
+        "Description": "Builder creates or updates a draft tour."
+      },
+      "StartLocation": {
+        "Application": "Tour Studio",
+        "NavItem": "TourStudioDashboard"
+      }
+    },
+    "primaryKey": {
+      "ID": "325DB5BE-E232-47A7-B1BC-461A32D220CA"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "authoring-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Authoring Reliable Tours",
+            "Body": "Great tours stay under five steps, target semantic or registered anchors, and measure real outcome Goals.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Begin Authoring Guide",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2329972C-11C7-43B2-8D94-AAFD7F82B3F4"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "authoring-studio-nav",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Build & Preview in Tour Studio",
+            "Body": "Assemble steps, configure branching paths on the graph canvas, and preview as any role before publishing.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "TourStudioDashboard"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "EBC4DCD4-1012-40E3-8C44-C7A003D0F2DE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "readiness-check",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Interactive Readiness Check",
+            "Title": "Verify Pre-Publish Readiness",
+            "Body": "Use this ComponentID-backed interactive step type to confirm your tour is ready to publish.",
+            "Configuration": {
+              "InputProps": {
+                "title": "Pre-Publish Tour Readiness Check"
+              },
+              "CompletionEventName": "builder.tour-authoring.readiness-confirmed",
+              "AllowNextButtonFallback": true
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "Signal",
+              "Signal": "builder.tour-authoring.readiness-confirmed"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "13FFBA08-9AB8-47E7-A677-1056D68D0A3A"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "authoring-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Publish an Immutable Version",
+            "Body": "When you publish, Tours.PublishTour validates the pathway graph for cycles and snapshots an immutable MJ: Tour Versions row.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Done"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F023BAB6-64E4-4848-BC14-79F98CE57EFE"
+          }
+        }
+      ]
+    }
+  }
+]

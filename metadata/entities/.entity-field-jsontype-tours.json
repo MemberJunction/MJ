@@ -1,0 +1,243 @@
+[
+  {
+    "_comments": [
+      "JSONType metadata for Guided Tours structured JSON columns.",
+      "Entities covered: MJ: Tours, MJ: Tour Versions, MJ: Tour Steps, MJ: Tour Step Paths,",
+      "MJ: Tour Triggers, MJ: Learning Paths, MJ: Tour Surface Tours, and MJ: Tour Runs."
+    ],
+    "fields": {
+      "Name": "MJ: Tours"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourLaunchPolicy",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourLaunchPolicy.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&Name=LaunchPolicy"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ITourGoal",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourGoal.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&Name=Goal"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ITourStartLocation",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourStartLocation.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&Name=StartLocation"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ITourConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tours&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tours"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tour Versions"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourVersionDefinition",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourVersionDefinition.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Versions&Name=Definition"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Versions"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tour Steps"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourStepConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourStepConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Steps&Name=Configuration"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ITourAnchor",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourAnchor.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Steps&Name=Anchor"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ITourStepPrepare",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourStepPrepare.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Steps&Name=Prepare"
+          }
+        },
+        {
+          "fields": {
+            "JSONType": "ITourCompletion",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourCompletion.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Steps&Name=Completion"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Steps"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tour Step Paths"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourStepPathConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourStepPathConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Step Paths&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Step Paths"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tour Triggers"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourTriggerConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourTriggerConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Triggers&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Triggers"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Learning Paths"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ILearningPathConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ILearningPathConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Learning Paths&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Learning Paths"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tour Surface Tours"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourStartLocation",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourStartLocation.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Surface Tours&Name=StartLocationOverride"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Surface Tours"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Tour Runs"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITourRunPathEntry",
+            "JSONTypeIsArray": true,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITourRunPathEntry.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tour Runs&Name=PathTaken"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tour Runs"
+    }
+  }
+]

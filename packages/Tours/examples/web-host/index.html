@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MJ Guided Tours — Web Host Surface Example</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 32px;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .portal-shell {
+      max-width: 720px;
+      margin: 0 auto;
+      display: grid;
+      gap: 20px;
+      padding: 24px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+    }
+    .portal-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .portal-btn {
+      padding: 10px 16px;
+      border-radius: 8px;
+      border: 1px solid #cbd5e1;
+      background: #ffffff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .portal-btn--primary {
+      background: #264faf;
+      color: #ffffff;
+      border-color: #264faf;
+    }
+  </style>
+</head>
+<body>
+  <main class="portal-shell">
+    <h1>Member Portal (Surface Script Tag Example)</h1>
+    <p>
+      This plain HTML page loads only the Stage-1 vanilla shell (<code>mj-tours.js</code>) until a tour
+      starts, then lazy-loads Stage-2 Light DOM Angular renderers on demand.
+    </p>
+    <div class="portal-actions">
+      <button
+        type="button"
+        class="portal-btn portal-btn--primary"
+        data-mj-tour-anchor="portal.renew"
+      >
+        Renew membership
+      </button>
+      <button
+        type="button"
+        class="portal-btn"
+        data-mj-tour-anchor="portal.billing"
+      >
+        Billing history
+      </button>
+    </div>
+  </main>
+
+  <script
+    src="../../../Angular/Generic/tours/dist/element/mj-tours.js"
+    data-surface-key="ts_live_replace_me"
+    data-api-url="http://localhost:4000"
+  ></script>
+</body>
+</html>
