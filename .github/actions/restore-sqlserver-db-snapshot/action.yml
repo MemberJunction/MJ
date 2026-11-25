@@ -16,8 +16,10 @@ inputs:
     description: >-
       Set to 'true' (e.g. on nightly schedule runs or migration/metadata PRs in codegen-drift) to
       bypass cache restore and provision cold. When 'true', `save-key` carries a unique
-      `-cold-<run_id>` suffix so nightly re-seeds supersede earlier incremental push snapshots
-      instead of colliding with an immutable Actions cache key.
+      `-cold-<run_id>` suffix: Actions cache keys are immutable, so a nightly cold re-seed of
+      inputs a push already snapshotted would otherwise be refused as a duplicate. The restore
+      step looks up `<key>-cold-` first, so for the same inputs the newest cold re-seed is what
+      later runs restore, ahead of the push's incremental `<key>` entry.
     required: false
     default: 'false'
 
@@ -29,10 +31,10 @@ outputs:
     description: >-
       Cache key for backstop saves: identical to `key` on incremental builds, or
       `<key>-cold-<run_id>` when `skip-restore` is 'true' so nightly cold re-seeds are never
-      rejected as duplicate cache keys.
+      rejected as duplicate cache keys (and are preferred on restore, see the restore step).
     value: ${{ steps.dbkey.outputs.save_key }}
   cache-hit:
-    description: "'true' only on an exact key (or exact `<key>-cold-*`) match."
+    description: "'true' only when the restored entry was saved for exactly these inputs: `<key>` or `<key>-cold-<run_id>`."
     value: ${{ steps.syncflag.outputs.exact_hit }}
   warm:
     description: "'1' if a cached .bak snapshot was restored into [test], else '0'."
@@ -68,6 +70,20 @@ runs:
             packages/MetadataSync/src
             packages/SQLServerDataProvider/src
             .github/actions/restore-sqlserver-db-snapshot
+            # The code that writes the pre-baked Entity Vector Sync - Daily vectors (only the
+            # `full` variant bakes them): the job driver, the Vectorize Entity action, the sync
+            # and embedding code, the local embedding model, the Float32 encoder and the entity
+            # save path. Keep in step with the `vectors` filter in integration.yml's `changes` job.
+            packages/Scheduling/engine/src
+            packages/Scheduling/base-engine/src
+            packages/Actions/CoreActions/src/custom/utilities/vectorize-entity.action.ts
+            packages/AI/Vectors/Sync/src
+            packages/AI/Vectors/Core/src
+            packages/AI/EntityDocuments/src
+            packages/AI/Prompts/src/embedding
+            packages/AI/Providers/LocalEmbeddings/src
+            packages/MJGlobal/src/util/BinaryEncoding.ts
+            packages/MJCore/src/generic/baseEntity.ts
           )
           VERSION_TAG="mj-ci-db-v4"
         elif [ "$VARIANT" = "base" ]; then
@@ -119,12 +135,17 @@ runs:
       uses: actions/cache/restore@v6
       with:
         path: /tmp/mjdb
-        key: ${{ steps.dbkey.outputs.key }}
-        # Check exact `<key>-cold-*` nightly re-seeds first (newest entry wins, superseding any
-        # incremental push snapshot for the same commit), then fall back to the newest snapshot on
-        # the same release line.
+        # Lookup order (actions/cache: an exact match on `key`, then the newest entry whose key
+        # starts with `key`, then each restore-key in turn, exact match first, then newest prefix):
+        #   1. `<key>-cold-`  — never an exact key, so this picks the newest nightly cold re-seed
+        #      of exactly these inputs. A clean from-scratch build beats an incremental one.
+        #   2. `<key>`        — the incremental snapshot a push saved for these inputs.
+        #   3. `<prefix>`     — the newest snapshot on the same release line (the migrate and
+        #      sync push steps then apply the delta).
+        # 1 and 2 both count as an exact hit (see the sync-push step below); 3 never does.
+        key: ${{ steps.dbkey.outputs.key }}-cold-
         restore-keys: |
-          ${{ steps.dbkey.outputs.key }}-
+          ${{ steps.dbkey.outputs.key }}
           ${{ steps.dbkey.outputs.prefix }}
 
     - name: Load the snapshot into SQL Server
@@ -195,9 +216,9 @@ runs:
         WARM: ${{ steps.dbload.outputs.warm }}
         RETRIED: ${{ steps.migrate.outputs.retried }}
       run: |
-        # Both an exact match (`$KEY`) and an exact nightly cold re-seed (`$KEY-cold-<run_id>`)
-        # represent this exact commit's inputs.
-        if [ -n "$MATCHED" ] && { [ "$MATCHED" = "$KEY" ] || [[ "$MATCHED" == "${KEY}-"* ]]; }; then
+        # Both the push snapshot (`$KEY`) and a nightly cold re-seed (`$KEY-cold-<run_id>`) were
+        # saved for exactly these inputs. Anything else is a prefix restore from older inputs.
+        if [ -n "$MATCHED" ] && { [ "$MATCHED" = "$KEY" ] || [[ "$MATCHED" == "${KEY}-cold-"* ]]; }; then
           EXACT_HIT="true"
         else
           EXACT_HIT="false"

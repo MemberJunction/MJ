@@ -208,9 +208,14 @@ jobs:
             else
               echo "migrations=false" >> "$GITHUB_OUTPUT"
             fi
-            # PRs touching vector/scheduling code must re-execute Entity Vector Sync - Daily with
-            # the PR's own code instead of validating pre-baked vectors written by next.
-            if echo "$CHANGED" | grep -qE '^(packages/AI/Vectors/|packages/Scheduling/|packages/Actions/CoreActions/src/custom/ai/|metadata/scheduled-jobs/|metadata/entity-documents/|packages/TestingFramework/integration-test-suite/src/checks/binary-fields\.checks\.ts)'; then
+            # PRs touching the code that writes or encodes the Entity Vector Sync - Daily vectors
+            # must re-execute that job with the PR's own code instead of validating the vectors
+            # pre-baked into the snapshot by next: the job driver (Scheduling), the Vectorize Entity
+            # action, the sync/embedding code and the local model, the Float32 encoder, the entity
+            # save path and the SQL Server provider that binds the binary column, the job and
+            # document metadata, and the BF checks that read the result. Keep in step with the
+            # vector-writing paths in the `full` key of .github/actions/restore-sqlserver-db-snapshot.
+            if echo "$CHANGED" | grep -qE '^(packages/AI/Vectors/|packages/AI/EntityDocuments/|packages/AI/Prompts/src/embedding/|packages/AI/Providers/LocalEmbeddings/|packages/Scheduling/|packages/Actions/CoreActions/src/custom/utilities/vectorize-entity\.action\.ts|packages/MJGlobal/src/util/BinaryEncoding\.ts|packages/MJCore/src/generic/baseEntity\.ts|packages/SQLServerDataProvider/src/|metadata/scheduled-jobs/|metadata/entity-documents/|packages/TestingFramework/integration-test-suite/src/checks/binary-fields\.checks\.ts)'; then
               echo "vectors=true" >> "$GITHUB_OUTPUT"
             else
               echo "vectors=false" >> "$GITHUB_OUTPUT"
@@ -579,11 +584,16 @@ jobs:
             exit 1
           fi
 
-      # On PRs that touch vector/scheduling code, clear the pre-baked Entity Vector Sync - Daily
-      # run and persisted EntityRecordDocument rows so MJAPI executes the first-run job with the
-      # PR's own code and binary-fields.BF2/BF3 validate vectors written by the PR (not next).
-      - name: Reset baked vector-sync state on vector/scheduling PRs
-        if: github.event_name == 'pull_request' && needs.changes.outputs.vectors == 'true' && steps.db.outputs.warm == '1'
+      # Clear the pre-baked Entity Vector Sync - Daily run and its EntityRecordDocument rows so
+      # MJAPI executes the first-run job with THIS commit's code, and binary-fields.BF2/BF3
+      # validate vectors it wrote rather than vectors carried in from an older snapshot:
+      #   - on a PR that touches the vector write path (the `vectors` filter); and
+      #   - on a push that restored a snapshot of OTHER inputs (a prefix restore, cache-hit
+      #     false). That push saves a new snapshot, and the pre-bake below only runs the job when
+      #     it has never completed, so without the reset the new snapshot would inherit vectors
+      #     written by the older code its key no longer hashes.
+      - name: Reset baked vector-sync state
+        if: steps.db.outputs.warm == '1' && ((github.event_name == 'pull_request' && needs.changes.outputs.vectors == 'true') || (github.event_name == 'push' && steps.db.outputs.cache-hit != 'true'))
         run: |
           docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
             -d test -b -I -Q "
@@ -595,7 +605,7 @@ jobs:
                 SET [LastRunAt] = NULL, [NextRunAt] = NULL, [LockToken] = NULL, [LockedAt] = NULL, [LockedByInstance] = NULL
                 WHERE [RunImmediatelyIfNeverRun] = 1;
             "
-          echo "Reset pre-baked vector-sync state so PR code executes Entity Vector Sync - Daily fresh."
+          echo "Reset pre-baked vector-sync state so this commit's code executes Entity Vector Sync - Daily fresh."
 
       # ── Pre-bake first-run scheduled jobs (Entity Vector Sync - Daily) into the snapshot ──
       # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun = 1, so MJAPI runs
@@ -606,8 +616,10 @@ jobs:
       # PR and push run skips the ~4-minute wait entirely.
       #
       # Determinism: all non-first-run Active cron jobs are paused before the transient MJAPI
-      # starts and restored after it exits, and we assert zero held LockToken / Running rows
-      # before BACKUP DATABASE so live cron side effects can never be baked into the snapshot.
+      # starts and restored after it exits. Before BACKUP DATABASE we assert that none of them is
+      # still Paused and that there are zero held LockToken / Running rows, so neither disabled
+      # cron jobs nor live cron side effects can be baked into the snapshot. Any failure writes a
+      # FAILED line to the step summary and skips the snapshot.
       - name: Pre-run first-run scheduled jobs for the snapshot
         id: prebake
         if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true'
@@ -617,6 +629,8 @@ jobs:
           GRAPHQL_PORT: '4000'
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
         run: |
+          # pipefail so a failing sqlcmd inside `run_sql ... | tr` fails the command, not just tr.
+          set -o pipefail
           run_sql() {
             docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
               -d test -h -1 -W -b -I -Q "$1"
@@ -627,35 +641,28 @@ jobs:
                 AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
                                 WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]'
           }
-          PENDING=$(pending_jobs || true)
-          if [ "${PENDING}" = "0" ]; then
-            echo "First-run scheduled jobs already completed in [test] — nothing to pre-bake."
-            exit 0
-          fi
 
-          # Pause non-first-run Active cron jobs during pre-bake so only RunImmediatelyIfNeverRun
-          # jobs can fire; record their IDs in a temp table and always restore on exit.
-          PAUSED_IDS=$(run_sql "SET NOCOUNT ON; SELECT [ID] FROM [__mj].[ScheduledJob] WHERE [Status] = 'Active' AND [RunImmediatelyIfNeverRun] = 0;" | tr -d '\r' | grep -E '^[0-9A-Fa-f-]+$' || true)
-          if [ -n "${PAUSED_IDS}" ]; then
-            run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Paused' WHERE [Status] = 'Active' AND [RunImmediatelyIfNeverRun] = 0;"
-          fi
+          # Every way out of this step that is not success writes a FAILED line to the step
+          # summary: the explicit branches call fail(); anything else (a SQL error under bash -e,
+          # e.g. in the pause, the NextRunAt reset or the lock checks) is caught by the EXIT trap,
+          # which names the phase it died in. continue-on-error would otherwise hide it.
+          PHASE="checking for pending first-run jobs"
+          FAIL_REPORTED=0
+          fail() {
+            echo "::warning::$1"
+            echo "DB snapshot pre-bake: **FAILED** ($2) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            FAIL_REPORTED=1
+            exit 1
+          }
 
           MJAPI_PID=""
+          PAUSED_IDS=""
+          PAUSED_IN_LIST=""
           RESTORED_PAUSED=0
           restore_paused_jobs() {
-            if [ "${RESTORED_PAUSED}" -eq 1 ]; then return 0; fi
+            if [ "${RESTORED_PAUSED}" -eq 1 ] || [ -z "${PAUSED_IN_LIST}" ]; then return 0; fi
+            run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Active' WHERE [ID] IN (${PAUSED_IN_LIST});"
             RESTORED_PAUSED=1
-            if [ -n "${PAUSED_IDS}" ]; then
-              local in_list=""
-              while IFS= read -r id; do
-                [ -z "$id" ] && continue
-                [ -n "$in_list" ] && in_list="${in_list},"
-                in_list="${in_list}'${id}'"
-              done <<< "${PAUSED_IDS}"
-              if [ -n "$in_list" ]; then
-                run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Active' WHERE [ID] IN (${in_list});" || true
-              fi
-            fi
           }
           stop_mjapi() {
             if [ -n "${MJAPI_PID}" ] && kill -0 "${MJAPI_PID}" 2>/dev/null; then
@@ -665,21 +672,49 @@ jobs:
             MJAPI_PID=""
           }
           cleanup_prebake() {
+            local rc=$?
             stop_mjapi
-            restore_paused_jobs
+            # Best effort on the way out: this run is failing and will not snapshot anyway.
+            restore_paused_jobs || true
+            if [ "${rc}" -ne 0 ] && [ "${FAIL_REPORTED}" -eq 0 ]; then
+              echo "::warning::Pre-bake failed (exit ${rc}) while ${PHASE}; skipping snapshot save."
+              echo "DB snapshot pre-bake: **FAILED** (error while ${PHASE}, exit ${rc}) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit "${rc}"
           }
           trap cleanup_prebake EXIT
 
+          PENDING=$(pending_jobs)
+          if [ "${PENDING}" = "0" ]; then
+            echo "First-run scheduled jobs already completed in [test] — nothing to pre-bake."
+            exit 0
+          fi
+
+          # Pause non-first-run Active cron jobs during pre-bake so only RunImmediatelyIfNeverRun
+          # jobs can fire. Their IDs are kept so exactly those jobs are set back to Active.
+          PHASE="pausing cron jobs"
+          ACTIVE_CRON=$(run_sql "SET NOCOUNT ON; SELECT [ID] FROM [__mj].[ScheduledJob] WHERE [Status] = 'Active' AND [RunImmediatelyIfNeverRun] = 0;")
+          PAUSED_IDS=$(printf '%s\n' "${ACTIVE_CRON}" | tr -d '\r' | grep -E '^[0-9A-Fa-f-]+$' || true)
+          while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            [ -n "${PAUSED_IN_LIST}" ] && PAUSED_IN_LIST="${PAUSED_IN_LIST},"
+            PAUSED_IN_LIST="${PAUSED_IN_LIST}'${id}'"
+          done <<< "${PAUSED_IDS}"
+          if [ -n "${PAUSED_IN_LIST}" ]; then
+            run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Paused' WHERE [ID] IN (${PAUSED_IN_LIST});"
+          fi
+
+          PHASE="booting the transient MJAPI"
           (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi-prebake.log 2>&1) &
           MJAPI_PID=$!
           if ! .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-prebake.log 36 5 "${MJAPI_PID}"; then
-            echo "::warning::Transient pre-bake MJAPI failed to become ready; skipping v4 snapshot save."
-            echo "DB snapshot pre-bake: **FAILED** (transient MJAPI did not boot) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            fail "Transient pre-bake MJAPI failed to become ready; skipping v4 snapshot save." "transient MJAPI did not boot"
           fi
 
+          PHASE="waiting for first-run jobs"
           DONE=0
           for _ in $(seq 1 84); do
+            # Tolerate a transient query error while MJAPI is busy; the timeout below still bounds it.
             PENDING=$(pending_jobs || true)
             if [ "${PENDING}" = "0" ]; then
               echo "Pre-baked first-run scheduled jobs finished after ${SECONDS}s."
@@ -689,24 +724,35 @@ jobs:
             sleep 5
           done
           if [ "${DONE}" -ne 1 ]; then
-            echo "::warning::Pre-bake first-run scheduled jobs still pending (${PENDING}) after 420 s; skipping snapshot save."
-            echo "DB snapshot pre-bake: **FAILED** (timed out with ${PENDING} job(s) pending after 420 s) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            fail "Pre-bake first-run scheduled jobs still pending (${PENDING}) after 420 s; skipping snapshot save." "timed out with ${PENDING} job(s) pending after 420 s"
           fi
 
-          # Stop MJAPI cleanly and restore paused jobs BEFORE verifying lock-free snapshot state.
+          # Stop MJAPI cleanly and restore paused jobs BEFORE verifying the snapshot state. No
+          # `|| true` here: a failed restore must fail the step (the EXIT trap reports it).
+          PHASE="stopping MJAPI"
           stop_mjapi
+          PHASE="restoring paused cron jobs"
           restore_paused_jobs
+          PHASE="resetting NextRunAt"
           run_sql "UPDATE [__mj].[ScheduledJob] SET [NextRunAt] = NULL;"
 
+          # Never snapshot a database with the cron jobs this step paused still Paused: every
+          # later warm run would start with the scheduler's cron jobs silently disabled.
+          if [ -n "${PAUSED_IN_LIST}" ]; then
+            PHASE="verifying the paused cron jobs were restored"
+            STILL_PAUSED=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] WHERE [Status] = 'Paused' AND [ID] IN (${PAUSED_IN_LIST});" | tr -d '[:space:]')
+            if [ "${STILL_PAUSED:-1}" != "0" ]; then
+              fail "Pre-bake left ${STILL_PAUSED} cron job(s) Paused; skipping snapshot save." "${STILL_PAUSED} paused cron job(s) not restored to Active"
+            fi
+          fi
+
+          PHASE="checking for held locks and running jobs"
           LOCKED=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] WHERE [LockToken] IS NOT NULL;" | tr -d '[:space:]')
           RUNNING=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJobRun] WHERE [Status] = 'Running';" | tr -d '[:space:]')
           if [ "${LOCKED:-1}" != "0" ] || [ "${RUNNING:-1}" != "0" ]; then
-            echo "::warning::Pre-bake left dirty scheduler state (LockToken count=${LOCKED}, Running runs=${RUNNING}); skipping snapshot save."
-            echo "DB snapshot pre-bake: **FAILED** (dirty scheduler state: locks=${LOCKED}, running=${RUNNING}) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
+            fail "Pre-bake left dirty scheduler state (LockToken count=${LOCKED}, Running runs=${RUNNING}); skipping snapshot save." "dirty scheduler state: locks=${LOCKED}, running=${RUNNING}"
           fi
-          echo "Pre-bake verified clean (0 held locks, 0 running job rows)."
+          echo "Pre-bake verified clean (0 held locks, 0 running job rows, 0 paused cron jobs left)."
 
       # ── Save the snapshot ──────────────────────────────────────────────────────────────
       # BEFORE the tier runs, never after: the suite mutates the database, and a snapshot taken
