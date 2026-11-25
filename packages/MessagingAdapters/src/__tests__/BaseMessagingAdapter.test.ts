@@ -259,10 +259,11 @@ class TestAdapter extends BaseMessagingAdapter {
     public async testResolveAgent(
         msg: IncomingMessage,
         threadHistory: IncomingMessage[] = [],
-        user?: UserInfo
+        user?: UserInfo,
+        rememberedAgentId?: string
     ): Promise<ResolveAgentResult> {
         // Use specified user or fallbackContextUser for testing; Initialize() must be called first
-        return this.resolveAgent(msg, user ?? this.fallbackContextUser!, threadHistory);
+        return this.resolveAgent(msg, user ?? this.fallbackContextUser!, threadHistory, rememberedAgentId);
     }
 
     public testBuildConversationMessages(history: IncomingMessage[], current: IncomingMessage) {
@@ -2068,6 +2069,136 @@ describe('BaseMessagingAdapter', () => {
             );
             expect(formRes.agent?.Name).toBe('Default Agent');
             expect(formRes.multiAgentNote).toBeNull();
+
+            // Programmatic multi-mention (where resolveAgent does NOT re-match text):
+            // resolveMentionedAgent itself must omit hidden agents from "Other mentioned agents (...)".
+            const programmaticMulti = await secAdapter.testResolveAgent(
+                createMessage({
+                    Text: 'run this command',
+                    MentionedAgentNames: ['Public Helper', 'Onyx Secret Vault'],
+                    RawEvent: { type: 'slash_command' },
+                }),
+                [],
+                alice
+            );
+            expect(programmaticMulti.agent?.Name).toBe('Public Helper');
+            expect(programmaticMulti.multiAgentNote).toBeNull();
+        });
+
+        it('does not confirm hidden agent existence when a user replies in a thread they started with a hidden full name or prefix', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'onyx-hid-id', Name: 'Onyx Secret Vault', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'onyx-hid-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Thread started by Alice with hidden full name, hidden prefix, and nonexistent name:
+            // replying in each thread must yield the exact same outcome (Default Agent, no refusal, no note)
+            // both with no rememberedAgentId (e.g. after restart) and with rememberedAgentId = 'default-id'.
+            for (const rootText of ['@Onyx Secret Vault hi', '@onyx hi', '@nosuchthing hi']) {
+                const history: IncomingMessage[] = [
+                    createMessage({
+                        MessageID: 'root-1',
+                        ThreadID: 'thread-probe',
+                        SenderID: 'alice-platform-id',
+                        SenderEmail: alice.Email,
+                        Text: rootText,
+                        MentionedAgentNames: undefined,
+                    }),
+                    createMessage({
+                        MessageID: 'bot-1',
+                        ThreadID: 'thread-probe',
+                        SenderID: 'BOT123',
+                        Text: 'Hello!',
+                    }),
+                ];
+
+                const replyNoRemembered = await secAdapter.testResolveAgent(
+                    createMessage({ ThreadID: 'thread-probe', Text: 'follow up', MentionedAgentNames: [] }),
+                    history,
+                    alice
+                );
+                expect(replyNoRemembered.agent?.Name).toBe('Default Agent');
+                expect(replyNoRemembered.refusalMessage).toBeUndefined();
+                expect(replyNoRemembered.multiAgentNote).toBeNull();
+
+                const replyWithDefaultRemembered = await secAdapter.testResolveAgent(
+                    createMessage({ ThreadID: 'thread-probe', Text: 'follow up', MentionedAgentNames: [] }),
+                    history,
+                    alice,
+                    'default-id'
+                );
+                expect(replyWithDefaultRemembered.agent?.Name).toBe('Default Agent');
+                expect(replyWithDefaultRemembered.refusalMessage).toBeUndefined();
+                expect(replyWithDefaultRemembered.multiAgentNote).toBeNull();
+            }
+        });
+
+        it('uses live AIEngineBase agent status in fallback handleDelegation so agents deactivated after Initialize are refused', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'target-id', Name: 'Target Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            seedCatalog(catalog, []);
+
+            const { AgentRunner, ResolveHandoffTarget } = await import('@memberjunction/ai-agents');
+            const origResolve = vi.mocked(ResolveHandoffTarget).getMockImplementation();
+            const seenTargetStatuses: Array<string | undefined> = [];
+            vi.mocked(ResolveHandoffTarget).mockImplementation(async (params: { AgentName?: string; Agents?: Array<{ Name?: string; Status?: string }> }) => {
+                const target = (params.Agents ?? []).find(a => a.Name === params.AgentName);
+                seenTargetStatuses.push(target?.Status);
+                if (!target || target.Status !== 'Active') {
+                    return { Target: null, Refusal: { Reason: 'NotFound', Message: 'Target agent is inactive' } };
+                }
+                return { Target: target as never };
+            });
+
+            const executedAgents: string[] = [];
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(async (params: { agent: { Name: string } }) => {
+                    executedAgents.push(params.agent.Name);
+                    return {
+                        agentResult: {
+                            success: true,
+                            payload: params.agent.Name === 'Default Agent' ? { invokeAgent: 'Target Agent' } : {},
+                            agentRun: { Message: 'Done.', Steps: [] },
+                        },
+                        conversationId: 'deleg-convo-1',
+                        userMessageDetailId: 'u-1',
+                        agentResponseDetailId: 'a-1',
+                        artifactInfo: undefined,
+                    };
+                }),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            try {
+                const delegAdapter = new TestAdapter(defaultSettings);
+                await delegAdapter.Initialize();
+
+                // Deactivate Target Agent in live AIEngineBase cache AFTER Initialize()
+                aiEngineState.agents[1]['Status'] = 'Disabled';
+
+                await delegAdapter.HandleMessage(createMessage({
+                    IsDirectMessage: true,
+                    SenderEmail: alice.Email,
+                    Text: 'delegate please',
+                }));
+
+                // ResolveHandoffTarget must receive the live 'Disabled' status, NOT the stale 'Active' snapshot
+                expect(seenTargetStatuses).toEqual(['Disabled']);
+                expect(executedAgents).toEqual(['Default Agent']);
+            } finally {
+                if (origResolve) {
+                    vi.mocked(ResolveHandoffTarget).mockImplementation(origResolve);
+                }
+            }
         });
 
         it('refuses agents deactivated after Initialize() and fails closed when GetEffectivePermissions throws', async () => {
@@ -2188,19 +2319,22 @@ describe('BaseMessagingAdapter', () => {
                 }),
             ];
 
-            // Bob (admin) continues thread with Finance Agent
+            // Bob (admin) continues thread with Finance Agent (both via history and rememberedAgentId)
             const bobReply = await secAdapter.testResolveAgent(
                 createMessage({ ThreadID: 't1', Text: 'break down by region', MentionedAgentNames: [] }),
                 threadHistory,
-                bob
+                bob,
+                'finance-id'
             );
             expect(bobReply.agent?.Name).toBe('Finance Agent');
 
-            // Alice (cannot view/run Finance Agent) is refused without naming Finance Agent
+            // Alice (cannot view/run Finance Agent) replying in a thread actually served by Finance Agent
+            // (rememberedAgentId='finance-id') is refused without naming Finance Agent.
             const aliceReply = await secAdapter.testResolveAgent(
                 createMessage({ ThreadID: 't1', Text: 'show me too', MentionedAgentNames: [] }),
                 threadHistory,
-                alice
+                alice,
+                'finance-id'
             );
             expect(aliceReply.agent).toBeNull();
             expect(aliceReply.refusalMessage).toContain("don't have permission");

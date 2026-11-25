@@ -268,7 +268,7 @@ Watch for: `Slack Socket Mode connected`
 2. Copy the **Microsoft App ID**
 3. Click **Manage Password** → **New client secret**
 4. Copy the secret value — this is `MICROSOFT_APP_PASSWORD`
-5. Note the **Tenant ID** if using Single Tenant
+5. Copy your Entra ID **Tenant ID** (`MICROSOFT_APP_TENANT_ID`) — required for Teams tenant verification (for Multi-Tenant registrations, configure `AllowedTenantIDs` with the trusted Entra tenant IDs)
 
 ### Step 3: Configure the Messaging Endpoint
 
@@ -441,7 +441,7 @@ module.exports = {
 | `SLACK_APP_TOKEN` | Slack (Socket) | App-Level Token (`xapp-...`) for Socket Mode |
 | `MICROSOFT_APP_ID` | Teams | Azure Bot Service App ID |
 | `MICROSOFT_APP_PASSWORD` | Teams | Azure Bot Service client secret |
-| `MICROSOFT_APP_TENANT_ID` | Teams (Single Tenant) | Azure AD Tenant ID |
+| `MICROSOFT_APP_TENANT_ID` | Teams | Trusted Entra ID (Azure AD) Tenant ID — required unless `AllowedTenantIDs` is set in `Settings` (Teams messages fail closed without a configured tenant) |
 | `MJ_BOT_DEFAULT_AGENT_NAME` | Both | Default agent name (e.g., "Sage") |
 | `MJ_BOT_CONTEXT_USER_EMAIL` | Both | Fallback MJ user email for agent execution |
 | `MJ_EXPLORER_BASE_URL` | Both (optional) | MJ Explorer URL for deep-link buttons |
@@ -469,7 +469,8 @@ module.exports = {
 | `SlashCommands` | `Record<string, string>` | — | Slash command → agent name mapping (Slack only) |
 | `MicrosoftAppId` | `string` | — | Azure Bot Service App ID (Teams only) |
 | `MicrosoftAppPassword` | `string` | — | Azure Bot Service client secret (Teams only) |
-| `MicrosoftAppTenantId` | `string` | — | Azure AD Tenant ID for Single Tenant (Teams only) |
+| `MicrosoftAppTenantId` | `string` | — | Trusted Entra ID Tenant ID (Teams only; required unless `AllowedTenantIDs` is set — Teams fails closed without a configured tenant) |
+| `AllowedTenantIDs` | `string[]` | — | Explicit allow-list of trusted Entra ID Tenant IDs for Multi-Tenant Teams bots (merged with `MicrosoftAppTenantId`) |
 | `MicrosoftAppType` | `string` | auto | `'SingleTenant'`, `'MultiTenant'`, or `'UserAssignedMsi'` |
 
 ---

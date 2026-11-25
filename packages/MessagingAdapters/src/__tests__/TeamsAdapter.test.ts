@@ -780,6 +780,82 @@ describe('TeamsAdapter', () => {
             const sharedMsg = adapter.MapTeamsActivity(sharedCtx as never);
             expect(await lookup('external-guest-1', sharedMsg)).toBeNull();
         });
+
+        it('refuses msteams activities missing any tenantId when MicrosoftAppTenantId is configured', async () => {
+            const adapter = await createInitializedAdapter();
+            const missingTenantCtx = createMockTurnContext({
+                from: { id: 'user-no-tenant', name: 'No Tenant', email: 'bot@company.com' },
+                conversation: { id: 'conv-no-tenant', conversationType: 'personal' },
+                channelData: undefined,
+            });
+            const msg = adapter.MapTeamsActivity(missingTenantCtx as never);
+            expect(msg.SenderEmail).toBeUndefined();
+
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+            expect(await lookup('user-no-tenant', msg)).toBeNull();
+            expect(mocks.getMember).not.toHaveBeenCalled();
+
+            await adapter.HandleMessage(msg);
+            expect(mocks.sendActivity).toHaveBeenCalledTimes(1);
+            expect(JSON.stringify(mocks.sendActivity.mock.calls[0][0])).toContain('This bot is not authorized for your tenant.');
+        });
+
+        it('scopes userEmailCache entries by tenantId when multiple tenants are allowed', async () => {
+            const adapter = await createInitializedAdapter({
+                AllowedTenantIDs: [EXTRA_ALLOWED_TENANT_ID],
+            });
+            const lookup = (adapter as unknown as {
+                lookupUserEmail(userId: string, message?: IncomingMessage): Promise<string | null>
+            }).lookupUserEmail.bind(adapter);
+
+            mocks.getMember
+                .mockResolvedValueOnce({ email: 'alice@tenant1.com', tenantId: TRUSTED_TENANT_ID })
+                .mockResolvedValueOnce({ email: 'bob@tenant2.com', tenantId: EXTRA_ALLOWED_TENANT_ID });
+
+            const t1Msg = adapter.MapTeamsActivity(createMockTurnContext({
+                conversation: { id: 'conv-t1', conversationType: 'personal', tenantId: TRUSTED_TENANT_ID },
+            }) as never);
+            const t2Msg = adapter.MapTeamsActivity(createMockTurnContext({
+                conversation: { id: 'conv-t2', conversationType: 'personal', tenantId: EXTRA_ALLOWED_TENANT_ID },
+            }) as never);
+
+            expect(await lookup('shared-platform-uid', t1Msg)).toBe('alice@tenant1.com');
+            expect(await lookup('shared-platform-uid', t2Msg)).toBe('bob@tenant2.com');
+            expect(mocks.getMember).toHaveBeenCalledTimes(2);
+        });
+
+        it('does not trust client-supplied from.email on non-msteams Bot Framework channels (Web Chat / Emulator)', async () => {
+            const adapter = await createInitializedAdapter();
+            const webchatCtx = createMockTurnContext({
+                channelId: 'webchat',
+                from: { id: 'wc-user-1', name: 'Web Chat User', email: 'bot@company.com' },
+                conversation: { id: 'conv-wc', conversationType: 'personal' },
+            });
+            const msg = adapter.MapTeamsActivity(webchatCtx as never);
+            expect(msg.SenderEmail).toBeUndefined();
+        });
+
+        it('logs a startup warning and reports HasConfiguredTenants=false when no tenant ID is configured', async () => {
+            const { LogError } = await import('@memberjunction/core');
+            vi.mocked(LogError).mockClear();
+            const origTenantEnv = process.env.MICROSOFT_APP_TENANT_ID;
+            delete process.env.MICROSOFT_APP_TENANT_ID;
+            try {
+                const adapter = await createInitializedAdapter({
+                    MicrosoftAppTenantId: undefined,
+                    AllowedTenantIDs: undefined,
+                });
+                expect(adapter.HasConfiguredTenants).toBe(false);
+                const logged = vi.mocked(LogError).mock.calls.map(c => String(c[0]));
+                expect(logged.some(m => m.includes('MicrosoftAppTenantId') && m.includes('fail closed'))).toBe(true);
+            } finally {
+                if (origTenantEnv !== undefined) {
+                    process.env.MICROSOFT_APP_TENANT_ID = origTenantEnv;
+                }
+            }
+        });
     });
 
     describe('getBotUserId', () => {

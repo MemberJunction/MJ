@@ -908,21 +908,15 @@ export abstract class BaseMessagingAdapter {
 
     /**
      * Resolve an agent when the current message has no explicit agent mentions:
-     * checks thread affinity (from platform history or remembered DB conversation agent) first,
-     * then falls back to the default agent — verifying access for `contextUser` in all cases.
+     * checks the remembered agent that actually served this thread first, then falls back
+     * to viewable thread-history mentions, then the default agent — verifying access for
+     * `contextUser` in all cases.
      */
     private async resolveUnmentionedAgent(
         threadHistory: IncomingMessage[],
         contextUser: UserInfo,
         rememberedAgentId?: string
     ): Promise<ResolveAgentResult> {
-        const threadOutcome = await this.resolveThreadAgent(threadHistory, contextUser);
-        if (threadOutcome.agent) {
-            return { agent: threadOutcome.agent, multiAgentNote: null };
-        }
-        if (threadOutcome.refusalMessage) {
-            return { agent: null, multiAgentNote: null, refusalMessage: threadOutcome.refusalMessage };
-        }
         if (rememberedAgentId) {
             const rememberedOutcome = await this.resolveRememberedAgent(rememberedAgentId, contextUser);
             if (rememberedOutcome.agent) {
@@ -931,6 +925,13 @@ export abstract class BaseMessagingAdapter {
             if (rememberedOutcome.refusalMessage) {
                 return { agent: null, multiAgentNote: null, refusalMessage: rememberedOutcome.refusalMessage };
             }
+        }
+        const threadOutcome = await this.resolveThreadAgent(threadHistory, contextUser);
+        if (threadOutcome.agent) {
+            return { agent: threadOutcome.agent, multiAgentNote: null };
+        }
+        if (threadOutcome.refusalMessage) {
+            return { agent: null, multiAgentNote: null, refusalMessage: threadOutcome.refusalMessage };
         }
         return this.authorizeDefaultAgent(contextUser, null);
     }
@@ -1107,29 +1108,6 @@ export abstract class BaseMessagingAdapter {
     }
 
     /**
-     * Whether the incoming message explicitly asked for `agentName` (via `@` prefix, slash command,
-     * or form submission) as opposed to an incidental word match in prose.
-     */
-    private isExplicitMentionRequest(message: IncomingMessage, agentName: string): boolean {
-        const rawType = message.RawEvent?.['type'];
-        if (rawType === 'slash_command') {
-            return true;
-        }
-        const cleanText = this.stripBotMention(message.Text ?? '');
-        const lowerText = cleanText.toLowerCase();
-        const lowerName = agentName.trim().toLowerCase();
-        if (lowerText.includes(`@${lowerName}`)) {
-            return true;
-        }
-        const firstWord = lowerName.split(/\s+/)[0];
-        if (firstWord && new RegExp(`@${this.escapeRegex(firstWord)}\\b`, 'i').test(cleanText)) {
-            return true;
-        }
-        // If text has no match at all, the caller supplied MentionedAgentNames programmatically (e.g. form/API).
-        return !lowerText.includes(lowerName);
-    }
-
-    /**
      * Filter `this.availableAgents` to agents `contextUser` is permitted to view (excluding
      * unviewable or inactive agents, while keeping viewable agents that lack `CanRun` so an
      * explicit `@mention` still yields a clear run-permission refusal).
@@ -1161,15 +1139,19 @@ export abstract class BaseMessagingAdapter {
      * Look through the thread history to find the agent that was originally invoked,
      * enforcing permissions for the *current* message's `contextUser`.
      *
-     * Checks the first user message in the thread for @agent mentions. This provides
-     * thread affinity — follow-up messages in a thread continue with the same agent
-     * without requiring the user to @mention it again, matching MJ Explorer behavior.
+     * Matches earlier human messages strictly against agents `contextUser` can view and
+     * skips unviewable mentions so an unverified history mention (e.g. a user starting a
+     * thread with `@hidden` and replying) cannot confirm a hidden agent's existence.
+     * Threads actually served by a restricted agent are gated via `resolveRememberedAgent`
+     * using the `lastAgentId` recorded when that agent ran.
      */
     private async resolveThreadAgent(
         threadHistory: IncomingMessage[],
         contextUser: UserInfo
     ): Promise<{ agent: MJAIAgentEntityExtended | null; refusalMessage?: string }> {
         if (threadHistory.length === 0) return { agent: null };
+
+        const viewableAgents = await this.getViewableAvailableAgents(contextUser);
 
         // Walk through thread messages (oldest first) looking for user messages with agent mentions
         for (const msg of threadHistory) {
@@ -1179,10 +1161,10 @@ export abstract class BaseMessagingAdapter {
             // to another. Only humans establish thread affinity.
             if (this.isSelf(msg.SenderID) || this.isBotAuthored(msg)) continue;
 
-            // Check for agent mentions in this message
-            const mentions = msg.MentionedAgentNames ?? this.matchAgentMentions(msg.Text);
-            if (mentions.length > 0) {
-                const lookup = await this.findAuthorizedAgentByName(mentions[0], contextUser);
+            // Match strictly against agents this user can view (never adapter-wide).
+            const mentions = msg.MentionedAgentNames ?? this.matchAgentMentions(msg.Text, viewableAgents);
+            for (const mention of mentions) {
+                const lookup = await this.findAuthorizedAgentByName(mention, contextUser);
                 if (lookup.agent) {
                     LogStatus(`Thread affinity: routing to '${lookup.agent.Name}' (mentioned in thread message ${msg.MessageID})`);
                     return { agent: lookup.agent };
@@ -1190,14 +1172,8 @@ export abstract class BaseMessagingAdapter {
                 if (lookup.refusalMessage) {
                     return { agent: null, refusalMessage: lookup.refusalMessage };
                 }
-                if (lookup.matchedHiddenAgent && this.isExplicitMentionRequest(msg, mentions[0])) {
-                    // Thread was started with a restricted agent the replying user cannot view;
-                    // refuse without leaking the agent's name.
-                    return {
-                        agent: null,
-                        refusalMessage: "You don't have permission to interact with the agent in this thread.",
-                    };
-                }
+                // Unviewable mention (matchedHiddenAgent) is skipped as no match so thread
+                // replies cannot act as an existence oracle for hidden agents that never ran.
             }
         }
 

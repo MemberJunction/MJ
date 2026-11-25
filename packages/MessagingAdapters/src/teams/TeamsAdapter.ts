@@ -104,11 +104,14 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         const conversationRef = TurnContext.getConversationReference(activity);
         this.storeConversationRef(activity.conversation?.id ?? '', conversationRef);
 
-        // Extract sender email from activity only when the activity's Entra tenant is trusted
-        // (for non-Teams channels like Web Chat/Emulator, tenant checks do not apply).
-        const isTeamsActivity = activity.channelId === 'msteams' || this.extractActivityTenantId(activity) != null;
-        const tenantTrusted = !isTeamsActivity || this.checkActivityTenant(turnContext).allowed;
-        const senderEmail = tenantTrusted
+        // Extract sender email only for tenant-verified Microsoft Teams activities.
+        // Non-Teams Bot Framework channels (Web Chat, Emulator, Direct Line) do not carry
+        // an Entra-verified tenant and may pass client-controlled `from.email`, so they are
+        // not trusted for email-to-user identity mapping (dev/demo Web Chat can opt in via
+        // AllowFallbackUser: true).
+        const trustActivityEmail =
+            activity.channelId === 'msteams' && this.checkActivityTenant(turnContext).allowed;
+        const senderEmail = trustActivityEmail
             ? ((activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined)
             : undefined;
 
@@ -136,12 +139,24 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         };
     }
 
+    /** Whether at least one trusted Entra tenant ID is configured for Teams tenant verification. */
+    public get HasConfiguredTenants(): boolean {
+        return this.getAllowedTenantIds().Size > 0;
+    }
+
     /**
-     * Initialize: set the bot ID from config or environment.
+     * Initialize: set the bot ID from config or environment and warn if no trusted Entra
+     * tenant ID is configured (since `msteams` activities fail closed without one).
      */
     protected async onInitialize(): Promise<void> {
         const settings = this.settings;
         this.botID = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
+        if (!this.HasConfiguredTenants) {
+            LogError(
+                'TeamsAdapter: neither MicrosoftAppTenantId (MICROSOFT_APP_TENANT_ID) nor AllowedTenantIDs is configured — ' +
+                'all Microsoft Teams messages will fail closed until at least one trusted Entra tenant ID is configured.'
+            );
+        }
     }
 
     protected getBotUserId(): string {
@@ -569,9 +584,9 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             const messageText = `@${formResponse}`;
 
             // Build a synthetic IncomingMessage and route through the adapter
-            const isTeamsActivity = activity.channelId === 'msteams' || this.extractActivityTenantId(activity) != null;
-            const tenantTrusted = !isTeamsActivity || this.checkActivityTenant(turnContext).allowed;
-            const senderEmail = tenantTrusted
+            const trustActivityEmail =
+                activity.channelId === 'msteams' && this.checkActivityTenant(turnContext).allowed;
+            const senderEmail = trustActivityEmail
                 ? ((activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined)
                 : undefined;
 

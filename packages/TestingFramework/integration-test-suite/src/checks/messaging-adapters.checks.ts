@@ -133,9 +133,10 @@ class InProcessMessagingAdapter extends BaseMessagingAdapter {
     public ResolveAgentForTest(
         message: IncomingMessage,
         user: UserInfo,
-        threadHistory: IncomingMessage[] = []
+        threadHistory: IncomingMessage[] = [],
+        rememberedAgentId?: string
     ): Promise<ResolveAgentResult> {
-        return this.resolveAgent(message, user, threadHistory);
+        return this.resolveAgent(message, user, threadHistory, rememberedAgentId);
     }
 }
 
@@ -441,27 +442,47 @@ async function checkMa6ThreadAffinityEnforcesReplyingUserPermissions(ctx: Integr
         }),
     ];
 
-    // Admin continuing thread routes to HiddenAgent
+    // Admin continuing thread routes to HiddenAgent (both via history and rememberedAgentId)
     const adminReply = await adapter.ResolveAgentForTest(
         buildMessage({ ThreadID: 'thread-root-1', Text: 'follow up', MentionedAgentNames: [] }),
         f.AdminUser,
-        history
+        history,
+        f.HiddenAgent.ID
     );
     Assert(
         adminReply.agent != null && UUIDsEqual(adminReply.agent.ID, f.HiddenAgent.ID),
         'MA6: admin user should retain thread affinity to HiddenAgent'
     );
 
-    // Regular user replying in same thread is refused without leaking HiddenAgent's name
+    // Regular user replying in a thread actually served by HiddenAgent (rememberedAgentId set)
+    // is refused without leaking HiddenAgent's name.
     const regReply = await adapter.ResolveAgentForTest(
         buildMessage({ ThreadID: 'thread-root-1', Text: 'me too', MentionedAgentNames: [] }),
         f.RegularUser,
-        history
+        history,
+        f.HiddenAgent.ID
     );
     AssertEqual(regReply.agent, null, 'MA6: regular user replying in HiddenAgent thread must be refused');
     Assert(
         !(regReply.refusalMessage ?? '').includes(f.HiddenAgent.Name!),
         'MA6: refusal for unviewable thread agent must not leak its name'
+    );
+
+    // Regular user replying in a thread where HiddenAgent never actually ran (no rememberedAgentId)
+    // falls back silently to DefaultAgent without confirming HiddenAgent exists.
+    const regUnverifiedReply = await adapter.ResolveAgentForTest(
+        buildMessage({ ThreadID: 'thread-root-1', Text: 'me too', MentionedAgentNames: [] }),
+        f.RegularUser,
+        history
+    );
+    Assert(
+        regUnverifiedReply.agent != null && UUIDsEqual(regUnverifiedReply.agent.ID, f.DefaultAgent.ID),
+        'MA6: unverified history mention of HiddenAgent must fall back silently to DefaultAgent'
+    );
+    AssertEqual(
+        regUnverifiedReply.refusalMessage,
+        undefined,
+        'MA6: unverified history mention of HiddenAgent must not emit a refusal confirming existence'
     );
 }
 

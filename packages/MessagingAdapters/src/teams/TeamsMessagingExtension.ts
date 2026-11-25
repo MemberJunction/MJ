@@ -225,7 +225,8 @@ export class TeamsMessagingExtension extends BaseServerExtension {
             Name: 'TeamsMessagingExtension',
             Details: {
                 adapterInitialized: this.adapter !== null,
-                cloudAdapterInitialized: this.cloudAdapterInstance !== null
+                cloudAdapterInitialized: this.cloudAdapterInstance !== null,
+                tenantConfigured: this.adapter?.HasConfiguredTenants ?? false,
             }
         };
     }
