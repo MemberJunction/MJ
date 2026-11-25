@@ -5565,9 +5565,6 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.3.0-edge.1
         version: link:../shared
-      '@memberjunction/ng-tours':
-        specifier: 6.3.0-edge.1
-        version: link:../../Generic/tours
       '@memberjunction/ng-workspace-initializer':
         specifier: 6.3.0-edge.1
         version: link:../workspace-initializer

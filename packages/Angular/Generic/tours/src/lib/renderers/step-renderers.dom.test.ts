@@ -8,15 +8,15 @@ import type {
 } from '@memberjunction/tours-runtime';
 import axe from 'axe-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OverlayTourPresenterComponent } from '../lib/presenters/overlay-tour-presenter.component';
-import { ActionStepRenderer } from '../lib/renderers/action-step-renderer.component';
-import { BeaconStepRenderer } from '../lib/renderers/beacon-step-renderer.component';
-import { ChoiceStepRenderer } from '../lib/renderers/choice-step-renderer.component';
-import { MediaStepRenderer } from '../lib/renderers/chunks/media-step-renderer.component';
-import { EmbeddedComponentStepRenderer } from '../lib/renderers/chunks/embedded-component-step-renderer.component';
-import { ModalStepRenderer } from '../lib/renderers/modal-step-renderer.component';
-import { SpotlightStepRenderer } from '../lib/renderers/spotlight-step-renderer.component';
-import { CreateTourShellElementClass } from '../shell/shell-element';
+import { OverlayTourPresenterComponent } from '../presenters/overlay-tour-presenter.component';
+import { ActionStepRenderer } from './action-step-renderer.component';
+import { BeaconStepRenderer } from './beacon-step-renderer.component';
+import { ChoiceStepRenderer } from './choice-step-renderer.component';
+import { MediaStepRenderer } from './chunks/media-step-renderer.component';
+import { EmbeddedComponentStepRenderer } from './chunks/embedded-component-step-renderer.component';
+import { ModalStepRenderer } from './modal-step-renderer.component';
+import { SpotlightStepRenderer } from './spotlight-step-renderer.component';
+import { CreateTourShellElementClass } from '../../shell/shell-element';
 
 function makeSessionView(step: TourStepView): TourSessionView {
   return {

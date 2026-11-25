@@ -5,9 +5,9 @@ import {
   UnregisterFormAnchorContainer,
 } from '@memberjunction/ng-base-forms';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { AnchorRegistry } from '../lib/anchors/anchor-registry';
-import { DomTourAnchorBridge } from '../lib/anchors/dom-tour-anchor-bridge';
-import { MJTourAnchorDirective } from '../lib/anchors/mj-tour-anchor.directive';
+import { AnchorRegistry } from './anchor-registry';
+import { DomTourAnchorBridge } from './dom-tour-anchor-bridge';
+import { MJTourAnchorDirective } from './mj-tour-anchor.directive';
 
 @Component({
   standalone: true,

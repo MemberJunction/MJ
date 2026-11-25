@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PositionAnchoredOverlay } from '../lib/overlay/positioning';
+import { PositionAnchoredOverlay } from './positioning';
 
 function makeRect(left: number, top: number, width: number, height: number): DOMRect {
   return {

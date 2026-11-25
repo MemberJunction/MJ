@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { SiblingInertManager } from '../lib/overlay/sibling-inert';
+import { SiblingInertManager } from './sibling-inert';
 
 describe('SiblingInertManager', () => {
   afterEach(() => {
