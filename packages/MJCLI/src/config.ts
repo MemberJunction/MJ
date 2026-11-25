@@ -387,7 +387,10 @@ export const GetSkywayConfig = async (
     Port: mjConfig.dbPort,
     Database: mjConfig.dbDatabase,
     User: mjConfig.codeGenLogin,
-    Password: pgSecurity?.Password ?? mjConfig.codeGenPassword,
+    Password: mjConfig.codeGenPassword,
+    // A token login: Skyway asks the source for each new connection, so a long run never presents
+    // a token that expired after the first connection opened.
+    ...(pgSecurity?.PasswordSource ? { PasswordProvider: pgSecurity.PasswordSource } : {}),
     Options: {
       Encrypt: mjConfig.dbEncrypt,
       TrustServerCertificate: mjConfig.dbTrustServerCertificate,
@@ -452,7 +455,6 @@ async function createSkywayProvider(dialect: DatabaseDialect, dbConfig: SkywayCo
 /** The result of {@link ResolvePostgresMigrationSecurity}. */
 export interface PostgresMigrationSecurity {
   SSL?: Record<string, unknown>;
-  Password?: string;
   PasswordSource?: () => Promise<string>;
 }
 
@@ -460,9 +462,8 @@ export interface PostgresMigrationSecurity {
  * TLS and password for a PostgreSQL migration run, from the shared `PG_SSL_*` and `PG_AUTH_MODE`
  * settings every MJ PostgreSQL client follows.
  *
- * For a token login, `PasswordSource` gives a token each time it is called; pass it to every client
- * that accepts a function, so each connection asks for its own. `Password` is one token fetched now,
- * for Skyway, whose password option is a string.
+ * For a token login, `PasswordSource` gives a token each time it is called. Pass it to every client
+ * (Skyway as `PasswordProvider`, node-postgres as `password`), so each connection asks for its own.
  */
 export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Promise<PostgresMigrationSecurity> {
   const ssl: PgSslConfig = BuildPgSslConfig(mjConfig.dbHost);
@@ -476,5 +477,5 @@ export async function ResolvePostgresMigrationSecurity(mjConfig: MJConfig): Prom
   // Skyway types its SSL option as a plain record and treats `true` as "TLS, unverified", so pass
   // the object as a record and leave the option out for plain TCP.
   const sslRecord: Record<string, unknown> | undefined = typeof ssl === 'object' && ssl !== null ? Object.fromEntries(Object.entries(ssl)) : undefined;
-  return source ? { SSL: sslRecord, Password: await source(), PasswordSource: source } : { SSL: sslRecord };
+  return source ? { SSL: sslRecord, PasswordSource: source } : { SSL: sslRecord };
 }
