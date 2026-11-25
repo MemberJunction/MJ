@@ -1,5 +1,7 @@
 # @memberjunction/dynamic-packages
 
+## 6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ## 6.3.0-edge.0

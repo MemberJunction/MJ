@@ -20,6 +20,13 @@ import {
 } from '../lib/utils/agent-turn-routing';
 import type { AgentReplyMode, AgentTurnRoute } from '../lib/models/agent-turn.model';
 
+/**
+ * Wall-clock ceiling for the pathological-input check. It guards against catastrophic or polynomial
+ * backtracking (seconds), not machine speed: tight millisecond bounds fail on shared CI runners
+ * (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 const MANAGER = 'AAAAAAAA-0000-0000-0000-000000000001';
 const TAGGED = 'AAAAAAAA-0000-0000-0000-000000000002';
 const LAST = 'AAAAAAAA-0000-0000-0000-000000000003';
@@ -332,6 +339,6 @@ describe('FindContinuityAgentMessage and MessageMentionsAgent — handoff contin
         const elapsedMs = performance.now() - start;
 
         expect(mentioned).toBe(false);
-        expect(elapsedMs).toBeLessThan(200);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     });
 });

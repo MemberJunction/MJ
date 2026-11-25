@@ -27,6 +27,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=PrimaryScore"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.127Z",
+            "checksum": "2c3f758bcc3e64acdcf28bb8b8c63e99189932412812de6bf11e122ccb81c2ab"
           }
         },
         {
@@ -40,6 +44,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=TrackedMetrics"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.153Z",
+            "checksum": "014bf938ddba20d9c334c0438dd9bc375af5dfe61a598fc61e7b99e52e10aa31"
           }
         },
         {
@@ -53,6 +61,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=Calibration"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.170Z",
+            "checksum": "dc5222374822039aff42801ac4980ba2e039af8598ba7cc11ef61b7e678a2843"
           }
         },
         {
@@ -66,6 +78,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=DriftLook"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.186Z",
+            "checksum": "43e64c6c71e8523d7c43f02488098db0eb39e0790af14d0875a875ff15faffd1"
           }
         },
         {
@@ -79,6 +95,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=DriftAlarms"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.201Z",
+            "checksum": "43e64c6c71e8523d7c43f02488098db0eb39e0790af14d0875a875ff15faffd1"
           }
         },
         {
@@ -92,6 +112,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=Parity"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.212Z",
+            "checksum": "b48eacad46987df320d199f670ff861fc91bf854b7e0afdb54765a07d8a229ae"
           }
         },
         {
@@ -105,6 +129,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=TriggersFired"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.227Z",
+            "checksum": "da28ec5b3e2a7e4f29d135f96e6efa45503590d005469d7ba2c7a90267f7e080"
           }
         },
         {
@@ -118,6 +146,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=ChallengerResult"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.241Z",
+            "checksum": "e3d11a54101f91fb3ceff89b93cce783e30af6072c96f765b714851a2909bf52"
           }
         },
         {
@@ -131,6 +163,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: ML Monitoring Results&Name=RollbackCheck"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.255Z",
+            "checksum": "3f8633438beb506340fc39e3f1caf755f0b74a2688fb613a68dedc46899f9f92"
           }
         }
       ]

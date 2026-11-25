@@ -243,6 +243,10 @@
           },
           "primaryKey": {
             "ID": "BCE306FF-6524-4A19-8906-1239A25901D3"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:57.401Z",
+            "checksum": "fcbb998b822c07af92018c72b7d97f8bfd3467b8bd6fa9d860e32723380ebc1a"
           }
         },
         {
@@ -257,6 +261,10 @@
           },
           "primaryKey": {
             "ID": "B1529260-2FB2-4341-A85A-DE21E0AC4FC4"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:57.422Z",
+            "checksum": "76b6c94dfaa04b348ee7e05b521a9f289f6a20e5347f324260229d014f2119e9"
           }
         }
       ],
@@ -272,8 +280,8 @@
             "ID": "163CB422-441F-47F9-80B5-4588E3881351"
           },
           "sync": {
-            "lastModified": "2026-11-10T23:41:30.024Z",
-            "checksum": "6a8983745c956e556923796afad1654fb8ee56fc5c61020f1dc35dd61696faec"
+            "lastModified": "2026-11-24T20:26:57.448Z",
+            "checksum": "72f487b610214399cf2c0f62bc1579fd91478d7bd31b85981a3a051cc228934d"
           }
         },
         {
@@ -330,6 +338,10 @@
           },
           "primaryKey": {
             "ID": "1005A06E-94EB-4B47-AC93-E61AD20723DF"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:57.463Z",
+            "checksum": "1e76b3fc0211c3bf428c5dd1e63e6eca23d8e1003fedd56adf37cf4f25527bca"
           }
         },
         {
@@ -341,6 +353,10 @@
           },
           "primaryKey": {
             "ID": "01F310E0-85D0-41B4-B1B2-5D28980C4DA7"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:57.477Z",
+            "checksum": "029a13237cf0d4726a408a7ac45048f202a59a34de2d35e354085a6270eb9ced"
           }
         }
       ]
@@ -349,8 +365,8 @@
       "ID": "A39B5FF6-A7DD-4851-9172-32713A601273"
     },
     "sync": {
-      "lastModified": "2026-11-10T23:41:29.708Z",
-      "checksum": "6e02b6509379d49a71c3694d9c72b6d4863cb2e2a7126852ccc2e9d834d6deb4"
+      "lastModified": "2026-11-24T20:26:57.376Z",
+      "checksum": "5a666d5b86b361fe6e226f7b4ff24a1bbb203936430c94465d50081104899d47"
     }
   }
 ]

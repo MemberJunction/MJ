@@ -1,5 +1,11 @@
 # @memberjunction/work-queue-aws
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- @memberjunction/work-queue-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

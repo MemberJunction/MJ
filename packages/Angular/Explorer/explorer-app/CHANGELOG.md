@@ -1,5 +1,100 @@
 # @memberjunction/ng-explorer-app
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- a87fe90: The artifact viewer header now has one Export menu in place of the PDF-only button. A viewer lists its formats with `GetExportOptions()` and runs the chosen one with `RunExport(key)`. By default these give the portrait and landscape PDF entries when `SupportsPDFExport` is true, so the Docs and Component viewers export as before. An option with a `DisabledReason` shows greyed out, with the reason in place of its description, and does not run. The menu is an `mj-menu`: the arrow keys move between options, and an unavailable option can still take focus, so a screen reader reads its reason.
+
+  Query (data) artifacts now export their results as Excel, CSV or JSON, and their query as a `.sql` file. A results export runs the query again without paging, up to 100,000 rows, through the grid's own export. A warning shows when that limit is hit or the query fails and only the rows on screen were exported. The same menu saves the query (save, update, or save as new), saves the records as a list, opens the saved query as a live Excel workbook when the server has the Excel add-in, and creates a Live Sheet (a Sheets artifact with a live table on the saved query). Excel (live) and Live Sheet need a saved query that matches the version on screen. The data toolbar no longer has the Save Query, Update Query and Save as List buttons; when the SQL has changed it shows an Open Query button next to its badge.
+
+  More viewers now list their exports in the same menu, through the export code they already had. Docs offer Word, Markdown and PDF. Sheets offer the workbook as Excel and the active sheet as CSV. Slides offer PowerPoint and a printable PDF. PDF, Word, Excel file, image, audio and video artifacts offer their original file. SVG, HTML, JSON and code artifacts save their source with the matching extension. The base viewer has `FILE_EXPORT_KEY` and protected `FileExportOption`, `OriginalFileName`, `ExportFileName` and `DownloadTextFile` helpers for this. The code viewer now detects JavaScript content as JavaScript; before, it showed it as Java. The Word (.docx) export of a Docs artifact now works in the browser; before, it failed with "nodebuffer is not supported by this platform".
+
+  `NavigationRequest` has optional `ArtifactID` and `ArtifactName`. The Conversations resource, the artifact tab, the dashboard chat pane and the chat overlay open that artifact in its own tab.
+
+  **Import change:** `LiveSheetClientToolHelper` and its helpers (`CreateLiveSheetHelperForProvider` and the other exports of `live-sheet-client-tool.helper`) moved from `@memberjunction/ng-dashboards` to `@memberjunction/ng-artifacts`. `@memberjunction/ng-dashboards` no longer exports them, so code outside this repository that imports them from `@memberjunction/ng-dashboards` must import them from `@memberjunction/ng-artifacts`. `@memberjunction/ng-query-viewer` now exports its Open in Excel parameter helpers (`HasRequiredParameterValues`, `ToExcelParameterValues`, `CanOpenQueryInExcel`).
+
+- 798fe51: Relocate `@memberjunction/ng-auth-services` from `packages/Angular/Explorer/auth-services` to `packages/Angular/Generic/auth-services` and set `mjUILayer` to `widgets` so non-Explorer Angular applications can reuse authentication services and login UI without Explorer coupling.
+- 81a62ec: Adds `@memberjunction/ng-public-host`, which serves public pages from Open Apps at `/p/<slug>` before sign-in, and `StartExplorer()` in the new `@memberjunction/ng-explorer-app/bootstrap` entry. A host's `main.ts` now only calls `StartExplorer()`: a path under `/p/` starts the public host, which loads only the page, and every other path starts Explorer as before. Start-up changes now reach a host with a package update. For a wrong address the public host shows the nearest error page an installed app ships, or its own. Public pages extend `BasePublicPage` and use `PublicPageContext` for the brand, MJAPI URLs, the sign-in link and `ShowNotFound()`. Explorer's service worker no longer answers `/p/` addresses, so the web host always receives them and can serve each page's own HTML file.
+- 66258b1: Implement UI Phase 0 Workstream 4 contract fixes: retoken the default MJ font family to Montserrat with a `--mj-font-family-display` seed/token (and Theme Studio heading-font control + seamless normalization for saved themes), bundle Font Awesome Free 6.7.2 from npm in `explorer-app`, remove hardcoded `Ubuntu`/`Inter` font stacks from Angular component stylesheets, and strip hardcoded hex fallbacks and the duplicated TS stylesheet from `card-grid`.
+
+  Note for standalone hosts (outside `explorer-app`) that render `<mj-card-grid>`: add `@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';` to your global stylesheet alongside the other `@memberjunction/ng-ui-components` global styles.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [a87fe90]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [346cdf3]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [7690d8d]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [798fe51]
+- Updated dependencies [3d5adab]
+- Updated dependencies [81a62ec]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [df69cd5]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [ef8c489]
+- Updated dependencies [49a5866]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/ng-conversations@6.3.0-edge.2
+  - @memberjunction/ng-explorer-core@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ng-bootstrap@6.3.0-edge.2
+  - @memberjunction/ng-shared@6.3.0-edge.2
+  - @memberjunction/ng-auth-services@6.3.0-edge.2
+  - @memberjunction/ng-workspace-initializer@6.3.0-edge.2
+  - @memberjunction/ng-public-host@6.3.0-edge.2
+  - @memberjunction/ng-explorer-service-worker@6.3.0-edge.2
+  - @memberjunction/theme-engine@6.3.0-edge.2
+  - @memberjunction/ng-base-application@6.3.0-edge.2
+  - @memberjunction/ai-agent-client@6.3.0-edge.2
+  - @memberjunction/ng-realtime-channels@6.3.0-edge.2
+  - @memberjunction/ng-base-types@6.3.0-edge.2
+  - @memberjunction/ng-notifications@6.3.0-edge.2
+  - @memberjunction/ng-feedback@6.3.0-edge.2
+  - @memberjunction/ng-agent-client@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

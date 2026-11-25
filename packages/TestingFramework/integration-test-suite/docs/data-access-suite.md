@@ -10,7 +10,7 @@ This document describes the **shipped, running** data-access family of MemberJun
 | `runquery-params` | IT34 - RunQuery Parameter Permutation | 40 | client | 10 (QP1–QP10) | none — executes the shipped catalog |
 | `runquery-features` | IT35 - RunQuery Feature Surface | 20 | server (in-process) | 10 (QF1–QF10) | self-cleaning Query Category + paging Query |
 | `view-execution` | IT25 - View Execution (client-first) | 33 | client | 9 (V1–V4, V9–V13) | none — discovered universe, read-only |
-| `lists` | IT20 - Lists Keyset Pagination | 14 | server (in-process) | 3 (LS1–LS3) | self-cleaning List + 25 List Details |
+| `lists` | IT20 - Lists Keyset Pagination | 14 | server (in-process) | 4 (LS1–LS4) | self-cleaning List + 25 List Details |
 
 Server-transport members (IT20, IT35) are sequenced before the client-transport members (IT25, IT31–IT34), which sit at the end of the deterministic suite — the suite's client-members-last ordering convention.
 
@@ -305,7 +305,7 @@ All 9 deterministic.
 
 ---
 
-## 7. Bundle `lists` (LS1–LS3) — Lists keyset pagination substrate
+## 7. Bundle `lists` (LS1–LS4) — Lists keyset pagination substrate and list delete
 
 **File:** `src/checks/lists.checks.ts`
 
@@ -323,7 +323,7 @@ All 9 deterministic.
 
 ### Tier
 
-All 3 deterministic (no model calls, self-cleaning writes; not `RequiresMutation`-gated — the bundle's writes are its own fixtures).
+All 4 deterministic (no model calls, self-cleaning writes; not `RequiresMutation`-gated — the bundle's writes are its own fixtures).
 
 ### Per-check inventory
 
@@ -332,6 +332,7 @@ All 3 deterministic (no model calls, self-cleaning writes; not `RequiresMutation
 | `lists.LS1` | Full keyset iteration | Draining from scratch yields all 25 members exactly once, in exactly 3 pages (10/10/5); a runaway guard caps at 10 batches | seek predicate skipping/repeating members; cursor not advancing |
 | `lists.LS2` | Resume from persisted cursor | First batch of 10, then a **fresh `ListSource` instance** resumed from the persisted keyset cursor: combined set is all 25 with no overlap or gaps | resume-after-restart breaking — the exact contract long-running Record Processes rely on |
 | `lists.LS3` | Legacy Offset cursor | `{Offset: 20}` resumes correctly (5-row tail), the returned cursor **is keyset** (`NextCursor.Key` set), and the source reports exhausted | pre-v5.48 persisted cursors being dropped or mis-positioned after the upgrade |
+| `lists.LS4` | Delete a list with members | A throwaway list with 3 members is deleted with one `list.Delete()`; the delete succeeds and a `BypassCache` count of its `MJ: List Details` rows is 0 | `FK_ListDetail_List` without `ON DELETE CASCADE` — the delete is refused, or members are left behind |
 
 ### Known pinned gaps and skips
 

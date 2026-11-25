@@ -62,6 +62,8 @@ vi.mock('../custom/list-refresh/ListRefreshRoutine', () => ({
     },
 }));
 
+import { LocalCacheManager } from '@memberjunction/core';
+
 import { MJListEntityServer } from '../custom/MJListEntityServer.server';
 
 type TestList = MJListEntityServer & { dirty: Set<string>; History: Array<{ Success: boolean; Message: string }>; saveSucceeds: boolean; deleted: boolean };
@@ -181,5 +183,17 @@ describe('MJListEntityServer — validation and delete', () => {
         const list = makeList({ RefreshRoutineID: 'routine-1', ContextCurrentUser: { ID: 'other-1' } });
         expect(await list.Delete()).toBe(false);
         expect(mockDeleteRoutine).not.toHaveBeenCalled();
+    });
+
+    it('clears the cached List Details results after the list is deleted, and not after a refused delete', async () => {
+        const invalidate = vi.spyOn(LocalCacheManager.Instance, 'InvalidateEntityCaches').mockResolvedValue(undefined);
+
+        const refused = makeList({ ContextCurrentUser: { ID: 'someone-else' } });
+        expect(await refused.Delete()).toBe(false);
+        expect(invalidate).not.toHaveBeenCalled();
+
+        const list = makeList();
+        expect(await list.Delete()).toBe(true);
+        expect(invalidate).toHaveBeenCalledWith('MJ: List Details', list.ProviderToUse);
     });
 });

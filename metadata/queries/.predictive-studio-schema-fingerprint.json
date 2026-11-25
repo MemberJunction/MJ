@@ -15,6 +15,10 @@
     },
     "primaryKey": {
       "ID": "5C010A31-CBCE-4E47-B876-0A9A6F171548"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:49.640Z",
+      "checksum": "4919ff313a171e5f526ce31288fc385f7bd27d60fc7f290de1950b907bee2df0"
     }
   }
 ]
