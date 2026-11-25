@@ -209,7 +209,7 @@ Guided Tours are **directed acyclic graphs**, not rigid linear arrays. Any tour 
 > `CompileTourGraph` (`packages/Tours/Runtime/src/tour-graph-compiler.ts`) automatically synthesizes a sequential edge `Steps[i] -> Steps[i + 1]` **for any step that has zero explicit outgoing `MJ: Tour Step Paths`**.
 >
 > Therefore, whenever a `Choice` step fans out to multiple branch steps (e.g., Step 4 Branch A and Step 5 Branch B) that converge onto Step 6 Summary:
-> 1. Give the `Choice` step explicit outgoing `MJ: Tour Step Paths` to **each** branch (`Condition: "Choice:<optionKey>"`, `Priority: 100`, `IsDefault: false`) plus a fallback default edge (`Condition: null`, `Priority: 0`, `IsDefault: true`).
+> 1. Give the `Choice` step explicit outgoing `MJ: Tour Step Paths` to **each** branch using a `CompositeFilter` JSON object (`"Condition": { "logic": "and", "filters": [{ "field": "lastChoiceKey", "operator": "eq", "value": "<optionKey>" }] }`, `"Priority": 100`, `"IsDefault": false`) plus a fallback default edge (`"Condition": null`, `"Priority": 0`, `"IsDefault": true`). Note that `MJ: Tour Step Paths.Condition` has `ExtendedType = 'JSON'`, so `MetadataSync` validates it as JSON at push time.
 > 2. **Give every non-final branch step (e.g. Step 4 Branch A) an explicit outgoing `MJ: Tour Step Paths` row pointing directly to Step 6 Summary (`Condition: null, IsDefault: true, Priority: 10`)** — otherwise Step 4 would have zero outgoing paths and fall through sequentially into Step 5 Branch B!
 
 ### Real Shipped DAG Examples Across MJ & OpenApps
