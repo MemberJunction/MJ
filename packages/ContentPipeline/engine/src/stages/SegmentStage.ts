@@ -8,9 +8,10 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { KnowledgeHubMetadataEngine, MJContentFileTypeEntity, MJContentSourceEntity, MJContentTypeEntity } from '@memberjunction/core-entities';
+import { IsPlainObject, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import {
+    BaseContentCleaner,
     ContentCleaningOptions,
     ContentCleaningResult,
     ContentPage,
@@ -39,7 +40,8 @@ import {
     WorkingRecordEntity,
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
-import { ContentSourceConfigurationResolver } from '../ContentSourceConfigurationResolver.js';
+import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from '../ContentSourceConfigurationResolver.js';
+import { FileTypeKey } from '../DetectionCatalog.js';
 
 /** The registered name. */
 export const SEGMENT_STAGE = 'Segment';
@@ -179,8 +181,9 @@ export class SegmentStage extends BasePipelineStage {
         const isCaption = !isHtmlExtractor && (isCaptionMime || LooksLikeCaptionText(text));
         const isHtml = isHtmlExtractor || (!isCaption && mimeTypeHint === 'text/html');
         const mimeType = isHtml ? 'text/html' : isCaption ? (mimeTypeHint ?? 'text/vtt') : 'text/plain';
-        // An unresolvable key degrades to the plain-text cleaner, and the result names the key that actually ran.
-        const cleaner = ResolveContentCleaner(resolved.CleanerKey ?? SuggestCleanerKey(mimeType));
+        // The resolved key is registered (unregistered ones were skipped); the built-in choice for the text backs it
+        // up, so markup is never cleaned as plain text. The result names the key that actually ran.
+        const cleaner = ResolveContentCleaner(resolved.CleanerKey ?? undefined, SuggestCleanerKey(mimeType));
         const result = cleaner.Clean({ Content: text, MimeType: mimeType, Options: resolved.CleaningOptions });
         if (!result.Success) {
             context.Log.Warning(`cleaning with '${result.CleanerKey}' failed, segmenting the text uncleaned: ${result.ErrorMessage ?? 'unknown reason'}`);
@@ -308,7 +311,7 @@ export class SegmentStage extends BasePipelineStage {
     /**
      * Resolves segmentation and cleaning settings in canonical precedence order:
      * Item override → Run Configuration → Content Source → Content Source Type / Content Type → Default.
-     * (No item-level cleaner override exists: a cleaner is chosen for a source's pages, not one page.)
+     * The cleaner is chosen from the item's detected file type, by {@link cleanerCandidates}.
      */
     private async resolveSegmentation(record: WorkingRecord, context: StageContext): Promise<ResolvedSegmentation> {
         const itemColumns = record.GetExtension<Record<string, unknown>>('Pipeline', 'columns');
@@ -317,7 +320,6 @@ export class SegmentStage extends BasePipelineStage {
             : null;
         const itemOverride = fromColumns ?? record.GetExtension<string>('Pipeline', 'segmenterKeyOverride');
         const runKey = nonEmpty(context.Configuration.SegmenterKey);
-        const runCleanerKey = nonEmpty(context.Configuration.CleanerKey);
         const runCleaningOptions = (context.Configuration.CleaningOptions as ContentCleaningOptions | undefined) ?? {};
         const contentSourceID = record.GetExtension<string>('Pipeline', 'contentSourceID');
         if (!contentSourceID) {
@@ -325,7 +327,7 @@ export class SegmentStage extends BasePipelineStage {
                 SegmenterKey: itemOverride ?? runKey,
                 Confidence: ResolveConfidence(context.Configuration),
                 Options: (context.Configuration.SegmentationOptions as SegmentationOptions) ?? {},
-                CleanerKey: runCleanerKey,
+                CleanerKey: this.firstRegisteredCleaner(cleanerCandidates(recordFileType(record), context.Configuration), context),
                 CleaningOptions: runCleaningOptions,
             };
         }
@@ -349,14 +351,11 @@ export class SegmentStage extends BasePipelineStage {
         const typeKey =
             contentType?.SegmenterKey ??
             (typeof resolvedConfig?.TypeConfiguration.SegmenterKey === 'string' ? resolvedConfig.TypeConfiguration.SegmenterKey : null);
-        const sourceCleanerKey =
-            nonEmpty(source?.CleanerKey) ??
-            nonEmpty(resolvedConfig?.Configuration.CleanerKey) ??
-            nonEmpty(resolvedConfig?.Settings.CleanerKey);
-        const typeCleanerKey = nonEmpty(contentType?.CleanerKey) ?? nonEmpty(resolvedConfig?.TypeConfiguration.CleanerKey);
         const contentTypeConfig = readTypeConfiguration(contentType);
+        const fileType = recordFileType(record, knowledge.ContentFileTypes ?? []);
+        const candidates = cleanerCandidates(fileType, context.Configuration, { source, contentType, contentTypeConfig, resolvedConfig });
         return {
-            CleanerKey: runCleanerKey ?? sourceCleanerKey ?? typeCleanerKey,
+            CleanerKey: this.firstRegisteredCleaner(candidates, context),
             CleaningOptions: {
                 ...(contentTypeConfig.CleaningOptions as Record<string, unknown> | undefined),
                 ...(resolvedConfig?.TypeConfiguration.CleaningOptions as Record<string, unknown> | undefined),
@@ -375,11 +374,143 @@ export class SegmentStage extends BasePipelineStage {
             },
         };
     }
+
+    /** Unregistered cleaner keys already warned about, so a misconfigured source warns once, not once per item. */
+    private readonly warnedCleanerKeys = new Set<string>();
+
+    /**
+     * The first candidate naming a registered cleaner, or `null` for the built-in choice. A key nothing registered
+     * (a typo, a plugin that did not load) is skipped with a warning, so the steps below it still apply, as
+     * Extract skips an extractor that is not registered.
+     */
+    private firstRegisteredCleaner(candidates: readonly CleanerCandidate[], context: StageContext): string | null {
+        for (const candidate of candidates) {
+            if (BaseContentCleaner.Resolve(candidate.Key)) {
+                return candidate.Key;
+            }
+            if (!this.warnedCleanerKeys.has(candidate.Key)) {
+                this.warnedCleanerKeys.add(candidate.Key);
+                context.Log.Warning(`cleaner '${candidate.Key}' (from ${candidate.From}) is not registered; skipping it for the next choice`);
+            }
+        }
+        return null;
+    }
 }
 
 /** A trimmed non-empty string, or `null`. */
 function nonEmpty(value: unknown): string | null {
     return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+/**
+ * The record's file type as `Cleaners` maps are keyed: the pipeline's key for a Content File Type
+ * ({@link FileTypeKey}: its extension without the dot, else its name, lowercased), which is what Extract records.
+ * An item loaded from the database carries its Content File Type's NAME instead. That equals the extension for
+ * the built-in types (`HTML`), but need not for a custom one (`Word Document` for `.docx`), so the value is looked
+ * up among the Content File Types, by name and then by extension, and turned into the same key.
+ */
+function recordFileType(record: WorkingRecord, fileTypes: readonly MJContentFileTypeEntity[] = []): string | null {
+    const value = nonEmpty(record.Get('FileType'));
+    if (!value) {
+        return null;
+    }
+    const byName = value.toLowerCase();
+    const normalized = normalizeFileType(value);
+    const row =
+        fileTypes.find((t) => nonEmpty(t.Name)?.toLowerCase() === byName) ??
+        fileTypes.find((t) => t.FileExtension != null && normalizeFileType(t.FileExtension) === normalized);
+    return (row ? FileTypeKey(row) : null) ?? normalized;
+}
+
+/** The source-level settings a cleaner is chosen from, when the item has a source. */
+interface SourceCleanerSettings {
+    source: MJContentSourceEntity | undefined;
+    contentType: MJContentTypeEntity | undefined;
+    contentTypeConfig: Record<string, unknown>;
+    resolvedConfig: ResolvedSourceConfiguration | null;
+}
+
+/** A cleaner key one step of the order names, and where it came from (for the warning when it is not registered). */
+interface CleanerCandidate {
+    Key: string;
+    From: string;
+}
+
+/**
+ * The cleaners configured for one item, best first. Segment runs the first one that is registered, and with
+ * none, its built-in choice (`Html` for markup, `PlainText` otherwise).
+ *
+ * The cleaner follows the item's detected file type. A `Cleaners` map in the configuration JSON
+ * (`{ "html": "Html", "md": "PlainText" }`, keyed by file type) names the cleaner for a file type:
+ *
+ *   1. the run: its entry for the file type, then its `CleanerKey` (a run is an operator's instruction,
+ *      so its plain key still overrides everything below);
+ *   2. the Content Source's entry for the file type (its `Configuration`, then its source-specific settings):
+ *      this source cleans this kind of file its own way;
+ *   3. the Content Type's entry for the file type, then the Content Source Type's: the standard cleaner
+ *      for that kind of file;
+ *   4. the source's `CleanerKey` (column, `Configuration`, settings): its default, for a file type nothing
+ *      maps or an item whose type was not detected;
+ *   5. the content type's `CleanerKey` (column, then its `Configuration`), then the source type's.
+ *
+ * At every level the content type comes before the source type, for the map and the plain key alike.
+ * (Unlike Extract, where a source's `ExtractorKey` beats a content type's per-file-type entry: a source's
+ * plain cleaner key is a default, not an override. Still no per-item override: the choice follows what
+ * the item IS, not which item it is.)
+ */
+function cleanerCandidates(
+    fileType: string | null,
+    run: Readonly<Record<string, unknown>>,
+    settings?: SourceCleanerSettings,
+): CleanerCandidate[] {
+    const candidates: CleanerCandidate[] = [];
+    const add = (value: unknown, from: string): void => {
+        const key = nonEmpty(value);
+        if (key) {
+            candidates.push({ Key: key, From: from });
+        }
+    };
+    add(cleanerForFileType(fileType, run.Cleaners), "the run's Cleaners");
+    add(run.CleanerKey, "the run's CleanerKey");
+    if (!settings) {
+        return candidates;
+    }
+    const { source, contentType, contentTypeConfig, resolvedConfig } = settings;
+    add(cleanerForFileType(fileType, resolvedConfig?.Configuration.Cleaners), "the content source's Cleaners");
+    add(cleanerForFileType(fileType, resolvedConfig?.Settings.Cleaners), "the content source's settings Cleaners");
+    add(cleanerForFileType(fileType, contentTypeConfig.Cleaners), "the content type's Cleaners");
+    add(cleanerForFileType(fileType, resolvedConfig?.TypeConfiguration.Cleaners), "the content source type's Cleaners");
+    add(source?.CleanerKey, "the content source's CleanerKey");
+    add(resolvedConfig?.Configuration.CleanerKey, "the content source's Configuration CleanerKey");
+    add(resolvedConfig?.Settings.CleanerKey, "the content source's settings CleanerKey");
+    add(contentType?.CleanerKey, "the content type's CleanerKey");
+    add(contentTypeConfig.CleanerKey, "the content type's Configuration CleanerKey");
+    add(resolvedConfig?.TypeConfiguration.CleanerKey, "the content source type's CleanerKey");
+    return candidates;
+}
+
+/**
+ * The cleaner one `Cleaners` map names for this file type, or `null`. Keys match case-insensitively and with or
+ * without a leading dot; a blank or non-string value names nothing. File types that are separate Content File
+ * Types (`html`, `htm`, `xhtml`) are separate keys.
+ */
+function cleanerForFileType(fileType: string | null, map: unknown): string | null {
+    if (!fileType || !IsPlainObject(map)) {
+        return null;
+    }
+    let found: string | null = null;
+    for (const [key, value] of Object.entries(map)) {
+        const cleanerKey = nonEmpty(value);
+        if (cleanerKey && normalizeFileType(key) === fileType) {
+            found = cleanerKey;
+        }
+    }
+    return found;
+}
+
+/** A file type as `Cleaners` maps are keyed: trimmed, lowercased, without a leading dot. */
+function normalizeFileType(value: string): string {
+    return value.trim().replace(/^\./, '').toLowerCase();
 }
 
 /** Content Type configuration JSON, or `{}` when unset or malformed. */

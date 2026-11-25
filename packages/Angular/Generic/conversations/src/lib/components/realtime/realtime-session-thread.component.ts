@@ -127,7 +127,7 @@ export class RealtimeSessionThreadComponent implements OnInit, AfterViewChecked,
   @ViewChild('scrollAnchor') private scrollAnchor?: ElementRef<HTMLElement>;
 
   /** Display name of the agent (caption avatar / meta line). */
-  @Input() AgentName = 'Sage';
+  @Input() AgentName = 'Assistant';
 
   /**
    * Display name of the signed-in user for their turns — consistent with the main

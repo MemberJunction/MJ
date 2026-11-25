@@ -16,7 +16,7 @@ import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
  * action stays thin: param validation (ModelID / TargetEntityName / ScopeFilter /
  * ContextUser — OutputField is OPTIONAL), correct mapping of the conversational params
  * onto the helper's options (cadence + valueKind parsing), and result→output-param
- * mapping for BOTH the write-back (binding present) and generic (binding null) modes.
+ * mapping for BOTH the write-back (binding with a column) and generic (binding with no column) modes.
  */
 
 /** A captured-call mock helper returning a stub Record Process + scoring binding. */
@@ -57,7 +57,7 @@ function out(p: RunActionParams, name: string): unknown {
 /** A stub helper result: the saved Record Process + its scoring binding (lineage row). */
 const STUB_RESULT = {
   recordProcess: { ID: 'rp-1', Name: 'Score Memberships with model m1 (Monthly)', CronExpression: '0 0 1 * *' },
-  binding: { ID: 'binding-1' },
+  binding: { ID: 'binding-1', TargetColumn: 'RenewalScore' },
 } as unknown as ScheduledModelScoringResult;
 
 function validParams(extra: ActionParam[] = []): ActionParam[] {
@@ -121,19 +121,20 @@ describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', 
     expect(scheduler.LastOpts?.scope).toEqual({ filter: "Status='Active'" });
     expect(scheduler.LastOpts?.cadence).toBeUndefined(); // helper defaults to Monthly
     expect(scheduler.LastOpts?.valueKind).toBeUndefined();
+    expect(scheduler.LastOpts?.featureName).toBeUndefined(); // helper defaults to the pipeline name
 
     expect(result.Success).toBe(true);
     expect(out(p, 'RecordProcessID')).toBe('rp-1');
     expect(out(p, 'CronExpression')).toBe('0 0 1 * *');
-    expect(out(p, 'WroteColumn')).toBe(true); // write-back mode (binding present)
+    expect(out(p, 'WroteColumn')).toBe(true); // write-back mode (the binding names a column)
     expect(out(p, 'ScoringBindingID')).toBe('binding-1'); // the lineage binding id
   });
 
-  it('handles generic output (null binding): WroteColumn=false, no ScoringBindingID, still succeeds', async () => {
-    // Generic-mode helper result — RP saved, but no write-back column / lineage binding.
+  it('handles generic output (a binding with no column): WroteColumn=false, the ScoringBindingID still emitted', async () => {
+    // Generic-mode helper result — RP saved, its binding names no write-back column.
     const genericResult = {
       recordProcess: { ID: 'rp-2', Name: 'Score Memberships with model m1 (Monthly)', CronExpression: '0 0 1 * *' },
-      binding: null,
+      binding: { ID: 'binding-2', TargetColumn: null },
     } as unknown as ScheduledModelScoringResult;
     const scheduler = new MockScheduler(genericResult);
     // No OutputField param — optional now.
@@ -141,15 +142,18 @@ describe('PredictiveStudioScheduleModelScoringAction — delegation + mapping', 
       { Name: 'ModelID', Type: 'Input', Value: 'm1' },
       { Name: 'TargetEntityName', Type: 'Input', Value: 'Memberships' },
       { Name: 'ScopeFilter', Type: 'Input', Value: "Status='Active'" },
+      { Name: 'FeatureName', Type: 'Input', Value: 'Churn risk' },
+      { Name: 'ViewAuthorizationID', Type: 'Input', Value: 'auth-1' },
     ]);
     const result = await new TestableAction(scheduler.fn).run(p);
 
     expect(scheduler.CallCount).toBe(1);
     expect(scheduler.LastOpts?.outputField).toBeUndefined(); // passed through as generic
+    expect(scheduler.LastOpts).toMatchObject({ featureName: 'Churn risk', viewAuthorizationId: 'auth-1' });
     expect(result.Success).toBe(true);
     expect(out(p, 'RecordProcessID')).toBe('rp-2');
     expect(out(p, 'WroteColumn')).toBe(false);
-    expect(out(p, 'ScoringBindingID')).toBeUndefined(); // no binding → no id emitted
+    expect(out(p, 'ScoringBindingID')).toBe('binding-2');
   });
 
   it('parses a named cadence (case-insensitive) and value kind', async () => {

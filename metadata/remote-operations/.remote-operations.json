@@ -216,6 +216,33 @@
   },
   {
     "fields": {
+      "Name": "Run ML Model Monitoring",
+      "OperationKey": "PredictiveStudio.RunModelMonitoring",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Run one Published MJ: ML Models row's monitoring now, for one period (periodStart, the first day of a period of its monitoring job's grain) or the last complete one: the period's predictions (its binding's Champion Model Feature Values, or a shadow Predict of the period's unit rows when no binding is Active) joined to realised outcomes once the label window has closed, the primary score and tracked metrics with 95% intervals, drift by monitor procedure M, the retrain triggers (a fired one starts a challenger through the automated publisher), the rollback check against the predecessor on the same rows, the live mirror's divergence and parity. Writes or updates the period's MJ: ML Monitoring Results row and returns it. Uses the spec of the model's open monitoring job. Delegates to PredictiveStudioModelMonitoringJobDriver in @memberjunction/predictive-studio.",
+      "InputTypeName": "PredictiveStudioRunModelMonitoringInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-run-model-monitoring.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioRunModelMonitoringOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-run-model-monitoring.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "8A03475E-DAA3-4706-AEC9-AE9C01CD95A9"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.371Z",
+      "checksum": "3334627714aba20e792bff7a80b26fa2c8882008b8cb5b6a9038c62a405e1c04"
+    }
+  },
+  {
+    "fields": {
       "Name": "Score Record Set",
       "OperationKey": "PredictiveStudio.ScoreRecordSet",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
@@ -237,8 +264,8 @@
       "ID": "64762D07-7750-495D-A25A-3DEEF541A2F7"
     },
     "sync": {
-      "lastModified": "2026-07-01T17:33:49.085Z",
-      "checksum": "e397f111810cbcfc267bd4978543d6f4d15daad35716911faa3184c071201664"
+      "lastModified": "2026-11-24T20:27:54.425Z",
+      "checksum": "33ce1d3d0cdbcc9acf9fa704d06a2ed58f9f29871ede5999d7764b06b70a6899"
     }
   },
   {
@@ -327,7 +354,7 @@
       "Name": "Promote ML Model",
       "OperationKey": "PredictiveStudio.PromoteModel",
       "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
-      "Description": "Transition an MJ: ML Models row through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless signOff=true. Lifecycle-only: never edits metrics or artifact, only Status. Returns whether the model was promoted and its new status. Delegates to the ProductionModelPromotionGate in @memberjunction/predictive-studio-engine.",
+      "Description": "Apply one lifecycle transition to an MJ: ML Models row through the Predictive Studio lifecycle gate: evaluate (Draft to Validated or KeepBaseline from the training run's stored gate decision), publish (Validated or KeepBaseline to Published, re-verified from the stored rows, with the publish record written), archive (to Archived, reason required) or rollback (Archived to Published for a model published before, reason required). A leakage-flagged model is published only with an approving sign-off record (signOffId). The caller is the initiator; an interactive user is recorded as the approver. Returns whether the transition was applied, the model's status, and the gate's refusal when it was not. Delegates to LifecycleGate in @memberjunction/predictive-studio-engine.",
       "InputTypeName": "PredictiveStudioPromoteModelInput",
       "InputTypeDefinition": "@file:types/predictive-studio-promote-model.input.ts",
       "InputTypeIsArray": false,
@@ -345,8 +372,8 @@
       "ID": "F82C30A4-46BC-4206-9CE8-3B1F9D359700"
     },
     "sync": {
-      "lastModified": "2026-07-01T17:33:49.174Z",
-      "checksum": "120b6d6d76a06bebad5f99db4d89e9b3c28047f3452f2d3167b50f4c30a4ac97"
+      "lastModified": "2026-11-24T20:27:54.453Z",
+      "checksum": "13c9df5f28ea421e05dc712b750c251c3ac7fe7d73e87e5f0a638554c26f4d51"
     }
   },
   {
@@ -372,8 +399,116 @@
       "ID": "837AF41A-DB89-4B3E-853D-499FFCDAA7E7"
     },
     "sync": {
-      "lastModified": "2026-07-01T17:33:49.202Z",
-      "checksum": "a7ef74f971f0454a747c60c45b55f4a85df04401951c0474aad48fd0358eab13"
+      "lastModified": "2026-11-24T20:27:54.467Z",
+      "checksum": "2696d95fcff9baec832d6619015f9ac0cb304010d61bfcd93d71db7c90e2e0e2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get ML Model Evidence",
+      "OperationKey": "PredictiveStudio.GetModelEvidence",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Build the evidence of an MJ: ML Models row from stored rows only, the way a sign-off records it and a publish freezes it: the holdout primary score of what ships (the kept simple member's for keep-simple-baseline) with its interval, the training run's paired comparisons, its stored gate decision and leakage flags, the Training Snapshot's data window and ContentHash. Returns the evidence and its SHA-256 (the EvidenceSha256 a sign-off over it records). Read-only: writes no row. Delegates to SignOffService in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioGetModelEvidenceInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-get-model-evidence.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioGetModelEvidenceOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-get-model-evidence.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D37FB471-978B-474E-A9CD-BA674366203E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.491Z",
+      "checksum": "6bb466e41cdb54ec068d20dd8c5b8262f919aac7c0a0792616265e6b33c4d785"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sign Off ML Model",
+      "OperationKey": "PredictiveStudio.SignOffModel",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Record a person's sign-off of an MJ: ML Models row for a publish or a rollback: an MJ: ML Model Publish Records row of Kind sign-off with the approver, the decision (approve or reject), the reason, the leakage flag kinds it overrides, and the evidence built from stored rows with its SHA-256. The lifecycle gate consumes an approving sign-off (PromoteModel's signOffId) only while its EvidenceSha256 equals a fresh recomputation. Refused with NOT_HUMAN for an API-key caller or the system user, INVALID_INPUT (naming the field) for an input outside its contract (a missing field, an unknown purpose, decision or leakage flag kind), OVERRIDES_WITHOUT_REASON when flags are overridden without a reason, and MODEL_ARCHIVED for an Archived model. Delegates to SignOffService in @memberjunction/predictive-studio-engine.",
+      "InputTypeName": "PredictiveStudioSignOffModelInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-sign-off-model.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioSignOffModelOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-sign-off-model.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "09BA5B09-D639-43EC-8421-088F4AF0F68B"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.517Z",
+      "checksum": "05f1b51a87abc2cfa6c975b7ab727d8878225e309decc94d4c7fee474bde668d"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Withdraw ML Model Scoring Binding",
+      "OperationKey": "PredictiveStudio.WithdrawScoringBinding",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "Withdraw an MJ: ML Model Scoring Bindings row: its Status becomes Withdrawn, so it scores no more, and in the same transaction every record whose TargetColumn still holds the value the binding last copied (its newest Champion Model Feature Value, resolved through TargetColumnSource) is saved with the column cleared, so Record Changes keeps the history. A value a person entered since, or a record holding a Human Feature Value of the binding's feature, is kept. The binding's Feature Values stay and follow its retention. Returns the counts of cleared and kept values. Delegates to ScoringBindings.Withdraw in @memberjunction/predictive-studio.",
+      "InputTypeName": "PredictiveStudioWithdrawScoringBindingInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-withdraw-scoring-binding.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioWithdrawScoringBindingOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-withdraw-scoring-binding.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "657E7834-B63C-46C0-B8B8-503A8B16C17C"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.545Z",
+      "checksum": "269b8de0de301d22c414b6b210b54de43498920d16c2c1e514f337618b850d4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Migrate Pre-Gate ML Models",
+      "OperationKey": "PredictiveStudio.MigratePreGateModels",
+      "CategoryID": "@lookup:MJ: Remote Operation Categories.Name=Predictive Studio",
+      "Description": "The pre-change model migration that the Predictive Studio Registry Check job runs on every run while work remains: models registered before the lifecycle gate with a stored gate record are back-filled and re-verified (kept Published with an adopt record, or demoted with the refusal), every other pre-change artifact is checked once (verified, legacy-local or missing), the scoring Actions and schedules of non-serving Unevaluated models are disabled, and each pipeline left without a Published model is retrained once under its protocol through the lifecycle gate (no Prediction Unit is invented for a legacy pipeline). A dry run (the default) reports the remaining work and writes nothing; a pass that writes needs the Registry Check job run it belongs to. Delegates to PreGateModelMigration in @memberjunction/predictive-studio.",
+      "InputTypeName": "PredictiveStudioMigratePreGateModelsInput",
+      "InputTypeDefinition": "@file:types/predictive-studio-migrate-pre-gate-models.input.ts",
+      "InputTypeIsArray": false,
+      "OutputTypeName": "PredictiveStudioMigratePreGateModelsOutput",
+      "OutputTypeDefinition": "@file:types/predictive-studio-migrate-pre-gate-models.output.ts",
+      "OutputTypeIsArray": false,
+      "ExecutionMode": "Sync",
+      "RequiredScope": "predictive:execute",
+      "RequiresSystemUser": false,
+      "GenerationType": "Manual",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D0290478-08BE-4446-BC33-5DB86B0EBDE9"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.572Z",
+      "checksum": "d156c6a482dcc6eda0419d302351121a6214535aa9297d15bdeeafcd6359823e"
     }
   },
   {
@@ -450,8 +585,8 @@
       "ID": "9A3CAF75-D794-4223-9AEE-A40AE8A0A012"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:50.472Z",
-      "checksum": "392da4f3d7fcd5d4ffff75bb321e0fbf2f5cc00ad8b6daafdd82568ee862ea4d"
+      "lastModified": "2026-11-24T20:27:54.599Z",
+      "checksum": "eb1314b2992a41c0e0e3e0e873661a8d9ea9e104c7b7e5a40d30a1b6407afb80"
     }
   },
   {
@@ -546,8 +681,8 @@
       "ID": "8C89A2A0-DB22-4EE2-86CF-40555401BAF0"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:50.491Z",
-      "checksum": "4316308c3e31827e65f947938fe69f0433f3b3be522962998b533cbbe50a9184"
+      "lastModified": "2026-11-24T20:27:54.615Z",
+      "checksum": "a844a0e3d3b04f07e70033701eac0ed5beef3c08a4a683eaca61434c1d27343e"
     }
   },
   {
@@ -570,8 +705,8 @@
       "ID": "7F7EDC70-2668-49CA-BBE6-2E86808D256C"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:50.508Z",
-      "checksum": "c3988806ee552c308473c8b455d737b45aebddaa3ed15a5e7da49a5b0450b80b"
+      "lastModified": "2026-11-24T20:27:54.628Z",
+      "checksum": "121247eb9c389bf2c702b95f4681f5ccac0298dd055fd6c9b40f1f5260b5f1d3"
     }
   },
   {
@@ -594,8 +729,8 @@
       "ID": "3456242D-6BC8-4EC0-9AA5-F671B2FCE644"
     },
     "sync": {
-      "lastModified": "2026-10-02T21:42:50.524Z",
-      "checksum": "25bfcf85ee69532a4648497680448c45555d88d56eaae7927d62b1f8d2e77b56"
+      "lastModified": "2026-11-24T20:27:54.652Z",
+      "checksum": "2177b40e963917c9774564e56794290bea12be1a18316e37a5e6c04c5edfd158"
     }
   },
   {
@@ -999,6 +1134,10 @@
     },
     "primaryKey": {
       "ID": "AD37D3E6-0FAD-49F8-8FEB-572BE22CCF1D"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.700Z",
+      "checksum": "205b349b81283bd308b4e181fc6a7f5548c87657db12dcfb4cd712ae6450e645"
     }
   },
   {
@@ -1019,6 +1158,10 @@
     },
     "primaryKey": {
       "ID": "EE2411B1-34D7-4074-BF51-022B0D794790"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:54.723Z",
+      "checksum": "1f0236cbba704b9d6f62a73595e97d9b13f4dbc019de5388954336f89a7aa65b"
     }
   }
 ]

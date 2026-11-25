@@ -548,6 +548,24 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
     }
 
     /**
+     * Runs registered {@link BaseGraphEdgeAccessPolicy} checks over `edges` for `user` and every
+     * `audienceReaders` principal. An edge survives only when every principal's policy allows it;
+     * edge types with no registered policy pass through unchanged.
+     */
+    public async FilterEdgesForUser(
+        edges: GraphEdgeView[],
+        user: UserInfo,
+        audienceReaders?: readonly UserInfo[],
+        options: GraphNodeFilterOptions = {},
+    ): Promise<GraphEdgeView[]> {
+        if (!user || !edges || edges.length === 0) {
+            return [];
+        }
+        const provider = this.graphProvider(options.Provider);
+        return this.applyEdgePolicies(edges, this.principals(user, audienceReaders), provider, options.IncludeProposed === true);
+    }
+
+    /**
      * Stored and derived edges incident to `node` in `graphName` whose endpoints the caller (and any
      * `options.AudienceReaders`) may see. An unknown or inactive graph yields no edges. Every read made
      * for the caller goes through `provider` when one is given (see {@link Subgraph}).

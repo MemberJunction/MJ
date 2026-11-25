@@ -498,6 +498,13 @@ Key principles:
 - **ResultType is excluded from cache fingerprints** — cache stores plain JSON regardless; transformation to BaseEntity objects happens post-cache
 - **`BypassCache: true`** — per-query escape hatch that skips all server-side caching (both read and write). Use for maintenance actions, scheduled jobs, or any query that needs true DB state after direct SQL operations that bypassed `BaseEntity.Save()`
 
+### Lifecycle & Scoping Over Arbitrary Cache Caps
+
+Never put arbitrary static count caps (`MAX_CACHED_* = 50`, `maxSize: 2_000`) onto engines, entity caches, or session registries to mask a scoping or lifecycle bug:
+- **Per-request `IMetadataProvider` caches**: MJServer creates a fresh `IMetadataProvider` per GraphQL/HTTP request. Never stringify provider IDs into a singleton `Map` or `MJLruCache` (0% cross-request hit rate, pins dead providers). Key per-provider caches with `WeakMap<IMetadataProvider, ...>` so V8 collects them automatically when the request ends.
+- **Server-side agent/action reads vs. `BaseEngine` UI caches**: Shared engines like `ConversationEngine` hold rich per-session UI caches for `MJExplorer`. Server-side tools and resolvers must load lightweight projections (`ResultType: 'simple'`, `Fields: [...]`) scoped to the run/request rather than populating process-global UI caches on `MJAPI`.
+- **In-flight maps & active sessions**: Clean up in-flight operation maps deterministically in `.finally()` / `Settled().finally()`, and manage live client/cloud sessions with explicit `onclose`/cancel teardown plus configurable idle TTLs (`mj.config.cjs`) — never evict active sessions by count.
+
 ### Check the Registry Before You Query (MJ Convention)
 
 **Before any code bulk-loads an entity's full row set, ask `BaseEngineRegistry` whether a loaded engine already holds it in memory.** In any process that bootstraps via `StartupManager` (MJAPI, MJCLI commands, mj-sync), every `@RegisterForStartup` engine has already paid for its caches — AI Models, Prompts, Queries, Integrations, Dashboards, and dozens more are sitting in RAM before your code runs. Re-querying them doubles the DB round trips, doubles the memory, and triggers the `REDUNDANT DATA LOADING` warning.

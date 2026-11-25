@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": [
+    "maxDays"
+  ],
+  "properties": {
+    "maxDays": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Maximum number of days consent remains valid from ConsentAt before renewal is required."
+    }
+  },
+  "additionalProperties": false
+}

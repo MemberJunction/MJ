@@ -1,0 +1,45 @@
+{
+  "name": "@memberjunction/ng-communications",
+  "version": "6.3.0-edge.2",
+  "description": "MemberJunction: Standalone Angular components and custom elements for public communication preference center",
+  "main": "./dist/public-api.js",
+  "typings": "./dist/public-api.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
+    "build": "ngc && pnpm run build:element",
+    "build:element": "node scripts/build-element.mjs",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22",
+    "@babel/core": "^7.29.0",
+    "@memberjunction/ng-test-utils": "6.3.0-edge.2",
+    "esbuild": "0.28.1",
+    "vitest": "^4.0.18",
+    "zone.js": "~0.16.0"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/elements": "^21.2.22",
+    "@angular/forms": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22"
+  },
+  "dependencies": {
+    "tslib": "^2.8.1"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "mjUILayer": "widgets"
+}

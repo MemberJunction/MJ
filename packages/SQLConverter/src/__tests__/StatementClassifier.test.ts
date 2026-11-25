@@ -780,6 +780,16 @@ describe('StatementClassifier — issue #5364', () => {
   });
 });
 
+// Regression: V202611140845 — a bare `DROP TRIGGER [schema].[name]` was UNKNOWN and passed through;
+// PG trigger names are not schema-qualified and need `ON <table>` (`syntax error at or near "."`).
+// TriggerRule emits `DROP TRIGGER IF EXISTS ... ON <table>` ahead of every CREATE TRIGGER it converts.
+describe('StatementClassifier — DROP TRIGGER', () => {
+  it('skips a bare DROP TRIGGER like DROP VIEW/PROCEDURE/FUNCTION', () => {
+    expect(ClassifyBatch('DROP TRIGGER [__mj].[trgUpdateArtifactType];')).toBe('SKIP_SQLSERVER');
+    expect(ClassifyBatch('DROP TRIGGER __mj.trgUpdateArtifactType')).toBe('SKIP_SQLSERVER');
+  });
+});
+
 // Issues #5955 / #3166: index drops, bare and guarded.
 describe('StatementClassifier — DROP INDEX (issues #5955, #3166)', () => {
   it('classifies DROP INDEX name ON table as DROP_INDEX', () => {

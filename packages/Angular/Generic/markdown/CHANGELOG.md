@@ -1,5 +1,19 @@
 # @memberjunction/ng-markdown
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 3d5adab: Add WebVTT/SubRip caption cue parsing (`ParseCaptionCues`, `LooksLikeCaptionText`) and raw caption text fallback to `TranscriptSegmenter`, register `VTT` and `SRT` in `MJ: Content File Types` metadata, persist multimodal chunk fields (`StartMs`, `EndMs`, `StartOffset`, `EndOffset`, `PageNumber`, `SegmentTitle`, `Transcript`, `SegmenterKey`, `ParentChunkID`) through `SegmentStage`, `PipelineProcessor`, `WorkingRecordHydrator`, and `EmbedStage`, export `UploadTokenManager` from `@memberjunction/server`, and add `EnableInlineMedia` support to `@memberjunction/ng-markdown` to upgrade `/media/:fileId` video tags into HTML5 `<video>` players with WebVTT caption tracks and a lazy click-to-seek transcript drawer.
+
+### Patch Changes
+
+- 66258b1: Implement UI Phase 0 Workstream 4 contract fixes: retoken the default MJ font family to Montserrat with a `--mj-font-family-display` seed/token (and Theme Studio heading-font control + seamless normalization for saved themes), bundle Font Awesome Free 6.7.2 from npm in `explorer-app`, remove hardcoded `Ubuntu`/`Inter` font stacks from Angular component stylesheets, and strip hardcoded hex fallbacks and the duplicated TS stylesheet from `card-grid`.
+
+  Note for standalone hosts (outside `explorer-app`) that render `<mj-card-grid>`: add `@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';` to your global stylesheet alongside the other `@memberjunction/ng-ui-components` global styles.
+  - @memberjunction/ai-diagrams@6.3.0-edge.2
+  - @memberjunction/markdown-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

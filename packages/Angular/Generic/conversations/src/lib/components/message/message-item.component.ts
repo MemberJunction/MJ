@@ -967,6 +967,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
+  /** Set in ngOnDestroy so async work that settles afterwards cannot re-arm the elapsed-time interval. */
+  private _isDestroyed = false;
   public ElapsedTimeFormatted: string = '0:00';
 
   /** @deprecated Use {@link ElapsedTimeFormatted}. */
@@ -1342,6 +1344,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   ngOnDestroy() {
+    this._isDestroyed = true;
     this.stopElapsedTimeUpdater();
     this.clearStopRetryTimer();
     this.disconnectMessageTextResizeObserver();
@@ -1469,6 +1472,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * and active durable workflow task graphs.
    */
   private startElapsedTimeUpdater(): void {
+    if (this._isDestroyed) {
+      return;
+    }
     if (this.IsInProgressAIMessage || this.IsAgentRunActive || this.HasActiveWorkflowTasks) {
       // Initial update
       this.updateTimers();
@@ -3101,6 +3107,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this.CurrentUser
       );
 
+      if (this._isDestroyed) {
+        return;
+      }
       if (result.Success) {
         const allTasks = result.Results || [];
         if (safeParentId) {
@@ -3127,7 +3136,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       console.error('Failed to load tasks for conversation detail:', error);
     } finally {
       this._tasksLoadInFlight = false;
-      if (this._tasksReloadQueued) {
+      if (this._tasksReloadQueued && !this._isDestroyed) {
         this._tasksReloadQueued = false;
         void this.loadTasks();
       }

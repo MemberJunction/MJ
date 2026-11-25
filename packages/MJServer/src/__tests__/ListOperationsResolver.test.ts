@@ -168,6 +168,16 @@ describe('ListOperationsResolver — boundary converters', () => {
       });
     });
 
+    it('carries Counts.Updated as UpdatedCount', () => {
+      const result: ApplyResult = {
+        Success: true,
+        ResultCode: 'SUCCESS',
+        Message: 'Updated 3 member(s)',
+        Counts: { Added: 0, Removed: 0, Failed: 0, Updated: 3 },
+      };
+      expect(FromCoreApplyResult(result).UpdatedCount).toBe(3);
+    });
+
     it('leaves SourceChange unset on any other result', () => {
       expect(FromCoreApplyResult({ Success: true, ResultCode: 'SUCCESS', Message: 'OK' }).SourceChange).toBeUndefined();
     });

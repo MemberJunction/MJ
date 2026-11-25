@@ -541,6 +541,7 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
   }
 
   ngOnDestroy(): void {
+    this.loadSequence++;
     this.destroyCurrentViewer();
   }
 
@@ -684,6 +685,9 @@ export class ArtifactTypePluginViewerComponent extends BaseAngularComponent impl
         BaseArtifactViewerPluginComponent,
         driverClass
       );
+      if (seq !== this.loadSequence) {
+        return;
+      }
 
       if (!registration?.SubClass) {
         this.setError(

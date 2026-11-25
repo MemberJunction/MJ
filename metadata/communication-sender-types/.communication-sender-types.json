@@ -1,0 +1,25 @@
+[
+  {
+    "fields": {
+      "Name": "Company",
+      "Description": "Organization or company sender backed by MJ: Companies.",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Companies",
+      "DriverClass": null,
+      "Configuration": {
+        "Slots": {
+          "Name": "Name",
+          "Website": "Website",
+          "LogoURL": "LogoURL"
+        }
+      },
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B565FF42-75A5-4EAE-8127-5544F5255C74"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.165Z",
+      "checksum": "402b05c51534890b64a26b6b21be28d517118c36e1d6ef27933194442f880e23"
+    }
+  }
+]

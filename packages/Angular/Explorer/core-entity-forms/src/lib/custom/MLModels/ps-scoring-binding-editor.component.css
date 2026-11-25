@@ -1,0 +1,154 @@
+/* Scoring binding editor (§5.8.2). Every color is a --mj-* semantic token. */
+
+.psbe {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.psbe-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.psbe-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.psbe-sub,
+.psbe-empty,
+.psbe-muted,
+.psbe-row-meta {
+  font-size: 0.78rem;
+  color: var(--mj-text-muted);
+}
+
+.psbe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.psbe-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 4px);
+  background: var(--mj-bg-surface-card);
+}
+
+.psbe-withdrawn {
+  background: var(--mj-bg-surface-sunken);
+}
+
+.psbe-row-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.psbe-row-actions,
+.psbe-confirm-actions,
+.psbe-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.psbe-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  border-radius: var(--mj-radius-full, 9999px);
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+}
+
+.psbe-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--mj-status-warning);
+  border-radius: var(--mj-radius-sm, 4px);
+  background: color-mix(in srgb, var(--mj-status-warning) 10%, transparent);
+  font-size: 0.8rem;
+  color: var(--mj-text-primary);
+}
+
+.psbe-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-md, 8px);
+  background: var(--mj-bg-surface-card);
+}
+
+.psbe-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.psbe-field > label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+}
+
+.psbe-static {
+  font-size: 0.85rem;
+  color: var(--mj-text-primary);
+}
+
+.psbe-input {
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-default);
+  border-radius: var(--mj-radius-sm, 4px);
+}
+
+.psbe-input:disabled {
+  color: var(--mj-text-disabled);
+  background: var(--mj-bg-surface-sunken);
+}
+
+.psbe-narrow {
+  max-width: 140px;
+}
+
+.psbe-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--mj-text-primary);
+}
+
+.psbe-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 22px;
+}
+
+.psbe-note {
+  font-size: 0.75rem;
+  color: var(--mj-text-secondary);
+}
+
+.psbe-error {
+  font-size: 0.78rem;
+  color: var(--mj-status-error-text);
+}

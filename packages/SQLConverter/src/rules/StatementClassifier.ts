@@ -233,10 +233,15 @@ export function ClassifyBatch(batch: string): StatementType {
   // Extended properties (add, update, and drop variants)
   if (upper.includes('SP_ADDEXTENDEDPROPERTY') || upper.includes('SP_UPDATEEXTENDEDPROPERTY') || upper.includes('SP_DROPEXTENDEDPROPERTY')) return 'EXTENDED_PROPERTY';
 
-  // DROP VIEW/PROCEDURE/FUNCTION — skip because ViewRule and
-  // ProcedureToFunctionRule generate their own DROP statements automatically.
+  // DROP VIEW/PROCEDURE/FUNCTION/TRIGGER — skip because ViewRule, ProcedureToFunctionRule and
+  // TriggerRule generate their own DROP statements automatically.
+  // A T-SQL `DROP TRIGGER [schema].[name]` cannot pass through: PG trigger names are not
+  // schema-qualified and PG requires `ON <table>`, which the statement does not carry
+  // (V202611140845 failed with `syntax error at or near "."`). TriggerRule emits
+  // `DROP TRIGGER IF EXISTS "<name>" ON <table>` ahead of every CREATE TRIGGER it converts, and
+  // every bare DROP TRIGGER in migrations/v5 and v6 is followed by a CREATE of the same name.
   // DROP TABLE with temp objects (#name) — SQL Server temp tables don't exist in PG.
-  if (/^DROP\s+(?:VIEW|PROCEDURE|PROC|FUNCTION)\s/i.test(upper)) return 'SKIP_SQLSERVER';
+  if (/^DROP\s+(?:VIEW|PROCEDURE|PROC|FUNCTION|TRIGGER)\s/i.test(upper)) return 'SKIP_SQLSERVER';
   if (/^DROP\s+TABLE\s/i.test(upper)) return 'SKIP_SQLSERVER';
 
   // Bare mj-sync CRUD sp calls → EXEC_BLOCK. mj-sync emits record DELETIONS as a

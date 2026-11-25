@@ -461,7 +461,6 @@ The MJExplorer application -- MemberJunction's primary Angular-based UI for brow
 | [explorer-core](./packages/Angular/Explorer/explorer-core/README.md) | `@memberjunction/ng-explorer-core` | Core Explorer framework: application shell, routing, resource containers, and navigation |
 | [explorer-modules](./packages/Angular/Explorer/explorer-modules/README.md) | `@memberjunction/ng-explorer-modules` | Consolidated Explorer NgModule bundle that re-exports all Explorer feature modules |
 | [base-application](./packages/Angular/Explorer/base-application/README.md) | `@memberjunction/ng-base-application` | BaseApplication class system for app-centric navigation |
-| [auth-services](./packages/Angular/Explorer/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, and WorkOS provider support |
 | [shared](./packages/Angular/Explorer/shared/README.md) | `@memberjunction/ng-shared` | Shared Explorer utilities, base components, services, and events used across Explorer packages |
 | [workspace-initializer](./packages/Angular/Explorer/workspace-initializer/README.md) | `@memberjunction/ng-workspace-initializer` | Workspace initialization service and components for bootstrapping the Explorer environment |
 
@@ -561,6 +560,7 @@ Reusable Angular components and services shared across MemberJunction applicatio
 |---------|-----|-------------|
 | [credentials](./packages/Angular/Generic/credentials/README.md) | `@memberjunction/ng-credentials` | Components for credential management -- panels and dialogs for creating and editing credentials |
 | [resource-permissions](./packages/Angular/Generic/resource-permissions/README.md) | `@memberjunction/ng-resource-permissions` | Generic components for displaying/editing permissions for a resource |
+| [auth-services](./packages/Angular/Generic/auth-services/README.md) | `@memberjunction/ng-auth-services` | Authentication services with Auth0, MSAL, Okta, Cognito, WorkOS, Magic Link, and Local Dev provider support |
 
 **UI Utilities**
 

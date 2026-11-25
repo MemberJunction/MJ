@@ -497,3 +497,51 @@
   border-color: var(--mj-brand-primary);
   color: var(--mj-brand-accent, var(--mj-brand-primary));
 }
+
+/* ---------- Responsive (mobile / narrow viewports) ----------
+   Keep identity (orb + truncated name), state label, and header actions on one clean row
+   without overflowing phones. Secondary metadata (Co-Agent pill, "speaking as", model suffix,
+   waveform bars) yields first. */
+@media (max-width: 640px) {
+  .banner {
+    gap: 8px;
+    padding: 8px 12px;
+  }
+  .agent-orb {
+    --orb-size: 28px;
+  }
+  .banner__name {
+    flex-shrink: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13.5px;
+  }
+  .pill--close-reason,
+  .banner__for,
+  .dev-link {
+    display: none;
+  }
+  .banner__state {
+    padding: 3px 9px;
+    gap: 6px;
+  }
+  .banner__state .waveform {
+    display: none;
+  }
+  .banner__state-label {
+    font-size: 12px;
+  }
+  .bar-actions {
+    gap: 6px;
+  }
+  .start-live-pill {
+    padding: 6px 12px;
+    font-size: 12px;
+    gap: 6px;
+  }
+  .gear-pop {
+    right: 8px;
+    max-width: calc(100vw - 16px);
+  }
+}

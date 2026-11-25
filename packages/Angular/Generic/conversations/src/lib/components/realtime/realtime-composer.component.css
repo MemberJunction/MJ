@@ -63,7 +63,7 @@
   .bar {
     flex-wrap: wrap;
     row-gap: 12px;
-    padding-inline: 12px;
+    padding: 12px 12px max(12px, env(safe-area-inset-bottom));
   }
   .bar,
   .bar__media {
@@ -109,11 +109,19 @@
 @container (max-width: 520px) {
   .dock {
     flex-wrap: wrap;
+    gap: 8px;
     row-gap: 8px;
+    padding: 8px 12px max(8px, env(safe-area-inset-bottom));
+  }
+  .dock__hide {
+    margin-left: auto;
   }
   .dock__box {
     order: 1;
     flex-basis: 100%;
+  }
+  .dock__hint {
+    display: none;
   }
 }
 
@@ -171,4 +179,13 @@
 .dock__send:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+/* Prevent iOS Safari auto-zoom when focusing the live-session text input on phones. */
+@media (max-width: 640px) {
+  .dock__input {
+    box-sizing: border-box;
+    font-size: 16px;
+    height: 30px;
+  }
 }

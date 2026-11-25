@@ -34,7 +34,7 @@ const render = (visible = true) =>
       // ProviderToUse) synchronously during setInput, and inputs apply in insertion order.
       Provider: createFakeProvider({ runViewResults: [], entities: [] }),
       modelId: 'm1',
-      modelLabel: 'Renewal Model',
+      ModelLabel: 'Renewal Model',
       engine: ENGINE,
       Visible: visible,
     },
@@ -80,7 +80,7 @@ describe('PSOperateDialogComponent (DOM)', () => {
   it('emits Close({changed:false}) when Cancel is clicked', () => {
     const fixture = render(true);
     const closed = capture(fixture.componentInstance.Close);
-    fixture.componentInstance.onCancel();
+    fixture.componentInstance.OnCancel();
     expect(closed).toEqual([{ changed: false }]);
   });
 });

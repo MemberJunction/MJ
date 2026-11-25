@@ -1,0 +1,94 @@
+{
+  "name": "@memberjunction/ng-auth-services",
+  "version": "6.3.0-edge.2",
+  "description": "MemberJunction: Generic Angular Authentication Services",
+  "main": "./dist/public-api.js",
+  "types": "./dist/public-api.d.ts",
+  "typings": "./dist/public-api.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/public-api.d.ts",
+      "default": "./dist/public-api.js"
+    },
+    "./preload": {
+      "types": "./dist/preload.d.ts",
+      "default": "./dist/preload.js"
+    },
+    "./msal": {
+      "types": "./dist/lib/providers/mjexplorer-msal-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-msal-provider.service.js"
+    },
+    "./auth0": {
+      "types": "./dist/lib/providers/mjexplorer-auth0-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-auth0-provider.service.js"
+    },
+    "./okta": {
+      "types": "./dist/lib/providers/mjexplorer-okta-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-okta-provider.service.js"
+    },
+    "./cognito": {
+      "types": "./dist/lib/providers/mjexplorer-cognito-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-cognito-provider.service.js"
+    },
+    "./workos": {
+      "types": "./dist/lib/providers/mjexplorer-workos-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-workos-provider.service.js"
+    },
+    "./magic-link": {
+      "types": "./dist/lib/providers/mjexplorer-magic-link-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-magic-link-provider.service.js"
+    },
+    "./local-dev": {
+      "types": "./dist/lib/providers/mjexplorer-local-dev-provider.service.d.ts",
+      "default": "./dist/lib/providers/mjexplorer-local-dev-provider.service.js"
+    }
+  },
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:types": "tsc --noEmit -p tsconfig.spec.json",
+    "build": "ngc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "BUSL-1.1",
+  "devDependencies": {
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22",
+    "@memberjunction/ng-test-utils": "6.3.0-edge.2"
+  },
+  "peerDependencies": {
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
+    "@auth0/auth0-angular": "^2.6.0",
+    "@azure/msal-angular": "^5.0.3",
+    "@azure/msal-browser": "^5.1.0",
+    "@azure/msal-common": "^16.0.3",
+    "@okta/okta-auth-js": "^7.14.1",
+    "@workos-inc/authkit-js": "^0.20.1",
+    "aws-amplify": "^6.0.0",
+    "@angular/cdk": "^21.2.14"
+  },
+  "dependencies": {
+    "@auth0/auth0-spa-js": "^2.14.0",
+    "@memberjunction/core": "6.3.0-edge.2",
+    "@memberjunction/global": "6.3.0-edge.2",
+    "@memberjunction/ng-ui-components": "6.3.0-edge.2",
+    "@memberjunction/realtime-runtime": "6.3.0-edge.2",
+    "rxjs": "^7.8.2",
+    "tslib": "^2.8.1",
+    "@memberjunction/theme-engine": "6.3.0-edge.2"
+  },
+  "sideEffects": [
+    "./dist/lib/providers/*.js",
+    "./src/lib/providers/*.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
+  "mjUILayer": "widgets"
+}

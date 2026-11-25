@@ -1,5 +1,14 @@
 # @memberjunction/video-studio-render-worker
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 3f239f5: Find installed `@hyperframes/*` packages through Node's lookup folders, so the render worker health check no longer reports them missing on npm (hoisted) installs.
+- be7f58e: Execute the Video Studio post-release hardening workstreams (`plans/video-studio-hardening.md`): add shared real-render test gates (`VIDEO_STUDIO_RENDER_TESTS_REQUIRED=1`) and CI workflow (`.github/workflows/video-studio-render.yml`, WS1); fix `PayloadManager` dotted/bracketed keys and empty-array upstream merges, update `JSONValidator.CleanValidationSyntax` and `AIPromptRunner` so colon-bearing keys like `16:9` and unrecognized `:rule` suffixes stay intact (#4827), and remove all `INTERIM` workarounds across Video Studio including unused `RestoreStrippedFormatKeys` (WS2); record Consult & Handoff ownership and independent review findings (WS3); unify stage-name normalization in `gates.ts` and decompose long orchestrator methods in `VideoStudioAgent` (WS4); add the orchestrator Loop vs code-led decision record (WS5); and record shipped scope in `plans/video-studio.md` §15 (WS6-2).
+- Updated dependencies [be7f58e]
+  - @memberjunction/video-studio-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

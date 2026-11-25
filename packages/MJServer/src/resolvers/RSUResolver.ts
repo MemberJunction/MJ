@@ -26,6 +26,7 @@ import {
     type RSUPipelineInput,
 } from '@memberjunction/schema-engine';
 import { readFileSync, existsSync } from 'node:fs';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 // ─── RSU Input Types ─────────────────────────────────────────────────
 
@@ -191,6 +192,7 @@ export class RSUQueueStatusGQL {
 
 // ─── Resolver ────────────────────────────────────────────────────────
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RSUResolver {
     /**

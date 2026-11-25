@@ -1,0 +1,71 @@
+[
+  {
+    "fields": {
+      "Name": "comms.dispatch-worker",
+      "Description": "Processes chunked comms.dispatch V2 outbound deliveries.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=comms.dispatch",
+      "PartitionMode": "None",
+      "MaxAttempts": 5,
+      "BackoffBaseSeconds": 5,
+      "BackoffMaxSeconds": 300,
+      "LeaseSeconds": 120,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "comms.dispatch",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "FDC392FC-E25F-4FD7-B9BC-1AB1A466A0CE"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:56.722Z",
+      "checksum": "d54ad293bfc168f6cd9bc8453f9c83f92957945d8a9a458911d2e13cbd8a3e47"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comms.render-worker",
+      "Description": "Processes batched comms.render template rendering and V2 dispatch.",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=comms.render",
+      "PartitionMode": "None",
+      "MaxAttempts": 5,
+      "BackoffBaseSeconds": 5,
+      "BackoffMaxSeconds": 300,
+      "LeaseSeconds": 120,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "comms.render",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B9B55409-2CAB-4CA4-835E-363B33BB978B"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:56.752Z",
+      "checksum": "5dfe6b82f0575d5bbfdcdf3bddb90c358175924569caa65a03a98237254c623c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "comms.activity-worker",
+      "Description": "Processes inbound comms.activity events (webhooks, opens, clicks, unsubscribes).",
+      "TopicID": "@lookup:MJ: Work Queue Topics.Name=comms.activity",
+      "PartitionMode": "None",
+      "MaxAttempts": 5,
+      "BackoffBaseSeconds": 5,
+      "BackoffMaxSeconds": 300,
+      "LeaseSeconds": 120,
+      "HeartbeatMode": "Auto",
+      "HostType": "MJWorker",
+      "HandlerKey": "comms.activity",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "AD130C6A-7F9C-4AD5-B112-42F667DA1FBB"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:56.781Z",
+      "checksum": "b21f7d59b567562590e858715b4c7d39d8a18ce10f1cede28df449a84e76f15b"
+    }
+  }
+]

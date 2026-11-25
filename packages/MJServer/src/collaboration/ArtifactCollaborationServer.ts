@@ -150,28 +150,28 @@ export const DEFAULT_IDLE_ROOM_TTL_MS = 30_000;
 export const DEFAULT_COLLABORATION_HEARTBEAT_MS = 30_000;
 
 const WORKING_STATE_FLUSH_DEBOUNCE_MS = 2500;
-const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB
-const MAX_AWARENESS_FRAME_BYTES = 16_384; // 16 KB
-const MAX_ACTIVE_COLLAB_ROOMS = 2_000;
-const MAX_ACTIVE_ROOMS_PER_USER = 50;
-const MAX_ROOM_DOC_BYTES = 8 * 1024 * 1024; // 8 MB
-const MAX_RETAINED_DIRTY_ROOMS = 250;
-const RETAINED_DIRTY_ROOM_TTL_MS = 15 * 60_000; // 15 minutes
+const MAX_COLLAB_FRAME_BYTES = 16 * 1024 * 1024; // 16 MB WebSocket maxPayload protocol ceiling against oversized binary frames
+const MAX_AWARENESS_FRAME_BYTES = 16_384; // 16 KB per-frame ceiling for ephemeral cursor/presence awareness payloads
+const MAX_ACTIVE_COLLAB_ROOMS = 2_000; // Process-wide DoS guard on simultaneous open WebSocket Yjs rooms
+const MAX_ACTIVE_ROOMS_PER_USER = 50; // Per-authenticated-user DoS guard on concurrent open rooms
+const MAX_ROOM_DOC_BYTES = 8 * 1024 * 1024; // 8 MB encoded Y.Doc state ceiling to prevent single-room OOM exhaustion
+const MAX_RETAINED_DIRTY_ROOMS = 250; // Backpressure guard on rooms awaiting retry after a failed DB working-state flush
+const RETAINED_DIRTY_ROOM_TTL_MS = 15 * 60_000; // 15m retention window for dirty rooms retrying failed DB flushes
 const CLIENT_FRAME_RATE_WINDOW_MS = 10_000;
-const MAX_CLIENT_FRAMES_PER_WINDOW = 500;
-const MAX_VERSION_SAVE_ATTEMPTS = 3;
-const MAX_IDLE_FLUSH_RETRIES = 3;
+const MAX_CLIENT_FRAMES_PER_WINDOW = 500; // Per-connection flood guard (50 frames/sec sustained over 10s window)
+const MAX_VERSION_SAVE_ATTEMPTS = 3; // Optimistic-concurrency retry attempts when persisting MJ: Artifact Versions
+const MAX_IDLE_FLUSH_RETRIES = 3; // Retry attempts for transient DB errors during idle room working-state flush
 const COLLABORATION_ALLOWED_ORIGINS_ENV = 'MJ_COLLABORATION_ALLOWED_ORIGINS';
 const REALTIME_ALLOWED_ORIGINS_ENV = 'MJ_REALTIME_PROXY_ALLOWED_ORIGINS';
-const MAX_LOGGED_ORIGIN_CHARS = 200;
+const MAX_LOGGED_ORIGIN_CHARS = 200; // Truncation length when logging untrusted Origin headers to prevent log bloat
 
 /** Reserved high Yjs clientID block for server-emitted AI agent awareness (browser clients cannot claim or spoof). */
 export const AGENT_AWARENESS_CLIENT_ID_BASE = 0x70000000;
 export const AGENT_AWARENESS_CLIENT_ID_MAX = 0x7fffffff;
-const DEFAULT_AGENT_PRESENCE_THROTTLE_MS = 150;
-const DEFAULT_AGENT_PRESENCE_DECAY_MS = 8_000;
-const DEFAULT_AGENT_PRESENCE_TTL_MS = 60_000;
-const DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS = 2_500;
+const DEFAULT_AGENT_PRESENCE_THROTTLE_MS = 150; // 150ms coalescing interval for rapid AI agent presence broadcasts
+const DEFAULT_AGENT_PRESENCE_DECAY_MS = 8_000; // 8s idle threshold before active agent presence transitions to idle
+const DEFAULT_AGENT_PRESENCE_TTL_MS = 60_000; // 60s expiry window for stale agent awareness entries without heartbeats
+const DEFAULT_AGENT_PRESENCE_EXIT_GRACE_MS = 2_500; // 2.5s UX grace delay so completed agent presence badge fades smoothly
 const SAFE_AWARENESS_COLOR_RE =
     /^(#[0-9a-fA-F]{3,8}|var\(--mj-[a-zA-Z0-9-]+\)|(rgb|hsl)a?\([0-9.,\s%/]+\))$/;
 const DEFAULT_AWARENESS_COLOR = 'var(--mj-brand-primary)';
@@ -481,7 +481,12 @@ interface AuthenticatedUpgradeResult {
 interface ServerPersistedWatermark {
     BaseVersionID: string | null;
     BaseVersionNumber: number;
-    BaseVersionText: string;
+    /**
+     * Present (`''`) only for base-0 rooms with no persisted `MJ: Artifact Versions` row yet.
+     * Omitted whenever a version row exists in the database so closed rooms retain zero artifact
+     * document bodies in memory (hydration falls back to `MJ: Artifact Versions` on demand).
+     */
+    BaseVersionText?: string;
     LastAppliedRestoreVersionID: string | null;
     LastAppliedRestoreVersionNumber: number;
     UpdatedAtMs: number;
@@ -605,13 +610,13 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         maxPayload: MAX_COLLAB_FRAME_BYTES
     });
 
-    private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512;
-    private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8;
-    private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144;
-    private static readonly SYNC_WAIT_TIMEOUT_MS = 1500;
-    private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32;
-    private static readonly MAX_AGENT_CLOCK_HIGH_WATER_ENTRIES = 10_000;
-    private static readonly COMPACTION_LEASE_TTL_MS = 15_000;
+    private static readonly MAX_TRACKED_COMPACTED_VECTORS = 512; // Cross-node state-vector dedup ring (2 keys per compacted version; falls back to content hash on miss)
+    private static readonly MAX_TRACKED_COMPACTED_VECTORS_PER_ARTIFACT = 8; // Recent compacted version vectors retained per artifact for peer catch-up
+    private static readonly MAX_INLINE_RELAY_DOC_UPDATE_BYTES = 262_144; // 256 KB pub/sub relay frame ceiling; larger updates fall back to DB working-state hydration
+    private static readonly SYNC_WAIT_TIMEOUT_MS = 1500; // 1.5s bounded wait for peer sync-state reply over pub/sub relay before cold DB fallback
+    private static readonly MAX_CONTROLLED_CLIENT_IDS_PER_CONN = 32; // Per-socket Yjs awareness clientID ownership bound against spoofed awareness floods
+    private static readonly MAX_AGENT_CLOCK_HIGH_WATER_ENTRIES = 10_000; // Replay-protection high-water clock ring across distinct agent presence sessions
+    private static readonly COMPACTION_LEASE_TTL_MS = 15_000; // 15s cross-node compaction lease window preventing duplicate version inserts
 
     private static getSharedCollabState(): {
         CompactedStateVectors: Map<
@@ -622,6 +627,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                 SavedSnapshotB64?: string;
                 VersionID: string;
                 ContentHash: string;
+                ArtifactIndexKey?: string;
             }
         >;
         CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
@@ -647,13 +653,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     SavedSnapshotB64?: string;
                     VersionID: string;
                     ContentHash: string;
+                    ArtifactIndexKey?: string;
                 }
             >;
             CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
             InFlightCompactionVersionIds: Set<string>;
             ServerVersionWatermarks?: Map<string, ServerPersistedWatermark>;
         };
-        if (!state.ServerVersionWatermarks) {
+        if (!(state.ServerVersionWatermarks instanceof Map)) {
             state.ServerVersionWatermarks = new Map<string, ServerPersistedWatermark>();
         }
         return state as {
@@ -665,6 +672,7 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
                     SavedSnapshotB64?: string;
                     VersionID: string;
                     ContentHash: string;
+                    ArtifactIndexKey?: string;
                 }
             >;
             CompactedVectorKeysByArtifact: Map<string, Array<{ verKey: string; artKey: string }>>;
@@ -916,10 +924,21 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
 
     private recordServerWatermark(room: CollaborationRoom): void {
         const shared = ArtifactCollaborationServer.getSharedCollabState();
+        const effectiveVersionNumber = Math.max(room.BaseVersionNumber ?? 0, room.RejectedOobVersionNumber ?? 0);
+        const baseVersionId = room.BaseVersionID && room.BaseVersionID.trim().length > 0 ? room.BaseVersionID : null;
+        const hasPersistedVersionRow = Boolean(baseVersionId) || effectiveVersionNumber > 0;
+        const baseText = room.BaseVersionText ?? '';
+        const currentDocText = room.Doc ? this.extractRoomSerializedContent(room.Doc) : baseText;
+        const hasUncompactedEdits = currentDocText !== baseText;
+        // 3-way merge on room re-hydration only needs `BaseVersionText` when the persisted working
+        // state diverges from the base version (`Working !== Base`) or on base-0 rooms with no DB
+        // version row. Once a room compacts (`Working === Base`), `Merge(Base, Base, Incoming) === Incoming`,
+        // so `BaseVersionText` is omitted and closed rooms retain zero duplicate artifact bodies in RAM.
+        const retainBaseText = !hasPersistedVersionRow || hasUncompactedEdits;
         shared.ServerVersionWatermarks.set(room.RoomKey, {
-            BaseVersionID: room.BaseVersionID ?? null,
-            BaseVersionNumber: Math.max(room.BaseVersionNumber ?? 0, room.RejectedOobVersionNumber ?? 0),
-            BaseVersionText: room.BaseVersionText ?? '',
+            BaseVersionID: baseVersionId,
+            BaseVersionNumber: effectiveVersionNumber,
+            ...(retainBaseText ? { BaseVersionText: baseText } : {}),
             LastAppliedRestoreVersionID: room.LastAppliedRestoreVersionID ?? null,
             LastAppliedRestoreVersionNumber: room.LastAppliedRestoreVersionNumber ?? 0,
             UpdatedAtMs: Date.now(),
@@ -3178,13 +3197,14 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
         const map = sharedState.CompactedStateVectors;
         const pKey = providerKey || 'default';
         const normArtId = NormalizeUUID(artifactId);
+        const perArtifactKey = `${pKey}::${normArtId}`;
+        const indexedEntry = { ...entry, ArtifactIndexKey: perArtifactKey };
         const verKey = `${pKey}::ver:${NormalizeUUID(versionId)}`;
         const artKey = `${pKey}::art:${normArtId}:v:${versionNumber}`;
-        map.set(verKey, entry);
-        map.set(artKey, entry);
+        map.set(verKey, indexedEntry);
+        map.set(artKey, indexedEntry);
 
         const perArtifactMap = sharedState.CompactedVectorKeysByArtifact;
-        const perArtifactKey = `${pKey}::${normArtId}`;
         const existingPerArtifact = perArtifactMap.get(perArtifactKey) ?? [];
         const filteredPerArtifact = existingPerArtifact.filter(
             (item) => item.verKey !== verKey && item.artKey !== artKey
@@ -3208,7 +3228,19 @@ export class ArtifactCollaborationServer extends BaseSingleton<ArtifactCollabora
             if (oldestKey === undefined) {
                 break;
             }
+            const evictedEntry = map.get(oldestKey);
             map.delete(oldestKey);
+            if (evictedEntry?.ArtifactIndexKey) {
+                const pairs = perArtifactMap.get(evictedEntry.ArtifactIndexKey);
+                if (pairs) {
+                    const remaining = pairs.filter((p) => map.has(p.verKey) || map.has(p.artKey));
+                    if (remaining.length === 0) {
+                        perArtifactMap.delete(evictedEntry.ArtifactIndexKey);
+                    } else if (remaining.length !== pairs.length) {
+                        perArtifactMap.set(evictedEntry.ArtifactIndexKey, remaining);
+                    }
+                }
+            }
         }
     }
 

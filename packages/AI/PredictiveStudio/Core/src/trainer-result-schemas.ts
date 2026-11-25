@@ -14,7 +14,9 @@ import { z } from 'zod';
 import type { BaselineSpec, Budgets, CalibrationMethod, Interval, MetricKey, MetricWithInterval } from './evaluation-protocol';
 import type { GateDecision, PairedComparison } from './gate';
 import type {
+  CalibrationReport,
   CandidateSpec,
+  CodeVersion,
   LeakageFlag,
   SliceResult,
   StoredTrainerResult,
@@ -229,6 +231,8 @@ export class TrainerResultSchemas {
   public static readonly Interval: z.ZodType<Interval> = interval;
   /** One score with its interval. */
   public static readonly MetricWithInterval: z.ZodType<MetricWithInterval> = metricWithInterval;
+  /** A calibration report (the trainer's holdout calibration, or a monitored period's). */
+  public static readonly CalibrationReport: z.ZodType<CalibrationReport> = calibrationReport;
   /** One baseline specification. */
   public static readonly BaselineSpec: z.ZodType<BaselineSpec> = baselineSpec;
   /** A protocol's budgets, as a run's cost reports them. */
@@ -239,6 +243,14 @@ export class TrainerResultSchemas {
   public static readonly IncumbentDiff: z.ZodType<NonNullable<TrainerCompleted['incumbentDiff']>> = incumbentDiff;
   /** The gate's decision. */
   public static readonly GateDecision: z.ZodType<GateDecision> = z.discriminatedUnion('outcome', [gateModel, gateKeepSimple, gateNoSignal]);
+  /** A gate decision that ships the model. */
+  public static readonly GateModel: z.ZodType<Extract<GateDecision, { readonly outcome: 'model' }>> = gateModel;
+  /** A gate decision that keeps the best simple baseline. */
+  public static readonly GateKeepSimple: z.ZodType<Extract<GateDecision, { readonly outcome: 'keep-simple-baseline' }>> = gateKeepSimple;
+  /** A gate decision that ships nothing. */
+  public static readonly GateNoSignal: z.ZodType<Extract<GateDecision, { readonly outcome: 'no-signal' }>> = gateNoSignal;
+  /** The code a run executed. */
+  public static readonly CodeVersion: z.ZodType<CodeVersion> = codeVersion;
   /** One leakage-audit finding. */
   public static readonly LeakageFlag: z.ZodType<LeakageFlag> = leakageFlag;
   /** The primary score on one slice. */

@@ -131,3 +131,25 @@ describe('verifyDatabaseConnection', () => {
     expect(close).toHaveBeenCalled();
   });
 });
+
+describe('verifyDatabaseConnection — PostgreSQL TLS advice', () => {
+  const pgConfig: DbConnectionConfig = { ...baseConfig, dbPlatform: 'postgresql', dbPort: 5432 };
+
+  beforeEach(() => {
+    openConnectionMock.mockReset();
+  });
+
+  it('points an untrusted PostgreSQL certificate at PG_SSL_CA_FILE, not the SQL Server setting', async () => {
+    openConnectionMock.mockRejectedValue(new Error('unable to verify the first certificate'));
+    const result = await VerifyDatabaseConnection(pgConfig);
+    expect(result.Reason).toBe('tls-untrusted-cert');
+    expect(result.Suggestion).toMatch(/PG_SSL_CA_FILE/);
+    expect(result.Suggestion).not.toMatch(/DB_TRUST_SERVER_CERTIFICATE/);
+  });
+
+  it('explains a TLS-only server rejecting a plain-TCP connection', async () => {
+    openConnectionMock.mockRejectedValue(new Error('no pg_hba.conf entry for host "127.0.0.1", user "mj", database "mj", no encryption'));
+    const result = await VerifyDatabaseConnection(pgConfig);
+    expect(result.Suggestion).toMatch(/only accepts TLS.*PG_SSL_MODE=verify-full/);
+  });
+});

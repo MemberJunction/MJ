@@ -8,6 +8,8 @@
       "Status": "Active",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
+      "MaxIterationsPerRun": 20,
+      "ContextWindowMaxTokens": 120000,
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
       "ArtifactCreationMode": "System Only",
@@ -155,6 +157,10 @@
           },
           "primaryKey": {
             "ID": "22176029-CA01-4FC2-80DC-2450AE7752A1"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:44.140Z",
+            "checksum": "cd9988ba1fa0bebdf24a218b52375ba8ca540fe7d9eb0e5d4076f1a92f5c4a58"
           }
         },
         {
@@ -1008,6 +1014,10 @@
                 },
                 "primaryKey": {
                   "ID": "B6987F12-DAE4-428F-B636-808E230B356E"
+                },
+                "sync": {
+                  "lastModified": "2026-11-24T20:27:44.193Z",
+                  "checksum": "8f232c076fa4fc7c5b2be19f1bc6dd3a430157aef18e2bc1db8c5ef984f69e6d"
                 }
               },
               {
@@ -1023,6 +1033,10 @@
                 },
                 "primaryKey": {
                   "ID": "64835630-81E2-4938-BEE9-32553FF660E9"
+                },
+                "sync": {
+                  "lastModified": "2026-11-24T20:27:44.209Z",
+                  "checksum": "a08dfd0921ceb3fc348a836b24544aa85fc8262dff627396fafeccdcd701f1bb"
                 }
               },
               {
@@ -1038,6 +1052,10 @@
                 },
                 "primaryKey": {
                   "ID": "E310AB9B-45AA-46EF-BDF4-D9B59E419A29"
+                },
+                "sync": {
+                  "lastModified": "2026-11-24T20:27:44.218Z",
+                  "checksum": "0a017e81e5e6e7a0dd83ca59d3f590e747b82accc0ef87b5788d566e7d988dde"
                 }
               }
             ]
@@ -1078,8 +1096,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-11-18T00:24:47.343Z",
-      "checksum": "ccbb2da4321ec48e4e416a14df967b903bb4026562ce842e5ee9196a2c043c5e"
+      "lastModified": "2026-11-24T20:27:44.118Z",
+      "checksum": "190fd7e64f0ecb58e130664336a337218d64c193f8971635bdfca558327220d6"
     }
   }
 ]

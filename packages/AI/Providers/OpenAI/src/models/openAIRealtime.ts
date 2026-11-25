@@ -190,6 +190,11 @@ export interface OpenAIRealtimeProfile {
      * (`resumption: { enabled: true }` in `session.update` and `?conversation_id=<handle>` on reconnect).
      */
     supportsNativeResumption?: boolean;
+    /**
+     * Whether the provider ADDS a response's `instructions` to the session prompt, where OpenAI replaces the prompt with
+     * them. A spoken update then sends its direction alone, instead of the session prompt and the direction.
+     */
+    responseInstructionsAddToPrompt?: boolean;
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
@@ -1426,7 +1431,7 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         this.responseActive = true;
         this.NotifyTurnStarted();
         const direction = typeof instructions === 'string' ? instructions.trim() : '';
-        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${direction.length > 0 ? 'yes, with the session prompt carried ahead of it' : 'none → session prompt governs'})`);
+        RealtimeDiagLog(`[${this.profile.providerKey}Realtime][diag] RequestSpokenUpdate → sending response.create (perResponseInstructions=${direction.length > 0 ? 'yes' : 'none → session prompt governs'})`);
         // CRITICAL: OpenAI's `response.create` treats `response.instructions` as a FULL override of the
         // session system prompt for that response. A blank value ⇒ plain `response.create` ⇒ the session
         // prompt governs; forwarding `''` as an override would wipe the co-agent identity framing (incl.
@@ -1442,7 +1447,7 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
         // configured name. So the session prompt is carried AHEAD of the direction, which keeps the
         // direction last — the most recent line is the one the model weights hardest — and means no caller
         // has to restate an identity the session already holds.
-        const identity = this.activeSystemPrompt;
+        const identity = this.profile.responseInstructionsAddToPrompt ? null : this.activeSystemPrompt;
         const perResponse = identity === null ? direction : `${identity}\n\n${direction}`;
         this.connection.send(
             direction.length > 0
@@ -1723,37 +1728,45 @@ export class OpenAIRealtimeSession extends BaseRealtimeSession implements IRealt
 
     private awaitConnectionCreated(conn: IOpenAIRealtimeConnection): Promise<void> {
         return new Promise<void>((resolve, reject) => {
-            const timer = setTimeout(() => {
+            let settled = false;
+            const stopWaiting = (): void => {
+                settled = true;
+                clearTimeout(timer);
                 conn.off('event', onEvent);
                 conn.off('error', onError);
-                this.discardConnection(conn, 'session.created did not arrive in time');
-                reject(new Error(`session.created not received within ${REALTIME_CONNECTION_SETUP_TIMEOUT_MS}ms during reconnect`));
+            };
+            const fail = (why: string, message: string): void => {
+                stopWaiting();
+                this.discardConnection(conn, why);
+                reject(new Error(message));
+            };
+
+            const timer = setTimeout(() => {
+                fail('session.created did not arrive in time', `session.created not received within ${REALTIME_CONNECTION_SETUP_TIMEOUT_MS}ms during reconnect`);
             }, REALTIME_CONNECTION_SETUP_TIMEOUT_MS);
             (timer as { unref?: () => void }).unref?.();
 
             const onEvent = (event: RealtimeServerEvent): void => {
-                if (event.type !== 'session.created') {
-                    return;
+                if (event.type === 'session.created') {
+                    stopWaiting();
+                    resolve();
                 }
-                clearTimeout(timer);
-                conn.off('event', onEvent);
-                conn.off('error', onError);
-                resolve();
             };
 
             const onError = (error: OpenAIRealtimeError): void => {
-                if (error.error != null) {
-                    return;
+                if (error.error == null) {
+                    fail('it failed before session.created', error.message);
                 }
-                clearTimeout(timer);
-                conn.off('event', onEvent);
-                conn.off('error', onError);
-                this.discardConnection(conn, 'it failed before session.created');
-                reject(new Error(error.message));
             };
 
             conn.on('event', onEvent);
             conn.on('error', onError);
+            // The socket's close listener cannot be removed, so one that fires later is ignored.
+            conn.socket?.addEventListener('close', () => {
+                if (!settled) {
+                    fail('it closed before session.created', `${this.profile.unexpectedCloseMessage} before session.created during reconnect`);
+                }
+            });
         });
     }
 

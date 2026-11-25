@@ -51,13 +51,12 @@ env:
   # The default (node_modules/.cache/turbo) lives inside a directory the pnpm setup owns and
   # would be awkward to cache independently of the store.
   TURBO_CACHE_DIR: .turbo/cache
-  # How many parallel test shards. 6 is the point of diminishing returns, not an arbitrary pick:
-  # the heaviest single package (ng-dashboards, ~305s) is an irreducible floor for whichever
-  # shard holds it, and 6 shards puts each shard's total work right at that floor (~916s of
-  # aggregate work ÷ the ~3x effective parallelism a 4-vCPU runner achieves ≈ 305s). A 7th shard
-  # buys nothing. Lower it if this repo starts queueing against the free-tier concurrent-job
-  # limit; the planner handles any value ≥ 1.
-  SHARD_COUNT: '6'
+  # How many parallel test shards. Recalibrated 2026-11-24: the aggregate suite grew from 8,537s
+  # (2026-10-28) to 15,984s (~266 min), with ng-conversations (777s) and ai-agents (766s) as the
+  # heaviest single packages. 8 shards puts each shard's aggregate work around ~33 min (~12-13 min
+  # wall time on a 4-vCPU runner), right at that single-package floor. Lower it if this repo starts
+  # queueing against concurrent-job limits; the planner handles any value ≥ 1.
+  SHARD_COUNT: '8'
 
 jobs:
   # ---------------------------------------------------------------------------------------
@@ -203,6 +202,9 @@ jobs:
             .github/scripts/check-turbo-cache-env.mjs
             # The turbo root-data inputs guard runs in the guards job; its suite lives in __tests__ above.
             .github/scripts/check-turbo-root-inputs.mjs
+            # The Vitest threads safety guard runs in the guards job; its suite lives in __tests__ above.
+            .github/scripts/check-vitest-threads-safety.mjs
+            .github/scripts/vitest-threads-allowlist.json
             # Video Studio real-render workflow: an edit to it must run the workflow guard suites.
             .github/workflows/video-studio-render.yml
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
@@ -216,6 +218,7 @@ jobs:
             .github/workflows/ci-standards.yml
             .github/workflows/pg-migrations.yml
             .github/workflows/claude-pack.yml
+            .github/workflows/build.yml
             .github/workflows/release-test.yml
             .github/workflows/publish.yml
           PATHS
@@ -402,7 +405,7 @@ jobs:
       # (that is the other half of this fix), so pointing at it here would match nothing. And
       # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
       # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings)
+      - name: Repo-wide compliance scans (UUID + multi-provider + field-security egress + platform strings + static numeric literals)
         if: ${{ !cancelled() }}
         run: >-
           pnpm --filter @memberjunction/global exec vitest run
@@ -412,6 +415,7 @@ jobs:
           src/__tests__/MultiProviderCompliance.test.ts
           src/__tests__/FieldSecurityEgressCompliance.test.ts
           src/__tests__/PlatformStringCompliance.test.ts
+          src/__tests__/StaticNumericLiteralCompliance.test.ts
 
       # The primary-key scanner is the same kind of repo-wide scan, hosted in MJCore. In MJCore's
       # per-package `test` task it ran only when a PR touched MJCore (core sits at the bottom of the
@@ -424,6 +428,10 @@ jobs:
           pnpm --filter @memberjunction/core exec vitest run
           --passWithNoTests=false
           src/__tests__/PrimaryKeyCompliance.test.ts
+
+      - name: Vitest threads safety guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-vitest-threads-safety.mjs
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
@@ -588,6 +596,8 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     outputs:
       turbo_filter: ${{ steps.scope.outputs.turbo_filter }}
+      is_full_suite: ${{ steps.scope.outputs.is_full_suite }}
+      test_seed_prefix: ${{ steps.scope.outputs.test_seed_prefix }}
       shards: ${{ steps.plan.outputs.shards }}
       has_tests: ${{ steps.plan.outputs.has_tests }}
     steps:
@@ -660,6 +670,17 @@ jobs:
             echo "Event '${{ github.event_name }}' — running the FULL suite (backstop)."
           fi
           echo "turbo_filter=$FILTER" >> "$GITHUB_OUTPUT"
+          if [ -z "$FILTER" ]; then
+            echo "is_full_suite=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_full_suite=false" >> "$GITHUB_OUTPUT"
+          fi
+          # Tie the Option A test cache seed prefix to runner OS, Node version, and mj-setup so
+          # runtime/setup changes invalidate the seed automatically (cleanup has no checkout, so
+          # computing this once here guarantees test and cleanup agree on the exact prefix).
+          SETUP_HASH="$(git rev-parse HEAD:.github/actions/mj-setup | cut -c1-12)"
+          NODE_VER="$(node -v | tr -cd 'A-Za-z0-9._-')"
+          echo "test_seed_prefix=turbo-test-v1-${{ runner.os }}-${NODE_VER}-${SETUP_HASH}-" >> "$GITHUB_OUTPUT"
 
       # `test:types` = the spec type-check gate (tsc --noEmit -p tsconfig.spec.json in each
       # DOM-testing package). Vitest/esbuild is transpile-only — it strips types and silently
@@ -781,7 +802,13 @@ jobs:
           if-no-files-found: error
 
       # Partition the in-scope packages into balanced shards for the matrix below. Runs after
-      # the build so the turbo dry-run it uses reads a warm graph.
+      # the build so the turbo dry-run it uses reads a warm graph. `--split-above=700` splits
+      # pure `vitest run` mega-packages (>~11.5 min, e.g. ng-conversations, ai-agents) into
+      # Vitest `--shard=j/k` sub-shards across runners when they exceed BOTH 700s AND the mean
+      # shard weight (`totalWeight / shardCount`) — i.e., small/scoped PRs where one mega-package
+      # dominates the critical path and idle shards are available. On full-suite runs every
+      # package fits well below the mean shard weight, so keeping them unsplit avoids serial
+      # post-block overhead and spreads heavy Angular DOM suites evenly across all 8 shards.
       - name: Plan test shards
         id: plan
         env:
@@ -790,13 +817,15 @@ jobs:
         # (`--filter=...[base]`), and in the space form the parser cannot tell that apart from
         # a valueless flag followed by the next option — it silently drops the `--filter=`
         # prefix and turbo then reports the remainder as an unknown TASK name.
-        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --turbo-args="$TURBO_FILTER"
+        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --split-above=700 --turbo-args="$TURBO_FILTER"
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
-      # read by another run, and deleted by the cleanup job at the end — the repo shares one
+      # read by another run, and always deleted by the cleanup job at the end — the repo shares one
       # LRU-evicted Actions cache budget, and a ~3 GB entry per PR would evict the `next` seed that
-      # every PR's build restores from. run_attempt is in the key so a re-run rebuilds rather
-      # than reading a half-written entry from the attempt that failed.
+      # every PR's build restores from. run_attempt is included so a full re-run gets a fresh key;
+      # on "Re-run failed jobs" (where build does not re-run), shards fall back via restore-keys to
+      # `turbo-run-<run_id>-` if still present and otherwise to `turbo-v1-<os>-` (next's build seed)
+      # so they only rebuild the PR's changed subtree without leaving orphaned ~3 GB entries behind.
       - name: Save turbo cache for the test shards
         uses: actions/cache/save@v6
         with:
@@ -920,6 +949,14 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
+          # Fallback for "Re-run failed jobs": when build passed in attempt 1, attempt 2 runs only
+          # the failed shards and never creates `turbo-run-${run_id}-2`. Attempt 1's cleanup job
+          # always deletes attempt 1's handoff entry, so `turbo-run-${run_id}-` only hits if that
+          # cleanup failed; normally the re-run is served by `turbo-v1-<os>-` (next's build seed),
+          # so a shard rebuilds only the PR's changed subtree, never ~387 packages from scratch.
+          restore-keys: |
+            turbo-run-${{ github.run_id }}-
+            turbo-v1-${{ runner.os }}-
 
       # Deliberately NOT fail-on-cache-miss. A miss is a slow shard, not a wrong one: turbo
       # rebuilds this shard's own subtree (a fraction of the repo) and the tests are just as
@@ -928,6 +965,35 @@ jobs:
       - name: Warn when the build handoff missed
         if: steps.shard_cache.outputs.cache-hit != 'true'
         run: echo "::warning::Run-scoped turbo cache miss — this shard will rebuild its own dependency subtree, which is slower but still correct."
+
+      # Option A (PR-#6817-safe): restore next's read-only test-task cache seed. Written ONLY by
+      # push/schedule backstops on `next` (see cleanup job), so scoped PR shards replay unchanged
+      # dependent `test` tasks from local disk with zero remote-cache credentials and zero PR writes
+      # to `next`. Skipped on full-suite PR runs (is_full_suite == 'true') so PRs touching root
+      # config, lockfiles, vitest presets, or test.yml always execute every test fresh.
+      - name: Restore next test cache seed
+        if: github.event_name != 'pull_request' || needs.build.outputs.is_full_suite != 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/test-seed
+          key: ${{ needs.build.outputs.test_seed_prefix }}${{ github.sha }}
+          restore-keys: |
+            ${{ needs.build.outputs.test_seed_prefix }}
+
+      - name: Merge next test cache seed into local turbo cache
+        run: |
+          mkdir -p .turbo/cache
+          if [ -d .turbo/test-seed ]; then
+            cp -rn .turbo/test-seed/. .turbo/cache/ 2>/dev/null || true
+            rm -rf .turbo/test-seed
+          fi
+
+      # Snapshot pre-test `.turbo/cache` entries on backstop runs so we can upload ONLY the small
+      # delta of newly produced `test` task entries (megabytes, not the 3 GB build cache).
+      - name: Record pre-test turbo cache entries
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+        run: |
+          find .turbo/cache -maxdepth 1 -name '*.tar.zst' -printf '%f\n' 2>/dev/null | sort > /tmp/pre-test-cache.txt || true
 
       # The gitignored class-registration manifests the root postbuild writes into the SOURCE
       # tree. See the build job's packaging step for why the turbo cache cannot carry these.
@@ -957,6 +1023,7 @@ jobs:
       - name: Run unit tests
         env:
           SHARD_PACKAGES: ${{ matrix.shard.packages }}
+          SHARD_SPLIT_PACKAGES: ${{ matrix.shard.splitPackages || '' }}
         run: |
           # Via env, never interpolated into the script: package names must not reach the shell.
           FILTER_ARGS=()
@@ -964,21 +1031,79 @@ jobs:
           for p in "${PKGS[@]}"; do
             [ -n "$p" ] && FILTER_ARGS+=("--filter=$p")
           done
-          if [ ${#FILTER_ARGS[@]} -eq 0 ]; then
+          SPLIT_SPECS=()
+          IFS=',' read -ra RAW_SPLITS <<< "$SHARD_SPLIT_PACKAGES"
+          for s in "${RAW_SPLITS[@]}"; do
+            [ -n "$s" ] && SPLIT_SPECS+=("$s")
+          done
+          if [ ${#FILTER_ARGS[@]} -eq 0 ] && [ ${#SPLIT_SPECS[@]} -eq 0 ]; then
             echo "::error::Shard received no packages — the planner produced an empty shard, which it must never do."
             exit 1
           fi
-          echo "Shard ${{ matrix.shard.index }}/${{ matrix.shard.total }}: ${#FILTER_ARGS[@]} package(s)"
-          # --concurrency=4: Angular DOM suites each spin heavy AOT-compile + jsdom workers
-          # (capped to 2/package by vitest.dom.shared.ts), so peak workers (concurrency × 2)
-          # must stay well under the 16 GB runner's limit — uncapped it OOM'd with exit 137 on
-          # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
-          # the heavy DOM packages across shards, yet a shard can still draw several.
+          echo "Shard ${{ matrix.shard.index }}/${{ matrix.shard.total }}: ${#FILTER_ARGS[@]} whole package(s), ${#SPLIT_SPECS[@]} split sub-shard(s)"
+          # --concurrency=2: paired with `maxWorkers: 2` in vitest.dom.shared.ts and vitest.shared.ts
+          # (under CI), each 4-vCPU shard runs at most 2 × 2 = 4 active Vitest workers — full CPU
+          # saturation with zero oversubscription and bounded DOM memory (~6 GB vs ~12 GB at
+          # concurrency=4). At --concurrency=4 with uncapped node workers, 4 concurrent packages
+          # spawned up to 16 workers on 4 vCPUs, inflating single-test wall time 2.5-3× and causing
+          # Vitest `Timeout calling "onTaskUpdate"` RPC errors and 60s test timeouts (run 45542108907).
           # Tee into a log so the digest step below can read the vitest counters on failure.
           # A step with no `shell:` runs as `bash -e {0}`, without pipefail, so the pipeline would
           # exit with tee's status and a failed test task would leave the shard green.
           set -o pipefail
-          npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee /tmp/shard-test.log
+          : > /tmp/shard-test.log
+          # --continue, and no early exit between the whole-package run and the split runs: a red
+          # shard must still run EVERY task it was given, so one failure cannot hide others (or
+          # leave a split half like ng-conversations --shard=1/2 never run). The step still fails
+          # at the end if any run failed.
+          STATUS=0
+          if [ ${#FILTER_ARGS[@]} -gt 0 ]; then
+            npx turbo run test --continue --concurrency=2 "${FILTER_ARGS[@]}" 2>&1 | tee -a /tmp/shard-test.log || STATUS=1
+          fi
+          # A split package builds its dependency graph first WITHOUT pass-through args, then runs
+          # only its own test task. turbo hashes `-- --shard=j/k` into EVERY task of the run, so
+          # `turbo run test --filter=pkg -- --shard=…` missed the cache on all ~80 dependency
+          # builds and recompiled them (run 45512966433: 81/81 misses, 8m40s for a 219s suite).
+          for spec in "${SPLIT_SPECS[@]}"; do
+            pkg="${spec%:*}"
+            shard_arg="${spec##*:}"
+            echo "Running split package ${pkg} (--shard=${shard_arg})..."
+            if npx turbo run build --filter="$pkg" 2>&1 | tee -a /tmp/shard-test.log; then
+              npx turbo run test --continue --only --filter="$pkg" -- --shard="$shard_arg" 2>&1 | tee -a /tmp/shard-test.log || STATUS=1
+            else
+              STATUS=1
+            fi
+          done
+          exit "$STATUS"
+
+      # Upload only newly produced `test` task cache entries from backstop runs on `next` so the
+      # cleanup job can publish a compact `turbo-test-v1` seed for PR shards to restore read-only.
+      - name: Stage new test cache entries for next seed
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+        continue-on-error: true
+        run: |
+          mkdir -p /tmp/turbo-test-delta
+          find .turbo/cache -maxdepth 1 -name '*.tar.zst' -printf '%f\n' 2>/dev/null | sort > /tmp/post-test-cache.txt || true
+          comm -13 /tmp/pre-test-cache.txt /tmp/post-test-cache.txt > /tmp/new-test-cache.txt || true
+          COUNT=0
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            cp -f ".turbo/cache/$f" "/tmp/turbo-test-delta/$f" 2>/dev/null || true
+            meta="${f%.tar.zst}-meta.json"
+            [ -f ".turbo/cache/$meta" ] && cp -f ".turbo/cache/$meta" "/tmp/turbo-test-delta/$meta" 2>/dev/null || true
+            COUNT=$((COUNT + 1))
+          done < /tmp/new-test-cache.txt
+          echo "Staged ${COUNT} new test cache entry pair(s) for next seed."
+
+      - name: Upload test cache delta for next seed
+        if: success() && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: turbo-test-delta-${{ matrix.shard.index }}
+          path: /tmp/turbo-test-delta
+          retention-days: 1
+          if-no-files-found: ignore
 
       # A red shard hands you a job log tens of thousands of lines long in which the decisive
       # lines are not the ones you would grep for: a worker that loses its IPC heartbeat exits 1
@@ -995,7 +1120,7 @@ jobs:
       # real; this asserts they were not skipped, which is the one thing a green summary cannot
       # tell you by itself.
       - name: Assert the Redis-gated suites really ran
-        if: contains(matrix.shard.packages, '@memberjunction/redis-provider')
+        if: contains(matrix.shard.packages, '@memberjunction/redis-provider') || contains(matrix.shard.splitPackages || '', '@memberjunction/redis-provider')
         run: node .github/scripts/check-redis-suites-ran.mjs
 
   # ---------------------------------------------------------------------------------------
@@ -1037,6 +1162,9 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-run-${{ github.run_id }}-
+            turbo-v1-${{ runner.os }}-
 
       # The guard imports built dist/, so materialize it from the build job's cache. This is a
       # pure cache replay (no compilation) whenever the handoff hit.
@@ -1201,6 +1329,62 @@ jobs:
     permissions:
       actions: write
     steps:
+      # Option A (PR-#6817-safe): merge per-shard test cache deltas on green backstop runs on
+      # `next` and save a bounded read-only seed (`turbo-test-v1-...-<sha>`) for scoped PR shards.
+      - name: Restore previous next test cache seed
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/test-seed
+          key: ${{ needs.build.outputs.test_seed_prefix }}${{ github.sha }}
+          restore-keys: |
+            ${{ needs.build.outputs.test_seed_prefix }}
+
+      - name: Download shard test cache deltas
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          pattern: turbo-test-delta-*
+          merge-multiple: true
+          path: .turbo/test-seed
+
+      - name: Prune next test cache seed to a bounded size
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        env:
+          CAP_MB: 512
+        run: |
+          node -e '
+            const fs = require("fs"), path = require("path");
+            const dir = ".turbo/test-seed";
+            const capBytes = Number(process.env.CAP_MB) * 1024 * 1024;
+            if (!fs.existsSync(dir)) { console.log("No test seed dir — nothing to prune."); process.exit(0); }
+            const archives = fs.readdirSync(dir)
+              .filter((f) => f.endsWith(".tar.zst"))
+              .map((f) => { const s = fs.statSync(path.join(dir, f)); return { f, size: s.size, mtime: s.mtimeMs }; })
+              .sort((a, b) => b.mtime - a.mtime);
+            const total = archives.reduce((n, a) => n + a.size, 0);
+            console.log(`turbo test seed: ${archives.length} entries, ${(total / 1048576).toFixed(1)} MB (cap ${process.env.CAP_MB} MB)`);
+            let kept = 0, removed = 0;
+            for (const a of archives) {
+              if (kept + a.size <= capBytes) { kept += a.size; continue; }
+              fs.rmSync(path.join(dir, a.f), { force: true });
+              fs.rmSync(path.join(dir, a.f.replace(/\.tar\.zst$/, "-meta.json")), { force: true });
+              removed++;
+            }
+            console.log(`pruned ${removed} test seed entries; keeping ${(kept / 1048576).toFixed(1)} MB`);
+          '
+
+      - name: Save next test cache seed
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next' && needs.test.result == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: .turbo/test-seed
+          key: ${{ needs.build.outputs.test_seed_prefix }}${{ github.sha }}
+
       - name: Delete the run-scoped turbo cache
         continue-on-error: true
         env:
@@ -1244,39 +1428,41 @@ jobs:
           gh api --paginate --slurp "repos/$REPO/actions/caches?per_page=100" > /tmp/caches.json
 
           TOTAL=$(jq '[.[] | .actions_caches[]] | length' /tmp/caches.json)
-          SEEDS=$(jq '[.[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-"))] | length' /tmp/caches.json)
-          echo "caches: $TOTAL total, $SEEDS turbo-v1 seeds, keeping the newest $KEEP"
+          for PREFIX in "turbo-v1-Linux-" "turbo-test-v1-Linux-"; do
+            SEEDS=$(jq --arg p "$PREFIX" '[.[] | .actions_caches[] | select(.key | startswith($p))] | length' /tmp/caches.json)
+            echo "caches: $TOTAL total, $SEEDS ${PREFIX}* seeds, keeping the newest $KEEP"
 
-          # Guard: if the filter matched nothing, do nothing. Protects against a key-naming
-          # change silently turning this into either a no-op or, worse, a broad delete.
-          if [ "$SEEDS" -le "$KEEP" ]; then
-            echo "Nothing to prune."
-            exit 0
-          fi
-
-          jq -r --argjson keep "$KEEP" '
-            [ .[] | .actions_caches[] | select(.key | startswith("turbo-v1-Linux-")) ]
-            | sort_by(.created_at) | reverse | .[$keep:]
-            | .[] | "\(.id) \(.size_in_bytes)"
-          ' /tmp/caches.json > /tmp/prune.txt
-
-          DELETED=0; FREED=0; FAILED=0
-          # `|| [ -n "$line" ]` so a final line with no trailing newline is still processed —
-          # without it the last entry is silently skipped every time.
-          while read -r id size || [ -n "$id" ]; do
-            [ -z "$id" ] && continue
-            if gh api --method DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1; then
-              DELETED=$((DELETED + 1)); FREED=$((FREED + size))
-            else
-              FAILED=$((FAILED + 1))
+            # Guard: if the filter matched nothing, do nothing. Protects against a key-naming
+            # change silently turning this into either a no-op or, worse, a broad delete.
+            if [ "$SEEDS" -le "$KEEP" ]; then
+              echo "Nothing to prune for $PREFIX."
+              continue
             fi
-          done < /tmp/prune.txt
 
-          echo "Pruned $DELETED seed cache(s), freeing $((FREED / 1073741824)) GB; $FAILED failed."
-          echo "Pruned **$DELETED** turbo-v1 seed cache(s), freeing **$((FREED / 1073741824)) GB**" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$FAILED" -gt 0 ]; then
-            echo "::warning::$FAILED seed cache(s) could not be deleted — they will age out via LRU."
-          fi
+            jq -r --arg p "$PREFIX" --argjson keep "$KEEP" '
+              [ .[] | .actions_caches[] | select(.key | startswith($p)) ]
+              | sort_by(.created_at) | reverse | .[$keep:]
+              | .[] | "\(.id) \(.size_in_bytes)"
+            ' /tmp/caches.json > /tmp/prune.txt
+
+            DELETED=0; FREED=0; FAILED=0
+            # `|| [ -n "$line" ]` so a final line with no trailing newline is still processed —
+            # without it the last entry is silently skipped every time.
+            while read -r id size || [ -n "$id" ]; do
+              [ -z "$id" ] && continue
+              if gh api --method DELETE "repos/$REPO/actions/caches/$id" >/dev/null 2>&1; then
+                DELETED=$((DELETED + 1)); FREED=$((FREED + size))
+              else
+                FAILED=$((FAILED + 1))
+              fi
+            done < /tmp/prune.txt
+
+            echo "Pruned $DELETED ${PREFIX}* seed cache(s), freeing $((FREED / 1048576)) MB; $FAILED failed."
+            echo "Pruned **$DELETED** \`${PREFIX}*\` seed cache(s), freeing **$((FREED / 1048576)) MB**" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$FAILED" -gt 0 ]; then
+              echo "::warning::$FAILED ${PREFIX}* seed cache(s) could not be deleted — they will age out via LRU."
+            fi
+          done
 
   # Nightly coverage lane. Runs ONLY on the scheduled backstop (plus manual dispatch), in its
   # own job so the backstop suite above is untouched: it executes the curated node-tier

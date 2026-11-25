@@ -510,6 +510,16 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
         @media (prefers-reduced-motion: reduce) {
             .mj-voice-picker__switch-track, .mj-voice-picker__switch-track::after { transition: none; }
         }
+        /* Prevent iOS Safari auto-zoom when focusing inputs/selects inside the mobile voice picker. */
+        @media (max-width: 640px) {
+            .mj-voice-picker__search input,
+            .mj-voice-picker__select {
+                font-size: 16px;
+            }
+            :host ::ng-deep .mj-voice-picker__voice-row .mj-dropdown {
+                font-size: 16px;
+            }
+        }
         .mj-voice-picker__footer {
             display: flex; align-items: center; gap: 8px;
             padding: 10px 12px;

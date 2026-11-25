@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Registry Check",
+      "Description": "Runs the Predictive Studio registry check hourly: every finding of the model registry (a model published or demoted outside the lifecycle gate, a pipeline holding more than one Published model, a Published model whose stored artifact is missing or altered, a Published model without its scoring Action, a stale running scoring run, a sign-off wait past its rule, a publish record with no status change, a read permission on the prediction entities without the view gate) is remediated through the lifecycle gate and written, with its action, to the run's Details and a notification to the job's owner.",
+      "DriverClass": "PredictiveStudioRegistryCheckJobDriver",
+      "DomainRunEntity": null,
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "E48EA49B-B372-43BF-89B4-CD95756C0E9D"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.744Z",
+      "checksum": "2e195486994e7ce45a80e3d16dd7675baa8fc2a6a4215d27b8806b9b824aa767"
+    }
+  }
+]
