@@ -11,6 +11,13 @@ export default defineConfig({
     // `process.cpuUsage()`. A single package may opt in only with a green full Linux CI run
     // (`turbo run test --continue`) recorded in `.github/scripts/vitest-threads-allowlist.json`;
     // `.github/scripts/check-vitest-threads-safety.mjs` enforces both.
+    // On CI (4-vCPU runners executing multiple packages concurrently under turbo), uncapped
+    // workers default to CPU count (4/package), so concurrent packages oversubscribe the VM
+    // and starve Vitest's worker IPC (`Timeout calling "onTaskUpdate"`) and per-test timeouts.
+    // Cap to 2 workers on CI so `turbo run test --concurrency=2` runs at most 4 active workers
+    // on 4 vCPUs (matching `vitest.dom.shared.ts`), while local runs keep full parallelism.
+    // Turbo 2.x passes `CI` through by default in strict env mode without hashing it.
+    ...(process.env.CI ? { maxWorkers: 2 } : {}),
     testTimeout: 30000,
     // Match the test timeout: hooks default to 10s, but setup hooks that cold-import a
     // heavy transitive module graph (e.g. `await import(...)` in beforeEach) can exceed

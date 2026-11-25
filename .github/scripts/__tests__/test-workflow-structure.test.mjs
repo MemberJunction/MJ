@@ -403,7 +403,7 @@ describe('test.yml — intra-package sharding & read-only next test cache seed (
         // Without --continue (and with `bash -e` exiting on the first failed pipeline) a shard
         // stopped at its first failing package, so later packages and split halves never ran.
         const body = readJobSteps('test').find((s) => s.name === 'Run unit tests').body.join('\n');
-        expect(body).toMatch(/npx turbo run test --continue --concurrency=4 "\$\{FILTER_ARGS\[@\]\}" .*\|\| STATUS=1/);
+        expect(body).toMatch(/npx turbo run test --continue --concurrency=2 "\$\{FILTER_ARGS\[@\]\}" .*\|\| STATUS=1/);
         expect(body).toMatch(/--shard="\$shard_arg" .*\|\| STATUS=1/);
         expect(body).toMatch(/else\s+STATUS=1/); // a failed split-package build fails the shard too
         expect(body).toMatch(/exit "\$STATUS"/);

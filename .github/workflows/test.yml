@@ -1041,11 +1041,12 @@ jobs:
             exit 1
           fi
           echo "Shard ${{ matrix.shard.index }}/${{ matrix.shard.total }}: ${#FILTER_ARGS[@]} whole package(s), ${#SPLIT_SPECS[@]} split sub-shard(s)"
-          # --concurrency=4: Angular DOM suites each spin heavy AOT-compile + jsdom workers
-          # (capped to 2/package by vitest.dom.shared.ts), so peak workers (concurrency × 2)
-          # must stay well under the 16 GB runner's limit — uncapped it OOM'd with exit 137 on
-          # PR #3231, twice. Sharding reduces but does not remove the risk: the planner spreads
-          # the heavy DOM packages across shards, yet a shard can still draw several.
+          # --concurrency=2: paired with `maxWorkers: 2` in vitest.dom.shared.ts and vitest.shared.ts
+          # (under CI), each 4-vCPU shard runs at most 2 × 2 = 4 active Vitest workers — full CPU
+          # saturation with zero oversubscription and bounded DOM memory (~6 GB vs ~12 GB at
+          # concurrency=4). At --concurrency=4 with uncapped node workers, 4 concurrent packages
+          # spawned up to 16 workers on 4 vCPUs, inflating single-test wall time 2.5-3× and causing
+          # Vitest `Timeout calling "onTaskUpdate"` RPC errors and 60s test timeouts (run 45542108907).
           # Tee into a log so the digest step below can read the vitest counters on failure.
           # A step with no `shell:` runs as `bash -e {0}`, without pipefail, so the pipeline would
           # exit with tee's status and a failed test task would leave the shard green.
@@ -1057,7 +1058,7 @@ jobs:
           # at the end if any run failed.
           STATUS=0
           if [ ${#FILTER_ARGS[@]} -gt 0 ]; then
-            npx turbo run test --continue --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee -a /tmp/shard-test.log || STATUS=1
+            npx turbo run test --continue --concurrency=2 "${FILTER_ARGS[@]}" 2>&1 | tee -a /tmp/shard-test.log || STATUS=1
           fi
           # A split package builds its dependency graph first WITHOUT pass-through args, then runs
           # only its own test task. turbo hashes `-- --shard=j/k` into EVERY task of the run, so
