@@ -99693,9 +99693,10 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: OwnerUserID
-    * * Display Name: Owner User
+    * * Display Name: Owner
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
     * * Description: The user who owns this query: who created it, unless a holder of the Queries: Approve authorization reassigned it. Set by the server on create. A user whose only query grant is the UI role updates and deletes only queries they own. Queries that existed before this column got their creator from Record Changes, or the system user when none was recorded.
     */
     get OwnerUserID(): string {
@@ -99752,7 +99753,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
 
     /**
     * * Field Name: OwnerUser
-    * * Display Name: Owner User Name
+    * * Display Name: Owner Name
     * * SQL Data Type: nvarchar(100)
     */
     get OwnerUser(): string | null {

@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { AssertClientInputWritableForUser, LogError, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
-import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity, QueryEngine } from '@memberjunction/core-entities';
+import { MJQueryCategoryEntity, MJQueryPermissionEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryEntityEntity, QUERY_PERMISSIONS_REFUSAL } from '@memberjunction/core-entities';
 import { MJQueryResolver, MJQuery_, MJQueryField_, MJQueryParameter_, MJQueryEntity_, MJQueryPermission_ } from '../generated/generated.js';
 import { GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
@@ -558,12 +558,34 @@ export class MJQueryResolverExtended extends MJQueryResolver {
     }
 
     /**
-     * Deletes every `MJ: Query Permissions` row of the query.
-     *
-     * @throws Error naming the role and the delete's own message when a row is not deleted
+     * Whether this user may replace a query's role permissions: Create and Delete on
+     * `MJ: Query Permissions`. The replacement writes those rows, so it is authorized on them, never
+     * by the query's own save, which can succeed without writing anything (and so without the
+     * query's row filters being checked).
      */
-    protected async deletePermissions(queryID: string): Promise<void> {
-        for (const perm of QueryEngine.Instance.GetQueryPermissions(queryID)) {
+    protected static MayReplacePermissions(p: DatabaseProviderBase, user: UserInfo): boolean {
+        const permissions = p.EntityByName('MJ: Query Permissions')?.GetUserPermisions(user);
+        return permissions?.CanCreate === true && permissions?.CanDelete === true;
+    }
+
+    /**
+     * Deletes every `MJ: Query Permissions` row of the query, loaded and deleted as the caller so the
+     * caller's own permissions and row filters on that entity apply.
+     *
+     * @throws Error naming the role and the delete's own message when a row is not deleted, or the
+     *   load's message when the rows cannot be read
+     */
+    protected async deletePermissions(p: DatabaseProviderBase, queryID: string, contextUser: UserInfo): Promise<void> {
+        const stored = await p.RunView<MJQueryPermissionEntity>({
+            EntityName: 'MJ: Query Permissions',
+            ExtraFilter: `QueryID='${EscapeSQLString(queryID)}'`,
+            ResultType: 'entity_object',
+            BypassCache: true,
+        }, contextUser);
+        if (!stored.Success) {
+            throw new Error(`Failed to read the query's permissions: ${stored.ErrorMessage}`);
+        }
+        for (const perm of stored.Results) {
             if (!await perm.Delete()) {
                 throw new Error(MJQueryResolverExtended.permissionWriteError('delete', perm.RoleID, perm));
             }
@@ -600,6 +622,11 @@ export class MJQueryResolverExtended extends MJQueryResolver {
                     Success: false,
                     ErrorMessage: `Query with ID ${input.ID} not found`
                 };
+            }
+
+            // Refused before anything is written, so a refused replacement leaves the query unchanged
+            if (input.Permissions !== undefined && !MJQueryResolverExtended.MayReplacePermissions(provider, context.userPayload.userRecord)) {
+                return { Success: false, ErrorMessage: QUERY_PERMISSIONS_REFUSAL };
             }
 
             // Handle CategoryPath if provided
@@ -662,9 +689,9 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // Handle permissions update if provided
             let createdPermissions: MJQueryPermissionEntity[] | undefined;
             if (input.Permissions !== undefined) {
-                // Replace the existing permissions (read from the QueryEngine cache); a failed write stops the update with its reason
+                // Replace the existing permissions as the caller; a failed write stops the update with its reason
                 try {
-                    await this.deletePermissions(queryID);
+                    await this.deletePermissions(provider, queryID, context.userPayload.userRecord);
                     createdPermissions = await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
                 } catch (e) {
                     return { Success: false, ErrorMessage: `Failed to update query permissions: ${e instanceof Error ? e.message : String(e)}` };

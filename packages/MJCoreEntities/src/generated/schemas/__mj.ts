@@ -35304,9 +35304,10 @@ export const MJQuerySchema = z.object({
         * * Description: Hash of this query's current definition: its SQL, template flag, external source, dialect SQL and parameter contract. Stamped on every save. A list linked to this query compares it with List.SourceFingerprint before each refresh. NULL until the query is next saved or checked.`),
     OwnerUserID: z.string().describe(`
         * * Field Name: OwnerUserID
-        * * Display Name: Owner User
+        * * Display Name: Owner
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
         * * Description: The user who owns this query: who created it, unless a holder of the Queries: Approve authorization reassigned it. Set by the server on create. A user whose only query grant is the UI role updates and deletes only queries they own. Queries that existed before this column got their creator from Record Changes, or the system user when none was recorded.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
@@ -35330,7 +35331,7 @@ export const MJQuerySchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     OwnerUser: z.string().nullable().describe(`
         * * Field Name: OwnerUser
-        * * Display Name: Owner User Name
+        * * Display Name: Owner Name
         * * SQL Data Type: nvarchar(100)`),
 });
 

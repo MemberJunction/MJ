@@ -615,7 +615,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-prediction-serving': 8,
         'ps-truth-datasets': 68,
         'query-api-lifecycle': 12,
-        'query-approvals': 9,
+        'query-approvals': 10,
         'query-extraction': 15,
         'query-metadata-client': 3,
         'query-refresh': 16,

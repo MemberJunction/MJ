@@ -24,7 +24,9 @@ import {
     QueryDefinitionRows,
     QueryEngine,
     QUERY_APPROVAL_REFUSAL,
+    QUERY_COMPOSITION_FIELD_NAMES,
     QUERY_DEFINITION_FIELD_NAMES,
+    QUERY_DELETE_IN_USE_REFUSAL,
     QUERY_OWNER_REFUSAL,
     QUERY_VALIDATION_SQL_REFUSAL,
     UserCanApproveQueries,
@@ -322,12 +324,15 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
      * Saves a change to an Approved query's definition (its SQL, template flag or external source)
      * as Pending when the user saving it does not hold `Queries: Approve`. The approval named the
      * definition a holder approved; a new one needs a holder too. Until then every surface that lists
-     * Approved queries stops offering it, not only the runs that check the fingerprint.
+     * Approved queries stops offering it, not only the runs that check the fingerprint. A change to
+     * the name, category or `Reusable` flag does the same, because other Approved queries compose
+     * this one by its path (see `QUERY_COMPOSITION_FIELD_NAMES`).
      */
     private returnEditedApprovalToPending(): void {
         if (!this.IsSaved || this.Status !== 'Approved') return;
         if (this.GetFieldByName('Status').OldValue !== 'Approved') return;
-        if (!QUERY_DEFINITION_FIELD_NAMES.some(name => this.FieldIsDirty(name))) return;
+        const edited = [...QUERY_DEFINITION_FIELD_NAMES, ...QUERY_COMPOSITION_FIELD_NAMES];
+        if (!edited.some(name => this.FieldIsDirty(name))) return;
         const user = this.ContextCurrentUser;
         if (!user || UserCanApproveQueries(user, this.extractionProvider)) return;
         this.Status = 'Pending';
@@ -557,12 +562,48 @@ export class MJQueryEntityServer extends MJQueryEntityExtended {
 
     override async Delete(options?: EntitySaveOptions): Promise<boolean> {
         try {
+            if (!options?.ReplayOnly && await this.deleteWouldChangeOthersRecordsAsync()) {
+                this.RegisterResultHistoryEntry(this.deleteRefusalResult(QUERY_DELETE_IN_USE_REFUSAL));
+                return false;
+            }
             return await super.Delete(options);
         } catch (e) {
             LogError('Failed to delete query:', e);
             this.LatestResult?.Errors.push(e);
             return false;
         }
+    }
+
+    /**
+     * Whether deleting this query would change records the deleting user does not own, when that
+     * user does not hold `Queries: Approve`. `spDeleteQuery` deletes the dependency rows of every
+     * query that composes this one and unlinks every list sourced from it, so a user who may delete
+     * only their own queries is refused when another query composes it or another user's list is
+     * sourced from it. Their own list sourced from it does not stop the delete (that is the cleanup
+     * of a list's unused draft). A delete with no context user is not checked, like the approval rules.
+     *
+     * The rows are read as the system user: the deleting user's own row filters may hide another
+     * user's list, and only a yes/no leaves this method.
+     */
+    private async deleteWouldChangeOthersRecordsAsync(): Promise<boolean> {
+        const user = this.ContextCurrentUser;
+        if (!user || UserCanApproveQueries(user, this.extractionProvider)) return false;
+        const id = EscapeSQLString(this.ID);
+        const [dependents, lists] = await this.RunViewProviderToUse.RunViews<{ ID: string }>([
+            { EntityName: 'MJ: Query Dependencies', ExtraFilter: `DependsOnQueryID='${id}' AND QueryID<>'${id}'`, Fields: ['ID'], MaxRows: 1, ResultType: 'simple', BypassCache: true },
+            { EntityName: 'MJ: Lists', ExtraFilter: `SourceQueryID='${id}' AND UserID<>'${EscapeSQLString(user.ID)}'`, Fields: ['ID'], MaxRows: 1, ResultType: 'simple', BypassCache: true },
+        ], UserCache.Instance?.GetSystemUser?.() ?? user);
+        if (!dependents?.Success || !lists?.Success) {
+            throw new Error(`could not check what uses the query: ${dependents?.ErrorMessage || lists?.ErrorMessage}`);
+        }
+        return dependents.Results.length > 0 || lists.Results.length > 0;
+    }
+
+    /** The result entry for a refused delete, carrying the reason. */
+    private deleteRefusalResult(reason: string): BaseEntityResult {
+        const result = this.refusalResult(reason);
+        result.Type = 'delete';
+        return result;
     }
 
     // ─── Extraction ──────────────────────────────────────────────────────────────

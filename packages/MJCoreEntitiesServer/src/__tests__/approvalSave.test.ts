@@ -22,6 +22,12 @@ const { db, writes, saveOptions } = vi.hoisted(() => ({
         approveChecks: [] as unknown[][],
         /** Whether the context user has Update on MJ: Queries (the UI role does not). */
         canUpdateQueries: true,
+        /** Rows a read of MJ: Query Dependencies returns (queries that compose this one). */
+        dependents: [] as Array<Record<string, unknown>>,
+        /** Rows a read of MJ: Lists returns (lists sourced from this query). */
+        sourcedLists: [] as Array<Record<string, unknown>>,
+        /** The IDs of the records deleted. */
+        deletes: [] as string[],
     },
     writes: [] as Array<Record<string, unknown>>,
     saveOptions: [] as Array<EntitySaveOptions | undefined>,
@@ -62,13 +68,22 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
                 },
                 RunViews: async (params: RunViewParams[]) => {
                     db.views.push(...params);
-                    return params.map(p => ({ Success: true, Results: p.EntityName === 'MJ: Query SQLs' ? db.querySQLs : db.queryParameters, ErrorMessage: '' }));
+                    const rowsFor = (entityName: string) => {
+                        switch (entityName) {
+                            case 'MJ: Query SQLs': return db.querySQLs;
+                            case 'MJ: Query Dependencies': return db.dependents;
+                            case 'MJ: Lists': return db.sourcedLists;
+                            default: return db.queryParameters;
+                        }
+                    };
+                    return params.map(p => ({ Success: true, Results: rowsFor(p.EntityName ?? ''), ErrorMessage: '' }));
                 },
             };
         }
         public GetFieldByName(): { Dirty: boolean } { return { Dirty: false }; }
         public FieldIsDirty(): boolean { return false; }
         public async GenerateEmbeddingsByFieldName(): Promise<boolean> { return true; }
+        public async Delete(): Promise<boolean> { db.deletes.push(this.ID); return true; }
         public async Save(options?: EntitySaveOptions): Promise<boolean> {
             writes.push({
                 ApprovedByUserID: this.ApprovedByUserID,
@@ -147,6 +162,7 @@ vi.mock('../custom/util', () => ({ EmbedTextLocalHelper: vi.fn() }));
 vi.mock('../custom/FormComponentGuard', () => ({ ComponentGuardRefusal: vi.fn(async () => null) }));
 
 import {
+    QUERY_DELETE_IN_USE_REFUSAL,
     ComputeComponentFingerprintAsync,
     ComputeDashboardFingerprintAsync,
     ComputeQueryFingerprintAsync,
@@ -172,6 +188,9 @@ beforeEach(() => {
     db.canApproveQueries = true;
     db.approveChecks = [];
     db.canUpdateQueries = true;
+    db.dependents = [];
+    db.sourcedLists = [];
+    db.deletes = [];
     writes.length = 0;
     saveOptions.length = 0;
 });
@@ -473,6 +492,14 @@ describe('MJQueryEntityServer', () => {
             expect(writes[0]).toMatchObject({ ApprovedByUserID: 'original', ApprovedFingerprint: 'fp-d1' });
         });
 
+        it.each(['Name', 'CategoryID', 'Reusable'])('from a user who does not hold Queries: Approve saves it as Pending when it changes how others compose it (%s)', async (field) => {
+            db.stored = { Status: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' };
+            db.canApproveQueries = false;
+            const query = editedQuery([field]);
+            expect(await query.Save()).toBe(true);
+            expect(query.Status).toBe('Pending');
+        });
+
         it('from a holder stays Approved', async () => {
             db.stored = { Status: 'Approved', ApprovedByUserID: 'original', ApprovedAt: null, ApprovedFingerprint: 'fp-d1' };
             const query = editedQuery(['SQL']);
@@ -494,6 +521,48 @@ describe('MJQueryEntityServer', () => {
             const query = editedQuery(['SQL'], 'Pending');
             expect(await query.Save()).toBe(false);
             expect(writes).toHaveLength(0);
+        });
+    });
+
+    describe('Delete, which removes the dependency rows of composing queries and unlinks sourced lists', () => {
+        const deleteRefusal = (query: MJQueryEntityServer) =>
+            (query.RegisterResultHistoryEntry as unknown as ReturnType<typeof vi.fn>).mock.calls.map(c => (c[0] as { Message: string; Type: string }));
+
+        it('refuses a user who does not hold Queries: Approve when another query composes it', async () => {
+            db.canApproveQueries = false;
+            db.dependents = [{ ID: 'dep-1' }];
+            const query = create(MJQueryEntityServer);
+            expect(await query.Delete()).toBe(false);
+            expect(db.deletes).toEqual([]);
+            expect(deleteRefusal(query)).toEqual([expect.objectContaining({ Type: 'delete', Message: QUERY_DELETE_IN_USE_REFUSAL })]);
+        });
+
+        it('refuses that user when another user\'s list is sourced from it', async () => {
+            db.canApproveQueries = false;
+            db.sourcedLists = [{ ID: 'list-1' }];
+            const query = create(MJQueryEntityServer);
+            expect(await query.Delete()).toBe(false);
+            expect(db.deletes).toEqual([]);
+        });
+
+        it('deletes for that user when nothing else uses it, counting only other users\' lists', async () => {
+            db.canApproveQueries = false;
+            const query = create(MJQueryEntityServer);
+            expect(await query.Delete()).toBe(true);
+            expect(db.deletes).toEqual(['rec-1']);
+            const lists = db.views.find(v => v.EntityName === 'MJ: Lists');
+            expect(lists?.ExtraFilter).toBe("SourceQueryID='rec-1' AND UserID<>'approver-1'");
+            const dependents = db.views.find(v => v.EntityName === 'MJ: Query Dependencies');
+            expect(dependents?.ExtraFilter).toBe("DependsOnQueryID='rec-1' AND QueryID<>'rec-1'");
+        });
+
+        it('deletes for a holder without checking what uses it', async () => {
+            db.dependents = [{ ID: 'dep-1' }];
+            db.sourcedLists = [{ ID: 'list-1' }];
+            const query = create(MJQueryEntityServer);
+            expect(await query.Delete()).toBe(true);
+            expect(db.deletes).toEqual(['rec-1']);
+            expect(db.views).toEqual([]);
         });
     });
 

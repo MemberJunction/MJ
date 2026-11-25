@@ -11,7 +11,11 @@
 -- WHAT.
 --   1. Query.OwnerUserID, NOT NULL, references User. Existing queries get the user
 --      who created them, read from the Create row in Record Changes (MJ: Queries
---      tracks record changes), or the system user when there is no such row.
+--      tracks record changes), or the system user when there is no such row. The
+--      column defaults to the system user, as AIAgent.OwnerUserID does, so SQL that
+--      creates a query without naming an owner (spCreateQuery without
+--      @OwnerUserID, or an INSERT) keeps working. The server sets the owner on
+--      every save through the entity layer.
 --   2. A row-level-security filter, "UI: Own Queries":
 --
 --          (OwnerUserID = '{{UserID}}')
@@ -51,6 +55,10 @@ OUTER APPLY (
 GO
 
 ALTER TABLE ${flyway:defaultSchema}.Query ALTER COLUMN OwnerUserID UNIQUEIDENTIFIER NOT NULL;
+GO
+
+ALTER TABLE ${flyway:defaultSchema}.Query
+    ADD CONSTRAINT DF_Query_OwnerUserID DEFAULT 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' FOR OwnerUserID;
 GO
 
 ALTER TABLE ${flyway:defaultSchema}.Query
@@ -144,7 +152,7 @@ GO
 
 /* SQL text to insert 1 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ea62bb1e-7931-4456-bba2-ac31496ac6f3' OR (EntityID = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'OwnerUserID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '2583b90f-8463-40cd-b59a-5a77f293dc7b' OR (EntityID = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'OwnerUserID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -177,7 +185,7 @@ GO
          )
          VALUES
          (
-            'ea62bb1e-7931-4456-bba2-ac31496ac6f3',
+            '2583b90f-8463-40cd-b59a-5a77f293dc7b',
             '1B248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Queries
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1B248F34-2837-EF11-86D4-6045BDEE16E6'),
             'OwnerUserID',
@@ -188,7 +196,7 @@ GO
             0,
             0,
             0,
-            NULL,
+            'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E',
             0,
             1,
             0,
@@ -210,15 +218,15 @@ GO
 
 /* Create Entity Relationship: MJ: Users -> MJ: Queries (One To Many via OwnerUserID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '9a8e8cc3-6292-491f-869c-39dc11781c7c' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityJoinField] = 'OwnerUserID')
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '722c4ef3-2117-4435-88e6-f5db4c4316d3' OR ([EntityID] = 'E1238F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityID] = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND [RelatedEntityJoinField] = 'OwnerUserID')
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('9a8e8cc3-6292-491f-869c-39dc11781c7c', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '1B248F34-2837-EF11-86D4-6045BDEE16E6', 'OwnerUserID', 'One To Many', 1, 1, 141, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('722c4ef3-2117-4435-88e6-f5db4c4316d3', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '1B248F34-2837-EF11-86D4-6045BDEE16E6', 'OwnerUserID', 'One To Many', 1, 1, 141, GETUTCDATE(), GETUTCDATE())
    END;
 
-/* SQL text to update entity field related entity name field map for entity field ID EA62BB1E-7931-4456-BBA2-AC31496AC6F3 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='EA62BB1E-7931-4456-BBA2-AC31496AC6F3', @RelatedEntityNameFieldMap='OwnerUser';
+/* SQL text to update entity field related entity name field map for entity field ID 2583B90F-8463-40CD-B59A-5A77F293DC7B */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='2583B90F-8463-40CD-B59A-5A77F293DC7B', @RelatedEntityNameFieldMap='OwnerUser';
 
 /* Index for Foreign Keys for Query */
 -----------------------------------------------------------------
@@ -534,7 +542,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateQuery]
     @ExtractionMessage nvarchar(MAX) = NULL,
     @DefinitionFingerprint_Clear bit = 0,
     @DefinitionFingerprint nvarchar(100) = NULL,
-    @OwnerUserID uniqueidentifier
+    @OwnerUserID uniqueidentifier = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -618,7 +626,7 @@ BEGIN
                 CASE WHEN @ExtractionStatus_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionStatus, NULL) END,
                 CASE WHEN @ExtractionMessage_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionMessage, NULL) END,
                 CASE WHEN @DefinitionFingerprint_Clear = 1 THEN NULL ELSE ISNULL(@DefinitionFingerprint, NULL) END,
-                @OwnerUserID
+                CASE WHEN @OwnerUserID = '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END
             )
     END
     ELSE
@@ -697,7 +705,7 @@ BEGIN
                 CASE WHEN @ExtractionStatus_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionStatus, NULL) END,
                 CASE WHEN @ExtractionMessage_Clear = 1 THEN NULL ELSE ISNULL(@ExtractionMessage, NULL) END,
                 CASE WHEN @DefinitionFingerprint_Clear = 1 THEN NULL ELSE ISNULL(@DefinitionFingerprint, NULL) END,
-                @OwnerUserID
+                CASE WHEN @OwnerUserID = '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -1177,7 +1185,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
 
 /* SQL text to insert 1 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '952e3140-adc3-431c-acde-fe6beecc2b83' OR (EntityID = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'OwnerUser')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'ba3b7ad9-3687-440f-a841-bd966c9177cf' OR (EntityID = '1B248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'OwnerUser')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1210,7 +1218,7 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteQuery] TO [cdp_Developer], [
          )
          VALUES
          (
-            '952e3140-adc3-431c-acde-fe6beecc2b83',
+            'ba3b7ad9-3687-440f-a841-bd966c9177cf',
             '1B248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Queries
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1B248F34-2837-EF11-86D4-6045BDEE16E6'),
             'OwnerUser',
@@ -1247,16 +1255,16 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Query Definition',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Owner User'
+   DisplayName = 'Owner'
 WHERE 
-   ID = 'EA62BB1E-7931-4456-BBA2-AC31496AC6F3';
+   ID = '2583B90F-8463-40CD-B59A-5A77F293DC7B';
 
 -- UPDATE Entity Field Category Info MJ: Queries.OwnerUser 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Query Definition',
    GeneratedFormSection = 'Category',
-   DisplayName = 'Owner User Name'
+   DisplayName = 'Owner Name'
 WHERE 
-   ID = '952E3140-ADC3-431C-ACDE-FE6BEECC2B83';
+   ID = 'BA3B7AD9-3687-440F-A841-BD966C9177CF';
 
