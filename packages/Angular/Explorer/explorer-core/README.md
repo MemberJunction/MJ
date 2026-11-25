@@ -61,6 +61,7 @@ graph TD
 - **Resource Wrappers**: Specialized components for Records, Dashboards, Views, Queries, Lists, Search Results, Conversations, and Artifacts
 - **Command Palette**: Global keyboard-driven command search (Ctrl+K / Cmd+K)
 - **User Menu Plugin System**: Extensible via `BaseUserMenu` with `@RegisterClass` overrides
+- **Generic User Impersonation**: Authorization-gated `"View As User..."` flow under the user avatar menu, responsive searchable dialog, active session banner, and per-app `MJImpersonationAppAdapter` extension hook
 - **Route Guards**: `AuthGuardService` for authentication, `EntitiesGuard` for entity route validation
 - **System Validation**: Startup validation services with visual banner for configuration issues
 - **OAuth Module**: OAuth callback handling for external service integrations
@@ -147,6 +148,80 @@ export class CustomUserMenu extends BaseUserMenu {
 }
 ```
 
+### Generic User Impersonation ("View As User...")
+
+Explorer includes a built-in, authorization-gated user impersonation experience backed by `MJUserImpersonationService` and `UserImpersonationResolver` on `MJServer`.
+
+- **Zero UI clutter by default**: After sign-in, `ShellComponent` calls `MJUserImpersonationService.CheckCanImpersonate()`. Because the `User Impersonation` authorization ships with **zero role grants**, `"View As User..."` is hidden from the user avatar menu for every user until an administrator explicitly grants a role `Allow` in `MJ: Authorization Roles`.
+- **Avatar menu + responsive dialog + banner**: Authorized users see **View As User...** under the user avatar menu, which opens `<mj-user-impersonation-dialog>` (centered modal on desktop, bottom sheet on mobile, instant + server-side search). While impersonating, `<mj-user-impersonation-banner>` remains pinned at the top of the shell with one-click **Switch User** and **Exit** controls, and the avatar menu exposes **Switch Impersonated User...** and **Exit Impersonation** even when viewing as a restricted user.
+- **No IdP logout or shell teardown**: `MJUserImpersonationService` preserves the original authenticated `GraphQLDataProvider` (Bearer JWT) so switching User A → User B → Exit always authenticates control-plane calls as the real actor. For the impersonated session it creates a dedicated `GraphQLDataProvider(true)` configured with the short-lived `MJ-Impersonation:` API key, calls `await provider.RefreshCurrentUser()`, swaps `Metadata.Provider` + the `GraphQLDataProvider` global store + `ApplicationManager`/`WorkspaceStateManager`/`SharedService` provider references in place (avoiding `UserInfoEngine.Config(true)` shell teardown), closes stale tabs, and raises `MJEventType.TenantChanged` so `ComponentCacheManager` flushes cached views.
+
+#### App-Specific Extension Hook (`MJImpersonationAppAdapter`)
+
+Any MemberJunction application can register an `MJImpersonationAppAdapter` to customize the dialog title/subtitle, add one-click Quick Switch presets, add category filter pills, enrich candidates with organization/badges (or hide service accounts), and run custom post-switch navigation:
+
+```typescript
+import { Injectable, inject } from '@angular/core';
+import {
+  MJUserImpersonationService,
+  type MJImpersonationAppAdapter,
+  type MJImpersonationCandidate,
+} from '@memberjunction/ng-explorer-core';
+import { NavigationService } from '@memberjunction/ng-shared';
+
+@Injectable({ providedIn: 'root' })
+export class CrmImpersonationRegistration {
+  private readonly impersonation = inject(MJUserImpersonationService);
+  private readonly navigation = inject(NavigationService);
+
+  public Register(): () => void {
+    const adapter: MJImpersonationAppAdapter = {
+      id: 'crm-impersonation',
+      appPaths: ['crm'],
+      priority: 10,
+      title: 'View CRM As User',
+      subtitle: 'Inspect territory RLS, pipeline visibility, and account access as any CRM user.',
+      categories: [
+        { key: 'reps', label: 'Sales Reps', icon: 'fa-solid fa-briefcase' },
+        { key: 'managers', label: 'Regional Managers', icon: 'fa-solid fa-users' },
+      ],
+      quickPresets: [
+        {
+          key: 'west-rep',
+          label: 'West Territory Rep',
+          description: 'Restricted to West region accounts',
+          icon: 'fa-solid fa-compass',
+          resolveCandidate: (users) =>
+            users.find((u) => u.email.toLowerCase() === 'west.rep@example.com'),
+        },
+      ],
+      enrichCandidates: async (users: readonly MJImpersonationCandidate[]) => {
+        const territoryMap = await this.loadUserTerritories();
+        return users.map((u) => {
+          const info = territoryMap.get(u.userId);
+          return {
+            ...u,
+            organization: info?.region ?? null,
+            categoryKey: info?.isManager ? 'managers' : 'reps',
+            badges: info
+              ? [{ label: info.region, tone: 'info', icon: 'fa-solid fa-map-pin' }]
+              : [],
+          };
+        });
+      },
+      afterSwitch: async (_activeTarget) => {
+        // Optional: return to the app's landing dashboard after every user switch or exit
+        await this.navigation.SwitchToAppByPath('crm', 'Overview');
+      },
+    };
+
+    return this.impersonation.RegisterAppAdapter(adapter);
+  }
+}
+```
+
+For the full security model, authorization setup, and audit queries, see [guides/USER_IMPERSONATION_GUIDE.md](../../../../guides/USER_IMPERSONATION_GUIDE.md).
+
 ### Shell Chrome Policy
 
 Instance Config decides the platform-wide chrome (`Shell.SearchBar.Enabled`, `Shell.Notifications.Enabled`, `Shell.AppSwitcher.*`, `Shell.AppNav.Enabled`, `Shell.ChatOverlay.Enabled`) and is the ceiling. A host that needs a narrower answer for some users — a white-label product hiding the search bar for organizations whose plan does not include browsing the knowledge base, say — registers a `BaseShellChromePolicy` subclass. The shell consults it every time it resolves its flags and re-resolves when the policy fires `Changed`. Booleans can only be narrowed: a `true` from the policy never re-enables something Instance Config turned off. The resolved set is readable on `ShellComponent.ChromeFlags`; explorer-app reads `chatOverlay` from there to gate the floating chat bubble.
@@ -202,6 +277,10 @@ Key exports include:
 | `StartupValidationService` | Service | Startup validation checks |
 | `SystemValidationBannerComponent` | Component | Validation issue banner |
 | `BaseUserMenu` | Class | Extensible user menu base class |
+| `MJUserImpersonationService` | Service | Authorization-gated user impersonation coordinator + `RegisterAppAdapter()` extension hook |
+| `UserImpersonationDialogComponent` | Component | Responsive searchable `"View As User..."` modal / bottom sheet (`<mj-user-impersonation-dialog>`) |
+| `UserImpersonationBannerComponent` | Component | Persistent active-impersonation banner with Switch / Exit controls (`<mj-user-impersonation-banner>`) |
+| `MJImpersonationAppAdapter`, `MJImpersonationCandidate`, `MJImpersonationQuickPreset` | Interfaces | App extension hook types for customizing the impersonation dialog and post-switch flow |
 | `BaseShellChromePolicy` | Class | Host hook narrowing the shell chrome per user/tenant (`ShellChromeFlags`, `ApplyShellChromePolicy`) |
 | `UserMenuItem`, `UserMenuContext` | Interfaces | User menu type definitions |
 | `DashboardPreferencesDialogComponent` | Component | Dashboard preferences editor |

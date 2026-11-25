@@ -324,6 +324,7 @@ export * from './resolvers/DuplicateEntryCheckResolver.js';
 export * from './resolvers/RunTestResolver.js';
 export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
+export * from './resolvers/UserImpersonationResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';

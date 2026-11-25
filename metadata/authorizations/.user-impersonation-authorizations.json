@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "User Impersonation",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants permission to temporarily view the application as another active non-system user via a short-lived scoped API key. Granted to no roles by default; an administrator must explicitly assign an Allow grant in MJ: Authorization Roles."
+    },
+    "primaryKey": {
+      "ID": "062370F4-DAEC-4E5E-BD0A-4AF2A28968EE"
+    }
+  }
+]

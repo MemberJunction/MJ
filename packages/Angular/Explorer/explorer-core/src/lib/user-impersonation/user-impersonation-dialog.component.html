@@ -1,0 +1,259 @@
+@if (IsOpen) {
+  <div
+    class="impersonation-backdrop"
+    role="presentation"
+    (click)="OnBackdropClick($event)">
+    <div
+      class="impersonation-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mj-impersonation-dialog-title">
+      <!-- Header -->
+      <header class="impersonation-header">
+        <div class="impersonation-header-copy">
+          <div class="impersonation-title-row">
+            <span class="impersonation-title-icon" aria-hidden="true">
+              <i class="fa-solid fa-masks-theater"></i>
+            </span>
+            <h2 id="mj-impersonation-dialog-title" class="impersonation-title">
+              {{ DialogTitle }}
+            </h2>
+          </div>
+          <p class="impersonation-subtitle">{{ DialogSubtitle }}</p>
+        </div>
+        <button
+          mjButton
+          variant="icon"
+          size="sm"
+          type="button"
+          aria-label="Close dialog"
+          [disabled]="State.switching"
+          (click)="Close()">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </header>
+
+      <!-- Active impersonation notice inside dialog -->
+      @if (State.activeTarget; as active) {
+        <div class="impersonation-active-callout">
+          <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+          <span>
+            Currently viewing as <strong>{{ active.name }}</strong>
+            @if (active.email) {
+              ({{ active.email }})
+            }
+          </span>
+        </div>
+      }
+
+      <!-- Search & Category Filter Bar -->
+      <div class="impersonation-controls">
+        <div class="impersonation-search-wrap">
+          <i class="fa-solid fa-magnifying-glass impersonation-search-icon" aria-hidden="true"></i>
+          <input
+            #searchInput
+            type="search"
+            class="impersonation-search-input"
+            placeholder="Search by name, email, title, or role..."
+            aria-label="Search users to impersonate"
+            [ngModel]="SearchTerm"
+            (ngModelChange)="OnSearchChanged($event)"
+            [disabled]="State.switching" />
+          @if (SearchTerm) {
+            <button
+              type="button"
+              class="impersonation-search-clear"
+              aria-label="Clear search"
+              (click)="ClearSearch()">
+              <i class="fa-solid fa-circle-xmark" aria-hidden="true"></i>
+            </button>
+          }
+        </div>
+
+        @if (Categories.length > 0) {
+          <div class="impersonation-categories" role="tablist" aria-label="Filter user categories">
+            <button
+              type="button"
+              class="impersonation-category-pill"
+              [class.active]="SelectedCategoryKey === null"
+              (click)="SelectCategory(null)">
+              All
+            </button>
+            @for (cat of Categories; track cat.key) {
+              <button
+                type="button"
+                class="impersonation-category-pill"
+                [class.active]="SelectedCategoryKey === cat.key"
+                (click)="SelectCategory(cat.key)">
+                @if (cat.icon) {
+                  <i [class]="cat.icon" aria-hidden="true"></i>
+                }
+                <span>{{ cat.label }}</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Error Banner -->
+      @if (State.errorMessage) {
+        <div class="impersonation-error" role="alert">
+          <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+          <span>{{ State.errorMessage }}</span>
+        </div>
+      }
+
+      <!-- Scrollable Body -->
+      <div class="impersonation-body">
+        <!-- Optional App-Contributed Quick Presets -->
+        @if (ResolvedQuickPresets.length > 0 && !SearchTerm && !SelectedCategoryKey) {
+          <section class="impersonation-section" aria-label="Quick presets">
+            <div class="impersonation-section-label">Quick Switch</div>
+            <div class="impersonation-presets-grid">
+              @for (item of ResolvedQuickPresets; track item.preset.key) {
+                <button
+                  type="button"
+                  class="impersonation-preset-card"
+                  [class.is-active]="IsActiveCandidate(item.candidate)"
+                  [disabled]="State.switching || IsActiveCandidate(item.candidate)"
+                  (click)="SelectCandidate(item.candidate)">
+                  <div class="impersonation-preset-top">
+                    @if (item.preset.icon) {
+                      <i [class]="item.preset.icon" aria-hidden="true"></i>
+                    }
+                    <span class="impersonation-preset-label">{{ item.preset.label }}</span>
+                  </div>
+                  @if (item.preset.description) {
+                    <div class="impersonation-preset-desc">{{ item.preset.description }}</div>
+                  }
+                  <div class="impersonation-preset-user">{{ item.candidate.name }}</div>
+                </button>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- User Directory List -->
+        <section class="impersonation-section" aria-label="Users">
+          @if (Loading && FilteredCandidates.length === 0) {
+            <div class="impersonation-state-panel">
+              <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+              <span>Loading users...</span>
+            </div>
+          } @else if (FilteredCandidates.length === 0) {
+            <div class="impersonation-state-panel">
+              <i class="fa-solid fa-users-slash" aria-hidden="true"></i>
+              <span>No matching active users found.</span>
+            </div>
+          } @else {
+            <ul class="impersonation-user-list">
+              @for (candidate of FilteredCandidates; track candidate.userId) {
+                <li
+                  class="impersonation-user-row"
+                  [class.is-active]="IsActiveCandidate(candidate)">
+                  <div class="impersonation-avatar" aria-hidden="true">
+                    {{ GetInitials(candidate) }}
+                  </div>
+                  <div class="impersonation-user-meta">
+                    <div class="impersonation-user-primary">
+                      <span class="impersonation-user-name">{{ candidate.name }}</span>
+                      @if (candidate.organization) {
+                        <span class="impersonation-user-org">{{ candidate.organization }}</span>
+                      }
+                    </div>
+                    <div class="impersonation-user-secondary">
+                      @if (candidate.email) {
+                        <span>{{ candidate.email }}</span>
+                      }
+                      @if (candidate.title) {
+                        <span class="impersonation-dot" aria-hidden="true">·</span>
+                        <span>{{ candidate.title }}</span>
+                      }
+                    </div>
+                    @if (candidate.subtitle) {
+                      <div class="impersonation-user-subtitle">{{ candidate.subtitle }}</div>
+                    }
+                    @if (candidate.roleNames.length > 0 || (candidate.badges && candidate.badges.length > 0)) {
+                      <div class="impersonation-pills">
+                        @for (badge of candidate.badges ?? []; track badge.label) {
+                          <span
+                            class="impersonation-badge"
+                            [attr.data-tone]="badge.tone || 'neutral'">
+                            @if (badge.icon) {
+                              <i [class]="badge.icon" aria-hidden="true"></i>
+                            }
+                            <span>{{ badge.label }}</span>
+                          </span>
+                        }
+                        @for (role of candidate.roleNames; track role) {
+                          <span class="impersonation-role-pill">{{ role }}</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                  <div class="impersonation-user-action">
+                    @if (IsActiveCandidate(candidate)) {
+                      <span class="impersonation-active-pill">
+                        <i class="fa-solid fa-check" aria-hidden="true"></i>
+                        Active
+                      </span>
+                    } @else {
+                      <button
+                        mjButton
+                        variant="primary"
+                        size="sm"
+                        type="button"
+                        [disabled]="State.switching"
+                        (click)="SelectCandidate(candidate)">
+                        @if (SwitchingUserId === candidate.userId) {
+                          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                          Switching...
+                        } @else {
+                          View As
+                        }
+                      </button>
+                    }
+                  </div>
+                </li>
+              }
+            </ul>
+          }
+        </section>
+      </div>
+
+      <!-- Footer: Affirmative/Destructive on LEFT, Close on RIGHT (MJ Dialog Convention) -->
+      <footer class="impersonation-footer">
+        <div class="impersonation-footer-left">
+          @if (State.activeTarget) {
+            <button
+              mjButton
+              variant="danger"
+              size="sm"
+              type="button"
+              [disabled]="State.switching"
+              (click)="ExitImpersonation()">
+              <i class="fa-solid fa-arrow-right-from-bracket" aria-hidden="true"></i>
+              Exit Impersonation
+            </button>
+          }
+          <span class="impersonation-count">
+            Showing {{ FilteredCandidates.length }}
+            @if (TotalCount > FilteredCandidates.length) {
+              of {{ TotalCount }}
+            }
+            {{ FilteredCandidates.length === 1 ? 'user' : 'users' }}
+          </span>
+        </div>
+        <button
+          mjButton
+          variant="outline"
+          size="sm"
+          type="button"
+          [disabled]="State.switching"
+          (click)="Close()">
+          Close
+        </button>
+      </footer>
+    </div>
+  </div>
+}

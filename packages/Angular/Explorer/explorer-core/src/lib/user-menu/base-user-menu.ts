@@ -133,6 +133,28 @@ export class BaseUserMenu {
                 tooltip: 'View and edit your profile'
             },
             {
+                id: 'view-as-user',
+                label: this._context?.isImpersonating ? 'Switch Impersonated User...' : 'View As User...',
+                icon: 'fa-solid fa-masks-theater',
+                group: 'primary',
+                order: 15,
+                developerOnly: false,
+                visible: this._context?.canImpersonate === true,
+                enabled: true,
+                tooltip: 'Temporarily view the application as another user'
+            },
+            {
+                id: 'exit-impersonation',
+                label: 'Exit Impersonation',
+                icon: 'fa-solid fa-arrow-right-from-bracket',
+                group: 'primary',
+                order: 16,
+                developerOnly: false,
+                visible: this._context?.canImpersonate === true && this._context?.isImpersonating === true,
+                enabled: true,
+                tooltip: 'Return to your own authenticated session'
+            },
+            {
                 id: 'pin-to-home',
                 label: 'Pin to Home',
                 icon: 'fa-solid fa-house-chimney',
@@ -455,6 +477,24 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'diagnostic-bundle'
+        };
+    }
+
+    /** Signal the shell to open the View As User impersonation dialog */
+    protected async Handle_view_as_user(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'view-as-user'
+        };
+    }
+
+    /** Signal the shell to end the active user impersonation session */
+    protected async Handle_exit_impersonation(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'exit-impersonation'
         };
     }
 

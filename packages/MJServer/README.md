@@ -585,6 +585,26 @@ The server supports two types of API key authentication:
 - Authenticates as the system user with elevated privileges
 - Used for server-to-server communication
 
+### User Impersonation
+
+`UserImpersonationResolver` (`src/resolvers/UserImpersonationResolver.ts`) provides a built-in, fail-closed GraphQL control plane that lets explicitly authorized administrators temporarily view the application as another active user without signing out of their IdP session.
+
+| GraphQL Operation | Kind | Purpose |
+|---|---|---|
+| `MJCanImpersonateUsers` | Query | Returns `{ CanImpersonate, AuthorizationName, ResultCode, Message }` for the current non-impersonated session |
+| `MJListImpersonatableUsers(input)` | Query | Lists active, non-system users excluding the caller; supports case-insensitive `Search` across name/email/title/roles and `Limit` (default `100`, max `500`) |
+| `MJStartUserImpersonation(input)` | Mutation | Mints a temporary scoped `MJ: API Keys` token (`full_access`, default `120` min TTL, clamped to `5..240` min) labeled `MJ-Impersonation:<ActorEmail>-><TargetEmail>` and returns `{ RawApiKey, APIKeyID, ExpiresAt, TargetUser }` |
+| `MJEndUserImpersonation(input)` | Mutation | Deletes all `MJ: API Key Scopes` for the key, revokes it via `APIKeyEngine.RevokeAPIKey()`, deletes the key row when no FK retains it, and refreshes the engine cache |
+
+**Security invariants (fail-closed):**
+
+- **Locked down to nobody by default**: Every operation checks `EvaluateUserImpersonationAuthorization()` against the `MJ: Authorizations` row named **`User Impersonation`** (`metadata/authorizations/.user-impersonation-authorizations.json`). Zero `MJ: Authorization Roles` rows ship by default, and `Owner`, `Administrator`, and `Developer` accounts are **not** auto-allowed. An administrator must explicitly grant an `Allow` row in `MJ: Authorization Roles` (and any `Deny` grant takes precedence).
+- **Anti-chaining protection**: Any request authenticated with an `MJ-Impersonation:` API key (`context.userPayload.apiKeyId`) is rejected with `FORBIDDEN_IMPERSONATION_CHAIN`, preventing nested impersonation or user directory enumeration from an impersonated session. Scope-limited principals are also refused via `@RefuseScopeLimitedPrincipals()`.
+- **Target safety**: `System` users (`Type = 'System'`, `Name = 'System'`, or the resolved system user), inactive users (`IsActive = 0`), and self-impersonation are excluded from listing and rejected on `MJStartUserImpersonation`.
+- **Full audit trail**: Writes `MJ: Audit Logs` records under `User Impersonation Started`, `User Impersonation Ended`, and `User Impersonation Denied` (`metadata/audit-log-types/.user-impersonation-audit-types.json`) capturing `actorUserId`, `actorEmail`, `targetUserId`, `targetEmail`, `apiKeyId`, `ttlMinutes`, and `expiresAt`.
+
+See the full end-to-end guide in [guides/USER_IMPERSONATION_GUIDE.md](../../guides/USER_IMPERSONATION_GUIDE.md).
+
 ### Scope-Based Authorization
 
 API keys are subject to a two-level scope evaluation: the application ceiling (maximum allowed scopes for MJAPI, MCP Server, etc.) and the individual key's assigned scopes.
@@ -661,6 +681,7 @@ The server includes resolvers for the following domains:
 | `DatasetResolver` | Dataset operations |
 | `UserViewResolver` | User view management |
 | `UserResolver` | User profile operations |
+| `UserImpersonationResolver` | Authorization-gated temporary user impersonation (`MJCanImpersonateUsers`, `MJListImpersonatableUsers`, `MJStartUserImpersonation`, `MJEndUserImpersonation`) — see [User Impersonation](#user-impersonation) and [USER_IMPERSONATION_GUIDE.md](../../guides/USER_IMPERSONATION_GUIDE.md) |
 | `UserFavoriteResolver` | Favorite record management |
 | `MergeRecordsResolver` | `MergeRecords` mutation (requires `AllowRecordMerge` on the entity; API keys need the `entity:merge` scope), plus `GetEntityDependencies` / `GetRecordDependencies` queries. See the [Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md). |
 | `SyncDataResolver` / `SyncRolesUsersResolver` | Data synchronization |

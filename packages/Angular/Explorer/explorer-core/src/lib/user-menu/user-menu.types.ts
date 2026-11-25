@@ -178,6 +178,12 @@ export interface UserMenuContext {
 
     /** Whether administrative / workspace-management menu items should be shown (false for restricted participants) */
     showAdminMenuItems?: boolean;
+
+    /** Whether the real authenticated user holds the `User Impersonation` authorization */
+    canImpersonate?: boolean;
+
+    /** Whether the session is currently impersonating another user */
+    isImpersonating?: boolean;
 }
 
 /**
