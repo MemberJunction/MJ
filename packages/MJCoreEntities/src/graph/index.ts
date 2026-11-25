@@ -15,6 +15,7 @@ export * from './providers/EntityMetadataEdgeProvider';
 export * from './providers/QueryMetadataEdgeProvider';
 export * from './providers/AlternateBaseViewEdgeProvider';
 export * from './providers/SharedConceptEdgeProvider';
+export * from './providers/IndexAwareJoinEdgeProvider';
 
 import { LoadForeignKeyEdgeProvider } from './providers/ForeignKeyEdgeProvider';
 import { LoadJoinEntityEdgeProvider } from './providers/JoinEntityEdgeProvider';
@@ -24,6 +25,7 @@ import { LoadEntityMetadataEdgeProvider } from './providers/EntityMetadataEdgePr
 import { LoadQueryMetadataEdgeProvider } from './providers/QueryMetadataEdgeProvider';
 import { LoadAlternateBaseViewEdgeProvider } from './providers/AlternateBaseViewEdgeProvider';
 import { LoadSharedConceptEdgeProvider } from './providers/SharedConceptEdgeProvider';
+import { LoadIndexAwareJoinEdgeProvider } from './providers/IndexAwareJoinEdgeProvider';
 import { LoadProvenanceAccessPolicies } from './policies/ProvenanceAccessPolicies';
 
 /**
@@ -39,5 +41,6 @@ export function LoadGraphEdgeProviders(): void {
     LoadQueryMetadataEdgeProvider();
     LoadAlternateBaseViewEdgeProvider();
     LoadSharedConceptEdgeProvider();
+    LoadIndexAwareJoinEdgeProvider();
     LoadProvenanceAccessPolicies();
 }

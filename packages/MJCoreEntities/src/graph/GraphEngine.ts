@@ -699,7 +699,9 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
         const maxDepth = ClampGraphDepth(options.Depth ?? options.MaxDepth ?? GRAPH_MAX_DEPTH);
         const maxNodes = ClampGraphMaxNodes(options.MaxNodes, GRAPH_MAX_NODES);
         const stopAtKey = this.nodeKey(this.normalizeNodeRef(to, this.graphProvider(provider)), this.graphProvider(provider));
-        const run = await this.traverse(graph, [from], options, { MaxDepth: maxDepth, MaxNodes: maxNodes, StopAtKey: stopAtKey }, user, provider);
+        const run = options.Strategy === 'Weighted'
+            ? await this.traverseWeighted(graph, [from], options, { MaxDepth: maxDepth, MaxNodes: maxNodes, StopAtKey: stopAtKey }, user, provider)
+            : await this.traverse(graph, [from], options, { MaxDepth: maxDepth, MaxNodes: maxNodes, StopAtKey: stopAtKey }, user, provider);
         if (!run.discovered.has(stopAtKey)) {
             const limit = run.capped ? ` (the search stopped at the ${maxNodes}-node limit)` : '';
             return notFoundPath(`No path found within ${maxDepth} hop${maxDepth === 1 ? '' : 's'}${limit}.`);
@@ -761,6 +763,122 @@ export class GraphEngine extends BaseEngine<GraphEngine> {
             capped = capped || admitted.Capped;
             frontier = admitted.Next;
         }
+        return { discovered, visibleByKey, capped, maxNodes, principals, dataProvider };
+    }
+
+    /**
+     * Dijkstra best-first traversal maximizing `PathWeight` (product of edge weights × per-hop decay).
+     * Unlike hop-by-hop {@link traverse}, a settled node's `PathWeight` is optimal within `MaxDepth`
+     * and `MaxNodes`, so a higher-weight multi-hop path (such as indexed joins) beats a lower-weight
+     * direct edge (such as an unindexed table scan).
+     */
+    private async traverseWeighted(
+        graph: MJGraphEntity,
+        seeds: GraphNodeRef[],
+        options: GraphTraversalOptions,
+        limits: TraversalLimits,
+        user: UserInfo,
+        provider?: IMetadataProvider,
+    ): Promise<TraversalRun> {
+        const dataProvider = this.graphProvider(provider);
+        const principals = this.principals(user, options.AudienceReaders);
+        const minWeight = options.MinWeight ?? 0;
+        const includeProposed = options.IncludeProposed === true;
+        const discovered = new Map<string, DiscoveredNode>();
+        const visibleByKey = new Map<string, GraphNodeView>();
+        const settled = new Set<string>();
+        const maxNodes = limits.MaxNodes;
+        let capped = false;
+
+        const seedNodes = await this.admitSeeds(seeds, principals, maxNodes, dataProvider, includeProposed, discovered, visibleByKey);
+        const queue: DiscoveredNode[] = [...seedNodes];
+
+        while (queue.length > 0) {
+            queue.sort((a, b) => b.PathWeight - a.PathWeight || a.Hop - b.Hop || compareStrings(a.Key, b.Key));
+            const current = queue.shift()!;
+            if (settled.has(current.Key)) {
+                continue;
+            }
+            const bestKnown = discovered.get(current.Key);
+            if (bestKnown && bestKnown.PathWeight > current.PathWeight) {
+                continue;
+            }
+            settled.add(current.Key);
+            if (limits.StopAtKey != null && current.Key === limits.StopAtKey) {
+                break;
+            }
+            if (current.Hop >= limits.MaxDepth) {
+                continue;
+            }
+
+            const stepEdges = await this.getEdgesForFrontier(graph, [current.Node], options, principals, dataProvider);
+            const nextHop = current.Hop + 1;
+            const decay = Math.pow(HOP_DECAY, nextHop - 1);
+            const candidates: CandidateHop[] = [];
+            for (const edge of stepEdges) {
+                if (edge.Weight < minWeight) {
+                    continue;
+                }
+                const sourceKey = this.nodeKey(edge.Source, dataProvider);
+                const targetKey = this.nodeKey(edge.Target, dataProvider);
+                let neighbor: GraphNodeRef | null = null;
+                let neighborKey: string | null = null;
+                if (sourceKey === current.Key && !settled.has(targetKey)) {
+                    neighbor = edge.Target;
+                    neighborKey = targetKey;
+                } else if (targetKey === current.Key && !settled.has(sourceKey)) {
+                    neighbor = edge.Source;
+                    neighborKey = sourceKey;
+                }
+                if (!neighbor || !neighborKey) {
+                    continue;
+                }
+                const score = current.PathWeight * edge.Weight * decay;
+                const existing = discovered.get(neighborKey);
+                if (!existing || score > existing.PathWeight) {
+                    candidates.push({ Edge: edge, Parent: current, Neighbor: neighbor, NeighborKey: neighborKey, Score: score });
+                }
+            }
+            if (candidates.length === 0) {
+                continue;
+            }
+
+            candidates.sort(
+                (a, b) => b.Score - a.Score || compareStrings(a.NeighborKey, b.NeighborKey) || compareStrings(a.Edge.ID, b.Edge.ID),
+            );
+            const unresolved = this.uniqueNeighborRefs(candidates).filter((ref) => !visibleByKey.has(this.nodeKey(ref, dataProvider)));
+            if (unresolved.length > 0) {
+                const newlyVisible = await this.resolveVisibleNodes(unresolved, principals, dataProvider, includeProposed);
+                for (const [k, v] of newlyVisible) {
+                    visibleByKey.set(k, v);
+                }
+            }
+
+            for (const c of candidates) {
+                if (!visibleByKey.has(c.NeighborKey)) {
+                    continue;
+                }
+                const existing = discovered.get(c.NeighborKey);
+                if (!existing && discovered.size >= maxNodes) {
+                    capped = true;
+                    continue;
+                }
+                if (existing && existing.PathWeight >= c.Score) {
+                    continue;
+                }
+                const nextNode: DiscoveredNode = {
+                    Node: c.Neighbor,
+                    Key: c.NeighborKey,
+                    PathWeight: c.Score,
+                    Hop: nextHop,
+                    ParentKey: current.Key,
+                    ViaEdge: c.Edge,
+                };
+                discovered.set(c.NeighborKey, nextNode);
+                queue.push(nextNode);
+            }
+        }
+
         return { discovered, visibleByKey, capped, maxNodes, principals, dataProvider };
     }
 

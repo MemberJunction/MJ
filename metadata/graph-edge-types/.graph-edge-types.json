@@ -372,5 +372,19 @@
     "primaryKey": {
       "ID": "F8C2FFC8-B633-4CE2-B3DF-3620D25EE710"
     }
+  },
+  {
+    "fields": {
+      "GraphID": null,
+      "Name": "Indexed Join",
+      "Description": "Directed join path between two entities weighted by database index coverage on the target join column (PrimaryKey, LeadingIndexKey, NonLeadingIndexKey, or TableScan). Derived on read by IndexAwareJoinEdgeProvider; never stored.",
+      "IsDirected": true,
+      "InverseName": "Indexed Join",
+      "DefaultWeight": 0.85,
+      "AllowStored": false
+    },
+    "primaryKey": {
+      "ID": "7A6D41B2-9F3E-4C81-B5E2-18C4E9A03F7D"
+    }
   }
 ]

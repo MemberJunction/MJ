@@ -86,6 +86,13 @@ export interface GraphTraversalOptions {
     /** Maximum expanded nodes (`50` by default, clamped to `1..200`). */
     MaxNodes?: number;
     /**
+     * Traversal strategy for {@link GraphEngine.FindPath}:
+     * - `'HopFirst'` (default): hop-by-hop bounded expansion stopping at the first hop that reaches the target.
+     * - `'Weighted'`: Dijkstra best-first search maximizing `PathWeight`, allowing a higher-weight
+     *   multi-hop path (e.g. indexed joins) to beat a lower-weight direct edge (e.g. an unindexed scan).
+     */
+    Strategy?: 'HopFirst' | 'Weighted';
+    /**
      * Everyone besides the caller who will see the result (a run's audience). A node is admitted only
      * when the caller AND every reader may see it, checked during traversal, so a node reachable only
      * through a node some reader cannot see is never reached.
