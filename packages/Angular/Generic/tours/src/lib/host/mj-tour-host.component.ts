@@ -701,17 +701,20 @@ export class MJTourHostComponent
           UserInitiated: false,
         });
       },
-      SubscribeEvents: (listener: (event: { Kind: string; TourKey: string; StepKey?: string; StepTitle?: string; VoiceScript?: string; Outcome?: string }) => void) =>
+      SubscribeEvents: (listener: (event: { Kind: string; TourKey: string; StepKey?: string; StepTitle?: string; StepBody?: string; GuideNotes?: string; VoiceScript?: string; Outcome?: string }) => void) =>
         this.On('*', (evt) => {
           if (evt.EventName === 'AfterTourStart') {
             listener({ Kind: 'tour_started', TourKey: evt.TourKey });
           } else if (evt.EventName === 'AfterTourStepEnter') {
+            const cur = this.activeSession?.SessionView.CurrentStep;
             listener({
               Kind: 'step_entered',
               TourKey: evt.TourKey,
               StepKey: evt.Step.StepKey,
               StepTitle: evt.Step.Title,
-              VoiceScript: this.activeSession?.SessionView.CurrentStep?.VoiceScript,
+              StepBody: cur?.Body,
+              GuideNotes: cur?.GuideNotes,
+              VoiceScript: cur?.VoiceScript,
             });
           } else if (evt.EventName === 'AfterTourStepComplete') {
             listener({

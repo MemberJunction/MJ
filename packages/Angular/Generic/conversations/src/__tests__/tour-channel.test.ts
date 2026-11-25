@@ -127,6 +127,9 @@ describe('TourChannel (headless Guided Tour realtime channel)', () => {
     const prepared = await channel.ApplyVerb('prepareStep', { consentGranted: true }, 'agent');
     expect(prepared.Success).toBe(true);
 
+    expect(spoken.length).toBe(1);
+    expect(spoken[0]).toContain('Click the application switcher in the top left.');
+
     listeners.forEach((l) =>
       l({
         Kind: 'step_completed',
@@ -135,8 +138,8 @@ describe('TourChannel (headless Guided Tour realtime channel)', () => {
         StepTitle: 'Switch between applications',
       }),
     );
-    expect(spoken.length).toBe(1);
-    expect(spoken[0]).toContain('Switch between applications');
+    expect(spoken.length).toBe(2);
+    expect(spoken[1]).toContain('Switch between applications');
 
     channel.Dispose();
   });

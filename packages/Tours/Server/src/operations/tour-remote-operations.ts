@@ -260,8 +260,14 @@ export class ToursRecordEventsServerOperation extends ToursRecordEventsOperation
                 }
             }
 
+            const clientUuid =
+                ev.RunClientId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ev.RunClientId.trim())
+                    ? ev.RunClientId.trim()
+                    : undefined;
             const existingRunId =
-                ev.RunId?.trim() || (ev.RunClientId ? runIdsByClientId[ev.RunClientId] : undefined);
+                ev.RunId?.trim() ||
+                (ev.RunClientId ? runIdsByClientId[ev.RunClientId] : undefined) ||
+                clientUuid;
 
             let run = existingRunId ? runCache.get(existingRunId.toLowerCase()) : undefined;
             if (!run && existingRunId) {
@@ -279,6 +285,9 @@ export class ToursRecordEventsServerOperation extends ToursRecordEventsOperation
                     continue;
                 }
                 run = await provider.GetEntityObject<MJTourRunEntity>('MJ: Tour Runs', dataUser);
+                if (clientUuid) {
+                    run.ID = clientUuid;
+                }
                 run.UserID = guestClaims.IsGuest ? null : user.ID;
                 run.VisitorKey = guestClaims.IsGuest ? guestClaims.VisitorKey : null;
                 run.SurfaceID = guestClaims.IsGuest ? guestClaims.SurfaceID : null;

@@ -521,9 +521,21 @@ export class TourSession {
     // User & Signal Interactions (non-cursor-hijacking)
     // ========================================================================
 
-    /** Called by UI renderer when user clicks Next/Continue. */
+    /** Called by UI renderer when user clicks Next/Continue/Skip. */
     public RequestNext(): void {
+        const stepBefore = this._currentStepKey;
         this._nextRequestedSubject.next();
+        if (this._status === 'In Progress' && !this._isPaused && stepBefore !== null) {
+            queueMicrotask(() => {
+                if (
+                    this._status === 'In Progress' &&
+                    !this._isPaused &&
+                    this._currentStepKey === stepBefore
+                ) {
+                    void this.Next();
+                }
+            });
+        }
     }
 
     /** Called by an agent via `AgentConfirmed` completion check. */
@@ -1607,7 +1619,7 @@ export class TourSession {
             CurrentStep: this._currentStepView,
             CompletedStepKeys: [...this._completedStepKeys],
             PathTaken: [...this._pathTaken],
-            CanGoBack: this._pathTaken.length > 1 && this._status === 'In Progress',
+            CanGoBack: this._pathTaken.length > 1 && idx > 0 && this._status === 'In Progress',
             CanAdvance: this._status === 'In Progress' && !this._isPaused && this._currentStepKey !== null,
             StepIndex: idx,
             StepCount: ordered.length,

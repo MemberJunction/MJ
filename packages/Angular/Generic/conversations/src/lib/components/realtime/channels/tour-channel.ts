@@ -58,6 +58,8 @@ export interface TourChannelBridgeEvent {
   TourKey: string;
   StepKey?: string;
   StepTitle?: string;
+  StepBody?: string;
+  GuideNotes?: string;
   VoiceScript?: string;
   Outcome?: string;
 }
@@ -248,7 +250,7 @@ const TOUR_CHANNEL_DESCRIPTOR: RealtimeChannelDescriptor = {
     { Name: 'tour_ended', Description: 'The Guided Tour session ended.' },
   ],
   DisplayPolicy: 'headless',
-  DefaultAvailability: 'opt-in',
+  DefaultAvailability: 'all-sessions',
   MaxExposure: 'state',
 };
 
@@ -466,6 +468,18 @@ export class TourChannel extends BaseRealtimeChannelClient<object> {
     const bridge = readTourRealtimeBridge();
     if (bridge) {
       this.unsubscribeBridge = bridge.SubscribeEvents((event) => this.handleBridgeEvent(event));
+      const currentStep = bridge.GetActiveStep();
+      if (currentStep) {
+        this.RecordChange({ Author: 'system' });
+        if (this.Context?.RequestSpokenResponse) {
+          const prompt =
+            currentStep.VoiceScript ??
+            (currentStep.GuideNotes
+              ? `Guide the user on step "${currentStep.StepTitle}": ${currentStep.GuideNotes}`
+              : `Briefly and warmly introduce the current tour step "${currentStep.StepTitle}" (${currentStep.StepIndex + 1} of ${currentStep.StepCount}) in one or two short sentences, then invite the user to proceed or ask a question.`);
+          this.Context.RequestSpokenResponse(prompt);
+        }
+      }
     }
 
     const stream = this.Context?.AppContext$;
@@ -508,13 +522,20 @@ export class TourChannel extends BaseRealtimeChannelClient<object> {
       changeId,
     );
 
-    if (event.Kind === 'step_completed' && this.Context?.RequestSpokenResponse) {
+    if (event.Kind === 'step_entered' && this.Context?.RequestSpokenResponse) {
+      const prompt =
+        event.VoiceScript ??
+        (event.GuideNotes
+          ? `Guide the user on step "${event.StepTitle ?? event.StepKey ?? 'this step'}": ${event.GuideNotes}`
+          : event.StepBody
+            ? `In 1–2 concise conversational sentences, guide the user through "${event.StepTitle ?? 'this step'}" (${event.StepBody}), without reading word-for-word.`
+            : `Briefly introduce step "${event.StepTitle ?? event.StepKey ?? 'this step'}" in one short sentence.`);
+      this.Context.RequestSpokenResponse(prompt);
+    } else if (event.Kind === 'step_completed' && this.Context?.RequestSpokenResponse) {
       const stepLabel = event.StepTitle ?? event.StepKey ?? 'this step';
       this.Context.RequestSpokenResponse(
         `The user completed ${stepLabel}. Briefly acknowledge and guide the next step if one is active.`,
       );
-    } else if (event.Kind === 'step_entered' && event.VoiceScript && this.Context?.RequestSpokenResponse) {
-      this.Context.RequestSpokenResponse(event.VoiceScript);
     }
   }
 

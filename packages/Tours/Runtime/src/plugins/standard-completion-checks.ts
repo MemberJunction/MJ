@@ -401,7 +401,7 @@ export class AllCompletionCheck extends BaseTourCompletionCheck {
     public async WaitForCompletion(ctx: TourCompletionContext): Promise<TourCompletionResult> {
         const children = ctx.Check.Checks ?? [];
         if (children.length === 0) {
-            return { Satisfied: true, Evidence: 'All(empty)' };
+            return new NextButtonCompletionCheck().WaitForCompletion(ctx);
         }
         const results = await Promise.all(
             children.map((child) => {

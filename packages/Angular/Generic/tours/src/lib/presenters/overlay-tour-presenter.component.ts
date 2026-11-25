@@ -115,24 +115,7 @@ const MODAL_STEP_TYPES = new Set([
         }
       }
 
-      @if (isCenteredModal(step)) {
-        <div #overlayRoot class="mjt-modal-backdrop">
-          <div #floatingDialog class="mjt-dialog mjt-dialog--modal mjt-dialog--centered">
-            <mj-tour-card-hairline [StepIndex]="step.StepIndex" [StepCount]="Session.StepCount" />
-            <ng-container #stepHost></ng-container>
-            <mj-tour-voice-dock
-              [Session]="Session"
-              [VoiceBarTemplate]="VoiceBarTemplate"
-              [VoiceGuideAvailable]="VoiceGuideAvailable"
-              [VoiceGuideActive]="VoiceGuideActive"
-              (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
-              (DemonstrateRequested)="DemonstrateRequested.emit($event)"
-              (ConfirmMutation)="ConfirmDemonstration.emit()"
-              (CancelMutation)="CancelDemonstration.emit()"
-            />
-          </div>
-        </div>
-      } @else if (step.StepType === 'Banner') {
+      @if (step.StepType === 'Banner') {
         <div #overlayRoot class="mjt-banner--floating">
           <div #floatingDialog>
             <ng-container #stepHost></ng-container>
@@ -159,39 +142,41 @@ const MODAL_STEP_TYPES = new Set([
           <ng-container #stepHost></ng-container>
         </div>
       } @else {
-        <div
-          #overlayRoot
-          #floatingDialog
-          class="mjt-dialog"
-          [class.mjt-dialog--modal]="isModalStep(step)"
-          [class.mjt-dialog--popover]="!isModalStep(step)"
-          [style.left.px]="posX()"
-          [style.top.px]="posY()"
-        >
-          <mj-tour-card-hairline [StepIndex]="step.StepIndex" [StepCount]="Session.StepCount" />
-          @if (arrowSide() !== 'center') {
-            <div
-              class="mjt-arrow"
-              [class.mjt-arrow--top]="arrowSide() === 'top'"
-              [class.mjt-arrow--bottom]="arrowSide() === 'bottom'"
-              [class.mjt-arrow--left]="arrowSide() === 'left'"
-              [class.mjt-arrow--right]="arrowSide() === 'right'"
-              [style.left.px]="arrowX()"
-              [style.top.px]="arrowY()"
-              aria-hidden="true"
-            ></div>
-          }
-          <ng-container #stepHost></ng-container>
-          <mj-tour-voice-dock
-            [Session]="Session"
-            [VoiceBarTemplate]="VoiceBarTemplate"
-            [VoiceGuideAvailable]="VoiceGuideAvailable"
-            [VoiceGuideActive]="VoiceGuideActive"
-            (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
-            (DemonstrateRequested)="DemonstrateRequested.emit($event)"
-            (ConfirmMutation)="ConfirmDemonstration.emit()"
-            (CancelMutation)="CancelDemonstration.emit()"
-          />
+        <div #overlayRoot [class.mjt-modal-backdrop]="isCenteredModal(step)">
+          <div
+            #floatingDialog
+            class="mjt-dialog"
+            [class.mjt-dialog--modal]="isModalStep(step)"
+            [class.mjt-dialog--centered]="isCenteredModal(step)"
+            [class.mjt-dialog--popover]="!isModalStep(step) && !isCenteredModal(step)"
+            [style.left.px]="isCenteredModal(step) ? null : posX()"
+            [style.top.px]="isCenteredModal(step) ? null : posY()"
+          >
+            <mj-tour-card-hairline [StepIndex]="step.StepIndex" [StepCount]="Session.StepCount" />
+            @if (!isCenteredModal(step) && arrowSide() !== 'center') {
+              <div
+                class="mjt-arrow"
+                [class.mjt-arrow--top]="arrowSide() === 'top'"
+                [class.mjt-arrow--bottom]="arrowSide() === 'bottom'"
+                [class.mjt-arrow--left]="arrowSide() === 'left'"
+                [class.mjt-arrow--right]="arrowSide() === 'right'"
+                [style.left.px]="arrowX()"
+                [style.top.px]="arrowY()"
+                aria-hidden="true"
+              ></div>
+            }
+            <ng-container #stepHost></ng-container>
+            <mj-tour-voice-dock
+              [Session]="Session"
+              [VoiceBarTemplate]="VoiceBarTemplate"
+              [VoiceGuideAvailable]="VoiceGuideAvailable"
+              [VoiceGuideActive]="VoiceGuideActive"
+              (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
+              (DemonstrateRequested)="DemonstrateRequested.emit($event)"
+              (ConfirmMutation)="ConfirmDemonstration.emit()"
+              (CancelMutation)="CancelDemonstration.emit()"
+            />
+          </div>
         </div>
       }
     }

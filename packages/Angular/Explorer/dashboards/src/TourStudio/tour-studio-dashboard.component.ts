@@ -3,9 +3,8 @@ import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
-  Inject,
   OnDestroy,
-  Optional,
+  OnInit,
   inject,
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
@@ -36,7 +35,7 @@ import {
   TourEngine,
 } from '@memberjunction/core-entities';
 import { GroupByUUID, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { BaseDashboard, SafeDetectChanges } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, SafeDetectChanges } from '@memberjunction/ng-shared';
 import { MJ_TOUR_HOST } from '@memberjunction/ng-tours';
 import { FilterFieldConfig, TabConfig } from '@memberjunction/ng-ui-components';
 import {
@@ -114,8 +113,8 @@ const QUERY_PARAM_TOUR = 'tourKey';
   styleUrls: ['./tour-studio-dashboard.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-@RegisterClass(BaseDashboard, 'TourStudioDashboard')
-export class TourStudioDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
+@RegisterClass(BaseResourceComponent, 'TourStudioDashboard')
+export class TourStudioDashboardComponent extends BaseResourceComponent implements OnInit, AfterViewInit, OnDestroy {
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly tourHost = inject(MJ_TOUR_HOST, { optional: true }) as TourLauncherHost | null;
 
@@ -346,9 +345,13 @@ export class TourStudioDashboardComponent extends BaseDashboard implements After
     return first?.VersionNumber ?? 0;
   }
 
-  protected initDashboard(): void {
+  private initialLoadNotified = false;
+
+  public override ngOnInit(): void {
+    super.ngOnInit();
     const params = this.GetQueryParams();
     this.applyQueryParams(params);
+    void this.loadData();
   }
 
   public async ngAfterViewInit(): Promise<void> {
@@ -473,11 +476,15 @@ export class TourStudioDashboardComponent extends BaseDashboard implements After
     } finally {
       this.IsLoading = false;
       this.publishAgentContext();
+      if (!this.initialLoadNotified) {
+        this.initialLoadNotified = true;
+        this.NotifyLoadComplete();
+      }
       SafeDetectChanges(this.cdr);
     }
   }
 
-  public override async Refresh(): Promise<void> {
+  public async Refresh(): Promise<void> {
     await this.loadData();
   }
 

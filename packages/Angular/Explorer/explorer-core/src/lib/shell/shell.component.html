@@ -25,6 +25,7 @@
             class="nav-bar-app-btn"
             [class.active]="IsActiveApp(app)"
             [attr.aria-current]="IsActiveApp(app) ? 'true' : null"
+            [attr.data-mj-tour-anchor]="app.Name === 'Home' ? 'core.shell.home' : null"
             [title]="app.Name"
             [style.--app-color]="app.GetColor()"
             (click)="onNavBarAppClick(app, $event)"

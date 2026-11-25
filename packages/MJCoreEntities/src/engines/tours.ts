@@ -1445,11 +1445,19 @@ export class TourEngine
         if (!raw) return null;
         const record = toPlainRecord(raw);
         const matchRaw = readOptionalString(record, 'Match') ?? readOptionalString(record, 'Mode');
-        const checksRaw = Array.isArray(record['Checks']) ? record['Checks'] : [];
-        return {
-            Checks: checksRaw
+        let checks: TourCompletionCheckSpec[] = [];
+        if (Array.isArray(record['Checks'])) {
+            checks = record['Checks']
                 .filter((c): c is Record<string, unknown> => isRecord(c))
-                .map((c) => this.mapCompletionCheck(c)),
+                .map((c) => this.mapCompletionCheck(c));
+        } else if (typeof record['Type'] === 'string' && record['Type'].trim().length > 0) {
+            checks = [this.mapCompletionCheck(record)];
+        }
+        if (checks.length === 0) {
+            return null;
+        }
+        return {
+            Checks: checks,
             Match: matchRaw === 'Any' ? 'Any' : 'All',
             TimeoutMs: readOptionalNumber(record, 'TimeoutMs'),
         };
