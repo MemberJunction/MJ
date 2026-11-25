@@ -18,6 +18,7 @@ interface QueryRow {
     UserQuestion: string | null;
     EmbeddingVector: string | null;
     EmbeddingVectorBinary: string | null;
+    EmbeddingModelID: string | null;
 }
 
 const { queryEngineState, logError } = vi.hoisted(() => ({
@@ -38,6 +39,15 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
     };
 });
 
+// AIEngine's filter, as tested there: rows with a stored vector from the default model 'local-model'.
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: { Instance: {
+        Config: vi.fn(),
+        WithDefaultEmbeddingModel: (rows: QueryRow[]) =>
+            rows.filter(r => (r.EmbeddingVector || r.EmbeddingVectorBinary) && r.EmbeddingModelID === 'local-model'),
+    } },
+}));
+
 import { QueryEngineServer } from '../engines/QueryEngineServer';
 
 // Exact in float32, so binary decodes compare equal.
@@ -48,7 +58,7 @@ function queryRow(id: string, binary: string | null, json: string | null): Query
     return {
         ID: id, Name: `Query ${id}`, Description: null, Category: null, Status: 'Approved',
         Reusable: true, SQL: 'SELECT 1', UserQuestion: null,
-        EmbeddingVector: json, EmbeddingVectorBinary: binary,
+        EmbeddingVector: json, EmbeddingVectorBinary: binary, EmbeddingModelID: 'local-model',
     };
 }
 
@@ -113,5 +123,12 @@ describe('QueryEngineServer.RefreshQueryEmbeddings stored vectors', () => {
         expect(vectorOf(engine, 'good')).toEqual(BINARY_VEC);
         expect(logError).toHaveBeenCalledTimes(1);
         expect(String(logError.mock.calls[0][0])).toContain('Query bad');
+    });
+
+    it('leaves out a query embedded by another model', () => {
+        const other = { ...queryRow('other', null, JSON.stringify(JSON_VEC)), EmbeddingModelID: 'old-model' };
+        const engine = refresh([queryRow('current', null, JSON.stringify(JSON_VEC)), other]);
+        expect(vectorOf(engine, 'current')).toEqual(JSON_VEC);
+        expect(engine.QueryVectorService!.GetVector('other')).toBeUndefined();
     });
 });

@@ -133,6 +133,18 @@ describe('AgentMemoryContextBuilder', () => {
             expect(messages[0].content).toContain('NOTES(1)');
         });
 
+        it('formats notes and examples for the run\'s user, so the text holds only fields they may read', async () => {
+            getNotes.mockResolvedValueOnce([{ ID: 'n1' }]);
+            getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);
+            const builder = new AgentMemoryContextBuilder();
+
+            await builder.InjectContextMemory('hi', makeAgent({ InjectNotes: true, InjectExamples: true }),
+                undefined, undefined, fakeUser, [{ role: 'user', content: 'hi' }]);
+
+            expect(formatNotes).toHaveBeenCalledWith([{ ID: 'n1' }], true, fakeUser);
+            expect(formatExamples).toHaveBeenCalledWith([{ ID: 'e1' }], fakeUser);
+        });
+
         it('combines notes and examples into a single system message and returns both', async () => {
             getNotes.mockResolvedValueOnce([{ ID: 'n1' }, { ID: 'n2' }]);
             getExamples.mockResolvedValueOnce([{ ID: 'e1' }]);
@@ -214,6 +226,25 @@ describe('AgentMemoryContextBuilder', () => {
 
             expect(getNotes.mock.calls[0][0].observability).toBeUndefined();
             expect(getExamples.mock.calls[0][0].observability).toBeUndefined();
+        });
+
+        it('runs notes and examples retrieval concurrently when observability is omitted', async () => {
+            let examplesStarted = false;
+            let resolveNotes!: (rows: Array<{ ID: string }>) => void;
+            getNotes.mockImplementationOnce(() => new Promise(resolve => { resolveNotes = resolve; }));
+            getExamples.mockImplementationOnce(async () => {
+                examplesStarted = true;
+                resolveNotes([{ ID: 'n-concurrent' }]);
+                return [{ ID: 'e-concurrent' }];
+            });
+
+            const result = await new AgentMemoryContextBuilder().InjectContextMemory(
+                'hi', makeAgent({ InjectNotes: true, InjectExamples: true }), undefined, undefined, fakeUser, []
+            );
+
+            expect(examplesStarted).toBe(true);
+            expect(result.notes).toEqual([{ ID: 'n-concurrent' }]);
+            expect(result.examples).toEqual([{ ID: 'e-concurrent' }]);
         });
 
         it('forwards SharedOnly to both retrieval calls when the run has an audience', async () => {

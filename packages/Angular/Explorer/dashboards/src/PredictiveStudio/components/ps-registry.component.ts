@@ -3,23 +3,37 @@ import { CommonModule } from '@angular/common';
 import { AngularSplitModule } from 'angular-split';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { UUIDsEqual } from '@memberjunction/global';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import { MJMLModelEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { PSModelDetailComponent } from '@memberjunction/ng-core-entity-forms';
+import { UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import { CompositeKey, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
+import { NavigationService } from '@memberjunction/ng-shared';
+import { MJMLModelEntity, MJMLModelPublishRecordEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { LifecycleLabels, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
+import { PSModelDetailComponent, type PSOpenRecordRequest } from '@memberjunction/ng-core-entity-forms';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
-import { PrimaryAuc, PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
+import { PrimaryModelScore, FormatMetricValue } from '../predictive-studio.view-models';
 
 interface ModelRowVM {
   id: string;
   name: string;
   version: number;
   algorithm: string;
-  holdoutAuc: string;
   holdoutScore: string;
   scoreLabel: string;
-  status: string;
+  status: MJMLModelEntity['Status'];
+  /** The model's stored `StatusReason`. */
+  statusReason: string | null;
+  /** The model's `ServingWhileUnevaluated` flag. */
+  servingWhileUnevaluated: boolean;
   iconClass: string;
+}
+
+/** A pipeline's latest training run that shipped no model row (no signal, kept the existing rule), from its refusal record. */
+interface RunOutcomeVM {
+  pipelineId: string;
+  pipelineName: string;
+  outcome: string;
+  detail: string;
+  recordedAt: Date;
 }
 
 /**
@@ -37,48 +51,67 @@ interface ModelRowVM {
   styleUrls: ['../predictive-studio.shared.css', './ps-registry.component.css'],
   template: `
     <div class="ps-panel ps-registry" data-testid="ps-registry-panel">
-      @if (models.length === 0) {
+      @if (Models.length === 0) {
         <div class="ps-empty" data-testid="ps-registry-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-cubes"></i></span>
           <h3>No trained models yet</h3>
           <p>Train a pipeline to register your first immutable model. Each successful training run produces a versioned model you can validate, publish, and score with here.</p>
         </div>
       } @else {
-        <div class="reg-layout" [class.list-collapsed]="isListCollapsed">
-          @if (isListCollapsed) {
+        <div class="reg-layout" [class.list-collapsed]="IsListCollapsed">
+          @if (IsListCollapsed) {
             <div class="reg-collapsed-strip" role="region" aria-label="Model registry list (collapsed)">
-              <button class="reg-rail-collapse" type="button" (click)="toggleList()" aria-label="Expand models list" title="Expand list">
+              <button class="reg-rail-collapse" type="button" (click)="ToggleList()" aria-label="Expand models list" title="Expand list">
                 <i class="fa-solid fa-chevron-right"></i>
               </button>
               <div class="reg-collapsed-strip-label"><i class="fa-solid fa-cubes"></i></div>
             </div>
           }
 
-          <as-split direction="horizontal" class="reg-splitter" unit="percent" [gutterSize]="6" (dragEnd)="onSplitDragEnd($event.sizes)">
-            @if (!isListCollapsed) {
-              <as-split-area [size]="listSizePct" [minSize]="18" [maxSize]="50">
+          <as-split direction="horizontal" class="reg-splitter" unit="percent" [gutterSize]="6" (dragEnd)="OnSplitDragEnd($event.sizes)">
+            @if (!IsListCollapsed) {
+              <as-split-area [size]="ListSizePct" [minSize]="18" [maxSize]="50">
                 <!-- master list -->
                 <div class="ps-card mlist" data-testid="ps-registry-list">
                   <div class="ps-card-head">
                     <h3>ML Models</h3>
                     <div style="display:flex;gap:6px;align-items:center">
-                      <span class="ps-badge gray">{{ models.length }}</span>
-                      <button class="reg-collapse-btn" type="button" (click)="toggleList()" title="Collapse list" aria-label="Collapse list">
+                      <span class="ps-badge gray">{{ Models.length }}</span>
+                      <button class="reg-collapse-btn" type="button" (click)="ToggleList()" title="Collapse list" aria-label="Collapse list">
                         <i class="fa-solid fa-chevron-left"></i>
                       </button>
                     </div>
                   </div>
                   <div class="ps-card-body" style="padding:8px">
-                    @for (m of models; track m.id) {
-                      <div class="mrow" data-testid="ps-registry-row" [class.sel]="m.id === selectedId" [class.arc]="m.status === 'Archived'" (click)="select(m.id)">
+                    @if (RunOutcomesError) {
+                      <div class="ps-callout warn ps-small" data-testid="ps-registry-run-outcomes-error">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <div>The latest runs that shipped no model could not be read: {{ RunOutcomesError }}</div>
+                      </div>
+                    }
+                    @if (RunOutcomes.length > 0) {
+                      <div class="reg-run-outcomes">
+                        <div class="ps-section-title">Latest runs that shipped no model</div>
+                        @for (o of RunOutcomes; track o.pipelineId) {
+                          <div class="reg-run-outcome ps-small" data-testid="ps-registry-run-outcome" [title]="o.detail">
+                            <strong>{{ o.pipelineName }}</strong> · {{ o.outcome }} <span class="ps-muted">({{ o.recordedAt | date: 'mediumDate' }})</span>
+                          </div>
+                        }
+                      </div>
+                    }
+                    @for (m of Models; track m.id) {
+                      <div class="mrow" data-testid="ps-registry-row" [class.sel]="IsSelected(m.id)" [class.arc]="m.status === 'Archived'" [attr.title]="m.statusReason" (click)="Select(m.id)">
                         <div class="ico" [class]="m.iconClass"><i class="fa-solid fa-cube"></i></div>
                         <div style="flex:1;min-width:0">
                           <div class="nm">{{ m.name }}</div>
                           <div class="ln2 ps-muted ps-small">v{{ m.version }} &bull; {{ m.algorithm }}</div>
                         </div>
                         <div class="auc">
-                          <div class="v">{{ m.holdoutScore }}</div>
-                          <div class="st" [class]="statusClass(m.status)">{{ m.status }}</div>
+                          <div class="v">{{ m.scoreLabel }} {{ m.holdoutScore }}</div>
+                          <div class="st" data-testid="ps-lifecycle-chip" [class]="StatusClass(m.status)">{{ LifecycleLabel(m) }}</div>
+                          @if (ServingNote(m); as note) {
+                            <div class="ps-small ps-muted" data-testid="ps-registry-serving">{{ note }}</div>
+                          }
                         </div>
                       </div>
                     }
@@ -87,16 +120,17 @@ interface ModelRowVM {
               </as-split-area>
             }
 
-            <as-split-area [size]="isListCollapsed ? 100 : detailSizePct" [minSize]="50">
+            <as-split-area [size]="IsListCollapsed ? 100 : DetailSizePct" [minSize]="50">
               <!-- detail via unified PSModelDetailComponent -->
               <div class="ps-col detail" data-testid="ps-registry-detail">
-                @if (selectedEntity) {
+                @if (SelectedEntity) {
                   <ps-model-detail
-                    [model]="selectedEntity"
-                    [displayName]="engine ? engine.ModelDisplayName(selectedEntity) : undefined"
-                    [provider]="provider"
-                    [currentUser]="currentUser"
-                    (statusChanged)="onModelStatusChanged($event)">
+                    [Model]="SelectedEntity"
+                    [displayName]="engine ? engine.ModelDisplayName(SelectedEntity) : undefined"
+                    [Provider]="provider"
+                    [CurrentUser]="CurrentUser"
+                    (StatusChanged)="OnModelStatusChanged($event)"
+                    (OpenRecord)="OnOpenRecord($event)">
                   </ps-model-detail>
                 } @else {
                   <div class="ps-empty" style="padding: 40px 20px;">
@@ -118,70 +152,25 @@ export class PSRegistryComponent implements OnInit {
   /** Acting user for the engine refresh after a mutation. */
   @Input() CurrentUser: UserInfo | null = null;
 
-  /** @deprecated Use {@link CurrentUser}. */
-  @Input() set currentUser(value: UserInfo | null) {
-    this.CurrentUser = value;
-  }
-  /** @deprecated Use {@link CurrentUser}. */
-  get currentUser(): UserInfo | null {
-    return this.CurrentUser;
-  }
-
   private cdr = inject(ChangeDetectorRef);
   private notifications = inject(MJNotificationService);
+  private navigation = inject(NavigationService);
 
   public Models: ModelRowVM[] = [];
 
-  /** @deprecated Use {@link Models}. */
-  public get models(): ModelRowVM[] {
-    return this.Models;
-  }
-  /** @deprecated Use {@link Models}. */
-  public set models(value: ModelRowVM[]) {
-    this.Models = value;
-  }
-  public SelectedId = '';
+  /** Each pipeline's latest run that shipped no model row, newest first. */
+  public RunOutcomes: RunOutcomeVM[] = [];
+  /** Why the run outcomes could not be read, or null when they were (shown in place of the section). */
+  public RunOutcomesError: string | null = null;
 
-  /** @deprecated Use {@link SelectedId}. */
-  public get selectedId() {
-    return this.SelectedId;
-  }
-  /** @deprecated Use {@link SelectedId}. */
-  public set selectedId(value) {
-    this.SelectedId = value;
-  }
+  public SelectedId = '';
 
   // Resizable split state
   public ListSizePct = 28;
 
-  /** @deprecated Use {@link ListSizePct}. */
-  public get listSizePct() {
-    return this.ListSizePct;
-  }
-  /** @deprecated Use {@link ListSizePct}. */
-  public set listSizePct(value) {
-    this.ListSizePct = value;
-  }
   public DetailSizePct = 72;
 
-  /** @deprecated Use {@link DetailSizePct}. */
-  public get detailSizePct() {
-    return this.DetailSizePct;
-  }
-  /** @deprecated Use {@link DetailSizePct}. */
-  public set detailSizePct(value) {
-    this.DetailSizePct = value;
-  }
   public IsListCollapsed = false;
-
-  /** @deprecated Use {@link IsListCollapsed}. */
-  public get isListCollapsed() {
-    return this.IsListCollapsed;
-  }
-  /** @deprecated Use {@link IsListCollapsed}. */
-  public set isListCollapsed(value) {
-    this.IsListCollapsed = value;
-  }
 
   private _initialModelId?: string;
   @Input()
@@ -191,23 +180,15 @@ export class PSRegistryComponent implements OnInit {
       if (this.Models.length === 0 || !this.Models.some((m) => UUIDsEqual(m.id, id))) {
         this.buildModels();
       }
-      if (this.Models.some((m) => UUIDsEqual(m.id, id))) {
-        this.SelectedId = id;
+      const match = this.Models.find((m) => UUIDsEqual(m.id, id));
+      if (match) {
+        this.SelectedId = match.id;
       }
       this.cdr.detectChanges();
     }
   }
   public get InitialModelId(): string | undefined {
     return this._initialModelId;
-  }
-
-  /** @deprecated Use {@link InitialModelId}. */
-  public get initialModelId(): string | undefined {
-    return this.InitialModelId;
-  }
-  /** @deprecated Use {@link InitialModelId}. */
-  @Input() public set initialModelId(value: string | undefined) {
-    this.InitialModelId = value;
   }
 
   ngOnInit(): void {
@@ -224,11 +205,9 @@ export class PSRegistryComponent implements OnInit {
     }
 
     this.buildModels();
-    if (this._initialModelId && this.Models.some((m) => UUIDsEqual(m.id, this._initialModelId))) {
-      this.SelectedId = this._initialModelId;
-    } else {
-      this.SelectedId = this.Models[0]?.id ?? '';
-    }
+    void this.loadRunOutcomes();
+    const initial = this._initialModelId ? this.Models.find((m) => UUIDsEqual(m.id, this._initialModelId)) : undefined;
+    this.SelectedId = initial ? initial.id : this.Models[0]?.id ?? '';
   }
 
   // ---- splitter resizing & persistence ----
@@ -241,20 +220,10 @@ export class PSRegistryComponent implements OnInit {
     }
   }
 
-  /** @deprecated Use {@link OnSplitDragEnd}. */
-  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
-    return this.OnSplitDragEnd(sizes);
-  }
-
   public ToggleList(): void {
     this.IsListCollapsed = !this.IsListCollapsed;
     this.saveLayoutPrefs();
     this.cdr.markForCheck();
-  }
-
-  /** @deprecated Use {@link ToggleList}. */
-  public toggleList(): void {
-    return this.ToggleList();
   }
 
   private saveLayoutPrefs(): void {
@@ -272,42 +241,86 @@ export class PSRegistryComponent implements OnInit {
     this.SelectedId = id;
   }
 
-  /** @deprecated Use {@link Select}. */
-  public select(id: string): void {
-    return this.Select(id);
+  /** True for the selected row (IDs compared case-insensitively: a deep link may spell the ID in another case). */
+  public IsSelected(id: string): boolean {
+    return UUIDsEqual(id, this.SelectedId);
   }
 
   public get Selected(): ModelRowVM {
-    return this.Models.find((m) => m.id === this.SelectedId) ?? this.Models[0] ?? this.placeholder();
-  }
-
-  /** @deprecated Use {@link Selected}. */
-  public get selected(): ModelRowVM {
-    return this.Selected;
+    return this.Models.find((m) => UUIDsEqual(m.id, this.SelectedId)) ?? this.Models[0] ?? this.placeholder();
   }
 
   public get SelectedEntity(): MJMLModelEntity | undefined {
     return this.engine?.Models?.find((m) => UUIDsEqual(m.ID, this.SelectedId));
   }
 
-  /** @deprecated Use {@link SelectedEntity}. */
-  public get selectedEntity(): MJMLModelEntity | undefined {
-    return this.SelectedEntity;
-  }
-
   public StatusClass(status: string): string {
     switch (status) {
       case 'Published': return 'pub';
       case 'Validated': return 'val';
+      case 'KeepBaseline': return 'val';
       case 'Draft': return 'dr';
+      case 'Unevaluated': return 'dr';
       case 'Archived': return 'arc';
       default: return 'dr';
     }
   }
 
-  /** @deprecated Use {@link StatusClass}. */
-  public statusClass(status: string): string {
-    return this.StatusClass(status);
+  /** The row's lifecycle chip text (shared with the model detail's chip through Predictive Studio Core). */
+  public LifecycleLabel(m: ModelRowVM): string {
+    return LifecycleLabels.For(m.status, m.statusReason).Label;
+  }
+
+  /** The "still serving" note of a serving pre-change model, or null. */
+  public ServingNote(m: ModelRowVM): string | null {
+    return LifecycleLabels.ServingNote(m.status, m.servingWhileUnevaluated);
+  }
+
+  /** The model detail asks to open a record (an initiator, a publish record): the registry, an L3 surface, navigates. */
+  public OnOpenRecord(request: PSOpenRecordRequest): void {
+    this.navigation.OpenEntityRecord(request.EntityName, CompositeKey.FromID(request.RecordID)); // first-pk-ok: every record the detail links (users, agent runs, job runs, process runs, publish records) is an MJ core entity keyed on ID
+  }
+
+  /**
+   * Reads the run-level refusal records (no model row, D4-56) and keeps each pipeline's newest one whose outcome shipped
+   * no model: "No signal" or "Kept the existing rule" (one batched `RunView`; the run's pipeline from the engine cache).
+   * A failed read is logged and shown as the section's error ({@link RunOutcomesError}).
+   */
+  private async loadRunOutcomes(): Promise<void> {
+    if (!this.engine || !this.provider) return;
+    try {
+      const [result] = await RunView.FromMetadataProvider(this.provider).RunViews<MJMLModelPublishRecordEntity>([
+        { EntityName: 'MJ: ML Model Publish Records', ExtraFilter: `Kind='refusal' AND ModelID IS NULL`, OrderBy: 'RecordedAt DESC', MaxRows: 200, ResultType: 'entity_object' },
+      ]);
+      if (!result || !result.Success) throw new Error(result?.ErrorMessage || 'the publish records read returned no result');
+      this.RunOutcomes = this.toRunOutcomes(result.Results);
+      this.RunOutcomesError = null;
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      LogError(`Predictive Studio registry: reading the run outcomes failed: ${reason}`);
+      this.RunOutcomes = [];
+      this.RunOutcomesError = reason;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Each pipeline's newest run-level outcome among `records` (newest first). */
+  private toRunOutcomes(records: readonly MJMLModelPublishRecordEntity[]): RunOutcomeVM[] {
+    const pipelineOfRun = new UUIDMap<string>();
+    for (const run of this.engine.TrainingRuns || []) pipelineOfRun.Set(run.ID, run.PipelineID);
+    const pipelineNames = new UUIDMap<string>();
+    for (const p of this.engine.Pipelines || []) pipelineNames.Set(p.ID, p.Name);
+    const seen = new UUIDMap<true>();
+    const out: RunOutcomeVM[] = [];
+    for (const r of records) {
+      const refusal = r.RefusalObject;
+      const outcome = refusal ? LifecycleLabels.RunOutcome(refusal) : null;
+      const pipelineId = r.TrainingRunID ? pipelineOfRun.Get(r.TrainingRunID) : undefined;
+      if (!refusal || !outcome || !pipelineId || seen.Has(pipelineId)) continue;
+      seen.Set(pipelineId, true);
+      out.push({ pipelineId, pipelineName: pipelineNames.Get(pipelineId) || 'Pipeline', outcome, detail: TransitionRefusalText.For(refusal), recordedAt: r.RecordedAt });
+    }
+    return out;
   }
 
   // ---- lifecycle change handling ----
@@ -316,17 +329,12 @@ export class PSRegistryComponent implements OnInit {
     await this.refreshAfterMutation();
   }
 
-  /** @deprecated Use {@link OnModelStatusChanged}. */
-  public async onModelStatusChanged(evt: { modelId: string; newStatus: string }): Promise<void> {
-    return this.OnModelStatusChanged(evt);
-  }
-
   /** Force-refresh the engine's cached models, then rebuild the master list. */
   private async refreshAfterMutation(): Promise<void> {
     const provider = this.provider ?? undefined;
     await this.engine.Config(true, this.CurrentUser ?? undefined, provider);
     this.buildModels();
-    if (!this.Models.some((m) => m.id === this.SelectedId)) {
+    if (!this.Models.some((m) => UUIDsEqual(m.id, this.SelectedId))) {
       this.SelectedId = this.Models[0]?.id ?? '';
     }
     this.cdr.detectChanges();
@@ -339,23 +347,23 @@ export class PSRegistryComponent implements OnInit {
   }
 
   private toVM(m: MJMLModelEntity): ModelRowVM {
-    const holdout = PrimaryAuc(m);
     const score = PrimaryModelScore(m);
-    const formattedScore = score != null ? FormatMetricValue(score.key, score.value) : (holdout != null ? holdout.toFixed(3) : '—');
+    const formattedScore = score != null ? FormatMetricValue(score.key, score.value) : '—';
     return {
       id: m.ID,
       name: this.engine?.ModelDisplayName ? this.engine.ModelDisplayName(m) : (m.Pipeline || `Model v${m.Version}`),
       version: m.Version,
       algorithm: this.engine?.AlgorithmName ? this.engine.AlgorithmName(m.AlgorithmID) : (m.Algorithm || 'Algorithm'),
-      holdoutAuc: holdout != null ? holdout.toFixed(3) : formattedScore,
       holdoutScore: formattedScore,
-      scoreLabel: score?.label ?? 'AUC',
+      scoreLabel: score?.label ?? 'Score',
       status: m.Status,
+      statusReason: m.StatusReason,
+      servingWhileUnevaluated: m.ServingWhileUnevaluated,
       iconClass: 'xgb',
     };
   }
 
   private placeholder(): ModelRowVM {
-    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutAuc: '—', holdoutScore: '—', scoreLabel: 'AUC', status: 'Draft', iconClass: 'xgb' };
+    return { id: '', name: 'No model', version: 0, algorithm: '—', holdoutScore: '—', scoreLabel: 'Score', status: 'Draft', statusReason: null, servingWhileUnevaluated: false, iconClass: 'xgb' };
   }
 }

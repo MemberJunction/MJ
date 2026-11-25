@@ -181,19 +181,42 @@ describe('ProviderBase.RunQuery cache and query definitions', () => {
         expect(provider.Executions).toBe(2);
     });
 
-    it('on a client, sends the slot\'s definition hash to the server and stores the hash it returns', async () => {
+    it('on a client, stamps the slot on the cold fetch via RunQueriesWithCacheCheck and sends the definition hash on subsequent checks', async () => {
         const provider = new DefinitionTestProvider(false);
 
-        await run(provider, { QueryID: QUERY_ID });        // miss: executed, slot has no hash yet
-        const second = await run(provider, { QueryID: QUERY_ID }); // check with '' → stale, slot gets the hash
-        const third = await run(provider, { QueryID: QUERY_ID });  // check with the hash → current
+        await run(provider, { QueryID: QUERY_ID });        // cold miss: goes through RunQueriesWithCacheCheck (no cacheStatus), slot gets hash-v1 immediately
+        const second = await run(provider, { QueryID: QUERY_ID }); // check with hash-v1 → current on the very first repeat (F5)
+        const third = await run(provider, { QueryID: QUERY_ID });  // check with hash-v1 → current
         provider.Edit();
-        const afterEdit = await run(provider, { QueryID: QUERY_ID }); // old hash → stale, new rows
+        const afterEdit = await run(provider, { QueryID: QUERY_ID }); // old hash-v1 → stale, new rows + hash-v2
 
-        expect(provider.ReceivedChecks.map(c => c.cacheStatus?.definitionHash)).toEqual(['', 'hash-v1', 'hash-v1']);
+        expect(provider.ReceivedChecks.map(c => c.cacheStatus?.definitionHash)).toEqual([undefined, 'hash-v1', 'hash-v1', 'hash-v1']);
+        expect(second.CacheHit).toBe(true);
         expect(second.Results).toEqual([{ Version: 1 }]);
+        expect(third.CacheHit).toBe(true);
         expect(third.Results).toEqual([{ Version: 1 }]);
+        expect(afterEdit.CacheHit).not.toBe(true);
         expect(afterEdit.Results).toEqual([{ Version: 2 }]);
-        expect(provider.Executions).toBe(1);
+        expect(provider.Executions).toBe(0);
+    });
+
+    it('on a client, upgrades a pre-existing slot written without a definitionHash on the next check', async () => {
+        const provider = new DefinitionTestProvider(false);
+        const fp = LocalCacheManager.Instance.GenerateRunQueryFingerprint(
+            QUERY_ID,
+            QUERY_NAME,
+            { __maxRows: -1, __startRow: 0 },
+            provider.InstanceConnectionString,
+            ''
+        );
+        await LocalCacheManager.Instance.SetRunQueryResult(fp, QUERY_NAME, [{ Version: 1 }], '', 1, QUERY_ID);
+
+        const upgrade = await run(provider, { QueryID: QUERY_ID }); // sends '' → stale, slot gets hash-v1
+        const hit = await run(provider, { QueryID: QUERY_ID });     // sends 'hash-v1' → current
+
+        expect(provider.ReceivedChecks.map(c => c.cacheStatus?.definitionHash)).toEqual(['', 'hash-v1']);
+        expect(upgrade.Results).toEqual([{ Version: 1 }]);
+        expect(hit.CacheHit).toBe(true);
+        expect(hit.Results).toEqual([{ Version: 1 }]);
     });
 });

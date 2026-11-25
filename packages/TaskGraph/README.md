@@ -66,8 +66,8 @@ without standing up the agent framework.
 
 | File | Responsibility |
 |---|---|
-| `TaskGraphService.ts` | Validate a spec, resolve names to IDs in parallel, write parent + children + edges concurrently inside a single entity transaction. The only write path. |
-| `TaskGraphDispatcher.ts` | Single-pass poll, claim, pre-hydrated execute, evaluate edges, propagate, roll up, settle, credit cost. |
+| `TaskGraphService.ts` | Validate a spec, resolve names to IDs in parallel (including sanitized native tool-name fallback and `Configuration.stepActionIds` for multi-step `steps[]` loop bodies), write parent + children + edges concurrently inside a single entity transaction. The only write path. |
+| `TaskGraphDispatcher.ts` | Single-pass poll, claim, pre-hydrated execute (including multi-step `ForEach`/`While` `steps[]` chaining via `steps.<id>.*`), evaluate edges, propagate, roll up, settle, credit cost. |
 | `TaskClaimStore.ts` | The atomic claim protocol — guarded writes so two instances cannot run the same task. |
 | `TaskLoopExecutor.ts` | `ForEach` / `While` semantics: bounds, ordering, concurrency, delay, failure. |
 | `DispatcherConditionEvaluator.ts` | Edge conditions, over the superset context both dialects can read. |
@@ -135,6 +135,21 @@ Each `pollOnce()` pass loads active graph state **once** in `propagateAndRollup`
 
 **A host with no runner is limited, not broken.** "Nobody here can run this" is not the same as
 "this ran and did not work", so those tasks stay visible and claimable by an instance that can.
+
+### Steps no runner executes
+
+`External`, `Wait`, and a `Human` step that names a `provider` are **waiting steps**: the dispatcher
+reaches them, marks them waiting (`Task.ClaimedBy = '__waiting__'`, with `DueAt` / `CorrelationKey` /
+the payload they were reached with), and something else finishes them.
+
+| | Finished by | API |
+|---|---|---|
+| `Wait` | the dispatcher, once `DueAt` passes | — |
+| `External` | a signal, by task ID or correlation key | `TaskGraphWaitingSteps.CompleteWaitingStep()` in-process; `TaskGraph.CompleteWaitingStep` remote operation |
+| `Human` + `provider` | the provider, with the same call | subclass `BaseHumanTaskProvider` (`@memberjunction/ai-core-plus`), `@RegisterClass(BaseHumanTaskProvider, '<key>')`; may be the install default (see the guide) |
+
+A Human step with no provider (or `'AgentRequest'`) keeps the built-in `MJ: AI Agent Requests` inbox.
+Full model, examples and troubleshooting: [Workflows and Task Graphs Guide § Waiting steps](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#waiting-steps-external-wait-and-human-providers).
 
 > **An Agent node starts a brand-new `AIAgentRun`** — a root run, linked from `Task.AgentRunID`
 > rather than nested under the submitting run. The relationship is expressed by the Task row.
@@ -211,11 +226,13 @@ section](../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md#cost-and-tokens-the-seam)
 cd packages/TaskGraph && pnpm test
 ```
 
-Unit tests cover the pure pieces — loop semantics, dispatchable kinds, configuration persistence,
-parent metadata. The dispatcher driving **real rows against SQL Server** is covered by the `IT74`
-bundle in `@memberjunction/integration-test-suite`, which uses a stub agent runner so it stays in
-the deterministic tier: no model calls, no tokens, real claim protocol, real condition evaluator,
-real rollup.
+Unit tests cover the pure pieces — loop semantics (including multi-step `steps[]` loop bodies and
+parallel array-append safety), dispatchable kinds, configuration persistence, and parent metadata.
+The dispatcher driving **real rows against SQL Server** is covered by `IT74` (core graph dispatch),
+`IT147` (deterministic multi-step `ForEach`/`While` `steps[]`, Flow graduation round-trip, and
+agent-submitted `Tasks` settlement against `ActionEngineServer`), and `IT148` (live native
+tool-calling LLM providers emitting and settling durable task graphs) in
+`@memberjunction/integration-test-suite`.
 
 ---
 

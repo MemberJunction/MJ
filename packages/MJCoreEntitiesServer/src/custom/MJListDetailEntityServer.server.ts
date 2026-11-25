@@ -15,10 +15,10 @@ import { MJListDetailEntityExtended, MJListEntityExtended } from '@memberjunctio
  * lists they DON'T own, because a List Detail carries no owner of its own — only a `ListID`.
  *
  * The owner is resolved by looking up the parent List's `UserID`. If the parent List can't be found
- * (an orphaned detail, or the parent already deleted during list teardown — `spDeleteList` does not
- * cascade, so details are removed while the parent still exists in the normal path) the rule
- * fails OPEN: there is no owner to protect and the coarse entity permission still applies. Enforcement
- * only bites when a parent List genuinely exists and is owned by someone else.
+ * (an orphaned detail) the rule fails OPEN: there is no owner to protect and the coarse entity
+ * permission still applies. Enforcement only bites when a parent List genuinely exists and is owned
+ * by someone else. Deleting a List removes its details in the database (`FK_ListDetail_List` cascades),
+ * so that path does not go through this class.
  */
 @RegisterClass(BaseEntity, 'MJ: List Details')
 export class MJListDetailEntityServer extends MJListDetailEntityExtended {
@@ -62,6 +62,7 @@ export class MJListDetailEntityServer extends MJListDetailEntityExtended {
                 ExtraFilter: `ID = '${this.ListID}'`,
                 Fields: ['ID', 'UserID'],
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'simple'
             }, this.ContextCurrentUser);
 

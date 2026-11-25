@@ -27,7 +27,10 @@ import {
     GetDashboardApprovalStateAsync,
     GetQueryApprovalStateAsync,
     GetUserViewApprovalStateAsync,
+    APPROVE_QUERIES_AUTHORIZATION,
+    UserCanApproveQueries,
 } from '../custom/approvals';
+import { AuthorizationInfo, AuthorizationRoleInfo, Metadata, UserInfo } from '@memberjunction/core';
 import type { QueryDefinitionRows } from '../custom/approvals';
 
 const PG = '4C4B5D2E-0000-4000-8000-000000000001';
@@ -131,6 +134,16 @@ describe('user views, dashboards and components', () => {
         expect(await GetUserViewApprovalStateAsync({ ...VIEW, WhereClause: '1=1', ApprovalStatus: 'Approved', ApprovedFingerprint: fp })).toBe('Stale');
     });
 
+    it('a view fingerprint includes the alternate base view only when one is set', async () => {
+        const fp = await ComputeUserViewFingerprintAsync(VIEW);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: null })).toBe(fp);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: '  ' })).toBe(fp);
+        const withAlt = await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: 'Active' });
+        expect(withAlt).not.toBe(fp);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: ' active ' })).toBe(withAlt);
+        expect(await ComputeUserViewFingerprintAsync({ ...VIEW, AlternateBaseView: 'Archived' })).not.toBe(withAlt);
+    });
+
     it('a dashboard fingerprint follows its configuration and code', async () => {
         const fp = await ComputeDashboardFingerprintAsync(DASHBOARD);
         expect(await ComputeDashboardFingerprintAsync({ ...DASHBOARD, Name: 'Renamed', Description: 'x' } as typeof DASHBOARD)).toBe(fp);
@@ -152,5 +165,63 @@ describe('user views, dashboards and components', () => {
         const a = await ComputeComponentFingerprintAsync({ Specification: 'x', Version: 'y' });
         const b = await ComputeDashboardFingerprintAsync({ Type: 'Config', UIConfigDetails: 'x', Code: null, DriverClass: null });
         expect(a).not.toBe(b);
+    });
+});
+
+/**
+ * Who may approve a query (#6746): any user with Create on MJ: Queries saves a draft; approving
+ * needs the `Queries: Approve` authorization. It must fail closed, so a deployment that has not
+ * synced the authorization yet lets nobody but an Owner approve.
+ */
+describe('UserCanApproveQueries', () => {
+    const GRANT_ID = 'auth-approve-queries';
+    const PARENT_ID = 'auth-query-admin';
+    const DEVELOPER = 'role-developer';
+    const UI_ROLE = 'role-ui';
+    const ADMIN = 'role-query-admin';
+
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue({
+            AuthorizationRoles: [
+                new AuthorizationRoleInfo({ ID: 'ar-1', AuthorizationID: GRANT_ID, RoleID: DEVELOPER, Type: 'Allow' }),
+                new AuthorizationRoleInfo({ ID: 'ar-2', AuthorizationID: PARENT_ID, RoleID: ADMIN, Type: 'Allow' }),
+            ],
+        } as never);
+    });
+
+    const grant = new AuthorizationInfo({ ID: GRANT_ID, Name: APPROVE_QUERIES_AUTHORIZATION, ParentID: null, IsActive: true });
+
+    function user(roleIDs: string[], type = 'User'): UserInfo {
+        return new UserInfo(null, { ID: 'u-1', Type: type, UserRoles: roleIDs.map((RoleID) => ({ UserID: 'u-1', RoleID })) });
+    }
+
+    it('lets a user whose role holds the authorization approve', () => {
+        expect(UserCanApproveQueries(user([DEVELOPER]), { Authorizations: [grant] })).toBe(true);
+    });
+
+    it('refuses a user whose roles do not hold it', () => {
+        expect(UserCanApproveQueries(user([UI_ROLE]), { Authorizations: [grant] })).toBe(false);
+    });
+
+    it('lets a holder of an ancestor authorization approve', () => {
+        const parent = new AuthorizationInfo({ ID: PARENT_ID, Name: 'Query Administration', ParentID: null, IsActive: true });
+        const child = new AuthorizationInfo({ ID: GRANT_ID, Name: APPROVE_QUERIES_AUTHORIZATION, ParentID: PARENT_ID, IsActive: true });
+        expect(UserCanApproveQueries(user([ADMIN]), { Authorizations: [parent, child] })).toBe(true);
+    });
+
+    it('lets an Owner approve, who must never be locked out', () => {
+        expect(UserCanApproveQueries(user([UI_ROLE], 'Owner'), { Authorizations: [grant] })).toBe(true);
+    });
+
+    it('fails closed when the authorization has not been synced, or there is no user or provider', () => {
+        expect(UserCanApproveQueries(user([DEVELOPER]), { Authorizations: [] })).toBe(false);
+        expect(UserCanApproveQueries(null, { Authorizations: [grant] })).toBe(false);
+        expect(UserCanApproveQueries(user([DEVELOPER]), null)).toBe(false);
+    });
+
+    it('finds the authorization whatever its casing', () => {
+        const lower = new AuthorizationInfo({ ID: GRANT_ID, Name: 'queries: approve', ParentID: null, IsActive: true });
+        expect(UserCanApproveQueries(user([DEVELOPER]), { Authorizations: [lower] })).toBe(true);
     });
 });

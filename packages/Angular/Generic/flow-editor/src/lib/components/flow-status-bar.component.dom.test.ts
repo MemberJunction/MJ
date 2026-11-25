@@ -15,18 +15,18 @@ describe('FlowStatusBarComponent (DOM)', () => {
     });
   }
 
-  it('uses singular labels for counts of 1', () => {
+  it('uses singular D18 labels for counts of 1', () => {
     const fixture = render({ NodeCount: 1, ConnectionCount: 1 });
     const items = queryAll(fixture, '.mj-flow-status-item').map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim());
-    expect(items[0]).toBe('1 node');
-    expect(items[1]).toBe('1 connection');
+    expect(items[0]).toBe('1 step');
+    expect(items[1]).toBe('1 path');
   });
 
-  it('uses plural labels for counts other than 1', () => {
+  it('uses plural D18 labels for counts other than 1', () => {
     const fixture = render({ NodeCount: 3, ConnectionCount: 0 });
     const items = queryAll(fixture, '.mj-flow-status-item').map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim());
-    expect(items[0]).toBe('3 nodes');
-    expect(items[1]).toBe('0 connections');
+    expect(items[0]).toBe('3 steps');
+    expect(items[1]).toBe('0 paths');
   });
 
   it('hides the selected-count item when SelectedCount is 0', () => {

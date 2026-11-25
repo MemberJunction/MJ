@@ -23,3 +23,7 @@ export * from './lib/loading/loading.component';
 // Rich-text rendering (safe HTML/SVG sanitization)
 export * from './lib/rich-text/rich-text-sanitize';
 export * from './lib/rich-text/safe-rich-html.pipe';
+
+// Angular GraphQL Provider
+export * from './lib/angular-graphql-data-provider';
+

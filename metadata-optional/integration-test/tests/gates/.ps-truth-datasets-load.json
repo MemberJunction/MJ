@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "PS truth datasets: load and verify",
+    "Description": "Bundle 'ps-truth-datasets': every truth-suite catalog entry at every base seed (68 datasets: 8 worlds × 4 seeds, W2-noise × 21, 15 scenarios × 1) is generated, loaded into its pstruth table in one transaction, and its entity reads back exactly the loaded row count through MJAPI.",
+    "Status": "Active",
+    "Tags": "[\"truth-suite\",\"datasets\",\"owner:PR2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "68 of 68 datasets load and read back their exact row count through MJAPI."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-truth-datasets"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "07263995-639F-491B-BF3D-83A279FCB490"
+  }
+}

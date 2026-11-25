@@ -1,4 +1,4 @@
-export { ComponentLinter, LintResult, Violation } from './component-linter';
+export { ComponentLinter, LintResult, Violation, ViolationDetails, FieldAccessViolationDetails } from './component-linter';
 export { BaseLintRule } from './lint-rule';
 export {
   LibraryLintCache,

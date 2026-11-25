@@ -97,6 +97,18 @@ export interface SuiteFlags extends CommonFlags {
     flakyCheck?: number;
     /** `name|id` or `name|id@version`. Overrides the rubric for every test in the suite. */
     rubric?: string;
+    /**
+     * Partition suite execution across multiple worker processes (`<index>/<total>`, 1-based,
+     * e.g. `1/3`, `2/3`, `3/3`) using duration-aware LPT load balancing while preserving
+     * suite sequence order within each shard.
+     */
+    shard?: string;
+    /**
+     * Filter tests in the suite by transport layer (`'server'` | `'client'` | `'all'`).
+     */
+    transport?: 'server' | 'client' | 'all';
+    /** Run only these suite tests, by exact name. */
+    test?: string[];
 }
 
 /**

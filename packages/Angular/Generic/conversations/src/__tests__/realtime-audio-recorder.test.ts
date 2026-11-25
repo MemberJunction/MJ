@@ -380,6 +380,28 @@ describe('RealtimeAudioRecorder — with stubbed Web Audio', () => {
         await recorder.Stop();
     });
 
+    it('AttachRemoteStream replaces the previous remote stream source when a new MediaStream arrives on mid-call WebRTC reconnect', async () => {
+        const sources: Array<{ Stream: MediaStream; Disconnected: boolean }> = [];
+        const context = g['AudioContext'] as { prototype: { createMediaStreamSource(stream: MediaStream): object } };
+        context.prototype.createMediaStreamSource = (stream: MediaStream) => {
+            const source = { Stream: stream, Disconnected: false, connect: () => undefined, disconnect: () => (source.Disconnected = true) };
+            sources.push(source);
+            return source;
+        };
+        const mic = fakeStream(1);
+        const remote1 = fakeStream(1);
+        const remote2 = fakeStream(1);
+        const recorder = new RealtimeAudioRecorder(async () => new SpyEncoder());
+        recorder.Start(mic, remote1);
+        await vi.waitFor(() => expect(sources).toHaveLength(2));
+
+        // Reconnect publishes a new MediaStream instance -> old remote source disconnected, new one connected:
+        recorder.AttachRemoteStream(remote2);
+        expect(sources.map((s) => s.Stream)).toEqual([mic, remote1, remote2]);
+        expect(sources.map((s) => s.Disconnected)).toEqual([false, true, false]);
+        await recorder.Stop();
+    });
+
     describe('ReplaceMicrophone', () => {
         /** Makes the stubbed context record each source node: the stream it reads and whether it was disconnected. */
         function recordSources(): Array<{ Stream: MediaStream; Disconnected: boolean }> {

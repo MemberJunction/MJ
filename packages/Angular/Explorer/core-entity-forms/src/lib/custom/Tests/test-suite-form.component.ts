@@ -9,7 +9,7 @@ import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJConfirmService, SectionPickerItem } from '@memberjunction/ng-ui-components';
 import { MJTestSuiteFormComponent } from '../../generated/Entities/MJTestSuite/mjtestsuite.form.component';
 import {
   TestingDialogService,
@@ -648,6 +648,22 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
     if (!el) return false;
     const tag = el.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el as HTMLElement).isContentEditable;
+  }
+
+  /** The tab strip as `mj-section-picker` items: strip order, a count once that tab's data has loaded. */
+  get SectionPickerItems(): SectionPickerItem[] {
+    return [
+      { Key: 'overview', Title: 'Overview', Icon: 'fas fa-th-large' },
+      { Key: 'tests', Title: 'Tests', Icon: 'fas fa-flask', Count: this.TestsLoaded ? this.SuiteTests.length : null },
+      { Key: 'runs', Title: 'Runs', Icon: 'fas fa-history', Count: this.RunsLoaded ? this.SuiteRuns.length : null },
+      { Key: 'analytics', Title: 'Analytics', Icon: 'fas fa-chart-line' },
+      { Key: 'compare', Title: 'Compare', Icon: 'fas fa-balance-scale' },
+    ];
+  }
+
+  /** A pick from the phone section sheet; goes through ChangeTab so lazy loads fire. An unknown key is ignored. */
+  OnSectionPicked(key: string): void {
+    if (this.SectionPickerItems.some((i) => i.Key === key)) this.ChangeTab(key);
   }
 
   ChangeTab(tab: string) {

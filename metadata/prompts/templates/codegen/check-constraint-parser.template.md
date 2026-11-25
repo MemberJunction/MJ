@@ -136,7 +136,22 @@ result.Errors.push(new ValidationErrorInfo(
 
 **Why?** Generated code is stored in SQL migration files processed by Flyway, which interprets `${}` as placeholder syntax. Use string concatenation (`+`) or build strings with `.join()` assigned to a variable first.
 
-**5. Code Formatting**
+**5. UUID Fields: Compare with `UUIDsEqual`, Never `===`/`!==`**
+```typescript
+// ✅ CORRECT - case-insensitive UUID comparison
+if (this.ParentID != null && UUIDsEqual(this.ParentID, this.ID)) {
+    // error
+}
+
+// ❌ WRONG - a UUID can arrive in either casing, so this misses a match
+if (this.ParentID != null && this.ParentID === this.ID) {
+    // error
+}
+```
+
+**Why?** `uniqueidentifier` (or `uuid`) values come back upper- or lower-case depending on how the record was loaded. Use `UUIDsEqual(a, b)` to test equality and `!UUIDsEqual(a, b)` for inequality whenever either side is a `uniqueidentifier` field. `UUIDsEqual` from `@memberjunction/global` is imported by the generated file; do not add an import.
+
+**6. Code Formatting**
 - Single tab indent for each line
 - Include comments for complex logic
 
@@ -161,6 +176,7 @@ Return a JSON object with this exact structure:
 - Method name must be valid TypeScript identifier
 - Check nullable fields before applying constraints
 - Never compare boolean fields to 0/1
+- Compare uniqueidentifier fields with `UUIDsEqual`, never `===` / `!==`
 
 ## Example Input
 

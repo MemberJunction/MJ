@@ -12,7 +12,8 @@
  * (a query's dialect variants and parameters) are sorted by a semantic key first, so the same
  * rows read back in a different order give the same fingerprint.
  */
-import { CONTEXT_TOKEN_CONTRACT_VERSION } from '@memberjunction/core';
+import { AuthorizationEvaluator, CONTEXT_TOKEN_CONTRACT_VERSION } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { ComputeContentHashAsync, NormalizeUUID, OrdinalCompare, UUIDsEqual } from '@memberjunction/global';
 import type {
     MJComponentEntity,
@@ -42,7 +43,13 @@ export interface QueryDefinitionRows {
 }
 
 /** A user view's material fields: what decides which rows it returns. */
-export type UserViewDefinitionFields = Pick<MJUserViewEntity, 'EntityID' | 'WhereClause' | 'CustomWhereClause' | 'SmartFilterWhereClause' | 'Properties'>;
+export type UserViewDefinitionFields = Pick<MJUserViewEntity, 'EntityID' | 'WhereClause' | 'CustomWhereClause' | 'SmartFilterWhereClause' | 'Properties'> & {
+    /**
+     * The alternate base view the view reads from (`MJUserViewEntityExtended.AlternateBaseView`).
+     * It decides which rows the view returns, so it is part of the definition when set.
+     */
+    AlternateBaseView?: string | null;
+};
 
 /** A dashboard's material fields: what it renders and runs. */
 export type DashboardDefinitionFields = Pick<MJDashboardEntity, 'Type' | 'UIConfigDetails' | 'Code' | 'DriverClass'>;
@@ -102,8 +109,16 @@ export async function ComputeUserViewFingerprintAsync(view: UserViewDefinitionFi
         WhereClause: text(view.WhereClause),
         CustomWhereClause: !!view.CustomWhereClause,
         SmartFilterWhereClause: text(view.SmartFilterWhereClause),
-        Properties: text(view.Properties)
+        Properties: text(view.Properties),
+        // Only when set, so a view without one keeps the fingerprint it already had.
+        ...alternateBaseViewPart(view.AlternateBaseView)
     });
+}
+
+/** Alternate base view names are case-insensitive, so the fingerprint uses the lowercased name. */
+function alternateBaseViewPart(name: string | null | undefined): { AlternateBaseView?: string } {
+    const trimmed = name?.trim();
+    return trimmed ? { AlternateBaseView: trimmed.toLowerCase() } : {};
 }
 
 /** The fingerprint of a dashboard's definition: its type, configuration (parts, mappings, wires) and code. */
@@ -161,6 +176,46 @@ export async function GetDashboardApprovalStateAsync(dashboard: DashboardDefinit
 /** Where a component version's approval stands. */
 export async function GetComponentApprovalStateAsync(component: ComponentDefinitionFields & Pick<MJComponentEntity, 'ApprovalStatus' | 'ApprovedFingerprint'>): Promise<ApprovalState> {
     return ApprovalStateOf({ Status: component.ApprovalStatus, ApprovedFingerprint: component.ApprovedFingerprint }, await ComputeComponentFingerprintAsync(component));
+}
+
+/**
+ * The authorization that lets a user approve a query. Any user with Create on `MJ: Queries` can
+ * save one, as a draft (`Pending`); approving it, which makes it MJ canon, needs this.
+ */
+export const APPROVE_QUERIES_AUTHORIZATION = 'Queries: Approve';
+
+/** Why the server refused a save that would approve a query. */
+export const QUERY_APPROVAL_REFUSAL =
+    `Approving a query needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it as Pending, and someone who holds it can approve it.`;
+
+/**
+ * Why the server refused a save that sets a query's `CacheValidationSQL`. That SQL runs as written
+ * when a client checks its cache, outside the checks the query's own SQL goes through, so only a
+ * user who could approve the query may write it.
+ */
+export const QUERY_VALIDATION_SQL_REFUSAL =
+    `Setting a query's cache validation SQL needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it without one, and someone who holds it can add it.`;
+
+/**
+ * Whether this user may approve queries: they hold {@link APPROVE_QUERIES_AUTHORIZATION}, directly
+ * or through an ancestor authorization, or they are an `Owner`-type user (the platform's top
+ * authority, never locked out of this).
+ *
+ * False without a user or when the authorization is not defined, so a deployment that has not
+ * synced the authorization yet fails closed. The server enforces this on save; clients use it to
+ * decide whether to offer approving at all.
+ */
+export function UserCanApproveQueries(
+    user: UserInfo | null | undefined,
+    provider: Pick<IMetadataProvider, 'Authorizations'> | null | undefined,
+): boolean {
+    if (!user) return false;
+    if (user.Type?.trim().toLowerCase() === 'owner') return true;
+    const authorizations = provider?.Authorizations ?? [];
+    const grant = authorizations.find((a) =>
+        a.Name?.trim().toLowerCase() === APPROVE_QUERIES_AUTHORIZATION.toLowerCase());
+    if (!grant) return false;
+    return new AuthorizationEvaluator().UserCanExecuteWithAncestors(grant, user, authorizations);
 }
 
 /** Empty text means the same as no text. */

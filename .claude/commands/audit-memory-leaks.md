@@ -345,12 +345,19 @@ Don't flag these in the report:
 
 ## Recommended Remediation Patterns
 
-When proposing fixes in a new audit, point reviewers at the established helpers — re-implementing them per-cache makes the codebase harder to audit:
+**CRITICAL DESIGN RULE — NEVER USE ARBITRARY HARD COUNT CAPS AS BAND-AIDS:**
+Never remediate a growing `Map`, session store, in-flight table, or shared engine by slapping an arbitrary hardcoded count cap (`MAX_CACHED_ITEMS = 50`, `MAX_SESSIONS = 1_000`, `MAX_TRACKED_RUNS = 256`, `MAX_POLICY_ENTRIES = 2_000`) onto it. Arbitrary count caps silently drop live user/MCP/cloud sessions, break FK ordering on concurrent in-flight operations, penalize legitimate UI sessions, and leave 0%-hit-rate per-request leaks pinning memory up to the cap. Also remember that `StaticNumericLiteralCompliance.test.ts` (`pnpm run check:guards`) flags any unexplained static numeric literal as a defect.
 
-- **Bounded credential / SDK-client caches** → use `new MJLruCache<K, V>({ maxSize, ttlMs, onEvict })` from `@memberjunction/global`. Standard config for credential caches: `maxSize: 100, ttlMs: 60 * 60 * 1000`. The `onEvict` callback is the right place to call `.destroy()` / `.close()` on disposable values.
-- **Singletons with timers / intervals / sockets / subscriptions** → implement `IShutdownable` and call `ShutdownRegistry.Instance.Register(this)` in the constructor. The MJServer SIGTERM handler already drains the registry; you don't need to wire a separate hook.
-- **Streaming providers with instance-level accumulators** → override `BaseLLM.resetStreamingState()` (it's called both at request start and in `finally`).
-- **Component RxJS subscriptions** → pipe through `takeUntil(this.destroy$)`. The `no-restricted-syntax` ESLint rule in `.eslintrc` flags any `MJGlobal.Instance.GetEventListener(...).subscribe(...)` that doesn't have an intervening `.pipe()`.
+Always fix the **root-cause lifecycle or object scope** in this priority order:
+
+1. **Per-request `IMetadataProvider` or short-lived object state** → use `WeakMap<IMetadataProvider, ...>` (never stringified provider IDs in a singleton `Map`/`MJLruCache`), so V8 garbage-collects the provider and its cached entities automatically when the request ends.
+2. **Server-side agent/action/resolver reads polluting a shared `BaseEngine` UI cache** → read fresh RLS-scoped rows (`RunView` with `ResultType: 'simple'`) and memoize on the **per-run** manager instance (cleared in `finally` / `endRun`), leaving the browser's `BaseEngine` cache uncapped.
+3. **In-flight promise / save-queue / lock tracking maps** → delete entries deterministically in `.finally()` / `queue.Settled(entity).finally(...)` the instant the operation settles (succeeded or failed), rather than capping concurrent in-flight count.
+4. **Live client / MCP / WebSocket / detached cloud sessions** → wire deterministic teardown on `onclose` / `EndSession()` / `cancel` **plus** an **idle TTL** configurable via `mj.config.cjs` (never evict active sessions by count). Strip multi-MB transient payloads (e.g., duplicate base-version document bodies) as soon as state compacts to the DB.
+5. **Bounded credential / external SDK-client caches** (where keys are genuinely long-lived reusable credentials/endpoints) → use `new MJLruCache<K, V>({ maxSize, ttlMs, onEvict })` from `@memberjunction/global` with `mj.config.cjs` / `LimitsConfigResolver` configurability and `onEvict` calling `.destroy()` / `.close()` on disposable handles.
+6. **Singletons with timers / intervals / sockets / subscriptions** → implement `IShutdownable` and call `ShutdownRegistry.Instance.Register(this)` in the constructor.
+7. **Streaming providers with instance-level accumulators** → override `BaseLLM.resetStreamingState()` (called at request start and in `finally`).
+8. **Component RxJS subscriptions & post-`await` continuations** → pipe through `takeUntil(this.destroy$)` and check `isDestroyed` / `loadSequence` after `await` boundaries before starting intervals, workers, or object URLs.
 
 ## Useful Files for Context
 

@@ -38,7 +38,7 @@ import { ActionEngineServer } from '@memberjunction/actions';
 import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { MJActionExecutionLogEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Assert, AssertEqual, settle } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, settle, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 
@@ -85,18 +85,16 @@ interface BreakerHarness {
     call(expression: string, options?: { skipCircuitBreaker?: boolean }): Promise<{ result: ActionResult; elapsedMs: number }>;
 }
 
-async function makeBreakerHarness(ctx: IntegrationCheckContext, checkId: string): Promise<BreakerHarness | undefined> {
+async function makeBreakerHarness(ctx: IntegrationCheckContext): Promise<BreakerHarness> {
     const engine = await configuredAIEngine(ctx);
     if (engine.Agents.length === 0) {
-        skipNote(checkId, 'no AI Agents in metadata — ExecuteSingleAction needs an agent for context');
-        return undefined;
+        SkipCheck('no AI Agents in metadata — ExecuteSingleAction needs an agent for context');
     }
     const actionEngine = ActionEngineServer.Instance;
     await actionEngine.Config(false, ctx.User);
     const calc = actionEngine.Actions.find(a => a.Name === BREAKER_ACTION && a.Status === 'Active');
     if (!calc) {
-        skipNote(checkId, `the core '${BREAKER_ACTION}' action is not Active in this database`);
-        return undefined;
+        SkipCheck(`the core '${BREAKER_ACTION}' action is not Active in this database`);
     }
     const agentEnt = await ctx.Provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', ctx.User);
     Assert(await agentEnt.Load(engine.Agents[0].ID), 'existing agent loads');
@@ -149,11 +147,6 @@ function requireFixture(): AgentLoopFixture {
         throw new Error('agent-loop-standin fixture not initialized — the bundle lifecycle Setup must run before its checks.');
     }
     return fixture;
-}
-
-/** Loud, uniform skip-as-pass note. */
-function skipNote(checkId: string, reason: string): void {
-    console.warn(`  ⚠ agent-loop-standin.${checkId} SKIPPED — ${reason}`);
 }
 
 /** Ensure the AI metadata cache is loaded (agent catalog + permission rows for Execute's gate). */
@@ -309,8 +302,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             // after Phase 1 shows up here as a persisted orphan run.
             const engine = await configuredAIEngine(ctx);
             if (engine.Agents.length === 0) {
-                skipNote('ALS3', 'no AI Agents in metadata — Execute cannot be exercised');
-                return;
+                SkipCheck('no AI Agents in metadata — Execute cannot be exercised');
             }
             const agentEnt = await ctx.Provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', ctx.User);
             Assert(await agentEnt.Load(engine.Agents[0].ID), 'existing agent loads');
@@ -350,8 +342,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
             const engine = await configuredAIEngine(ctx);
             const candidate = findExecutableActiveAgent(engine, ctx.User.ID);
             if (!candidate) {
-                skipNote('ALS4', `no Active agent whose Run gate passes for the context user without ambient grants (${engine.Agents.length} agents)`);
-                return;
+                SkipCheck(`no Active agent whose Run gate passes for the context user without ambient grants (${engine.Agents.length} agents)`);
             }
             const agentEnt = await ctx.Provider.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', ctx.User);
             Assert(await agentEnt.Load(candidate.ID), 'candidate agent loads');
@@ -483,8 +474,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS7',
         Name: `ALS7: identical-arguments rule — ${IDENTICAL_FAILURE_THRESHOLD} failures with the same arguments block the next identical call before the engine (no log row, ~0ms); different arguments still dispatch`,
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS7');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             for (let i = 1; i <= IDENTICAL_FAILURE_THRESHOLD; i++) {
                 const { result } = await h.call(BAD_EXPRESSION);
                 AssertEqual(result.Success, false, `dispatched failure ${i} reports Success=false`);
@@ -512,8 +502,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS8',
         Name: `ALS8: attempt budget — ${ACTION_FAILURE_BUDGET} consecutive failures across DIFFERENT arguments disable the action for the run; the next call is blocked whatever its arguments`,
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS8');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             for (let i = 1; i <= ACTION_FAILURE_BUDGET; i++) {
                 const { result } = await h.call(`${BAD_EXPRESSION} + ${i}`);
                 AssertEqual(blockedReason(result), undefined, `varied-argument failure ${i} dispatched (self-correction room)`);
@@ -533,8 +522,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS9',
         Name: 'ALS9: a success clears both counters — after identical failures, one good call re-opens the action for the very arguments that failed',
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS9');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             for (let i = 1; i <= IDENTICAL_FAILURE_THRESHOLD; i++) {
                 await h.call(BAD_EXPRESSION);
             }
@@ -554,8 +542,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS10',
         Name: 'ALS10: fatal lockout — one credential/configuration failure disables the action for the run, for ANY arguments, before the engine',
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS10');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             // The core fixture action cannot produce a credential failure on demand, so the lockout
             // is recorded through the same method a dispatched fatal failure goes through; what is
             // under test is the breaker's response to it on every later call.
@@ -579,8 +566,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS11',
         Name: 'ALS11: skipCircuitBreaker (ForEach / While / pipeline callers) bypasses all three rules and leaves the failure history untouched in both directions',
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS11');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             // Lock the action out fatally AND build an identical-arguments record, then prove the
             // exempt path ignores both and neither dispatch outcome moves the counters.
             const action: AgentAction = { name: BREAKER_ACTION, params: { Expression: BAD_EXPRESSION } };
@@ -607,8 +593,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS12',
         Name: 'ALS12: a bound parameter (boundActionParams) replaces the model\'s value at dispatch and is marked Bound in the execution log',
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS12');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             // The model asks for the expression the action refuses; the binding fixes it to one that works.
             h.params.boundActionParams = { [h.calc.ID]: { Expression: '(2 * 3) + 4' } };
             const { result } = await h.call(BAD_EXPRESSION);
@@ -626,8 +611,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS13',
         Name: 'ALS13: a binding that names no input of the action refuses the call before the engine, tells the model only that the action is unavailable, and locks it out for the run',
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS13');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             h.params.boundActionParams = { [h.calc.ID]: { NotAParameter: 'x' } };
             const refused = await h.call('1 + 1');
             AssertEqual(blockedReason(refused.result), 'fatal', 'the refusal is a fatal block');
@@ -645,8 +629,7 @@ export const AgentLoopStandinChecks: NamedCheck[] = [
         Id: 'agent-loop-standin.ALS14',
         Name: 'ALS14: a run that continues another (lastRunId) applies the bound parameters stored on that run\'s row when its caller passes none, and the caller\'s own bindings win',
         Fn: async (ctx): Promise<void> => {
-            const h = await makeBreakerHarness(ctx, 'ALS14');
-            if (!h) { return; }
+            const h = await makeBreakerHarness(ctx);
             const bound = { [h.calc.ID]: { Expression: '(2 * 3) + 4' } };
             const prior = await createAgentRunFixture(ctx);
             prior.BoundActionParams = JSON.stringify({ [h.calc.ID]: { Expression: '999' } });

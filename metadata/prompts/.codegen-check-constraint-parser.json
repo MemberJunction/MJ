@@ -58,7 +58,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 4.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=Claude Haiku 5.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 3
           },
@@ -66,23 +66,24 @@
             "ID": "AEAF195A-201E-4C2A-B7D2-28B641568C7E"
           },
           "sync": {
-            "lastModified": "2026-02-13T20:48:55.065Z",
-            "checksum": "681b374ee1553a33bd3eaec4ccf26074c9ecdc0aaf252d7f6efb2a0424addee5"
+            "lastModified": "2026-11-24T20:27:11.670Z",
+            "checksum": "f7b3791c0a8795d8c8b639e72e654ea0422f3af48d605a1e43f081bce7ac68f7"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 10
+            "Priority": 10,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "51508C0F-9DAD-4BB6-9CD7-067DCFA64159"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:11.202Z",
-            "checksum": "16ae6811aae94d52bed203c8c0d10a4f2d74035edf8bbe657cc0fb9c54a03df3"
+            "lastModified": "2026-11-24T20:27:11.678Z",
+            "checksum": "1a36e0da4d74276c1c16151204547066b4b73fdd5fe7a6a5b216c06b5a2bce55"
           }
         },
         {
@@ -103,26 +104,23 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 9
+            "Priority": 9,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "52784AE7-1E17-4556-9A99-7F6F324FA700"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:11.235Z",
-            "checksum": "13bc8b6a2097c32d1a3db8a9cdd44e04bd8e5e7cc4a8971fe6178a2f8aff5958"
+            "lastModified": "2026-11-24T20:27:11.688Z",
+            "checksum": "8b8e8d7e008f18978b9cd9433becd542c1c77f9eb0abe5ac7080d720b7d7ce35"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "8B635038-60E9-4591-8B2C-7F33338D58DC"
-    },
-    "sync": {
-      "lastModified": "2026-05-29T19:48:58.770Z",
-      "checksum": "3a29e95e466d2c4bb83b4c745e0d7a1d9b984202c8358188400f1b37936d7280"
     }
   }
 ]

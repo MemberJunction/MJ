@@ -5,8 +5,8 @@
  *
  * It runs before {@link ResolveAgentTurn}, which stays pure. When the answer is confident, the
  * caller replaces the continuity candidate with {@link ApplyRoutingDecision}; otherwise nothing
- * changes. Every failure keeps today's routing. The chat turns it on with `EnableDecisionRouting`,
- * which is off by default.
+ * changes. Every failure keeps today's routing. The chat's `EnableDecisionRouting` input controls
+ * it, and is on by default.
  *
  * The decision itself (its input, questions and state, and how its answers are read) is built in
  * `@memberjunction/ai-core-plus` (`conversation-routing-decision.ts`), so the Decision Eval harness
@@ -26,9 +26,13 @@ import {
     DECISION_ROUTING_TIMEOUT_MS,
     InterpretRoutingAnswers,
     KeptContinuityOutcome,
+    NoAgentOutcome,
+    ROUTING_CONTINUES_CALIBRATION_KEY,
+    RoutingAnsweredBy,
     type RoutingDecisionInput,
     type RoutingDecisionOutcome
 } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import type { RunDecisionParams, RunDecisionResult } from '@memberjunction/graphql-dataprovider';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { AgentReplyMode } from '../models/agent-turn.model';
@@ -45,6 +49,12 @@ export interface RoutingDecisionGate {
     ReplyMode: AgentReplyMode;
     /** Agents the message tags. */
     MentionedAgentIds: readonly string[];
+    /** People the message tags (`@Person`). */
+    MentionedUserIds?: readonly string[];
+    /** Direct reply (`ParentID`) to an earlier AI message. */
+    ReplyParentAgentId?: string | null;
+    /** Direct reply (`ParentID`) to another person's message. */
+    ReplyParentIsHuman?: boolean;
     /** The message, as saved. */
     Message: string;
     /** The last agent that answered, other than the conversation manager. */
@@ -52,27 +62,33 @@ export interface RoutingDecisionGate {
 }
 
 /**
- * True when a message should get a routing decision: routing is on, the reply mode is `Always`,
- * some agent has answered before, and the message tags no agent and is not a form response. A
- * form response always goes back to the agent that asked for it. Every other message keeps
- * today's routing, with no call.
+ * True when a message should get a routing decision: routing is on, some agent has answered
+ * before in this conversation, and the message has no structural override (`@Agent`, `@Person`,
+ * `ParentID` thread reply, or a form response). Before any agent has answered (`ContinuityAgentId`
+ * is null), no call is made — so in `MentionOnly` chats the first invocation requires an `@Agent`
+ * mention, and subsequent unmentioned messages ask the routing decision.
  */
 export function ShouldRunRoutingDecision(gate: RoutingDecisionGate): boolean {
     return gate.Enabled
-        && gate.ReplyMode === 'Always'
         && !!gate.ContinuityAgentId
         && gate.MentionedAgentIds.length === 0
+        && (gate.MentionedUserIds?.length ?? 0) === 0
+        && !gate.ReplyParentAgentId
+        && !gate.ReplyParentIsHuman
         && !ConversationUtility.ContainsFormResponse(gate.Message);
 }
 
 /**
- * Asks one routing decision and reads its answer. It fails toward continuity: an error, no answer
- * within `timeoutMs` (the call is abandoned), or an unsure answer keeps today's routing. Never
- * throws.
+ * Asks one routing decision and reads its answer. In a single-user chat it fails toward
+ * continuity; in a multi-person chat (`input.AllowNoAgentOption`) it fails toward silence
+ * (`NoAgent`). Never throws.
  *
  * @param input What to decide. Check it with `CanAskRoutingDecision` first.
  * @param runDecision Runs the decision on the server.
  * @param timeoutMs How long to wait. Defaults to `DECISION_ROUTING_TIMEOUT_MS`.
+ *
+ * The thread Likelihood is calibrated with the answering model's fit, from
+ * `AIEngineBase.Instance.FindDecisionCalibration`.
  */
 export async function RunRoutingDecision(
     input: RoutingDecisionInput,
@@ -85,15 +101,19 @@ export async function RunRoutingDecision(
         TimeoutMS: timeoutMs
     };
     const result = await runWithDeadline(() => runDecision(params), timeoutMs);
-    return result
-        ? InterpretRoutingAnswers(input, result)
-        : KeptContinuityOutcome(`no answer within ${timeoutMs} ms`);
+    if (result) {
+        const calibration = AIEngineBase.Instance.FindDecisionCalibration(ROUTING_CONTINUES_CALIBRATION_KEY, RoutingAnsweredBy(result));
+        return InterpretRoutingAnswers(input, result, calibration);
+    }
+    const reason = `no answer within ${timeoutMs} ms`;
+    return input.AllowNoAgentOption ? NoAgentOutcome(reason) : KeptContinuityOutcome(reason);
 }
 
 /**
  * The candidates with the decision applied: a routed agent replaces continuity and is labelled
- * `DecisionRouted`, and "someone else" clears continuity. Any other outcome, or none, leaves the
- * candidates as they are.
+ * `DecisionRouted`, "someone else" clears continuity, and "no agent" (multi-person human-to-human)
+ * clears continuity and marks the message as addressed to a person. Any other outcome, or none,
+ * leaves the candidates as they are.
  */
 export function ApplyRoutingDecision(
     candidates: AgentTurnCandidates,
@@ -101,6 +121,9 @@ export function ApplyRoutingDecision(
 ): AgentTurnCandidates {
     if (outcome?.Verdict === 'Routed' && outcome.RoutedAgentId) {
         return { ...candidates, ContinuityAgentId: outcome.RoutedAgentId, ContinuityDecisionRouted: true };
+    }
+    if (outcome?.Verdict === 'NoAgent') {
+        return { ...candidates, ContinuityAgentId: null, ContinuityDecisionRouted: false, DecisionAddressedToHuman: true };
     }
     if (outcome?.Verdict === 'SomeoneElse') {
         return { ...candidates, ContinuityAgentId: null };

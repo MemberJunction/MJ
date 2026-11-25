@@ -431,7 +431,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
                 activities.push({
                     keyLabel: key.Label,
                     action: 'Revoked',
-                    user: key.User,
+                    user: key.User ?? '',
                     date: key.__mj_UpdatedAt,
                     keyId: key.ID
                 });
@@ -439,7 +439,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
                 activities.push({
                     keyLabel: key.Label,
                     action: 'Created',
-                    user: key.CreatedByUser,
+                    user: key.CreatedByUser ?? '',
                     date: key.__mj_CreatedAt,
                     keyId: key.ID
                 });

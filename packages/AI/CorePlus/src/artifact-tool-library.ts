@@ -16,15 +16,62 @@
  * both server and client code paths (e.g. future in-browser inference).
  */
 
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+
+/**
+ * JSON-compatible recursive value type for artifact tool inputs, schemas, and payloads.
+ */
+export type ArtifactJsonValue =
+    | string
+    | number
+    | boolean
+    | null
+    | ArtifactJsonValue[]
+    | { [key: string]: ArtifactJsonValue | undefined };
+
+/**
+ * Strongly typed dictionary of JSON-compatible arguments or schema fields for artifact tools.
+ */
+export type ArtifactToolArgs = Record<string, ArtifactJsonValue | undefined>;
+
+/**
+ * Optional execution context supplied by host callers (e.g. `ArtifactToolManager` or
+ * `GovernedArtifactService`) when invoking an artifact tool library on the server.
+ * Enables live data materialization (`RefreshLiveTables`, `EvaluateMjCustomFunctions`,
+ * `DocumentLiveBlockEngine`) under strict user permissions without breaking 3-arg subclasses.
+ */
+export interface ArtifactToolExecutionContext {
+    /** Authenticated human user on whose behalf the tool is executing (enforces RLS/FLS/Query perms). */
+    contextUser?: UserInfo;
+    /** Trusted ID of the acting user populated by host callers (never supplied by untrusted tool input). */
+    actorUserId?: string;
+    /** Trusted ID of the artifact's owner populated by host callers for owner-only lock operations. */
+    ownerUserId?: string;
+    /** Trusted edit-permission flag populated by host callers indicating whether the actor may mutate this artifact. */
+    isEditor?: boolean;
+    /** Request-scoped metadata provider (preferred over falling back to global `Metadata.Provider`). */
+    provider?: IMetadataProvider;
+    /** Underlying `MJ: Artifacts` UUID (used for `=MJ.IMPORTRANGE` resolution and audit). */
+    artifactId?: string;
+    /** Active `MJ: AI Agent Runs` UUID when invoked inside an agent run. */
+    agentRunId?: string;
+    /** Display name of the agent invoking the tool. */
+    agentName?: string;
+    /** Resolves a session-scoped alpha short-ID (e.g. `"D"`) or UUID string to its real `MJ: Artifacts` UUID. */
+    resolveArtifactId?: (idOrAlpha: string) => string | undefined;
+    /** Resolves a session-scoped alpha short-ID (e.g. `"E"`) or UUID string to its real `MJ: Artifact Versions` UUID. */
+    resolveVersionId?: (idOrAlpha: string) => string | undefined;
+}
+
 export interface ArtifactToolDefinition {
     name: string;
     description: string;
-    inputSchema: Record<string, unknown>;
+    inputSchema: ArtifactToolArgs;
 }
 
 export interface ArtifactToolResult {
     success: boolean;
-    data: unknown;
+    data: ArtifactJsonValue | object | undefined;
     errorMessage?: string;
 }
 
@@ -45,13 +92,14 @@ export abstract class BaseArtifactToolLibrary {
      */
     public async InvokeTool(
         toolName: string,
-        input: Record<string, unknown>,
-        artifactContent: string | Buffer
+        input: ArtifactToolArgs,
+        artifactContent: string | Buffer,
+        context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         if (toolName === 'get_full') {
             return this.getFull(artifactContent);
         }
-        return this.invokeSubclassTool(toolName, input, artifactContent);
+        return this.invokeSubclassTool(toolName, input, artifactContent, context);
     }
 
     /**
@@ -76,8 +124,9 @@ export abstract class BaseArtifactToolLibrary {
      */
     protected async invokeSubclassTool(
         toolName: string,
-        _input: Record<string, unknown>,
-        _artifactContent: string | Buffer
+        _input: ArtifactToolArgs,
+        _artifactContent: string | Buffer,
+        _context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
         return {
             success: false,
@@ -123,4 +172,91 @@ export abstract class BaseArtifactToolLibrary {
             },
         };
     }
+}
+
+const EMBEDDED_ARTIFACT_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMBEDDED_ARTIFACT_ALPHA_SHORT_ID_RE = /^(?:artifact\s+)?[A-Za-z]{1,2}$/i;
+
+export type ResolveEmbeddedArtifactResult =
+    | { ok: true; artifactId: string; errorMessage?: never }
+    | { ok: false; artifactId?: never; errorMessage: string };
+
+export type ResolveEmbeddedVersionResult =
+    | { ok: true; versionId: string; errorMessage?: never }
+    | { ok: false; versionId?: never; errorMessage: string };
+
+interface EmbeddedUuidLookupOutcome {
+    resolvedId?: string;
+    errorMessage?: string;
+}
+
+function resolveEmbeddedUuidReference(
+    rawId: string,
+    fieldName: 'artifactId' | 'versionId',
+    entityLabel: 'MJ: Artifacts' | 'MJ: Artifact Versions',
+    resolver?: (idOrAlpha: string) => string | undefined
+): EmbeddedUuidLookupOutcome {
+    const trimmed = (rawId ?? '').trim();
+    if (!trimmed) {
+        return { errorMessage: `${fieldName} must be a non-empty string.` };
+    }
+
+    if (resolver) {
+        const resolved = resolver(trimmed);
+        if (resolved && EMBEDDED_ARTIFACT_UUID_RE.test(resolved.trim())) {
+            return { resolvedId: resolved.trim() };
+        }
+        if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
+            return { resolvedId: trimmed };
+        }
+        return {
+            errorMessage: `Unable to resolve ${fieldName} '${trimmed}' to a valid ${entityLabel} UUID. Pass a full ${entityLabel} UUID or a valid short ID from the current session.`,
+        };
+    }
+
+    if (EMBEDDED_ARTIFACT_ALPHA_SHORT_ID_RE.test(trimmed)) {
+        return {
+            errorMessage: `Short ${fieldName} '${trimmed}' could not be resolved to an ${entityLabel} UUID without an active artifact session.`,
+        };
+    }
+
+    if (EMBEDDED_ARTIFACT_UUID_RE.test(trimmed)) {
+        return { resolvedId: trimmed };
+    }
+
+    return {
+        errorMessage: `Invalid ${fieldName} '${trimmed}': expected a valid ${entityLabel} UUID.`,
+    };
+}
+
+/**
+ * Resolves a session-scoped alpha short-ID (e.g. `"D"`) or full UUID provided to an
+ * embed tool into a canonical `MJ: Artifacts` UUID, rejecting unresolvable short IDs
+ * before they can be persisted into artifact content.
+ */
+export function ResolveEmbeddedArtifactId(
+    rawId: string,
+    context?: ArtifactToolExecutionContext
+): ResolveEmbeddedArtifactResult {
+    const outcome = resolveEmbeddedUuidReference(rawId, 'artifactId', 'MJ: Artifacts', context?.resolveArtifactId);
+    if (!outcome.resolvedId) {
+        return { ok: false, errorMessage: outcome.errorMessage ?? 'Unable to resolve artifactId.' };
+    }
+    return { ok: true, artifactId: outcome.resolvedId };
+}
+
+/**
+ * Resolves a session-scoped alpha short-ID (e.g. `"E"`) or full UUID provided to an
+ * embed tool into a canonical `MJ: Artifact Versions` UUID, rejecting unresolvable short
+ * IDs before they can be persisted into artifact content.
+ */
+export function ResolveEmbeddedVersionId(
+    rawId: string,
+    context?: ArtifactToolExecutionContext
+): ResolveEmbeddedVersionResult {
+    const outcome = resolveEmbeddedUuidReference(rawId, 'versionId', 'MJ: Artifact Versions', context?.resolveVersionId);
+    if (!outcome.resolvedId) {
+        return { ok: false, errorMessage: outcome.errorMessage ?? 'Unable to resolve versionId.' };
+    }
+    return { ok: true, versionId: outcome.resolvedId };
 }

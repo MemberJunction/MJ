@@ -23,7 +23,8 @@
         [AgentName]="AgentName"
         [ErrorLabel]="CallEndLabel"
         [ModelName]="IsReviewing ? null : (ModelName$ | async)"
-        [DevMode]="DevMode"
+        [DevMode]="Ui.showDevLinks"
+        [AllowDevLinks]="AllowDevLinks"
         [SessionID]="IsReviewing ? ReviewSessionID : SessionID"
         [ReviewMode]="IsReviewing"
         [ReviewStartedAt]="ReviewStartedAt"
@@ -67,8 +68,10 @@
         </mj-alert>
       }
 
-      <!-- Ephemeral narration with no active working card to anchor to → under the banner -->
-      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Disclosure.ShowThread) {
+      <!-- Ephemeral narration with no active working card to anchor to → under the banner. It is conversation text, so it
+           shows exactly while the thread does (Ui.showThread folds the host's text switch, the captions choice, console
+           chrome and review) — never on the session's disclosure ratchet, which only goes up. -->
+      @if (!IsReviewing && State.Narration && !State.ActiveCallId && Ui.showThread) {
         <div class="banner-live-note" role="status" aria-live="polite">
           <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
           {{ State.Narration }}
@@ -124,7 +127,7 @@
               <!-- The agent's tile names it and says what it is doing; this live region still says it for screen readers. -->
               <span class="hero__sr">{{ HeroStateLabel(state) }}</span>
             }
-            @if (PresenterOnStage || !Ui.showCaptionsControl) {
+            @if (Ui.allowTextReveal && (PresenterOnStage || !Ui.showCaptionsControl)) {
               <button type="button" class="hero__reveal" (click)="OnTextReveal()"
                       title="Show the conversation as text">
                 <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
@@ -132,13 +135,14 @@
               </button>
             }
           </div>
-        } @else {
+        } @else if (Ui.showThread) {
           <mj-realtime-session-thread
             [State]="State"
             [AgentName]="AgentName"
             [UserName]="CurrentUser?.Name || 'You'"
             [ShowCaptions]="IsReviewing ? true : ShowCaptions"
-            [DevMode]="DevMode"
+            [DevMode]="Ui.showDevLinks"
+            [OpenLinksInNewTab]="OpenLinksInNewTab"
             (OpenRunRequested)="OnOpenRunRequested($event)"
             (OpenArtifactRequested)="OnOpenArtifactRequested($event)"
             (CancelRequested)="OnCancelDelegation($event)">
@@ -169,6 +173,9 @@
             [Open]="ComposerOpen"
             [Compact]="Ui.chrome === 'orb' || Ui.compact"
             (OpenChanged)="OnComposerOpenChanged($event)"
+            [AllowTyping]="Ui.allowTyping"
+            [ShowEnd]="Ui.showEnd"
+            [ShowCaptionsControl]="Ui.showCaptionsControl"
             [CaptionsOn]="ShowCaptions"
             [IsMuted]="Muted"
             [ShowCamera]="CaptureOffers.Camera"
@@ -213,7 +220,7 @@
       <div class="call-panel" [style.width.px]="PanelAreaSize">
         <mj-realtime-surface-tabs
           [State]="State"
-          [DevMode]="DevMode"
+          [DevMode]="Ui.showDevLinks"
           [CurrentUser]="CurrentUser"
           [EnvironmentID]="EnvironmentID"
           [ShowActivityTab]="ShowActivityTab"
@@ -302,9 +309,12 @@
                 [attr.aria-label]="FocusPillMuted ? 'Unmute microphone' : 'Mute microphone'">
           <i class="fa-solid" [class.fa-microphone]="!FocusPillMuted" [class.fa-microphone-slash]="FocusPillMuted" aria-hidden="true"></i>
         </button>
+        <!-- The focus-mode exit, always offered: it is the only way off a focused surface. With text
+             disallowed the column comes back as the orb hero, so it is labelled as a return to the call. -->
         <button type="button" class="board-focus-pill__btn"
                 (click)="OnFocusPillExit()"
-                title="Show thread" aria-label="Show the conversation thread">
+                [title]="Ui.allowTextReveal ? 'Show thread' : 'Back to the call'"
+                [attr.aria-label]="Ui.allowTextReveal ? 'Show the conversation thread' : 'Leave focus mode and return to the call'">
           <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
         @if (StagePlugin; as stagePlugin) {
@@ -317,11 +327,13 @@
             (ResetLayoutRequested)="OnResetLayout()">
           </mj-media-move-menu>
         }
-        <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
-                (click)="OnFocusPillEnd()"
-                title="End call" aria-label="End the call">
-          <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-        </button>
+        @if (Ui.showEnd) {
+          <button type="button" class="board-focus-pill__btn board-focus-pill__btn--end"
+                  (click)="OnFocusPillEnd()"
+                  title="End call" aria-label="End the call">
+            <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
+          </button>
+        }
       </div>
     }
 
@@ -339,6 +351,51 @@
 
   </div>
 }
+
+<!-- SESSION REVIEW Docs workspace pane body: the reviewed session's saved ArtifactWorkspace
+     tabs (Docs, Spreadsheets, Slide Decks), rendered READ-ONLY so reviewers see the exact tabbed
+     workspace from the past session rather than only the flat Activity list. -->
+<ng-template #reviewDocsTpl>
+  @if (ReviewWorkspaceEngine; as workspace) {
+    <div class="review-docs-host">
+      <mj-realtime-artifact-workspace-surface
+        [Engine]="workspace"
+        [AgentName]="AgentName"
+        [CurrentUser]="CurrentUser"
+        [EnvironmentID]="EnvironmentID"
+        [Provider]="Provider"
+        [ReadOnly]="true">
+      </mj-realtime-artifact-workspace-surface>
+    </div>
+  }
+</ng-template>
+
+<!-- SESSION REVIEW Media pane body: the reviewed session's saved Media channel items. -->
+<ng-template #reviewMediaTpl>
+  @if (ReviewMedia; as media) {
+    <div class="review-media-host">
+      <mj-realtime-media-surface
+        [State]="media"
+        [AgentName]="AgentName"
+        [Provider]="Provider">
+      </mj-realtime-media-surface>
+    </div>
+  }
+</ng-template>
+
+<!-- SESSION REVIEW Browser pane body: the reviewed session's saved Remote Browser snapshot and visited pages. -->
+<ng-template #reviewBrowserTpl>
+  @if (ReviewBrowser; as browser) {
+    <div class="review-browser-host">
+      <mj-realtime-remote-browser-surface
+        [ReadOnly]="true"
+        [CurrentUrl]="browser.CurrentUrl"
+        [ScreenshotDataUrl]="browser.ScreenshotDataUrl ?? null"
+        [ReviewHistory]="browser.History">
+      </mj-realtime-remote-browser-surface>
+    </div>
+  }
+</ng-template>
 
 <!-- SESSION REVIEW whiteboard pane body: the reviewed session's saved board, rehydrated
      locally (WhiteboardState.FromJSON) and rendered READ-ONLY (pan/zoom only). Registered

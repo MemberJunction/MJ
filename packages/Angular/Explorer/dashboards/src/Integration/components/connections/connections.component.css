@@ -1461,7 +1461,7 @@ mj-empty-state {
   gap: 6px;
   padding: 8px 16px;
   background: linear-gradient(135deg, var(--mj-brand-primary) 0%, var(--mj-brand-primary-active) 100%);
-  color: white;
+  color: var(--mj-brand-on-primary);
   border: none;
   border-radius: 8px;
   cursor: pointer;

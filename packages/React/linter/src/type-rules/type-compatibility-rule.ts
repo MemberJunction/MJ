@@ -37,7 +37,7 @@ const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeo
 import * as t from '@babel/types';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { TypeInferenceEngine } from '../type-inference-engine';
-import { TypeContext } from '../type-context';
+import { TypeContext, IsArrayMethodMisuse } from '../type-context';
 import { ControlFlowAnalyzer } from '../control-flow-analyzer';
 
 export interface Violation {
@@ -192,7 +192,7 @@ export class TypeCompatibilityRule {
    * Check method calls (array methods, string methods) for type compatibility
    */
   private checkMethodCalls(ast: t.File, context: LintContext, violations: Violation[]): void {
-    const { typeEngine } = context;
+    const { typeEngine, controlFlowAnalyzer } = context;
 
     traverse(ast, {
       CallExpression(path: NodePath<t.CallExpression>) {
@@ -201,38 +201,11 @@ export class TypeCompatibilityRule {
         if (t.isMemberExpression(node.callee) && t.isIdentifier(node.callee.property)) {
           const methodName = node.callee.property.name;
 
-          // Array-specific methods
-          const arrayOnlyMethods = [
-            'push',
-            'pop',
-            'shift',
-            'unshift',
-            'splice',
-            'slice',
-            'map',
-            'filter',
-            'reduce',
-            'reduceRight',
-            'forEach',
-            'find',
-            'findIndex',
-            'some',
-            'every',
-            'flat',
-            'flatMap',
-            'sort',
-            'reverse',
-            'concat',
-            'join',
-            'fill',
-            'copyWithin',
-          ];
-
-          if (arrayOnlyMethods.includes(methodName)) {
+          // Array methods on a value known not to be an array, unless that type has the
+          // method too (Map#forEach, String#slice) — see IsArrayMethodMisuse
+          {
             const objectType = typeEngine.inferExpressionType(node.callee.object, path);
-
-            // Only flag if we know it's definitely not an array
-            if (objectType.type !== 'unknown' && objectType.type !== 'array') {
+            if (IsArrayMethodMisuse(methodName, objectType)) {
               violations.push({
                 rule: 'type-compatibility',
                 severity: 'high',
@@ -270,9 +243,12 @@ export class TypeCompatibilityRule {
 
           if (stringOnlyMethods.includes(methodName)) {
             const objectType = typeEngine.inferExpressionType(node.callee.object, path);
+            // Respect a typeof guard, as the arithmetic check does:
+            // `if (typeof aVal === 'string') { aVal.localeCompare(bVal) }`
+            const stringGuarded = controlFlowAnalyzer.IsNarrowedToType(node.callee.object, path, 'string');
 
             // Only flag if we know it's definitely not a string
-            if (objectType.type !== 'unknown' && objectType.type !== 'string') {
+            if (!stringGuarded && objectType.type !== 'unknown' && objectType.type !== 'string') {
               violations.push({
                 rule: 'type-compatibility',
                 severity: 'high',

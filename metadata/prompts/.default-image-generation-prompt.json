@@ -25,86 +25,87 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT Image 2",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 50
+            "ModelID": "@lookup:MJ: AI Models.Name=Nano Banana 2.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 50,
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "43C61C32-25CA-4F3E-8A2D-15C73E7038DC"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:13.635Z",
-            "checksum": "18b01350f7ff6156d6d2581d86564fa021f0c1be092b5fe3f820fca6b6cab7b1"
+            "lastModified": "2026-11-24T20:27:12.492Z",
+            "checksum": "22a4d51964f9c603e4280eca169fc774ff722b82e8d7eed105e77ced56cce31b"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=FLUX.2 Pro",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
-            "Priority": 40
+            "ModelID": "@lookup:MJ: AI Models.Name=Nano Banana Pro",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 40,
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "DA429198-6268-49DA-8EFF-0EDA42F1893A"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:13.651Z",
-            "checksum": "1534aa8417c8faf6f6bf293e20e2895fa2fe7a0e7807140452f9fae3458eefe4"
+            "lastModified": "2026-11-24T20:27:12.501Z",
+            "checksum": "b418098e97d33b1cd4bcba751bcf6dad9c50bdfee6c5e8fade05e55c5af8a8cc"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT 4.o Image 1.5",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT Image 2.6 Sunburst",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 30
+            "Priority": 30,
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "02BABEA8-4389-407A-9959-04F2903D4A22"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:13.666Z",
-            "checksum": "b44cb7506d79fbfdbd9e1eadcaa88166db8c60cd98ec6d056603d3573908712c"
+            "lastModified": "2026-11-24T20:27:12.508Z",
+            "checksum": "04315e9d6ad9caa88d7d9ab76dab0bc6bc95f20d39019dae08eedce64e6c0586"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=FLUX 1.1 Pro",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
-            "Priority": 20
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT Image 2.6 Flare",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 20,
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "AE7FF224-5B85-4BED-A590-E2B1231F8A4E"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:13.680Z",
-            "checksum": "6caf5ab1f0158230e5360dec4e6aec27032b87dbe1b569fce9c9e42a2ba6a9f0"
+            "lastModified": "2026-11-24T20:27:12.517Z",
+            "checksum": "0b74e27ef23436e7323e849bf18de63ddb9542248af5f25061058fcf1446b2ab"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=GPT-4o Image 1.0",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 10
+            "ModelID": "@lookup:MJ: AI Models.Name=FLUX 3 Image",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 10,
+            "Status": "Active"
           },
           "primaryKey": {
             "ID": "3E476075-2A4E-4282-B867-6E1F600251B8"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:13.694Z",
-            "checksum": "616908558c33f1e83a90de2060d5f6b7e92c46aed92e2fa8189c8b67a0f6bf55"
+            "lastModified": "2026-11-24T20:27:12.525Z",
+            "checksum": "787fcb70db82e0786cca7296a1b2904832fdb264466cab8538ed4fc1d0782402"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "FE9B4877-99EF-45AA-A66C-95D674DBF58B"
-    },
-    "sync": {
-      "lastModified": "2026-10-02T21:42:13.618Z",
-      "checksum": "89492835939b3982aa35d6d74badc3778cf93c8106d4d3179d1feb2dde8a303b"
     }
   }
 ]

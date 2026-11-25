@@ -157,6 +157,53 @@ Two deliberate safety behaviours: an invalid selector is skipped rather than fai
 whole clean, and if cleaning would remove *everything* the original content is returned with
 a warning — over-including beats silently dropping a document.
 
+**One source, several kinds of file.** The pipeline's Segment stage chooses the cleaner per
+item, by the file type Extract detected for it. A `Cleaners` map in the configuration JSON names
+the cleaner for a file type:
+
+```json
+{ "Cleaners": { "html": "Html", "md": "PlainText", "pdf": "MyPdfCleaner" } }
+```
+
+Keys are file types as the pipeline names them: a Content File Type's extension without the dot
+(`html`, `pdf`, `txt`), or its name when it has no extension. Case and a leading dot do not matter,
+and an item loaded from the database (which carries its Content File Type's *name*, even a custom
+one such as `Word Document`) is matched by the same key as one Extract just read (`docx`).
+Segment takes the first of:
+
+1. the run's entry for the file type, then the run's `CleanerKey` (an operator's override);
+2. the Content Source's entry for the file type (its `Configuration`, then its source-specific
+   settings);
+3. the Content Type's entry for the file type, then the Content Source Type's (the standard cleaner
+   for that kind of file);
+4. the Content Source's `CleanerKey` (the column, then its `Configuration`, then its settings): its
+   default for a file type nothing maps, or an item whose type was not detected;
+5. the Content Type's `CleanerKey` (the column, then its `Configuration`), then the Content Source
+   Type's;
+6. `Html` for markup, `PlainText` otherwise.
+
+So the content type says how each kind of file is normally cleaned, a source overrides that for
+one file type by naming it in its own map (`{ "Cleaners": { "pdf": "SpecialPdf" } }`), and a
+source's plain `CleanerKey` is its default, never an override of the content type's map. Wherever
+both name one, the Content Type comes before the Content Source Type.
+
+A cleaner key nothing registered (a typo, a plugin package that did not load) is skipped with one
+warning, and the next step applies; markup is never cleaned as plain text because a key was wrong.
+
+Things to know before adding a map:
+
+- **A map on a shared Content Type applies to every source of that type**, and it comes before
+  those sources' own `CleanerKey`. A source that set `CleanerKey` to clean its pages its own way
+  must name the file type in its own `Cleaners` map to keep doing so.
+- **Aliases are separate file types.** `HTML`, `HTM` and `XHTML` are separate Content File Types
+  (likewise `MD`/`MARKDOWN` and `TXT`/`TEXT`), so `{ "html": … }` does not cover `.htm`; list each
+  one you mean: `{ "html": "Html", "htm": "Html", "xhtml": "Html" }`.
+- **An item starts with its source's file type.** Discover gives every new item its source's
+  Content File Type, and Extract replaces it only with a type it detects and Content File Types
+  holds. An item Extract could not type keeps the source's: on a website source (`HTML`) it is
+  matched as `html`, not treated as undetected. A source that mixes kinds of file should use the
+  `Other` file type, so such an item falls to the source's default.
+
 Cleaning and segmentation are separate because they change for different reasons: a new CMS
 template needs new selectors, not a new chunking strategy. Splitting them also means the
 rules apply once and benefit every consumer — embedding chunks, tagging chunks, and
@@ -392,5 +439,5 @@ contains the segment**. See `TextChunker.offsets.test.ts` for the regression pat
 - **[Search Overview Guide](SEARCH_OVERVIEW_GUIDE.md)** — which search API to reach for; segmentation feeds all the semantic ones.
 - **[Search Scopes & RAG Guide](SEARCH_SCOPES_AND_RAG_GUIDE.md)** — how retrieved chunks reach an agent.
 - **[Content Autotagging Guide](CONTENT_AUTOTAGGING_GUIDE.md)** — the ingestion pipeline that consumes segmentation.
-- **[Duplicate Detection Guide](DUPLICATE_DETECTION_GUIDE.md)** — a second consumer of embeddings; changes to how content is embedded affect it.
+- **[Duplicate Management Guide](DUPLICATE_MANAGEMENT_GUIDE.md)** — a second consumer of embeddings; changes to how content is embedded affect it.
 - **[Text Processing Guide](../packages/AI/Vectors/Core/docs/TEXT_PROCESSING_GUIDE.md)** — `TextChunker`/`TextExtractor` primitives in detail.

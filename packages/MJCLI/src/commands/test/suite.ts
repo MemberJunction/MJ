@@ -9,6 +9,7 @@ export default class TestSuite extends Command {
     '<%= config.bin %> <%= command.id %> --name="Agent Quality Suite"',
     '<%= config.bin %> <%= command.id %> <suite-id> --format=json',
     '<%= config.bin %> <%= command.id %> <suite-id> --output=suite-results.json',
+    '<%= config.bin %> <%= command.id %> --name="MJ Explorer Regression Suite" --test="T001 - Login Smoke"',
   ];
 
   static args = {
@@ -65,6 +66,19 @@ export default class TestSuite extends Command {
         'Each export is registered on the engine before the suite runs — used by non-MJ ' +
         'adopters to plug app-specific oracle types without modifying TestingFramework.',
     }),
+    shard: Flags.string({
+      description:
+        'Deterministic shard specification (<index>/<total>, 1-based, e.g. --shard=1/3) for ' +
+        'partitioning suite execution across isolated parallel worker processes using duration-aware LPT balancing.',
+    }),
+    transport: Flags.string({
+      description: 'Filter suite tests by transport layer (server, client, or all).',
+      options: ['server', 'client', 'all'],
+    }),
+    test: Flags.string({
+      description: 'Run only this suite test, by exact name. Repeat the flag to run more than one.',
+      multiple: true,
+    }),
   };
 
   async run(): Promise<void> {
@@ -93,6 +107,9 @@ export default class TestSuite extends Command {
         rubric: flags.rubric,
         oraclesModule: flags['oracles-module'],
         checksModule: flags['checks-module'],
+        shard: flags.shard,
+        transport: flags.transport as 'server' | 'client' | 'all' | undefined,
+        test: flags.test,
       });
 
     } catch (error) {

@@ -3,6 +3,9 @@
        Consuming apps that added their own skip link should remove it on upgrade. -->
   <a class="mj-skip-link" href="#mj-main-content" (click)="skipToMainContent($event)">Skip to main content</a>
 
+  <!-- Diagnostic Recording Banner — inside the clipped shell container so its Stop control is visible -->
+  <mj-diagnostic-recording-banner></mj-diagnostic-recording-banner>
+
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -15,7 +18,7 @@
     </button>
 
     <!-- Nav Bar Apps: Left of App Switcher -->
-    @if (leftOfSwitcherApps.length > 0 && !appSwitchingLocked) {
+    @if (leftOfSwitcherApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {
       <div class="nav-bar-apps left-of-switcher">
         @for (app of leftOfSwitcherApps; track app) {
           <button
@@ -165,7 +168,7 @@
         </button>
       }
       <!-- Nav Bar Apps: Left of User Menu -->
-      @if (leftOfUserMenuApps.length > 0) {
+      @if (leftOfUserMenuApps.length > 0 && !appSwitchingLocked && ShowAppSwitcher) {
         <div class="nav-bar-apps left-of-user-menu">
           @for (app of leftOfUserMenuApps; track app) {
             <button
@@ -217,7 +220,7 @@
               <div class="user-menu-divider"></div>
             }
             <!-- Dynamic Menu Items -->
-            @for (element of userMenuElements; track element) {
+            @for (element of GetVisibleUserMenuElements(); track element) {
               <!-- Divider -->
               @if (isMenuDivider(element)) {
                 <div class="user-menu-divider"></div>
@@ -261,32 +264,34 @@
   </header>
 
   <!-- Search Popup -->
-  @if (isSearchOpen) {
-    <div class="search-popup-overlay" (click)="closeSearch()"></div>
-  }
-  <div class="search-popup" [class.open]="isSearchOpen" [attr.inert]="isSearchOpen ? null : ''">
-    <div class="search-popup-content" (click)="$event.stopPropagation()">
-      <mj-dropdown
-        [Data]="searchableEntities"
-        TextField="Name"
-        ValueField="ID"
-        AriaLabel="Search in"
-        class="search-entity-dropdown"
-        [(ngModel)]="selectedEntity">
-      </mj-dropdown>
-      <input
-        type="text"
-        #searchInput
-        placeholder="Search..."
-        aria-label="Search"
-        class="mj-input search-input"
-        (keydown.enter)="onSearch($event)"
-        />
-      <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
-        <i class="fa-solid fa-search"></i>
-      </button>
+  @if (ShowSearchBar) {
+    @if (isSearchOpen) {
+      <div class="search-popup-overlay" (click)="closeSearch()"></div>
+    }
+    <div class="search-popup" [class.open]="isSearchOpen" [attr.inert]="isSearchOpen ? null : ''">
+      <div class="search-popup-content" (click)="$event.stopPropagation()">
+        <mj-dropdown
+          [Data]="searchableEntities"
+          TextField="Name"
+          ValueField="ID"
+          AriaLabel="Search in"
+          class="search-entity-dropdown"
+          [(ngModel)]="selectedEntity">
+        </mj-dropdown>
+        <input
+          type="text"
+          #searchInput
+          placeholder="Search..."
+          aria-label="Search"
+          class="mj-input search-input"
+          (keydown.enter)="onSearch($event)"
+          />
+        <button class="search-submit-btn" (click)="onSearch($event)" title="Search">
+          <i class="fa-solid fa-search"></i>
+        </button>
+      </div>
     </div>
-  </div>
+  }
 
   <!-- Mobile Navigation Drawer -->
   @if (mobileNavOpen) {
@@ -321,10 +326,12 @@
       </div>
     }
     <div class="mobile-nav-footer">
-      <button class="mobile-nav-action" title="Search" (click)="toggleSearch(); closeMobileNav()">
-        <i class="fa-solid fa-search"></i>
-        <span>Search</span>
-      </button>
+      @if (ShowSearchBar) {
+        <button class="mobile-nav-action" title="Search" (click)="toggleSearch(); closeMobileNav()">
+          <i class="fa-solid fa-search"></i>
+          <span>Search</span>
+        </button>
+      }
       @if (ShowNotifications) {
         <button class="mobile-nav-action" title="Notifications" (click)="showNotifications(); closeMobileNav()">
           <i class="fa-solid fa-bell"></i>
@@ -339,18 +346,31 @@
     </div>
   </div>
 
-  <!-- Tab Container - with dynamic tab bar visibility. A call's Share menu offers it as "Main content" under
-       "This panel", except to a call inside it. -->
-  <mj-tab-container
-    id="mj-main-content"
-    role="main"
-    tabindex="-1"
-    mjSharePanel="Main content"
-    mjSharePanelIcon="fa-solid fa-table-cells-large"
-    [class.hide-tab-bar]="!tabBarVisible"
-    (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
-    (layoutInitError)="handleLayoutError()">
-  </mj-tab-container>
+  <!-- Main Content: Branded No-Access View when zero applications are granted, otherwise Golden Layout Tab Container -->
+  @if (HasZeroApplicationGrants) {
+    <main id="mj-main-content" class="shell-no-access-main" tabindex="-1">
+      <mj-shell-no-access
+        [Provider]="Provider"
+        [UserName]="userName"
+        [UserEmail]="UserEmail"
+        [IsRefreshing]="IsRefreshingAccess"
+        [RefreshErrorMessage]="NoAccessRefreshError"
+        (RefreshAccess)="OnRefreshNoAccessGrants()"
+        (SignOut)="OnLogout()">
+      </mj-shell-no-access>
+    </main>
+  } @else {
+    <mj-tab-container
+      id="mj-main-content"
+      role="main"
+      tabindex="-1"
+      mjSharePanel="Main content"
+      mjSharePanelIcon="fa-solid fa-table-cells-large"
+      [class.hide-tab-bar]="!tabBarVisible"
+      (firstResourceLoadComplete)="onFirstResourceLoadComplete()"
+      (layoutInitError)="handleLayoutError()">
+    </mj-tab-container>
+  }
 </div>
 
 <!-- Loading State -->
@@ -373,6 +393,10 @@
         <p class="loading-reset-hint">
           This can happen after updates or due to cached data issues.
         </p>
+        <button class="loading-reset-btn" (click)="DownloadPreResetDiagnostics()" style="margin-right: 8px;">
+          <i class="fa-solid fa-box-archive"></i>
+          Download Diagnostic Bundle
+        </button>
         <button class="loading-reset-btn" (click)="ResetApplication()">
           <i class="fa-solid fa-arrows-rotate"></i>
           Reset
@@ -391,10 +415,12 @@
 </mj-app-access-dialog>
 
 <!-- Command Palette -->
-<mj-command-palette
-  [ShowSearch]="ShowSearchBar"
-  (AppSelected)="onAppSwitch($event)"
-  (KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"></mj-command-palette>
+@if (ShowCommandPalette) {
+  <mj-command-palette
+    [ShowSearch]="ShowSearchBar"
+    (AppSelected)="onAppSwitch($event)"
+    (KnowledgeSearchRequested)="OnCommandPaletteSearch($event)"></mj-command-palette>
+}
 
 <!-- Unified command palette (Shell.Omnibar.Enabled). Rendered only while the search bar is:
      when Instance Config or the host's chrome policy hides search, the palette must not
@@ -430,3 +456,9 @@
     </div>
   </div>
 }
+
+<!-- Report Problem Dialog -->
+<mj-diagnostic-report-problem-dialog
+  [IsVisible]="DiagnosticDialogOpen"
+  (Closed)="DiagnosticDialogOpen = false">
+</mj-diagnostic-report-problem-dialog>

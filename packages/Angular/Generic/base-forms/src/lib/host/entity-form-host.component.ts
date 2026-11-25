@@ -6,8 +6,10 @@ import {
   CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType, LogError
 } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subscription } from 'rxjs';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { IsPhoneViewport } from '../chrome/phone-viewport';
 
 import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
@@ -61,6 +63,12 @@ import {
  * {@link FormMode} / {@link FormModeChange}; hosts that must not offer it set
  * {@link ShowFormModeSwitch} to false.
  */
+/**
+ * Per-user, per-entity dismissal map stored in `MJ: User Settings` via `UserInfoEngine`.
+ * Shape: JSON `Record<string, boolean>` keyed by entity name (e.g. `{"MJ: AI Agents": true}`).
+ */
+export const CUSTOM_VIEW_BANNER_DISMISSED_KEY = 'mj.forms.customViewBannerDismissed';
+
 @Component({
   standalone: false,
   selector: 'mj-entity-form-host',
@@ -228,6 +236,10 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
    */
   public HasStandardFormAlternative = false;
 
+  private _resolvedEntityName: string | null = null;
+  private _dismissedEntitiesCache: Record<string, boolean> | null = null;
+  private _bannerDismissedLocally = false;
+
   private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
   private _sectionRef: ComponentRef<BaseFormSectionComponent> | null = null;
   private _isSection = false;
@@ -275,6 +287,63 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
 
   ngOnDestroy(): void {
     this.teardown();
+  }
+
+  // ── Standard-form switch strip ─────────────────────────────────────────────
+
+  /**
+   * At phone width the mode strip is hidden; the switch lives in the toolbar's More menu
+   * across all viewports. On desktop, the custom-view notice is also hidden once the user
+   * dismisses it for the active entity.
+   */
+  public get HidesModeStrip(): boolean {
+    if (IsPhoneViewport()) return true;
+    if (this._formMode === 'default' && this.IsCustomViewBannerDismissed) return true;
+    return false;
+  }
+
+  /** True when the current user has dismissed the custom-view banner for the active entity. */
+  public get IsCustomViewBannerDismissed(): boolean {
+    if (this._bannerDismissedLocally) return true;
+    const entityName = this.activeEntityName();
+    if (!entityName) return false;
+    const dismissed = this.readDismissedBanners();
+    return dismissed[entityName] === true;
+  }
+
+  /** Dismisses the custom-view notice for the active entity and persists the choice via UserInfoEngine. */
+  public DismissCustomViewBanner(): void {
+    const entityName = this.activeEntityName();
+    this._bannerDismissedLocally = true;
+    if (entityName) {
+      const next: Record<string, boolean> = { ...this.readDismissedBanners(), [entityName]: true };
+      this._dismissedEntitiesCache = next;
+      try {
+        UserInfoEngine.Instance.SetSettingDebounced(CUSTOM_VIEW_BANNER_DISMISSED_KEY, JSON.stringify(next));
+      } catch {
+        // UserInfoEngine may not be initialized in standalone test harnesses
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  private activeEntityName(): string | null {
+    return this._resolvedEntityName ?? this._record?.EntityInfo?.Name ?? this._entityName;
+  }
+
+  private readDismissedBanners(): Record<string, boolean> {
+    try {
+      const raw = UserInfoEngine.Instance.GetSetting(CUSTOM_VIEW_BANNER_DISMISSED_KEY);
+      if (raw) {
+        const parsed: unknown = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return parsed as Record<string, boolean>;
+        }
+      }
+    } catch {
+      // Fall back to in-memory cache if engine is unavailable or JSON is malformed
+    }
+    return this._dismissedEntitiesCache ?? {};
   }
 
   // ── Public API (driven by dialog/slide-in chrome) ─────────────────────────
@@ -381,6 +450,10 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
     const md = this.ProviderToUse;
     // When a pre-loaded record is supplied, derive the entity from it.
     const entityName = this._record?.EntityInfo?.Name ?? this._entityName;
+    if (entityName !== this._resolvedEntityName) {
+      this._resolvedEntityName = entityName;
+      this._bannerDismissedLocally = false;
+    }
 
     if (!entityName || entityName.trim().length === 0) {
       // Nothing to load yet — a caller will re-invoke once an entity is known.
@@ -626,6 +699,10 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       this._record = null; // force a fresh load against the new variant
       this.reload();
     };
+    // ShowFormModeSwitch is the host's opt-out for the strip; the phone View sheet honours it too.
+    instance.FormModeSwitch = this.ShowFormModeSwitch && this.HasStandardFormAlternative
+      ? { Mode: this._formMode, Switch: (m) => this.SwitchFormMode(m) }
+      : null;
   }
 
   /** Subscribe to the form's outputs and re-emit them through the host. */

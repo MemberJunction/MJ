@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { LocalCacheManager } from '@memberjunction/core';
 import { BootstrapIntegrationServer, serverProcessAlreadyClaimed } from '../bootstrap';
 import { BootstrapIntegrationClient } from '../bootstrap-client';
+import { PreflightMJAPI } from '../bootstrap-shared';
 
 /**
  * Proves the D1 anti-corruption guard WITHOUT a DB: when LocalCacheManager is
@@ -30,5 +31,22 @@ describe('integration bootstrap ownership guard', () => {
         vi.restoreAllMocks();
         vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(false);
         expect(serverProcessAlreadyClaimed()).toBe(false);
+    });
+
+    it('PreflightMJAPI fails immediately without retrying on ECONNREFUSED', async () => {
+        const err = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+        const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValue(err);
+        await expect(PreflightMJAPI('http://localhost:4000/', 'test-key')).rejects.toThrow(/MJAPI is not reachable/);
+        expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('PreflightMJAPI retries transient timeout errors and succeeds when MJAPI responds', async () => {
+        const timeoutErr = new DOMException('The operation was aborted due to timeout', 'TimeoutError');
+        const okResponse = new Response(JSON.stringify({ data: { __typename: 'Query' } }), { status: 200 });
+        const fetchSpy = vi.spyOn(globalThis, 'fetch')
+            .mockRejectedValueOnce(timeoutErr)
+            .mockResolvedValueOnce(okResponse);
+        await expect(PreflightMJAPI('http://localhost:4000/', 'test-key')).resolves.toBeUndefined();
+        expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
 });

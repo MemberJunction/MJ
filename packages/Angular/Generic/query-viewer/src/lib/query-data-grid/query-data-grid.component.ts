@@ -14,7 +14,9 @@ import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { MJQueryEntityExtended } from '@memberjunction/core-entities';
-import { FormatDateOnly, IsDateOnlySQLType } from '@memberjunction/core';
+import { FormatDateOnly, IsDateOnlySQLType, LogError } from '@memberjunction/core';
+import { ExcelAddinClient } from '@memberjunction/excel-addin';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -60,11 +62,13 @@ import {
     QueryGridStateChangedEvent,
     QuerySelectionChangedEvent,
     QueryExportOptions,
-    BuildColumnsFromQueryFields,
-    BuildColumnsFromData,
-    GetQueryGridStateKey
+    BuildColumnsForResult,
+    ResultColumnNames,
+    GetQueryGridStateKey,
+    QueryParameterValues
 } from './models/query-grid-types';
 import { RowDetailEntityLinkEvent } from '../query-row-detail/query-row-detail.component';
+import { CanOpenQueryInExcel, OPEN_QUERY_IN_EXCEL_TOOLTIP, ToExcelParameterValues } from './open-in-excel';
 
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
@@ -144,9 +148,11 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
     @Input()
     set ColumnConfigs(value: QueryGridColumnConfig[] | null) {
         this._columnConfigs = value;
+        this._resultColumnsSignature = null;
         if (value && value.length > 0) {
             this.Columns = value;
             this.buildColumnDefs();
+            this.syncConfiguredColumnsToResult();
             this.cdr.markForCheck();
         }
     }
@@ -181,10 +187,11 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
             }
         }
 
-        // If we have data but no columns from metadata or explicit configs, build from data
-        if (this._data.length > 0 && this.Columns.length === 0 && !this._columnConfigs) {
-            this.Columns = BuildColumnsFromData(this._data);
-            this.buildColumnDefs();
+        // Columns follow the columns the result actually carries.
+        if (this._columnConfigs) {
+            this.syncConfiguredColumnsToResult();
+        } else {
+            this.syncColumnsToResult();
         }
 
         if (this.GridApi) {
@@ -220,6 +227,18 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
      * Whether to show export button
      */
     @Input() ShowExport: boolean = true;
+
+    /**
+     * Whether to show the Open in Excel button. It appears only for a saved query, when the
+     * MemberJunction host serves the Excel add-in and every required parameter has a value.
+     */
+    @Input() ShowOpenInExcel: boolean = true;
+
+    /**
+     * The parameter values of the query's last run. Open in Excel carries them into the workbook
+     * (never server-set ones); the host that ran the query supplies them.
+     */
+    @Input() ParameterValues: QueryParameterValues | null = null;
 
     /**
      * Whether to show refresh button
@@ -414,6 +433,7 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
     ngOnDestroy(): void {
         // Flush any pending state changes before destroy
         this.FlushState();
+        document.removeEventListener('click', this.handleExcelMenuOutsideClick);
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -456,27 +476,63 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
             return;
         }
 
-        // Build columns from query fields
-        this.Columns = BuildColumnsFromQueryFields(this._queryInfo.QueryFields, this.ProviderToUse);
-
-        // Apply initial state if provided via prop (takes precedence)
-        if (this.InitialGridState) {
-            this.applyColumnStateFromGridState(this.InitialGridState);
-        } else {
-            // Otherwise try to load from User Settings
-            this.loadPersistedState();
+        // Columns come from the result, not from the query's field metadata: a column the
+        // server left out (for example one the user may not read) must not appear. Until rows
+        // arrive there are no columns; the fields only format and link the columns present.
+        this._resultColumnsSignature = null;
+        this.Columns = [];
+        this.ColumnDefs = [];
+        if (!this._columnConfigs) {
+            this.syncColumnsToResult();
         }
+        void this.resolveExcelAddinAvailability();
+        this.cdr.markForCheck();
+    }
 
-        // Build AG Grid column definitions
+    /** The column names the current columns were built from, so a new page of the same shape keeps the user's layout. */
+    private _resultColumnsSignature: string | null = null;
+
+    /**
+     * Rebuilds the columns when the result's columns differ from the ones shown: the columns the
+     * rows carry, in the server's order, formatted and linked by the query's field metadata where a
+     * field describes them. Then the saved or initial grid state is applied.
+     */
+    private syncColumnsToResult(): void {
+        if (this._data.length === 0) return;
+        const signature = ResultColumnNames(this._data).join('\u0000');
+        if (signature === this._resultColumnsSignature && this.Columns.length > 0) return;
+        this._resultColumnsSignature = signature;
+        this.Columns = BuildColumnsForResult(this._data, this._queryInfo?.QueryFields ?? [], this.ProviderToUse);
+        this.applyStartingGridState();
         this.buildColumnDefs();
-
-        // If grid is already initialized and we have pending state, apply it now
         if (this.GridApi && this._pendingState) {
             this.applyFullGridState(this._pendingState);
             this._pendingState = null;
         }
+    }
 
-        this.cdr.markForCheck();
+    /**
+     * With explicit column configs, a configured column the result does not carry is not shown
+     * once rows arrive; the column definitions are rebuilt when the result's columns change.
+     */
+    private syncConfiguredColumnsToResult(): void {
+        if (this._data.length === 0) return;
+        const signature = ResultColumnNames(this._data).join('\u0000');
+        if (signature === this._resultColumnsSignature) return;
+        this._resultColumnsSignature = signature;
+        const present = new Set(ResultColumnNames(this._data));
+        this.Columns = (this._columnConfigs ?? []).filter(c => present.has(c.field));
+        this.buildColumnDefs();
+    }
+
+    /** The initial state passed in takes precedence over the user's saved state. */
+    private applyStartingGridState(): void {
+        if (!this._queryInfo) return;
+        if (this.InitialGridState) {
+            this.applyColumnStateFromGridState(this.InitialGridState);
+        } else {
+            this.loadPersistedState();
+        }
     }
 
     private applyColumnStateFromGridState(state: QueryGridState): void {
@@ -1031,6 +1087,129 @@ export class QueryDataGridComponent extends BaseAngularComponent implements OnIn
 
     public Refresh(): void {
         this.RefreshRequest.emit();
+    }
+
+    private static _nextExcelMenuInstanceId = 0;
+    private _excelAddinEnabled = false;
+    @ViewChild('excelMenuTrigger') private _excelMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+    /** Unique DOM id pairing the unified Export/Excel disclosure trigger with its action popover. */
+    public readonly ExcelMenuId = `mj-query-grid-excel-menu-${++QueryDataGridComponent._nextExcelMenuInstanceId}`;
+    /** True while the unified Export/Excel toolbar action popover is open. */
+    public ShowExcelMenu = false;
+    /** True while Open in Excel is building the workbook. */
+    public IsOpeningInExcel = false;
+    /** The Open in Excel button's tooltip. */
+    public readonly OpenInExcelTooltip = OPEN_QUERY_IN_EXCEL_TOOLTIP;
+
+    /**
+     * True when the toolbar offers Open in Excel: a saved query is loaded, the host serves the add-in,
+     * and every required parameter the person fills in has a value from the last run.
+     */
+    public get CanOpenInExcel(): boolean {
+        const query = this._queryInfo;
+        if (!query) {
+            return false;
+        }
+        return CanOpenQueryInExcel(this.ShowOpenInExcel, query.ID, this._excelAddinEnabled, this.ParameterValues, query.QueryParameters ?? []);
+    }
+
+    /** Toggles the unified Export/Excel action popover. */
+    public ToggleExcelMenu(): void {
+        this.ShowExcelMenu = !this.ShowExcelMenu;
+        this.cdr.markForCheck();
+
+        if (this.ShowExcelMenu) {
+            setTimeout(() => {
+                document.addEventListener('click', this.handleExcelMenuOutsideClick);
+            }, 0);
+        } else {
+            document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+        }
+    }
+
+    /** Closes the unified Export/Excel action popover, optionally restoring focus to the trigger button. */
+    public CloseExcelMenu(restoreFocus = false): void {
+        if (!this.ShowExcelMenu) {
+            document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+            return;
+        }
+        this.ShowExcelMenu = false;
+        document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+        this.cdr.detectChanges();
+        if (restoreFocus) {
+            this._excelMenuTrigger?.nativeElement?.focus();
+        }
+    }
+
+    /** Handles Escape key dismissal inside the unified Export/Excel dropdown. */
+    public OnExcelMenuEscape(event: Event): void {
+        if (!this.ShowExcelMenu) {
+            return;
+        }
+        event.stopPropagation();
+        this.CloseExcelMenu(true);
+    }
+
+    /** Invokes Open in Excel from the unified toolbar popover. */
+    public OnOpenInExcelFromMenu(): void {
+        this.CloseExcelMenu();
+        void this.OpenInExcel();
+    }
+
+    /** Invokes static snapshot export from the unified toolbar popover. */
+    public OnExportSnapshotFromMenu(): void {
+        this.CloseExcelMenu();
+        void this.OpenExportDialog();
+    }
+
+    private handleExcelMenuOutsideClick = (): void => {
+        this.CloseExcelMenu();
+    };
+
+    /** Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in. */
+    private async resolveExcelAddinAvailability(): Promise<void> {
+        const provider = this.ProviderToUse;
+        if (!this._queryInfo || this._excelAddinEnabled || !provider) {
+            return;
+        }
+        try {
+            this._excelAddinEnabled = await ExcelAddinClient.Instance.IsEnabled(provider);
+            if (this._excelAddinEnabled) {
+                this.cdr.markForCheck();
+            }
+        } catch (e) {
+            // Non-fatal: the button stays hidden. The client already treats an unreadable status as "off".
+            LogError(`QueryDataGrid: Excel add-in status check failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+    }
+
+    /** Builds a workbook that loads this query, with the last run's parameters, in Excel, and downloads it. */
+    public async OpenInExcel(): Promise<void> {
+        const query = this._queryInfo;
+        if (!query || this.IsOpeningInExcel) {
+            return;
+        }
+        this.IsOpeningInExcel = true;
+        this.cdr.markForCheck();
+        try {
+            const parameters = ToExcelParameterValues(this.ParameterValues, query.QueryParameters ?? []);
+            const result = await ExcelAddinClient.Instance.OpenInExcel(
+                [{ Kind: 'Query', ID: query.ID, Parameters: parameters }], this.ProviderToUse);
+            if (result.Success) {
+                MJNotificationService.Instance?.CreateSimpleNotification(
+                    `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
+            } else {
+                MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage || 'The workbook could not be built.', 'error', 6000);
+            }
+        } catch (e) {
+            const message = e instanceof Error ? e.message : String(e);
+            LogError(`QueryDataGrid: Open in Excel failed: ${message}`);
+            MJNotificationService.Instance?.CreateSimpleNotification(`Open in Excel failed: ${message}`, 'error', 6000);
+        } finally {
+            this.IsOpeningInExcel = false;
+            this.cdr.markForCheck();
+        }
     }
 
     /**

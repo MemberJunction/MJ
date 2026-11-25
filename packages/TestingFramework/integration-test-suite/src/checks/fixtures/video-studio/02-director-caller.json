@@ -1,0 +1,53 @@
+{
+    "taskComplete": true,
+    "message": "Creative brief completed for caller dataset using Social Short archetype.",
+    "payloadChangeRequest": {
+        "newElements": {
+            "Archetype": {
+                "Name": "Social Short"
+            },
+            "Film": {
+                "OneSentence": "Quarterly revenue metrics from the caller query show steady enterprise expansion.",
+                "Audience": "Revenue operations and executive leadership",
+                "Purpose": "Present the caller query dataset as a KPI briefing",
+                "DurationSeconds": 18,
+                "Formats": [
+                    "16:9"
+                ],
+                "Language": "en-US"
+            },
+            "Assets": {
+                "Required": [],
+                "NeverInvent": [
+                    "Customer logos not provided in the brief",
+                    "Unaudited financial projections",
+                    "Portraits of real employees or customers"
+                ],
+                "Generate": []
+            },
+            "DataBindings": [
+                {
+                    "Key": "caller",
+                    "Source": {
+                        "Kind": "Inline"
+                    },
+                    "Shape": "Table",
+                    "Columns": [
+                        {
+                            "Header": "metric"
+                        },
+                        {
+                            "Header": "value",
+                            "Format": {
+                                "Kind": "Currency",
+                                "Currency": "USD",
+                                "Decimals": 0
+                            }
+                        }
+                    ],
+                    "Label": "Caller Query Dataset"
+                }
+            ]
+        }
+    }
+}

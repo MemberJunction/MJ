@@ -5,8 +5,8 @@
  * Predictive Studio Actions in real metadata + invoked through the real Action-execution path.
  * Graduated verbatim from integration-test-scripts/predictive-studio-tests.ts.
  *
- * Deterministic + sidecar-free by default (PS1–PS5 seams only). The only live-sidecar leg is an
- * internal PS5 leg gated on PS_INTEGRATION=1 (read inline, verbatim). The Predictive Studio engine is
+ * Deterministic + sidecar-free (PS1–PS5 seams only): PS5's train leg is refused before the sidecar is
+ * reached, because the fixture pipeline has no Prediction Unit. The Predictive Studio engine is
  * imported for its side effects (the @RegisterClass decorators on the scoring processor + the four
  * actions). The bundle lifecycle creates the Pipeline → Model → Binding lineage fixture once and tears
  * it down (child → parent) afterwards.
@@ -18,6 +18,7 @@ import {
     MJMLTrainingPipelineEntity,
     MJMLModelEntity,
     MJMLModelScoringBindingEntity,
+    type MJActionEntity,
 } from '@memberjunction/core-entities';
 import {
     RecordProcessorRegistry,
@@ -35,6 +36,7 @@ import {
     LoadMLModelInferenceProcessor,
     LoadPredictiveStudioActions,
     TRAIN_MODEL_DRIVER_CLASS,
+    ScoringBindingStatusAuthorisations,
     type MLInferenceDeps,
 } from '@memberjunction/predictive-studio';
 // The sidecar request/response contracts live in the Core package (the engine consumes them and, per
@@ -45,9 +47,9 @@ import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import type { PredictiveStudioFixture } from '@memberjunction/testing-integration';
 
-/** Whether the live-sidecar / trained-model legs run (mirrors RUN_AGENT_TESTS on the AI tier). */
-const PS_LIVE = process.env.PS_INTEGRATION === '1';
 const PREFIX = 'mj-predictive-studio-test';
+/** The fixture binding's feature name on the target entity. */
+const BINDING_FEATURE = `${PREFIX}-feature`;
 
 // Anchor the side-effect registrations so the bundler/transpiler can't drop the decorated modules.
 LoadMLModelInferenceProcessor();
@@ -77,9 +79,9 @@ async function loadModelRow(id: string, user: UserInfo): Promise<MJMLModelEntity
 function stubInferenceDeps(): MLInferenceDeps {
     return {
         modelLoader: { loadModel: async () => null },
-        artifactLoader: { load: async () => null },
+        artifactLoader: { load: async (fileId: string) => ({ Kind: 'absent', FileID: fileId }) },
         sidecar: {
-            predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [] }),
+            predict: async (_req: PredictRequest): Promise<PredictResponse> => ({ predictions: [], classOrder: null }),
         },
     };
 }
@@ -125,10 +127,13 @@ export const PredictiveStudioChecks: NamedCheck[] = [
             );
             const b = bRes.Results?.[0];
             Assert(!!b, `persisted scoring binding ${Binding.ID} not found`);
-            AssertEqual(b!.MLModelID, Model.ID, 'binding → model FK (lineage)');
+            AssertEqual(b!.MLTrainingPipelineID, Pipeline.ID, 'binding → pipeline FK (lineage)');
+            AssertEqual(Model.PipelineID, Pipeline.ID, 'model → pipeline FK (the binding scores with the pipeline\'s Published model)');
             AssertEqual(String(b!.Mode), 'OnDemand', 'binding Mode (typed union)');
-            AssertEqual(b!.TargetColumn, 'RenewalScore', 'binding TargetColumn');
-            console.log(`      → lineage binding ${b!.ID} → model ${b!.MLModelID} → pipeline ${p!.ID} verified`);
+            AssertEqual(String(b!.Status), 'Active', 'binding Status (typed union)');
+            AssertEqual(b!.FeatureName, BINDING_FEATURE, 'binding FeatureName');
+            AssertEqual(b!.TargetColumn, null, 'binding TargetColumn (no column copy)');
+            console.log(`      → lineage binding ${b!.ID} → pipeline ${p!.ID} ← model ${Model.ID} verified`);
         }
     },
     {
@@ -176,11 +181,17 @@ export const PredictiveStudioChecks: NamedCheck[] = [
         Fn: async (ctx: IntegrationCheckContext) => {
             await ActionEngineServer.Instance.Config(false, ctx.User);
             const engine = ActionEngineServer.Instance;
-            const expected = ['Train ML Model', 'Score Record Set', 'Run Experiment Session', 'Promote ML Model'];
-            for (const name of expected) {
+            // Experiment sessions are switched off (no production session runner), so that action ships Disabled.
+            const expected: ReadonlyArray<{ Name: string; Status: MJActionEntity['Status'] }> = [
+                { Name: 'Train ML Model', Status: 'Active' },
+                { Name: 'Score Record Set', Status: 'Active' },
+                { Name: 'Run Experiment Session', Status: 'Disabled' },
+                { Name: 'Promote ML Model', Status: 'Active' },
+            ];
+            for (const { Name: name, Status: status } of expected) {
                 const action = engine.GetActionByName(name);
                 Assert(!!action, `PS action '${name}' is not registered in metadata`);
-                AssertEqual(String(action!.Status), 'Active', `PS action '${name}' Status`);
+                AssertEqual(action!.Status, status, `PS action '${name}' Status`);
             }
 
             // Spot-check the Train action's param + result-code contract (the wiring agents/UI depend on).
@@ -199,7 +210,7 @@ export const PredictiveStudioChecks: NamedCheck[] = [
     },
     {
         Id: 'predictive-studio.PS5',
-        Name: 'PS5: invoking "Train ML Model" with a missing PipelineID fails cleanly (VALIDATION_ERROR, no throw)',
+        Name: 'PS5: "Train ML Model" fails cleanly with VALIDATION_ERROR for a missing PipelineID, and refuses a pipeline without a Prediction Unit with UNIT_REQUIRED before any run',
         Fn: async (ctx: IntegrationCheckContext) => {
             const { Pipeline } = fx(ctx);
             await ActionEngineServer.Instance.Config(false, ctx.User);
@@ -227,21 +238,23 @@ export const PredictiveStudioChecks: NamedCheck[] = [
             );
             console.log(`      → clean validation failure: code='${code}' message='${result.Message}'`);
 
-            if (PS_LIVE) {
-                // Gated: a real train invocation against the test pipeline. Needs the Python sidecar +
-                // model storage; we assert only that it returns a structured result (success OR a clean
-                // engine failure code), never that it throws.
-                const liveParams = new RunActionParams();
-                liveParams.Action = train!;
-                liveParams.ContextUser = ctx.User;
-                liveParams.Params = [{ Name: 'PipelineID', Type: 'Input', Value: Pipeline.ID }];
-                liveParams.SkipActionLog = true;
-                const live = await ActionEngineServer.Instance.RunAction(liveParams);
-                Assert(typeof live.Success === 'boolean', 'live train returned no structured result');
-                console.log(`      → [PS_INTEGRATION] live train returned Success=${live.Success} code='${live.Result?.ResultCode ?? ''}'`);
-            } else {
-                console.log('      → (skipping the live train invocation — set PS_INTEGRATION=1 to exercise the sidecar path)');
-            }
+            // A real train invocation against the fixture pipeline, which has no Prediction Unit: training refuses it
+            // with the typed UNIT_REQUIRED code before it writes a training run or reaches the sidecar.
+            const liveParams = new RunActionParams();
+            liveParams.Action = train!;
+            liveParams.ContextUser = ctx.User;
+            liveParams.Params = [{ Name: 'PipelineID', Type: 'Input', Value: Pipeline.ID }];
+            liveParams.SkipActionLog = true;
+            const live = await ActionEngineServer.Instance.RunAction(liveParams);
+            Assert(live != null, 'RunAction returned no result for the unit-less pipeline');
+            AssertEqual(live.Success, false, 'training a pipeline without a Prediction Unit reports failure');
+            AssertEqual(live.ResultCode, 'UNIT_REQUIRED', `training a pipeline without a Prediction Unit is refused as UNIT_REQUIRED (message='${live.Message}')`);
+            const runs = await new RunView().RunView<{ ID: string }>(
+                { EntityName: 'MJ: ML Training Runs', ExtraFilter: `PipelineID='${Pipeline.ID}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, ctx.User,
+            );
+            Assert(runs.Success, `reading the fixture pipeline's training runs failed: ${runs.ErrorMessage}`);
+            AssertEqual(runs.Results.length, 0, 'the refused training wrote no training run');
+            console.log(`      → unit-less pipeline refused: code='${live.ResultCode}' message='${live.Message}', 0 training runs`);
         }
     }
 ];
@@ -261,6 +274,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         Assert(!!targetEntityID, 'Could not resolve a seed entity for the ML pipeline target');
         const algorithmID = (await firstID('MJ: ML Algorithms', user));
         Assert(!!algorithmID, 'No MJ: ML Algorithms are seeded — run `mj sync push --include=ml-algorithms` first');
+        // A binding names the authorization its predictions are seen through; any authorization serves the fixture.
+        const viewAuthorizationID = md.Authorizations.length > 0 ? md.Authorizations[0].ID : null;
+        Assert(viewAuthorizationID !== null, 'No MJ: Authorizations are loaded for the scoring binding fixture');
 
         // Publish the handle up-front and populate each field as its record is created, so a
         // mid-Setup crash leaves Teardown a handle to sweep whatever part of the lineage exists.
@@ -294,9 +310,10 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
 
         const binding = await md.GetEntityObject<MJMLModelScoringBindingEntity>('MJ: ML Model Scoring Bindings', user);
         binding.NewRecord();
-        binding.MLModelID = model.ID;
+        binding.MLTrainingPipelineID = pipeline.ID;
+        binding.FeatureName = BINDING_FEATURE;
+        binding.ViewAuthorizationID = viewAuthorizationID!;
         binding.TargetEntityID = targetEntityID!;
-        binding.TargetColumn = 'RenewalScore';
         binding.Mode = 'OnDemand';
         Assert(await binding.Save(), `creating test scoring binding failed: ${binding.LatestResult?.CompleteMessage}`);
         fx.Binding = binding;
@@ -309,7 +326,13 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('predictive-studio', {
         // Cleanup: delete the fixtures child → parent (binding → model → pipeline) so FKs never block a
         // delete. Each is guarded + best-effort — a mid-Setup crash may have created only some (R4).
         if (f.Binding) {
-            await f.Binding.Delete().catch(() => undefined);
+            // A binding deletes only once withdrawn (it has no column copy to clear here). Its Status changes only under
+            // the withdrawal's one-shot authorisation (PredictiveStudioScoringBindingGuard); the fixture's authorization
+            // is any loaded one, which the run's user need not hold, so this teardown authorises the change itself.
+            f.Binding.Status = 'Withdrawn';
+            ScoringBindingStatusAuthorisations.Instance.Authorise(f.Binding, { From: 'Active', To: 'Withdrawn' });
+            if (await f.Binding.Save().catch(() => false)) await f.Binding.Delete().catch(() => undefined);
+            ScoringBindingStatusAuthorisations.Instance.Revoke(f.Binding);
         }
         if (f.Model) {
             await f.Model.Delete().catch(() => undefined);

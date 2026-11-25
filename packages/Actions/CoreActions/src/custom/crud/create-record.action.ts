@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseRecordMutationAction } from "./base-record-mutation.action";
 import { BaseAction } from '@memberjunction/actions';
+import { AgentDataPolicyGuard } from "./agent-data-policy-guard";
 
 /**
  * Generic action for creating new entity records in the database.
@@ -41,11 +42,11 @@ export class CreateRecordAction extends BaseRecordMutationAction {
      * 
      * @param params - The action parameters containing:
      *   - EntityName (required): The name of the entity to create
-     *   - Fields (required): Object containing field names and values to set
+     *   - Fields (required): Object (or JSON string) containing field names and values to set
      * 
      * @returns ActionResultSimple with:
      *   - Success: true if record was created successfully
-     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, VALIDATION_ERROR, PERMISSION_DENIED
+     *   - ResultCode: SUCCESS, FAILED, ENTITY_NOT_FOUND, VALIDATION_ERROR, INVALID_FIELD_NAMES, PERMISSION_DENIED
      *   - Message: Details about the operation
      *   - Params: Output parameter 'PrimaryKey' contains an object with the primary key field(s) and value(s)
      */
@@ -65,18 +66,49 @@ export class CreateRecordAction extends BaseRecordMutationAction {
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
 
+            // Fail fast on a misspelled field before creating anything
+            const fieldNamesError = this.validateFieldNames(entity!, entityInfo!, fields);
+            if (fieldNamesError) return fieldNamesError;
+
             // Set fields on the new entity
             entity!.NewRecord();
             
             // Set field values using base class method
-            this.setFieldValues(entity!, fields, entityName);
+            this.setFieldValues(entity!, fields, entityName, entityInfo);
+
+            const mutatedFields = Object.keys(fields).map(
+                (fieldName) => this.resolveEntityFieldName(entity!, fieldName, entityInfo) ?? fieldName
+            );
+            // fls-guard: entity was instantiated for params.ContextUser and is passed only to internal agent policy evaluation (never serialized to caller)
+            const pendingCreateRecord = entity!.GetAll();
+            const policyOutcome = await AgentDataPolicyGuard.EvaluateRecordOperation({
+                params,
+                entityInfo: entityInfo!,
+                operation: 'Create',
+                mutatedFields,
+                record: pendingCreateRecord,
+            });
+            if ('Blocked' in policyOutcome) {
+                return policyOutcome.Blocked;
+            }
+            if (policyOutcome.Allowed.Active && policyOutcome.Allowed.EffectiveWhereClause) {
+                const whereError = await AgentDataPolicyGuard.VerifyEntityStatePassesWhereClause({
+                    params,
+                    entity: entity!,
+                    entityInfo: entityInfo!,
+                    effectiveWhereClause: policyOutcome.Allowed.EffectiveWhereClause,
+                });
+                if (whereError) {
+                    return whereError;
+                }
+            }
 
             // Save the record
             const saveResult = await entity!.Save();
             
             if (saveResult) {
                 // Get the primary key value(s)
-                const primaryKeys: Record<string, any> = {};
+                const primaryKeys: Record<string, unknown> = {};
                 for (const pk of entityInfo!.PrimaryKeys) {
                     primaryKeys[pk.Name] = entity!.Get(pk.Name);
                 }

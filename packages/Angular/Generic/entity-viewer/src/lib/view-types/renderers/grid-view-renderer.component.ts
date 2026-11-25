@@ -122,6 +122,7 @@ export interface GridViewConfig {
       [Data]="records"
       [ExportDataProvider]="exportDataProvider"
       [Params]="effectiveParams"
+      [SavedViewID]="SavedViewID"
       [FilterText]="filterText ?? ''"
       [GridState]="config.gridState ?? null"
       [Height]="'auto'"
@@ -345,6 +346,13 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
 
   /** Active alternate base view semantic name pushed by the host, forwarded into `EffectiveParams`. */
   @Input() alternateBaseView: string | null = null;
+
+  /**
+   * ID of the persisted `MJ: User Views` record backing the current record set, or `null` for a
+   * dynamic / unsaved view. Forwarded to `[SavedViewID]` on `<mj-entity-data-grid>` so Open in Excel
+   * works when hosted inside `<mj-entity-viewer>` without handing `_viewEntity` persistence to the grid.
+   */
+  @Input() SavedViewID: string | null = null;
 
   // ---- IViewRenderer outputs (generic + navigation channels only) ----
 
@@ -1161,6 +1169,7 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
         Fields: child.PrimaryKeys.map(f => f.Name),
         ResultType: 'simple' as const,
         MaxRows: 1,
+        SkipTotalRowCount: true,
       })),
     );
     if (results.some(r => !r.Success)) return null;

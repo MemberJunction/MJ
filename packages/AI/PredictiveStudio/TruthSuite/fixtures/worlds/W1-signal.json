@@ -1,0 +1,15 @@
+{
+  "id": "W1-signal",
+  "seeds": [42, 43, 44],
+  "freshSeed": 9042,
+  "nPersons": 4999,
+  "cycles": [2021, 2022, 2023, 2024, 2025, 2026],
+  "target": 0.8,
+  "betas": { "EventsAttended": 0.35, "Premium": 0.6, "AutoRenew": 1.2, "IncomeK": 0.01 },
+  "era": { "fromCycle": null, "deltaIntercept": 0, "betaOverrides": {} },
+  "churn": true,
+  "censorLastCycle": "none",
+  "leaks": { "statusOnRow": false, "personStatusInPlace": false },
+  "extraNoise": { "PostalCode400": false, "MemberNumberUnique": false },
+  "multiclass": false
+}

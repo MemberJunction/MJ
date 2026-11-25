@@ -19,7 +19,10 @@ import type { UserInfo } from '@memberjunction/core';
 
 const runViewMock = vi.fn();
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     RunView: class {
@@ -544,6 +547,46 @@ describe('WebSearchEngine selection', () => {
             const result = await engine.Search({ Query: 'q' }, USER);
             expect(result.Success).toBe(true);
             expect(result.ProviderUsed).toBe('Brave');
+        });
+    });
+
+    describe('Config load sharing', () => {
+        it('REGRESSION: a forced Config during a load runs after it, never alongside it', async () => {
+            // Before, a forced call started a second load beside the running one: the two reads
+            // overlapped, either could land last, and the first one's cleanup dropped the second's
+            // promise while it still ran.
+            configureProviders([
+                { name: 'Brave', driver: 'BraveWebSearchProvider', priority: 10, provider: new FakeProvider(ok()) },
+            ]);
+            const configured = runViewMock.getMockImplementation()!;
+            let release!: () => void;
+            const gate = new Promise<void>((resolve) => { release = resolve; });
+            let inFlight = 0;
+            let maxInFlight = 0;
+            runViewMock.mockImplementation(async (...args: unknown[]) => {
+                inFlight++;
+                maxInFlight = Math.max(maxInFlight, inFlight);
+                try {
+                    if (runViewMock.mock.calls.length === 1) {
+                        await gate;
+                    }
+                    return await configured(...args);
+                } finally {
+                    inFlight--;
+                }
+            });
+
+            const engine = WebSearchEngine.Instance;
+            const running = engine.Config(true, USER);
+            const forced = engine.Config(true, USER);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            expect(runViewMock).toHaveBeenCalledTimes(1);
+
+            release();
+            await Promise.all([running, forced]);
+            expect(runViewMock).toHaveBeenCalledTimes(2);
+            expect(maxInFlight).toBe(1);
+            expect((await engine.Search({ Query: 'q' }, USER)).ProviderUsed).toBe('Brave');
         });
     });
 });

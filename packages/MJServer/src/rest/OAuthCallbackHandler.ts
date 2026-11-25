@@ -18,6 +18,8 @@ import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { OAuthManager, MCPClientManager } from '@memberjunction/ai-mcp-client';
 import type { MCPServerOAuthConfig } from '@memberjunction/ai-mcp-client';
+import { CreateRouteRateLimiter } from './routeRateLimit.js';
+import type { RouteRateLimitSettings } from '../routeRateLimitConfigUnits.js';
 
 /** Entity name for MCP Server Connections */
 const ENTITY_MCP_SERVER_CONNECTIONS = 'MJ: MCP Server Connections';
@@ -27,6 +29,15 @@ const ENTITY_MCP_SERVERS = 'MJ: MCP Servers';
 
 /** Entity name for OAuth Authorization States */
 const ENTITY_OAUTH_AUTHORIZATION_STATES = 'MJ: O Auth Authorization States';
+
+const UUID_SHAPE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
+function sqlUuid(value: string, argName: string): string {
+    if (typeof value !== 'string' || !UUID_SHAPE.test(value)) {
+        throw new Error(`${argName} must be a UUID`);
+    }
+    return value;
+}
 
 /**
  * Configuration for OAuth callback handler
@@ -55,6 +66,16 @@ export interface OAuthCallbackHandlerOptions {
      * as a side effect, which makes this handler unimportable in any context without one.
      */
     allowedFrontendOrigins: string[];  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+
+    /**
+     * Per-route limiter settings for the unauthenticated callback routes and the authenticated
+     * routes (normally `configInfo.rateLimiting.routes`). Omitted groups use
+     * the defaults in `routeRateLimitConfigUnits.ts`, which are on.
+     */
+    RateLimits?: {
+        Callback?: Partial<RouteRateLimitSettings>;
+        Authenticated?: Partial<RouteRateLimitSettings>;
+    };
 }
 
 /**
@@ -103,17 +124,22 @@ export class OAuthCallbackHandler {
      * Sets up all routes for OAuth handling.
      */
     private setupRoutes(): void {
+        // Per-IP limiters (on by default; see routeRateLimit.ts). One instance per router so the
+        // unauthenticated callback pages and the authenticated API keep separate budgets.
+        const callbackLimiter = CreateRouteRateLimiter('oauthCallback', this.options.RateLimits?.Callback);
+        const authenticatedLimiter = CreateRouteRateLimiter('oauthAuthenticated', this.options.RateLimits?.Authenticated);
+
         // Unauthenticated callback route
-        this.callbackRouter.get('/callback', this.handleCallback.bind(this));
+        this.callbackRouter.get('/callback', ...callbackLimiter, this.handleCallback.bind(this));
 
         // Success and error pages (unauthenticated - user is redirected here after OAuth)
-        this.callbackRouter.get('/success', this.handleSuccessPage.bind(this));
-        this.callbackRouter.get('/error', this.handleErrorPage.bind(this));
+        this.callbackRouter.get('/success', ...callbackLimiter, this.handleSuccessPage.bind(this));
+        this.callbackRouter.get('/error', ...callbackLimiter, this.handleErrorPage.bind(this));
 
         // Authenticated routes
-        this.authenticatedRouter.get('/status/:stateParameter', this.getStatus.bind(this));
-        this.authenticatedRouter.post('/initiate', this.initiateFlow.bind(this));
-        this.authenticatedRouter.post('/exchange', this.handleExchange.bind(this));
+        this.authenticatedRouter.get('/status/:stateParameter', ...authenticatedLimiter, this.getStatus.bind(this));
+        this.authenticatedRouter.post('/initiate', ...authenticatedLimiter, this.initiateFlow.bind(this));
+        this.authenticatedRouter.post('/exchange', ...authenticatedLimiter, this.handleExchange.bind(this));
     }
 
     /**
@@ -693,12 +719,11 @@ export class OAuthCallbackHandler {
             const rv = new RunView();
 
             // Get connection to get server ID.
-            // connectionId is caller-supplied (POST /oauth/initiate body). MJ ExtraFilter is a raw
-            // SQL fragment, so single quotes MUST be doubled to prevent injection — matching the
-            // escaping used for stateParameter in loadAuthorizationState().
+            // connectionId is caller-supplied (POST /oauth/initiate body); enforce strict UUID shape
+            // (matching MCPResolver.getServerOAuthConfig) before interpolating into ExtraFilter.
             const connResult = await rv.RunView<{ MCPServerID: string }>({
                 EntityName: ENTITY_MCP_SERVER_CONNECTIONS,
-                ExtraFilter: `ID='${connectionId.replace(/'/g, "''")}'`,
+                ExtraFilter: `ID='${sqlUuid(connectionId, 'connectionId')}'`,
                 Fields: ['MCPServerID'],
                 ResultType: 'simple'
             }, contextUser);
@@ -719,7 +744,7 @@ export class OAuthCallbackHandler {
                 OAuthRequirePKCE: boolean | null;
             }>({
                 EntityName: ENTITY_MCP_SERVERS,
-                ExtraFilter: `ID='${serverId}'`,
+                ExtraFilter: `ID='${sqlUuid(serverId, 'serverId')}'`,
                 Fields: [
                     'OAuthIssuerURL', 'OAuthScopes', 'OAuthMetadataCacheTTLMinutes',
                     'OAuthClientID', 'OAuthClientSecretEncrypted', 'OAuthRequirePKCE'

@@ -1,0 +1,39 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Handoff Agent - System Prompt",
+      "Description": "Shared prompt of the IT: Handoff agents. The agent-handoff bundle answers every call to it with a scripted reply, so no model ever runs it. Bound to one model so the bundle knows which driver class to stand in for. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=IT: Integration Test",
+      "TemplateText": "@file:templates/it-handoff.template.md",
+      "Status": "Active",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "SelectionStrategy": "Specific",
+      "Temperature": 0,
+      "OutputType": "object",
+      "OutputExample": "@file:output/it-loop-response.example.json",
+      "ValidationBehavior": "None",
+      "MaxRetries": 0
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A5326FA0-E9F4-4DB9-A546-F5B573AF5639"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "70DF603E-C76A-4243-8514-96E509B31674"
+    }
+  }
+]

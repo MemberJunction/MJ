@@ -16,7 +16,7 @@
  */
 
 import { GetAIAPIKey } from "@memberjunction/ai";
-import { AIEmbeddingRunner } from "@memberjunction/ai-prompts";
+import { AIEmbeddingRunner, EmbeddingCarrierPrompts } from "@memberjunction/ai-prompts";
 import {
     PotentialDuplicateRequest,
     PotentialDuplicateResponse,
@@ -532,6 +532,76 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
+     * Evaluates an unsaved record's field values against an active `MJ: Entity Documents`
+     * vector index and returns readable `PotentialDuplicate` candidates sorted by descending
+     * probability score (spec §11.4 / §19.8).
+     *
+     * Unlike {@link CheckRecordValues}, this method does not require an LLM reasoning mode to be
+     * enabled on the EntityDocument — it performs template rendering, embedding, vector similarity
+     * search, and read-permission filtering directly so sync engines (such as MJ Peer Sync's
+     * pre-save identity gate) can evaluate threshold bands (`DuplicateThreshold` vs
+     * `PotentialMatchThreshold`) deterministically.
+     */
+    public async FindCandidatesForValues(
+        entityName: string,
+        values: Record<string, unknown>,
+        contextUser: UserInfo,
+        options?: {
+            EntityDocumentID?: string | null;
+            TopK?: number;
+            PotentialMatchThreshold?: number;
+        },
+    ): Promise<PotentialDuplicate[]> {
+        if (!contextUser) {
+            throw new Error('DuplicateRecordDetector.FindCandidatesForValues: contextUser is required');
+        }
+        this.CurrentUser = contextUser;
+
+        await KnowledgeHubMetadataEngine.Instance.Config(false, contextUser);
+        let entityDocument: MJEntityDocumentEntity | null = null;
+        if (options?.EntityDocumentID) {
+            entityDocument = await this.ValidateEntityDocument(options.EntityDocumentID);
+        } else {
+            const docs = KnowledgeHubMetadataEngine.Instance.GetEntityDocumentsForEntity(entityName)
+                .filter((d) => d.Status === 'Active');
+            entityDocument = docs.sort(compareOldestFirst)[0] ?? null;
+        }
+        if (!entityDocument) {
+            return [];
+        }
+
+        const entityInfo = this.Metadata.EntityByID(entityDocument.EntityID);
+        if (!entityInfo) {
+            return [];
+        }
+
+        await this.InitializeProviders(entityDocument);
+        const record = await this.BuildUnsavedRecord(entityInfo, values, contextUser);
+        const query = await this.QueryCandidatesForRecord(
+            record,
+            entityDocument,
+            {
+                TopK: options?.TopK ?? DEFAULT_TOP_K,
+            },
+            contextUser,
+        );
+        if (!query || query.Duplicates.Duplicates.length === 0) {
+            return [];
+        }
+
+        const readableNames = await this.LoadReadableCandidateNames(
+            query.Duplicates.Duplicates,
+            entityInfo,
+            contextUser,
+        );
+        const minScore = options?.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold ?? 0;
+
+        return query.Duplicates.Duplicates
+            .filter((d) => readableNames.has(NormalizeUUID(d.ToCompactURLSegment())) && (d.ProbabilityScore ?? 0) >= minScore)
+            .sort((a, b) => (b.ProbabilityScore ?? 0) - (a.ProbabilityScore ?? 0));
+    }
+
+    /**
      * Render one record with the entity document's template, embed it, and query the vector index
      * for its candidates. Shared by {@link CheckSingleRecord} (a saved record) and
      * {@link CheckRecordValues} (an unsaved one).
@@ -552,6 +622,7 @@ export class DuplicateRecordDetector extends VectorBase {
             () => this.GenerateTemplateTexts(templateParser, entityDocument, [record], contextUser));
         const embedResult = await step('embedding the record', () => this.EmbeddingRunner.RunEmbedding({
             Texts: templateTexts,
+            PromptName: EmbeddingCarrierPrompts.DuplicateDetection,
             ModelID: this.embeddingModelID ?? undefined,
             Dimensions: this.embeddingDimensions,
             ContextUser: contextUser,
@@ -639,6 +710,7 @@ export class DuplicateRecordDetector extends VectorBase {
             Fields: [...new Set([...entityInfo.PrimaryKeys.map(pk => pk.Name), ...nameFields.map(f => f.Name)])],
             ResultType: 'simple',
             MaxRows: candidates.length,
+            SkipTotalRowCount: true,
         }, contextUser);
         if (!result.Success) {
             LogError(`Duplicate entry check: could not confirm which ${entityInfo.Name} candidates are readable: ${result.ErrorMessage}`);
@@ -916,6 +988,7 @@ export class DuplicateRecordDetector extends VectorBase {
             const subTemplateTexts = await this.GenerateTemplateTexts(templateParser, entityDocument, subRecords, contextUser);
             const subEmbedResult = await this.EmbeddingRunner.RunEmbedding({
                 Texts: subTemplateTexts,
+                PromptName: EmbeddingCarrierPrompts.DuplicateDetection,
                 ModelID: this.embeddingModelID ?? undefined,
                 Dimensions: this.embeddingDimensions,
                 ContextUser: contextUser,
@@ -1364,7 +1437,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
         const entityInfo = records[0].EntityInfo;
         const rows = await this.LoadTemplateRows(records, entityInfo);
-        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser);
+        const dataBuilder = new EntityDocumentTemplateDataBuilder(this.RunView, contextUser ?? this.CurrentUser, this.Provider);
         // Only saved records have related rows: a new record's key, even a client-generated one, has none yet.
         const savedRows = rows.filter((_, index) => records[index].IsSaved);
         const relatedData = await dataBuilder.LoadRelatedData(entityInfo, savedRows, template);
@@ -1381,7 +1454,7 @@ export class DuplicateRecordDetector extends VectorBase {
             // Skip validation and suppress its warnings, as sync does: records commonly have null
             // fields, and the templates handle them with {% if %} conditionals.
             const result = await TemplateEngineServer.Instance.RenderTemplate(
-                template, templateContent, data, true, true
+                template, templateContent, data, true, true, { ContextUser: contextUser ?? this.CurrentUser }
             );
 
             if (result.Success) {
@@ -1494,6 +1567,7 @@ export class DuplicateRecordDetector extends VectorBase {
 
             const rawMatchCount = Array.isArray(queryResponse.data?.matches) ? queryResponse.data.matches.length : 0;
             const dupeResult = this.ParseVectorMatches(queryResponse, compositeKey);
+            this.ProjectCandidateMetadata(dupeResult.Duplicates, record.EntityInfo);
             dupeResult.Duplicates = this.FilterSelfMatches(dupeResult.Duplicates, compositeKey);
             const potentialThreshold = options.PotentialMatchThreshold ?? entityDocument.PotentialMatchThreshold;
             dupeResult.Duplicates = dupeResult.Duplicates.filter(
@@ -1622,6 +1696,23 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
+     * Remove from each candidate's `VectorMetadata` the fields of `entityInfo` the current user may not
+     * read. The metadata was written by the sync under another identity and is returned to this user for
+     * display, so it is projected here the same way their own reads are. Mutates the candidates.
+     */
+    protected ProjectCandidateMetadata(candidates: PotentialDuplicate[], entityInfo: EntityInfo | undefined): void {
+        if (!entityInfo || !this.CurrentUser) return;
+        const denied = entityInfo.GetDeniedReadFields(this.CurrentUser);
+        if (denied.size === 0) return;
+        for (const candidate of candidates) {
+            if (!candidate.VectorMetadata) continue;
+            candidate.VectorMetadata = Object.fromEntries(
+                Object.entries(candidate.VectorMetadata).filter(([key]) => !denied.has(key.toLowerCase()))
+            );
+        }
+    }
+
+    /**
      * True when two composite keys identify the same record. Compares the normalized
      * (trimmed, lower-cased) URL-segment representation, so it is robust to UUID-casing
      * differences across platforms (SQL Server upper- vs PostgreSQL lower-case) and to a
@@ -1668,11 +1759,14 @@ export class DuplicateRecordDetector extends VectorBase {
      */
     protected buildSourceMetadataMap(records: BaseEntity[], entityInfo: EntityInfo): Map<string, string> {
         const metadataMap = new Map<string, string>();
+        // Fields the user may not read are left out: the records were loaded for this user, and the
+        // map is shown to them. Reading them as absent also keeps Get() from refusing them.
+        const readable = (fieldName: string) => entityInfo.IsFieldReadableByUser(fieldName, this.CurrentUser);
         for (const record of records) {
             // Keyed by the same compact segment the batch ids use, so CreateRunDetailRecords can
             // look the metadata up by record id for single-column and composite keys alike.
             const id = record.PrimaryKey.ToCompactURLSegment();
-            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => record.Get(fieldName), entityInfo)));
+            metadataMap.set(id, JSON.stringify(this.BuildRecordMetadata(fieldName => (readable(fieldName) ? record.Get(fieldName) : undefined), entityInfo)));
         }
         return metadataMap;
     }

@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "IT: Permission Grant Fixture",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=IT: Integration Test",
+      "Description": "Inert fixture that holds one AI agent permission grant, so the AI permission DENY checks prove principal filtering instead of passing on empty grant tables. Disabled: never run. (mj-integration-test — safe to delete)",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Disabled",
+      "ExposeAsAction": false,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "IconClass": "fa-solid fa-vial",
+      "InjectNotes": false,
+      "InjectExamples": false
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Permissions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Scoped Reader",
+            "CanView": true,
+            "CanRun": false,
+            "CanEdit": false,
+            "CanDelete": false,
+            "Comments": "Integration fixture grant (mj-integration-test — safe to delete)"
+          },
+          "primaryKey": {
+            "ID": "DFAE505F-C718-4205-91E8-F70017D7379A"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8EA840B7-04F3-4C6E-8421-4D6E28FCD251"
+    }
+  }
+]

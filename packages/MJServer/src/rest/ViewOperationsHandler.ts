@@ -1,46 +1,95 @@
 import { 
-    BaseEntity, LogError, Metadata, RunView, RunViewParams, 
+    BaseEntity, EntityInfo, LogError, Metadata, RunView, RunViewParams, 
     RunViewResult, UserInfo, type IRunViewProvider 
 } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { ClientClauseScreen } from '@memberjunction/generic-database-provider';
+import { ProjectRowsForCaller } from '../generic/fieldSecurityTransport.js';
 
 /**
  * View Operations Implementation for REST endpoints
  * These functions handle running views through the REST API
  */
 export class ViewOperationsHandler {
+    private static resolveEntityCaseInsensitive(md: Metadata, entityName: string | undefined): EntityInfo | undefined {
+        if (!entityName || typeof entityName !== 'string') {
+            return undefined;
+        }
+        const viaMethod = typeof md.EntityByName === 'function' ? md.EntityByName(entityName) : undefined;
+        if (viaMethod) {
+            return viaMethod;
+        }
+        const normalized = entityName.trim().toLowerCase();
+        return md.Entities?.find((e) => e.Name.trim().toLowerCase() === normalized);
+    }
+
+    private static async validateViewMatchesEntity(
+        params: RunViewParams,
+        entity: EntityInfo,
+        runView: RunView,
+        user: UserInfo,
+    ): Promise<void> {
+        if (!params.ViewID && !params.ViewName) {
+            return;
+        }
+        const filter = params.ViewID
+            ? `ID='${EscapeSQLString(params.ViewID)}'`
+            : `Name='${EscapeSQLString(params.ViewName!)}'`;
+        const viewRes = await runView.RunView<{ Entity?: string }>(
+            {
+                EntityName: 'MJ: User Views',
+                ExtraFilter: filter,
+                Fields: ['Entity'],
+                MaxRows: 1,
+                ResultType: 'simple',
+            },
+            user,
+        );
+        const viewRow = viewRes.Success ? viewRes.Results?.[0] : undefined;
+        if (!viewRow?.Entity) {
+            throw new Error(`Referenced User View '${params.ViewID ?? params.ViewName}' was not found`);
+        }
+        if (viewRow.Entity.trim().toLowerCase() !== entity.Name.trim().toLowerCase()) {
+            throw new Error(
+                `EntityName '${entity.Name}' does not match resolved User View entity '${viewRow.Entity}'`,
+            );
+        }
+    }
+
     /**
      * Run a view and return results
      */
     static async RunView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
         try {
-            // Validate entity exists
+            // Validate entity exists (case-insensitive canonical resolution)
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
-            const entity = md.Entities.find(e => e.Name === params.EntityName);
+            const entity = this.resolveEntityCaseInsensitive(md, params.EntityName);
             if (!entity) {
                 return { 
                     success: false, 
                     error: `Entity '${params.EntityName}' not found` 
                 };
             }
+            params.EntityName = entity.Name;
             
             // Check read permission
             const permissions = entity.GetUserPermisions(user);
             if (!permissions.CanRead) {
                 return { 
                     success: false, 
-                    error: `User ${user.Name} does not have permission to read ${params.EntityName} records` 
+                    error: `User ${user.Name} does not have permission to read ${entity.Name} records` 
                 };
             }
             
             // Sanitize and validate parameters against the provider that runs the view
             const runView = new RunView();
             this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
+            await this.validateViewMatchesEntity(params, entity, runView, user);
             
             // Execute the view
             const result = await runView.RunView(params, user);
             
-            return { success: true, result };
+            return { success: true, result: this.projectResult(result, entity, user, md) };
         } catch (error) {
             LogError(error);
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
@@ -60,33 +109,38 @@ export class ViewOperationsHandler {
             // Validate and sanitize each set of parameters against the provider that runs the views
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const runView = new RunView();
+            const entities: EntityInfo[] = [];
             for (const params of paramsArray) {
-                // Validate entity exists
-                const entity = md.Entities.find(e => e.Name === params.EntityName);
+                // Validate entity exists (case-insensitive canonical resolution)
+                const entity = this.resolveEntityCaseInsensitive(md, params.EntityName);
                 if (!entity) {
                     return { 
                         success: false, 
                         error: `Entity '${params.EntityName}' not found` 
                     };
                 }
+                params.EntityName = entity.Name;
                 
                 // Check read permission
                 const permissions = entity.GetUserPermisions(user);
                 if (!permissions.CanRead) {
                     return { 
                         success: false, 
-                        error: `User ${user.Name} does not have permission to read ${params.EntityName} records` 
+                        error: `User ${user.Name} does not have permission to read ${entity.Name} records` 
                     };
                 }
                 
-                // Sanitize parameters
+                // Sanitize parameters and enforce view/entity consistency
                 this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
+                await this.validateViewMatchesEntity(params, entity, runView, user);
+                entities.push(entity);
             }
             
             // Execute the views
             const results = await runView.RunViews(paramsArray, user);
             
-            return { success: true, results };
+            const projected = results?.map((r, i) => this.projectResult(r, entities[i], user, md));
+            return { success: true, results: projected?.some((r, i) => r !== results[i]) ? projected : results };
         } catch (error) {
             LogError(error);
             return { success: false, error: (error as Error)?.message || 'Unknown error' };
@@ -105,22 +159,24 @@ export class ViewOperationsHandler {
         try {
             // Check entity exists and user has permission
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
-            const entity = md.Entities.find(e => e.Name === params.EntityName);
+            const entity = this.resolveEntityCaseInsensitive(md, params.EntityName);
             if (!entity) {
                 throw new Error(`Entity '${params.EntityName}' not found`);
             }
+            params.EntityName = entity.Name;
             
             const permissions = entity.GetUserPermisions(user);
             if (!permissions.CanRead) {
-                throw new Error(`User ${user.Name} does not have permission to read ${params.EntityName} records`);
+                throw new Error(`User ${user.Name} does not have permission to read ${entity.Name} records`);
             }
             
             // Sanitize and validate parameters against the provider that runs the view
             const runView = new RunView();
             this.sanitizeRunViewParams(params, md, runView.ProviderToUse, user);
+            await this.validateViewMatchesEntity(params, entity, runView, user);
             
             // Execute the view
-            return await runView.RunView(params, user);
+            return this.projectResult(await runView.RunView(params, user), entity, user, md);
         } catch (error) {
             LogError(error);
             throw error;
@@ -139,7 +195,7 @@ export class ViewOperationsHandler {
         try {
             // Validate entity exists
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
-            const entity = md.Entities.find(e => e.Name === entityName);
+            const entity = this.resolveEntityCaseInsensitive(md, entityName);
             if (!entity) {
                 return { 
                     success: false, 
@@ -159,7 +215,7 @@ export class ViewOperationsHandler {
             // Run a view to get the available views
             const params: RunViewParams = {
                 EntityName: 'MJ: User Views',
-                ExtraFilter: `Entity = '${entityName}'`
+                ExtraFilter: `Entity = '${EscapeSQLString(entity.Name)}'`
             };
             
             const runView = new RunView();
@@ -193,6 +249,19 @@ export class ViewOperationsHandler {
         return this.GetEntityViews(entityName, user);
     }
     
+    /**
+     * The result with its rows reduced to what `user` may READ. The provider already narrows the
+     * rows it reads for a restricted caller; this is the backstop for any that arrive wider. The
+     * same result object comes back when no row needed changing.
+     */
+    private static projectResult(result: RunViewResult, entity: EntityInfo, user: UserInfo, md: Metadata): RunViewResult {
+        if (!result?.Results?.length) {
+            return result;
+        }
+        const rows = ProjectRowsForCaller(entity, result.Results as Record<string, unknown>[], user, md);
+        return rows === result.Results ? result : { ...result, Results: rows };
+    }
+
     /**
      * Sanitize and validate RunViewParams. Client filter and sort text passes the same clause
      * screen as the GraphQL RunView resolvers, parsed in the dialect of `provider`, the provider
@@ -231,8 +300,9 @@ export class ViewOperationsHandler {
             params.StartRow = Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed as number)) : undefined;
         }
         
-        // Default ResultType if not provided
-        if (!params.ResultType) {
+        // Plain rows only on the wire. An entity object serializes its internal state rather than
+        // its projected field values, so a caller may not ask for one; a count carries no row.
+        if (params.ResultType !== 'count_only') {
             params.ResultType = 'simple';
         }
 

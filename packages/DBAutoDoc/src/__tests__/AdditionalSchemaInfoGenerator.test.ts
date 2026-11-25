@@ -1207,4 +1207,502 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(result.hr[0].Fields[1].ValueListType).toBe('ListOrUserEntry');
     });
   });
+
+  describe('Phase 0 candidate gating, single-winner PKs, and descriptions', () => {
+    function makeKeyDetectionPhase(
+      primaryKeys: PKCandidate[],
+      foreignKeys: FKCandidate[] = []
+    ): RelationshipDiscoveryPhase {
+      return {
+        triggered: true,
+        triggerReason: 'missing_pks',
+        triggerDetails: { tablesWithoutPK: 1, expectedFKs: 0, actualFKs: 0, fkDeficitPercentage: 0 },
+        startedAt: '2026-01-01',
+        tokenBudget: { allocated: 1000, used: 0, remaining: 1000 },
+        iterations: [],
+        discovered: { primaryKeys, foreignKeys },
+        schemaEnhancements: { pkeysAdded: 0, fkeysAdded: 0, overallConfidence: 0 },
+        feedbackFromAnalysis: [],
+        summary: {
+          totalTablesAnalyzed: 1,
+          tablesWithDiscoveredPKs: 0,
+          relationshipsDiscovered: 0,
+          averageConfidence: 0,
+          highConfidenceCount: 0,
+          mediumConfidenceCount: 0,
+          lowConfidenceCount: 0,
+          rejectedCount: 0,
+        },
+      };
+    }
+
+    function makePK(
+      columnNames: string[],
+      confidence: number,
+      status: PKCandidate['status'] = 'candidate',
+      tableName = 'Orders'
+    ): PKCandidate {
+      return {
+        schemaName: 'dbo',
+        tableName,
+        columnNames,
+        confidence,
+        evidence: {
+          uniqueness: 1,
+          nullCount: 0,
+          totalRows: 100,
+          dataPattern: 'sequential',
+          namingScore: 1,
+          dataTypeScore: 1,
+          warnings: [],
+        },
+        discoveredInIteration: 1,
+        validatedByLLM: status === 'confirmed',
+        status,
+      };
+    }
+
+    function makeFK(
+      sourceColumn: string,
+      targetTable: string,
+      targetColumn: string,
+      status: FKCandidate['status'] = 'confirmed',
+      confidence = 90,
+      targetSchema = 'dbo'
+    ): FKCandidate {
+      return {
+        schemaName: 'dbo',
+        sourceTable: 'Orders',
+        sourceColumn,
+        targetSchema,
+        targetTable,
+        targetColumn,
+        confidence,
+        evidence: {
+          namingMatch: 0.9,
+          valueOverlap: 0.9,
+          cardinalityRatio: 0.1,
+          dataTypeMatch: true,
+          nullPercentage: 0,
+          sampleSize: 100,
+          orphanCount: 0,
+          warnings: [],
+        },
+        discoveredInIteration: 1,
+        validatedByLLM: status === 'confirmed',
+        status,
+      };
+    }
+
+    it('emits only ONE winning PK candidate per table rather than unioning multiple candidates', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'OrderID', dataType: 'int', description: 'Unique order identifier' }),
+          createColumn({ name: 'OrderNum', dataType: 'int' }),
+          createColumn({ name: 'LineNum', dataType: 'int' }),
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([
+            makePK(['OrderNum', 'LineNum'], 80, 'candidate'),
+            makePK(['OrderID'], 95, 'confirmed'),
+          ]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey).toEqual([
+        { FieldName: 'OrderID', Description: 'Unique order identifier' },
+      ]);
+    });
+
+    it('never unions a discovered PK onto a declared catalog PK, even when discovery already stamped isPrimaryKey', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'DeclaredID', dataType: 'int', isPrimaryKey: true, description: 'Catalog primary key' }),
+          createColumn({ name: 'AltCode', dataType: 'varchar', isPrimaryKey: true }),
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([makePK(['AltCode'], 92, 'confirmed')]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey).toEqual([
+        { FieldName: 'DeclaredID', Description: 'Catalog primary key' },
+      ]);
+    });
+
+    it('suppresses rejected PK and FK candidates even when column flags or dependsOn remain set', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'RealPK', dataType: 'int', isPrimaryKey: true }),
+          createColumn({ name: 'StaleDiscoveredPK', dataType: 'int', isPrimaryKey: true }),
+          createColumn({
+            name: 'WhsSiblingID',
+            dataType: 'int',
+            isForeignKey: true,
+            foreignKeyReferences: {
+              schema: 'dbo',
+              table: 'WarehouseSibling',
+              column: 'WhsSiblingID',
+              referencedColumn: 'ID',
+            },
+          }),
+          createColumn({
+            name: 'CustomerID',
+            dataType: 'int',
+            isForeignKey: true,
+            foreignKeyReferences: {
+              schema: 'dbo',
+              table: 'Customers',
+              column: 'CustomerID',
+              referencedColumn: 'ID',
+            },
+          }),
+        ],
+        dependsOn: [
+          { schema: 'dbo', table: 'WarehouseSibling', column: 'WhsSiblingID', referencedColumn: 'ID' },
+          { schema: 'dbo', table: 'Customers', column: 'CustomerID', referencedColumn: 'ID' },
+        ],
+      });
+
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase(
+            [makePK(['StaleDiscoveredPK'], 85, 'rejected')],
+            [
+              makeFK('WhsSiblingID', 'WarehouseSibling', 'ID', 'rejected', 88),
+              makeFK('CustomerID', 'Customers', 'ID', 'confirmed', 96),
+            ]
+          ),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey.map((p: { FieldName: string }) => p.FieldName)).toEqual(['RealPK']);
+      expect(parsed.dbo[0].ForeignKeys.map((f: { FieldName: string }) => f.FieldName)).toEqual(['CustomerID']);
+    });
+
+    it('preserves a genuine catalog FK constraint even if discovery proposed and rejected the same edge', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'OrderID', dataType: 'int', isPrimaryKey: true }),
+          createColumn({
+            name: 'CustomerID',
+            dataType: 'int',
+            isForeignKey: true,
+            description: 'Catalog FK to customer',
+            foreignKeyReferences: {
+              schema: 'dbo',
+              table: 'Customers',
+              column: 'CustomerID',
+              referencedColumn: 'ID',
+            },
+          }),
+        ],
+        dependsOn: [
+          {
+            schema: 'dbo',
+            table: 'Customers',
+            column: 'CustomerID',
+            referencedColumn: 'ID',
+            constraintName: 'FK_Orders_Customers',
+          },
+        ],
+      });
+
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([], [makeFK('CustomerID', 'Customers', 'ID', 'rejected', 60)]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].ForeignKeys).toHaveLength(1);
+      expect(parsed.dbo[0].ForeignKeys[0].FieldName).toBe('CustomerID');
+      expect(parsed.dbo[0].ForeignKeys[0].Description).toBe('Catalog FK to customer');
+    });
+
+    it('respects ConfirmedOnly and ConfidenceThreshold even when discovery stamped column FK flags and dependsOn', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({
+            name: 'WeakRefID',
+            dataType: 'int',
+            isForeignKey: true,
+            foreignKeyReferences: {
+              schema: 'dbo',
+              table: 'Targets',
+              column: 'WeakRefID',
+              referencedColumn: 'ID',
+            },
+          }),
+        ],
+        dependsOn: [{ schema: 'dbo', table: 'Targets', column: 'WeakRefID', referencedColumn: 'ID' }],
+      });
+
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([], [makeFK('WeakRefID', 'Targets', 'ID', 'candidate', 70)]),
+        },
+      });
+
+      expect(JSON.parse(generator.Generate(state, { ConfirmedOnly: true })).dbo).toBeUndefined();
+      expect(JSON.parse(generator.Generate(state, { ConfidenceThreshold: 80 })).dbo).toBeUndefined();
+      expect(JSON.parse(generator.Generate(state, { ConfidenceThreshold: 60 })).dbo[0].ForeignKeys).toHaveLength(1);
+    });
+
+    it('preserves column descriptions and FK provenance on both flagged production states and DiscoveredOnly output', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({
+            name: 'OrderID',
+            dataType: 'int',
+            isPrimaryKey: true,
+            description: 'Surrogate primary key for customer orders',
+          }),
+          createColumn({
+            name: 'CustomerID',
+            dataType: 'int',
+            isForeignKey: true,
+            description: 'Owning customer account reference',
+            foreignKeyReferences: {
+              schema: 'dbo',
+              table: 'Customers',
+              column: 'CustomerID',
+              referencedColumn: 'ID',
+            },
+          }),
+        ],
+        dependsOn: [{ schema: 'dbo', table: 'Customers', column: 'CustomerID', referencedColumn: 'ID' }],
+      });
+
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase(
+            [makePK(['OrderID'], 99, 'confirmed')],
+            [makeFK('CustomerID', 'Customers', 'ID', 'confirmed', 95)]
+          ),
+        },
+      });
+
+      for (const options of [{}, { DiscoveredOnly: true }]) {
+        const parsed = JSON.parse(generator.Generate(state, options));
+        expect(parsed.dbo[0].PrimaryKey[0].Description).toBe('Surrogate primary key for customer orders');
+        expect(parsed.dbo[0].PrimaryKey[0].Description).not.toContain('AI-discovered primary key');
+        expect(parsed.dbo[0].ForeignKeys[0].Description).toContain('Owning customer account reference');
+        expect(parsed.dbo[0].ForeignKeys[0].Description).toContain('AI-discovered relationship (confidence: 95%)');
+      }
+    });
+
+    it('keeps distinct cross-schema FKs that target identically named tables in different schemas', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'AccountID', dataType: 'int' }),
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase(
+            [],
+            [
+              makeFK('AccountID', 'Accounts', 'ID', 'confirmed', 95, 'crm'),
+              makeFK('AccountID', 'Accounts', 'ID', 'confirmed', 90, 'billing'),
+            ]
+          ),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].ForeignKeys).toHaveLength(2);
+      expect(parsed.dbo[0].ForeignKeys.map((f: { SchemaName: string }) => f.SchemaName)).toEqual(['crm', 'billing']);
+    });
+
+    it('never emits a discovered PK under DiscoveredOnly when the table has a declared catalog PK', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'DeclaredID', dataType: 'int', isPrimaryKey: true, description: 'Catalog PK' }),
+          createColumn({ name: 'AltCode', dataType: 'varchar', isPrimaryKey: true }),
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([makePK(['AltCode'], 92, 'confirmed')]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state, { DiscoveredOnly: true }));
+      expect(parsed.dbo).toBeUndefined();
+    });
+
+    it('preserves a declared composite catalog PK backed by a catalog PK index even if discovery proposed and rejected one of its columns', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'OrderID', dataType: 'int', isPrimaryKey: true, description: 'Order identifier' }),
+          createColumn({ name: 'LineNum', dataType: 'int', isPrimaryKey: true, description: 'Line number' }),
+          createColumn({ name: 'StaleCol', dataType: 'int', isPrimaryKey: true }),
+        ],
+        indexes: [
+          {
+            SchemaName: 'dbo',
+            TableName: 'Orders',
+            IndexName: 'PK_Orders',
+            Columns: ['OrderID', 'LineNum'],
+            IncludeColumns: [],
+            IsUnique: true,
+            IsPrimaryKey: true,
+            Method: 'CLUSTERED',
+            HasExpressions: false,
+          },
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([
+            makePK(['OrderID'], 80, 'rejected'),
+            makePK(['StaleCol'], 95, 'confirmed'),
+          ]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey).toEqual([
+        { FieldName: 'OrderID', Description: 'Order identifier' },
+        { FieldName: 'LineNum', Description: 'Line number' },
+      ]);
+      expect(JSON.parse(generator.Generate(state, { DiscoveredOnly: true })).dbo).toBeUndefined();
+    });
+
+    it('respects post-#6636 primaryKeySource markers so unmarked catalog PKs survive overlapping candidates', () => {
+      const discoveredCol = Object.assign(
+        createColumn({ name: 'AltCode', dataType: 'varchar', isPrimaryKey: true }),
+        { primaryKeySource: 'discovery' }
+      );
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'OrderID', dataType: 'int', isPrimaryKey: true, description: 'Catalog PK' }),
+          discoveredCol,
+        ],
+      });
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([
+            makePK(['OrderID'], 75, 'rejected'),
+            makePK(['AltCode'], 90, 'confirmed'),
+          ]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].PrimaryKey).toEqual([
+        { FieldName: 'OrderID', Description: 'Catalog PK' },
+      ]);
+    });
+
+    it('keeps a valid cross-schema FK when dropNonUniqueCompositePairs drops an identically named table in another schema', () => {
+      const crmAccounts = createTable({
+        name: 'Accounts',
+        columns: [
+          createColumn({ name: 'ID', dataType: 'int', isPrimaryKey: true }),
+          createColumn({ name: 'TenantID', dataType: 'int', isPrimaryKey: true }),
+        ],
+      });
+      const billingAccounts = createTable({
+        name: 'Accounts',
+        columns: [
+          createColumn({ name: 'ID', dataType: 'int', isPrimaryKey: true }),
+        ],
+      });
+      const orders = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'AccountID', dataType: 'int' }),
+          createColumn({ name: 'TenantID', dataType: 'int' }),
+        ],
+        dependsOn: [
+          { schema: 'crm', table: 'Accounts', column: 'AccountID', referencedColumn: 'ID', constraintName: 'FK_Orders_CrmAccounts' },
+          { schema: 'crm', table: 'Accounts', column: 'TenantID', referencedColumn: 'TenantID', constraintName: 'FK_Orders_CrmAccounts' },
+          { schema: 'billing', table: 'Accounts', column: 'AccountID', referencedColumn: 'ID', constraintName: 'FK_Orders_BillingAccounts' },
+        ],
+      });
+      const state = createTestState({
+        schemas: [
+          createSchema('crm', [crmAccounts]),
+          createSchema('billing', [billingAccounts]),
+          createSchema('dbo', [orders]),
+        ],
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].ForeignKeys).toEqual([
+        {
+          FieldName: 'AccountID',
+          SchemaName: 'billing',
+          RelatedTable: 'Accounts',
+          RelatedField: 'ID',
+        },
+      ]);
+    });
+
+    it('prefers the confirmed or highest-confidence candidate when duplicate discovered FKs target the same edge, matching schema/table case-insensitively', () => {
+      const table = createTable({
+        name: 'Orders',
+        columns: [
+          createColumn({ name: 'CustomerID', dataType: 'int', description: 'Customer reference' }),
+        ],
+      });
+      const lowCandidate = makeFK('CustomerID', 'Customers', 'ID', 'candidate', 70);
+      lowCandidate.schemaName = 'DBO';
+      lowCandidate.sourceTable = 'orders';
+      const highConfirmed = makeFK('CustomerID', 'Customers', 'ID', 'confirmed', 96);
+      highConfirmed.schemaName = 'DBO';
+      highConfirmed.sourceTable = 'orders';
+
+      const state = createTestState({
+        schemas: [createSchema('dbo', [table])],
+        phases: {
+          descriptionGeneration: [],
+          keyDetection: makeKeyDetectionPhase([], [lowCandidate, highConfirmed]),
+        },
+      });
+
+      const parsed = JSON.parse(generator.Generate(state));
+      expect(parsed.dbo[0].ForeignKeys).toHaveLength(1);
+      expect(parsed.dbo[0].ForeignKeys[0].Description).toContain('confidence: 96%');
+    });
+  });
 });

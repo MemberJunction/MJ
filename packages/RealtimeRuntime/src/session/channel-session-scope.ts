@@ -65,6 +65,22 @@ export interface RealtimeHostChannelDeclaration {
 export interface RealtimeSessionStartOptions {
     /** Channels the host brings to this session (see {@link RealtimeHostChannelDeclaration}). */
     HostChannels?: RealtimeHostChannelDeclaration[];
+    /**
+     * Optional host predicate that filters prepared channel plugins before candidate reporting and mint.
+     * Evaluated **once at session start** (tool declarations and server policy are fixed at mint, so later
+     * viewport or host changes do not retroactively add or remove channels in a live session).
+     * Returning `false` leaves the channel out of `channelCandidatesJson` and `NativeTools` so neither
+     * the voice model nor the server mounts a surface the current view cannot display (e.g. side-panel
+     * tabs on mobile phones or narrow windows).
+     */
+    ChannelFilter?: (plugin: BaseRealtimeChannelClient) => boolean;
+    /**
+     * Optional explanation surfaced to the agent (in the `[channels]` catalog note, `GetSurfaceSnapshot`,
+     * and `ContextTool` errors) for active registry/host channels omitted by {@link ChannelFilter} before
+     * agent/app policy scoping, so the agent explains why a surface cannot be shown in the current view
+     * instead of claiming a permissions error.
+     */
+    ChannelFilterReason?: string;
     /** The fork (`MJ: Conversation Branches.ID`) the session starts on; omitted or null is Main. */
     ConversationBranchID?: string | null;
     /**
@@ -74,6 +90,12 @@ export interface RealtimeSessionStartOptions {
      * shows the check; otherwise the camera waits for a confirmation that never comes.
      */
     CameraCheck?: boolean;
+    /**
+     * The session's deadline, when the host knows it at start (a guest's voice ceiling). The runtime arms it, with the
+     * default options, in the same tick it takes the call slot, so a start refused because another call holds the
+     * runtime never arms it. A host that learns the deadline later, or needs other options, uses `SetSessionDeadline`.
+     */
+    SessionDeadline?: Date | null;
 }
 
 /** A resolved-but-not-yet-initialized channel plugin, with what the scope decision needs to know about it. */

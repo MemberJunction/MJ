@@ -94,8 +94,9 @@ describe('ngsw-config.json shape', () => {
             expect(g.updateMode).toBe('prefetch');
         });
 
-        it('captures Angular emitted chunks (chunk-*.js)', () => {
+        it('captures Angular emitted chunks (chunk-*.js) and worker bundles (worker-*.js)', () => {
             expect(g.resources.files).toContain('/chunk-*.js');
+            expect(g.resources.files).toContain('/worker-*.js');
         });
     });
 
@@ -131,6 +132,7 @@ describe('ngsw-config.json shape', () => {
             ['!/auth/**', 'Auth provider callbacks'],
             ['!/**/?msal*', 'MSAL OAuth fragment'],
             ['!/**/*__*', 'Internal MJ routes with double-underscore segments'],
+            ['!/p/**', 'Public pages, which the web host serves with their own title and link preview'],
         ])('excludes %s (%s)', (pattern) => {
             expect(config.navigationUrls).toContain(pattern);
         });

@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseRequestParams,
@@ -94,7 +95,7 @@ export class PgVectorDatabase extends VectorDBBase {
                 database: this._config.Database,
                 user: this._config.User,
                 password: this._config.Password,
-                ssl: this._config.SSL ? { rejectUnauthorized: false } : undefined,
+                ssl: ResolvePgVectorSsl(this._config.SSL),
             });
         }
         return this._pool;
@@ -532,19 +533,23 @@ export class PgVectorDatabase extends VectorDBBase {
      * @returns A {@link BaseResponse} indicating success or failure.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async UpdateRecord(record: UpdateOptions): Promise<BaseResponse> {
+    public async UpdateRecord(
+        record: UpdateOptions,
+        indexName?: string,
+        _providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
         try {
             const pool = this.getPool();
-            const indexName = (record as Record<string, unknown>)['indexName'] as string;
-            if (!indexName) {
-                return this.wrapFailureResponse('indexName property is required on the UpdateOptions object');
+            const resolvedIndex = indexName || ((record as Record<string, unknown>)['indexName'] as string | undefined);
+            if (!resolvedIndex) {
+                return this.wrapFailureResponse('indexName is required on UpdateRecord or the UpdateOptions object');
             }
 
             const setClauses: string[] = [];
             const queryParams: unknown[] = [];
             let paramIndex = 1;
 
-            if (record.values) {
+            if (record.values && record.values.length > 0) {
                 setClauses.push(`embedding = $${paramIndex}::vector`);
                 queryParams.push(`[${record.values.join(',')}]`);
                 paramIndex++;
@@ -561,7 +566,7 @@ export class PgVectorDatabase extends VectorDBBase {
 
             queryParams.push(record.id);
             await pool.query(
-                `UPDATE ${this.qualifyTable(indexName)}
+                `UPDATE ${this.qualifyTable(resolvedIndex)}
                  SET ${setClauses.join(', ')}
                  WHERE id = $${paramIndex}`,
                 queryParams
@@ -576,17 +581,27 @@ export class PgVectorDatabase extends VectorDBBase {
     }
 
     /**
-     * Update records in batch. Currently delegates to {@link UpdateRecord} since the
-     * base class signature accepts a single {@link UpdateOptions} object.
+     * Update one or more vector records' embeddings and/or metadata.
      *
-     * @param records - The update options (single record).
+     * @param records - Single {@link UpdateOptions} or array of {@link UpdateOptions}.
+     * @param indexName - Optional target index (table) name.
+     * @param providerConfig - Optional provider configuration.
      * @returns A {@link BaseResponse} indicating success or failure.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async UpdateRecords(records: UpdateOptions): Promise<BaseResponse> {
-        // The base class signature takes a single UpdateOptions, but the intent is batch.
-        // Delegate to UpdateRecord for now.
-        return this.UpdateRecord(records);
+    public async UpdateRecords(
+        records: UpdateOptions | UpdateOptions[],
+        indexName?: string,
+        providerConfig?: Record<string, unknown>,
+    ): Promise<BaseResponse> {
+        const list = Array.isArray(records) ? records : [records];
+        for (const rec of list) {
+            const result = await this.UpdateRecord(rec, indexName, providerConfig);
+            if (!result.success) {
+                return result;
+            }
+        }
+        return this.wrapSuccessResponse(null);
     }
 
     /**
@@ -938,4 +953,43 @@ export class PgVectorDatabase extends VectorDBBase {
         }
     }
 
+}
+
+/** The node-postgres `ssl` value: `false`, or the options for a TLS connection. */
+export type PgVectorSslConfig = false | { rejectUnauthorized: boolean; ca?: string; servername?: string };
+
+/**
+ * TLS for the pgvector connection. It follows the same `PG_SSL_MODE` / `PG_SSL_CA_FILE` /
+ * `PG_SSL_SERVERNAME` variables as MJ's other PostgreSQL clients (`BuildPgSslConfig` in
+ * `@memberjunction/postgresql-dataprovider`); it is restated here rather than imported so that loading
+ * this provider, which every server bootstrap does, does not load the PostgreSQL data provider too.
+ *
+ * - `PG_VECTOR_SSL` unset or false: plain TCP, unless `PG_SSL_MODE` asks for TLS.
+ * - `PG_VECTOR_SSL=true`: TLS, verifying the server certificate. It used to skip verification;
+ *   `PG_SSL_MODE=require` restores that.
+ */
+export function ResolvePgVectorSsl(sslRequested: boolean | undefined, env: NodeJS.ProcessEnv = process.env, readFile: (path: string) => string = (p) => readFileSync(p, 'utf8')): PgVectorSslConfig {
+    const mode = (env.PG_SSL_MODE ?? '').trim().toLowerCase() || (sslRequested ? 'verify-full' : 'disable');
+    if (mode === 'disable') {
+        return false;
+    }
+    if (mode === 'require') {
+        return { rejectUnauthorized: false };
+    }
+    if (mode !== 'verify-ca' && mode !== 'verify-full') {
+        throw new Error(`PG_SSL_MODE is "${env.PG_SSL_MODE}"; expected disable, require, verify-ca or verify-full.`);
+    }
+    const ssl: { rejectUnauthorized: boolean; ca?: string; servername?: string; checkServerIdentity?: () => undefined } = { rejectUnauthorized: true };
+    const caFile = env.PG_SSL_CA_FILE?.trim();
+    if (caFile) {
+        ssl.ca = readFile(caFile);
+    }
+    const serverName = env.PG_SSL_SERVERNAME?.trim();
+    if (serverName) {
+        ssl.servername = serverName;
+    }
+    if (mode === 'verify-ca') {
+        ssl.checkServerIdentity = () => undefined;
+    }
+    return ssl;
 }

@@ -1,5 +1,6 @@
 import pg from 'pg';
 import { MJPostgresTypes } from './pgTypeParsers.js';
+import { PgSslVerifiesServer } from './pgSsl.js';
 
 /**
  * Configuration for establishing a PostgreSQL connection pool.
@@ -13,9 +14,20 @@ export interface PGConnectionConfig {
     Database: string;
     /** Username */
     User: string;
-    /** Password */
+    /** Password. Ignored when {@link PasswordSource} is set. */
     Password: string;
-    /** SSL configuration */
+    /**
+     * Supplies the password for each new physical connection, for token-based logins (Microsoft
+     * Entra ID, AWS RDS IAM) whose tokens expire. node-postgres calls it every time the pool opens
+     * a connection, so a rotated token is picked up without restarting. See `BuildPgPasswordSource`.
+     * A pool with a source refuses `SSL` that does not verify the server.
+     */
+    PasswordSource?: () => Promise<string>;
+    /**
+     * TLS for the connection, as node-postgres takes it. Build it with `BuildPgSslConfig` so every
+     * client follows the same `PG_SSL_*` settings. When unset, TLS is on (without server
+     * verification rules beyond node's defaults) only when `NODE_ENV` is `production`.
+     */
     SSL?: boolean | pg.ConnectionConfig['ssl'];
     /** Maximum number of connections in the pool (default: 20) */
     MaxConnections?: number;
@@ -98,17 +110,19 @@ export class PGConnectionManager {
 
         this._config = config;
         this._ownsPool = true;
+        const ssl = config.SSL ?? (process.env.NODE_ENV === 'production');
+        assertPasswordSourceTransport(config, ssl);
         this._pool = new pg.Pool({
             host: config.Host,
             port: config.Port ?? 5432,
             database: config.Database,
             user: config.User,
-            password: config.Password,
+            password: config.PasswordSource ?? config.Password,
             // SSL default: explicit config wins; otherwise ON in production so managed Postgres (e.g. AWS
             // Aurora with rds.force_ssl=1, the AWS default) is not rejected or silently downgraded to an
             // unencrypted channel. Dev/local stays OFF unless explicitly enabled. For Aurora, pass an SSL
             // object (e.g. { rejectUnauthorized: true, ca: <Aurora CA bundle> }) via config.SSL.
-            ssl: config.SSL ?? (process.env.NODE_ENV === 'production'),
+            ssl,
             max: config.MaxConnections ?? 20,
             min: config.MinConnections ?? 2,
             idleTimeoutMillis: config.IdleTimeoutMillis ?? 30000,
@@ -117,6 +131,14 @@ export class PGConnectionManager {
             // see MJPostgresTypes. Pools passed to InitializeWithExistingPool must set
             // this themselves; type parsers can't be retrofitted onto an existing pool.
             types: MJPostgresTypes,
+            // TCP keepalive (SO_KEEPALIVE) on every pooled socket. A long CodeGen run leaves
+            // pooled connections idle for minutes at a time; without keepalive probes, a NAT
+            // gateway / load balancer / security-group idle timer anywhere on the path (e.g. a
+            // GitHub-Actions runner talking to a public Aurora endpoint) silently drops the
+            // flow and the next use of that socket surfaces as `read ECONNRESET`. Probing from
+            // 10s keeps the mapping alive well inside every common idle window.
+            keepAlive: true,
+            keepAliveInitialDelayMillis: 10000,
             // Optional libpq startup options (e.g. `-c statement_timeout=30000`) — applied
             // by every backend from connection #1, including the verify-SELECT-1 below.
             ...(config.Options ? { options: config.Options } : {}),
@@ -197,4 +219,19 @@ export class PGConnectionManager {
             await pool.end();
         }
     }
+}
+
+/**
+ * A pool given a {@link PGConnectionConfig.PasswordSource} carries a token login (only token modes
+ * use a source), so it must verify the server: the backstop behind `BuildPgPasswordSource` for a
+ * source built any other way.
+ */
+function assertPasswordSourceTransport(config: PGConnectionConfig, ssl: boolean | pg.ConnectionConfig['ssl']): void {
+    if (!config.PasswordSource || (typeof ssl === 'object' && PgSslVerifiesServer(ssl))) {
+        return;
+    }
+    throw new Error(
+        'PGConnectionManager: a PasswordSource (token login) was given, but PostgreSQL TLS does not verify the server. ' +
+        'Refusing to send the token. Build SSL with BuildPgSslConfig and set PG_SSL_MODE to verify-ca or verify-full.'
+    );
 }

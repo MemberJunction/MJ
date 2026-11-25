@@ -2,15 +2,18 @@ import { ActionResultSimple, RunActionParams, ActionParam, ActionRunScopeIsBound
 import { BaseAction } from "@memberjunction/actions";
 import { IsPlainObject, NormalizeUUID, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
+import { AIEngine } from "@memberjunction/aiengine";
 import {
     SearchEngine,
     SearchAudience,
     SearchResult,
     SearchResultItem,
+    SearchResultScopeAttribution,
     SearchStreamEvent,
     GetSearchScopePermissionResolver,
     EffectivePermission
 } from "@memberjunction/search-engine";
+import { NormalizeScopedSearchQuery } from "./search-query.util";
 import {
     SearchEngineBase,
     MJAIAgentEntity,
@@ -39,6 +42,9 @@ interface FormattedSearchResult {
     RecordName?: string;
     MatchedAt: string;
     RawMetadata?: string;
+    OriginatingScopeID?: string;
+    OriginatingScopeName?: string;
+    OriginatingScopes?: SearchResultScopeAttribution[];
 }
 
 /**
@@ -80,6 +86,9 @@ const SCOPED_SEARCH_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-
  *   - `SearchScopeAccess='All'`:
  *       - If `ScopeID` supplied: used as-is.
  *       - If omitted: uses the Global scope.
+ *   - Host-assigned scopes (`RunActionParams.RunScope.SearchScopeIDs`) replace all three rules: only those scopes are
+ *     searchable (the first when `ScopeID` is omitted, any other is `ACCESS_DENIED`), and the permission check runs
+ *     with `HostAssigned: true`, so the user's own grant is still required.
  *
  * Multi-tenant `SearchContext`:
  *   A tenant and secondary dimensions assemble a `SearchContext` that is threaded into
@@ -199,23 +208,25 @@ export class ScopedSearchAction extends BaseAction {
             const scopeOutcome = await this.resolveAndLogScope(
                 agent, query, requestedScopeID, params, startTime, skill?.ID ?? undefined);
             if ('result' in scopeOutcome) return scopeOutcome.result;
-            const { scope, scopeID } = scopeOutcome;
+            const { scope, scopeID, hostAssigned } = scopeOutcome;
             const unboundedDenial = await this.refuseUnboundedScopeInScopedRun(agent, skill, scope, query, params, startTime);
             if (unboundedDenial) return unboundedDenial;
 
             // 3. User-side permission check (Phase 2A) + Read-level gate, with denial logging — then the same
             // gate for every reader of the run's audience: a room may search a scope only if each of them may.
-            const permDenial = await this.enforceUserPermission(agent, skill, scopeID, query, params, startTime, tenant.primaryScopeRecordID);
+            const permDenial = await this.enforceUserPermission(agent, skill, scopeID, query, params, startTime, tenant.primaryScopeRecordID, hostAssigned);
             if (permDenial) return permDenial;
-            const audienceDenial = await this.enforceAudiencePermission(agent, skill, scopeID, query, params, startTime, tenant.primaryScopeRecordID);
+            const audienceDenial = await this.enforceAudiencePermission(agent, skill, scopeID, query, params, startTime, tenant.primaryScopeRecordID, hostAssigned);
             if (audienceDenial) return audienceDenial;
 
             // 4. Run the search (sync or streaming) under the tenant resolved in 1c
             const exec = await this.searchUnderTenant(params, { query, agent, scope, scopeID, skillID: skill?.ID ?? undefined, tenant });
             if ('result' in exec) return exec.result;
 
-            // 5. Build the success response (no SourceCounts for a room: they are counted before the audience pass)
-            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, params.Audience !== undefined);
+            // 5. Build the success response (no SourceCounts for a room or structural common-reach audience:
+            // they are counted before the audience pass)
+            const underAudience = params.Audience !== undefined || params.IsStructuralAudience === true;
+            return this.buildSuccessResult(exec.sr, scope, scopeID, exec.progressEvents, underAudience);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`ScopedSearchAction error: ${msg}`);
@@ -236,7 +247,8 @@ export class ScopedSearchAction extends BaseAction {
         | { ok: true; query: string; agent: MJAIAgentEntity }
         | { ok: false; result: ActionResultSimple }
     > {
-        const query = this.getStringParam(params, "query");
+        const rawQuery = this.getStringParam(params, "query");
+        const query = rawQuery ? NormalizeScopedSearchQuery(rawQuery) : undefined;
         if (!query) {
             return { ok: false, result: this.createErrorResult("Query parameter is required", "MISSING_QUERY") };
         }
@@ -282,10 +294,10 @@ export class ScopedSearchAction extends BaseAction {
         startTime: number,
         aiSkillID: string | undefined,
     ): Promise<
-        | { ok: true; scope: MJSearchScopeEntity | undefined; scopeID: string | undefined }
+        | { ok: true; scope: MJSearchScopeEntity | undefined; scopeID: string | undefined; hostAssigned: boolean }
         | { ok: false; result: ActionResultSimple }
     > {
-        const scopeResolution = await this.resolveScope(agent, requestedScopeID);
+        const scopeResolution = await this.resolveScope(agent, requestedScopeID, params.RunScope?.SearchScopeIDs ?? null);
         if (!scopeResolution.success) {
             if (scopeResolution.errorCode === 'ACCESS_DENIED') {
                 await SearchEngine.Instance.LogForbiddenSearch({
@@ -304,7 +316,7 @@ export class ScopedSearchAction extends BaseAction {
             }
             return { ok: false, result: this.createErrorResult(scopeResolution.errorMessage!, scopeResolution.errorCode!) };
         }
-        return { ok: true, scope: scopeResolution.scope, scopeID: scopeResolution.scopeID };
+        return { ok: true, scope: scopeResolution.scope, scopeID: scopeResolution.scopeID, hostAssigned: scopeResolution.hostAssigned === true };
     }
 
     /**
@@ -333,9 +345,12 @@ export class ScopedSearchAction extends BaseAction {
             AISkillID: skill?.ID ?? null,
             PrimaryScopeRecordID: params.RunScope ? this.runTenantID(params.RunScope) ?? null : null,
         });
+        // In a host run every other ScopeID is refused, so "pass another scope" would send the model in circles
+        const advice = params.RunScope?.SearchScopeIDs?.length
+            ? "The run's host assigned this scope, and no other can be searched in this run."
+            : 'Pass a ScopeID for a scope that is bounded to the tenant.';
         return this.createErrorResult(
-            `This agent run is scoped to a tenant, and ${which} would search across every tenant. `
-                + 'Pass a ScopeID for a scope that is bounded to the tenant.',
+            `This agent run is scoped to a tenant, and ${which} would search across every tenant. ${advice}`,
             'INVALID_PARAM',
         );
     }
@@ -357,6 +372,7 @@ export class ScopedSearchAction extends BaseAction {
         params: RunActionParams,
         startTime: number,
         primaryScopeRecordID: string | undefined,
+        hostAssigned: boolean,
     ): Promise<ActionResultSimple | null> {
         if (!scopeID) {
             // No scope resolved, so there is nothing for the per-scope rules to judge. Unchanged for
@@ -399,6 +415,7 @@ export class ScopedSearchAction extends BaseAction {
             Skill: skill,
             PrimaryScopeRecordID: primaryScopeRecordID ?? null,
             ContextUser: params.ContextUser,
+            HostAssigned: hostAssigned,
         });
         if (!verdict.Allowed) {
             LogStatusEx({
@@ -496,6 +513,7 @@ export class ScopedSearchAction extends BaseAction {
         params: RunActionParams,
         startTime: number,
         primaryScopeRecordID: string | undefined,
+        hostAssigned: boolean,
     ): Promise<ActionResultSimple | null> {
         const readers = Array.isArray(params.Audience?.Readers) ? params.Audience.Readers : [];
         if (!scopeID || readers.length === 0) return null;
@@ -503,6 +521,7 @@ export class ScopedSearchAction extends BaseAction {
         const verdicts = await Promise.all(readers.map(reader => resolver.ResolveEffectivePermission({
             User: reader, SearchScopeID: scopeID, Agent: agent, Skill: skill,
             PrimaryScopeRecordID: primaryScopeRecordID ?? null, ContextUser: params.ContextUser,
+            HostAssigned: hostAssigned,
         })));
         const refused = readers
             .map((reader, i) => ({ reader, verdict: verdicts[i] }))
@@ -562,6 +581,7 @@ export class ScopedSearchAction extends BaseAction {
             secondaryScopes: tenant.secondaryScopes,
             aiSkillID: skillID,
             audience: params.Audience,
+            underAudience: params.Audience !== undefined || params.IsStructuralAudience === true,
         });
     }
 
@@ -583,6 +603,7 @@ export class ScopedSearchAction extends BaseAction {
         secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
         aiSkillID: string | undefined;
         audience: SearchAudience | undefined;
+        underAudience: boolean;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
         // Construct a SearchContext only when the caller supplied at least
         // one runtime dimension. Leaving it undefined preserves the existing
@@ -643,7 +664,7 @@ export class ScopedSearchAction extends BaseAction {
             } else if (ev.phase === 'error') {
                 errorMsg = ev.error;
             }
-            const progress = this.progressEventFor(ev, input.audience !== undefined);
+            const progress = this.progressEventFor(ev, input.underAudience);
             if (progress) progressEvents.push(progress);
         }
         if (errorMsg || !finalEvent) {
@@ -721,8 +742,14 @@ export class ScopedSearchAction extends BaseAction {
 
     private async resolveScope(
         agent: MJAIAgentEntity,
-        requestedScopeID: string | undefined
+        requestedScopeID: string | undefined,
+        hostScopeIDs: readonly string[] | null,
     ): Promise<ScopeResolutionResult> {
+        // THE RUN'S HOST DECIDES WHAT THE RUN MAY SEARCH. When it assigned scopes, only those are searchable — the
+        // agent's own SearchScopeAccess and assigned list neither refuse nor widen — and the user's grant is still checked.
+        if (hostScopeIDs && hostScopeIDs.length > 0) {
+            return this.resolveScopeFromHost(requestedScopeID, hostScopeIDs);
+        }
         const access = agent.SearchScopeAccess;
         if (access === 'None') {
             return {
@@ -777,6 +804,21 @@ export class ScopedSearchAction extends BaseAction {
             };
         }
         return this.lookupActiveScope(def.SearchScopeID, `Default scope "${def.SearchScopeID}" is not active.`);
+    }
+
+    /**
+     * Host-assigned path: a requested scope must be one the host assigned; with none requested, the host's first.
+     */
+    private resolveScopeFromHost(requestedScopeID: string | undefined, hostScopeIDs: readonly string[]): ScopeResolutionResult {
+        if (requestedScopeID && !hostScopeIDs.some((id) => UUIDsEqual(id, requestedScopeID))) {
+            return {
+                success: false,
+                errorCode: 'ACCESS_DENIED',
+                errorMessage: `Scope "${requestedScopeID}" is not one of the scopes this run's host assigned; omit ScopeID to search the assigned scope.`,
+            };
+        }
+        const resolved = this.lookupActiveScope(requestedScopeID ?? hostScopeIDs[0]);
+        return resolved.success ? { ...resolved, hostAssigned: true } : resolved;
     }
 
     /**
@@ -907,9 +949,21 @@ export class ScopedSearchAction extends BaseAction {
         return undefined;
     }
 
-    /** Load the skill principal. Mirrors loadAgent; null when it cannot be loaded. */
+    /**
+     * Load the skill principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the skill definition row, which is safe because a skill principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadSkill(skillID: string, contextUser: UserInfo): Promise<MJAISkillEntity | null> {
         try {
+            try {
+                await AIEngine.Instance.Config(false, contextUser);
+                const cached = AIEngine.Instance.Skills?.find(s => UUIDsEqual(s.ID, skillID));
+                if (cached) return cached;
+            } catch {
+                // Fall back to direct entity load if AIEngine cache is unavailable
+            }
             const md = new Metadata(); // global-provider-ok: same rationale as loadAgent below
             const entity = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
             const loaded = await entity.Load(skillID);
@@ -922,8 +976,21 @@ export class ScopedSearchAction extends BaseAction {
         }
     }
 
+    /**
+     * Load the agent principal from AIEngine's shared metadata cache first, falling back to direct
+     * entity load; returns null when it cannot be loaded. Reading from AIEngine skips the per-user
+     * `entity.Load` read check on the agent definition row, which is safe because an agent principal
+     * only narrows search scope rather than widening data access.
+     */
     private async loadAgent(agentID: string, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         try {
+            try {
+                await AIEngine.Instance.Config(false, contextUser);
+                const cached = AIEngine.Instance.Agents?.find(a => UUIDsEqual(a.ID, agentID));
+                if (cached) return cached;
+            } catch {
+                // Fall back to direct entity load if AIEngine cache is unavailable
+            }
             const md = new Metadata(); // global-provider-ok: BaseAction has no bound IMetadataProvider; contextUser is the per-request scope
             const entity = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
             const loaded = await entity.Load(agentID);
@@ -1072,7 +1139,10 @@ export class ScopedSearchAction extends BaseAction {
             MatchedAt: item.MatchedAt instanceof Date
                 ? item.MatchedAt.toISOString()
                 : String(item.MatchedAt),
-            RawMetadata: item.RawMetadata
+            RawMetadata: item.RawMetadata,
+            ...(item.OriginatingScopeID !== undefined ? { OriginatingScopeID: item.OriginatingScopeID } : {}),
+            ...(item.OriginatingScopeName !== undefined ? { OriginatingScopeName: item.OriginatingScopeName } : {}),
+            ...(item.OriginatingScopes !== undefined ? { OriginatingScopes: item.OriginatingScopes } : {}),
         }));
     }
 
@@ -1180,6 +1250,8 @@ interface ScopeResolutionResult {
     success: boolean;
     scope?: MJSearchScopeEntity;
     scopeID?: string;
+    /** True when the scope came from the run's host-assigned list (RunScope.SearchScopeIDs). */
+    hostAssigned?: boolean;
     errorCode?: string;
     errorMessage?: string;
 }

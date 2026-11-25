@@ -230,3 +230,45 @@ describe('StartBridgeOrphanReconciliation', () => {
         expect(runView.mock.calls[0][1]).toBe(user);
     });
 });
+
+describe('StartBridgeOrphanReconciliation with agentSessions.bridgeReconciler settings', () => {
+    const HOUR = 60 * 60_000;
+    afterEach(() => {
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    it('enabled: reconciles now, then on the configured interval', async () => {
+        vi.useFakeTimers();
+        const reconcile = vi.spyOn(AIBridgeEngine.Instance, 'ReconcileOrphans').mockResolvedValue(0);
+        const { provider } = bridgeTable([]);
+
+        StartBridgeOrphanReconciliation(provider, user, { enabled: true, sweepIntervalMs: 120_000 });
+        await vi.advanceTimersByTimeAsync(6 * 60_000);
+
+        expect(reconcile).toHaveBeenCalledTimes(4); // now + every 2 minutes
+    });
+
+    it('disabled: reconciles once now and never again', async () => {
+        vi.useFakeTimers();
+        const reconcile = vi.spyOn(AIBridgeEngine.Instance, 'ReconcileOrphans').mockResolvedValue(0);
+        const { provider } = bridgeTable([]);
+
+        StartBridgeOrphanReconciliation(provider, user, { enabled: false, sweepIntervalMs: 600_000 });
+        await vi.advanceTimersByTimeAsync(HOUR);
+
+        expect(reconcile).toHaveBeenCalledTimes(1);
+        expect(reconcile.mock.calls[0][0]).toBe(user);
+    });
+
+    it('with no settings keeps the shipped 10-minute repeat', async () => {
+        vi.useFakeTimers();
+        const reconcile = vi.spyOn(AIBridgeEngine.Instance, 'ReconcileOrphans').mockResolvedValue(0);
+        const { provider } = bridgeTable([]);
+
+        StartBridgeOrphanReconciliation(provider, user);
+        await vi.advanceTimersByTimeAsync(HOUR);
+
+        expect(reconcile).toHaveBeenCalledTimes(7);
+    });
+});

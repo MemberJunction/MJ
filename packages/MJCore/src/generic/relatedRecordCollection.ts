@@ -23,7 +23,7 @@
  * @module @memberjunction/core
  */
 
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import type { BaseEntity } from './baseEntity';
 import { BaseEngineRegistry } from './baseEngineRegistry';
 import { IsVerboseLoggingEnabled, LogStatus } from './logging';
@@ -31,9 +31,11 @@ import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
-import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
+import { EntityFieldInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
 import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
+import type { UserInfo } from './securityInfo';
 import { LogError } from './logging';
+import { AssertClientInputWritableForUser, OmitFieldsUnreadableByActiveUser } from './entityValueFieldSecurity';
 
 /**
  * When a child collection populates itself from the database.
@@ -219,9 +221,27 @@ export type RelatedRecordCollectionWire = {
  * ```
  */
 export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends EntityCompanion<RelatedRecordCollectionWire> {
+    /**
+     * Lazy per-donor-array index keyed by join field then normalized parent key so repeated
+     * cached lookups (e.g. N parents sharing one cached entity engine array) are O(1) instead
+     * of O(M) full-array scans. Uses a WeakMap so stale engine arrays are GC'd automatically,
+     * and invalidates whenever array length or boundary elements change on in-place mutation.
+     */
+    private static readonly _donorJoinIndex = new WeakMap<
+        readonly BaseEntity[],
+        {
+            length: number;
+            first: BaseEntity | undefined;
+            last: BaseEntity | undefined;
+            byJoinField: Map<string, Map<string, BaseEntity[]>>;
+        }
+    >();
+
     private items: T[] = [];
     private removed: T[] = [];
     private loaded = false;
+    /** True while {@link items} are an engine's own cached instances rather than records this collection owns. */
+    private sharesEngineInstances = false;
     private readonly options: RelatedRecordCollectionOptions;
 
     /**
@@ -287,6 +307,14 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
     /** When this collection populates itself. */
     public get LoadMode(): RelatedRecordLoadMode {
         return this.options.Load ?? 'explicit';
+    }
+
+    /**
+     * The automatic sequence numbering this collection applies, if declared. When set, every
+     * `Add`/`Create`/`Remove` renumbers the children's sequence field from their position.
+     */
+    public get SequenceOptions(): Readonly<RelatedRecordSequence> | undefined {
+        return this.options.Sequence;
     }
 
     /** What removal means for this collection. */
@@ -539,7 +567,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (this.Source === 'cache') {
             const cached = this.findCachedRecords();
             if (cached) {
-                this.SetLoadedItems(this.IsReadOnly ? cached : await this.copyRecords(cached));
+                await this.adoptCachedRecords(cached);
                 return;
             }
         }
@@ -567,9 +595,12 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             );
         }
 
-        this.items = result.Results ?? [];
+        // A copy: a RunView served from a cache slot can hand back a frozen array, and the
+        // collection appends to and removes from its own list.
+        this.items = [...(result.Results ?? [])];
         this.removed = [];
         this.loaded = true;
+        this.sharesEngineInstances = false;
     }
 
     /** @inheritdoc */
@@ -588,9 +619,39 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @param items - The children belonging to this parent.
      */
     public SetLoadedItems(items: T[]): void {
-        this.items = items ?? [];
+        this.items = [...(items ?? [])];
         this.removed = [];
         this.loaded = true;
+        this.sharesEngineInstances = false;
+    }
+
+    /** Fills the collection from an engine's cached records: shared when read-only, copied otherwise. */
+    private async adoptCachedRecords(cached: T[]): Promise<void> {
+        if (this.IsReadOnly) {
+            this.adoptEngineInstances(cached);
+        } else {
+            this.SetLoadedItems(await this.copyRecords(cached));
+        }
+    }
+
+    /** Fills the collection with an engine's own instances, which it must never change. */
+    private adoptEngineInstances(records: T[]): void {
+        this.SetLoadedItems(records);
+        this.sharesEngineInstances = true;
+    }
+
+    /**
+     * Gives every loaded child, and every child pending removal, the owner's new user, which
+     * narrows what each holds to that user. A read-only cache collection's children are the
+     * engine's own instances, shared with every other reader, so they are left as they are.
+     */
+    public override OnOwnerContextUserChanged(user: UserInfo): void {
+        if (this.sharesEngineInstances) {
+            return;
+        }
+        for (const child of [...this.items, ...this.removed]) {
+            child.ContextCurrentUser = user;
+        }
     }
 
     /**
@@ -646,7 +707,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (!cached) {
             return false;
         }
-        this.SetLoadedItems(this.IsReadOnly ? cached : await this.copyRecords(cached));
+        await this.adoptCachedRecords(cached);
         return true;
     }
 
@@ -693,10 +754,10 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
         const joinField = this.RelatedEntityJoinField;
         const records = current as T[];
-        const mine = records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
+        const mine = this.filterAndSortCachedRecords(records, joinField, String(parentKey));
         this.cacheDonor.array = records as unknown[];
         this.cacheDonor.length = records.length;
-        this.SetLoadedItems(this.sortLikeOrderBy(mine));
+        this.adoptEngineInstances(mine);
     }
 
     /**
@@ -814,7 +875,7 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         if (!cached) {
             return false;
         }
-        this.SetLoadedItems(cached);
+        this.adoptEngineInstances(cached);
         return true;
     }
 
@@ -857,8 +918,52 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         }
 
         const joinField = this.RelatedEntityJoinField;
-        const mine = donor.records.filter(r => UUIDsEqual(String(r.Get(joinField) ?? ''), String(parentKey)));
-        return this.sortLikeOrderBy(mine);
+        return this.filterAndSortCachedRecords(donor.records as T[], joinField, String(parentKey));
+    }
+
+    /**
+     * Looks up cached donor rows matching `joinField === parentKey` in O(1) using the
+     * lazily built WeakMap index keyed by `(records array -> joinField -> NormalizeUUID(fk))`,
+     * then returns a sorted defensive copy via {@link sortLikeOrderBy}.
+     */
+    private filterAndSortCachedRecords(records: readonly T[], joinField: string, parentKey: string): T[] {
+        const recordCount = records.length;
+        let cacheEntry = RelatedRecordCollection._donorJoinIndex.get(records);
+        const first = recordCount > 0 ? records[0] : undefined;
+        const last = recordCount > 0 ? records[recordCount - 1] : undefined;
+        if (
+            !cacheEntry ||
+            cacheEntry.length !== recordCount ||
+            cacheEntry.first !== first ||
+            cacheEntry.last !== last
+        ) {
+            cacheEntry = {
+                length: recordCount,
+                first,
+                last,
+                byJoinField: new Map<string, Map<string, BaseEntity[]>>(),
+            };
+            RelatedRecordCollection._donorJoinIndex.set(records, cacheEntry);
+        }
+
+        let fieldBuckets = cacheEntry.byJoinField.get(joinField);
+        if (!fieldBuckets) {
+            fieldBuckets = new Map<string, BaseEntity[]>();
+            for (let i = 0; i < recordCount; i++) {
+                const record = records[i];
+                const normalizedKey = NormalizeUUID(String(record.Get(joinField) ?? ''));
+                let bucket = fieldBuckets.get(normalizedKey);
+                if (!bucket) {
+                    bucket = [];
+                    fieldBuckets.set(normalizedKey, bucket);
+                }
+                bucket.push(record);
+            }
+            cacheEntry.byJoinField.set(joinField, fieldBuckets);
+        }
+
+        const mine = fieldBuckets.get(NormalizeUUID(parentKey));
+        return this.sortLikeOrderBy(mine ? (mine.slice() as T[]) : []);
     }
 
     /**
@@ -1151,7 +1256,9 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             const companions = i.HasCompanions ? await i.SerializeCompanions(mode) : [];
             items.push({
                 EntityName: i.EntityInfo?.Name ?? this.RelatedEntityName,
-                Fields: i.GetAll(),
+                // Without the fields the child's user may not read: the receiving tier refuses a
+                // restricted caller's input that names one.
+                Fields: OmitFieldsUnreadableByActiveUser(i, i.GetAll()),
                 IsNew: !i.IsSaved,
                 Companions: companions.length > 0 ? companions : null,
             });
@@ -1178,6 +1285,8 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         // is simply absent from it.
         this.removed = mode === 'request' ? await this.rehydrateRemovals(provider, data?.Removed ?? []) : [];
         this.loaded = true;
+        // The rehydrated children are this collection's own, never an engine's shared instances.
+        this.sharesEngineInstances = false;
     }
 
     /**
@@ -1199,11 +1308,39 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
         rows: RelatedRecordCollectionWireItem[],
         mode: EntityCompanionDeserializeMode,
     ): Promise<T[]> {
-        const out: T[] = [];
+        if (rows.length === 0) {
+            return [];
+        }
+
+        interface PreparedItem {
+            row: RelatedRecordCollectionWireItem;
+            entityName: string;
+            child: T;
+            key: CompositeKey | null;
+        }
+
+        const prepared: PreparedItem[] = [];
+        const existingTargets: Array<{ child: T; entityName: string; key: CompositeKey; fieldsForKey: Record<string, unknown> }> = [];
+
         for (const row of rows) {
             const entityName = row.EntityName || this.RelatedEntityName;
             const child = await provider.GetEntityObject<T>(entityName, this.Owner.ContextCurrentUser);
 
+            if (mode === 'result' || row.IsNew) {
+                prepared.push({ row, entityName, child, key: null });
+            } else {
+                const key = new CompositeKey(
+                    child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row.Fields[pk.Name])),
+                );
+                prepared.push({ row, entityName, child, key });
+                existingTargets.push({ child, entityName, key, fieldsForKey: row.Fields });
+            }
+        }
+
+        const { prefetchedRows, batchedChildren } = await this.prefetchExistingRows(provider, existingTargets);
+
+        const out: T[] = [];
+        for (const { row, entityName, child, key } of prepared) {
             if (mode === 'result') {
                 // Authoritative post-save state: adopt it verbatim and land clean. No query — the
                 // sender just persisted these rows and is telling us what they now contain.
@@ -1215,29 +1352,32 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 continue;
             }
 
+            // A request carries client input: a caller with any field denial may send only the
+            // fields they can read. A no-op without a context user (no server-side caller).
+            AssertClientInputWritableForUser(child.EntityInfo, row.Fields, this.Owner.ContextCurrentUser);
+
             if (row.IsNew) {
                 child.NewRecord();
                 child.SetMany(row.Fields, true);
             } else {
-                // AN EXISTING CHILD MUST BE LOADED BEFORE THE WIRE VALUES ARE APPLIED.
-                //
-                // The tempting shortcut — LoadFromData(row, replaceOldValues: true) — sets each
-                // field's OLD value to the value that arrived over the wire. The record then reports
-                // Dirty === false, its Save() takes the not-dirty early return, and the caller's edit
-                // is silently discarded while every layer reports success.
-                //
-                // Loading first gives genuine old values, so dirty tracking is accurate and the
-                // old-values concurrency check has something real to compare against. It costs one
-                // query per edited child; correctness first, and a batched variant can follow.
-                const key = new CompositeKey(
-                    child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row.Fields[pk.Name])),
-                );
-                const loaded = await child.InnerLoad(key);
-                if (!loaded) {
+                // AN EXISTING CHILD MUST BE LOADED BEFORE THE WIRE VALUES ARE APPLIED so dirty
+                // tracking and old-values concurrency checks have genuine DB values to compare against.
+                const prefetched = prefetchedRows.get(child);
+                if (prefetched) {
+                    await child.HydrateFromRow(prefetched, key!);
+                } else if (batchedChildren.has(child)) {
                     throw new Error(
                         `RelatedRecordCollection '${this.Name}': cannot load existing ${entityName} ` +
-                        `record ${key.ToString()} referenced by the incoming payload.`,
+                        `record ${key!.ToString()} referenced by the incoming payload.`,
                     );
+                } else {
+                    const loaded = await child.InnerLoad(key!);
+                    if (!loaded) {
+                        throw new Error(
+                            `RelatedRecordCollection '${this.Name}': cannot load existing ${entityName} ` +
+                            `record ${key!.ToString()} referenced by the incoming payload.`,
+                        );
+                    }
                 }
                 child.SetMany(row.Fields, true);
             }
@@ -1263,18 +1403,160 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
      * @returns Loaded child entities to delete.
      */
     private async rehydrateRemovals(provider: IMetadataProvider, rows: Record<string, unknown>[]): Promise<T[]> {
-        const out: T[] = [];
+        if (rows.length === 0) {
+            return [];
+        }
+
+        const targets: Array<{ child: T; entityName: string; key: CompositeKey; fieldsForKey: Record<string, unknown> }> = [];
         for (const row of rows) {
             const entityName = (row['__entityName'] as string) || this.RelatedEntityName;
             const child = await provider.GetEntityObject<T>(entityName, this.Owner.ContextCurrentUser);
             const key = new CompositeKey(
                 child.EntityInfo.PrimaryKeys.map(pk => new KeyValuePair(pk.Name, row[pk.Name])),
             );
-            if (await child.InnerLoad(key)) {
-                out.push(child);
+            targets.push({ child, entityName, key, fieldsForKey: row });
+        }
+
+        const { prefetchedRows, batchedChildren } = await this.prefetchExistingRows(provider, targets);
+
+        const out: T[] = [];
+        for (const { child, key } of targets) {
+            const prefetched = prefetchedRows.get(child);
+            if (prefetched) {
+                if (await child.HydrateFromRow(prefetched, key)) {
+                    out.push(child);
+                }
+            } else if (!batchedChildren.has(child)) {
+                if (await child.InnerLoad(key)) {
+                    out.push(child);
+                }
             }
         }
         return out;
+    }
+
+    /**
+     * Batch-loads existing rows by primary key via chunked `RunView` queries so wire deserialization
+     * of N edited/removed children costs O(1) queries per entity type instead of N serial `InnerLoad` calls.
+     * Falls back per-entity whenever `RunView` is unavailable, a subclass overrides `InnerLoad`, or a
+     * group has fewer than 2 eligible rows.
+     */
+    private async prefetchExistingRows(
+        provider: IMetadataProvider,
+        targets: Array<{ child: T; entityName: string; key: CompositeKey; fieldsForKey: Record<string, unknown> }>,
+    ): Promise<{ prefetchedRows: Map<T, Record<string, unknown>>; batchedChildren: Set<T> }> {
+        const prefetchedRows = new Map<T, Record<string, unknown>>();
+        const batchedChildren = new Set<T>();
+        if (targets.length < 2) {
+            return { prefetchedRows, batchedChildren };
+        }
+
+        const rvProvider = provider as unknown as Partial<IRunViewProvider>;
+        if (typeof rvProvider.RunView !== 'function') {
+            return { prefetchedRows, batchedChildren };
+        }
+
+        const byEntity = new Map<string, typeof targets>();
+        for (const target of targets) {
+            let list = byEntity.get(target.entityName);
+            if (!list) {
+                list = [];
+                byEntity.set(target.entityName, list);
+            }
+            list.push(target);
+        }
+
+        for (const [entityName, group] of byEntity) {
+            if (group.length < 2) {
+                continue;
+            }
+            const pks = group[0].child.EntityInfo?.PrimaryKeys;
+            if (!pks || pks.length === 0) {
+                continue;
+            }
+            if (!group.every(t =>
+                typeof t.child.HydrateFromRow === 'function' &&
+                !hasCustomInnerLoadOverride(t.child) &&
+                t.key.Validate()?.IsValid === true
+            )) {
+                continue;
+            }
+
+            const predicates: string[] = [];
+            let allFormattable = true;
+            for (const target of group) {
+                if (pks.length === 1) {
+                    const lit = formatPrimaryKeySQLValue(pks[0], target.fieldsForKey[pks[0].Name]);
+                    if (lit === null) {
+                        allFormattable = false;
+                        break;
+                    }
+                    predicates.push(lit);
+                } else {
+                    const parts: string[] = [];
+                    for (const pk of pks) {
+                        const lit = formatPrimaryKeySQLValue(pk, target.fieldsForKey[pk.Name]);
+                        if (lit === null) {
+                            allFormattable = false;
+                            break;
+                        }
+                        parts.push(`[${pk.Name}]=${lit}`);
+                    }
+                    if (!allFormattable) {
+                        break;
+                    }
+                    predicates.push(`(${parts.join(' AND ')})`);
+                }
+            }
+            if (!allFormattable) {
+                continue;
+            }
+
+            const chunkSize = pks.length === 1 ? 200 : 100;
+            const rowByLookupKey = new Map<string, Record<string, unknown>>();
+            let batchSucceeded = true;
+
+            for (let start = 0; start < group.length; start += chunkSize) {
+                const slicePreds = predicates.slice(start, start + chunkSize);
+                const extraFilter = pks.length === 1
+                    ? `[${pks[0].Name}] IN (${slicePreds.join(',')})`
+                    : slicePreds.join(' OR ');
+
+                const res = await rvProvider.RunView<Record<string, unknown>>(
+                    {
+                        EntityName: entityName,
+                        ExtraFilter: extraFilter,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                        SkipTotalRowCount: true,
+                        MaxRows: slicePreds.length,
+                        IgnoreMaxRows: true,
+                    },
+                    this.Owner.ContextCurrentUser,
+                );
+                if (!res?.Success) {
+                    batchSucceeded = false;
+                    break;
+                }
+                for (const row of res.Results ?? []) {
+                    rowByLookupKey.set(normalizePrimaryKeyLookup(pks, row), row);
+                }
+            }
+
+            if (!batchSucceeded) {
+                continue;
+            }
+
+            for (const target of group) {
+                batchedChildren.add(target.child);
+                const match = rowByLookupKey.get(normalizePrimaryKeyLookup(pks, target.fieldsForKey));
+                if (match) {
+                    prefetchedRows.set(target.child, match);
+                }
+            }
+        }
+
+        return { prefetchedRows, batchedChildren };
     }
 
     /**
@@ -1357,4 +1639,60 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
             }
         }
     }
+}
+
+/** True when `entity` or a subclass above `BaseEntity` overrides `InnerLoad`. */
+function hasCustomInnerLoadOverride(entity: BaseEntity): boolean {
+    if (Object.prototype.hasOwnProperty.call(entity, 'InnerLoad')) {
+        return true;
+    }
+    let proto: object | null = Object.getPrototypeOf(entity);
+    while (proto && proto !== Object.prototype) {
+        const parent: object | null = Object.getPrototypeOf(proto);
+        if (
+            Object.prototype.hasOwnProperty.call(proto, 'InnerLoad') &&
+            parent !== null &&
+            'InnerLoad' in parent
+        ) {
+            return true;
+        }
+        proto = parent;
+    }
+    return false;
+}
+
+/** Formats a primary-key value safely for a SQL `ExtraFilter` predicate, or returns `null` to fall back to `InnerLoad`. */
+function formatPrimaryKeySQLValue(pkField: EntityFieldInfo, value: unknown): string | null {
+    if (value === null || value === undefined) {
+        return null;
+    }
+    if (!pkField.NeedsQuotes) {
+        const trimmed = String(value).trim();
+        return /^-?\d+(\.\d+)?$/.test(trimmed) ? trimmed : null;
+    }
+    return `'${EscapeSQLString(String(value))}'`;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Builds a case/format-normalized composite lookup key for matching wire PKs to `RunView` rows. */
+function normalizePrimaryKeyLookup(pks: EntityFieldInfo[], record: Record<string, unknown>): string {
+    if (pks.length === 1) {
+        const raw = record[pks[0].Name];
+        if (raw === null || raw === undefined) {
+            return '';
+        }
+        const str = String(raw);
+        return (pks[0].IsUniqueIdentifier || UUID_PATTERN.test(str)) ? NormalizeUUID(str) : str;
+    }
+    return pks
+        .map((pk) => {
+            const raw = record[pk.Name];
+            if (raw === null || raw === undefined) {
+                return '';
+            }
+            const str = String(raw);
+            return (pk.IsUniqueIdentifier || UUID_PATTERN.test(str)) ? NormalizeUUID(str) : str;
+        })
+        .join('\u0000');
 }

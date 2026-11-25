@@ -7,6 +7,8 @@
  */
 import { DataSnapshot, DataTable, NormalizeToTables } from '@memberjunction/core';
 
+type NormalizeToTablesInput = Parameters<typeof NormalizeToTables>[0];
+
 /**
  * Shape of a DataArtifactSpec that the data viewer works with.
  * Only the fields relevant to snapshot creation are required.
@@ -14,7 +16,7 @@ import { DataSnapshot, DataTable, NormalizeToTables } from '@memberjunction/core
 interface DataArtifactSpecLike {
   title?: string;
   columns?: { field: string; headerName?: string; sqlBaseType?: string }[];
-  rows?: Record<string, unknown>[];
+  rows?: DataTable['rows'];
 }
 
 /**
@@ -24,13 +26,13 @@ interface DataArtifactSpecLike {
 export function CreateJsonSnapshot(content: string | null, title: string | null): DataSnapshot | null {
   if (!content) return null;
   try {
-    const parsed = JSON.parse(content) as Record<string, unknown>;
+    const parsed = JSON.parse(content) as DataSnapshot['custom'];
     const snap = new DataSnapshot();
     snap.title = title ?? undefined;
     if (typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)) {
       snap.interpretation = `JSON artifact with ${Object.keys(parsed).length} top-level keys.`;
     }
-    snap.custom = parsed as Record<string, unknown>;
+    snap.custom = parsed;
     return snap;
   } catch {
     return null;
@@ -102,7 +104,7 @@ export function buildMultiTableSql(tables: DataTable[]): string | null {
 export function CreateDataSnapshot(spec: DataArtifactSpecLike | null): DataSnapshot | null {
   if (!spec) return null;
   const tableName = spec.title || 'Results';
-  const tables = NormalizeToTables(spec as Record<string, unknown>, tableName);
+  const tables = NormalizeToTables(spec as NormalizeToTablesInput, tableName);
   return DataSnapshot.FromTables(tables, spec.title);
 }
 

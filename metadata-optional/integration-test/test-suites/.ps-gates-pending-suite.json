@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Pending",
+      "Description": "Gates that do not block a merge. G0.6 (W1 -> S9.3) is an LLM judge whose verdict can differ between runs on the same text; it needs AI_VENDOR_API_KEY__GeminiLLM set, runs unless RUN_AGENT_TESTS=0 (the live-model tier is on by default), and needs RUN_MUTATION_TESTS=1 because it trains and promotes a model. Needs MJAPI and the truth sidecar running and `pnpm run truth:provision` done. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Pending\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> S9.3",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A92C508-08AB-4054-90AF-23FF25FB293D"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "09E4ED3C-BF42-4EE4-AF0A-CE284458A7CD"
+    }
+  }
+]

@@ -14,6 +14,8 @@ import {
     ChoiceAnswer,
     ChoiceQuestion,
     DecisionAnswer,
+    DecisionMedia,
+    DecisionMediaType,
     DecisionParams,
     DecisionQuestion,
     DecisionResult,
@@ -54,6 +56,32 @@ export abstract class BaseDecision extends BaseModel {
      */
     constructor(apiKey: string) {
         super(apiKey);
+    }
+
+    /**
+     * The media types this driver's model reads alongside the text state. Empty by default: a text-only
+     * driver refuses any request that carries media, so the runner fails over to a model that reads it.
+     * Override in a driver whose API takes media.
+     */
+    public get SupportedMediaTypes(): readonly DecisionMediaType[] {
+        return [];
+    }
+
+    /**
+     * Why this driver cannot take the request's media, or undefined when it can (or there is none).
+     * @param media The request's media.
+     */
+    public DescribeUnsupportedMedia(media: readonly DecisionMedia[] | null | undefined): string | undefined {
+        if (!media || media.length === 0) {
+            return undefined;
+        }
+        const supported = new Set<string>(this.SupportedMediaTypes);
+        const unsupported = [...new Set(media.map(m => m?.Type).filter(t => !supported.has(t)))];
+        if (unsupported.length === 0) {
+            return undefined;
+        }
+        const reads = this.SupportedMediaTypes.length > 0 ? `reads only ${this.SupportedMediaTypes.join(', ')}` : 'reads text only';
+        return `${this.constructor.name} ${reads}, not ${unsupported.join(', ')}`;
     }
 
     /**
@@ -150,6 +178,7 @@ export abstract class BaseDecision extends BaseModel {
 
         errors.push(...this.validateState(params.State));
         errors.push(...this.validateQuestions(params.Questions));
+        errors.push(...this.validateMedia(params.Media));
         return errors;
     }
 
@@ -170,6 +199,43 @@ export abstract class BaseDecision extends BaseModel {
             return [];
         }
         return ['State must be a non-empty string once trimmed, or an object with at least one key'];
+    }
+
+    /**
+     * Validates the optional media: each item a known type this driver reads, with a MIME type and
+     * exactly one of `Data` or `URI`.
+     */
+    private validateMedia(media: unknown): string[] {
+        if (media === undefined || media === null) {
+            return [];
+        }
+        if (!Array.isArray(media)) {
+            return ['Media must be an array'];
+        }
+        const errors: string[] = [];
+        media.forEach((item: unknown, index: number) => {
+            if (!item || typeof item !== 'object') {
+                errors.push(`Media ${index}: must be an object`);
+                return;
+            }
+            const m = item as Record<string, unknown>;
+            if (!['image', 'audio', 'video', 'document'].includes(String(m.Type))) {
+                errors.push(`Media ${index}: unknown Type '${String(m.Type)}'`);
+            }
+            if (typeof m.MimeType !== 'string' || m.MimeType.trim().length === 0) {
+                errors.push(`Media ${index}: MimeType must be a non-empty string`);
+            }
+            const hasData = typeof m.Data === 'string' && m.Data.length > 0;
+            const hasURI = typeof m.URI === 'string' && m.URI.trim().length > 0;
+            if (hasData === hasURI) {
+                errors.push(`Media ${index}: give exactly one of Data or URI`);
+            }
+        });
+        const unsupported = errors.length === 0 ? this.DescribeUnsupportedMedia(media as DecisionMedia[]) : undefined;
+        if (unsupported) {
+            errors.push(unsupported);
+        }
+        return errors;
     }
 
     /**

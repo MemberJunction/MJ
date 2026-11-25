@@ -20,11 +20,16 @@ export class MJCommunicationProviderFormComponent extends BaseFormComponent {
             { sectionKey: 'providerDetails', sectionName: 'Provider Details', isExpanded: true },
             { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
             { sectionKey: 'advancedCapabilities', sectionName: 'Advanced Capabilities', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJCommunicationLogs', sectionName: 'Communication Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationProviderMessageTypes', sectionName: 'Message Types', isExpanded: false },
             { sectionKey: 'mJCalendarSyncStates', sectionName: 'Calendar Sync States', isExpanded: false },
-            { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false }
+            { sectionKey: 'mJCalendarEventLinks', sectionName: 'Calendar Event Links', isExpanded: false },
+            { sectionKey: 'mJCommunicationProviderEvents', sectionName: 'Communication Provider Events', isExpanded: false },
+            { sectionKey: 'mJCommunicationActivities', sectionName: 'Communication Activities', isExpanded: false },
+            { sectionKey: 'mJCommunicationSendingDomains', sectionName: 'Communication Sending Domains', isExpanded: false },
+            { sectionKey: 'mJCommunicationSenders', sectionName: 'Communication Senders', isExpanded: false }
         ]);
     }
 }

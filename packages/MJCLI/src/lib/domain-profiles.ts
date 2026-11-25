@@ -43,6 +43,10 @@ export const DEFAULT_DOMAIN_PROFILE: DomainProfile = {
  * `RegisterUsage` is first-wins and reads plugin metadata first.
  */
 export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
+  agent: {
+    Summary: 'Initialize a Citizen Agent Builder environment with Docker setup.',
+    Runtime: { class: 'slow', typicalSeconds: 120, note: 'scaffolds files and optionally boots Docker containers' },
+  },
   codegen: {
     Summary: 'Regenerate entities, SQL, and Angular forms from the database schema.',
     Runtime: { class: 'slow', typicalSeconds: 120, note: 'scales with entity count; a full run ≫ a single-entity change' },
@@ -95,9 +99,21 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Summary: 'Generate and export AI-authored database documentation.',
     Runtime: { class: 'slow', typicalSeconds: 300, note: 'LLM-driven; scales with table and column count' },
   },
+  diag: {
+    Summary: 'Inspect, scrub, analyze, export, and generate keys for .mjdiag diagnostic bundles.',
+    Runtime: { class: 'fast', note: 'local archive verification, timeline/slow-query inspection, and trace export' },
+  },
   doctor: {
     Summary: 'Diagnose the local MJ environment and report what is misconfigured.',
     Runtime: { class: 'moderate', typicalSeconds: 15 },
+  },
+  explorer: {
+    Summary: 'Post-build tasks for MJ Explorer (service worker verification and public page HTML generation).',
+    Runtime: { class: 'fast' },
+  },
+  harness: {
+    Summary: 'Manage multi-account CLI subscription pools, balancing strategies, and cooldown controls for external agent harnesses.',
+    Runtime: { class: 'fast', note: 'local pool operations are instant; interactive login awaits user sign-in' },
   },
   install: {
     Summary: 'Install MemberJunction, or seed the Claude Code pack into a repo.',
@@ -111,9 +127,17 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
     Summary: 'Register third-party CLI plugins in mj-cli-plugins.json.',
     Runtime: { class: 'fast' },
   },
+  query: {
+    Summary: 'Refresh saved queries\' extracted parameters, fields and entities from their SQL.',
+    Runtime: { class: 'moderate', typicalSeconds: 30, note: 'scales with the number of queries; each is described on the database server' },
+  },
   querygen: {
     Summary: 'Generate, validate, and export stored queries.',
     Runtime: { class: 'slow', typicalSeconds: 120, note: 'LLM-driven generation; validation alone is fast' },
+  },
+  rubric: {
+    Summary: 'List, show, diff, validate, and evaluate versioned scoring rubrics.',
+    Runtime: { class: 'moderate', typicalSeconds: 20, note: 'validate is instant; evaluate invokes the configured evaluator' },
   },
   'sql-audit': {
     Summary: 'Audit SQL objects for drift against the metadata.',
@@ -142,6 +166,10 @@ export const DOMAIN_PROFILES: Readonly<Record<string, DomainProfile>> = {
   usage: {
     Summary: 'This progressive-disclosure surface: domains, then per-domain detail.',
     Runtime: { class: 'fast' },
+  },
+  user: {
+    Summary: 'Clone an existing or template MJ user with roles, views, or settings.',
+    Runtime: { class: 'fast', note: 'single database clone operation' },
   },
 };
 

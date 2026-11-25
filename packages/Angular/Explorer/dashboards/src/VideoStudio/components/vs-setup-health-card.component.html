@@ -1,0 +1,216 @@
+<div
+  class="vs-health-card"
+  [class.vs-health-card--healthy]="IsAllOk"
+  [class.vs-health-card--warning]="IsWarningsOnly"
+  [class.vs-health-card--unhealthy]="HasError"
+  role="status"
+  aria-live="polite"
+  data-testid="vs-setup-health-card"
+>
+  <div class="vs-health-card__bar">
+    @if (Loading && !Result) {
+      <div class="vs-health-card__summary" data-testid="vs-setup-health-loading">
+        <mj-loading [ShowText]="false" Size="small"></mj-loading>
+        <span class="vs-health-card__summary-text">Checking Video Studio setup…</span>
+      </div>
+    } @else if (IsAllOk) {
+      <button
+        type="button"
+        class="vs-health-card__toggle vs-health-card__toggle--quiet"
+        data-testid="vs-setup-health-ok-toggle"
+        [attr.aria-expanded]="Expanded"
+        (click)="ToggleExpanded()"
+      >
+        <i class="fa-solid fa-circle-check vs-health-card__icon vs-health-card__icon--ok" aria-hidden="true"></i>
+        <span class="vs-health-card__summary-text" data-testid="vs-setup-health-ok-label">Setup OK</span>
+        <i
+          class="fa-solid vs-health-card__chevron"
+          [class.fa-chevron-down]="!Expanded"
+          [class.fa-chevron-up]="Expanded"
+          aria-hidden="true"
+        ></i>
+      </button>
+    } @else if (IsWarningsOnly) {
+      <button
+        type="button"
+        class="vs-health-card__toggle vs-health-card__toggle--quiet"
+        data-testid="vs-setup-health-warnings-toggle"
+        [attr.aria-expanded]="WarningsExpanded"
+        (click)="ToggleWarningsExpanded()"
+      >
+        <i class="fa-solid fa-circle-check vs-health-card__icon vs-health-card__icon--ok" aria-hidden="true"></i>
+        <span class="vs-health-card__summary-text" data-testid="vs-setup-health-warnings-label">
+          {{ WarningsSummaryLabel }}
+        </span>
+        <i
+          class="fa-solid vs-health-card__chevron"
+          [class.fa-chevron-down]="!WarningsExpanded"
+          [class.fa-chevron-up]="WarningsExpanded"
+          aria-hidden="true"
+        ></i>
+      </button>
+    } @else if (HasError) {
+      <div class="vs-health-card__error-line" data-testid="vs-setup-health-issues-heading">
+        <i class="fa-solid fa-circle-exclamation vs-health-card__icon vs-health-card__icon--error" aria-hidden="true"></i>
+        <div class="vs-health-card__error-copy">
+          <span class="vs-health-card__error-headline" data-testid="vs-setup-health-error-headline">
+            {{ ErrorHeadline }}
+          </span>
+          @if (PrimaryErrorCheck?.Message) {
+            <span class="vs-health-card__error-message" data-testid="vs-setup-health-error-message">
+              {{ PrimaryErrorCheck?.Message }}
+            </span>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="vs-health-card__actions">
+      @if (HasError) {
+        <button
+          type="button"
+          class="vs-health-card__inline-toggle"
+          data-testid="vs-setup-health-error-details-toggle"
+          [attr.aria-expanded]="ErrorDetailsExpanded"
+          (click)="ToggleErrorDetails()"
+        >
+          <span>Details</span>
+          <i
+            class="fa-solid vs-health-card__chevron"
+            [class.fa-chevron-down]="!ErrorDetailsExpanded"
+            [class.fa-chevron-up]="ErrorDetailsExpanded"
+            aria-hidden="true"
+          ></i>
+        </button>
+      }
+
+      <mj-refresh-button
+        class="vs-health-card__recheck"
+        data-testid="vs-setup-health-recheck"
+        Variant="flat"
+        Size="sm"
+        Label="Recheck"
+        Title="Recheck"
+        [Loading]="Loading"
+        (Clicked)="OnRecheckClick()"
+      ></mj-refresh-button>
+    </div>
+  </div>
+
+  @if ((IsWarningsOnly && WarningsExpanded) || (HasError && ErrorDetailsExpanded)) {
+    <div class="vs-health-card__checks" data-testid="vs-setup-health-non-ok-list">
+      @for (check of NonOkChecks; track check.Key) {
+        <div
+          class="vs-health-card__row"
+          [class.vs-health-card__row--error]="check.Status === 'Error'"
+          [class.vs-health-card__row--warning]="check.Status === 'Warning'"
+          [attr.data-testid]="'vs-setup-health-row-' + check.Key"
+          [attr.data-status]="check.Status"
+        >
+          <i
+            [class]="IconForStatus(check.Status) + ' vs-health-card__icon vs-health-card__icon--' + check.Status.toLowerCase()"
+            aria-hidden="true"
+          ></i>
+          <div class="vs-health-card__row-body">
+            <div class="vs-health-card__row-header">
+              <span class="vs-health-card__row-title" [attr.data-testid]="'vs-setup-health-title-' + check.Key">
+                {{ check.Title }}
+              </span>
+              <span class="vs-health-card__row-message" [attr.data-testid]="'vs-setup-health-message-' + check.Key">
+                {{ check.Message }}
+              </span>
+            </div>
+            @if (HasAdminDetails(check)) {
+              <button
+                type="button"
+                class="vs-health-card__admin-toggle"
+                [attr.data-testid]="'vs-setup-health-admin-toggle-' + check.Key"
+                [attr.aria-expanded]="IsAdminDetailsOpen(check.Key)"
+                (click)="ToggleAdminDetails(check.Key)"
+              >
+                <span>Details for admins</span>
+                <i
+                  class="fa-solid vs-health-card__chevron"
+                  [class.fa-chevron-down]="!IsAdminDetailsOpen(check.Key)"
+                  [class.fa-chevron-up]="IsAdminDetailsOpen(check.Key)"
+                  aria-hidden="true"
+                ></i>
+              </button>
+              @if (IsAdminDetailsOpen(check.Key)) {
+                <div class="vs-health-card__admin-panel" [attr.data-testid]="'vs-setup-health-admin-panel-' + check.Key">
+                  @if (check.Action) {
+                    <div class="vs-health-card__row-action" [attr.data-testid]="'vs-setup-health-action-' + check.Key">
+                      {{ check.Action }}
+                    </div>
+                  }
+                  @if (check.Details && check.Details.length > 0) {
+                    <ul class="vs-health-card__details" [attr.data-testid]="'vs-setup-health-details-' + check.Key">
+                      @for (detail of check.Details; track detail) {
+                        <li>{{ detail }}</li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (IsAllOk && Expanded) {
+    <div class="vs-health-card__expanded" data-testid="vs-setup-health-expanded-details">
+      @for (check of Checks; track check.Key) {
+        <div
+          class="vs-health-card__detail-item"
+          [attr.data-testid]="'vs-setup-health-expanded-' + check.Key"
+        >
+          <i
+            [class]="IconForStatus(check.Status) + ' vs-health-card__icon vs-health-card__icon--' + check.Status.toLowerCase()"
+            aria-hidden="true"
+          ></i>
+          <div class="vs-health-card__row-body">
+            <div class="vs-health-card__row-header">
+              <span class="vs-health-card__row-title">{{ check.Title }}:</span>
+              <span class="vs-health-card__row-message">{{ check.Message }}</span>
+            </div>
+            @if (HasAdminDetails(check)) {
+              <button
+                type="button"
+                class="vs-health-card__admin-toggle"
+                [attr.data-testid]="'vs-setup-health-admin-toggle-' + check.Key"
+                [attr.aria-expanded]="IsAdminDetailsOpen(check.Key)"
+                (click)="ToggleAdminDetails(check.Key)"
+              >
+                <span>Details for admins</span>
+                <i
+                  class="fa-solid vs-health-card__chevron"
+                  [class.fa-chevron-down]="!IsAdminDetailsOpen(check.Key)"
+                  [class.fa-chevron-up]="IsAdminDetailsOpen(check.Key)"
+                  aria-hidden="true"
+                ></i>
+              </button>
+              @if (IsAdminDetailsOpen(check.Key)) {
+                <div class="vs-health-card__admin-panel" [attr.data-testid]="'vs-setup-health-admin-panel-' + check.Key">
+                  @if (check.Action) {
+                    <div class="vs-health-card__row-action">
+                      {{ check.Action }}
+                    </div>
+                  }
+                  @if (check.Details && check.Details.length > 0) {
+                    <ul class="vs-health-card__details">
+                      @for (detail of check.Details; track detail) {
+                        <li>{{ detail }}</li>
+                      }
+                    </ul>
+                  }
+                </div>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

@@ -21,7 +21,7 @@
  *   node check-esm-imports.mjs [packagesDir] [--changed-since <gitRef>]
  *
  * `--changed-since` narrows the sweep to packages whose OWN source changed against the ref —
- * the PR mode. The full sweep spawns a fresh node process per package (~3s each, ~11 minutes
+ * the PR mode. The full sweep spawns a node process per package (~3s each, ~11 minutes
  * for the ~220 type:module packages in this repo) and re-imports on every PR the ~215 packages
  * that provably cannot have gained the break: the signature lives in a package's own emitted
  * dist/, and an untouched source recompiles identically even when a dependency change forces a
@@ -36,7 +36,7 @@
 import { readFileSync, readdirSync, existsSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve, sep, dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 
 /** Per-package import timeout — a hanging top-level await must not stall CI. */
 const IMPORT_TIMEOUT_MS = 60000;
@@ -55,6 +55,21 @@ const CHILD_IMPORT_SCRIPT = [
     '  () => process.exit(0),',
     '  (e) => { console.error(marker + JSON.stringify({ code: e.code ?? null, message: String(e.message ?? e) })); process.exit(1); }',
     ');',
+].join('\n');
+
+// The batch child's script: imports every URL it reads from stdin (a JSON array) in ONE
+// process and prints one marker line for each entry that imports cleanly. The entry list
+// arrives on stdin for the same reason as above, and because hundreds of paths do not fit
+// in a Windows command line.
+const CHILD_BATCH_IMPORT_SCRIPT = [
+    'const [marker] = process.argv.slice(1);',
+    'let input = "";',
+    'for await (const chunk of process.stdin) input += chunk;',
+    'await Promise.all(JSON.parse(input).map((url, i) => import(url).then(',
+    '  () => process.stdout.write("\\n" + marker + i + "\\n"),',
+    '  () => {},',
+    ')));',
+    'process.stdout.write("", () => process.exit(0));',
 ].join('\n');
 
 /**
@@ -155,11 +170,12 @@ export async function checkPackage(pkgDir, pkgJson = null, { timeoutMs = IMPORT_
 
     // A gating break in ANY entry gates the package; otherwise the first entry's status
     // stands (a side-effecting subpath's non-gating error doesn't muddy a clean root).
-    const results = [];
-    for (const p of entries) {
-        const failure = await importInFreshProcess(p, timeoutMs);
-        results.push(failure ? classifyFailure(failure, pkgDir) : { status: 'OK', detail: '' });
-    }
+    // All entries of a package import in one child process: a package whose `exports` star
+    // expands to hundreds of files (integration-test-suite's ./checks/*) otherwise pays a
+    // fresh process, and a fresh load of the shared dependency graph, for each file.
+    // Results keep entry order.
+    const failures = await importEntries(entries, timeoutMs);
+    const results = failures.map((failure) => (failure ? classifyFailure(failure, pkgDir) : { status: 'OK', detail: '' }));
     const gating = results.find((r) => r.status === 'OWN_DIST_MISSING_EXT');
     return { name, pkgDir, ...(gating ?? results[0]) };
 }
@@ -248,7 +264,35 @@ function walkFiles(dir, out = []) {
  * timeout and hang CI to the job cap. SIGKILL is uncatchable, so the timeout can
  * always reclaim the child.
  */
+/** At most CHILD_LIMIT import children run at once, across every package in a sweep. */
+const CHILD_LIMIT = 8;
+let runningChildren = 0;
+const waitingChildren = [];
+
+/**
+ * Run `start` once a child slot is free. A finishing child hands its slot straight to the
+ * oldest waiter (the count does not drop), so a newcomer can never take it in between.
+ */
+async function withChildSlot(start) {
+    if (runningChildren < CHILD_LIMIT) {
+        runningChildren++;
+    } else {
+        await new Promise((takeSlot) => waitingChildren.push(takeSlot));
+    }
+    try {
+        return await start();
+    } finally {
+        const next = waitingChildren.shift();
+        if (next) next();
+        else runningChildren--;
+    }
+}
+
 function importInFreshProcess(entryPath, timeoutMs = IMPORT_TIMEOUT_MS) {
+    return withChildSlot(() => importInChild(entryPath, timeoutMs));
+}
+
+function importInChild(entryPath, timeoutMs) {
     const url = pathToFileURL(entryPath).href;
     return new Promise((resolveResult) => {
         execFile(
@@ -274,6 +318,63 @@ function importInFreshProcess(entryPath, timeoutMs = IMPORT_TIMEOUT_MS) {
                 resolveResult({ code: error.killed ? 'TIMEOUT' : null, message: stderr.trim() || String(error) });
             }
         );
+    });
+}
+
+/**
+ * Import every entry of one package. Resolves to one result per entry, in entry order:
+ * null on success, or a structured { code, message } failure.
+ *
+ * Several entries share one child process, which is trusted only for a clean import.
+ * Entries in a shared process can change each other's result (evaluation order, a crash,
+ * an early exit, a hang), so every entry the shared child did not report as clean is
+ * imported again in its own fresh process, and that result stands.
+ */
+async function importEntries(entryPaths, timeoutMs = IMPORT_TIMEOUT_MS) {
+    if (entryPaths.length === 1) return [await importInFreshProcess(entryPaths[0], timeoutMs)];
+    const clean = await withChildSlot(() => importBatchInChild(entryPaths, timeoutMs));
+    return Promise.all(entryPaths.map((p, i) => (clean.has(i) ? null : importInFreshProcess(p, timeoutMs))));
+}
+
+/**
+ * Import all `entryPaths` in one child process. Resolves to the Set of entry indexes
+ * that imported cleanly before the child ended. The child is killed when it reports
+ * nothing for `idleTimeoutMs`.
+ */
+function importBatchInChild(entryPaths, idleTimeoutMs) {
+    return new Promise((resolveClean) => {
+        const clean = new Set();
+        const child = spawn(process.execPath, ['--input-type=module', '-e', CHILD_BATCH_IMPORT_SCRIPT, FAILURE_MARKER], {
+            stdio: ['pipe', 'pipe', 'ignore'],
+        });
+        let idleTimer;
+        const restartIdleTimer = () => {
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(() => child.kill('SIGKILL'), idleTimeoutMs);
+        };
+        const finish = () => {
+            clearTimeout(idleTimer);
+            resolveClean(clean);
+        };
+
+        let pending = '';
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (chunk) => {
+            const lines = (pending + chunk).split('\n');
+            pending = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith(FAILURE_MARKER)) continue;
+                const index = Number(line.slice(FAILURE_MARKER.length));
+                if (!Number.isInteger(index) || index < 0 || index >= entryPaths.length) continue;
+                clean.add(index);
+                restartIdleTimer();
+            }
+        });
+        child.on('error', finish);
+        child.on('close', finish);
+        child.stdin.on('error', () => {}); // the child can end before it reads the list
+        child.stdin.end(JSON.stringify(entryPaths.map((p) => pathToFileURL(p).href)));
+        restartIdleTimer();
     });
 }
 

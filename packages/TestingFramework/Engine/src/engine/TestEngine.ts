@@ -54,6 +54,7 @@ import {
 } from '../utils/execution-context';
 import { VariableResolver, VariableResolutionError } from '../utils/variable-resolver';
 import { MeanExecutedScore } from '../utils/result-formatter';
+import { AssignTestsToShard, EstimateTestWeightSeconds, FilterTestsByTransport } from '../utils/suite-sharding';
 
 /**
  * Main testing engine that orchestrates test execution.
@@ -819,6 +820,39 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 return sequenceSet.has(seq);
             });
             this.log(`Filtered to ${filteredTests.length} tests by sequence numbers [${options.sequence.join(', ')}]`, options.verbose);
+        }
+
+        // Filter by transport ('server' | 'client' | 'all') if provided
+        if (options.transport && options.transport !== 'all') {
+            filteredTests = FilterTestsByTransport(filteredTests, options.transport);
+            this.log(`Filtered to ${filteredTests.length} tests by transport '${options.transport}'`, options.verbose);
+        }
+
+        // Partition by deterministic LPT shard if provided
+        if (options.shard) {
+            // Canonicalize tied-Sequence ordering by Name then ID before sharding so separate
+            // worker processes connected to different database clones always see the identical
+            // candidate order regardless of SQL row scan order.
+            filteredTests.sort((a, b) => {
+                const seqA = testSequenceMap.get(a.ID) ?? Number.MAX_SAFE_INTEGER;
+                const seqB = testSequenceMap.get(b.ID) ?? Number.MAX_SAFE_INTEGER;
+                if (seqA !== seqB) {
+                    return seqA - seqB;
+                }
+                const nameCmp = (a.Name ?? '').localeCompare(b.Name ?? '');
+                if (nameCmp !== 0) {
+                    return nameCmp;
+                }
+                return (a.ID ?? '').localeCompare(b.ID ?? '');
+            });
+
+            const beforeShardCount = filteredTests.length;
+            filteredTests = AssignTestsToShard(filteredTests, options.shard);
+            const estSeconds = filteredTests.reduce((sum, t) => sum + EstimateTestWeightSeconds(t), 0);
+            this.log(
+                `Shard ${options.shard.index}/${options.shard.total}: selected ${filteredTests.length}/${beforeShardCount} test(s) (est. weight ~${estSeconds}s)`,
+                false
+            );
         }
 
         return filteredTests;

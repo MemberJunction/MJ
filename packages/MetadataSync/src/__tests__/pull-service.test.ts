@@ -334,3 +334,90 @@ describe('PullService.pull — mergeStrategy skip', () => {
     expect(await fs.readFile(file, 'utf8')).toBe(before);
   });
 });
+
+describe('PullService.mergeRecords — composition axes', () => {
+  type MergeRecords = (
+    existing: RecordData,
+    newData: RecordData,
+    strategy: 'overwrite' | 'merge' | 'skip',
+    preserveFields: string[]
+  ) => Promise<RecordData>;
+
+  const user = new UserInfo(null, { ID: 'user-1', Name: 'Test', Email: 'test@example.com' });
+  const merge = (existing: RecordData, newData: RecordData, strategy: 'overwrite' | 'merge') => {
+    const service = new PullService(new SyncEngine(user), user);
+    return (service as unknown as { mergeRecords: MergeRecords }).mergeRecords(existing, newData, strategy, []);
+  };
+
+  const declared: RecordData = {
+    fields: { Name: 'Get Agent Run Tree' },
+    collections: { Parameters: [{ fields: { Name: 'agentRunID', DetectionMethod: 'Manual' } }] },
+    embeds: { ShipToAddressID: { fields: { City: 'Ames' } } },
+    extension: { entity: 'Event Order Lines', fields: { Venue: 'Hall' } },
+    primaryKey: { ID: 'q-1' },
+  };
+  const pulledWithoutAxes: RecordData = { fields: { Name: 'Get Agent Run Tree' }, primaryKey: { ID: 'q-1' } };
+
+  it('keeps collections, embeds and extension the pull did not produce under merge', async () => {
+    const result = await merge(declared, pulledWithoutAxes, 'merge');
+    expect(result.collections).toEqual(declared.collections);
+    expect(result.embeds).toEqual(declared.embeds);
+    expect(result.extension).toEqual(declared.extension);
+  });
+
+  it('replaces a collection the pull produced under merge', async () => {
+    const pulled: RecordData = {
+      ...pulledWithoutAxes,
+      collections: { Parameters: [{ fields: { Name: 'maxDepth', DetectionMethod: 'Manual' } }] },
+    };
+    const result = await merge(declared, pulled, 'merge');
+    expect(result.collections?.Parameters.map((p) => p.fields.Name)).toEqual(['maxDepth']);
+  });
+
+  it('merges embeds by name under merge: a pulled embed replaces its namesake, others are kept', async () => {
+    const pulled: RecordData = {
+      ...pulledWithoutAxes,
+      embeds: {
+        ShipToAddressID: { fields: { City: 'Boone' } },
+        BillToAddressID: { fields: { City: 'Ames' } },
+      },
+    };
+    const existing: RecordData = {
+      ...declared,
+      embeds: { ...declared.embeds, ContactID: { fields: { Name: 'Pat' } } },
+    };
+    const result = await merge(existing, pulled, 'merge');
+    expect(result.embeds).toEqual({
+      ShipToAddressID: { fields: { City: 'Boone' } },
+      ContactID: { fields: { Name: 'Pat' } },
+      BillToAddressID: { fields: { City: 'Ames' } },
+    });
+  });
+
+  it('writes the pulled composition axes under overwrite', async () => {
+    const pulled: RecordData = {
+      ...pulledWithoutAxes,
+      collections: { Parameters: [{ fields: { Name: 'maxDepth' } }] },
+      embeds: { ShipToAddressID: { fields: { City: 'Boone' } } },
+      extension: { entity: 'Event Order Lines', fields: { Venue: 'Annex' } },
+    };
+    const result = await merge(declared, pulled, 'overwrite');
+    expect(result.collections).toEqual(pulled.collections);
+    expect(result.embeds).toEqual(pulled.embeds);
+    expect(result.extension).toEqual(pulled.extension);
+  });
+
+  it('drops composition axes the pull did not produce under overwrite', async () => {
+    const result = await merge(declared, pulledWithoutAxes, 'overwrite');
+    expect(result).not.toHaveProperty('collections');
+    expect(result).not.toHaveProperty('embeds');
+    expect(result).not.toHaveProperty('extension');
+  });
+
+  it('emits no empty composition blocks', async () => {
+    const result = await merge(pulledWithoutAxes, pulledWithoutAxes, 'merge');
+    expect(result).not.toHaveProperty('collections');
+    expect(result).not.toHaveProperty('embeds');
+    expect(result).not.toHaveProperty('extension');
+  });
+});

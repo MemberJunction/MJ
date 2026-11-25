@@ -165,6 +165,17 @@ module.exports = {
 
 ---
 
+## Server State Lifecycle — Request Scoping, Session Idle TTLs & No Arbitrary Caps
+
+MJAPI is a long-lived multi-tenant/multi-user server process where every GraphQL/HTTP request constructs its own scoped `IMetadataProvider`. Design in-memory state around **deterministic lifecycle and object scoping**, never hardcoded count caps (`MAX_* = 500`):
+
+- **Per-request provider state → `WeakMap<IMetadataProvider, ...>`**: Never key a singleton `Map` or `MJLruCache` by per-request provider ID strings (that yields a 0% cross-request hit rate while pinning dead providers and `BaseEntity` instances in RAM). A `WeakMap` gives intra-request hits and automatic GC as soon as the request completes.
+- **Per-run / per-request work stays off global UI engines**: Resolvers, actions, and AI agent tools running inside MJAPI must load fresh RLS-scoped projections (`RunView` with `ResultType: 'simple'` and `contextUser`) or memoize on the per-run instance (`Clear()` in `finally`) — never populate process-global UI caches (e.g. `ConversationEngine._detailCache`).
+- **Live sessions (MCP, WebSocket collaboration, cloud harnesses)**: Never evict active sessions with an arbitrary `MAX_SESSIONS` cap. Wire deterministic `onclose` / cancel teardown, drop heavy transient payloads (such as duplicate base-version text once a collaboration room compacts), and use **idle TTLs** exposed in `mj.config.cjs` (`mcpServerSettings.sessionIdleTtlMs`, etc.) to reap abandoned connections.
+- **Static numeric constants require rationale comments**: Any `static readonly` or module-level `MAX_*`/`MIN_*`/`DEFAULT_*`/`LIMIT_*`/`CAP_*` numeric literal must carry an inline or attached comment explaining why that value exists (`StaticNumericLiteralCompliance.test.ts` in `check:guards`).
+
+---
+
 ## Switching database platforms (SQL Server ↔ PostgreSQL)
 
 When developing against both SQL Server and PostgreSQL on the same URL/port (e.g.

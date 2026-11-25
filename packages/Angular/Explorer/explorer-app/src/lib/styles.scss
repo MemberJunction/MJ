@@ -16,12 +16,17 @@
 @import '@memberjunction/ng-shared-generic/dist/lib/tokens';
 @import './styles/md3-theme';
 
-// Global reset — previously provided by Kendo theme
+// Global reset
 [hidden] { display: none !important; }
 
 // Core style imports
 @import './styles/variables';
 @import './styles/typography';
+
+// Import Font Awesome Free 6.7.2 icons bundled from explorer-app's npm dependency
+// (omitting the .css extension lets Sass inline the stylesheet and Angular CLI rebase
+// ../webfonts/* relative to dist/styles/fontawesome/css/ without any MJExplorer package.json edit)
+@import './styles/fontawesome/css/all.min';
 
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
@@ -53,10 +58,11 @@
 @import '@memberjunction/ng-ui-components/dist/lib/input/chip';
 // Tab chrome shared by mj-tabstrip and the draft/workspace tab strip — one look, two packages.
 @import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
+@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';
 
 .link-text {
     cursor: pointer;
-    color: darkblue;
+    color: var(--mj-text-link);
     font-size: 14px;
 }
 
@@ -108,6 +114,9 @@
 
 // Header
 .material-bg {
+    // Kendo leftover. This file ships as dist/styles.scss, so apps may still
+    // use the class; it can be removed in a major release.
+    // color-exception: published legacy class kept for compatibility
     color: white;
 }
 

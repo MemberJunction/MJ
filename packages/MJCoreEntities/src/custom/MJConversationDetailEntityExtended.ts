@@ -12,6 +12,7 @@ import {
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJConversationDetailEntity, MJConversationEntity } from '../generated/entity_subclasses';
 import { ConversationWriteDecision, UserMayWriteConversation } from './ConversationWriteAccess';
+import { DispatchConversationMentionNotifications } from './Permissions/mentionNotification';
 
 /**
  * Fields that represent the conversation owner's evaluation of an AI message.
@@ -165,14 +166,31 @@ export class MJConversationDetailEntityExtended extends MJConversationDetailEnti
 
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const callerUserID = this.UserID; // the gate may fill in a grantee's; a save that fails keeps the caller's
+        const wasSaved = this.IsSaved;
+        const previousMessage = wasSaved ? this.originalFieldText('Message') : null;
         if (!(await this.currentUserMayWrite('save'))) {
             return false;
         }
         const saved = await super.Save(options);
         if (!saved) {
             this.UserID = callerUserID;
+            return false;
         }
-        return saved;
+
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const user = this.ContextCurrentUser;
+        if (provider?.ProviderType === 'Database' && user && isPersonRole(this.Role) && this.Message) {
+            await DispatchConversationMentionNotifications({
+                Provider: provider,
+                ContextUser: user,
+                ConversationID: this.ConversationID,
+                ConversationDetailID: this.ID,
+                AuthorUserID: this.UserID || user.ID,
+                Message: this.Message,
+                PreviousMessage: wasSaved ? previousMessage : null
+            });
+        }
+        return true;
     }
 
     override async Delete(options?: EntityDeleteOptions): Promise<boolean> {

@@ -63,7 +63,7 @@ import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
                   </td>
                   <td>
                     <span class="log-provider-badge">
-                      <i [class]="getProviderIcon(log.CommunicationProvider)" [style.color]="getProviderColor(log.CommunicationProvider)"></i>
+                      <i [class]="getProviderIcon(log.CommunicationProvider ?? '')" [style.color]="getProviderColor(log.CommunicationProvider ?? '')"></i>
                       {{log.CommunicationProvider}}
                     </span>
                   </td>

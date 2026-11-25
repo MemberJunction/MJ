@@ -2,12 +2,13 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
-import { MJListEntity, MJListEntityExtended, MJListCategoryEntity, MJListDetailEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListEntityExtended, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { CreateListsClient, DuplicateListNotice } from '../../shared/lists-client';
 import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 interface ListViewModel {
   list: MJListEntity;
@@ -136,8 +137,8 @@ interface CategoryNode {
                   role="listitem"
                   [attr.aria-label]="item.list.Name + ' - ' + item.entityName + ' - ' + item.itemCount + ' items'">
                   <div class="card-header">
-                    <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity)" aria-hidden="true">
-                      <i [class]="getEntityIcon(item.list.Entity)"></i>
+                    <div class="card-icon" [style.background-color]="getEntityColor(item.list.Entity ?? '')" aria-hidden="true">
+                      <i [class]="getEntityIcon(item.list.Entity ?? '')"></i>
                     </div>
                     <div class="card-menu">
                       <button class="menu-btn" (click)="openListMenu($event, item.list)" [attr.aria-label]="'More options for ' + item.list.Name">
@@ -1537,7 +1538,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
           ResultType: 'count_only' as const
         })));
         countResults.forEach((res, idx) => {
-          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount : 0);
+          itemCounts.set(lists[idx].ID, res.Success ? res.TotalRowCount ?? 0 : 0);
         });
       }
 
@@ -1908,48 +1909,10 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.cdr.detectChanges();
 
     try {
-      const md = this.ProviderToUse;
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-
-      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
-      newList.Name = `${listToDuplicate.Name} (Copy)`;
-      newList.Description = listToDuplicate.Description;
-      newList.EntityID = listToDuplicate.EntityID;
-      newList.CategoryID = listToDuplicate.CategoryID;
-      newList.UserID = md.CurrentUser!.ID;
-
-      const listSaved = await newList.Save();
-      if (!listSaved) {
-        this.notificationService.CreateSimpleNotification('Failed to duplicate list', 'error', 4000);
-        return;
-      }
-
-      const itemsResult = await rv.RunView<MJListDetailEntity>({
-        EntityName: 'MJ: List Details',
-        ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
-        ResultType: 'entity_object'
-      });
-
-      if (itemsResult.Success && itemsResult.Results.length > 0) {
-        let copiedCount = 0;
-        for (const item of itemsResult.Results) {
-          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details');
-          newItem.ListID = newList.ID;
-          newItem.RecordID = item.RecordID;
-          newItem.Sequence = item.Sequence;
-          const itemSaved = await newItem.Save();
-          if (itemSaved) copiedCount++;
-        }
-        this.notificationService.CreateSimpleNotification(
-          `List duplicated with ${copiedCount} item${copiedCount !== 1 ? 's' : ''}`,
-          'success',
-          3000
-        );
-      } else {
-        this.notificationService.CreateSimpleNotification('List duplicated successfully', 'success', 3000);
-      }
-
-      await this.loadData();
+      const result = await CreateListsClient(this.ProviderToUse).DuplicateList(listToDuplicate.ID);
+      const notice = DuplicateListNotice(result);
+      this.notificationService.CreateSimpleNotification(notice.Message, notice.Style, notice.Duration);
+      if (result.CreatedListId) await this.loadData();
     } catch (error) {
       console.error('Error duplicating list:', error);
       this.notificationService.CreateSimpleNotification('Error duplicating list. Please try again.', 'error', 4000);
@@ -2011,8 +1974,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
       if (deleted) {
         this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
       } else {
-        // Get the detailed error message from LatestResult
-        const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = listToDelete.LatestResult?.CompleteMessage || 'Unknown error occurred';
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }

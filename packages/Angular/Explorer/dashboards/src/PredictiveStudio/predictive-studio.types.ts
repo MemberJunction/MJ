@@ -6,7 +6,7 @@
  * tested). These interfaces are the contract between those derivations and the Angular templates.
  */
 
-export type PSPanelKey = 'home' | 'catalog' | 'pipelines' | 'experiments' | 'registry' | 'production' | 'compare';
+export type PSPanelKey = 'home' | 'units' | 'protocols' | 'catalog' | 'pipelines' | 'experiments' | 'registry' | 'production' | 'compare';
 
 /** A kanban iteration card on the Experiments panel. */
 export interface PSIterationCard {
@@ -20,6 +20,8 @@ export interface PSIterationCard {
   Progress?: number;
   ProgressDetail?: string;
   score?: number;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
+  /** The holdout metric `score` is on; absent while the session's stored ranking does not hold the iteration yet. */
+  ScoreMetric?: string;
   ScoreDelta?: string;
   Rationale: string;
 }
@@ -31,7 +33,14 @@ export interface PSLeaderboardEntry {
   algorithmIcon: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   algorithmColor: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   features: string;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
-  auc: number;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
+  /** The iteration the entry ranks. */
+  IterationID: string;
+  /** The score on its metric's own scale (a loss reads as the loss, not its negation). */
+  Score: number;
+  /** The holdout metric `Score` is on: the plan's success metric, or a kept baseline's primary proper score. */
+  ScoreMetric: string;
+  /** True when `ScoreMetric` is the plan's success metric; every such entry ranks above a fallback entry. */
+  OnSuccessMetric: boolean;
   best?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
   pruned?: boolean;  // case-violation-ok-legacy-back-compat: renaming it broke a use the checker could not see from the declaration — the compile proved it
 }

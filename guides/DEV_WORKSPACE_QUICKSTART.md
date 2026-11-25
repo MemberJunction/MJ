@@ -44,8 +44,10 @@ commands as plain `mj dev workspace ...`.
    ```
 
    It detects members (anything with `mj-app.json`, `@mj-biz-apps/*` packages, or the MJ monorepo
-   itself), writes four files at the parent (`pnpm-workspace.yaml`, `package.json`, `.npmrc`,
-   `turbo.json`) plus a `.mj-dev-workspace.json` sentinel, then runs the install.
+   itself), writes three files at the parent (`pnpm-workspace.yaml`, `package.json`, `.npmrc`)
+   plus a `.mj-dev-workspace.json` sentinel, then runs the install. There is no parent
+   `turbo.json`: each member keeps its own, and a regenerate moves one an earlier version wrote
+   to `turbo.json.bak`.
 
    When it offers to **remove members' own standalone installs, say yes** — the MJ clone's
    `node_modules` from step 2 must be replaced by the workspace install, or MJ's code resolves
@@ -55,7 +57,7 @@ commands as plain `mj dev workspace ...`.
 4. **Build everything from the parent** and check health:
 
    ```bash
-   pnpm run build          # turbo across all members
+   pnpm run build          # every member package, in dependency order, one at a time
    node MJ/packages/MJCLI/bin/run.js dev workspace status
    ```
 
@@ -105,6 +107,27 @@ parent. A package declared by a repo that is not a workspace member is ignored (
 linked — that is what excluding it means), and the check skips entirely until `pnpm install` has
 run at the parent, since linkage is the install's output rather than the generator's.
 
+Doctor also reads build output. Linking a member package links its source folder, so a package that
+was never built, or was edited after its last build, installs cleanly and fails only when Explorer
+loads it (a missing export, or "No form is registered for …"). For every member package with a
+`build` script and a `src/` folder, doctor FAILS when its entry file (`main`, else `module`, else
+the `exports` root; `dist/` when none is declared) does not exist, and WARNS when a `src/` file is
+newer than everything in the output folder. Test files do not count. Rebuild with
+`pnpm --filter <package> run build` at the parent.
+
+### Explorer's prebundle exclude
+
+Explorer's Vite dev server pre-bundles dependencies into a cache, so a linked package rebuilt by
+`pnpm run watch` is served stale unless its scope is in `serve.options.prebundle.exclude` in the
+shell's `angular.json`. MJ commits `@memberjunction/*` there. On join, `mj dev workspace` adds the
+npm scopes of the packages the other members link (`@mj-biz-apps/*`, ...) to every enumerated app
+shell that already has that list, and records the additions in `.mj-dev-workspace.json`. `status`
+and `doctor` list them (doctor warns if one went missing, e.g. after a `git checkout` of the file),
+a re-join drops the scopes of members that left, and `clean` removes exactly the recorded entries,
+leaving the file as it was. Do not commit the change: CI's guards job (and `npm run check:guards`)
+fails any committed `angular.json` whose exclude holds anything but `@memberjunction/*`. An
+`angular.json` with comments is not edited; the command names it so you can add the scope by hand.
+
 ## Recovery
 
 Someone (or an IDE) ran `npm install` / `pnpm install` **inside** a member repo? `status` will flag
@@ -121,8 +144,9 @@ node MJ/packages/MJCLI/bin/run.js dev workspace clean
 ```
 
 Removes only the generated parent files (sentinel-verified — it refuses to delete a workspace it
-didn't generate unless you `--force`). Member repos are untouched and stay git-clean throughout;
-the workspace never commits anything to any repo.
+didn't generate unless you `--force`) and takes the recorded prebundle-exclude entries back out of
+the shell's `angular.json`. That file is the one member file the workspace edits; everything else in
+the member repos is untouched. The workspace never commits anything to any repo.
 
 ## Gotchas
 

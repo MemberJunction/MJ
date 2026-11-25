@@ -1,0 +1,146 @@
+[
+  {
+    "fields": {
+      "Name": "ConsentModel",
+      "Description": "Governs whether explicit opt-in consent is required or opt-out applies. Strictest merge: opt-in beats opt-out; softOptIn is false unless all regimes allow it.",
+      "DriverClass": "ConsentModelRuleDriver",
+      "ParameterSchema": "@file:schemas/consent-model.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "DD946EEF-737F-4B29-9D31-A1BDEA5E9387"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.472Z",
+      "checksum": "d8d571ddebb9edb201d1c667bedd73dfeea96f3f572d49d9c4d758996ea70469"
+    }
+  },
+  {
+    "fields": {
+      "Name": "RequireDoubleOptIn",
+      "Description": "Requires confirmed double opt-in (OptInMethod = Double and ConfirmedAt set). Strictest merge: true wins.",
+      "DriverClass": "RequireDoubleOptInRuleDriver",
+      "ParameterSchema": "@file:schemas/require-double-opt-in.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "5A7EF67D-6B74-4FEF-BD34-EF38E506CA38"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.495Z",
+      "checksum": "f1d63c0667ab9f0961cdf9f99d9787e3b735f481c2fc65f77e7da239932e496a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ConsentEvidence",
+      "Description": "Requires recorded consent evidence fields (source, timestamp, consent text). Strictest merge: true wins per field.",
+      "DriverClass": "ConsentEvidenceRuleDriver",
+      "ParameterSchema": "@file:schemas/consent-evidence.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "89E761AE-6101-4171-A004-8A8A2F95A5FC"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.513Z",
+      "checksum": "5a6639daf553b309483416b385d38a96761959c209f2cf9265ea8da79b79d6f2"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ConsentExpiry",
+      "Description": "Enforces a maximum age (in days) for consent before renewal is required. Strictest merge: shortest maxDays wins.",
+      "DriverClass": "ConsentExpiryRuleDriver",
+      "ParameterSchema": "@file:schemas/consent-expiry.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "9355E00F-750F-40E7-A463-1044F9E1AE67"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.529Z",
+      "checksum": "21691579817f6988e6f7bc51607837b160bf03ad9c799ad42435b3d2cf02af35"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UnsubscribeMechanism",
+      "Description": "Requires one-click List-Unsubscribe header and/or visible footer unsubscribe link. Strictest merge: required beats optional.",
+      "DriverClass": "UnsubscribeMechanismRuleDriver",
+      "ParameterSchema": "@file:schemas/unsubscribe-mechanism.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "E841A0F5-EB48-440F-AE58-49C2E3FFC2CD"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.552Z",
+      "checksum": "62d21f8b3c2edb4d083232e88370c6f70fa406a980f69aec106c757c2e08e26f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UnsubscribeHonorWindow",
+      "Description": "Maximum hours allowed to honor an unsubscribe request, driving SLA monitoring. Strictest merge: shortest maxHours wins.",
+      "DriverClass": "UnsubscribeHonorWindowRuleDriver",
+      "ParameterSchema": "@file:schemas/unsubscribe-honor-window.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "62438AD0-5115-4807-B488-E286868F28CE"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.570Z",
+      "checksum": "c1ae6d3a813c59952210cea7d458c72f173c79f890122adc7c8ae4bb507f91ed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SenderIdentification",
+      "Description": "Requires physical postal address and clear sender name in outbound messages. Strictest merge: true wins per field.",
+      "DriverClass": "SenderIdentificationRuleDriver",
+      "ParameterSchema": "@file:schemas/sender-identification.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "1650126B-9C19-4571-95CE-7B8511098990"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.585Z",
+      "checksum": "9afab126c5d386dc27c3d3e97c02792578411678ff6fc27c418ddf5cb115b1dc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "QuietHours",
+      "Description": "Defers sends that fall inside legal quiet-hour local-time windows. Strictest merge: union of all blocked windows wins.",
+      "DriverClass": "QuietHoursRuleDriver",
+      "ParameterSchema": "@file:schemas/quiet-hours.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A0C7B32E-FA7C-48D1-8E96-A10C3EF3FDF7"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.603Z",
+      "checksum": "5ade61b16cb4ed197947edef49bc1a9f8a450dd836ed0deea966db5eda746957"
+    }
+  },
+  {
+    "fields": {
+      "Name": "TrackingConsent",
+      "Description": "Controls whether open-tracking pixels and click/link rewriting require explicit consent. Strictest merge: true wins per field.",
+      "DriverClass": "TrackingConsentRuleDriver",
+      "ParameterSchema": "@file:schemas/tracking-consent.schema.json",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D51F7301-F108-4B27-BEB1-2E20A4B5F31E"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:55.621Z",
+      "checksum": "42eb4643bbfb186aa8634efe0634713ca98f99f63a1257bfc3edfb06508316f0"
+    }
+  }
+]

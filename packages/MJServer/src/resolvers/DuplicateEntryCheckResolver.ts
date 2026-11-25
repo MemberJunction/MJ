@@ -5,6 +5,7 @@ import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 import type { DuplicateEntryCheckResult, DuplicateEntryCheckStatus } from '@memberjunction/ai-vector-dupe';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /**
  * The most characters `valuesJSON` may hold. A larger request is refused before it is parsed. The
@@ -74,6 +75,7 @@ export type DuplicateEntryChecker = Pick<DuplicateRecordDetector, 'CheckRecordVa
  * through `DuplicateRecordDetector.CheckRecordValues`, and returns the plausible duplicates to flag.
  * It only flags: it saves, merges and blocks nothing.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class DuplicateEntryCheckResolver extends ResolverBase {
     /**

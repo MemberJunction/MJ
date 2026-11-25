@@ -34,6 +34,16 @@ export interface RequestWithRawBody extends Request {
  * }]
  * ```
  */
+/** Per-IP rate limit for a messaging extension's HTTP webhook routes. */
+export interface WebhookRateLimitSettings {
+    /** When false, no limiter is mounted. @default true */
+    Enabled?: boolean;
+    /** Window length in milliseconds. @default 60000 */
+    WindowMs?: number;
+    /** Requests allowed per IP per window. @default 1200 */
+    MaxRequests?: number;
+}
+
 export interface MessagingAdapterSettings {
     /**
      * Default MJ Agent name used when no specific agent is @mentioned.
@@ -69,6 +79,13 @@ export interface MessagingAdapterSettings {
      * @default 50
      */
     MaxThreadMessages?: number;
+
+    /**
+     * Per-IP rate limit on the HTTP webhook routes (Slack events, interactivity and slash
+     * commands share one budget). On by default with a generous budget; set `Enabled: false`
+     * when a gateway in front of MJAPI already limits these routes. Ignored in Socket Mode.
+     */
+    WebhookRateLimit?: WebhookRateLimitSettings;
 
     /**
      * Whether to show typing/thinking indicators while the agent processes.

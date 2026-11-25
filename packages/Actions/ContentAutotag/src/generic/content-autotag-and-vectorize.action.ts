@@ -31,6 +31,9 @@ import { EntityVectorSyncer } from "@memberjunction/ai-vector-sync";
  *
  * Uses plugin architecture: iterates all ContentSourceType records and resolves
  * providers dynamically via ClassFactory using the DriverClass field.
+ *
+ * @deprecated Superseded by the Content Pipeline Framework (`@memberjunction/content-pipeline` —
+ * `PipelineProcessor` and the `Content Pipeline — *` Record Processes).
  */
 @RegisterClass(BaseAction, "__AutotagAndVectorizeContent")
 export class AutotagAndVectorizeContentAction extends BaseAction {

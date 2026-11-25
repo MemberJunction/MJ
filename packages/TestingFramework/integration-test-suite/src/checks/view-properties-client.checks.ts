@@ -27,7 +27,7 @@ import { LogError, RunView } from '@memberjunction/core';
 import type { IMetadataProvider, RunViewResult, UserViewProperty, ViewPropertyValues } from '@memberjunction/core';
 import type { MJAIAgentRunEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { UUIDSet } from '@memberjunction/global';
-import { Assert, AssertEqual, IntegrationCheckRegistry, SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck, SEEDED_SCOPED_A_EMAIL, SEEDED_SCOPED_B_EMAIL, SEED_FIXTURES_COMMAND } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
 import { BuildUserKeyProviderWithRetry, DeleteMintedUserKeys, MintFullAccessUserKey, MintedUserKeyIds } from './fls-client.checks';
 
@@ -58,12 +58,16 @@ const ownerProperty: UserViewProperty = {
     Name: 'Owner', Type: 'uuid', AllowOverride: false, Default: { Token: 'Context.UserID' }, Target: { Field: 'UserID', Operator: '=' },
 };
 
-function usableFixture(checkId: string): ViewPropertiesFixture | null {
-    if (!fixture?.Usable) {
-        console.warn(`  ⚠ ${BUNDLE}.${checkId} SKIPPED — ${fixture?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`);
-        return null;
+/** A provisioned fixture: its runs and the scoped reader exist. */
+type UsableFixture = ViewPropertiesFixture & { RunIDs: NonNullable<ViewPropertiesFixture['RunIDs']>; ScopedA: IMetadataProvider };
+
+/** The provisioned fixture; ends the check as skipped when Setup could not provision it. */
+function usableFixture(): UsableFixture {
+    const fx = fixture;
+    if (!fx?.Usable || !fx.RunIDs || !fx.ScopedA) {
+        SkipCheck(`${fx?.Reason ?? 'fixture not provisioned'}. Seed with \`${SEED_FIXTURES_COMMAND}\` and start MJAPI.`);
     }
-    return fixture;
+    return { ...fx, RunIDs: fx.RunIDs, ScopedA: fx.ScopedA };
 }
 
 /** Runs a view by ID over the wire; the GraphQL client needs the entity name and a field list to build its query. */
@@ -196,8 +200,7 @@ export const ViewPropertiesClientChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VP1`,
         Name: 'VP1: a view run by ViewID with a property value over GraphQL returns only the matching rows',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('VP1');
-            if (!fx?.RunIDs) return;
+            const fx = usableFixture();
             const r = fx.RunIDs;
             assertRows(await runView(ctx.Provider, fx.OpenViewID!, { Status: 'Completed' }), [r.ACompleted, r.BCompleted, r.MeCompleted], 'VP1 Completed');
             assertRows(await runView(ctx.Provider, fx.OpenViewID!, { Status: 'Failed' }), [r.AFailed], 'VP1 Failed');
@@ -208,8 +211,7 @@ export const ViewPropertiesClientChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VP2`,
         Name: 'VP2: a client value for a property that does not allow override is refused, naming the property',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('VP2');
-            if (!fx?.RunIDs) return;
+            const fx = usableFixture();
             const result = await runView(ctx.Provider, fx.LockedViewID!, { Owner: fx.RunIDs.BCompleted });
             Assert(!result.Success, 'VP2: a client value for the locked Owner property was ACCEPTED');
             Assert((result.ErrorMessage ?? '').includes('View property "Owner"'), `VP2: the refusal does not name the property: ${result.ErrorMessage}`);
@@ -220,8 +222,7 @@ export const ViewPropertiesClientChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VP3`,
         Name: 'VP3: with no value, the server applies the Context.UserID token default for the wire identity',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('VP3');
-            if (!fx?.RunIDs) return;
+            const fx = usableFixture();
             assertRows(await runView(ctx.Provider, fx.LockedViewID!, {}), [fx.RunIDs.MeCompleted], 'VP3 token default');
             assertRows(await runView(ctx.Provider, fx.LockedViewID!, { Status: 'Failed' }), [], 'VP3 token default and a client Status');
         },
@@ -230,8 +231,7 @@ export const ViewPropertiesClientChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VP4`,
         Name: 'VP4: row-level security still applies on top: the scoped reader gets only its own rows',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('VP4');
-            if (!fx?.RunIDs || !fx.ScopedA) return;
+            const fx = usableFixture();
             const r = fx.RunIDs;
             assertRows(await runView(fx.ScopedA, fx.OpenViewID!, { Status: 'Completed' }), [r.ACompleted], 'VP4 scoped reader, Completed');
             assertRows(await runView(fx.ScopedA, fx.OpenViewID!, {}), [r.ACompleted, r.AFailed], 'VP4 scoped reader, no value');
@@ -242,8 +242,7 @@ export const ViewPropertiesClientChecks: NamedCheck[] = [
         Id: `${BUNDLE}.VP5`,
         Name: 'VP5: the server result cache keys on property values: each value gets its own rows from a cached run',
         Fn: async (ctx: IntegrationCheckContext) => {
-            const fx = usableFixture('VP5');
-            if (!fx?.RunIDs) return;
+            const fx = usableFixture();
             const r = fx.RunIDs;
             for (let pass = 0; pass < 2; pass++) {
                 assertRows(await runView(ctx.Provider, fx.OpenViewID!, { Status: 'Completed' }, false), [r.ACompleted, r.BCompleted, r.MeCompleted], `VP5 Completed (pass ${pass + 1})`);

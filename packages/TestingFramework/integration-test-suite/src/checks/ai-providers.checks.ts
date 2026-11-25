@@ -30,7 +30,7 @@ import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseLLM } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { DefaultAgentResolver } from '@memberjunction/conversations-runtime';
-import { Assert, AssertEqual } from '@memberjunction/testing-integration';
+import { Assert, AssertEqual, SkipCheck } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck } from '@memberjunction/testing-integration';
 
@@ -51,8 +51,7 @@ export const AiProvidersChecks: NamedCheck[] = [
             if (resolved.length === 0) {
                 // The MC7 rationale: an all-zero sweep cannot distinguish "broken metadata" from
                 // "LLM provider packages not loaded in this process" — skip loudly, never guess.
-                console.warn(`  ⚠ AIP1 SKIPPED — none of ${activeLLMs.length} Active LLM drivers are registered in this process (provider packages not loaded).`);
-                return;
+                SkipCheck(`none of ${activeLLMs.length} Active LLM drivers are registered in this process (provider packages not loaded)`);
             }
             // Providers ARE loaded here — every ACTIVE LLM model's driver must resolve, or it is
             // dead at runtime. (B65 — the two Cohere Command models declaring the non-existent

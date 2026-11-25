@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseCliHarnessAdapter, HarnessCliRawEvent } from './BaseCliHarnessAdapter.js';
 import { BaseHarnessAdapter } from './BaseHarnessAdapter.js';
-import { HarnessCapabilities, HarnessPermissionPolicy, HarnessTurnEvent } from '../types.js';
+import { HarnessCapabilities, HarnessPermissionPolicy, HarnessSessionConfig, HarnessTurnEvent } from '../types.js';
 import { HarnessProcess } from '../sandbox/SandboxExecutor.js';
 
 /**
@@ -90,6 +90,14 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
     }
 
     /** @inheritdoc */
+    public override async StartSession(config: HarnessSessionConfig): Promise<void> {
+        this.didResume = false;
+        this.pendingTerminal = null;
+        this.reportedModel = undefined;
+        await super.StartSession(config);
+    }
+
+    /** @inheritdoc */
     public override get DidResumeSession(): boolean {
         return this.didResume;
     }
@@ -157,6 +165,14 @@ export class ClaudeCodeCliAdapter extends BaseCliHarnessAdapter {
         }
         if (this.config?.Model) {
             args.push('--model', this.config.Model);
+        }
+        const seenDirs = new Set<string>([this.config?.WorkspacePath ?? ''].filter(Boolean));
+        for (const extraDir of this.config?.AdditionalDirectories ?? []) {
+            const trimmed = extraDir.trim();
+            if (trimmed && !seenDirs.has(trimmed)) {
+                seenDirs.add(trimmed);
+                args.push('--add-dir', trimmed);
+            }
         }
         // Per-invocation, not per-session: the process is new every turn, so a policy applied only
         // at session start would silently lapse from turn 2 onward.

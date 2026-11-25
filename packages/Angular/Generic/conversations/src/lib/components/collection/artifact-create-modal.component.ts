@@ -27,7 +27,7 @@ import { UUIDsEqual } from '@memberjunction/global';
             </label>
             <input
               type="text"
-              class="k-textbox form-control"
+              class="form-control"
               [(ngModel)]="formData.name"
               placeholder="Artifact name"
               #nameInput>
@@ -50,7 +50,7 @@ import { UUIDsEqual } from '@memberjunction/global';
           <div class="form-group">
             <label class="form-label">Description</label>
             <textarea
-              class="k-textarea form-control"
+              class="form-control"
               [(ngModel)]="formData.description"
               placeholder="Optional description"
               rows="2">
@@ -61,7 +61,7 @@ import { UUIDsEqual } from '@memberjunction/global';
               Content <span class="required">*</span>
             </label>
             <textarea
-              class="k-textarea form-control content-area"
+              class="form-control content-area"
               [(ngModel)]="formData.content"
               placeholder="Paste your content here..."
               rows="12">

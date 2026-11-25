@@ -27,9 +27,23 @@ on:
       - 'scripts/verify-bundle-smoke.mjs'
       - '.github/workflows/claude-pack.yml'
 
+# Cancel superseded runs for the same ref. Without this a second push to a PR leaves the
+# first run burning a runner for a commit nobody will merge; 108 such runner-minutes were
+# measured across this repo in a single 23-hour window (2026-10-27).
+# EXCEPTION: push (merge to next) gets a per-commit group and is NEVER cancelled.
+# `github.ref` is the same string for every merge, so a shared, cancellable group would let
+# a later merge kill an earlier one's run. Mirrors test.yml.
+concurrency:
+  group: claude-pack-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
+
 # Least-privilege token: nothing in this workflow writes to the repository.
 permissions:
   contents: read
+
+env:
+  # Pin turbo's local cache directory so the seed restore and turbo agree on its location.
+  TURBO_CACHE_DIR: .turbo/cache
 
 jobs:
   verify-dist-fresh:
@@ -38,33 +52,28 @@ jobs:
     timeout-minutes: 5
 
     env:
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
-
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
+        uses: actions/checkout@v7
 
       # The build script has no npm dependencies of its own — it only uses
       # node:fs / node:crypto / node:path. We still need the lockfile install
       # so `npm run claude-pack:build` finds the script entry; skipping it
       # would still work but `pnpm install --frozen-lockfile --ignore-scripts` is essentially free
       # given the cache and gives consistent behavior.
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+      - uses: ./.github/actions/mj-setup
+        with:
+          ignore-scripts: 'true'
+          create-explorer-env: 'false'
 
       - name: Rebuild claude-pack
         run: pnpm run claude-pack:build
@@ -106,25 +115,28 @@ jobs:
     timeout-minutes: 15
 
     env: # Turbo remote cache — see the note on verify-dist-fresh above.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
+          create-explorer-env: 'false'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # Restore next's turbo build seed on PR runs (PR jobs receive no remote-cache credentials).
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       # Build only what `mj bundle` needs: MJInstaller (assembler + RepoFetcher)
       # and MJCLI (the command entry point). Turbo picks up their transitive

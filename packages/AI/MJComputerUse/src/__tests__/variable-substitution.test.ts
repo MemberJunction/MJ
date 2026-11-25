@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders } from '../utils/variable-substitution.js';
+import { BuildVariableValuesFromContext, SubstituteVariables, ComposeApplicationContext, FindUnresolvedPlaceholders, FindUnresolvedAuthPlaceholders, UnescapeLiteralBraces } from '../utils/variable-substitution.js';
 
 describe('buildVariableValuesFromContext', () => {
     it('returns empty when there is no context and no relevant env vars', () => {
@@ -316,5 +316,73 @@ describe('findUnresolvedAuthPlaceholders', () => {
 
     it('ignores non-string method fields', () => {
         expect(FindUnresolvedAuthPlaceholders(auth({ Timeout: 5000, Nested: { x: '{{y}}' } }))).toEqual([]);
+    });
+});
+
+describe('escaped \\{{…}} is literal text', () => {
+    const goal = 'Open the template; its Text may include \\{{ placeholder }} parameters';
+
+    it('is skipped by FindUnresolvedPlaceholders', () => {
+        expect(FindUnresolvedPlaceholders(goal)).toEqual([]);
+        expect(FindUnresolvedPlaceholders('\\{{baseUrl}}/x')).toEqual([]);
+    });
+
+    it('is skipped by FindUnresolvedAuthPlaceholders', () => {
+        const auth = { bindings: [{ method: { Username: '\\{{literal}}', Password: '{{authPassword}}' } }] };
+        expect(FindUnresolvedAuthPlaceholders(auth)).toEqual(['auth.bindings[0].Password:{{authPassword}}']);
+    });
+
+    it('is unescaped to {{…}} by SubstituteVariables, keeping inner whitespace', () => {
+        expect(SubstituteVariables({ goal }, { other: 'x' })).toEqual({
+            goal: 'Open the template; its Text may include {{ placeholder }} parameters',
+        });
+    });
+
+    it('is unescaped even when the values map is empty', () => {
+        expect(SubstituteVariables({ goal: '\\{{x}}' }, {})).toEqual({ goal: '{{x}}' });
+    });
+
+    it('is not substituted when the escaped key is a defined variable', () => {
+        expect(SubstituteVariables({ goal: 'write \\{{baseUrl}} literally' }, { baseUrl: 'http://h' })).toEqual({
+            goal: 'write {{baseUrl}} literally',
+        });
+        expect(SubstituteVariables({ startUrl: '\\{{baseUrl}}' }, { baseUrl: ['not', 'raw'] })).toEqual({
+            startUrl: '{{baseUrl}}',
+        });
+    });
+
+    it('stays escaped with KeepEscapes until UnescapeLiteralBraces runs', () => {
+        const kept = SubstituteVariables({ goal: 'go to {{baseUrl}}, type \\{{name}}' }, { baseUrl: 'http://h' }, { KeepEscapes: true });
+        expect(kept).toEqual({ goal: 'go to http://h, type \\{{name}}' });
+        expect(FindUnresolvedPlaceholders(kept.goal)).toEqual([]);
+        expect(UnescapeLiteralBraces(kept)).toEqual({ goal: 'go to http://h, type {{name}}' });
+    });
+
+    it('mixes escaped and real placeholders: real ones resolve, escaped ones stay literal', () => {
+        const input = { startUrl: '{{baseUrl}}/templates', goal: 'Edit \\{{ firstName }} for {{user}}' };
+        const out = SubstituteVariables(input, { baseUrl: 'http://h', user: 'alex' }, { KeepEscapes: true });
+        expect(FindUnresolvedPlaceholders(out.startUrl)).toEqual([]);
+        expect(FindUnresolvedPlaceholders(out.goal)).toEqual([]);
+        expect(UnescapeLiteralBraces(out)).toEqual({ startUrl: 'http://h/templates', goal: 'Edit {{ firstName }} for alex' });
+    });
+
+    it('still reports a real unresolved {{baseUrl}} next to an escaped one', () => {
+        const out = SubstituteVariables({ startUrl: '{{baseUrl}}/x', goal: 'type \\{{baseUrl}} and {{missing}}' }, { other: 'y' }, { KeepEscapes: true });
+        expect(FindUnresolvedPlaceholders(out.startUrl)).toEqual(['baseUrl']);
+        expect(FindUnresolvedPlaceholders(out.goal)).toEqual(['missing']);
+    });
+
+    it('UnescapeLiteralBraces returns the input itself when it holds no escapes', () => {
+        const input = { goal: 'plain', nested: [{ a: '{{x}}' }] };
+        expect(UnescapeLiteralBraces(input)).toBe(input);
+    });
+
+    it('ComposeApplicationContext unescapes both layers, and leaves an already-resolved per-test layer alone', () => {
+        expect(ComposeApplicationContext('suite \\{{a}}', 'test \\{{b}}', { a: 'no' })).toBe(
+            'suite {{a}}\n\n## Test-specific Notes\n\ntest {{b}}'
+        );
+        expect(ComposeApplicationContext(undefined, 'literal {{baseUrl}}', { baseUrl: 'http://h' }, { PerTestResolved: true })).toBe(
+            '## Test-specific Notes\n\nliteral {{baseUrl}}'
+        );
     });
 });

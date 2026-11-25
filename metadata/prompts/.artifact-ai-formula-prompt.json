@@ -1,0 +1,56 @@
+[
+  {
+    "fields": {
+      "Name": "Spreadsheet MJ.AI Formula Evaluator",
+      "Description": "Governed prompt used by Artifact.EvaluateAiFormula to evaluate explicit opt-in =MJ.AI(prompt, [context]) spreadsheet cell formulas with untrusted-data isolation.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/artifacts/spreadsheet-mj-ai-formula-evaluator.template.md",
+      "Status": "Active",
+      "ResponseFormat": "Text",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Lowest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 0,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "D9AA8F81-A1C1-4C76-8CBA-C51257447AC3"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:01.271Z",
+            "checksum": "d9ed3c25ca94c243df966a26022612df23f449d0f66f2e6bdbbe8d6e264c02a4"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
+            "Priority": 9
+          },
+          "primaryKey": {
+            "ID": "4224C1B4-4852-4D88-A26B-B2505EEA6CF5"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:01.280Z",
+            "checksum": "218d897d4b7c8dbf48500b7078eae5fe07ba3d7a89fdb26071335cd5a895cb2e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "08D8214D-A029-44BA-B304-1D90B478D492"
+    }
+  }
+]

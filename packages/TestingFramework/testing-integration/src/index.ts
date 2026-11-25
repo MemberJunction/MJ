@@ -16,6 +16,7 @@ export * from './bootstrap-client';
 export * from './ai-verify';
 export * from './check';
 export * from './check-registry';
+export * from './skip-gate';
 import './checks/self-test.check'; // side effect: register the permanent Phase-0 smoke check
 export * from './rls-fixture';
 export * from './fls-fixture';
@@ -24,6 +25,8 @@ export * from './fls-fixture';
 // every bundle on this registry. This framework package deliberately ships content-free.
 export * from './types';
 export * from './IntegrationTestDriver';
+export * from './perf-profiler';
+export * from './perf-harness';
 
 // The @RegisterClass decorator on IntegrationTestDriver fires via the export above.
 //

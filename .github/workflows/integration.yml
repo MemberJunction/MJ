@@ -2,8 +2,11 @@ name: Integration Tier
 
 # Deterministic integration tier — the check bundles in the private
 # @memberjunction/integration-test-suite package, dispatched by `mj test suite`
-# ("Integration Tests — Deterministic") against a fresh SQL Server, on every PR that
-# touches server code or the integration metadata. Single entry path: the per-bundle tsx
+# ("Integration Tests — Deterministic") against a fresh SQL Server on every PR that touches
+# server code or the integration metadata. A parallel PostgreSQL lane (`integration-postgres`,
+# a known-failures ratchet) runs on the same PRs and blocks on a PostgreSQL regression; a parity
+# gap (PostgreSQL twins not converted yet) only leaves out the metadata that needs it, and blocks
+# only the build engineer's migrations-pg/ PR and the release. Single entry path: the per-bundle tsx
 # dispatchers and run-all.ts were removed in the July-2026 restructure.
 #
 # HOST-BASED lane (no Docker regression images). This PR gate provisions the DB directly on
@@ -59,6 +62,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'migrations/**'
+      # The build engineer's PR: the PostgreSQL lane gates it (see integration-postgres).
+      - 'migrations-pg/**'
       # The job runs `mj sync push --dir=metadata`, so a metadata-only PR must run this gate.
       - 'metadata/**'
       # All integration test/suite/type metadata AND the RLS fixtures now live under this one
@@ -68,10 +73,26 @@ on:
       - 'tsconfig*'
       - 'turbo.json'
       - '.github/workflows/integration.yml'
+      - '.github/actions/restore-sqlserver-db-snapshot/**'
       # The drift gate's own script. The changed-paths filter in the `changes` job below also
       # matches it, but that job only runs if the workflow starts at all — so without this entry
       # a script-only PR never reaches the filter and the gate cannot catch its own regressions.
       - 'scripts/codegen-idempotency-check.mjs'
+      # Scripts the deterministic lane runs (and the one that decides whether it runs). A PR that
+      # changes one must run the lane; the tier selection treats any path outside packages/ that
+      # matched this filter as "run".
+      - '.github/scripts/wait-for-mjapi.sh'
+      - '.github/scripts/check-fls-wire-bundles-ran.mjs'
+      - '.github/scripts/select-integration-tier.mjs'
+      # The PostgreSQL lane's ratchet and its list: a PR that edits either must run that lane.
+      - '.github/scripts/check-integration-known-failures.mjs'
+      - '.github/scripts/prune-pg-parity-gap.mjs'
+      - '.github/integration-known-failures/**'
+      # Root install inputs: the pnpm version pin (packageManager), the workspace globs and the
+      # registry settings decide what the lane installs and builds.
+      - 'package.json'
+      - 'pnpm-workspace.yaml'
+      - '.npmrc'
   # Full backstop: every merge into next runs the gate, so a filter-missed break (paths are a
   # heuristic; migrations + runtime @RegisterClass wiring can couple files no filter foresees)
   # can never merge silently and red the next PR (R3, mirrors test.yml).
@@ -88,12 +109,22 @@ on:
   #               cache-invalidation checks S17/S23/S24/S29/S30/S31b/C10 — the bug class that
   #               shipped twice — cost nothing on a throwaway CI DB), plus the cross-server
   #               Redis invalidation rig (two MJAPI processes + Redis; the fingerprint bugs of
-  #               2026-07 proved this can be 100% broken with every single-process tier green).
+  #               2026-07 proved this can be 100% broken with every single-process tier green),
+  #               and the schema-mutating rig (its own throwaway database; CodeGen runs per scenario).
   #   30 6 * * 0  WEEKLY (Sun) — the "Integration Tests — Live Model" suite, budget-capped,
   #               gated on the INTEGRATION_LIVE_MODEL_KEYS secret (see that job).
   schedule:
     - cron: '0 6 * * *'
     - cron: '30 6 * * 0'
+  # The release gate: publish.yml calls this workflow on the commit it is about to publish, and
+  # build-and-publish waits for it. `release: true` runs only the deterministic lanes; the nightly
+  # rigs, the drift gate and the live-model lanes keep their own schedules.
+  workflow_call:
+    inputs:
+      release:
+        description: 'Called by publish.yml as the release gate: run only the deterministic integration lanes.'
+        type: boolean
+        default: false
 
 # Cancel superseded PR runs for the same ref. EXCEPTION: push (merge to next) events get a
 # per-commit group and are NEVER cancelled — every merge's backstop must run to completion
@@ -106,21 +137,45 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
-  cancel-in-progress: ${{ github.event_name != 'push' }}
+  # A called run takes the caller's workflow name and event, so the release gate gets a group of
+  # its own (never publish.yml's) and is never cancelled by a newer run.
+  group: ${{ inputs.release && format('integration-release-{0}', github.sha) || format('{0}-{1}', github.workflow, github.ref) }}${{ !inputs.release && github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
+  cancel-in-progress: ${{ github.event_name != 'push' && !inputs.release }}
+
+# The package graph the deterministic lane builds (and therefore all it can execute). One
+# definition, read by the build steps and by the `changes` job's tier selection — the selection
+# is only sound while it describes exactly what the lane builds.
+env:
+  INTEGRATION_BUILD_FILTERS: --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+  # Where turbo keeps its local cache, and the directory the "Restore the turbo build seed from
+  # next" steps restore into. This is turbo's default; it is pinned, as in test.yml, so the
+  # restore and the build cannot come to disagree about it.
+  TURBO_CACHE_DIR: .turbo/cache
 
 jobs:
   changes:
     name: Detect PR changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    # actions: read lets the tier selection verify a pass record against the recorded run.
+    permissions:
+      contents: read
+      actions: read
     outputs:
       codegen: ${{ steps.filter.outputs.codegen }}
+      cachestack: ${{ steps.filter.outputs.cachestack }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+      vectors: ${{ steps.filter.outputs.vectors }}
+      pg: ${{ steps.filter.outputs.pg }}
+      integration: ${{ steps.tier.outputs.integration }}
+      fingerprint: ${{ steps.fingerprint.outputs.fingerprint }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
       - name: Check changed paths
         id: filter
         env:
@@ -128,7 +183,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             git fetch --no-tags origin "$PR_BASE_REF"
-            CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+            # --no-renames: a file moved out of a watched directory must list its old path too.
+            CHANGED="$(git diff --name-only --no-renames "origin/$PR_BASE_REF...HEAD")"
             # scripts/codegen-idempotency-check.mjs IS the gate: a change to it must run the gate,
             # or the gate cannot catch its own regressions. #4386's probe-cleanup hole sat cosmetic
             # and then went fatal under 6805744ae4 without a single run of the gate on the change
@@ -138,9 +194,107 @@ jobs:
             else
               echo "codegen=false" >> "$GITHUB_OUTPUT"
             fi
+            # The shared-cache stack and the server bootstrap that loads metadata through it. A defect
+            # here can pass every single-process lane (none runs with Redis) and leave a server that
+            # boots with no metadata; the cross-server rig is the lane that runs MJAPI on Redis.
+            if echo "$CHANGED" | grep -qE '^(packages/RedisProvider/|packages/MJCore/src/generic/localCacheManager\.ts|packages/MJServer/src/(sharedCache|index|startupGate|startupState|metadataReadiness)\.ts|packages/ServerBootstrap/src/|\.github/scripts/wait-for-mjapi\.sh)'; then
+              echo "cachestack=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "cachestack=false" >> "$GITHUB_OUTPUT"
+            fi
+            # Migration or metadata PRs must run codegen-drift against a cold from-scratch DB so
+            # fresh-install-only failures (e.g. literal Sequence collisions, removed metadata rows)
+            # are caught before merge instead of hidden by a prefix snapshot restore.
+            if echo "$CHANGED" | grep -qE '^(migrations/|metadata/)'; then
+              echo "migrations=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "migrations=false" >> "$GITHUB_OUTPUT"
+            fi
+            # PRs touching the code that writes or encodes the Entity Vector Sync - Daily vectors
+            # must re-execute that job with the PR's own code instead of validating the vectors
+            # pre-baked into the snapshot by next: the job driver (Scheduling), the Vectorize Entity
+            # action, the sync/embedding code and the local model, the Float32 encoder, the entity
+            # save path and the SQL Server provider that binds the binary column, the job and
+            # document metadata, and the BF checks that read the result. Keep in step with the
+            # vector-writing paths in the `full` key of .github/actions/restore-sqlserver-db-snapshot.
+            if echo "$CHANGED" | grep -qE '^(packages/AI/Vectors/|packages/AI/EntityDocuments/|packages/AI/Prompts/src/embedding/|packages/AI/Providers/LocalEmbeddings/|packages/Scheduling/|packages/Actions/CoreActions/src/custom/utilities/vectorize-entity\.action\.ts|packages/MJGlobal/src/util/BinaryEncoding\.ts|packages/MJCore/src/generic/baseEntity\.ts|packages/SQLServerDataProvider/src/|metadata/scheduled-jobs/|metadata/entity-documents/|packages/TestingFramework/integration-test-suite/src/checks/binary-fields\.checks\.ts)'; then
+              echo "vectors=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "vectors=false" >> "$GITHUB_OUTPUT"
+            fi
+            # The PostgreSQL lane runs on the same PRs as the SQL Server lane (see its `if`). A feature
+            # PR ships the T-SQL migration only, and the build engineer converts with /pg-migrate, so
+            # a PostgreSQL database may lack the newest tables: a parity gap, which is not the PR's
+            # doing. `regressions` warns on a gap, leaves out only the metadata that needs it, runs the
+            # whole suite and blocks on any regression; `gate`, for a PR that touches migrations-pg/
+            # (the build engineer's PR), also blocks on the gap.
+            if echo "$CHANGED" | grep -qE '^migrations-pg/'; then
+              echo "pg=gate" >> "$GITHUB_OUTPUT"
+            else
+              echo "pg=regressions" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "codegen=true" >> "$GITHUB_OUTPUT"
+            # Off the pull-request path the rig runs on its own schedule (see cross-server-invalidation).
+            echo "cachestack=false" >> "$GITHUB_OUTPUT"
+            echo "migrations=false" >> "$GITHUB_OUTPUT"
+            echo "vectors=false" >> "$GITHUB_OUTPUT"
+            # A release (publish.yml calling this workflow with release: true) and a dispatch (the
+            # build engineer's own run) gate. The nightly blocks on a regression and warns on a parity
+            # gap, as a PR does. A merge into next skips the lane: the PR that merged already ran it.
+            if [ "${{ inputs.release }}" = "true" ]; then
+              echo "pg=gate" >> "$GITHUB_OUTPUT"
+            else case "${{ github.event_name }}" in
+              workflow_dispatch) echo "pg=gate" >> "$GITHUB_OUTPUT" ;;
+              schedule) echo "pg=regressions" >> "$GITHUB_OUTPUT" ;;
+              *) echo "pg=skip" >> "$GITHUB_OUTPUT" ;;
+            esac; fi
           fi
+
+      # The deterministic lane is skipped on a PR when either
+      #   - every watched change sits in packages the lane never builds (UI-only PRs, in
+      #     practice): no test can load them; or
+      #   - these exact PR changes already passed it (a catch-up merge of the base branch that
+      #     leaves the PR's files, migrations, metadata and test definitions alone — measured at
+      #     ~16% of this job's PR minutes): see the record-integration-pass job, which records a
+      #     pass only when both deterministic lanes passed.
+      # The rules, and why every doubt resolves to "run", are in the script's header. Merges,
+      # the nightly and dispatches always run the lane, so a wrong skip is caught by the next
+      # merge's backstop.
+      - name: Fingerprint the PR changes
+        id: fingerprint
+        if: github.event_name == 'pull_request'
+        run: node .github/scripts/select-integration-tier.mjs fingerprint
+
+      # The cache is only an index from fingerprint to run URL. The selection step verifies the
+      # recorded run through the API before trusting it, since any workflow a PR runs can write
+      # a cache entry under this PR's scope.
+      - name: Look up an earlier passing run of these changes
+        if: steps.fingerprint.outputs.fingerprint != ''
+        uses: actions/cache/restore@v6
+        with:
+          path: .integration-pass
+          key: integration-pass-v2-${{ github.event.pull_request.number }}-${{ github.base_ref }}-${{ steps.fingerprint.outputs.fingerprint }}
+
+      # No install here: turbo is fetched at the lockfile's exact version and reads the
+      # workspace graph from the lockfile and package.json files alone.
+      - name: Select integration tier
+        id: tier
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          FINGERPRINT: ${{ steps.fingerprint.outputs.fingerprint }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "integration=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TURBO_VERSION="$(sed -n 's/^  turbo@\([0-9][0-9.]*\):$/\1/p' pnpm-lock.yaml | head -n 1)"
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          # A failed dry run leaves the graph file empty; the script then fails open and runs the tier.
+          npx --yes "turbo@${TURBO_VERSION:-2}" run build --dry=json "${FILTERS[@]}" > "$RUNNER_TEMP/build-graph.json" || true
+          node .github/scripts/select-integration-tier.mjs --build-graph="$RUNNER_TEMP/build-graph.json" \
+            --passed-marker=.integration-pass/run.txt --fingerprint="$FINGERPRINT" --pr="$PR_NUMBER"
 
   # Lockfile preflight (MJ#4650). Every heavy job below installs for itself, so a lockfile that
   # does not resolve used to fail ALL of them — each after minutes, each under a name implying the
@@ -153,33 +307,96 @@ jobs:
   # now SKIPS them instead of failing them — "could not run" and "ran and found a problem" stop
   # reporting the same state, which is also what lets a ruleset treat them differently (MJ#4648).
   # Resolve-only: it writes no node_modules and is not a substitute for each job's own install.
+  #
+  # Deliberately NOT named like lockfile-guard.yml's `Lockfile matches package.json`, although both
+  # run the same `pnpm install --frozen-lockfile --lockfile-only`. That name is the required check in
+  # next-protect, and a ruleset matches checks by name only: two jobs reporting under it would make
+  # the verdict depend on which one reported last, and this one does not run on every PR. The
+  # required check is lockfile-guard.yml's; this job only exists so the jobs below can skip.
   preflight:
-    name: Lockfile resolves
+    name: Lockfile resolves (integration preflight)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
+      # No pnpm cache here: a lockfile-only install downloads no packages, so this job would
+      # save a near-empty store under the cache key that the installing jobs share.
       - name: Set up Node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: 'pnpm'
+          package-manager-cache: false
 
       - name: Resolve against the committed lockfile
         run: pnpm install --frozen-lockfile --lockfile-only
 
+  # Predictive Studio sidecar's pytest suite (D-077's Python deferral closed, D4-69). The sidecar's
+  # setup:python / test:python scripts import only node: modules, so no pnpm install is needed: pnpm
+  # only runs the package scripts. setup:python builds .venv on CPython 3.11 from the pinned
+  # src/python/requirements.txt; test:python exits 1 on a failing test and on a missing venv (it
+  # never skips). Same trigger rule as integration-sqlserver: the weekly live-model cron skips it.
+  ps-sidecar-pytest:
+    name: Predictive Studio sidecar (pytest)
+    needs: [preflight]
+    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      # No pnpm cache here: the filtered install below downloads only the sidecar's subset of
+      # dependencies, so enabling setup-node's shared pnpm cache saves a ~192 MB partial store
+      # under the full lockfile's key that every full-install workflow then hits and re-downloads.
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # The parity tests (tests/tools/gate_parity.py, tests/test_snapshot.py) run the built Core through node, from
+      # Sidecar/node_modules/@memberjunction/predictive-studio-core/dist, so the sidecar's workspace dependencies are
+      # installed and Core is built with its own workspace dependencies first.
+      - name: Install the sidecar's workspace dependencies
+        run: pnpm install --frozen-lockfile --filter "@memberjunction/predictive-studio-sidecar..."
+
+      - name: Build Predictive Studio Core and its dependencies
+        run: pnpm --filter "@memberjunction/predictive-studio-core..." run build
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.11'
+
+      - name: Create the sidecar venv
+        working-directory: packages/AI/PredictiveStudio/Sidecar
+        run: pnpm run setup:python   # probes python3.11 first (scripts/python-probe.mjs:12)
+
+      - name: Run the sidecar pytest suite
+        working-directory: packages/AI/PredictiveStudio/Sidecar
+        run: pnpm run test:python
+
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
-    needs: [preflight]
+    needs: [changes, preflight]
     # Runs on PRs, merges, dispatch, and the NIGHTLY cron (with the mutation tier armed).
     # The weekly Sunday cron is the live-model lane's trigger — the deterministic suite
     # already ran that morning's nightly, so skip it there.
-    if: github.event_name != 'schedule' || github.event.schedule == '0 6 * * *'
+    # On a PR, `changes` may select it out (see "Select integration tier"). Only an explicit
+    # 'false' skips: if `changes` itself failed, its output is empty and the lane still runs —
+    # hence `!cancelled()` plus the explicit preflight check instead of the implicit success().
+    if: |
+      !cancelled() && needs.preflight.result == 'success' &&
+      (github.event_name != 'schedule' || github.event.schedule == '0 6 * * *') &&
+      needs.changes.outputs.integration != 'false'
     timeout-minutes: 60
     runs-on: ubuntu-latest
     # Both the committed mj.config.cjs and the aggregator's own config layer read DB creds
@@ -193,16 +410,23 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Every query, tag and agent-note save embeds its text with the default local model, which is
+      # otherwise the highest-PowerRank active one (all-mpnet-base-v2, ~3 s per embed on this
+      # runner). The deterministic tier checks the pipelines around embedding, not embedding
+      # quality, so it pins the smallest local model. Read by MJAPI and the `mj` CLI alike, so both
+      # embed with, and judge stored vectors against, the same model.
+      MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -211,7 +435,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       # Poll until SQL Server actually answers a query, rather than a blind sleep. A cold
       # container that merely started (but is still doing recovery/tempdb setup) will accept
@@ -232,20 +482,40 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
+          create-explorer-env: 'false'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # ── next's turbo build seed (PR runs only) ─────────────────────────────────────────
+      # A PR run receives no remote-cache credentials (see this job's env block), so without
+      # this step the build below compiles every task from source: 0 of 237 cached, 6.5-9.5
+      # minutes, against 235 of 235 in about 10 seconds while PR runs still had the remote
+      # cache (measured 2026-11-23). The Unit Tests backstop saves its `.turbo/cache` on every
+      # merge to next (test.yml, "Save turbo build cache"), and that build runs every task this
+      # workflow builds under the same hashes: 237 of 237 for this job and 177 of 177 for the
+      # drift gate on 3f239f5dd3. A task the PR changed, or that depends on one, still misses
+      # and compiles.
+      #
+      # Restore-only, the split test.yml's own Build job uses: the entry is written by
+      # push/schedule runs on next alone, and an Actions cache lets a PR read next's entries
+      # but never another PR's. Entries are content-hashed, so a PR into a release line can
+      # read next's seed too; whatever does not match is a miss.
+      #
+      # Push, schedule, dispatch and release-gate runs keep the remote cache and skip this.
+      # Every job here that builds with turbo carries the step, including the lanes no PR
+      # reaches today, so a lane that later gains a PR trigger is already covered.
+      # integration-turbo-seed.test.mjs holds that, and the key prefix, to test.yml's save key.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       # Build the graph the aggregator imports: testing-integration (+ its deps, which cover
       # core/core-entities/sqlserver-dataprovider/graphql-dataprovider/predictive-studio/
@@ -255,18 +525,25 @@ jobs:
       # of the monorepo this lane never touches. Built once; every step below reuses it.
       - name: Build integration graph + CLI + MJAPI
         # mj_api added so the lane can BOOT MJAPI for the client-transport members.
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
 
-      # Provision the DB (aggregator SETUP): apply the committed migrations — which include the
-      # committed CodeGen output and the repeatable R__RefreshMetadata that refreshes every core
-      # view/proc/EntityField — then reconcile the committed metadata against that schema.
-      - name: Migrate — apply committed migrations to the fresh DB
-        env:
-          # Headroom over mssql's 15s default for the first heavy workload on a cold server.
-          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
-        run: node packages/MJCLI/bin/run.js migrate
+      # ── Provisioned-DB snapshot cache (v4: includes pre-baked first-run scheduled jobs) ──
+      # Migrate + the two sync pushes + Entity Vector Sync - Daily rebuild a byte-identical
+      # database on every run (~6 min provisioning + ~4 min first-run embedding). Most PRs touch
+      # neither migrations/ nor metadata*/, so restoring `mj-ci-db-v4-<line>-<hash>` turns both
+      # into seconds. Backstop-only save (push/schedule) preserves Actions cache isolation; the
+      # nightly cron skips restore (`skip-restore: true`) to re-seed cleanly every day.
+      - name: Restore SQL Server DB snapshot and migrate
+        id: db
+        uses: ./.github/actions/restore-sqlserver-db-snapshot
+        with:
+          variant: full
+          skip-restore: ${{ github.event_name == 'schedule' }}
 
       - name: Sync push — reconcile committed metadata (mj sync push --ci)
+        if: steps.db.outputs.needs-sync == 'true'
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
@@ -280,6 +557,7 @@ jobs:
       # roles → entity-permissions → users) resolves every @lookup ref in order. Without this the
       # RLS8/9/10 checks skip-as-pass, so the gate stays green either way — but pushing here keeps them exercised.
       - name: Sync push — seed the optional integration metadata + RLS fixtures
+        if: steps.db.outputs.needs-sync == 'true'
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'   # same cold-runner headroom as the main push above
         run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
@@ -288,6 +566,9 @@ jobs:
       # seeding (e.g. a silent no-op); if the 3 @integration.test principals are absent, the
       # deterministic RLS8/9/10 checks skip-as-pass and the tier's strongest coverage silently
       # stops running while the gate stays green. Fail loudly here instead (R2 follow-up).
+      # Unconditional, so on a warm run it doubles as the snapshot's own acceptance test: a
+      # restored database that is missing the fixtures reds the job here rather than quietly
+      # skipping the RLS coverage.
       - name: Verify RLS integration fixtures were seeded
         run: |
           COUNT=$(docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
@@ -299,6 +580,235 @@ jobs:
             echo "::error::RLS integration fixtures were not seeded (found ${COUNT}/3 @integration.test users). The fixtures sync push may have exited 0 without seeding — the deterministic RLS8/9/10 checks would silently skip-as-pass. Re-run: mj sync push --dir=metadata-optional/integration-test" >&2
             exit 1
           fi
+
+      # Clear the pre-baked Entity Vector Sync - Daily run and its EntityRecordDocument rows so
+      # MJAPI executes the first-run job with THIS commit's code, and binary-fields.BF2/BF3
+      # validate vectors it wrote rather than vectors carried in from an older snapshot:
+      #   - on a PR that touches the vector write path (the `vectors` filter); and
+      #   - on a push that restored a snapshot of OTHER inputs (a prefix restore, cache-hit
+      #     false). That push saves a new snapshot, and the pre-bake below only runs the job when
+      #     it has never completed, so without the reset the new snapshot would inherit vectors
+      #     written by the older code its key no longer hashes.
+      - name: Reset baked vector-sync state
+        if: steps.db.outputs.warm == '1' && ((github.event_name == 'pull_request' && needs.changes.outputs.vectors == 'true') || (github.event_name == 'push' && steps.db.outputs.cache-hit != 'true'))
+        run: |
+          docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+            -d test -b -I -Q "
+              DELETE FROM [__mj].[EntityRecordDocument];
+              DELETE r FROM [__mj].[ScheduledJobRun] r
+                INNER JOIN [__mj].[ScheduledJob] j ON j.[ID] = r.[ScheduledJobID]
+                WHERE j.[RunImmediatelyIfNeverRun] = 1;
+              UPDATE [__mj].[ScheduledJob]
+                SET [LastRunAt] = NULL, [NextRunAt] = NULL, [LockToken] = NULL, [LockedAt] = NULL, [LockedByInstance] = NULL
+                WHERE [RunImmediatelyIfNeverRun] = 1;
+            "
+          echo "Reset pre-baked vector-sync state so this commit's code executes Entity Vector Sync - Daily fresh."
+
+      # ── Pre-bake first-run scheduled jobs (Entity Vector Sync - Daily) into the snapshot ──
+      # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun = 1, so MJAPI runs
+      # ~230-250 s of in-process embedding on its first boot against a fresh DB, blocking
+      # shard:client and saturating the 4-vCPU runner while server-1..3 execute. Running it once
+      # here on backstop snapshot builds (push/schedule on cache miss) bakes its CompletedAt row
+      # and stored vectors (required by binary-fields.BF2/BF3) into the v4 snapshot so every warm
+      # PR and push run skips the ~4-minute wait entirely.
+      #
+      # Determinism: all non-first-run Active cron jobs are paused before the transient MJAPI
+      # starts and restored after it exits. Before BACKUP DATABASE we assert that none of them is
+      # still Paused and that there are zero held LockToken / Running rows, so neither disabled
+      # cron jobs nor live cron side effects can be baked into the snapshot. Any failure writes a
+      # FAILED line to the step summary and skips the snapshot.
+      - name: Pre-run first-run scheduled jobs for the snapshot
+        id: prebake
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true'
+        continue-on-error: true
+        env:
+          MJ_API_KEY: mj-integration-prebake-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+        run: |
+          # pipefail so a failing sqlcmd inside `run_sql ... | tr` fails the command, not just tr.
+          set -o pipefail
+          run_sql() {
+            docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+              -d test -h -1 -W -b -I -Q "$1"
+          }
+          pending_jobs() {
+            run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
+              WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
+                AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
+                                WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]'
+          }
+
+          # Every way out of this step that is not success writes a FAILED line to the step
+          # summary: the explicit branches call fail(); anything else (a SQL error under bash -e,
+          # e.g. in the pause, the NextRunAt reset or the lock checks) is caught by the EXIT trap,
+          # which names the phase it died in. continue-on-error would otherwise hide it.
+          PHASE="checking for pending first-run jobs"
+          FAIL_REPORTED=0
+          fail() {
+            echo "::warning::$1"
+            echo "DB snapshot pre-bake: **FAILED** ($2) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            FAIL_REPORTED=1
+            exit 1
+          }
+
+          MJAPI_PID=""
+          PAUSED_IDS=""
+          PAUSED_IN_LIST=""
+          RESTORED_PAUSED=0
+          restore_paused_jobs() {
+            if [ "${RESTORED_PAUSED}" -eq 1 ] || [ -z "${PAUSED_IN_LIST}" ]; then return 0; fi
+            run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Active' WHERE [ID] IN (${PAUSED_IN_LIST});"
+            RESTORED_PAUSED=1
+          }
+          stop_mjapi() {
+            if [ -n "${MJAPI_PID}" ] && kill -0 "${MJAPI_PID}" 2>/dev/null; then
+              kill "${MJAPI_PID}" 2>/dev/null || true
+              wait "${MJAPI_PID}" 2>/dev/null || true
+            fi
+            MJAPI_PID=""
+          }
+          cleanup_prebake() {
+            local rc=$?
+            stop_mjapi
+            # Best effort on the way out: this run is failing and will not snapshot anyway.
+            restore_paused_jobs || true
+            if [ "${rc}" -ne 0 ] && [ "${FAIL_REPORTED}" -eq 0 ]; then
+              echo "::warning::Pre-bake failed (exit ${rc}) while ${PHASE}; skipping snapshot save."
+              echo "DB snapshot pre-bake: **FAILED** (error while ${PHASE}, exit ${rc}) — snapshot save skipped" >> "$GITHUB_STEP_SUMMARY"
+            fi
+            exit "${rc}"
+          }
+          trap cleanup_prebake EXIT
+
+          PENDING=$(pending_jobs)
+          if [ "${PENDING}" = "0" ]; then
+            echo "First-run scheduled jobs already completed in [test] — nothing to pre-bake."
+            exit 0
+          fi
+
+          # Pause non-first-run Active cron jobs during pre-bake so only RunImmediatelyIfNeverRun
+          # jobs can fire. Their IDs are kept so exactly those jobs are set back to Active.
+          PHASE="pausing cron jobs"
+          ACTIVE_CRON=$(run_sql "SET NOCOUNT ON; SELECT [ID] FROM [__mj].[ScheduledJob] WHERE [Status] = 'Active' AND [RunImmediatelyIfNeverRun] = 0;")
+          PAUSED_IDS=$(printf '%s\n' "${ACTIVE_CRON}" | tr -d '\r' | grep -E '^[0-9A-Fa-f-]+$' || true)
+          while IFS= read -r id; do
+            [ -z "$id" ] && continue
+            [ -n "${PAUSED_IN_LIST}" ] && PAUSED_IN_LIST="${PAUSED_IN_LIST},"
+            PAUSED_IN_LIST="${PAUSED_IN_LIST}'${id}'"
+          done <<< "${PAUSED_IDS}"
+          if [ -n "${PAUSED_IN_LIST}" ]; then
+            run_sql "UPDATE [__mj].[ScheduledJob] SET [Status] = 'Paused' WHERE [ID] IN (${PAUSED_IN_LIST});"
+          fi
+
+          PHASE="booting the transient MJAPI"
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi-prebake.log 2>&1) &
+          MJAPI_PID=$!
+          if ! .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-prebake.log 36 5 "${MJAPI_PID}"; then
+            fail "Transient pre-bake MJAPI failed to become ready; skipping v4 snapshot save." "transient MJAPI did not boot"
+          fi
+
+          PHASE="waiting for first-run jobs"
+          DONE=0
+          for _ in $(seq 1 84); do
+            # Tolerate a transient query error while MJAPI is busy; the timeout below still bounds it.
+            PENDING=$(pending_jobs || true)
+            if [ "${PENDING}" = "0" ]; then
+              echo "Pre-baked first-run scheduled jobs finished after ${SECONDS}s."
+              DONE=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "${DONE}" -ne 1 ]; then
+            fail "Pre-bake first-run scheduled jobs still pending (${PENDING}) after 420 s; skipping snapshot save." "timed out with ${PENDING} job(s) pending after 420 s"
+          fi
+
+          # Stop MJAPI cleanly and restore paused jobs BEFORE verifying the snapshot state. No
+          # `|| true` here: a failed restore must fail the step (the EXIT trap reports it).
+          PHASE="stopping MJAPI"
+          stop_mjapi
+          PHASE="restoring paused cron jobs"
+          restore_paused_jobs
+          PHASE="resetting NextRunAt"
+          run_sql "UPDATE [__mj].[ScheduledJob] SET [NextRunAt] = NULL;"
+
+          # Never snapshot a database with the cron jobs this step paused still Paused: every
+          # later warm run would start with the scheduler's cron jobs silently disabled.
+          if [ -n "${PAUSED_IN_LIST}" ]; then
+            PHASE="verifying the paused cron jobs were restored"
+            STILL_PAUSED=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] WHERE [Status] = 'Paused' AND [ID] IN (${PAUSED_IN_LIST});" | tr -d '[:space:]')
+            if [ "${STILL_PAUSED:-1}" != "0" ]; then
+              fail "Pre-bake left ${STILL_PAUSED} cron job(s) Paused; skipping snapshot save." "${STILL_PAUSED} paused cron job(s) not restored to Active"
+            fi
+          fi
+
+          PHASE="checking for held locks and running jobs"
+          LOCKED=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] WHERE [LockToken] IS NOT NULL;" | tr -d '[:space:]')
+          RUNNING=$(run_sql "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJobRun] WHERE [Status] = 'Running';" | tr -d '[:space:]')
+          if [ "${LOCKED:-1}" != "0" ] || [ "${RUNNING:-1}" != "0" ]; then
+            fail "Pre-bake left dirty scheduler state (LockToken count=${LOCKED}, Running runs=${RUNNING}); skipping snapshot save." "dirty scheduler state: locks=${LOCKED}, running=${RUNNING}"
+          fi
+          echo "Pre-bake verified clean (0 held locks, 0 running job rows, 0 paused cron jobs left)."
+
+      # ── Save the snapshot ──────────────────────────────────────────────────────────────
+      # BEFORE the tier runs, never after: the suite mutates the database, and a snapshot taken
+      # afterwards would seed every later run with test debris. Taken here, the snapshot is
+      # "migrations + committed metadata + fixtures + completed first-run scheduled jobs".
+      # Gated on prebake.outcome == 'success' so a failed pre-bake never saves an incomplete v4 seed.
+      - name: Snapshot the provisioned DB
+        id: dbsnapshot
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true' && steps.prebake.outcome == 'success'
+        continue-on-error: true
+        run: |
+          rm -rf /tmp/mjdb
+          mkdir -p /tmp/mjdb
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+            -Q "BACKUP DATABASE [test] TO DISK='/var/opt/mssql/snapshot.bak' WITH COMPRESSION, INIT, FORMAT;"
+          docker cp sql:/var/opt/mssql/snapshot.bak /tmp/mjdb/test.bak
+          # Printed so the size trend is visible in the log; it is the one figure the cache
+          # budget depends on.
+          ls -lh /tmp/mjdb/test.bak
+
+      - name: Save the provisioned-DB snapshot
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true' && steps.dbsnapshot.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: /tmp/mjdb
+          key: ${{ steps.db.outputs.save-key }}
+
+      # Encrypted entity fields (MJ: Credentials.Values and the like) need a base key in BOTH
+      # processes that write them: MJAPI (IT160 over the wire) and the mj test process (IT161
+      # in-process). Without one the save is refused and those bundles can only skip. A per-run
+      # throwaway is enough — the database was provisioned for this run, so there is no earlier
+      # ciphertext to stay compatible with. GITHUB_ENV carries it to every later step.
+      - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Comms V2 click links and open pixels are signed with this. MJAPI verifies them and the
+          # test process signs them (comms-v2-wire.CV2W6), so both need the same value.
+          echo "MJ_COMMS_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
+
+      # Clone the provisioned [test] database into 3 isolated worker databases ([test_s1],
+      # [test_s2], [test_s3]) so the 101 pure-server deterministic bundles can execute across
+      # 3 LPT-balanced shards concurrently without cross-bundle mutation or entity-cache collisions,
+      # while [test] remains dedicated to MJAPI and the client-transport (+ wire-companion) worker.
+      - name: Clone isolated worker databases for parallel server shards
+        run: |
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+            -Q "
+              BACKUP DATABASE [test] TO DISK='/var/opt/mssql/worker_seed.bak' WITH COMPRESSION, INIT, FORMAT;
+              RESTORE DATABASE [test_s1] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s1.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s1_log.ldf';
+              RESTORE DATABASE [test_s2] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s2.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s2_log.ldf';
+              RESTORE DATABASE [test_s3] FROM DISK='/var/opt/mssql/worker_seed.bak' WITH REPLACE, MOVE 'test' TO '/var/opt/mssql/data/test_s3.mdf', MOVE 'test_log' TO '/var/opt/mssql/data/test_s3_log.ldf';
+            "
+          docker exec -u 0 sql rm -f /var/opt/mssql/worker_seed.bak
 
       # Boot MJAPI against the provisioned DB so the client-transport members execute
       # instead of skipping. MJ_API_KEY is a throwaway per-run system key: MJServer
@@ -316,19 +826,14 @@ jobs:
           # checks read them as "never ran" (expected 4, got 0). Immediately-eligible root tasks
           # lose this race most often, which is why it presented as an intermittent failure.
           MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+          # REST is off by default; the REST members (IT134 CW7/CW8) skip without it.
+          MJ_REST_API_ENABLED: 'true'
+          # Opt this integration MJAPI into Frozen artifact guest sharing so IT171 DSLC5/DSLC6 exercise it (while DSLC13 asserts default-off refusal).
+          MJ_ARTIFACT_GUEST_SHARING_ENABLED: 'true'
+        # Without a ready MJAPI the 19 client-transport members would skip, so a failed boot fails here.
         run: |
-          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
-          echo "Waiting for MJAPI /healthcheck..."
-          for i in $(seq 1 36); do
-            if curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1; then
-              echo "MJAPI is up (attempt $i)."
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "::error::MJAPI failed to boot within 3 minutes — the 19 client-transport members would skip. Log tail:"
-          tail -200 /tmp/mjapi.log
-          exit 1
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi.log 36 5 "$!"
 
       # The deterministic tier via the single entry path: `mj test suite` loads the private
       # suite package through mj.config.cjs `testing.checkModules`, dispatches every IT
@@ -339,34 +844,505 @@ jobs:
       # MJ_API_KEY (same value MJAPI booted with) arms the client-transport members.
       # RUN_MUTATION_TESTS=1 on the nightly cron arms the save/delete cache-invalidation
       # checks — PR/push runs keep them Skipped (visible in the summary, never false-green).
+      #
+      # Parallel sharding across 4 isolated databases (1 per vCPU on standard 4-core runners):
+      #   - server-1..3 run `--transport=server --shard=k/3` against `test_s1..3`
+      #   - client runs `--transport=client` against `test` (the DB served by MJAPI on :4000)
       - name: Run integration tier (mj test)
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
           RUN_MUTATION_TESTS: ${{ github.event_name == 'schedule' && '1' || '' }}
+          # IT145 (the SQL pipeline scenario matrix over GraphQL) saves real queries through MJAPI
+          # for every case, so its cost scales with the case count: on CI runners SPC1 took
+          # 249-684 s and SPC2 97-428 s at full scope (worst 1,112 s against the bundle's 900 s
+          # limit; run 40993440752 timed out in SPC2). Pull requests run the 'pr' subset: all
+          # pairs over the transport dimensions (run path, values, MaxRows, StartRow), every
+          # shape/templating/composition variant on every client run path, ~22% of the points.
+          # The content-only pairs it drops run in full on every PR in the server bundles
+          # IT143/IT146. The nightly cron, merges to next/lts and manual dispatch run 'full'.
+          # At full scope 900 s was too tight to be a hang guard: 7 of the 10 merges to next
+          # measured on 2026-10-30 ran into it, with SPC1 passing and SPC2 either still running at the limit
+          # or passing with no time left for teardown. IT145's MaxExecutionTimeMS is therefore
+          # 1,500 s (the worst full run above plus ~35%).
+          SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
           # live-model is DEFAULT-ON since 2026-07-20 (tiers.ts: only an explicit '0'
           # disables). This lane has no LLM credentials, so pin it off explicitly —
           # tiers.ts's own doc comment assumes CI does this, and nothing did.
           RUN_AGENT_TESTS: '0'
         run: |
-          set -o pipefail
-          pnpm run test:integration 2>&1 | tee /tmp/integration.log
+          set -uo pipefail
+          SUITE_NAME="Integration Tests — Deterministic"
+          rm -f /tmp/integration-shard-*.log /tmp/integration-shard-*.status /tmp/integration-shard-*.json /tmp/integration.log
+
+          run_shard() {
+            local name="$1"
+            local db="$2"
+            shift 2
+            local log="/tmp/integration-shard-${name}.log"
+            local status_file="/tmp/integration-shard-${name}.status"
+            local json_file="/tmp/integration-shard-${name}.json"
+            local start_ts
+            start_ts=$(date +%s)
+            echo "[shard:${name}] Starting on DB=${db} args=($*)..."
+            local rc=0
+            DB_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" --output "${json_file}" "$@" > "${log}" 2>&1 || rc=$?
+            local end_ts
+            end_ts=$(date +%s)
+            local elapsed=$((end_ts - start_ts))
+            printf '%s\t%s\t%s\t%s\t%s\n' "${name}" "${db}" "$*" "${rc}" "${elapsed}s" > "${status_file}"
+            echo "[shard:${name}] Finished with exit=${rc} in ${elapsed}s"
+            return 0
+          }
+
+          # Entity Vector Sync - Daily is seeded with RunImmediatelyIfNeverRun and a CI database has
+          # never run it, so MJAPI starts it on every boot: 90-170 s of in-process embedding that
+          # stops /healthcheck answering and times out requests waiting for a pooled connection.
+          # A client shard started alongside it got a provider with no metadata (#6361). The job
+          # has to run, because binary-fields.BF2/BF3 read the rows it writes. So the client shard
+          # waits for it; the server shards don't use MJAPI and start now. After the limit the
+          # client shard starts anyway, and a job that never finished fails the checks that need it.
+          wait_for_first_run_jobs() {
+            local pending=""
+            for _ in $(seq 1 84); do
+              pending=$(docker exec sql /opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'VeryStr0ngP@ssw0rd' \
+                -d test -h -1 -W -I -Q "SET NOCOUNT ON; SELECT COUNT(*) FROM [__mj].[ScheduledJob] j
+                  WHERE j.[Status] = 'Active' AND j.[RunImmediatelyIfNeverRun] = 1
+                    AND NOT EXISTS (SELECT 1 FROM [__mj].[ScheduledJobRun] r
+                                    WHERE r.[ScheduledJobID] = j.[ID] AND r.[CompletedAt] IS NOT NULL);" | tr -d '[:space:]') || true
+              if [ "${pending}" = "0" ]; then
+                echo "[shard:client] First-run scheduled jobs finished after ${SECONDS}s."
+                return 0
+              fi
+              sleep 5
+            done
+            echo "::warning::First-run scheduled jobs still pending (${pending}) after 420 s; starting the client shard anyway."
+          }
+
+          run_shard "server-1" "test_s1" --transport=server --shard=1/3 &
+          PID_S1=$!
+          run_shard "server-2" "test_s2" --transport=server --shard=2/3 &
+          PID_S2=$!
+          run_shard "server-3" "test_s3" --transport=server --shard=3/3 &
+          PID_S3=$!
+          { wait_for_first_run_jobs; run_shard "client" "test" --transport=client; } &
+          PID_CLIENT=$!
+
+          wait "${PID_S1}" "${PID_S2}" "${PID_S3}" "${PID_CLIENT}"
+
+          OVERALL_EXIT=0
+          for SHARD in server-1 server-2 server-3 client; do
+            LOG="/tmp/integration-shard-${SHARD}.log"
+            STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+            RC=$(cut -f4 "${STATUS_FILE}")
+            ELAPSED=$(cut -f5 "${STATUS_FILE}")
+            echo "::group::Shard ${SHARD} (exit=${RC}, duration=${ELAPSED})"
+            cat "${LOG}"
+            echo "::endgroup::"
+            cat "${LOG}" >> /tmp/integration.log
+            if [ "${RC}" -ne 0 ]; then
+              OVERALL_EXIT=1
+            fi
+          done
+
+          if [ "${OVERALL_EXIT}" -ne 0 ]; then
+            echo "::error::One or more integration shards failed — summary of failing shards:"
+            for SHARD in server-1 server-2 server-3 client; do
+              STATUS_FILE="/tmp/integration-shard-${SHARD}.status"
+              RC=$(cut -f4 "${STATUS_FILE}")
+              if [ "${RC}" -ne 0 ]; then
+                echo "=== Failing shard: ${SHARD} (exit=${RC}) ==="
+                grep -E '(\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]|✗|Error:)' "/tmp/integration-shard-${SHARD}.log" | tail -80 || true
+              fi
+            done
+            exit 1
+          fi
+
+      # IT92 and IT134 are the only checks that prove field-level security through MJAPI's
+      # GraphQL and REST endpoints. The suite counts a skipped check as a skip, not a failure, so a
+      # fixture that refused to run (seed missing, REST off, the field-security flag read as on)
+      # would leave every one of them unrun while the gate stays green. Same reasoning as the RLS
+      # fixture check above: fail loudly when any of their checks skipped or none ran.
+      - name: Verify the over-the-wire FLS bundles ran (IT92, IT134)
+        run: node .github/scripts/check-fls-wire-bundles-ran.mjs /tmp/integration.log
 
       # Surface the suite's own pass/fail/skip accounting in the job summary so a run
       # where coverage silently shrank (skips) is one click away from being noticed.
       - name: Publish suite summary
         if: always()
         run: |
-          {
-            echo '## Integration tier result'
-            echo '```'
-            grep -E '\[(SUITE_COMPLETE|SUMMARY|DURATION|FAILURES|SKIPPED)\]' /tmp/integration.log || echo 'No suite summary found in the log.'
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          node -e '
+            const fs = require("node:fs");
+            const shards = ["server-1", "server-2", "server-3", "client"];
+            const lines = [
+              "## Integration tier result (4 parallel shards)",
+              "",
+              "| Shard | Database | Flags | Exit | Wall Time | Suite Summary |",
+              "| --- | --- | --- | --- | --- | --- |",
+            ];
+            let totalPassed = 0, totalFailed = 0, totalSkipped = 0, totalTests = 0, haveTotals = false;
+            const detailBlocks = [];
+
+            for (const shard of shards) {
+              const statusPath = `/tmp/integration-shard-${shard}.status`;
+              const jsonPath = `/tmp/integration-shard-${shard}.json`;
+              const logPath = `/tmp/integration-shard-${shard}.log`;
+              if (!fs.existsSync(statusPath)) continue;
+
+              const [, db = "", flags = "", rc = "", elapsed = ""] =
+                fs.readFileSync(statusPath, "utf8").trim().split("\t");
+              const logText = fs.existsSync(logPath) ? fs.readFileSync(logPath, "utf8") : "";
+
+              let parsed = null;
+              if (fs.existsSync(jsonPath)) {
+                try { parsed = JSON.parse(fs.readFileSync(jsonPath, "utf8")); } catch {}
+              }
+              if (!parsed && logText) {
+                const p = /"passedTests":\s*(\d+)/.exec(logText);
+                const f = /"failedTests":\s*(\d+)/.exec(logText);
+                const s = /"skippedTests":\s*(\d+)/.exec(logText);
+                const t = /"totalTests":\s*(\d+)/.exec(logText);
+                if (p && f && t) {
+                  parsed = {
+                    passedTests: Number(p[1]),
+                    failedTests: Number(f[1]),
+                    skippedTests: s ? Number(s[1]) : 0,
+                    totalTests: Number(t[1]),
+                  };
+                }
+              }
+
+              let summaryCell = "(no summary line)";
+              if (parsed && typeof parsed.totalTests === "number") {
+                const p = parsed.passedTests ?? 0;
+                const f = parsed.failedTests ?? 0;
+                const s = parsed.skippedTests ?? 0;
+                const t = parsed.totalTests ?? 0;
+                summaryCell = `${p} passed / ${f} failed / ${s} skipped of ${t}`;
+                totalPassed += p;
+                totalFailed += f;
+                totalSkipped += s;
+                totalTests += t;
+                haveTotals = true;
+              } else if (logText) {
+                const m = /\[SUMMARY\]\s*(.+)/.exec(logText);
+                if (m) summaryCell = m[1].trim();
+              }
+
+              lines.push(`| \`${shard}\` | \`${db}\` | \`${flags}\` | \`${rc}\` | ${elapsed} | ${summaryCell} |`);
+
+              const skipGateMatch = /Skip gate:\s*(.+)/.exec(logText);
+              const detailLines = [`=== ${shard} (${summaryCell}) ===`];
+              if (skipGateMatch) detailLines.push(`Skip gate: ${skipGateMatch[1].trim()}`);
+              if (parsed && Array.isArray(parsed.testResults)) {
+                const failed = parsed.testResults.filter(tr => tr.status !== "Passed" && tr.status !== "Skipped");
+                for (const tr of failed) {
+                  detailLines.push(`  ✗ ${tr.testName} (${tr.status})`);
+                }
+              }
+              detailBlocks.push(detailLines.join("\n"));
+            }
+
+            if (haveTotals) {
+              lines.push(
+                `| **Total** | | | | | **${totalPassed} passed / ${totalFailed} failed / ${totalSkipped} skipped of ${totalTests}** |`
+              );
+            }
+            lines.push("", "### Per-shard details", "```", ...detailBlocks, "```");
+            const benchMdPath = "packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md";
+            if (fs.existsSync(benchMdPath)) {
+              lines.push("", "---", "", fs.readFileSync(benchMdPath, "utf8"));
+            }
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          '
+
+      - name: Upload IT128 performance benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: it128-performance-benchmark-${{ github.run_attempt }}
+          path: |
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.json
+            packages/TestingFramework/integration-test-suite/benchmark-logs/latest.md
+          if-no-files-found: ignore
+          retention-days: 30
 
       - name: Dump MJAPI log on failure
         if: failure()
         run: tail -300 /tmp/mjapi.log || true
+
+      # The tail above stops at 300 lines, and the line that explains a failure is usually earlier:
+      # a client-transport check's query refusal is logged by MJAPI ("RunQuery: query ... refused for
+      # user ... by ..."), not by the test process, at the moment it happens (#6173). Keep the whole
+      # log so a failed run can be diagnosed without reproducing it.
+      - name: Upload MJAPI log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mjapi-log-deterministic-${{ github.run_attempt }}
+          path: /tmp/mjapi.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+
+  # ── Deterministic tier on PostgreSQL ────────────────────────────────────────────────
+  # The same suite, the same 4-shard layout, against a PostgreSQL database built only from
+  # migrations-pg and the two metadata pushes. SQL Server stays the hard gate; this lane catches
+  # what SQL Server cannot see: T-SQL in a check, a PG twin that lost metadata, a provider that
+  # behaves differently (a COMMIT PostgreSQL silently turned into ROLLBACK was found this way).
+  #
+  # RATCHET, not a zero-failure gate. PostgreSQL starts with a backlog, recorded with a reason
+  # per check in .github/integration-known-failures/postgresql.json. The job fails on a check
+  # that fails and is NOT on that list (a regression), and on a listed check that now passes, so
+  # the list is shortened in the pull request that fixed it. When the list is empty, delete it
+  # and gate on zero failures like the SQL Server job.
+  #
+  # No snapshot cache: migrate + both pushes take ~2 minutes on PostgreSQL.
+  integration-postgres:
+    name: Integration (PostgreSQL, deterministic)
+    # A PARITY GAP is an entity the metadata names that the PostgreSQL database does not have yet:
+    # feature PRs ship T-SQL migrations only, and their PostgreSQL twins arrive with the build
+    # engineer's /pg-migrate PR. The gap is next's state, not the PR's doing, so it must not stop
+    # the suite. prune-pg-parity-gap.mjs finds it before the push and leaves out only the records
+    # that name a missing entity or column (and, to a fixed point, records that look them up); everything
+    # else is pushed and the whole suite runs. A REGRESSION always blocks: a push of the pruned
+    # metadata that fails, or a check that fails and is neither on the known-failures list nor
+    # fails with the error a missing entity or column raises (`Entity <name> not found in metadata`,
+    # `column "<name>" does not exist`, ...), naming one the gap holds. The `changes` job sets the mode: `regressions` (every
+    # PR the SQL Server lane runs on, and the nightly) warns on a gap and prunes; `gate` (a PR
+    # touching migrations-pg/, a dispatch, or the release gate publish.yml runs) fails on a gap;
+    # `skip` (a merge into next) does not run.
+    #
+    # `complete` is true only when there was no gap and the suite met the ratchet: the pass record
+    # below needs it, so a run that left metadata out is never recorded as a full pass.
+    needs: [changes, preflight]
+    if: |
+      !cancelled() && needs.preflight.result == 'success' &&
+      (github.event_name != 'schedule' || github.event.schedule == '0 6 * * *') &&
+      needs.changes.outputs.pg != 'skip' &&
+      (github.event_name != 'pull_request' || needs.changes.outputs.pg == 'gate' || needs.changes.outputs.integration != 'false')
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    outputs:
+      complete: ${{ steps.ratchet.outputs.complete }}
+    env:
+      DB_PLATFORM: postgresql
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_DATABASE: test
+      DB_USERNAME: postgres
+      DB_PASSWORD: testpass
+      PG_HOST: localhost
+      PG_PORT: '5432'
+      PG_DATABASE: test
+      PG_USERNAME: postgres
+      PG_PASSWORD: testpass
+      CODEGEN_DB_USERNAME: postgres
+      CODEGEN_DB_PASSWORD: testpass
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: testpass
+      # Without it a bare `psql` connects to the database named after the user (`postgres`), not `test`.
+      PGDATABASE: test
+      # Same reason as the SQL Server job: the smallest local embedding model, read by MJAPI and `mj`.
+      MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/mj-setup
+        with:
+          create-explorer-env: 'false'
+
+      # The turbo build seed from next, as in integration-sqlserver (see the comment there).
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Build integration graph + CLI + MJAPI
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
+
+      # The group roles migration GRANTs reference, and the extensions the installer creates.
+      - name: Provision roles and extensions
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          CREATE EXTENSION IF NOT EXISTS pgcrypto;
+          CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+          SQL
+
+      - name: Migrate — apply migrations-pg
+        run: node packages/MJCLI/bin/run.js migrate
+
+      # The entities and fields the database has, against those the metadata names. In `regressions`
+      # mode a gap is a warning and the records that need a missing entity or column are removed from
+      # this (throwaway) checkout before the pushes; in `gate` mode it fails here.
+      - name: Find a parity gap and prune the metadata that needs it
+        id: parity
+        run: |
+          psql -v ON_ERROR_STOP=1 -tA -c 'SELECT "Name" FROM __mj."Entity"' > /tmp/pg-entities.txt
+          psql -v ON_ERROR_STOP=1 -tA -F $'\t' -c 'SELECT e."Name", f."Name" FROM __mj."EntityField" f JOIN __mj."Entity" e ON e."ID" = f."EntityID"' > /tmp/pg-entity-fields.txt
+          node .github/scripts/prune-pg-parity-gap.mjs --mode=${{ needs.changes.outputs.pg }} --in-place \
+            --present=/tmp/pg-entities.txt --present-fields=/tmp/pg-entity-fields.txt --gap-out=/tmp/pg-parity-gap.txt \
+            metadata metadata-optional/integration-test
+
+      - name: Sync push — reconcile committed metadata
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      - name: Sync push — seed the optional integration metadata + RLS fixtures
+        run: node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
+
+      - name: Verify RLS integration fixtures were seeded
+        run: |
+          COUNT=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"User\" WHERE \"Email\" LIKE '%@integration.test'")
+          echo "Seeded @integration.test fixture users: ${COUNT}/3"
+          if [ "${COUNT:-0}" -lt 3 ]; then
+            echo "::error::RLS integration fixtures were not seeded (found ${COUNT}/3 @integration.test users)." >&2
+            exit 1
+          fi
+
+      - name: Generate throwaway encryption and collaboration HMAC keys for this run
+        run: |
+          echo "MJ_BASE_ENCRYPTION_KEY=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          # Signs Comms V2 click links and open pixels; MJAPI and the test process share it (comms-v2-wire.CV2W6).
+          echo "MJ_COMMS_HMAC_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "MJ_MAGIC_LINK_PRIVATE_KEY=$(openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 2>/dev/null | base64 | tr -d '\n')" >> "$GITHUB_ENV"
+
+      # PostgreSQL copies a database from a template, so the worker databases cost seconds.
+      - name: Clone isolated worker databases for parallel server shards
+        run: |
+          for n in 1 2 3; do
+            psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE test_s${n} TEMPLATE test"
+          done
+
+      - name: Boot MJAPI (client-transport members)
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          MJ_DISABLE_TASK_GRAPH_DISPATCHER: '1'
+          MJ_REST_API_ENABLED: 'true'
+          MJ_ARTIFACT_GUEST_SHARING_ENABLED: 'true'
+        run: |
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/pg-mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/pg-mjapi.log 36 5 "$!"
+
+      # Same shards as the SQL Server job. A shard's exit code is not the verdict here: the
+      # known-failures check below is. A shard that crashes leaves no JSON, which fails that check.
+      - name: Run integration tier (mj test)
+        env:
+          MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
+          GRAPHQL_PORT: '4000'
+          SQLPIPE_MATRIX_SCOPE: ${{ github.event_name == 'pull_request' && 'pr' || 'full' }}
+          RUN_AGENT_TESTS: '0'
+        run: |
+          set -uo pipefail
+          SUITE_NAME="Integration Tests — Deterministic"
+          run_shard() {
+            local name="$1" db="$2"
+            shift 2
+            local rc=0 start_ts=$(date +%s)
+            DB_DATABASE="${db}" PG_DATABASE="${db}" MJ_INTEGRATION_TEST=1 \
+              node packages/MJCLI/bin/run.js test suite "${SUITE_NAME}" --output "/tmp/pg-shard-${name}.json" "$@" > "/tmp/pg-shard-${name}.log" 2>&1 || rc=$?
+            echo "[shard:${name}] exit=${rc} in $(( $(date +%s) - start_ts ))s"
+          }
+          # The client shard waits for MJAPI's first-run scheduled jobs, as on SQL Server (#6361).
+          wait_for_first_run_jobs() {
+            local pending=""
+            for _ in $(seq 1 84); do
+              pending=$(psql -tA -c "SELECT COUNT(*) FROM __mj.\"ScheduledJob\" j WHERE j.\"Status\" = 'Active' AND j.\"RunImmediatelyIfNeverRun\" = TRUE AND NOT EXISTS (SELECT 1 FROM __mj.\"ScheduledJobRun\" r WHERE r.\"ScheduledJobID\" = j.\"ID\" AND r.\"CompletedAt\" IS NOT NULL)" | tr -d '[:space:]') || true
+              if [ "${pending}" = "0" ]; then echo "[shard:client] First-run scheduled jobs finished after ${SECONDS}s."; return 0; fi
+              sleep 5
+            done
+            echo "::warning::First-run scheduled jobs still pending (${pending}) after 420 s; starting the client shard anyway."
+          }
+          run_shard server-1 test_s1 --transport=server --shard=1/3 & P1=$!
+          run_shard server-2 test_s2 --transport=server --shard=2/3 & P2=$!
+          run_shard server-3 test_s3 --transport=server --shard=3/3 & P3=$!
+          { wait_for_first_run_jobs; run_shard client test --transport=client; } & P4=$!
+          wait "$P1" "$P2" "$P3" "$P4"
+          for SHARD in server-1 server-2 server-3 client; do
+            echo "::group::Shard ${SHARD}"
+            cat "/tmp/pg-shard-${SHARD}.log" || true
+            echo "::endgroup::"
+          done
+
+      # A failure that is not on the list fails here, unless it is the error a missing entity or
+      # column raises, naming one the gap holds (reported, not gating). `complete` is written only after a pass with no gap.
+      - name: Compare with the known PostgreSQL failures
+        id: ratchet
+        run: |
+          node .github/scripts/check-integration-known-failures.mjs --parity-gap=/tmp/pg-parity-gap.txt \
+            .github/integration-known-failures/postgresql.json \
+            /tmp/pg-shard-server-1.json /tmp/pg-shard-server-2.json /tmp/pg-shard-server-3.json /tmp/pg-shard-client.json
+          if [ "${{ steps.parity.outputs.gap }}" = "false" ]; then
+            echo "complete=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::The suite passed the ratchet, but metadata was left out for the parity gap, so this run is not recorded as a full pass."
+          fi
+
+      - name: MJAPI log on failure
+        if: failure()
+        run: tail -300 /tmp/pg-mjapi.log || true
+
+  # A pass record lets a later run of this PR with the same change fingerprint (see the `changes`
+  # job) skip both deterministic lanes. It is written only when both suites ran in full and passed:
+  # the SQL Server job succeeded, and the PostgreSQL job reported `complete` (no parity gap, so no
+  # metadata was left out, and the ratchet passed). A skipped PostgreSQL job, or one that pruned for
+  # a gap, records nothing, so a later run tests again. A failure to save only costs that later
+  # skip, so it must not fail the run.
+  record-integration-pass:
+    name: Record that these PR changes passed
+    needs: [changes, integration-sqlserver, integration-postgres]
+    if: |
+      !cancelled() && github.event_name == 'pull_request' && needs.changes.outputs.fingerprint != '' &&
+      needs.integration-sqlserver.result == 'success' &&
+      needs.integration-postgres.result == 'success' && needs.integration-postgres.outputs.complete == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Record that these PR changes passed
+        run: |
+          mkdir -p .integration-pass
+          echo "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" > .integration-pass/run.txt
+      - name: Save the pass record
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: .integration-pass
+          key: integration-pass-v2-${{ github.event.pull_request.number }}-${{ github.base_ref }}-${{ needs.changes.outputs.fingerprint }}
 
   # ── WEEKLY live-model lane (Sunday 06:30 UTC + manual dispatch) ─────────────────────────
   # Runs "Integration Tests — Live Model" (15 tests: prompt-runner, agent-runner, shipped
@@ -384,7 +1360,7 @@ jobs:
   integration-live-model:
     name: Integration (Live Model, weekly)
     needs: [preflight]
-    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && github.event.inputs.run_live_model == 'true')) }}
     timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
@@ -395,13 +1371,14 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Check live-model prerequisites
         id: prereq
@@ -417,7 +1394,7 @@ jobs:
 
       - name: Checkout repo
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -427,7 +1404,33 @@ jobs:
 
       - name: Create SQL Server container
         if: steps.prereq.outputs.READY == 'true'
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         if: steps.prereq.outputs.READY == 'true'
@@ -443,28 +1446,30 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
       - name: Create SQL database
         if: steps.prereq.outputs.READY == 'true'
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        if: steps.prereq.outputs.READY == 'true'
-        uses: actions/setup-node@v6
+      - if: steps.prereq.outputs.READY == 'true'
+        uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
+          create-explorer-env: 'false'
 
-      - name: Install dependencies
-        if: steps.prereq.outputs.READY == 'true'
-        run: pnpm install --frozen-lockfile
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build integration graph + CLI + MJAPI
         if: steps.prereq.outputs.READY == 'true'
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
 
       - name: Migrate + sync push (main and integration metadata)
         if: steps.prereq.outputs.READY == 'true'
@@ -484,6 +1489,11 @@ jobs:
           # MJAPI boots with cwd packages/MJAPI and loads dotenv cwd-relative, so the keys must also
           # land there or the server process never sees them (IT63's agent runs server-side).
           printf '%s\n' "$LIVE_KEYS" >> packages/MJAPI/.env
+          COLLAB_SECRET="$(openssl rand -hex 32)"
+          FROZEN_SECRET="$(openssl rand -hex 32)"
+          echo "MJ_ARTIFACT_COLLAB_HMAC_SECRET=$COLLAB_SECRET" >> "$GITHUB_ENV"
+          echo "MJ_FROZEN_BLOCK_HMAC_SECRET=$FROZEN_SECRET" >> "$GITHUB_ENV"
+          printf 'MJ_ARTIFACT_COLLAB_HMAC_SECRET=%s\nMJ_FROZEN_BLOCK_HMAC_SECRET=%s\n' "$COLLAB_SECRET" "$FROZEN_SECRET" >> packages/MJAPI/.env
 
       - name: Boot MJAPI (wire-callback members)
         if: steps.prereq.outputs.READY == 'true'
@@ -491,12 +1501,8 @@ jobs:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
           GRAPHQL_PORT: '4000'
         run: |
-          (cd packages/MJAPI && node dist/index.js > /tmp/mjapi.log 2>&1 &)
-          for i in $(seq 1 36); do
-            curl -fsS http://localhost:4000/healthcheck >/dev/null 2>&1 && { echo "MJAPI is up."; exit 0; }
-            sleep 5
-          done
-          echo "::error::MJAPI failed to boot"; tail -200 /tmp/mjapi.log; exit 1
+          (cd packages/MJAPI && exec node dist/index.js > /tmp/mjapi.log 2>&1) &
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi.log 36 5 "$!"
 
       - name: Run Live Model suite
         if: steps.prereq.outputs.READY == 'true'
@@ -528,11 +1534,15 @@ jobs:
   # remote-invalidate). The July-2026 fingerprint bugs (31f38be52, d4947ed73) showed this
   # can be 100% broken while every unit test and the whole single-process integration tier
   # stay green — the failure only manifests when a second server's lookup misses.
+  #
+  # It is also the only lane that boots MJAPI with REDIS_URL set, so it runs on pull requests that
+  # change the shared-cache stack or the server bootstrap (`changes.outputs.cachestack`), not only
+  # nightly: a server that loads no metadata through the Redis-backed cache passes every other lane.
   cross-server-invalidation:
-    name: Cross-server invalidation rig (nightly)
-    needs: [preflight]
+    name: Cross-server invalidation rig (nightly + cache-stack PRs)
+    needs: [preflight, changes]
     # workflow_dispatch also runs it so the rig can be re-run on demand without waiting for the cron.
-    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && needs.changes.outputs.cachestack == 'true')) }}
     timeout-minutes: 45
     runs-on: ubuntu-latest
     env:
@@ -543,13 +1553,19 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # One definition for both MJAPI processes AND the rig: the servers swap to
+      # RedisLocalStorageProvider from REDIS_URL, and the rig's XS10/XS11 subscribe to the same
+      # Redis + key prefix to assert what the servers broadcast. Defined here so the two cannot drift.
+      REDIS_URL: redis://localhost:6379
+      REDIS_KEY_PREFIX: mj
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     services:
       redis:
         image: redis:7
@@ -557,7 +1573,7 @@ jobs:
           - 6379:6379
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -565,7 +1581,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
@@ -580,52 +1622,58 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
+          create-explorer-env: 'false'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build integration graph + CLI + MJAPI
-        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/testing-integration --filter=@memberjunction/integration-test-suite --filter=@memberjunction/open-app-engine --filter=mj_api
+        run: |
+          read -ra FILTERS <<< "$INTEGRATION_BUILD_FILTERS"
+          npx turbo build "${FILTERS[@]}"
 
-      - name: Migrate + sync push
+      # Restore the provisioned full DB snapshot (v4, including pre-baked first-run scheduled jobs)
+      # instead of running cold migrate + two sync pushes (~7.8-8.7 min). Restore-only here;
+      # integration-sqlserver is the sole writer for the `full` variant.
+      - name: Restore SQL Server DB snapshot and migrate
+        id: db
+        uses: ./.github/actions/restore-sqlserver-db-snapshot
+        with:
+          variant: full
+          skip-restore: ${{ github.event_name == 'schedule' }}
+
+      - name: Sync push (when snapshot missed or prefix-matched)
+        if: steps.db.outputs.needs-sync == 'true'
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: |
-          node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
           node packages/MJCLI/bin/run.js sync push --dir=metadata-optional/integration-test --ci
 
       - name: Boot two MJAPI processes on shared Redis
         env:
           MJ_API_KEY: mj-integration-ci-${{ github.run_id }}
-          REDIS_URL: redis://localhost:6379
+        # Ready means the server loaded entity metadata: a start that loaded none fails, and
+        # /healthcheck then answers 503 with the failed phase, which the wait script stops on.
         run: |
-          (cd packages/MJAPI && GRAPHQL_PORT=4000 node dist/index.js > /tmp/mjapi-a.log 2>&1 &)
-          (cd packages/MJAPI && GRAPHQL_PORT=4001 node dist/index.js > /tmp/mjapi-b.log 2>&1 &)
-          for PORT in 4000 4001; do
-            UP=0
-            for i in $(seq 1 36); do
-              curl -fsS "http://localhost:${PORT}/healthcheck" >/dev/null 2>&1 && { UP=1; break; }
-              sleep 5
-            done
-            if [ "$UP" != "1" ]; then
-              echo "::error::MJAPI on port ${PORT} failed to boot"
-              tail -200 "/tmp/mjapi-$([ "$PORT" = "4000" ] && echo a || echo b).log"
-              exit 1
-            fi
-            echo "MJAPI on ${PORT} is up."
-          done
+          (cd packages/MJAPI && GRAPHQL_PORT=4000 exec node dist/index.js > /tmp/mjapi-a.log 2>&1) &
+          PID_A=$!
+          (cd packages/MJAPI && GRAPHQL_PORT=4001 exec node dist/index.js > /tmp/mjapi-b.log 2>&1) &
+          PID_B=$!
+          .github/scripts/wait-for-mjapi.sh http://localhost:4000 /tmp/mjapi-a.log 36 5 "$PID_A"
+          .github/scripts/wait-for-mjapi.sh http://localhost:4001 /tmp/mjapi-b.log 36 5 "$PID_B"
 
       # ANTI-VACUITY. Every assertion in the rig presupposes that both processes actually
       # swapped LocalCacheManager to RedisLocalStorageProvider — that is the only thing that
@@ -633,6 +1681,10 @@ jobs:
       # both would silently fall back to the in-memory cache, no cross-server event would be
       # emitted, and XS1–XS7 would all PASS while testing nothing. A green lane asserting
       # nothing is worse than a red one.
+      #
+      # Both servers reaching ready (previous step) already proves each loaded entity metadata:
+      # MJServer fails a start that loaded none. What it does not prove is that they loaded it
+      # through Redis.
       #
       # MJServer logs the swap only at `verbose` (index.ts: startupLog.LogIf('verbose', …)),
       # so the log is not a dependable signal. Assert against Redis itself: two servers that
@@ -656,7 +1708,7 @@ jobs:
                 process.exit(0);
               })
               .catch(e => { console.log('::error::Could not reach Redis: ' + e.message); process.exit(1); });
-          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; exit 1; }
+          " || { echo '--- mjapi-a ---'; tail -100 /tmp/mjapi-a.log || true; echo '--- mjapi-b ---'; tail -100 /tmp/mjapi-b.log || true; exit 1; }
 
       - name: Run cross-server invalidation rig
         env:
@@ -684,10 +1736,11 @@ jobs:
   codegen-drift:
     name: CodeGen drift gate
     needs: [changes, preflight]
-    if: |
+    if: >-
+      ${{ !inputs.release && (
       (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') ||
       github.event_name == 'workflow_dispatch' ||
-      needs.changes.outputs.codegen == 'true'
+      needs.changes.outputs.codegen == 'true') }}
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -702,16 +1755,17 @@ jobs:
       MJ_CODEGEN_NO_AI: '1'
       # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
       MJ_CODEGEN_SKIP_COMMANDS: '1'
-      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
-      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. PR-triggered runs never
+      # receive it (the write token + HMAC signing key must not reach unreviewed PR code, which
+      # could poison cache entries the release gate replays), so they degrade to a cold local cache. Rationale and
       # setup instructions live once, on the build job in test.yml.
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -719,7 +1773,33 @@ jobs:
         run: docker network create -d bridge local-net
 
       - name: Create SQL Server container
-        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
 
       - name: Wait for SQL Server to be ready
         run: |
@@ -734,29 +1814,42 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
+          create-explorer-env: 'false'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build CLI + CodeGen graph
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
 
-      - name: Migrate + sync push
+      # Restore the `base` DB snapshot (migrations + metadata/ ONLY — never metadata-optional/ or
+      # ScheduledJobRun rows) instead of running cold migrate + sync push (~7.7 min). On PRs that
+      # touch migrations/ or metadata/, bypass restore so the drift gate still verifies a true
+      # from-scratch fresh install (catching literal Sequence collisions and deleted metadata rows).
+      - name: Restore SQL Server base DB snapshot and migrate
+        id: db
+        uses: ./.github/actions/restore-sqlserver-db-snapshot
+        with:
+          variant: base
+          skip-restore: ${{ github.event_name == 'schedule' || needs.changes.outputs.migrations == 'true' }}
+
+      - name: Sync push (when base snapshot missed or prefix-matched)
+        if: steps.db.outputs.needs-sync == 'true'
         env:
           MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
         run: |
-          node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
           # This push is the gate's SETUP, not its system-under-test, and it writes `sync` blocks
           # back into every record it touches — documented behaviour (metadata/CLAUDE.md rule 1)
@@ -764,6 +1857,29 @@ jobs:
           # metadata record is not failed for it. A minted primaryKey — or any other write-back —
           # leaves the file dirty and still reds the drift step below.
           node scripts/ci-restore-sync-only-metadata.mjs
+
+      # Save the clean `base` snapshot (backstop-only, BEFORE mj codegen runs) so subsequent PRs
+      # and push runs restore migrate + metadata/ in seconds.
+      - name: Snapshot the base DB for CodeGen drift
+        id: dbsnapshot
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true'
+        continue-on-error: true
+        run: |
+          rm -rf /tmp/mjdb
+          mkdir -p /tmp/mjdb
+          docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -b \
+            -Q "BACKUP DATABASE [test] TO DISK='/var/opt/mssql/snapshot.bak' WITH COMPRESSION, INIT, FORMAT;"
+          docker cp sql:/var/opt/mssql/snapshot.bak /tmp/mjdb/test.bak
+          ls -lh /tmp/mjdb/test.bak
+
+      - name: Save the base DB snapshot
+        if: (github.event_name == 'push' || github.event_name == 'schedule') && steps.db.outputs.cache-hit != 'true' && steps.dbsnapshot.outcome == 'success'
+        continue-on-error: true
+        uses: actions/cache/save@v6
+        with:
+          path: /tmp/mjdb
+          key: ${{ steps.db.outputs.save-key }}
 
       - name: Run CodeGen against the migrated DB
         id: codegen
@@ -773,7 +1889,8 @@ jobs:
         id: idempotency
         run: |
           node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai --skip-first-run
-          node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai
+          # --skip-warm: warm-twice just ran above; omitting it re-runs warm-twice from scratch (~3 min).
+          node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai --skip-warm
 
       - name: Diff committed generated artifacts
         id: drift
@@ -796,6 +1913,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -834,29 +1955,37 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # ── WEEKLY AI CodeGen drift gate ───────────────────────────────────────────────────────
-  # Runs the CodeGen idempotency and drift suite with live AI models enabled.
-  codegen-drift-ai:
-    name: CodeGen drift gate (weekly AI-assisted)
+  # ── NIGHTLY schema-mutating rig ────────────────────────────────────────────────────────
+  # Tests that change the schema and then run `mj codegen` cannot run in the deterministic tier:
+  # that tier is read-only-or-self-cleaning against one shared database, and its checks run
+  # in-process. This rig creates its own database on the job's SQL Server (mj_rig_fls_<timestamp>),
+  # runs migrate → sync push → codegen on it, then the field-level security reconciliation
+  # scenarios (test plan 2.7a–2.7d, 2.8c, 2.10: a column, a foreign key, a computed column and a
+  # layered-view column added; a custom view narrowed; a no-change run), and drops it. Each scenario
+  # runs CodeGen and requires it to exit 0. Nightly + on demand only: it runs CodeGen ~9 times.
+  schema-mutating-rig:
+    name: Schema-mutating rig (nightly)
     needs: [preflight]
-    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)
-    timeout-minutes: 60
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch') }}
+    timeout-minutes: 90
     runs-on: ubuntu-latest
     env:
       DB_HOST: localhost
-      DB_DATABASE: test
+      DB_PORT: '1433'
       DB_USERNAME: sa
       DB_PASSWORD: VeryStr0ngP@ssw0rd
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      MJ_CODEGEN_NO_AI: '1'
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
+      MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Rationale and setup
+      # instructions live once, on the build job in test.yml.
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
-      INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
-      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
-      MJ_CODEGEN_SKIP_COMMANDS: '1'
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -882,20 +2011,118 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: ./.github/actions/mj-setup
+        with:
+          create-explorer-env: 'false'
+
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Build CLI + CodeGen + test framework
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib --filter=@memberjunction/testing-integration
+
+      # The rig creates, bootstraps and drops its own database; there is no "Create SQL database"
+      # step. Each CLI step's full output goes to a temp directory the rig prints at start.
+      - name: Run schema-mutating rig
+        run: npx tsx packages/TestingFramework/integration-test-suite/rigs/schema-mutating/schema-mutating-tests.ts
+
+  # ── WEEKLY AI CodeGen drift gate ───────────────────────────────────────────────────────
+  # Runs the CodeGen idempotency and drift suite with live AI models enabled.
+  codegen-drift-ai:
+    name: CodeGen drift gate (weekly AI-assisted)
+    needs: [preflight]
+    if: ${{ !inputs.release && ((github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)) }}
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
+      INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        # Retried, because the image pull is a hard dependency on a registry we do not control
+        # and a blip here reds `next` for everyone. Observed 2026-10-28 (run 40784682308), with
+        # nothing about the job changed and no other container-creation failure in the previous
+        # 100 runs:
+        #     Unable to find image 'mcr.microsoft.com/mssql/server:2022-latest' locally
+        #     docker: Error response from daemon: Get "https://mcr.microsoft.com/v2/":
+        #       net/http: request canceled (Client.Timeout exceeded while awaiting headers)
+        # MCR was simply unreachable for 15s. Exit 125 — the container never started, so every
+        # later step skipped and the whole tier reported failure.
+        #
+        # `docker rm -f` between attempts: a partially-created container holds the `sql` name,
+        # and without this the retry would fail on the name conflict rather than retry the pull.
+        run: |
+          for attempt in 1 2 3; do
+            if docker run --rm -d --network local-net --name sql \
+                 -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" \
+                 -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest; then
+              exit 0
+            fi
+            docker rm -f sql >/dev/null 2>&1 || true
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::SQL Server container did not start (attempt ${attempt}/3) — retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            fi
+          done
+          echo "::error::Could not pull or start the SQL Server image after 3 attempts — see the docker error above."
+          exit 1
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
+          create-explorer-env: 'false'
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
+      - name: Restore the turbo build seed from next
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
 
       - name: Build CLI + CodeGen graph
         run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
@@ -918,7 +2145,8 @@ jobs:
         id: idempotency
         run: |
           node scripts/codegen-idempotency-check.mjs --stage warm-twice --skip-first-run
-          node scripts/codegen-idempotency-check.mjs --stage single-column
+          # --skip-warm: warm-twice just ran above; omitting it re-runs warm-twice from scratch.
+          node scripts/codegen-idempotency-check.mjs --stage single-column --skip-warm
 
       - name: Diff committed generated artifacts
         id: drift
@@ -941,6 +2169,10 @@ jobs:
             # only way to act on this failure used to be reproducing the whole job locally. Emit the
             # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
             # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            # `git status` lists untracked files (`??`) but `git diff` ignores them, so a newly
+            # emitted file printed two empty sections. Intent-to-add (-N) makes them show in the
+            # diff as additions without staging their content.
+            git add -A -N -- packages/ metadata/ migrations/ || true
             git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
             git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
             echo "--- change shape ---"
@@ -978,3 +2210,47 @@ jobs:
               echo '</details>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # Backstop alarm: neither `push` runs on `next` nor the `schedule` runs (`0 6 * * *` nightly,
+  # `30 6 * * 0` weekly) gate PR merges, so a red run used to be visible only to whoever opened the
+  # Actions tab. Each lane uses its own `--workflow` name (and therefore its own rolling issue label):
+  #   * push to `next`        -> "Integration Tier"
+  #   * nightly (`0 6 * * *`) -> "Integration Tier (Nightly)"
+  #   * weekly (`30 6 * * 0`) -> "Integration Tier (Weekly)"
+  # Isolating the three labels ensures a green daytime push (where mutation/cross-server/schema-rig
+  # lanes skip) can never auto-close an open nightly or weekly alarm. Logic and tests:
+  # .github/scripts/backstop-alarm.mjs.
+  backstop-alarm:
+    name: Backstop alarm
+    needs: [changes, preflight, integration-sqlserver, integration-postgres, integration-live-model, cross-server-invalidation, codegen-drift, schema-mutating-rig, codegen-drift-ai]
+    if: always() && !inputs.release && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref_name == 'next'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      ALARM_WORKFLOW: ${{ github.event_name == 'schedule' && (github.event.schedule == '0 6 * * *' && 'Integration Tier (Nightly)' || 'Integration Tier (Weekly)') || 'Integration Tier' }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: .github
+
+      - name: Alert on backstop failure
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs red --workflow "$ALARM_WORKFLOW"
+
+      # A cleanup failure must never turn a green run red (that would file an alarm about the
+      # alarm), so this step alone is continue-on-error; the script still logs ::error::.
+      - name: Resolve backstop alarm on green
+        if: ${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/backstop-alarm.mjs green --workflow "$ALARM_WORKFLOW"

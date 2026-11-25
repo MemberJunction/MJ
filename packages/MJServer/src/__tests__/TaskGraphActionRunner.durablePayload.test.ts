@@ -21,6 +21,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@memberjunction/actions', () => ({
+    BaseAction: class BaseAction {},
     ActionEngineServer: {
         Instance: {
             Config: vi.fn(),
@@ -170,7 +171,7 @@ describe('TaskGraphActionRunner: outputs must be storable', () => {
         expect(result).toMatchObject({ Success: true, Output: { AgentRunID: 'RUN-1' }, ActionLogID: 'LOG-2' });
     });
 
-    it('merges structured JSON Message properties into Output and aliases handle/Handle', async () => {
+    it('merges structured JSON Message properties into Output without synthesizing handle/Handle aliases', async () => {
         vi.mocked(ActionEngineServer.Instance.RunAction).mockResolvedValue({
             Success: true,
             Message: JSON.stringify({
@@ -188,10 +189,10 @@ describe('TaskGraphActionRunner: outputs must be storable', () => {
         expect(result.Success).toBe(true);
         expect(result.Output).toMatchObject({
             handle: 'doc-handle-99',
-            Handle: 'doc-handle-99',
             documentType: 'pdf',
             fileName: 'Sales_Demo_Report.pdf',
         });
+        expect(result.Output).not.toHaveProperty('Handle');
     });
 });
 

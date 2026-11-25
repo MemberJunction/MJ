@@ -150,6 +150,20 @@ The `SystemPlaceholderManager` automatically injects common values into all prom
 | `AgentPayloadChangeRequest` | Request to modify agent payload data during execution |
 | `ForEachOperation` / `WhileOperation` | Loop operation definitions for flow-based agents |
 
+### Executable Canon: Deterministic `TaskGraph` DAG Similarity & Workflow Health Telemetry (`task-graph/dag-similarity.ts`, `task-graph/workflow-telemetry.ts`)
+
+Pure, browser- and server-safe algorithms for comparing ad-hoc runtime `TaskGraphSpec` executions against saved canonized Flow workflows (`MJ: AI Agents` where `Type = 'Flow'`) and monitoring saved workflows for usage decay, exception spikes, outcome drift, and shadow bypasses. See the **[Canon-First Methodology & Semantic Graphs Guide](../../../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)** for full details.
+
+| Export | Purpose |
+|---|---|
+| `CanonicalizeNodeSignature` | Normalizes any `TaskGraphSpecNode` (`Action`, `Agent`, `Prompt`, `Decision`, `ForEach`, `While`, `External`, `Human`) into a run-invariant operator token, optionally including sorted `inputPayload` keys |
+| `NormalizeEdgeConditionShape` | Normalizes dependency edge conditions into structural shape tokens (`unconditional`, `xor:cond(decisions)`, `cond(stepResult+payload)`) |
+| `ComputeDAGFingerprint` | Computes a `DAGFingerprint` with an isomorphism-invariant 64-bit hex `ExactStructureHash`, operator multiset, directed edge bigrams, 2-hop transitive reachability pairs (`opA ~> opB`), and 2-iteration Weisfeiler-Lehman (WL) bidirectional subtree features |
+| `CompareDAGFingerprints` / `ComputeDAGSimilarity` | Returns weighted `Overall`, `OperatorJaccard`, `EdgeBigramJaccard`, `TransitivePairJaccard`, `WLSubtreeCosine`, and `IsExactStructuralMatch` |
+| `DiffDAGFingerprints` | Computes `SharedOperators`, `AddedOperators`, `RemovedOperators`, `AddedEdges`, and `RemovedEdges` between a baseline and candidate DAG |
+| `DiscoverWorkflowPromotionCandidates` | Complete-linkage agglomerative clustering over executed ad-hoc task graphs, classifying each cluster against saved workflows as `PromoteToWorkflow`, `EvolveExistingWorkflow`, `ExistingWorkflowDiscoveryGap`, or `BelowPromotionThreshold` |
+| `EvaluateWorkflowCanonHealth` | Evaluates saved Flow workflows across trailing vs. baseline execution windows and ad-hoc clusters, surfacing `Dormant`, `UsageDecay` (with `DomainAdjustedVelocityRatio` to separate true abandonment from seasonal domain slowdowns), `ExceptionSpike` (with node-level `HotspotNodes`), `OutcomeDrift`, and `ShadowBypassed` |
+
 ## Usage
 
 ### Prompt Execution Parameters
@@ -301,6 +315,20 @@ Provider mappings:
 - **Anthropic**: Thinking mode with 25K-2M token budgets
 - **Groq**: Experimental reasoning_effort parameter
 - **Gemini**: Reasoning mode intensity
+
+## Agent Instances, Instantiation Config & Policy Ceiling Inheritance
+
+`@memberjunction/ai-core-plus` defines the shared instantiation schema helpers, strictest-wins chain policy intersection, and ancestor-clamped run-limit resolution used across server engines and Angular UI studios.
+
+| Export | Module | Purpose |
+| --- | --- | --- |
+| `AgentInstantiationMode`, `MAX_AGENT_INHERITANCE_DEPTH` (5) | `agent-instantiation.ts` | Strongly-typed instantiation mode derived from `MJAIAgentEntity['InstantiationMode']` and the maximum prototype chain depth constant. |
+| `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig` | `agent-instantiation.ts` | Typed parser for `TypeConfiguration.instantiation` onboarding hints (suggested names, default icons, personality presets, `maxInstancesPerUser`). |
+| `DeepMergeAgentConfigObjects`, `ParseAgentConfigJsonObject` | `agent-instantiation.ts` | Deterministic root → leaf JSON object merge for `TypeConfiguration` and `AgentTypePromptParams` across `BaseAgentID` chains. |
+| `AgentUserPolicyEngine.GetEffectivePolicyForAgentChain` / `IntersectPolicies` | `AgentUserPolicyEngine.ts` | Intersects active user policies across `[root … leaf]` using strictest-wins ceiling semantics without mutating underlying entities. |
+| `ResolveAgentRunLimits` (`AncestorAgents`, `AncestorUserPolicies`) | `limits-diagnostics.ts` | Clamps derived agent cost, token, time, and iteration ceilings against every ancestor agent and ancestor policy in the chain. |
+
+Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
 
 ## Dependencies
 

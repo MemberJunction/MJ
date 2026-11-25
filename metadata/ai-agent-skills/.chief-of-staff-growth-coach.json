@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "AgentID": "@lookup:MJ: AI Agents.Name=Chief of Staff",
+      "SkillID": "@lookup:MJ: AI Skills.Name=Growth Coach",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A5C240F4-2838-4CB5-8472-2E6F9A7C2D2C"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:44.558Z",
+      "checksum": "a96c6e69fc9c9dab51622a445013c88068e303a11cb7379a67cac74f11262ef3"
+    }
+  }
+]

@@ -2,6 +2,9 @@
   {
     "fields": {
       "Name": "Brave Search",
+      "Config": {
+        "outputTrustLevel": "Untrusted"
+      },
       "Description": "Web search through the Brave Search API. Returns ranked title/url/snippet results from Brave's own independent index rather than reselling Google's or Bing's, so it does not share a failure mode with the Google Custom Search action (discontinued 2027-01-01) or with SERP-proxy vendors.",
       "DriverClass": "Brave Search",
       "Type": "Custom",
@@ -401,8 +404,8 @@
       "ID": "01DA2F20-7433-462F-B7F5-6DB7953DFCFA"
     },
     "sync": {
-      "lastModified": "2026-09-21T02:45:26.224Z",
-      "checksum": "425f5c2722b0268651f01f2ce9ce7dca301063ad0a51eec806f9c2d2579ab0c4"
+      "lastModified": "2026-11-03T23:46:07.446Z",
+      "checksum": "b37face7011c4464f0fb6890cb36499b83c465835d21a4d1e44478d110bc1736"
     }
   }
 ]

@@ -45,8 +45,10 @@ describe('InjectWhiteboardSubmitHelper', () => {
   it('the helper posts the documented marker payload to the parent with a "*" target', () => {
     // '*' is deliberate: the sandboxed frame has an OPAQUE origin (nothing to address);
     // the HOST validates marker + event.source instead.
-    expect(WHITEBOARD_SUBMIT_HELPER).toContain(
-      `window.MJWhiteboard={__lastSubmitAt:0,submit:function(data){window.MJWhiteboard.__lastSubmitAt=Date.now();parent.postMessage({__mjWhiteboardSubmit:true,data:data},'*');}};`);
+    // (the message gains `by: 'agent'` only when the helper attributes the submit to an agent command)
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('window.MJWhiteboard={__lastSubmitAt:0,');
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('var msg={__mjWhiteboardSubmit:true,data:data};');
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain(`parent.postMessage(msg,'*');`);
     expect(WHITEBOARD_SUBMIT_HELPER).toContain(WHITEBOARD_SUBMIT_MARKER);
   });
 });
@@ -96,6 +98,16 @@ describe('EvaluateWidgetSubmitMessage — host-side validation', () => {
   it('drops payloads that cannot be JSON-serialized (undefined data)', () => {
     const outcome = EvaluateWidgetSubmitMessage({ __mjWhiteboardSubmit: true }, widget);
     expect(outcome).toEqual({ Kind: 'dropped', Reason: 'unserializable' });
+  });
+
+  it("maps the helper's by:'agent' claim to Author:'agent'; anything else leaves Author absent (= user)", () => {
+    const agent = EvaluateWidgetSubmitMessage({ __mjWhiteboardSubmit: true, data: { a: 1 }, by: 'agent' }, widget);
+    expect(agent.Kind === 'submit' && agent.Event.Author).toBe('agent');
+    for (const by of [undefined, 'user', 'AGENT', true]) {
+      const outcome = EvaluateWidgetSubmitMessage({ __mjWhiteboardSubmit: true, data: { a: 1 }, by }, widget);
+      expect(outcome.Kind).toBe('submit');
+      expect(outcome.Kind === 'submit' && 'Author' in outcome.Event).toBe(false);
+    }
   });
 
   it('null data serializes fine ("null") — only undefined is unserializable', () => {
@@ -148,5 +160,6 @@ describe('auto-submit fallback (inert agent HTML still submits)', () => {
   it('field serialization respects the recorder privacy rules (private fields skipped, unchecked excluded)', () => {
     expect(WHITEBOARD_SUBMIT_HELPER).toContain("(t==='radio'||t==='checkbox')&&!el.checked");
     expect(WHITEBOARD_SUBMIT_HELPER).toMatch(/collectFields[\s\S]*isPrivate/);
+    expect(WHITEBOARD_SUBMIT_HELPER).toContain('var el=els[i];if(isGuarded(el)){continue;}');
   });
 });

@@ -189,6 +189,7 @@ vi.mock('@memberjunction/core', () => {
 });
 
 vi.mock('@memberjunction/ai-prompts', () => ({
+    EmbeddingCarrierPrompts: { VectorSync: 'Vector Sync Embedding', DuplicateDetection: 'Duplicate Detection Embedding', VectorSearch: 'Vector Search Embedding' },
     AIEmbeddingRunner: class {
         RunEmbedding = mockRunEmbeddingFn;
     },
@@ -535,6 +536,8 @@ describe('DuplicateRecordDetector', () => {
                 expect.objectContaining({
                     ModelID: 'model-1',
                     Description: expect.stringContaining('Duplicate detection batch'),
+                    // Booked under the duplicate detection carrier prompt (#4923).
+                    PromptName: 'Duplicate Detection Embedding',
                 })
             );
         });
@@ -566,6 +569,7 @@ describe('DuplicateRecordDetector', () => {
                 expect.objectContaining({
                     ModelID: 'model-1',
                     Description: expect.stringContaining('Duplicate detection single record'),
+                    PromptName: 'Duplicate Detection Embedding',
                 })
             );
         });
@@ -721,6 +725,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Contacts',
                 NameField: null,
                 Icon: 'fa-user',
+                IsFieldReadableByUser: () => true,
                 Fields: [
                     { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                     { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
@@ -762,6 +767,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Items',
                 NameField: null,
                 Icon: null,
+                IsFieldReadableByUser: () => true,
                 Fields: [
                     { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                 ],
@@ -794,6 +800,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Notes',
                 NameField: null,
                 Icon: null,
+                IsFieldReadableByUser: () => true,
                 Fields: [
                     { Name: 'Description', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                 ],
@@ -823,6 +830,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Empty',
                 NameField: null,
                 Icon: null,
+                IsFieldReadableByUser: () => true,
                 Fields: [],
                 FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true },
             };
@@ -836,6 +844,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'People',
                 NameField: null,
                 Icon: null,
+                IsFieldReadableByUser: () => true,
                 Fields: [
                     { Name: 'Name', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                     { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
@@ -868,6 +877,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'Contacts',
                 NameField: null,
                 Icon: 'fa-user',
+                IsFieldReadableByUser: () => true,
                 Fields: [
                     { Name: 'FirstName', IsNameField: true, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                     { Name: 'LastName', IsNameField: true, DefaultInView: true, Sequence: 2, IsPrimaryKey: false },
@@ -909,6 +919,7 @@ describe('DuplicateRecordDetector', () => {
                 Name: 'OldEntity',
                 NameField: { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                 Icon: null,
+                IsFieldReadableByUser: () => true,
                 Fields: [
                     { Name: 'Title', IsNameField: false, DefaultInView: true, Sequence: 1, IsPrimaryKey: false },
                 ],

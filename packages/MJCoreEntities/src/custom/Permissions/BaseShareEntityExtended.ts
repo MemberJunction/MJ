@@ -1,5 +1,5 @@
-import { BaseEntity, BaseEntityResult, EntityPermissionType, EntitySaveOptions, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, BaseEntityResult, IEntityDataProvider, IMetadataProvider, LogError, UserInfo } from '@memberjunction/core';
+import { GetGlobalObjectStore, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 
 import { CreateShareNotification, ShareNotificationInput } from './shareNotification';
 
@@ -87,15 +87,66 @@ export function checkShareManagePermission(
  *  - fire-and-forget via `void CreateShareNotification(...)` — notification
  *    failures never fail the save.
  */
+export function AsShareMetadataProvider(provider: IEntityDataProvider | null | undefined): IMetadataProvider | null {
+    if (!provider) {
+        return null;
+    }
+    return provider as IEntityDataProvider & IMetadataProvider;
+}
+
+export function AreAllValidUUIDs(...ids: Array<string | null | undefined>): boolean {
+    return ids.every((id) => IsValidUUID(id));
+}
+
+/**
+ * Returns the stored (`OldValue`) string for an immutable/target field when updating or deleting
+ * an existing share row, falling back to current field value on unsaved entities.
+ */
+export function GetStoredShareFieldString(entity: BaseEntity, fieldName: string): string | null {
+    if (typeof entity.GetFieldByName === 'function') {
+        const field = entity.GetFieldByName(fieldName);
+        if (field) {
+            const raw = entity.IsSaved && field.OldValue !== undefined ? field.OldValue : field.Value;
+            if (raw === null || raw === undefined) {
+                return null;
+            }
+            const trimmed = String(raw).trim();
+            return trimmed.length > 0 ? trimmed : null;
+        }
+    }
+    return null;
+}
+
+export function HasImmutableShareFieldChanged(entity: BaseEntity, fieldNames: string[]): string | null {
+    if (!entity.IsSaved || typeof entity.GetFieldByName !== 'function') {
+        return null;
+    }
+    for (const fieldName of fieldNames) {
+        const field = entity.GetFieldByName(fieldName);
+        if (!field || field.OldValue === undefined) {
+            continue;
+        }
+        const oldStr = field.OldValue === null ? '' : String(field.OldValue).trim();
+        const newStr = field.Value === undefined || field.Value === null ? '' : String(field.Value).trim();
+        if (oldStr.length === 0 && newStr.length === 0) {
+            continue;
+        }
+        if (oldStr.length === 0 || newStr.length === 0 || !UUIDsEqual(oldStr, newStr)) {
+            return fieldName;
+        }
+    }
+    return null;
+}
+
 export async function DispatchShareNotificationAfterSave(
     entity: BaseEntity,
     isNewShare: boolean,
     grantorUserId: string | null | undefined,
     payloadBuilder: (provider: IMetadataProvider, grantorId: string) => Promise<ShareNotificationInput | null> | ShareNotificationInput | null
 ): Promise<void> {
-    const provider = entity.ProviderToUse as unknown as IMetadataProvider;
+    const provider = AsShareMetadataProvider(entity.ProviderToUse);
     const isServerSide = provider?.ProviderType === 'Database';
-    if (!isServerSide || !isNewShare) return;
+    if (!isServerSide || !isNewShare || !provider) return;
 
     const grantorId = grantorUserId ?? entity.ContextCurrentUser?.ID ?? null;
     if (!grantorId) return;
@@ -116,6 +167,20 @@ export async function dispatchShareNotificationAfterSave(
     payloadBuilder: (provider: IMetadataProvider, grantorId: string) => Promise<ShareNotificationInput | null> | ShareNotificationInput | null
 ): Promise<void> {
     return DispatchShareNotificationAfterSave(entity, isNewShare, grantorUserId, payloadBuilder);
+}
+
+/**
+ * Derive a normalized permission level string (`'Owner'`, `'Edit'`, or `'View'`)
+ * from boolean permission flags on Artifact, Collection, or Dashboard grants.
+ */
+export function DeriveSharePermissionLevel(flags: {
+    canEdit?: boolean | null;
+    canDelete?: boolean | null;
+    canShare?: boolean | null;
+}): 'View' | 'Edit' | 'Owner' {
+    if (flags.canDelete || flags.canShare) return 'Owner';
+    if (flags.canEdit) return 'Edit';
+    return 'View';
 }
 
 /**
@@ -170,16 +235,110 @@ export function AssertCallerMayCreateShare(
     reason: string = 'Only the resource owner or someone with Share permission can create this share.'
 ): Promise<boolean> | boolean {
     if (!isNewShare) return true;
-    const provider = entity.ProviderToUse as unknown as IMetadataProvider;
+    return AssertCallerMaySaveShare(entity, isNewShare, authorized, reason);
+}
+
+/**
+ * Authorization gate for BOTH creating and updating a share row. Runs on
+ * server-side Database providers when `ContextCurrentUser` is present, and
+ * records a structured failure on `entity.LatestResult` / `entity.ResultHistory`
+ * when `authorized()` returns false.
+ */
+const EXPLICIT_FAILURE_SET_KEY = '___MJ_SHARE_EXPLICIT_FAILURE_ENTITIES___';
+
+function getExplicitFailureRecordedSet(): WeakSet<BaseEntity> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        const existing = store[EXPLICIT_FAILURE_SET_KEY];
+        if (existing instanceof WeakSet) {
+            return existing as WeakSet<BaseEntity>;
+        }
+        const created = new WeakSet<BaseEntity>();
+        store[EXPLICIT_FAILURE_SET_KEY] = created;
+        return created;
+    }
+    return new WeakSet<BaseEntity>();
+}
+
+export function AssertCallerMaySaveShare(
+    entity: BaseEntity,
+    isNewShare: boolean,
+    authorized: () => boolean | Promise<boolean>,
+    reason: string = 'Only the resource owner or someone with Share permission can save this share.'
+): Promise<boolean> | boolean {
+    const provider = AsShareMetadataProvider(entity.ProviderToUse);
     if (provider?.ProviderType !== 'Database') return true;
     const user = entity.ContextCurrentUser;
     if (!user) return true;
 
+    const recorded = getExplicitFailureRecordedSet();
+    recorded.delete(entity);
+    const action: 'create' | 'update' = isNewShare ? 'create' : 'update';
     const result = authorized();
     if (result instanceof Promise) {
-        return result.then((ok) => ok || failSave(entity, user, reason));
+        return result.then((ok) => {
+            if (ok) return true;
+            if (recorded.has(entity)) {
+                recorded.delete(entity);
+                return false;
+            }
+            return failSave(entity, user, reason, action);
+        });
     }
-    return result || failSave(entity, user, reason);
+    if (result) return true;
+    if (recorded.has(entity)) {
+        recorded.delete(entity);
+        return false;
+    }
+    return failSave(entity, user, reason, action);
+}
+
+/**
+ * Server-side gate for DELETING/REVOKING an existing share row.
+ * Runs on server-side Database providers when `ContextCurrentUser` is present.
+ */
+export function AssertCallerMayDeleteShare(
+    entity: BaseEntity,
+    authorized: () => boolean | Promise<boolean>,
+    reason: string = 'Only the resource owner or someone with Share permission can revoke this share.'
+): Promise<boolean> | boolean {
+    const provider = AsShareMetadataProvider(entity.ProviderToUse);
+    if (provider?.ProviderType !== 'Database') return true;
+    const user = entity.ContextCurrentUser;
+    if (!user) return true;
+
+    const recorded = getExplicitFailureRecordedSet();
+    recorded.delete(entity);
+    const result = authorized();
+    if (result instanceof Promise) {
+        return result.then((ok) => {
+            if (ok) return true;
+            if (recorded.has(entity)) {
+                recorded.delete(entity);
+                return false;
+            }
+            return failSave(entity, user, reason, 'delete');
+        });
+    }
+    if (result) return true;
+    if (recorded.has(entity)) {
+        recorded.delete(entity);
+        return false;
+    }
+    return failSave(entity, user, reason, 'delete');
+}
+
+/**
+ * Records a failed save/delete result on `entity` with a specific denial reason.
+ */
+export function FailShareSave(
+    entity: BaseEntity,
+    user: UserInfo,
+    reason: string,
+    action: 'create' | 'update' | 'delete' = 'create'
+): false {
+    getExplicitFailureRecordedSet().add(entity);
+    return failSave(entity, user, reason, action);
 }
 
 /** @deprecated Use {@link AssertCallerMayCreateShare}. */
@@ -196,19 +355,22 @@ export function assertCallerMayCreateShare(
  * Fail-the-save helper: marks `LatestResult` so the UI sees the reason, logs
  * server-side. Always returns `false` so callers can `return failSave(...)`.
  */
-function failSave(entity: BaseEntity, user: UserInfo, reason: string): false {
-    LogError(`${entity.constructor.name}: user ${user.ID} (${user.Email ?? user.Name ?? 'unknown'}) blocked from creating share — ${reason}`);
-    const latest = entity.LatestResult as unknown as { Success: boolean; Message?: string } | undefined;
+function failSave(
+    entity: BaseEntity,
+    user: UserInfo,
+    reason: string,
+    action: 'create' | 'update' | 'delete' = 'create'
+): false {
+    const verb = action === 'create' ? 'creating' : action === 'delete' ? 'deleting' : 'updating';
+    LogError(`${entity.constructor.name}: user ${user.ID} (${user.Email ?? user.Name ?? 'unspecified'}) blocked from ${verb} share — ${reason}`);
+    const latest = entity.LatestResult;
     if (latest) {
         latest.Success = false;
         latest.Message = reason;
     } else {
-        // The gate fires before super.Save(), so a new entity has no result history yet
+        // The gate fires before super.Save()/Delete(), so a new entity has no result history yet
         // (LatestResult is null) — push one so the reason reaches callers/resolvers.
-        entity.ResultHistory.push(new BaseEntityResult(false, reason, 'create'));
+        entity.ResultHistory.push(new BaseEntityResult(false, reason, action));
     }
     return false;
 }
-
-/** Re-export for ergonomic `import { EntityPermissionType } from '...'` in subclasses. */
-export { EntityPermissionType, EntitySaveOptions };

@@ -1,0 +1,4 @@
+{
+  "_README": "Packages allowed to run Vitest on pool: 'threads'. Every package runs on the default forks pool; threads is opt-in only. To opt ONE package in: set pool: 'threads' in its vitest.config.ts, get a green full Linux CI run that ran it on threads with `turbo run test --continue` (the Unit Tests workflow on a full-suite run), and add an entry here keyed by the package directory, e.g. \"packages/TaskGraph\": { \"linuxRun\": \"https://github.com/MemberJunction/MJ/actions/runs/<runId>\", \"note\": \"why it is safe\" }. A local or macOS run is not proof: ai-agents, task-graph and codegen-lib all passed on macOS and segfaulted (exit 139) on the Linux runners. .github/scripts/check-vitest-threads-safety.mjs fails on an opt-in without an entry, on an entry whose package does not opt in, and on tests, setup files or helpers in a threads package that write process.env.TZ, call vi.stubEnv('TZ'), process.chdir() or process.cpuUsage().",
+  "packages": {}
+}

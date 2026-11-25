@@ -283,3 +283,48 @@ export class CredentialNotFoundError extends CredentialResolutionError {
         this.CredentialName = credentialName;
     }
 }
+
+/**
+ * Thrown when a credential's `Values` field cannot be read as a JSON object.
+ *
+ * `StillEncrypted` is true when the field still holds ciphertext (`$ENC$…`): the row reached the
+ * engine without being decrypted, so the stored values are intact and a reload from the database
+ * reads them. The message never quotes the field, which may hold a secret.
+ */
+export class CredentialValuesUnreadableError extends CredentialResolutionError {
+    public readonly CredentialName: string;
+    public readonly CredentialID: string;
+    public readonly StillEncrypted: boolean;
+
+    constructor(credentialName: string, credentialId: string, stillEncrypted: boolean) {
+        super(
+            stillEncrypted
+                ? `Credential '${credentialName}' (${credentialId}) holds its values still encrypted: ` +
+                  `the cached row was never decrypted. Reload the credential engine to read them.`
+                : `Credential '${credentialName}' (${credentialId}) has values that are not a JSON object.`
+        );
+        this.CredentialName = credentialName;
+        this.CredentialID = credentialId;
+        this.StillEncrypted = stillEncrypted;
+    }
+}
+
+/**
+ * Thrown when a user-delegated (`3LO`) credential is bound to a specific `ownerUserId`
+ * and a caller attempts to resolve it without a matching `contextUser.ID`.
+ */
+export class CredentialOwnerMismatchError extends CredentialResolutionError {
+    public readonly CredentialName: string;
+    public readonly OwnerUserID: string;
+    public readonly RequestingUserID: string | null;
+
+    constructor(credentialName: string, ownerUserId: string, requestingUserId: string | null) {
+        super(
+            `Credential owner mismatch for '${credentialName}': bound to user '${ownerUserId}', ` +
+            `but requested by '${requestingUserId ?? 'anonymous'}'. Cross-user access to delegated OAuth credentials is forbidden.`
+        );
+        this.CredentialName = credentialName;
+        this.OwnerUserID = ownerUserId;
+        this.RequestingUserID = requestingUserId;
+    }
+}

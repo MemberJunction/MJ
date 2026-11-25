@@ -91,6 +91,7 @@ vi.mock('@memberjunction/global', async (importOriginal) => ({
     OptionalKeyedSpecialization: (await importOriginal<typeof import('@memberjunction/global')>()).OptionalKeyedSpecialization,
     // Real UUIDSet — actions-base's audience helpers (ActionAudienceReaders) dedupe readers with it.
     UUIDSet: (await importOriginal<typeof import('@memberjunction/global')>()).UUIDSet,
+    IsBrowser: (await importOriginal<typeof import('@memberjunction/global')>()).IsBrowser,
     MJGlobal: {
         Instance: {
             ClassFactory: mockClassFactory,
@@ -210,20 +211,26 @@ vi.mock('@memberjunction/actions-base', async (importOriginal) => {
         // engine's own use of the redactor — snapshot-at-call-time, Params vs ResultParams, provenance,
         // LoggingMode — is covered in ActionEngine.logging.test.ts.
         RedactParamsToJSON: (params: unknown[] | null | undefined) => JSON.stringify(params ?? []),
+        // The real field-security projection the engine applies before redaction; its behaviour is
+        // covered in actions-base/ActionParamFieldSecurity.test.ts and ActionEngine.logging.test.ts.
+        ProjectActionParamValuesForUser: actual.ProjectActionParamValuesForUser,
         ActionAudienceReaders: actual.ActionAudienceReaders,
         ActionAudienceAddsReader: actual.ActionAudienceAddsReader,
         AUDIENCE_UNSUPPORTED_RESULT_CODE: actual.AUDIENCE_UNSUPPORTED_RESULT_CODE,
+        EnforceServerBoundHiddenScopeParams: actual.EnforceServerBoundHiddenScopeParams,
+        RequiresReceiptOnlyChatReturn: actual.RequiresReceiptOnlyChatReturn,
+        ShapeActionReturnForChat: actual.ShapeActionReturnForChat,
     };
 });
 
 // ============================================================================
 // Now import the modules under test
 // ============================================================================
-import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer } from '../generic/ActionEngine';
+import { ACTION_PREVENTED_BY_FILTER_MESSAGE, ActionEngineServer, ENGINE_RESULT_CODES } from '../generic/ActionEngine';
 import { BaseAction } from '../generic/BaseAction';
-import { Metadata, LogError, LogErrorEx } from '@memberjunction/core';
+import { Metadata, LogError, LogErrorEx, type UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import type { RunActionParams } from '@memberjunction/actions-base';
+import { ActionEngineBase, type RunActionParams } from '@memberjunction/actions-base';
 
 // ============================================================================
 // Create a concrete subclass of BaseAction for testing
@@ -284,6 +291,8 @@ describe('ActionEngineServer', () => {
 
             expect(result.Success).toBe(false);
             expect(result.Message).toContain('Input validation failed');
+            // #4690: the log row carries why the action did not run, not NULL.
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.InputValidationFailed);
             expect(validateSpy).toHaveBeenCalledWith(params);
         });
 
@@ -375,6 +384,7 @@ describe('ActionEngineServer', () => {
             // an error, and callers must not treat it as a failure to retry.
             expect(result.Success).toBe(true);
             expect(result.Message).toBe(ACTION_PREVENTED_BY_FILTER_MESSAGE);
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.PreventedByFilter);
         });
 
         it('runs a deferral in place of the action, but only after filters pass', async () => {
@@ -527,6 +537,22 @@ describe('ActionEngineServer', () => {
 
             expect(result.Success).toBe(true);
             expect(mockClassFactory.CreateInstance).toHaveBeenCalledTimes(1);
+        });
+
+        it('enforces SupportsAudience when IsStructuralAudience=true even without enumerated Readers', async () => {
+            const unsupported = new TestAction();
+            mockClassFactory.CreateInstance.mockReturnValue(unsupported);
+            const refused = await run(paramsFor(undefined, { IsStructuralAudience: true }));
+            expect(refused.Success).toBe(false);
+            expect(refused.ResultCode).toBe('AUDIENCE_UNSUPPORTED');
+
+            const supported = new AudienceAwareAction();
+            mockClassFactory.CreateInstance.mockReturnValue(supported);
+            vi.spyOn(engine as never, 'StartActionLog' as never).mockResolvedValue({} as never);
+            vi.spyOn(engine as never, 'EndActionLog' as never).mockResolvedValue(undefined as never);
+            const allowed = await run(paramsFor(undefined, { IsStructuralAudience: true }));
+            expect(allowed.Success).toBe(true);
+            expect(supported.ranWith).toHaveLength(1);
         });
     });
 
@@ -921,6 +947,33 @@ describe('ActionEngineServer', () => {
             await vi.waitFor(() => expect(mockEntity.Save).toHaveBeenCalled());
         });
 
+        it("REGRESSION: stamps UserID with the run's user, not the engine's", async () => {
+            let stampedUserID = '';
+            const mockEntity = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockResolvedValue(true),
+                set ActionID(_v: string) {},
+                set StartedAt(_v: Date) {},
+                set UserID(v: string) { stampedUserID = v; },
+                set Params(_v: string) {},
+            };
+            (Metadata as unknown as ReturnType<typeof vi.fn>).mockImplementation(function() {
+                return { GetEntityObject: vi.fn().mockResolvedValue(mockEntity) };
+            });
+            const engineUser = engine.ContextUser;
+            engine.ContextUser = { ID: 'alice-id', Name: 'Alice' } as never;
+            try {
+                const params = { Action: { ID: 'a1', Name: 'Test' }, Params: [], ContextUser: { ID: 'bob-id', Name: 'Bob' } };
+                await (engine as unknown as Record<string, Function>)['StartActionLog'](params as never, false);
+                expect(stampedUserID).toBe('bob-id');
+
+                await (engine as unknown as Record<string, Function>)['StartActionLog']({ Action: { ID: 'a1', Name: 'Test' }, Params: [] } as never, false);
+                expect(stampedUserID).toBe('alice-id');
+            } finally {
+                engine.ContextUser = engineUser;
+            }
+        });
+
         it('should not save when saveRecord is false', async () => {
             const mockEntity = {
                 NewRecord: vi.fn(),
@@ -986,6 +1039,25 @@ describe('ActionEngineServer', () => {
 
             // Save is queued fire-and-forget — assert it runs on the microtask queue.
             await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+        });
+
+        it('logs the action\'s own result code when it matches none of the metadata result codes', async () => {
+            let loggedCode: string | undefined;
+            const logEntity = {
+                Save: vi.fn().mockResolvedValue(true),
+                set EndedAt(_v: Date) {},
+                set Params(_v: string) {},
+                set ResultCode(v: string | undefined) { loggedCode = v; },
+                set Message(_v: string | undefined) {},
+            };
+
+            const params = { Params: [] };
+            const result = { Result: undefined, ResultCode: 'CUSTOM_CODE', Message: 'Done' };
+
+            await (engine as unknown as Record<string, Function>)['EndActionLog'](logEntity as never, params as never, result as unknown as Record<string, Function>);
+
+            await vi.waitFor(() => expect(logEntity.Save).toHaveBeenCalled());
+            expect(loggedCode).toBe('CUSTOM_CODE');
         });
 
         it('should log error when save fails', async () => {
@@ -1445,6 +1517,7 @@ describe('ActionEngineServer', () => {
             expect(result.Success).toBe(false);
             expect(result.Message).toMatch(/MaxExecutionTimeMS \(50ms\)/);
             expect(result.Message).toContain('Times Out');
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.Timeout);
         });
 
         it('returns Success=false with the upstream reason when the caller aborts via params.AbortSignal', async () => {
@@ -1465,6 +1538,7 @@ describe('ActionEngineServer', () => {
 
             expect(result.Success).toBe(false);
             expect(result.Message).toBe('user-initiated cancel');
+            expect(result.ResultCode).toBe(ENGINE_RESULT_CODES.Aborted);
         });
 
         it('does not corrupt caller-visible params after the run', async () => {
@@ -1521,5 +1595,34 @@ describe('ActionEngineServer.RunRuntimeAction: the bridge context carries the ca
         expect(seen).toHaveLength(1);
         expect(seen[0].runScope).toBe(runScope);
         expect(seen[0].audience).toBe(audience);
+    });
+});
+
+describe('ActionEngineServer.Config system-user preservation', () => {
+    it('does not downgrade ContextUser to a restricted UI caller once ActionEngineBase resolved the system user', async () => {
+        const engine = ActionEngineServer.Instance;
+        const base = ActionEngineBase.Instance;
+        const systemUser = { ID: 'sys-0001', Name: 'System', Type: 'Owner' } as unknown as UserInfo;
+        const uiUser = { ID: 'ui-0002', Name: 'Sarah Connor', Type: 'User' } as unknown as UserInfo;
+        const origConfig = base.Config;
+        const origBaseUser = base.ContextUser;
+        const origEngineUser = engine.ContextUser;
+
+        try {
+            // Simulate BaseEngine.ResolveContextUser() locking base.ContextUser to the system user
+            // even when a subsequent Config(false, uiUser) arrives for a non-Owner UI caller.
+            (base as { ContextUser: UserInfo }).ContextUser = systemUser;
+            base.Config = vi.fn().mockResolvedValue(undefined);
+
+            await engine.Config(false, systemUser);
+            expect(engine.ContextUser).toBe(systemUser);
+
+            await engine.Config(false, uiUser);
+            expect(engine.ContextUser).toBe(systemUser);
+        } finally {
+            base.Config = origConfig;
+            (base as { ContextUser: UserInfo }).ContextUser = origBaseUser;
+            engine.ContextUser = origEngineUser;
+        }
     });
 });

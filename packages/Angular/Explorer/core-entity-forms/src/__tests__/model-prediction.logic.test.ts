@@ -1,400 +1,156 @@
 import { describe, it, expect } from 'vitest';
+import { AuthorizationInfo, UserInfo } from '@memberjunction/core';
 import {
-    BandFor,
-    FormatLastScored,
-    FormatHistoryTimestamp,
-    FormatValue,
-    GaugePct,
-    ParseDrivers,
-    ParsePayloadDrivers,
-    ParseHistoryItem,
-    FilterHistoryByModel,
-    GetDistinctModelsFromHistory,
-    ResolveLabel,
-    ToNumber,
-    ValueKind,
-    MAX_DRIVERS,
-    type PredictionHistoryItem,
+    ModelPredictionLogic,
+    type PanelBindingRow,
+    type PanelOutputBindingRow,
+    type PanelRunRow,
+    type PanelValueRow,
 } from '../lib/panels/model-predictions/model-prediction.logic';
 
-describe('model-prediction.logic', () => {
-    describe('toNumber', () => {
-        it('passes finite numbers through', () => {
-            expect(ToNumber(0.5)).toBe(0.5);
-            expect(ToNumber(0)).toBe(0);
-            expect(ToNumber(-3)).toBe(-3);
-        });
-        it('parses numeric strings', () => {
-            expect(ToNumber('0.72')).toBe(0.72);
-            expect(ToNumber('  12 ')).toBe(12);
-        });
-        it('returns null for non-numbers', () => {
-            expect(ToNumber(null)).toBeNull();
-            expect(ToNumber(undefined)).toBeNull();
-            expect(ToNumber('')).toBeNull();
-            expect(ToNumber('Renewing')).toBeNull();
-            expect(ToNumber(NaN)).toBeNull();
-            expect(ToNumber(Infinity)).toBeNull();
-        });
+/** An authorization whose holders are named by user ID, so the ancestor walk is tested without a metadata provider. */
+class HeldAuthorization extends AuthorizationInfo {
+    constructor(init: { ID: string; Name: string; ParentID?: string | null }, private readonly holders: readonly string[]) {
+        super({ IsActive: true, ParentID: null, ...init });
+    }
+
+    public override UserCanExecute(user: UserInfo): boolean {
+        return this.holders.includes(user.ID);
+    }
+}
+
+const user = (id: string, type = 'User'): UserInfo => new UserInfo(undefined, { ID: id, Name: id, Type: type });
+
+const binding = (over: Partial<PanelBindingRow> = {}): PanelBindingRow => ({
+    ID: 'B1', FeatureName: 'Renewal risk', MLTrainingPipelineID: 'P1', MLTrainingPipeline: 'Renewal',
+    TargetEntityID: 'E1', ViewAuthorizationID: 'A-VIEW', Status: 'Active', LastScoredAt: null, ...over,
+});
+
+const DAY1 = new Date('2026-11-01T00:00:00Z');
+const DAY3 = new Date('2026-11-03T00:00:00Z');
+
+const value = (over: Partial<PanelValueRow> = {}): PanelValueRow => ({
+    ID: 'V1', EntityID: 'E1', RecordID: 'R1', FeatureName: 'Renewal risk', Source: 'Model', EffectiveAsOf: DAY3, ComputedAt: DAY3,
+    MLModelScoringBindingID: 'B1', MLModelID: 'M1', MLScoringRunID: 'RUN1', InTraining: false,
+    ValueText: 'lapsed', ValueNumeric: 0.72, Confidence: 0.72,
+    ValueJSON: JSON.stringify({
+        Probabilities: { renewed: 0.28, lapsed: 0.72 },
+        Drivers: [
+            { sourceColumn: 'DaysSinceLogin', contribution: 0.9, effect: 'raises-adverse' },
+            { sourceColumn: 'AutoRenew', contribution: 0.4, effect: 'lowers-adverse' },
+        ],
+    }),
+    ...over,
+});
+
+const run = (over: Partial<PanelRunRow> = {}): PanelRunRow => ({ ID: 'RUN1', ModelID: 'M1', ModelVersion: 3, StartedAt: DAY3, ...over });
+
+const recordPanel = (over: Partial<PanelOutputBindingRow> = {}): PanelOutputBindingRow => ({
+    ID: 'OB1', ModelID: 'M1', Surface: 'record-panel', SortsBy: 'adverse-probability-desc', DriverDirectionRelativeTo: 'adverse-class', Label: 'Lapse risk', ...over,
+});
+
+describe('ModelPredictionLogic — number formatting', () => {
+    it('ToNumber passes finite numbers and numeric strings, and returns null otherwise', () => {
+        expect([ModelPredictionLogic.ToNumber(0.5), ModelPredictionLogic.ToNumber('  12 '), ModelPredictionLogic.ToNumber('Renewing'), ModelPredictionLogic.ToNumber(NaN), ModelPredictionLogic.ToNumber(null)])
+            .toEqual([0.5, 12, null, null, null]);
     });
-
-    describe('valueKind', () => {
-        it('regression with a number → numeric', () => {
-            expect(ValueKind('regression', 1234.5)).toBe('numeric');
-        });
-        it('classification with a 0–1 value → probability', () => {
-            expect(ValueKind('classification', 0)).toBe('probability');
-            expect(ValueKind('classification', 0.5)).toBe('probability');
-            expect(ValueKind('classification', 1)).toBe('probability');
-        });
-        it('classification with an out-of-range number → class', () => {
-            expect(ValueKind('classification', 5)).toBe('class');
-            expect(ValueKind('classification', -0.1)).toBe('class');
-        });
-        it('non-numeric (a class label) → class', () => {
-            expect(ValueKind('classification', null)).toBe('class');
-            expect(ValueKind('regression', null)).toBe('class');
-        });
+    it('BandFor splits [0,1] into neutral terciles and clamps', () => {
+        expect([0, 0.33, 0.34, 0.66, 0.67, 1, -1, 2].map((v) => ModelPredictionLogic.BandFor(v))).toEqual(['low', 'low', 'mid', 'mid', 'high', 'high', 'low', 'high']);
     });
-
-    describe('bandFor — neutral tercile, no moral direction', () => {
-        it('splits [0,1] into three equal terciles', () => {
-            expect(BandFor(0)).toBe('low');
-            expect(BandFor(0.2)).toBe('low');
-            expect(BandFor(0.33)).toBe('low');
-            expect(BandFor(0.34)).toBe('mid');
-            expect(BandFor(0.5)).toBe('mid');
-            expect(BandFor(0.66)).toBe('mid');
-            expect(BandFor(0.67)).toBe('high');
-            expect(BandFor(1)).toBe('high');
-        });
-        it('clamps out-of-range input', () => {
-            expect(BandFor(-1)).toBe('low');
-            expect(BandFor(2)).toBe('high');
-        });
+    it('GaugePct maps 0–1 to a clamped 0–100 integer', () => {
+        expect([0, 0.724, 0.726, 1, -0.5, 1.5].map((v) => ModelPredictionLogic.GaugePct(v))).toEqual([0, 72, 73, 100, 0, 100]);
     });
-
-    describe('gaugePct', () => {
-        it('maps 0–1 to 0–100 rounded', () => {
-            expect(GaugePct(0)).toBe(0);
-            expect(GaugePct(0.724)).toBe(72);
-            expect(GaugePct(0.726)).toBe(73);
-            expect(GaugePct(1)).toBe(100);
-        });
-        it('clamps', () => {
-            expect(GaugePct(-0.5)).toBe(0);
-            expect(GaugePct(1.5)).toBe(100);
-        });
+    it('FormatDate returns null for a missing or invalid date and a short date otherwise', () => {
+        expect(ModelPredictionLogic.FormatDate(null)).toBeNull();
+        expect(ModelPredictionLogic.FormatDate('not a date')).toBeNull();
+        expect(ModelPredictionLogic.FormatDate('2026-03-15T12:00:00Z')).toContain('2026');
     });
+});
 
-    describe('formatValue', () => {
-        it('formats a probability as a percentage', () => {
-            expect(FormatValue(0.72, 0.72, 'probability')).toBe('72%');
-        });
-        it('formats a regression number with grouping and ≤4 decimals', () => {
-            expect(FormatValue(1240.5, 1240.5, 'numeric')).toBe((1240.5).toLocaleString(undefined, { maximumFractionDigits: 4 }));
-        });
-        it('renders a class label verbatim', () => {
-            expect(FormatValue('Renewing', null, 'class')).toBe('Renewing');
-        });
-        it('renders an em dash for missing values', () => {
-            expect(FormatValue(null, null, 'class')).toBe('—');
-            expect(FormatValue('', null, 'class')).toBe('—');
-        });
+describe('ModelPredictionLogic.AuthorizedBindings — the user holds the binding\'s view authorization', () => {
+    const view = new HeldAuthorization({ ID: 'A-VIEW', Name: 'View Model Predictions' }, ['u-dev']);
+    const child = new HeldAuthorization({ ID: 'A-CHILD', Name: 'Child', ParentID: 'A-VIEW' }, []);
+    const all = [view, child];
+
+    it('keeps a binding the user holds directly or through an ancestor, and drops the others', () => {
+        const bindings = [binding({ ID: 'B1' }), binding({ ID: 'B2', ViewAuthorizationID: 'A-CHILD' }), binding({ ID: 'B3', ViewAuthorizationID: 'A-MISSING' })];
+        expect(ModelPredictionLogic.AuthorizedBindings(bindings, user('u-dev'), all).map((b) => b.ID)).toEqual(['B1', 'B2']);
+        expect(ModelPredictionLogic.AuthorizedBindings(bindings, user('u-ui'), all)).toEqual([]);
     });
-
-    describe('resolveLabel — entity-agnostic, no hardcoded domain term', () => {
-        it('prefers the model target variable', () => {
-            expect(ResolveLabel('WillRenew', 'RenewalScore')).toBe('WillRenew');
-        });
-        it('falls back to the bound column', () => {
-            expect(ResolveLabel(null, 'LeadScore')).toBe('LeadScore');
-            expect(ResolveLabel('   ', 'LeadScore')).toBe('LeadScore');
-        });
-        it('falls back to a generic label when nothing supplied', () => {
-            expect(ResolveLabel(null, null)).toBe('Prediction');
-        });
+    it('a binding with no view authorization matches no user, an Owner included (fail closed)', () => {
+        expect(ModelPredictionLogic.AuthorizedBindings([binding({ ViewAuthorizationID: null })], user('u-dev'), all)).toEqual([]);
+        expect(ModelPredictionLogic.AuthorizedBindings([binding({ ViewAuthorizationID: null })], user('u-owner', 'Owner'), all)).toEqual([]);
     });
-
-    describe('parseDrivers — feature importance', () => {
-        it('returns [] for null / empty / invalid JSON', () => {
-            expect(ParseDrivers(null)).toEqual([]);
-            expect(ParseDrivers('')).toEqual([]);
-            expect(ParseDrivers('not json')).toEqual([]);
-            expect(ParseDrivers('[1,2,3]')).toEqual([]); // array, not a map
-            expect(ParseDrivers('{}')).toEqual([]);
-        });
-        it('sorts by importance magnitude descending and caps at MAX_DRIVERS', () => {
-            const json = JSON.stringify({ a: 0.1, b: 0.9, c: 0.5, d: 0.3, e: 0.2, f: 0.05, g: 0.4 });
-            const drivers = ParseDrivers(json);
-            expect(drivers).toHaveLength(MAX_DRIVERS);
-            expect(drivers.map(d => d.name)).toEqual(['b', 'c', 'g', 'd', 'e']);
-        });
-        it('uses absolute value of negative contributions', () => {
-            const drivers = ParseDrivers(JSON.stringify({ pos: 0.4, neg: -0.8 }));
-            expect(drivers[0].name).toBe('neg');
-            expect(drivers[0].importance).toBe(0.8);
-        });
-        it('computes relativePct against the strongest driver', () => {
-            const drivers = ParseDrivers(JSON.stringify({ top: 1.0, half: 0.5 }));
-            expect(drivers[0].RelativePct).toBe(100);
-            expect(drivers[1].RelativePct).toBe(50);
-        });
-        it('drops zero-importance features', () => {
-            const drivers = ParseDrivers(JSON.stringify({ a: 0, b: 0.5 }));
-            expect(drivers.map(d => d.name)).toEqual(['b']);
-        });
+    it('an Owner holds every authorization, as vwUserHeldAuthorizations states', () => {
+        expect(ModelPredictionLogic.AuthorizedBindings([binding()], user('u-owner', 'Owner'), all).map((b) => b.ID)).toEqual(['B1']);
     });
+});
 
-    describe('formatLastScored', () => {
-        it('returns null for null / invalid dates', () => {
-            expect(FormatLastScored(null)).toBeNull();
-            expect(FormatLastScored('not a date')).toBeNull();
+describe('ModelPredictionLogic.BuildCard', () => {
+    it('BuildCard reads the class order of the record-panel output binding, not the column', () => {
+        const multiclass = value({
+            ValueText: 'Gold', ValueNumeric: 0.3, Confidence: 0.7,
+            ValueJSON: JSON.stringify({ Probabilities: { Bronze: 0.1, Silver: 0.2, Gold: 0.7 }, Drivers: [] }),
         });
-        it('formats a valid Date', () => {
-            const result = FormatLastScored(new Date('2026-03-15T00:00:00Z'));
-            expect(result).not.toBeNull();
-            expect(result!.length).toBeGreaterThan(0);
-        });
-        it('accepts an ISO string', () => {
-            expect(FormatLastScored('2026-03-15T12:00:00Z')).not.toBeNull();
-        });
+        const card = ModelPredictionLogic.BuildCard(binding({ FeatureName: 'Tier' }), multiclass, [], recordPanel({ Label: 'Membership tier' }), run());
+        expect(card?.Label).toBe('Membership tier');
+        expect(card?.Class).toBe('Gold');
+        expect(card?.Classes.map((c) => `${c.Class} ${c.Pct}%`)).toEqual(['Bronze 10%', 'Silver 20%', 'Gold 70%']);
     });
-
-    describe('formatHistoryTimestamp', () => {
-        it('returns em-dash for null or invalid dates', () => {
-            expect(FormatHistoryTimestamp(null)).toBe('—');
-            expect(FormatHistoryTimestamp('invalid')).toBe('—');
-        });
-        it('formats a valid ISO timestamp', () => {
-            const result = FormatHistoryTimestamp('2026-09-20T14:30:00Z');
-            expect(result).not.toBe('—');
-            expect(result).toContain('2026');
-        });
+    it('a classification card shows the adverse probability with its risk band, the class and the probability of that class', () => {
+        const card = ModelPredictionLogic.BuildCard(binding(), value(), [], null, run());
+        expect([card?.Kind, card?.DisplayValue, card?.GaugePct, card?.Class, card?.ClassProbability, card?.StatusLabel, card?.BadgeColor]).toEqual(
+            ['probability', '72%', 72, 'lapsed', '72%', 'High risk', 'red'],
+        );
+        expect(card?.Label).toBe('Renewal risk');
     });
-
-    describe('parsePayloadDrivers', () => {
-        it('handles null/undefined gracefully', () => {
-            expect(ParsePayloadDrivers(null)).toEqual([]);
-            expect(ParsePayloadDrivers(undefined)).toEqual([]);
-        });
-        it('parses array of feature/value objects', () => {
-            const raw = [
-                { feature: 'AutoRenew', value: 0.8 },
-                { feature: 'TenureDays', value: -0.4 },
-                { feature: 'ZeroImpact', value: 0 },
-            ];
-            const drivers = ParsePayloadDrivers(raw);
-            expect(drivers).toHaveLength(2);
-            expect(drivers[0].name).toBe('AutoRenew');
-            expect(drivers[0].RelativePct).toBe(100);
-            expect(drivers[1].name).toBe('TenureDays');
-            expect(drivers[1].RelativePct).toBe(50);
-        });
+    it('a regression card shows the point prediction and no risk band', () => {
+        const card = ModelPredictionLogic.BuildCard(binding(), value({ ValueText: null, ValueNumeric: 1240.5, Confidence: null, ValueJSON: JSON.stringify({ Drivers: [] }) }), [], null, run());
+        expect([card?.Kind, card?.DisplayValue, card?.StatusLabel, card?.Class]).toEqual(['numeric', (1240.5).toLocaleString(undefined, { maximumFractionDigits: 4 }), null, null]);
     });
-
-    describe('parseHistoryItem', () => {
-        const mockModelLookup = new Map([
-            [
-                'M-123',
-                {
-                    Name: 'Renewal Likelihood Model',
-                    Pipeline: 'Member Retention',
-                    Version: 2,
-                    ProblemType: 'classification',
-                    TargetVariable: 'RenewalLikelihood',
-                },
-            ],
-            [
-                'M-456',
-                {
-                    Name: 'Order Spend Model',
-                    Pipeline: 'Revenue Forecast',
-                    Version: 1,
-                    ProblemType: 'regression',
-                    TargetVariable: 'ExpectedSpend',
-                },
-            ],
-        ]);
-
-        it('parses wrapped output payload from MLModelInferenceProcessor', () => {
-            const raw = {
-                ID: 'PRD-001',
-                ProcessRunID: 'PR-999',
-                Status: 'Succeeded',
-                CompletedAt: '2026-09-20T00:04:28Z',
-                ResultPayload: JSON.stringify({
-                    output: {
-                        modelId: 'M-123',
-                        target: 'RenewalLikelihood',
-                        problemType: 'classification',
-                        score: 0.88,
-                        class: 'Renewing',
-                        drivers: [{ feature: 'AutoRenew', value: 0.9 }],  // wire key: the processor writes it lowercase, and ParseHistoryItem reads payload['drivers']
-                        scoredAt: '2026-09-20T00:04:27Z',
-                    },
-                    writeBack: { updatedRecord: true },
-                }),
-                ErrorMessage: null,
-            };
-
-            const item = ParseHistoryItem(raw, mockModelLookup);
-            expect(item.id).toBe('PRD-001');
-            expect(item.ProcessRunId).toBe('PR-999');
-            expect(item.modelId).toBe('M-123');
-            expect(item.ModelName).toBe('Renewal Likelihood Model');
-            expect(item.Provenance).toBe('Member Retention v2');
-            expect(item.problemType).toBe('classification');
-            expect(item.NumericValue).toBe(0.88);
-            expect(item.PredictedClass).toBe('Renewing');
-            expect(item.DisplayValue).toBe('Renewing');
-            expect(item.IsProbability).toBe(true);
-            expect(item.Band).toBe('high');
-            expect(item.StatusBand?.Label).toBe('High');
-            expect(item.StatusBand?.BadgeColor).toBe('green');
-            expect(item.BadgeColor).toBe('green');
-            expect(item.Drivers).toHaveLength(1);
-            expect(item.Drivers[0].name).toBe('AutoRenew');
-            expect(item.RawPayload).not.toBeNull();
-        });
-
-        it('resolves adverse polarity for risk/churn models', () => {
-            const raw = {
-                ID: 'PRD-004',
-                ProcessRunID: 'PR-998',
-                Status: 'Succeeded',
-                CompletedAt: '2026-09-20T00:05:00Z',
-                ResultPayload: JSON.stringify({
-                    output: {
-                        target: 'ChurnRisk',
-                        problemType: 'classification',
-                        score: 0.85,
-                    },
-                }),
-                ErrorMessage: null,
-            };
-
-            const item = ParseHistoryItem(raw);
-            expect(item.IsProbability).toBe(true);
-            expect(item.StatusBand?.Label).toBe('High Risk');
-            expect(item.StatusBand?.BadgeColor).toBe('red');
-            expect(item.BadgeColor).toBe('red');
-        });
-
-        it('resolves categorical outcome styles for class labels', () => {
-            const raw = {
-                ID: 'PRD-005',
-                ProcessRunID: 'PR-997',
-                Status: 'Succeeded',
-                CompletedAt: '2026-09-20T00:06:00Z',
-                ResultPayload: JSON.stringify({
-                    output: {
-                        target: 'PaymentStatus',
-                        problemType: 'classification',
-                        class: 'Late',
-                    },
-                }),
-                ErrorMessage: null,
-            };
-
-            const item = ParseHistoryItem(raw);
-            expect(item.PredictedClass).toBe('Late');
-            expect(item.BadgeColor).toBe('red');
-            expect(item.StatusLabel).toBe('Late');
-        });
-
-        it('parses regression models correctly', () => {
-            const raw = {
-                ID: 'PRD-002',
-                ProcessRunID: 'PR-888',
-                Status: 'Succeeded',
-                CompletedAt: '2026-09-20T01:00:00Z',
-                ResultPayload: JSON.stringify({
-                    modelId: 'M-456',
-                    target: 'ExpectedSpend',
-                    problemType: 'regression',
-                    score: 1450.5,
-                }),
-                ErrorMessage: null,
-            };
-
-            const item = ParseHistoryItem(raw, mockModelLookup);
-            expect(item.id).toBe('PRD-002');
-            expect(item.problemType).toBe('regression');
-            expect(item.NumericValue).toBe(1450.5);
-            expect(item.IsProbability).toBe(false);
-            expect(item.Band).toBeNull();
-            expect(item.DisplayValue).toBe((1450.5).toLocaleString(undefined, { maximumFractionDigits: 4 }));
-        });
-
-        it('handles malformed payload and failed runs gracefully', () => {
-            const raw = {
-                ID: 'PRD-003',
-                ProcessRunID: 'PR-777',
-                Status: 'Failed',
-                CompletedAt: null,
-                ResultPayload: '{ not valid json',
-                ErrorMessage: 'Timeout talking to model sidecar',
-            };
-
-            const item = ParseHistoryItem(raw, mockModelLookup);
-            expect(item.id).toBe('PRD-003');
-            expect(item.status).toBe('Failed');
-            expect(item.ErrorMessage).toBe('Timeout talking to model sidecar');
-            expect(item.RawPayload).toBeNull();
-            expect(item.DisplayValue).toBe('—');
-        });
+    it('returns no card for a binding with no value for the record', () => {
+        expect(ModelPredictionLogic.BuildCard(binding(), null, [], null, null)).toBeNull();
     });
-
-    describe('filterHistoryByModel and getDistinctModelsFromHistory', () => {
-        const makeHistoryItem = (overrides: Partial<PredictionHistoryItem> = {}): PredictionHistoryItem => ({
-            id: '1',
-            ProcessRunId: 'pr1',
-            modelId: 'M1',
-            ModelName: 'Model 1',
-            Provenance: 'M1 v1',
-            target: 'T1',
-            problemType: 'classification',
-            NumericValue: 0.9,
-            PredictedClass: null,
-            DisplayValue: '90%',
-            IsProbability: true,
-            Band: 'high',
-            StatusBand: null,
-            StatusLabel: null,
-            BadgeColor: 'gray',
-            BadgeIcon: null,
-            status: 'Succeeded',
-            CompletedAt: null,
-            FormattedTime: 'Today',
-            Drivers: [],
-            ErrorMessage: null,
-            RawPayload: null,
-            ...overrides,
-        });
-        const item1 = makeHistoryItem();
-        const item2 = makeHistoryItem({ id: '2', modelId: 'M2', ModelName: 'Model 2' });
-        const item3 = makeHistoryItem({ id: '3', modelId: 'M1', ModelName: 'Model 1' });
-        const items = [item1, item2, item3];
-
-        it('filterHistoryByModel returns all when null or "ALL"', () => {
-            expect(FilterHistoryByModel(items, null)).toHaveLength(3);
-            expect(FilterHistoryByModel(items, 'ALL')).toHaveLength(3);
-        });
-
-        it('filterHistoryByModel filters to specific modelId', () => {
-            const filtered = FilterHistoryByModel(items, 'M2');
-            expect(filtered).toHaveLength(1);
-            expect(filtered[0].id).toBe('2');
-        });
-
-        it('getDistinctModelsFromHistory aggregates distinct models with counts', () => {
-            const summaries = GetDistinctModelsFromHistory(items);
-            expect(summaries).toHaveLength(2);
-            const m1 = summaries.find(s => s.modelId === 'M1');
-            const m2 = summaries.find(s => s.modelId === 'M2');
-            expect(m1?.count).toBe(2);
-            expect(m2?.count).toBe(1);
-        });
+    it('the lineage names the model version and the run, the as-of date and an optimistic in-training score', () => {
+        const card = ModelPredictionLogic.BuildCard(binding(), value({ InTraining: true }), [], null, run({ ModelVersion: 4 }));
+        expect(card?.Lineage).toMatchObject({ Source: 'Model', ModelVersion: 4, ScoringRunID: 'RUN1', InTraining: true });
+        expect(card?.Lineage.AsOf).toContain('2026');
+        expect(card?.Provenance).toBe('Renewal v4');
+    });
+    it('the as-of date is the stored calendar date in any time zone (Nov 3, not Nov 2 in New York)', () => {
+        const zone = process.env.TZ;
+        process.env.TZ = 'America/New_York';
+        try {
+            const history = [value({ ID: 'H3', EffectiveAsOf: DAY3, ValueNumeric: 0.72 })];
+            const card = ModelPredictionLogic.BuildCard(binding(), value({}), history, null, run());
+            expect(card?.Lineage.AsOf).toContain('Nov 3');
+            expect(card?.History.map((h) => h.AsOf)).toEqual([expect.stringContaining('Nov 3')]);
+        } finally {
+            if (zone === undefined) delete process.env.TZ;
+            else process.env.TZ = zone;
+        }
+    });
+    it('a person\'s value of the binding\'s feature has no model lineage', () => {
+        const card = ModelPredictionLogic.BuildCard(binding(), value({ Source: 'Human', MLModelID: null, MLScoringRunID: null }), [], null, null);
+        expect(card?.Lineage).toMatchObject({ Source: 'Human', ModelVersion: null, ScoringRunID: null });
+    });
+    it('signs the per-record drivers by the stored effect, or by the raw contribution when the output binding says so', () => {
+        const adverse = ModelPredictionLogic.BuildCard(binding(), value(), [], recordPanel(), run());
+        expect(adverse?.Drivers.map((d) => [d.Name, d.RaisesAdverse, d.RelativePct])).toEqual([['Days Since Login', true, 100], ['Auto Renew', false, 44]]);
+        const raw = ModelPredictionLogic.BuildCard(binding(), value({ ValueJSON: JSON.stringify({ Drivers: [{ sourceColumn: 'AutoRenew', contribution: -0.4, effect: 'raises-adverse' }] }) }), [], recordPanel({ DriverDirectionRelativeTo: 'raw-contribution' }), run());
+        expect(raw?.Drivers.map((d) => d.RaisesAdverse)).toEqual([false]);
+    });
+    it('keeps at most ModelPredictionLogic.MaxDrivers drivers, strongest first', () => {
+        const drivers = Array.from({ length: ModelPredictionLogic.MaxDrivers + 2 }, (_, i) => ({ sourceColumn: `F${i}`, contribution: i + 1, effect: 'raises-adverse' }));
+        const card = ModelPredictionLogic.BuildCard(binding(), value({ ValueJSON: JSON.stringify({ Drivers: drivers }) }), [], null, run());
+        expect(card?.Drivers.length).toBe(ModelPredictionLogic.MaxDrivers);
+        expect(card?.Drivers[0].Name).toBe(`F${ModelPredictionLogic.MaxDrivers + 1}`);
+    });
+    it('the history is the binding\'s Champion values in as-of order, plotted on a 0–1 scale for a probability', () => {
+        const history = [value({ ID: 'H3', EffectiveAsOf: DAY3, ValueNumeric: 0.72 }), value({ ID: 'H1', EffectiveAsOf: DAY1, ValueNumeric: 0.6 })];
+        const card = ModelPredictionLogic.BuildCard(binding(), value(), history, null, run());
+        expect(card?.History.map((p) => [p.ID, p.Display])).toEqual([['H1', '60%'], ['H3', '72%']]);
+        expect(card?.History.map((p) => p.Y)).toEqual([40, 28]);
+        expect(card?.SparklinePoints).toBe('0,40 100,28');
     });
 });

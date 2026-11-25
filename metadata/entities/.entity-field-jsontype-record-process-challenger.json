@@ -1,0 +1,34 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on RecordProcess.ChallengerConfiguration so CodeGen emits a typed",
+      "ChallengerConfigurationObject accessor with IRecordProcessChallengerConfig. The interface is",
+      "authored in JSONType-interfaces/IRecordProcessChallengerConfig.ts and inlined into the generated",
+      "entity by CodeGen."
+    ],
+    "fields": {
+      "Name": "MJ: Record Processes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IRecordProcessChallengerConfig",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IRecordProcessChallengerConfig.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Processes&Name=ChallengerConfiguration"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:26:32.421Z",
+            "checksum": "0fef616745fde087d83acc57025f7f701bd5f2dadf8a3984df4bd52f2d45bb20"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Record Processes"
+    }
+  }
+]

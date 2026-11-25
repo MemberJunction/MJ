@@ -19,7 +19,7 @@ import type { IConversionRule, ConversionContext, StatementType } from './types.
 import { GAP_MARKER_UNPARSED } from './types.js';
 import {
   ConvertIdentifiers, RemoveNPrefix, ConvertCommonFunctions, QuotePascalCaseIdentifiers,
-  ConvertTopToLimit,
+  ConvertTopToLimit, TransformCodeOnly,
   CastBooleanInsertValues, ConvertBooleanLiteralComparisons,
 } from './ExpressionHelpers.js';
 import { ResolveType } from './TypeResolver.js';
@@ -230,15 +230,17 @@ export class DeclareDmlBlockRule implements IConversionRule {
     );
   }
 
-  /** Convert @variable references to v_variable */
+  /**
+   * Convert @variable references to v_variable, in code only — never inside a string literal or a
+   * comment.
+   *
+   * Comment-awareness is load-bearing. This used a private segmenter that knew only string literals,
+   * so an apostrophe in a header comment (`A guest's session` in V202611161547) opened a phantom string
+   * that inverted every code/string segment after it: the MERGE's `@FilterID` references were treated
+   * as string text, left un-renamed, and later quoted to `@"FilterID"` (`column ... does not exist`).
+   */
   private convertVariableRefs(sql: string): string {
-    // Match @VarName that isn't inside a string literal
-    // Simple approach: replace all @VarName outside of quotes
-    const segments = this.segmentSQL(sql);
-    return segments.map(seg => {
-      if (seg.type !== 'code') return seg.text;
-      return seg.text.replace(/@(\w+)/g, 'v_$1');
-    }).join('');
+    return TransformCodeOnly(sql, (code) => code.replace(/@(\w+)/g, 'v_$1'));
   }
 
   /**
@@ -253,9 +255,7 @@ export class DeclareDmlBlockRule implements IConversionRule {
    */
   private convertPrint(sql: string): string {
     return sql.replace(/^(\s*)PRINT\s+([^;]+);/gim, (_match, indent: string, expr: string) => {
-      const concatenated = this.segmentSQL(expr.trim())
-        .map(seg => (seg.type === 'code' ? seg.text.replace(/\+/g, '||') : seg.text))
-        .join('');
+      const concatenated = TransformCodeOnly(expr.trim(), (code) => code.replace(/\+/g, '||'));
       return `${indent}RAISE NOTICE '%', ${concatenated};`;
     });
   }
@@ -565,37 +565,6 @@ export class DeclareDmlBlockRule implements IConversionRule {
     }
     parts.push(current);
     return parts;
-  }
-
-  /** Segment SQL into code and string literal parts */
-  private segmentSQL(sql: string): Array<{ text: string; type: 'code' | 'string' }> {
-    const segments: Array<{ text: string; type: 'code' | 'string' }> = [];
-    let current = '';
-    let inStr = false;
-
-    for (let i = 0; i < sql.length; i++) {
-      if (inStr) {
-        current += sql[i];
-        if (sql[i] === "'" && i + 1 < sql.length && sql[i + 1] === "'") {
-          current += "'";
-          i++;
-        } else if (sql[i] === "'") {
-          segments.push({ text: current, type: 'string' });
-          current = '';
-          inStr = false;
-        }
-      } else {
-        if (sql[i] === "'") {
-          if (current) segments.push({ text: current, type: 'code' });
-          current = "'";
-          inStr = true;
-        } else {
-          current += sql[i];
-        }
-      }
-    }
-    if (current) segments.push({ text: current, type: inStr ? 'string' : 'code' });
-    return segments;
   }
 
   /**

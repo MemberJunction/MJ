@@ -259,7 +259,7 @@
               }
             </div>
             <div class="html-card__body">
-              @if (IsNearViewport(item)) {
+              @if (ShouldMountWidget(item)) {
                 <!-- SANDBOXED: allow-scripts ONLY (no allow-same-origin) — opaque origin,
                      no access to the app DOM, session, cookies or storage. The srcdoc is
                      built by the view-scoped wbWidgetSrcdoc pipe: rebuilt per MOUNT (page

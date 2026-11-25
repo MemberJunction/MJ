@@ -319,4 +319,18 @@ describe('ExternalDataSourceReadRouterImpl', () => {
       expect(await impl.GetCacheTTLSeconds('missing')).toBe(300);
     });
   });
+
+  describe('GetQueryDialectKey', () => {
+    it("returns the source driver's SQL dialect key", async () => {
+      mockResolve(makeFakeDriver({ QueryDialectKey: 'mysql' } as Partial<BaseExternalDataSourceDriver>));
+      expect(await impl.GetQueryDialectKey('ds-1')).toBe('mysql');
+    });
+
+    it('returns null for a driver with no SQL dialect, and when the source cannot be resolved', async () => {
+      mockResolve(makeFakeDriver({ QueryDialectKey: null } as Partial<BaseExternalDataSourceDriver>));
+      expect(await impl.GetQueryDialectKey('ds-1')).toBeNull();
+      vi.spyOn(ExternalDataSourceRouter.Instance, 'Resolve').mockRejectedValue(new Error('not found'));
+      expect(await impl.GetQueryDialectKey('missing')).toBeNull();
+    });
+  });
 });

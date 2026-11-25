@@ -26,7 +26,10 @@ vi.mock('@memberjunction/global', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => ({
+vi.mock('@memberjunction/core', async () => ({
+    // The real SharedLoad, so Config's load sharing runs as it does in production. Imported from its
+    // own module: the whole of @memberjunction/core would load the @memberjunction/global mocked here.
+    SharedLoad: (await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core/dist/generic/sharedLoad.js')).SharedLoad,
     BaseRemotableOperation: class {},
     BaseEngine: class {
         public async Config() {}

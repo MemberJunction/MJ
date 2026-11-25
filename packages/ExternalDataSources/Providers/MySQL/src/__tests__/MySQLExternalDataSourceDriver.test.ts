@@ -157,3 +157,9 @@ describe('MySQLExternalDataSourceDriver — connection caching', () => {
     await driver.endAll();
   });
 });
+
+describe('MySQLExternalDataSourceDriver.QueryDialectKey', () => {
+  it("names the MySQL dialect, so a query's template values render as MySQL literals", () => {
+    expect(new MySQLExternalDataSourceDriver().QueryDialectKey).toBe('mysql');
+  });
+});

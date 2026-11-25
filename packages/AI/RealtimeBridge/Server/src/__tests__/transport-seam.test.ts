@@ -24,6 +24,8 @@ import type {
 import { BridgeMediaFrame, AIBridgeEngineBase } from '@memberjunction/ai-bridge-base';
 import {
     AIBridgeEngine,
+    BridgeTranscriptLine,
+    BridgeTranscriptSink,
     DefaultHostInstanceIdentity,
     IHostInstanceIdentity,
     StartBridgeSessionParams,
@@ -986,7 +988,7 @@ describe('AIBridgeEngine — participant tracking', () => {
 
 describe('AIBridgeEngine — unified room transcript', () => {
     it('elects ONE scribe per room; only the scribe emits final lines (both roles), with handoff on departure', async () => {
-        const sink = vi.fn(async () => undefined);
+        const sink = vi.fn<BridgeTranscriptSink>(async () => undefined);
         engine().SetTranscriptSink(sink);
         const addr = 'loopback://transcript-room-unique';
         const sessionA = new MockRealtimeSession();
@@ -1032,7 +1034,7 @@ describe('AIBridgeEngine — unified room transcript', () => {
     });
 
     it('diarizes a User line by attributing it to the last inbound audio speaker', async () => {
-        const sink = vi.fn(async () => undefined);
+        const sink = vi.fn<BridgeTranscriptSink>(async () => undefined);
         engine().SetTranscriptSink(sink);
         const session = new MockRealtimeSession();
         const { provider } = makeProvider(() => makeBridgeRow());
@@ -1377,9 +1379,9 @@ describe('AIBridgeEngine — composes AIBridgeEngineBase (single cache, delegati
 
 describe('AIBridgeEngine — end-to-end smoke (multi-agent meeting)', () => {
     it('start → diarized transcript → 2nd agent → re-gate → floor contention → handoff → finalize', async () => {
-        const transcript: Array<Record<string, unknown>> = [];
+        const transcript: BridgeTranscriptLine[] = [];
         const finalized: Array<string | undefined> = [];
-        engine().SetTranscriptSink(async (line: Record<string, unknown>) => { transcript.push(line); });
+        engine().SetTranscriptSink(async (line: BridgeTranscriptLine) => { transcript.push(line); });
         engine().SetSessionRunFinalizer(async (sessionId?: string) => { finalized.push(sessionId); });
         // Per-agent name matchers (real meeting mode): each agent answers only when ITS name is addressed.
         const matchA = { IsAddressed: (seg: { Text: string }) => /\bA\b/.test(seg.Text) };

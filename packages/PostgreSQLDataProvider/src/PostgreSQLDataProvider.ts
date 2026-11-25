@@ -20,14 +20,38 @@ import {
     RunQuerySQLFilterManager,
     RestoreContext,
     CloneContext,
+    SyncContext,
     RecordChangeSource,
     RecordChangePayload,
     EntityDeleteOptions,
     EntitySaveOptions,
+    GetDiagnosticContext,
+    IsDiagnosticCaptureSuppressed,
+    RunViewWithCacheCheckParams,
+    Metadata,
+    LocalCacheManager,
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, SaveCoercedValue, SaveCallBinding, SaveSQLFragment, SaveReturnContext } from '@memberjunction/generic-database-provider';
+import {
+    GenericDatabaseProvider,
+    SaveCoercedValue,
+    SaveCallBinding,
+    SaveSQLFragment,
+    SaveReturnContext,
+    DescribeStatementFailure,
+    SummarizeSqlParameters,
+    FormatSqlParameterTypesForError,
+    ExecuteSQLBatchOptions,
+    NamedQueryParameter,
+    RecordChangeSnapshotColumnKindOf,
+    DoomedTransactionError,
+} from '@memberjunction/generic-database-provider';
+import type { DatabasePoolStats, DescribeStatementResult } from '@memberjunction/generic-database-provider';
+import {
+    DescribeCatalogParameters, DescribeWrapperSQL, FieldDescriptionOf, MapPostgreSQLDescribeFields, POSTGRESQL_DESCRIBE_CATALOG_SQL, POSTGRESQL_DESCRIBE_TIMEOUT_MS,
+    type PostgreSQLDescribeCatalogRow,
+} from './statementDescription.js';
 import type { IColocatedVectorHost } from '@memberjunction/ai-vectordb';
 import { BytesToBase64, EscapeSQLString, IsByteArray, TryBase64ToBytes } from '@memberjunction/global';
 import { PostgreSQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
@@ -77,13 +101,30 @@ export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
  * - Identifier quoting uses "double quotes" instead of [brackets]
  */
 /**
- * The `ChangeContext` column and its `$n` placeholder for a Record Change insert, or nothing when
- * there is no context. Only clones set it, so every other tracked write keeps working on a database
- * whose RecordChange table doesn't have the column yet (the PostgreSQL migration ships at release).
+ * Optional `ChangeContext` and `IntegrationID` columns and their `$n` placeholders for a Record Change
+ * insert, or nothing when neither is set. Only clones and sync operations set them, so every other
+ * tracked write keeps working on a database whose RecordChange table doesn't have the columns yet.
  */
-function changeContextSQL(changeContext: string | null | undefined, placeholder: number): { column: string; value: string; parameters: string[] } {
-    if (!changeContext) return { column: '', value: '', parameters: [] };
-    return { column: ', "ChangeContext"', value: `, $${placeholder}::text`, parameters: [changeContext] };
+function changeContextSQL(
+    changeContext: string | null | undefined,
+    placeholder: number,
+    integrationID?: string | null,
+): { column: string; value: string; parameters: string[] } {
+    let column = '';
+    let value = '';
+    const parameters: string[] = [];
+    let nextPlaceholder = placeholder;
+    if (changeContext) {
+        column += ', "ChangeContext"';
+        value += `, $${nextPlaceholder++}::text`;
+        parameters.push(changeContext);
+    }
+    if (integrationID) {
+        column += ', "IntegrationID"';
+        value += `, $${nextPlaceholder++}::uuid`;
+        parameters.push(integrationID);
+    }
+    return { column, value, parameters };
 }
 
 export class PostgreSQLDataProvider extends GenericDatabaseProvider implements IColocatedVectorHost {
@@ -151,11 +192,30 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
             .map(child => {
-                const schema = child.SchemaName || '__mj';
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
                 const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
                 return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
+            });
+        if (unionParts.length === 0) return '';
+        return unionParts.join(' UNION ALL ');
+    }
+
+    protected override BuildChildDiscoveryBatchSQL(childEntities: EntityInfo[], recordPKValues: string[]): string {
+        if (recordPKValues.length === 0) return '';
+        const inList = recordPKValues.map(v => pgDialect.QuoteStringLiteral(v)).join(', ');
+        const aliasEntityName = pgDialect.QuoteColumnAlias('EntityName');
+        const aliasRecordPK = pgDialect.QuoteColumnAlias('RecordPK');
+        const aliasPriority = pgDialect.QuoteColumnAlias('Priority');
+        const unionParts = childEntities
+            .filter(child => child.PrimaryKeys.length > 0)
+            .map((child, idx) => {
+                const schema = child.SchemaName || this.MJCoreSchemaName || '__mj';
+                const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A shared key
+                const nameLit = pgDialect.QuoteStringLiteral(child.Name);
+                return `SELECT ${nameLit} AS ${aliasEntityName}, CAST(${pkRef} AS TEXT) AS ${aliasRecordPK}, ${idx + 1} AS ${aliasPriority} FROM ${sourceRef} WHERE ${pkRef} IN (${inList})`;
             });
         if (unionParts.length === 0) return '';
         return unionParts.join(' UNION ALL ');
@@ -178,7 +238,6 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const fkField = relatedEntityInfo.Fields.find(f => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
             if (fkField?.EntityIDFieldName && fkField.EntityIDFieldName.trim().length > 0) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pksToProject = relatedEntityInfo.PrimaryKeys?.length ? relatedEntityInfo.PrimaryKeys : entityInfo.PrimaryKeys;
             const pkParts: string[] = [];
             for (const pk of pksToProject) {
@@ -186,8 +245,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             }
             const primaryKeySelectString = pkParts.join(" || '" + CompositeKey.DefaultFieldDelimiter + "' || ");
             const sourceObject = this.resolveDependencySourceObject(relatedEntityInfo, [dep.FieldName]);
-            const rawVal = String(compositeKey.GetValueByIndex(0) ?? '');
-            const escapedVal = quotes.length > 0 ? rawVal.replace(/'/g, "''") : rawVal;
+            const pkLiteral = this.RenderPrimaryKeyLiteral(entityInfo.FirstPrimaryKey, compositeKey.GetValueByIndex(0), entityInfo.Name); // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
 
             if (sSQL.length > 0) sSQL += ' UNION ALL ';
             sSQL += 'SELECT '
@@ -198,7 +256,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + 'false AS "IsSoftLink", '
                 + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, sourceObject) + ' '
-                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + escapedVal + quotes;
+                + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + pkLiteral;
         }
         return sSQL;
     }
@@ -282,6 +340,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         return this._connectionManager.Pool;
     }
 
+    /** Reads the live counts from the pg pool, or `null` before the pool is initialized. */
+    public override GetPoolStats(): DatabasePoolStats | null {
+        if (!this._connectionManager.IsConnected) {
+            return null;
+        }
+        const pool = this._connectionManager.Pool;
+        return {
+            TotalConnections: pool.totalCount,
+            ActiveConnections: pool.totalCount - pool.idleCount,
+            IdleConnections: pool.idleCount,
+            WaitingRequests: pool.waitingCount,
+        };
+    }
+
     get InstanceConnectionString(): string {
         const cfg = this._configData?.ConnectionConfig;
         if (!cfg) return '';
@@ -318,6 +390,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             parent.ExcludeSchemas,
             false,
         );
+        cfg.ConcurrencyCheck = this.ConcurrencyCheck;
+        cfg.DeltaUpdates = this.DeltaUpdates;
+        cfg.LoadQueryMetadata = this.LoadsQueryMetadata;
         await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
         return child;
     }
@@ -369,6 +444,36 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Returns `true` when global metadata and `LocalCacheManager` are warm in memory and `pool`
+     * is non-null so {@link ConfigureFromGlobalSync} can configure a per-request provider without I/O.
+     */
+    public static CanConfigureFromGlobalSync(pool: pg.Pool | null | undefined): boolean {
+        if (!pool || !Metadata.Provider || !LocalCacheManager.Instance.IsInitialized) { // global-provider-ok: fast-path readiness check for global metadata
+            return false;
+        }
+        return (Metadata.Provider.AllMetadata?.AllEntities?.length ?? 0) > 0; // global-provider-ok: verifies global metadata entities are warm
+    }
+
+    /**
+     * Synchronously configures a per-request `PostgreSQLDataProvider` sharing `existingPool` when
+     * global metadata and `LocalCacheManager` are already warm in memory. Returns `false` if any
+     * dependency is not yet warm, allowing callers to fall back to async {@link ConfigWithSharedPool}.
+     */
+    public ConfigureFromGlobalSync(configData: PostgreSQLProviderConfigData, existingPool: pg.Pool): boolean {
+        if (!existingPool) {
+            return false;
+        }
+        if (!this.ConfigureFromGlobalMetadataSync(configData)) {
+            return false;
+        }
+        this._configData = configData;
+        this._schemaName = configData.MJCoreSchemaName || '__mj';
+        this._connectionManager.InitializeWithExistingPool(existingPool, configData.ConnectionConfig);
+        RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
+        return true;
+    }
+
+    /**
      * Configures this provider to share an existing pool from another PostgreSQLDataProvider.
      * Used for per-request providers that should reuse the primary provider's connection pool.
      */
@@ -395,11 +500,77 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     // ─── SQL Execution ───────────────────────────────────────────────
 
+    /**
+     * Executes a query on the given PostgreSQL queryable source while notifying
+     * registered `ISqlObserver` listeners and active SQL logging sessions.
+     */
+    public async ExecuteObservedQuery<T = Record<string, unknown>>(
+        source: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> },
+        sqlText: string,
+        params?: unknown[],
+        options?: ExecuteSQLOptions,
+        contextUser?: UserInfo,
+    ): Promise<Array<T>> {
+        const startTime = performance.now();
+        try {
+            const result = await source.query(sqlText, params);
+            const durationMs = performance.now() - startTime;
+            const rows = (result?.rows ?? []) as Array<T>;
+            const rowCount = Array.isArray(result?.rows)
+                ? result.rows.length
+                : typeof result?.rowCount === 'number'
+                  ? result.rowCount
+                  : 0;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: sqlText,
+                    parameterSummaries: SummarizeSqlParameters(params, !(options?.isMutation ?? false)),
+                    durationMs,
+                    rowCount,
+                    isMutation: options?.isMutation ?? false,
+                    description: options?.description,
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            if (!options?.ignoreLogging && this.HasActiveSqlLoggingSessions) {
+                await this._logSqlStatement(
+                    sqlText,
+                    params,
+                    options?.description,
+                    options?.ignoreLogging ?? false,
+                    options?.isMutation ?? false,
+                    undefined,
+                    contextUser,
+                );
+            }
+            return rows;
+        } catch (err) {
+            const durationMs = performance.now() - startTime;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: sqlText,
+                    parameterSummaries: SummarizeSqlParameters(params, false),
+                    durationMs,
+                    rowCount: 0,
+                    isMutation: options?.isMutation ?? false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                    description: options?.description,
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            throw err;
+        }
+    }
+
     async ExecuteSQL<T>(
         query: string,
         parameters?: unknown[],
         options?: ExecuteSQLOptions,
-        _contextUser?: UserInfo
+        contextUser?: UserInfo
     ): Promise<Array<T>> {
         const processedParams = PGQueryParameterProcessor.ProcessParameters(parameters);
         // Auto-quote PascalCase identifiers in raw SQL. MJ has lots of hand-written
@@ -414,10 +585,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         try {
             if (options?.connectionSource) {
                 const bypass = options.connectionSource as {
-                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>;
+                    query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }>;
                 };
-                const bypassResult = await bypass.query(quotedQuery, processedParams);
-                return bypassResult.rows as T[];
+                return await this.ExecuteObservedQuery<T>(bypass, quotedQuery, processedParams, options, contextUser);
             }
             const timeoutMs = this.effectiveTimeoutMs(options?.timeoutMs);
             // Both protections are skipped only for a statement that will run inside the caller's own
@@ -428,19 +598,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const readOnly = !!options?.readOnlyTransaction && !joinsCallerTransaction;
             const timed = timeoutMs !== undefined && !joinsCallerTransaction;
             if (readOnly || timed) {
-                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs);
+                return await this.executeOnOwnConnection<T>(quotedQuery, processedParams, readOnly, timeoutMs, options, contextUser);
             }
             if (options?.ignoreAmbientTransaction) {
                 // A read that does not join the ambient transaction: straight to the pool (#4514).
-                const poolResult = await this._connectionManager.Pool.query(quotedQuery, processedParams);
-                return poolResult.rows as T[];
+                return await this.ExecuteObservedQuery<T>(this._connectionManager.Pool, quotedQuery, processedParams, options, contextUser);
             }
             const source = this.resolveQuerySource();
-            const result = await source.query(quotedQuery, processedParams);
-            return result.rows as T[];
+            return await this.ExecuteObservedQuery<T>(source, quotedQuery, processedParams, options, contextUser);
         } catch (err) {
             const desc = options?.description ? ` [${options.description}]` : '';
-            LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
+            const paramSummary = processedParams && processedParams.length > 0
+                ? ` (Parameters: ${FormatSqlParameterTypesForError(processedParams)})`
+                : '';
+            LogError(`PostgreSQLDataProvider.ExecuteSQL failed${desc}${paramSummary}: ${err instanceof Error ? err.message : String(err)}`);
             throw err;
         }
     }
@@ -487,6 +658,8 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         params: unknown[] | undefined,
         readOnly: boolean,
         timeoutMs: number | undefined,
+        options?: ExecuteSQLOptions,
+        contextUser?: UserInfo,
     ): Promise<Array<T>> {
         const client = await this._connectionManager.AcquireClient();
         try {
@@ -495,15 +668,359 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 if (timeoutMs !== undefined) {
                     await client.query(`SET LOCAL statement_timeout = ${timeoutMs}`);
                 }
-                const result = await client.query(sql, params);
+                const rows = await this.ExecuteObservedQuery<T>(client, sql, params, options, contextUser);
                 await client.query(readOnly ? 'ROLLBACK' : 'COMMIT');
-                return result.rows as T[];
+                return rows;
             } catch (err) {
                 await client.query('ROLLBACK').catch(() => undefined);
                 throw err;
             }
         } finally {
             await this.releaseOwnConnection(client);
+        }
+    }
+
+    /**
+     * Executes multiple SQL queries on a single connection and returns an array of result arrays,
+     * one per query. Overrides GenericDatabaseProvider.ExecuteSQLBatch to avoid checking out multiple
+     * connections from the pool in parallel.
+     *
+     * - Empty `queries`: returns `[]` immediately without checking out any connection.
+     * - Single query: delegates to `ExecuteSQL` and wraps in a single-element array.
+     * - Multiple queries without parameters: joins statements with `\n;\n` to prevent trailing `--`
+     *   comments from swallowing subsequent tokens, executing in a single network round-trip on one
+     *   connection.
+     * - Multiple queries with parameters: executes sequentially on the same checked-out connection.
+     * - Always releases checked-out connections in a `finally` block to prevent pool starvation.
+     */
+    public override async ExecuteSQLBatch(
+        queries: string[],
+        parameters?: unknown[][] | ExecuteSQLBatchOptions,
+        options?: ExecuteSQLBatchOptions | UserInfo,
+        contextUser?: UserInfo,
+    ): Promise<Record<string, unknown>[][]> {
+        if (!queries || queries.length === 0) {
+            return [];
+        }
+
+        let actualParams: unknown[][] | undefined;
+        let actualOptions: ExecuteSQLBatchOptions | undefined;
+        let actualUser: UserInfo | undefined;
+
+        if (Array.isArray(parameters)) {
+            actualParams = parameters;
+            actualOptions = options as ExecuteSQLBatchOptions | undefined;
+            actualUser = contextUser;
+        } else if (parameters && typeof parameters === 'object' && !('length' in parameters)) {
+            actualParams = undefined;
+            actualOptions = parameters as ExecuteSQLBatchOptions;
+            actualUser = options as UserInfo | undefined;
+        } else {
+            actualParams = undefined;
+            actualOptions = options as ExecuteSQLBatchOptions | undefined;
+            actualUser = contextUser;
+        }
+
+        if (queries.length === 1) {
+            const execOptions: ExecuteSQLOptions | undefined = actualOptions ? {
+                description: actualOptions.description,
+                ignoreLogging: actualOptions.ignoreLogging,
+                isMutation: actualOptions.isMutation,
+                ignoreAmbientTransaction: actualOptions.ignoreAmbientTransaction,
+            } : undefined;
+            const singleParam = actualParams?.[0];
+            const singleResult = await this.ExecuteSQL<Record<string, unknown>>(
+                queries[0],
+                singleParam,
+                execOptions,
+                actualUser,
+            );
+            return [singleResult];
+        }
+
+        const optionsConnectionSource = (actualOptions as ExecuteSQLOptions | undefined)?.connectionSource as {
+            query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }>;
+        } | undefined;
+
+        const joinsAmbient = !actualOptions?.ignoreAmbientTransaction && this.IsCallerInAmbientTransaction();
+        if (joinsAmbient) {
+            this.AssertAmbientTransactionUsable();
+        }
+
+        let client: pg.PoolClient | { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> } | null = null;
+        const shouldRelease = !joinsAmbient && !optionsConnectionSource;
+
+        try {
+            if (optionsConnectionSource) {
+                client = optionsConnectionSource;
+            } else if (joinsAmbient) {
+                client = this._transaction!;
+            } else {
+                client = await this._connectionManager.AcquireClient();
+            }
+
+            const hasParams = actualParams !== undefined && actualParams.some((p) => p && p.length > 0);
+            if (hasParams) {
+                return await this.executeSequentialBatchOnClient(client, queries, actualParams, actualOptions, actualUser);
+            }
+
+            return await this.executeMultiStatementBatchOnClient(client, queries, actualOptions, actualUser);
+        } finally {
+            if (shouldRelease && client) {
+                await this.releaseOwnConnection(client as pg.PoolClient);
+            }
+        }
+    }
+
+    private async executeSequentialBatchOnClient(
+        client: { query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[]; rowCount?: number | null }> },
+        queries: string[],
+        parameters: unknown[][] | undefined,
+        options: ExecuteSQLBatchOptions | undefined,
+        contextUser: UserInfo | undefined,
+    ): Promise<Record<string, unknown>[][]> {
+        const results: Record<string, unknown>[][] = [];
+        for (let i = 0; i < queries.length; i++) {
+            const q = queries[i];
+            const p = parameters?.[i];
+            const quotedQuery = this.AutoQuoteIdentifiers(q);
+            const processedParams = PGQueryParameterProcessor.ProcessParameters(p);
+            const execOptions: ExecuteSQLOptions | undefined = options ? {
+                description: options.description ? `${options.description} [${i + 1}/${queries.length}]` : undefined,
+                ignoreLogging: options.ignoreLogging,
+                isMutation: options.isMutation,
+                ignoreAmbientTransaction: options.ignoreAmbientTransaction,
+            } : undefined;
+            const rows = await this.ExecuteObservedQuery<Record<string, unknown>>(
+                client,
+                quotedQuery,
+                processedParams,
+                execOptions,
+                contextUser,
+            );
+            results.push(rows);
+        }
+        return results;
+    }
+
+    private async executeMultiStatementBatchOnClient(
+        client: { query: (sql: string, params?: unknown[]) => Promise<unknown> },
+        queries: string[],
+        options: ExecuteSQLBatchOptions | undefined,
+        contextUser: UserInfo | undefined,
+    ): Promise<Record<string, unknown>[][]> {
+        const quotedQueries = queries.map((q) => this.AutoQuoteIdentifiers(q));
+        const formattedQueries = quotedQueries.map((q) => {
+            const trimmed = q.trim();
+            return trimmed.endsWith(';') ? `${trimmed}\n` : `${trimmed}\n;\n`;
+        });
+        const combinedSql = formattedQueries.join('');
+        const startTime = performance.now();
+        try {
+            const rawResult = await client.query(combinedSql);
+            const durationMs = performance.now() - startTime;
+            const resultSets: Array<{ rows?: unknown[]; rowCount?: number | null }> = Array.isArray(rawResult)
+                ? (rawResult as Array<{ rows?: unknown[]; rowCount?: number | null }>)
+                : [rawResult as { rows?: unknown[]; rowCount?: number | null }];
+
+            const totalRowCount = resultSets.reduce(
+                (sum, r) => sum + (Array.isArray(r?.rows) ? r.rows.length : (typeof r?.rowCount === 'number' ? r.rowCount : 0)),
+                0,
+            );
+
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: combinedSql,
+                    parameterSummaries: [],
+                    durationMs,
+                    rowCount: totalRowCount,
+                    isMutation: options?.isMutation ?? false,
+                    description: options?.description ?? 'ExecuteSQLBatch',
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+
+            if (!options?.ignoreLogging && this.HasActiveSqlLoggingSessions) {
+                await this._logSqlStatement(
+                    combinedSql,
+                    undefined,
+                    options?.description ?? 'ExecuteSQLBatch',
+                    options?.ignoreLogging ?? false,
+                    options?.isMutation ?? false,
+                    undefined,
+                    contextUser,
+                );
+            }
+
+            if (Array.isArray(rawResult)) {
+                return resultSets.map((r) => ((r?.rows ?? []) as Record<string, unknown>[]));
+            }
+
+            return queries.map(() => ((resultSets[0]?.rows ?? []) as Record<string, unknown>[]));
+        } catch (err) {
+            const durationMs = performance.now() - startTime;
+            if (!options?.ignoreLogging && !IsDiagnosticCaptureSuppressed() && GenericDatabaseProvider.HasSqlObservers()) {
+                GenericDatabaseProvider.NotifySqlObservers({
+                    ts: Date.now(),
+                    sql: combinedSql,
+                    parameterSummaries: [],
+                    durationMs,
+                    rowCount: 0,
+                    isMutation: options?.isMutation ?? false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                    description: options?.description ?? 'ExecuteSQLBatch',
+                    diagnosticContext: GetDiagnosticContext(),
+                    ignoreLogging: options?.ignoreLogging,
+                });
+            }
+            const desc = options?.description ? ` [${options.description}]` : '';
+            LogError(`PostgreSQLDataProvider.ExecuteSQLBatch failed${desc}: ${err instanceof Error ? err.message : String(err)}`);
+            throw err;
+        }
+    }
+
+    /**
+     * Executes server cache status checks for multiple views in a single UNION ALL query
+     * over 1 network round-trip instead of K separate pool connections.
+     * If any query has bound parameters or the UNION ALL query fails, falls back to the
+     * base class per-item execution.
+     */
+    protected override async getBatchedServerCacheStatus(
+        items: Array<{
+            index: number;
+            item: RunViewWithCacheCheckParams;
+            entityInfo: EntityInfo;
+            whereSQL: string;
+            queryParameters?: NamedQueryParameter[];
+        }>,
+        contextUser?: UserInfo,
+    ): Promise<Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>> {
+        const results = new Map<number, { success: boolean; maxUpdatedAt?: string; rowCount?: number; errorMessage?: string }>();
+        if (!items || items.length === 0) {
+            return results;
+        }
+
+        // Parameterized cache status queries fall back to individual execution
+        if (items.some((it) => it.queryParameters && it.queryParameters.length > 0)) {
+            return await super.getBatchedServerCacheStatus(items, contextUser);
+        }
+
+        const validItems: Array<{
+            index: number;
+            entityInfo: EntityInfo;
+            effectiveTarget: { viewName: string; schemaName: string };
+            whereSQL: string;
+        }> = [];
+
+        for (const entry of items) {
+            const { index, item, entityInfo, whereSQL } = entry;
+            try {
+                const effectiveTarget = await this.resolveEffectiveBaseViewTarget(entityInfo, item.params, contextUser);
+                validItems.push({
+                    index,
+                    entityInfo,
+                    effectiveTarget,
+                    whereSQL,
+                });
+            } catch (err) {
+                results.set(index, {
+                    success: false,
+                    errorMessage: err instanceof Error ? err.message : String(err),
+                });
+            }
+        }
+
+        if (validItems.length === 0) {
+            return results;
+        }
+
+        const branches = validItems.map(({ index, entityInfo, effectiveTarget, whereSQL }) => {
+            const schema = effectiveTarget.schemaName || entityInfo.SchemaName || this._schemaName;
+            const view = effectiveTarget.viewName;
+            const from = `FROM ${this.QuoteSchemaAndView(schema, view)}${whereSQL ? ' WHERE ' + whereSQL : ''}`;
+            const hasUpdatedAt = entityInfo.Fields?.some((f) => f.IsUpdatedAtField);
+            const maxUpdatedCol = hasUpdatedAt
+                ? `MAX(${this.QuoteIdentifier('__mj_UpdatedAt')})::timestamptz`
+                : 'CAST(NULL AS timestamptz)';
+            return `SELECT ${index} AS "ItemIndex", COUNT(*) AS "TotalRows", ${maxUpdatedCol} AS "MaxUpdatedAt" ${from}`;
+        });
+
+        const unionSql = branches.map((b) => `(${b})`).join('\nUNION ALL\n');
+
+        try {
+            const rows = await this.ExecuteSQL<Record<string, unknown>>(
+                unionSql,
+                undefined,
+                { description: 'Batched server cache status check', ignoreLogging: true },
+                contextUser,
+            );
+
+            const rowMap = new Map<number, Record<string, unknown>>();
+            for (const row of rows) {
+                const idx = Number(row['ItemIndex']);
+                rowMap.set(idx, row);
+            }
+
+            for (const { index } of validItems) {
+                const row = rowMap.get(index);
+                if (row) {
+                    const totalRows = Number(row['TotalRows'] ?? 0);
+                    const rawUpdatedAt = row['MaxUpdatedAt'];
+                    const maxUpdatedAt = rawUpdatedAt
+                        ? new Date(rawUpdatedAt as Date | string).toISOString()
+                        : undefined;
+                    results.set(index, {
+                        success: true,
+                        rowCount: totalRows,
+                        maxUpdatedAt,
+                    });
+                } else {
+                    results.set(index, { success: true, rowCount: 0, maxUpdatedAt: undefined });
+                }
+            }
+        } catch {
+            // One bad view or error fails the UNION ALL batch.
+            // Fall back to super (individual queries) so a single bad entity doesn't break the entire sweep.
+            return await super.getBatchedServerCacheStatus(items, contextUser);
+        }
+
+        return results;
+    }
+
+    /**
+     * Describes the result set of `sqlText`: it runs as `SELECT * FROM (<sql>) _q LIMIT 0` on a
+     * connection of its own, inside a read-only transaction that is always rolled back, with JIT
+     * off and a statement timeout, so no row is read and nothing it does persists. The sources
+     * come from the row description's table and column numbers. The SQL is auto-quoted as
+     * {@link ExecuteSQL} would quote it, so the description is of the statement that would run.
+     */
+    public override async DescribeStatement(sqlText: string, _contextUser?: UserInfo): Promise<DescribeStatementResult> {
+        let client: pg.PoolClient | null = null;
+        try {
+            client = await this._connectionManager.AcquireClient();
+            return await this.describeInReadOnlyTransaction(client, DescribeWrapperSQL(this.AutoQuoteIdentifiers(sqlText)));
+        } catch (e) {
+            return DescribeStatementFailure(e instanceof Error ? e.message : String(e));
+        } finally {
+            if (client) await this.releaseOwnConnection(client);
+        }
+    }
+
+    /** Runs the describe wrapper and its catalog lookup in a read-only transaction that is rolled back. */
+    private async describeInReadOnlyTransaction(client: pg.PoolClient, wrapper: string): Promise<DescribeStatementResult> {
+        await client.query('BEGIN READ ONLY');
+        try {
+            await client.query('SET LOCAL jit = off');
+            await client.query(`SET LOCAL statement_timeout = ${this.effectiveTimeoutMs(POSTGRESQL_DESCRIBE_TIMEOUT_MS) ?? POSTGRESQL_DESCRIBE_TIMEOUT_MS}`);
+            const fields = (await client.query(wrapper)).fields.map(FieldDescriptionOf);
+            const catalog = fields.length === 0
+                ? { rows: [] as PostgreSQLDescribeCatalogRow[] }
+                : await client.query<PostgreSQLDescribeCatalogRow>(POSTGRESQL_DESCRIBE_CATALOG_SQL, DescribeCatalogParameters(fields));
+            return MapPostgreSQLDescribeFields(fields, catalog.rows);
+        } finally {
+            await client.query('ROLLBACK').catch(() => undefined);
         }
     }
 
@@ -530,8 +1047,12 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      */
     public async RunColocatedSQL<T = Record<string, unknown>>(sql: string, params?: ReadonlyArray<unknown>): Promise<T[]> {
         const source = this.resolveQuerySource();
-        const result = await source.query(sql, params ? [...params] : undefined);
-        return result.rows as T[];
+        return await this.ExecuteObservedQuery<T>(
+            source,
+            sql,
+            params ? [...params] : undefined,
+            { description: 'RunColocatedSQL' },
+        );
     }
 
     /**
@@ -586,9 +1107,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         }
         const client = this._transaction;
         // On COMMIT failure leave the client published so AbandonPhysicalTransaction can ROLLBACK then release.
-        await client.query('COMMIT');
+        const result = await client.query('COMMIT');
         this._transaction = null;
         client.release();
+        // COMMIT on a transaction an earlier statement aborted does not fail: PostgreSQL rolls it back
+        // and answers ROLLBACK. Reporting that as a commit would tell the caller its writes persisted.
+        if (result?.command === 'ROLLBACK') {
+            throw new DoomedTransactionError(
+                'PostgreSQL rolled the transaction back instead of committing it: an earlier statement in it failed, so none of its writes persisted',
+            );
+        }
     }
 
     protected override async RollbackPhysicalTransaction(): Promise<void> {
@@ -637,8 +1165,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         } catch { /* swallow — surfacing the primary error */ }
     }
 
+    /**
+     * Returns the currently active `pg.PoolClient` transaction handle managed by this provider,
+     * or `null` when no physical transaction is open.
+     */
+    public get ActiveTransactionClient(): pg.PoolClient | null {
+        return this._transaction;
+    }
+
     async CreateTransactionGroup(): Promise<TransactionGroupBase> {
-        return new PostgreSQLTransactionGroup();
+        return new PostgreSQLTransactionGroup(this);
     }
 
     protected override BuildPaginationSQL(maxRows: number, startRow: number): string {
@@ -656,6 +1192,11 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
      * keyword, producing `syntax error at or near "ESCAPE"`). PostgreSQL's default
      * backslash-escape behavior in LIKE makes the explicit ESCAPE clause unnecessary,
      * so we emit plain quoted literals with no `N` prefix and no `ESCAPE`.
+     *
+     * Matching is case-insensitive (`ILIKE`), as it is on SQL Server under its default
+     * case-insensitive collation: a user searching for "acme" must find "Acme Corp" on both
+     * platforms. `Exact` uses `ILIKE` without wildcards for the same reason, with the term's
+     * LIKE metacharacters escaped so they match literally.
      */
     protected override buildPerFieldSearchPredicate(field: EntityFieldInfo, escapedTerm: string, rawSafeTerm: string): string {
         if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
@@ -667,14 +1208,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
         const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
         switch (pred) {
             case 'Exact':
-                return ` = '${rawSafeTerm}'`;
+                return ` ILIKE '${escapedTerm}'`;
             case 'BeginsWith':
-                return ` LIKE '${escapedTerm}%'`;
+                return ` ILIKE '${escapedTerm}%'`;
             case 'EndsWith':
-                return ` LIKE '%${escapedTerm}'`;
+                return ` ILIKE '%${escapedTerm}'`;
             case 'Contains':
             default:
-                return ` LIKE '%${escapedTerm}%'`;
+                return ` ILIKE '%${escapedTerm}%'`;
         }
     }
 
@@ -861,9 +1402,13 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     /**
      * Public wrapper for GenerateSaveSQL used by PostgreSQLTransactionGroup
      * when transaction variables require regenerating the SQL instruction.
+     *
+     * @param client - The client whose transaction the save will run in, when one is already
+     *   open. A read the save's Record Change snapshot needs runs on it, so it sees that
+     *   transaction's earlier writes.
      */
-    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult> {
-        return this.GenerateSaveSQL(entity, isNew, user);
+    public async GetSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo, client?: pg.PoolClient): Promise<SaveSQLResult> {
+        return this.GenerateSaveSQLReadingOn(entity, isNew, user, client);
     }
 
     // GenerateSaveSQL is now inherited from GenericDatabaseProvider — the
@@ -980,6 +1525,25 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     /**
+     * Reads the target record's physical columns from `"schema"."BaseTable" WHERE ... FOR UPDATE`
+     * inside the save transaction so concurrent writers serialize on the row lock before `spUpdate*`
+     * executes. Queries `BaseTable` directly because PostgreSQL does not allow `FOR UPDATE` on views
+     * containing `LEFT JOIN`s.
+     */
+    protected override RenderLockedRowReadSQL(
+        entityInfo: EntityInfo,
+        pkWhereClause: string,
+        columns: string[],
+    ): string | null {
+        if (columns.length === 0 || !pkWhereClause || !entityInfo.BaseTable) {
+            return null;
+        }
+        const selectCols = columns.map((c) => this.QuoteIdentifier(c)).join(', ');
+        const tableRef = this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseTable);
+        return `SELECT ${selectCols} FROM ${tableRef} WHERE ${pkWhereClause} FOR UPDATE`;
+    }
+
+    /**
      * Wraps a PG binding with the bare `SELECT * FROM schema.fn(...)`
      * result-capture pattern. PG returns the row directly; no
      * @ResultTable equivalent.
@@ -1047,35 +1611,90 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             throw new Error(`PostgreSQLDataProvider.WrapSaveCallWithRecordChange: unexpected binding kind '${binding.kind}'`);
         }
         const resolvedReturn = returnContext ?? this.ResolveSaveReturnContext(entity, options);
-        const baseValues = saveSQL.parameters ?? [];
+        const parameters: unknown[] = [...(saveSQL.parameters ?? [])];
+        const bind = (value: unknown, cast: string): string => {
+            parameters.push(value);
+            return `$${parameters.length}::${cast}`;
+        };
         const recordIDExpr = this.buildRecordIDFromCTE(entity.EntityInfo, 'save_result');
-        const s = baseValues.length + 1;
-        const cc = changeContextSQL(payload.changeContext, s + 9);
+        const entityIDSQL = bind(payload.entityID, 'uuid');
+        const userIDSQL = bind(payload.userID, 'uuid');
+        const typeSQL = bind(payload.type, 'varchar');
+        const sourceSQL = bind(payload.source, 'varchar');
+        const changesJSONSQL = bind(payload.changesJSON, 'text');
+        const changesDescriptionSQL = bind(payload.changesDescription, 'text');
+        // The snapshot is the row the function returned, when save_result holds the whole row;
+        // otherwise the payload's in-memory snapshot.
+        const fullRecordJSONSQL = this.BuildsFullRecordJSONFromResultRow(entity, resolvedReturn)
+            ? this.renderResultRowSnapshotSQL(entity.EntityInfo, 'save_result')
+            : bind(payload.fullRecordJSON, 'text');
+        const restoredFromIDSQL = bind(payload.restoredFromID, 'uuid');
+        const restoreReasonSQL = bind(payload.restoreReason, 'text');
+        const cc = changeContextSQL(payload.changeContext, parameters.length + 1, payload.integrationID);
+        parameters.push(...cc.parameters);
         const fullSQL = `WITH save_result AS (
     ${saveSQL.sql}
 ),
 record_change AS (
     INSERT INTO ${this._schemaName}."RecordChange"
         ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
-    SELECT $${s}::uuid, ${recordIDExpr}, $${s + 1}::uuid, $${s + 2}::varchar, $${s + 3}::varchar, $${s + 4}::text, $${s + 5}::text, $${s + 6}::text, 'Complete', $${s + 7}::uuid, $${s + 8}::text${cc.value}
+    SELECT ${entityIDSQL}, ${recordIDExpr}, ${userIDSQL}, ${typeSQL}, ${sourceSQL}, ${changesJSONSQL}, ${changesDescriptionSQL}, ${fullRecordJSONSQL}, 'Complete', ${restoredFromIDSQL}, ${restoreReasonSQL}${cc.value}
     FROM save_result
     RETURNING "ID"
 )
 SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
-        const parameters = [
-            ...baseValues,
-            payload.entityID,
-            payload.userID,
-            payload.type,
-            payload.source,
-            payload.changesJSON,
-            payload.changesDescription,
-            payload.fullRecordJSON,
-            payload.restoredFromID,
-            payload.restoreReason,
-            ...cc.parameters,
-        ];
         return { sql: fullSQL, parameters };
+    }
+
+    /**
+     * True when a save's Record Change snapshot can be built from the row its function returned:
+     * `save_result` holds the whole row, because neither the compiled function nor this call
+     * returns datestamps only.
+     *
+     * Built from the returned row, the snapshot holds what the database stored: values another writer
+     * committed to columns this save did not change, server-set timestamps and defaults, current
+     * joined display values, and encrypted columns as their ciphertext.
+     */
+    protected override BuildsFullRecordJSONFromResultRow(_entity: BaseEntity, returnContext: SaveReturnContext): boolean {
+        return !returnContext.spReturnsDatestampsOnly && !returnContext.needsDatestampProjection;
+    }
+
+    /**
+     * A scalar subquery rendering the current `rowAlias` row as the snapshot's JSON text, one key per
+     * entity field, each column rendered as {@link renderResultRowSnapshotColumn} describes.
+     */
+    private renderResultRowSnapshotSQL(entityInfo: EntityInfo, rowAlias: string): string {
+        const columns = entityInfo.Fields.map(
+            (f) => `${this.renderResultRowSnapshotColumn(f, `${rowAlias}.${this.QuoteIdentifier(f.Name)}`)} AS ${this.QuoteIdentifier(f.Name)}`,
+        );
+        return `(SELECT row_to_json(snapshot_row)::text FROM (SELECT ${columns.join(', ')}) snapshot_row)`;
+    }
+
+    /**
+     * One returned column as the snapshot writes it, matching how a loaded entity serializes the same
+     * value: date-times as UTC ISO-8601 with milliseconds and `Z` (MJ's date-time columns are
+     * `timestamptz`), `bigint` as a string, `bytea` as base64 rather than `row_to_json`'s `\x` hex,
+     * and `json`/`jsonb` and unrecognized types as text rather than nested JSON.
+     */
+    private renderResultRowSnapshotColumn(field: EntityFieldInfo, col: string): string {
+        switch (RecordChangeSnapshotColumnKindOf(field.Type, 'postgresql')) {
+            case 'utc-datetime':
+            case 'offset-datetime':
+                return `to_char(${col} AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+            case 'date':
+                return `to_char(${col}, 'YYYY-MM-DD') || 'T00:00:00.000Z'`;
+            case 'time':
+                return `'1970-01-01T' || to_char(${col}, 'HH24:MI:SS.MS') || 'Z'`;
+            case 'binary':
+                return `translate(encode(${col}, 'base64'), E'\\n', '')`;
+            case 'bigint':
+            case 'json':
+            case 'clr':
+            case 'text':
+                return `(${col})::text`;
+            default:
+                return col;
+        }
     }
 
     /**
@@ -1095,7 +1714,7 @@ SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
         const simpleSQL = `SELECT * FROM ${pgDialect.QuoteSchema(entityInfo.SchemaName, fnName)}(${paramPlaceholders})`;
 
         if (this.ShouldTrackRecordChanges(entityInfo) && options?.SkipRecordChanges !== true) {
-            const oldData = entity.GetAll(false);
+            const oldData = this.RecordChangeDeleteSnapshot(entity, entity.GetAll(true)); // the OLD values, full width
             const recordID = this.buildRecordIDFromEntity(entity);
             // Delete: newData is null so the payload renders Source/lineage from
             // the entity's RestoreContext (usually NULL — supported for symmetry).
@@ -1108,10 +1727,13 @@ SELECT ${resolvedReturn.finalSelectColumnsSQL} FROM save_result`;
                 user,
                 entity.RestoreContext,
                 "'",
+                entity.CloneContext,
+                false,
+                entity.SyncContext,
             );
             if (payload) {
                 const s = paramValues.length + 1;
-                const cc = changeContextSQL(payload.changeContext, s + 7);
+                const cc = changeContextSQL(payload.changeContext, s + 7, payload.integrationID);
                 paramValues.push(
                     payload.entityID,
                     payload.recordID,
@@ -1302,12 +1924,16 @@ SELECT * FROM delete_result`;
             // Negative lookahead: don't quote words followed by ( — those are function calls
             // (e.g., LENGTH(...), LEFT(...)), not column references. Without this, a field
             // named "Length" causes LENGTH() to be quoted as "Length"() which PG can't resolve.
+            // Negative lookbehind (?<!\$): don't quote $1 parameter tokens whose identifier
+            // part might match a numeric/field pattern (BindExtraFilterParameters rewrites
+            // @paramName to $1 before TransformExternalSQLClause runs; on PostgreSQL, @ is the
+            // unary absolute-value operator, so @FieldName must still quote "FieldName").
             // `fieldName` is escaped before interpolation: PostgreSQL identifiers may
             // legally contain regex metacharacters (`$`, `(`, `.`), and injecting one
             // raw built a pattern that either matched nothing — a `$` became an
             // end-anchor, so `a$$b` was never quoted at all — or matched the wrong
             // text. Discovered alongside issue #3171.
-            const re = new RegExp(`\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
+            const re = new RegExp(`(?<!\\$)\\b${escapeRegExp(fieldName)}\\b(?!\\s*\\()`, 'gi');
             // Function replacement, for the same reason on the other side: a quoted
             // identifier containing `$` would be expanded by a string replacement.
             const quoted = pgDialect.QuoteIdentifier(fieldName);
@@ -1449,6 +2075,7 @@ SELECT * FROM delete_result`;
         user: UserInfo,
         restoreContext?: RestoreContext | null,
         cloneContext?: CloneContext | null,
+        syncContext?: SyncContext | null,
     ): { sql: string; parameters?: unknown[] } | null {
         const payload = this.BuildRecordChangePayload(
             newData,
@@ -1460,10 +2087,12 @@ SELECT * FROM delete_result`;
             restoreContext,
             "'",
             cloneContext,
+            false,
+            syncContext,
         );
         if (!payload) return null;
 
-        const cc = changeContextSQL(payload.changeContext, 11);
+        const cc = changeContextSQL(payload.changeContext, 11, payload.integrationID);
         const sql = `INSERT INTO ${this._schemaName}."RecordChange"
             ("EntityID", "RecordID", "UserID", "Type", "Source", "ChangesJSON", "ChangesDescription", "FullRecordJSON", "Status", "RestoredFromID", "RestoreReason"${cc.column})
             VALUES ($1::uuid, $2::varchar, $3::uuid, $4::varchar, $5::varchar, $6::text, $7::text, $8::text, 'Complete', $9::uuid, $10::text${cc.value})
@@ -1499,6 +2128,7 @@ SELECT * FROM delete_result`;
         safeUserId: string,
         source?: RecordChangeSource,
         changeContext?: string | null,
+        integrationID?: string | null,
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
@@ -1511,8 +2141,10 @@ SELECT * FROM delete_result`;
 
         const sourceVal = source ?? 'Internal';
         // Named only when set, like the other sites: see changeContextSQL.
-        const changeContextColumn = changeContext ? ', "ChangeContext"' : '';
-        const changeContextValue = changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : '';
+        const changeContextColumn = `${changeContext ? ', "ChangeContext"' : ''}${integrationID ? ', "IntegrationID"' : ''}`;
+        const changeContextValue =
+            `${changeContext ? `,\n    '${EscapeSQLString(changeContext)}'::text` : ''}` +
+            `${integrationID ? `,\n    '${EscapeSQLString(integrationID)}'::uuid` : ''}`;
 
         return `
 INSERT INTO ${this._schemaName}."RecordChange"

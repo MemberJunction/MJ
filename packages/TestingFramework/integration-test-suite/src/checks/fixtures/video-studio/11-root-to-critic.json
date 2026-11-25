@@ -1,0 +1,12 @@
+{
+    "taskComplete": false,
+    "message": "Invoking Critic to score the rendered contact sheets against the 9-criterion rubric.",
+    "nextStep": {
+        "type": "Sub-Agent",
+        "subAgent": {
+            "name": "Video Studio - Critic",
+            "message": "Evaluate the rendered contact sheet and composition against the Video Studio Quality Rubric.",
+            "terminateAfter": false
+        }
+    }
+}

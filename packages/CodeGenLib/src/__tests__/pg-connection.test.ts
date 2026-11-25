@@ -51,6 +51,11 @@ vi.mock('@memberjunction/postgresql-dataprovider', () => ({
             },
         };
     }),
+    // The shared TLS rule, reduced to what these tests check: plain TCP for a local or bare
+    // service-name host, verify-full for a remote one. Its own tests live with the provider.
+    BuildPgSslConfig: vi.fn((host: string) => (host === 'localhost' || !host.includes('.') ? false : { rejectUnauthorized: true })),
+    ResolvePgAuthMode: vi.fn(() => 'password'),
+    BuildPgPasswordSource: vi.fn(() => undefined),
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -181,14 +186,18 @@ describe('PGConnection — lazy + cached pool', () => {
         expect(fakePool.listeners.connect ?? []).toHaveLength(0);
     });
 
-    it('defaults SSL off to preserve pre-refactor inline-pool behavior', async () => {
-        // Pre-multi-provider PR, codegen built `new pg.Pool({...})` inline with no
-        // `ssl` key, so pg defaulted SSL OFF. PGConnectionManager defaults SSL ON
-        // when NODE_ENV=production, which would flip behavior under us. buildPgConfig()
-        // explicitly passes SSL: false to preserve the prior behavior.
+    it('defaults SSL to the shared PG_SSL_* rule: off for a local host', async () => {
+        configInfo.dbHost = 'localhost';
         await PGConnection();
         const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
         expect(passed.SSL).toBe(false);
+    });
+
+    it('defaults SSL to the shared PG_SSL_* rule: verify-full for a remote host', async () => {
+        configInfo.dbHost = 'pg.example.com';
+        await PGConnection();
+        const passed = initializeMock.mock.calls[0]![0] as Record<string, unknown>;
+        expect(passed.SSL).toEqual({ rejectUnauthorized: true });
     });
 
     it('honors an explicit codegenPool.ssl override (boolean true)', async () => {

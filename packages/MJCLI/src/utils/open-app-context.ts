@@ -14,9 +14,10 @@ import { IsInteractiveRun } from '../lib/interactive-guard.js';
 import { input, confirm, select, password } from '@inquirer/prompts';
 import { createRequire } from 'node:module';
 import { UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { GetServerPrincipal } from '@memberjunction/generic-database-provider';
 import { initializeProvider, cleanupProvider } from '@memberjunction/metadata-sync';
-import { GetValidatedConfig } from '../config.js';
+import type { GitHubClientOptions, GitHubTokenSource } from '@memberjunction/open-app-engine';
+import { GetValidatedConfig, ResolvePostgresMigrationSecurity } from '../config.js';
 
 type ResolvedConfig = ReturnType<typeof GetValidatedConfig>;
 
@@ -91,24 +92,13 @@ export async function closeConnectionPool(): Promise<void> {
 function getSystemUserInfo(): UserInfo {
   // UserCache is populated by initializeProvider on BOTH platforms (PG via its
   // vwUsers/vwUserRoles bootstrap), so the same lookup works regardless of backend.
-  const sysUser = UserCache.Instance.GetSystemUser();
-  if (sysUser) {
-    return sysUser;
+  // Active system user, else lowest-ID active Owner. Never an arbitrary user.
+  const principal = GetServerPrincipal();
+  if (principal) {
+    return principal;
   }
 
-  // Fallback: find first Owner user
-  const ownerUser = UserCache.Instance.Users.find(u => u.IsActive && u.Type === 'Owner');
-  if (ownerUser) {
-    return ownerUser;
-  }
-
-  // Last resort: first active user
-  const firstUser = UserCache.Instance.Users.find(u => u.IsActive);
-  if (firstUser) {
-    return firstUser;
-  }
-
-  throw new Error('No users found in UserCache. Cannot determine system user for Open App operations.');
+  throw new Error('No active system user or Owner found in UserCache. Cannot determine a user for Open App operations.');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -147,6 +137,9 @@ export async function BuildOrchestratorContext(
   // `interactive` is the per-command opt-out (--non-interactive); isInteractiveRun() is the
   // global rule: a real terminal unless --no-interactive / CI says otherwise.
   const wantPrompts = interactive && IsInteractiveRun();
+  // PostgreSQL: the install's migration run and metadata refresh follow the shared PG_SSL_* and
+  // PG_AUTH_MODE settings, like `mj migrate`.
+  const pgSecurity = config.dbPlatform === 'postgresql' ? await ResolvePostgresMigrationSecurity(config) : undefined;
 
   return {
     ContextUser: contextUser,
@@ -156,10 +149,12 @@ export async function BuildOrchestratorContext(
       Port: config.dbPort,
       Database: config.dbDatabase,
       User: config.codeGenLogin,
-      Password: config.codeGenPassword,
+      Password: pgSecurity?.Password ?? config.codeGenPassword,
       Encrypt: config.dbEncrypt,
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
+      ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
+      ...(pgSecurity?.PasswordSource ? { PasswordSource: pgSecurity.PasswordSource } : {}),
     },
     GitHubOptions: BuildGitHubOptions(config),
     RepoRoot: process.cwd(),
@@ -231,6 +226,7 @@ interface OrchestratorContextShape {
     Encrypt?: boolean;
     TrustServerCertificate?: boolean;
     RequestTimeout?: number;
+    SSL?: Record<string, unknown>;
   };
   GitHubOptions: {
     Token?: string;
@@ -273,17 +269,23 @@ interface OrchestratorContextShape {
  */
 export function BuildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
-}): { Token?: string; TokenMap?: Record<string, string> } {
+}): GitHubClientOptions {
+  const configToken = config.openApps?.github?.token;
+  const envToken = process.env.GITHUB_TOKEN;
+  // Recorded so a "cannot read this repository" message names the token that was actually used:
+  // a config token silently beats GITHUB_TOKEN, so exporting a fresh one changes nothing.
+  const tokenSource: GitHubTokenSource | undefined = configToken != null ? 'Config' : envToken != null ? 'Environment' : undefined;
   return {
-    Token: config.openApps?.github?.token ?? process.env.GITHUB_TOKEN,
+    Token: configToken ?? envToken,
     TokenMap: filterDefinedTokens(config.openApps?.github?.tokens),
+    TokenSource: tokenSource,
   };
 }
 
 /** @deprecated Use {@link BuildGitHubOptions}. */
 export function buildGitHubOptions(config: {
   openApps?: { github?: { token?: string; tokens?: Record<string, string | undefined> } };
-}): { Token?: string; TokenMap?: Record<string, string> } {
+}): GitHubClientOptions {
   return BuildGitHubOptions(config);
 }
 

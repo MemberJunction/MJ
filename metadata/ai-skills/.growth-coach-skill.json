@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "Name": "Growth Coach",
+      "Description": "Opt-in biweekly reflective growth coach that reviews bounded recent tasks, meeting notes/transcripts, work reports, and agent conversations to deliver a concise Start / Stop / Continue coaching note in a private ParentID side conversation.",
+      "Instructions": "@file:templates/growth-coach.skill.md",
+      "Status": "Active",
+      "ActivationMode": "RequestedOnly",
+      "Category": "Coaching",
+      "IconClass": "fa-solid fa-seedling",
+      "Color": "#0D9488",
+      "CreatedByUserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "2197EB38-86D4-4846-A2E9-336E87E20ABA"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:44.528Z",
+      "checksum": "59dea67de1ab4722e660496a5305741797c4ffdb78f067fffdd288877dc70d75"
+    }
+  }
+]

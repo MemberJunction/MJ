@@ -62,7 +62,7 @@ interface EngineCacheKeyAccess {
 interface ProviderCacheKeyAccess {
     InstanceConnectionString: string;
     ComputeRunViewRLSWhereClause(params: RunViewParams, contextUser?: UserInfo): string;
-    ComputeRunViewFLSFingerprintKey(params: RunViewParams): string | undefined;
+    ComputeRunViewFLSFingerprintKey(params: RunViewParams, contextUser?: UserInfo): string | undefined;
 }
 
 /**
@@ -72,7 +72,7 @@ interface ProviderCacheKeyAccess {
 function providerSlotKey(provider: ProviderCacheKeyAccess, params: RunViewParams, user: UserInfo): string {
     return LocalCacheManager.Instance.GenerateRunViewFingerprint(
         params, provider.InstanceConnectionString, provider.ComputeRunViewRLSWhereClause(params, user), undefined,
-        provider.ComputeRunViewFLSFingerprintKey(params));
+        provider.ComputeRunViewFLSFingerprintKey(params, user));
 }
 
 /** Every engine in this process that has finished loading. */

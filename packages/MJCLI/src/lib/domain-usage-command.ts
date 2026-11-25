@@ -2,7 +2,7 @@ import { Command, Flags } from '@oclif/core';
 import { CLIPluginRegistry, ResolveOutputFormat } from '@memberjunction/cli-core';
 import { LoadAllCliPlugins } from './cli-plugins.js';
 import { EmitUsage, RenderDomainDetail } from './usage-render.js';
-import type { OclifCommandShape } from './derived-usage.js';
+import { FromOclifCommands } from './derived-usage.js';
 
 /**
  * Shared base for tier-2 usage commands (`mj <domain> usage`). Concrete
@@ -24,7 +24,7 @@ export abstract class DomainUsageCommand extends Command {
 
   async run(): Promise<void> {
     const { flags } = await this.parse(this.constructor as typeof DomainUsageCommand);
-    await LoadAllCliPlugins(process.cwd(), this.config.commands as unknown as OclifCommandShape[]);
+    await LoadAllCliPlugins(process.cwd(), FromOclifCommands(this.config.commands));
     const detail = CLIPluginRegistry.BuildDomainDetail(this.Domain);
     const result = CLIPluginRegistry.AsResult(`${this.Domain}:usage`, { domain: detail.domain, commands: detail.commands });
     const { format } = ResolveOutputFormat({ formatFlag: flags.format });

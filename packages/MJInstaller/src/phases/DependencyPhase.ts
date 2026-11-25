@@ -56,6 +56,16 @@ export function TagToNpmVersion(tag: string): string {
   return /^\d+\.\d+\.\d+(-[\w.-]+)?(\+[\w.-]+)?$/.test(stripped) ? stripped : 'latest';
 }
 
+/**
+ * Timeout for one package-manager install run. Windows gets 30 minutes, matching
+ * the build cap: a cold Windows install was observed to exceed 15 minutes (#4478).
+ *
+ * @param platform - The OS platform (defaults to the current process's).
+ */
+export function DependencyInstallTimeoutMs(platform: NodeJS.Platform = process.platform): number {
+  return platform === 'win32' ? 1_800_000 : 900_000;
+}
+
 /** @deprecated Use {@link TagToNpmVersion}. */
 export function tagToNpmVersion(tag: string): string {
   return TagToNpmVersion(tag);
@@ -496,7 +506,7 @@ export class DependencyPhase {
     const install = pm.Install(extraArgs);
     return this.processRunner.Run(install.Cmd, install.Args, {
       Cwd: dir,
-      TimeoutMs: 900_000, // 15 minutes
+      TimeoutMs: DependencyInstallTimeoutMs(),
       OnStdout: (line: string) => {
         emitter.Emit('step:progress', {
           Type: 'step:progress',
@@ -552,6 +562,13 @@ export class DependencyPhase {
     }
 
     const npmVersion = TagToNpmVersion(tag);
+    if (npmVersion === 'latest') {
+      emitter.Emit('warn', {
+        Type: 'warn',
+        Phase: 'dependencies',
+        Message: `Tag "${tag}" is not a release version; pinning @memberjunction/cli@latest, which npm resolves to its "latest" dist-tag and may be a different major version than the installed code.`,
+      });
+    }
 
     if (!pkg['devDependencies']) {
       pkg['devDependencies'] = {};

@@ -152,4 +152,80 @@ describe('buildBroadRowFilterSQL', () => {
             expect(r.Sql).toBe(sql);
         });
     });
+
+    describe("span edits on the author's text", () => {
+        it('removes the FIRST conjunct and keeps comments, casing and bracket style as written', () => {
+            const sql = "SELECT o.[ID], o.Status /* status col */\nFROM dbo.[Orders] o\nwhere o.Status = 'Active' and o.ChapterID = 42 -- trailing\nORDER BY o.[ID]";
+            const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
+            expect(r.RemovedCount).toBe(1);
+            expect(r.Ambiguous).toBe(false);
+            expect(r.Sql).toBe("SELECT o.[ID], o.Status /* status col */\nFROM dbo.[Orders] o\nwhere o.ChapterID = 42 -- trailing\nORDER BY o.[ID]");
+        });
+
+        it('removes a MIDDLE conjunct with one adjacent AND', () => {
+            const r = BuildBroadRowFilterSQL("SELECT ID FROM Orders WHERE ChapterID = 42 AND Status = 'Active' AND IsDeleted = 0", ['Status'], tsql, 1);
+            expect(r.Sql).toBe('SELECT ID FROM Orders WHERE ChapterID = 42 AND IsDeleted = 0');
+        });
+
+        it('removes the LAST conjunct with the AND before it', () => {
+            const r = BuildBroadRowFilterSQL("SELECT ID FROM Orders WHERE ChapterID = 42 AND Status IN ('A', 'B')", ['Status'], tsql, 1);
+            expect(r.Sql).toBe('SELECT ID FROM Orders WHERE ChapterID = 42');
+        });
+
+        it('drops the whole WHERE when every conjunct goes, keeping the clauses after it', () => {
+            const r = BuildBroadRowFilterSQL("SELECT Region, COUNT(*) AS n FROM Orders WHERE Region = 'East' GROUP BY Region", ['Region'], tsql, 1);
+            expect(r.Sql).toBe('SELECT Region, COUNT(*) AS n FROM Orders GROUP BY Region');
+        });
+
+        it('edits only the outer WHERE of a WITH-headed source, leaving the CTE as written', () => {
+            const sql = "WITH recent AS (SELECT ID, Status FROM Orders WHERE Status <> 'Void')\nSELECT ID, Status FROM recent WHERE Status = 'Active' AND ID > 10";
+            const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
+            expect(r.RemovedCount).toBe(1);
+            expect(r.Sql).toBe("WITH recent AS (SELECT ID, Status FROM Orders WHERE Status <> 'Void')\nSELECT ID, Status FROM recent WHERE ID > 10");
+        });
+
+        it('removes a conjunct inside a parenthesized AND group', () => {
+            const r = BuildBroadRowFilterSQL("SELECT ID FROM Orders WHERE (Status = 'A' AND ChapterID = 1) AND Region = 'East'", ['Status'], tsql, 1);
+            expect(r.Sql).toBe("SELECT ID FROM Orders WHERE (ChapterID = 1) AND Region = 'East'");
+        });
+
+        it('keeps the AND of a BETWEEN with its predicate', () => {
+            const r = BuildBroadRowFilterSQL('SELECT ID FROM Members WHERE Score BETWEEN 10 AND 50 AND ChapterID = 2', ['Score'], tsql, 1);
+            expect(r.Sql).toBe('SELECT ID FROM Members WHERE ChapterID = 2');
+        });
+
+        it('keeps the line break after a line comment when it removes the WHERE', () => {
+            const r = BuildBroadRowFilterSQL("SELECT ID FROM Orders -- every order\nWHERE Status = 'A'", ['Status'], tsql, 1);
+            expect(r.Sql).toBe('SELECT ID FROM Orders -- every order\n');
+        });
+
+        it('PostgreSQL: keeps double-quoted identifiers as written', () => {
+            const r = BuildBroadRowFilterSQL('SELECT "ID" FROM "Orders" WHERE "Status" = \'Active\' AND "ChapterID" = 1', ['Status'], pg, 1);
+            expect(r.Sql).toBe('SELECT "ID" FROM "Orders" WHERE "ChapterID" = 1');
+        });
+    });
+
+    describe('unreadable structure is left unchanged (fail closed)', () => {
+        it('a predicate under a top-level OR is not removed', () => {
+            const sql = "SELECT ID FROM Orders WHERE Status = 'A' OR ChapterID = 1";
+            const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
+            expect(r.RemovedCount).toBe(0);
+            expect(r.Ambiguous).toBe(true);
+            expect(r.Sql).toBe(sql);
+        });
+
+        it('a set operation is not edited', () => {
+            const sql = "SELECT ID FROM Orders WHERE Status = 'A' UNION ALL SELECT ID FROM Archive";
+            const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
+            expect(r.RemovedCount).toBe(0);
+            expect(r.Sql).toBe(sql);
+        });
+
+        it('text the parser cannot read completely is not edited', () => {
+            const sql = "SELECT ID FROM Orders WHERE (Status = 'A'";
+            const r = BuildBroadRowFilterSQL(sql, ['Status'], tsql, 1);
+            expect(r.RemovedCount).toBe(0);
+            expect(r.Sql).toBe(sql);
+        });
+    });
 });

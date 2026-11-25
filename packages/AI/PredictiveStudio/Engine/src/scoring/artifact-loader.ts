@@ -9,23 +9,18 @@
  * - {@link InMemoryArtifactLoader} — for unit tests (no DB, no MJStorage), which
  *   can also bridge a training-time `InMemoryArtifactStore.Saved` map so a model
  *   trained in-memory can be scored in-memory in the same test.
- * - {@link LocalArtifactLoader} — the read-side inverse of `MJFilesArtifactStore`.
- *   The fileId is the real `MJ: Files` row id and the bytes live on local disk at
- *   `<baseDir>/<fileId>.bin` (dev / on-prem); this reads that path and returns its
- *   bytes, or `null` when absent. **Production follow-up**: a provider `GetObject`
- *   keyed by the File id replaces the local `readFile`.
+ *
+ * The production loader is `StorageProviderArtifactLoader`
+ * (`scoring/storage-provider-artifact-loader`).
  */
 
-import { readFile } from 'node:fs/promises';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 
-import { LogError, type UserInfo } from '@memberjunction/core';
-
-import { ResolveLocalArtifactBaseDir, LocalArtifactPath } from '../training/artifact-store';
-import type { IArtifactLoader } from './types';
+import type { ArtifactBytesRead, IArtifactLoader } from './types';
 
 /**
  * In-memory {@link IArtifactLoader} for unit tests. Holds artifact bytes keyed by
- * file id and returns them on {@link load}. No database, no MJStorage.
+ * file id and returns them on {@link load} (`absent` for an id it does not hold). No database, no MJStorage.
  *
  * Bridges the training-side `InMemoryArtifactStore`: pass its `Saved` map (keyed
  * by the returned file id, with `{ Bytes }`) so a model trained in-memory is
@@ -52,65 +47,9 @@ export class InMemoryArtifactLoader implements IArtifactLoader {
     this.store.set(fileId, bytes);
   }
 
-  /** @deprecated Use {@link Set}. */
-  public set(fileId: string, bytes: Uint8Array): void {
-    return this.Set(fileId, bytes);
+  /** @inheritdoc A file id with no bytes registered is `absent`. */
+  public async load(fileId: string, _contextUser: UserInfo, _provider: IMetadataProvider): Promise<ArtifactBytesRead> {
+    const bytes = this.store.get(fileId);
+    return bytes ? { Kind: 'read', Bytes: bytes } : { Kind: 'absent', FileID: fileId };
   }
-
-  /** @inheritdoc */
-  public async load(fileId: string, _contextUser?: UserInfo): Promise<Uint8Array | null> {
-    return this.store.get(fileId) ?? null;
-  }
-}
-
-/**
- * The single production {@link IArtifactLoader} — the read-side inverse of
- * {@link MJFilesArtifactStore}. Given a fileId (= the real `MJ: Files` row id the
- * artifact was stored under), it reads the bytes from local disk at
- * `<baseDir>/<fileId>.bin` and returns them, or `null` when the file is absent.
- *
- * A missing file is a normal, expected `null` (the model has no persisted artifact);
- * only a genuine I/O failure (permissions, corruption) is logged.
- *
- * **NOT for multi-host production** — it can only read paths on the machine the
- * artifact was written to. **Production follow-up**: replace the local `readFile`
- * with a provider `GetObject` keyed by the File id; the id contract is unchanged.
- */
-export class LocalArtifactLoader implements IArtifactLoader {
-  private readonly baseDir: string;
-
-  /**
-   * @param baseDir optional base-directory override (defaults to
-   *   {@link resolveLocalArtifactBaseDir}); must match the store's base dir
-   */
-  constructor(baseDir: string = ResolveLocalArtifactBaseDir()) {
-    this.baseDir = baseDir;
-  }
-
-  /** @inheritdoc */
-  public async load(fileId: string, _contextUser?: UserInfo): Promise<Uint8Array | null> {
-    const absolutePath = LocalArtifactPath(this.baseDir, fileId);
-    try {
-      const buffer = await readFile(absolutePath);
-      return new Uint8Array(buffer);
-    } catch (error) {
-      // ENOENT is the expected "no persisted artifact" signal — return null quietly.
-      // Log only real I/O failures.
-      if (!isFileNotFoundError(error)) {
-        const message = error instanceof Error ? error.message : String(error);
-        LogError(`LocalArtifactLoader: failed to read artifact at '${absolutePath}': ${message}`);
-      }
-      return null;
-    }
-  }
-}
-
-/** Whether a caught error is a Node "file not found" (`ENOENT`) error. */
-function isFileNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 'ENOENT'
-  );
 }

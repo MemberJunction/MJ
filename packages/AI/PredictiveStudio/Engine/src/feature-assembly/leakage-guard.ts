@@ -12,7 +12,7 @@
  * 2. **Single-feature-dominance detection (post-train).** After training, if one
  *    feature's importance exceeds a threshold (e.g. >0.6), the run is flagged as
  *    suspicious → warn loudly + block promotion until a human signs off. The
- *    detection itself ({@link detectSingleFeatureDominance}) runs post-train
+ *    detection itself ({@link DetectSingleFeatureDominance}) runs post-train
  *    (importance only exists after a model is fit); the executor only enforces
  *    the deny-list at assembly time.
  */
@@ -50,11 +50,6 @@ export class LeakageGuardEnforcer {
     return !this.denyFields.has(normalizeName(fieldName));
   }
 
-  /** @deprecated Use {@link IsFieldAllowed}. */
-  public isFieldAllowed(fieldName: string): boolean {
-    return this.IsFieldAllowed(fieldName);
-  }
-
   /**
    * Whether a source binding is allowed to be drawn from (i.e. NOT deny-listed).
    *
@@ -62,11 +57,6 @@ export class LeakageGuardEnforcer {
    */
   public IsSourceAllowed(sourceRef: string): boolean {
     return !this.denySources.has(normalizeName(sourceRef));
-  }
-
-  /** @deprecated Use {@link IsSourceAllowed}. */
-  public isSourceAllowed(sourceRef: string): boolean {
-    return this.IsSourceAllowed(sourceRef);
   }
 
   /**
@@ -84,11 +74,6 @@ export class LeakageGuardEnforcer {
       (this.IsFieldAllowed(c) ? allowed : denied).push(c);
     }
     return { allowed, denied };
-  }
-
-  /** @deprecated Use {@link PartitionColumns}. */
-  public partitionColumns(columns: string[]): { allowed: string[]; denied: string[] } {
-    return this.PartitionColumns(columns);
   }
 }
 
@@ -158,9 +143,4 @@ export function DetectSingleFeatureDominance(featureImportance: FeatureImportanc
     TopShare: topShare,
     Threshold: effectiveThreshold,
   };
-}
-
-/** @deprecated Use {@link DetectSingleFeatureDominance}. */
-export function detectSingleFeatureDominance(featureImportance: FeatureImportance, threshold: number): DominanceResult {
-  return DetectSingleFeatureDominance(featureImportance, threshold);
 }

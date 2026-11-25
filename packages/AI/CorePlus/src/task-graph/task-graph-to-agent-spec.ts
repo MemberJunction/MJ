@@ -110,10 +110,9 @@ export function ConvertTaskGraphToAgentSpec(
     const decisionKeys = assignDecisionKeys(graph.tasks);
 
     for (const node of graph.tasks) {
-        // Human and External have no design-time equivalent — reported, never emitted as an empty
-        // step, which would look like a workflow that runs unattended. Every OTHER kind maps to a
-        // step type: reading only `agentName` used to mislabel action, prompt and loop nodes as
-        // "human task" losses and drop them.
+        // A kind with no design-time step type is reported, never emitted as an empty step, which
+        // would look like a workflow that runs unattended. Today every kind maps to a step type;
+        // Human, External and Wait included.
         const omitted = noDesignTimeEquivalent(node);
         if (omitted) {
             losses.push({ Kind: 'HumanTask', TempId: node.tempId, Detail: omitted });
@@ -147,8 +146,7 @@ export function ConvertTaskGraphToAgentSpec(
 
         const unresolvedPrompt = unresolvedDecisionPrompt(node, options);
         if (unresolvedPrompt) losses.push(unresolvedPrompt);
-        const unresolved = unresolvedAction(node, options);
-        if (unresolved) losses.push(unresolved);
+        losses.push(...unresolvedActions(node, options));
 
         const stepID = options.NextID();
         stepIdByTempId.set(node.tempId, stepID);
@@ -230,6 +228,7 @@ export function ConvertTaskGraphToAgentSpec(
         Description: graph.reasoning || `Saved from a task graph: ${graph.workflowName}`,
         TypeID: options.FlowAgentTypeID,
         Status: 'Active',
+        ...(graph.isolation ? { Isolation: graph.isolation } : {}),
         // A saved workflow inherits no payload contract from the graph it came from — a runtime
         // graph never had one. 'Warn' rather than 'Fail' so a first invocation surfaces a mismatch
         // instead of refusing to run something the user just watched succeed.
@@ -246,16 +245,15 @@ export function FormatSaveAsWorkflowLosses(losses: SaveAsWorkflowLoss[]): string
     return losses.map((l) => `[${l.Kind}] ${l.Detail}`).join('\n');
 }
 
-/** Why a node cannot become a Flow step, or `null` when it can. */
-function noDesignTimeEquivalent(node: TaskGraphSpecNode): string | null {
-    switch (node.kind) {
-        case 'Human':
-            return `"${node.name}" is a person's step and has no design-time equivalent yet; it is omitted from the workflow.`;
-        case 'External':
-            return `"${node.name}" is completed by an external system and has no design-time equivalent; it is omitted from the workflow.`;
-        default:
-            return null;
-    }
+/**
+ * Why a node cannot become a Flow step, or `null` when it can.
+ *
+ * Every kind has a design-time equivalent now: Human steps since flows gained them, and External and
+ * Wait since `AIAgentStep.StepType` accepted both. Kept as the one place to say so if a future kind
+ * arrives before its step type does.
+ */
+function noDesignTimeEquivalent(_node: TaskGraphSpecNode): string | null {
+    return null;
 }
 
 /**
@@ -318,19 +316,38 @@ function unresolvedDecisionPrompt(node: TaskGraphSpecNode, options: SaveAsWorkfl
 }
 
 /**
- * A loss when an Action node names an action that cannot be resolved, or `null`.
+ * Losses when an Action node (or action-bodied ForEach/While node) names actions that cannot be
+ * resolved to IDs.
  *
- * The step is still saved — its mappings and position are the author's work — but with no
- * `ActionID` it runs nothing, so it is said rather than saved quietly.
+ * The step is still saved — its mappings and position are the author's work — but any unresolved
+ * action is surfaced rather than dropped quietly.
  */
-function unresolvedAction(node: TaskGraphSpecNode, options: SaveAsWorkflowOptions): SaveAsWorkflowLoss | null {
-    const actionName = ConfigOf(node, 'Action')?.actionName;
-    if (!actionName || options.ResolveActionID?.(actionName)) return null;
-    return {
-        Kind: 'UnknownAction',
-        TempId: node.tempId,
-        Detail: `Action "${actionName}" could not be resolved; "${node.name}" is saved with no action, so choose one in the workflow editor.`,
-    };
+function unresolvedActions(node: TaskGraphSpecNode, options: SaveAsWorkflowOptions): SaveAsWorkflowLoss[] {
+    const names: string[] = [];
+    if (node.kind === 'Action') {
+        const actionName = ConfigOf(node, 'Action')?.actionName;
+        if (actionName) names.push(actionName);
+    } else if (node.kind === 'ForEach' || node.kind === 'While') {
+        const loopCfg = node.kind === 'ForEach' ? ConfigOf(node, 'ForEach') : ConfigOf(node, 'While');
+        if (loopCfg?.action?.name) names.push(loopCfg.action.name);
+        if (loopCfg?.steps?.length) {
+            for (const s of loopCfg.steps) {
+                if (s?.name) names.push(s.name);
+            }
+        }
+    }
+
+    const losses: SaveAsWorkflowLoss[] = [];
+    for (const actionName of new Set(names)) {
+        if (!options.ResolveActionID?.(actionName)) {
+            losses.push({
+                Kind: 'UnknownAction',
+                TempId: node.tempId,
+                Detail: `Action "${actionName}" could not be resolved; "${node.name}" is saved with no action, so choose one in the workflow editor.`,
+            });
+        }
+    }
+    return losses;
 }
 
 /**
@@ -369,18 +386,48 @@ function stepShapeFor(
                 PromptName: promptName,
             };
         }
-        case 'ForEach':
+        case 'ForEach': {
+            const cfg = ConfigOf(node, 'ForEach');
+            const primaryActionName = cfg?.action?.name ?? cfg?.steps?.[0]?.name;
             return {
                 StepType: 'ForEach',
-                LoopBodyType: ConfigOf(node, 'ForEach')?.action ? 'Action' : 'Sub-Agent',
-                Configuration: JSON.stringify(ConfigOf(node, 'ForEach') ?? {}),
+                LoopBodyType: (cfg?.action || cfg?.steps?.length) ? 'Action' : cfg?.prompt ? 'Prompt' : 'Sub-Agent',
+                ...(primaryActionName ? { ActionID: options.ResolveActionID?.(primaryActionName) ?? undefined } : {}),
+                ...(cfg?.action ? {
+                    ActionInputMapping: JSON.stringify(cfg.action.params ?? {}),
+                    ActionOutputMapping: cfg.action.outputMapping,
+                } : {}),
+                ...(cfg?.prompt ? {
+                    PromptID: options.ResolvePromptID?.(cfg.prompt.name) ?? undefined,
+                    ActionOutputMapping: cfg.prompt.outputMapping,
+                } : {}),
+                ...(cfg?.subAgent ? {
+                    SubAgentID: options.ResolveAgentID(cfg.subAgent.name) ?? undefined,
+                } : {}),
+                Configuration: JSON.stringify(cfg ?? {}),
             };
-        case 'While':
+        }
+        case 'While': {
+            const cfg = ConfigOf(node, 'While');
+            const primaryActionName = cfg?.action?.name ?? cfg?.steps?.[0]?.name;
             return {
                 StepType: 'While',
-                LoopBodyType: ConfigOf(node, 'While')?.action ? 'Action' : 'Sub-Agent',
-                Configuration: JSON.stringify(ConfigOf(node, 'While') ?? {}),
+                LoopBodyType: (cfg?.action || cfg?.steps?.length) ? 'Action' : cfg?.prompt ? 'Prompt' : 'Sub-Agent',
+                ...(primaryActionName ? { ActionID: options.ResolveActionID?.(primaryActionName) ?? undefined } : {}),
+                ...(cfg?.action ? {
+                    ActionInputMapping: JSON.stringify(cfg.action.params ?? {}),
+                    ActionOutputMapping: cfg.action.outputMapping,
+                } : {}),
+                ...(cfg?.prompt ? {
+                    PromptID: options.ResolvePromptID?.(cfg.prompt.name) ?? undefined,
+                    ActionOutputMapping: cfg.prompt.outputMapping,
+                } : {}),
+                ...(cfg?.subAgent ? {
+                    SubAgentID: options.ResolveAgentID(cfg.subAgent.name) ?? undefined,
+                } : {}),
+                Configuration: JSON.stringify(cfg ?? {}),
             };
+        }
         case 'Decision': {
             const cfg = ConfigOf(node, 'Decision');
             const configuration: FlowDecisionStepConfiguration = {
@@ -395,9 +442,38 @@ function stepShapeFor(
                 Configuration: JSON.stringify(configuration),
             };
         }
+        case 'Human': {
+            const cfg = ConfigOf(node, 'Human');
+            return {
+                StepType: 'Human',
+                // The step's description IS what the person is asked to do — the convention the flow
+                // compiler reads it back with.
+                Description: cfg?.instructions ?? node.description,
+                Configuration: JSON.stringify(omitUndefined({
+                    assignToUserID: cfg?.assignToUserID,
+                    expiresInHours: cfg?.expiresInHours,
+                    provider: cfg?.provider,
+                    providerConfiguration: cfg?.providerConfiguration,
+                })),
+            };
+        }
+        case 'External':
+            return { StepType: 'External', Configuration: JSON.stringify(ConfigOf(node, 'External') ?? { domain: 'external' }) };
+        case 'Enqueue':
+            return {
+                StepType: 'External',
+                Configuration: JSON.stringify({ stepKind: 'Enqueue', enqueue: ConfigOf(node, 'Enqueue') ?? {} }),
+            };
+        case 'Wait':
+            return { StepType: 'Wait', Configuration: JSON.stringify(ConfigOf(node, 'Wait') ?? {}) };
         default:
-            // Human/External are filtered out before this point; the fallback keeps the function
-            // total rather than letting a future kind fall through as undefined.
+            // Every kind is handled above; the fallback keeps the function total rather than letting
+            // a future kind fall through as undefined.
             return { StepType: 'Sub-Agent', SubAgentID: subAgentID ?? undefined };
     }
+}
+
+/** Drops undefined members, so a saved step's configuration carries only what was set. */
+function omitUndefined(value: Record<string, unknown>): Record<string, unknown> {
+    return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined));
 }

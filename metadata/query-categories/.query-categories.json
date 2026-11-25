@@ -118,5 +118,35 @@
       "lastModified": "2026-04-11T22:21:09.550Z",
       "checksum": "dbe0cc1ccebcec6e1b3c3baaf7f80199f029d71bf0bbca156bf2be526437c1ec"
     }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio",
+      "ParentID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Predictive Studio queries for the model lifecycle gate: the publish locks and model version allocation run inside the gate's transaction.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "1FCA9C31-3AD9-4725-AD70-8BD3201EB674"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:47.019Z",
+      "checksum": "41b0c9a039947dbf3521fe79b1ee23399daf45a183907fc18082f48b9d612c67"
+    }
+  },
+  {
+    "fields": {
+      "Name": "User Lists",
+      "ParentID": null,
+      "Description": "Queries saved so a list can refresh from them, one subcategory per user. A query here is saved Pending; its owner can approve it.",
+      "UserID": "@lookup:MJ: Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "D6E999CC-BF2C-4D98-8BC8-4A86764D164C"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.979Z",
+      "checksum": "3f7a4fcf1b1a67ddea9ba0f76f4a86d6b16123422e2e9779d84b5ce9d621836f"
+    }
   }
 ]

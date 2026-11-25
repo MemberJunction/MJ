@@ -151,6 +151,42 @@ export function FindCaseMismatch(target: string, candidates: string[] | Set<stri
   return null;
 }
 
+/** Shortest name that counts as "containing" another; below this, containment matches too much. */
+const MIN_CONTAINED_LENGTH = 3;
+
+/**
+ * Up to `limit` candidates that resemble `target`, best first. A candidate qualifies when,
+ * ignoring case, it contains `target` or is contained in it (`Revenue` and `TotalRevenue`),
+ * or when it is within the same edit distance {@link FindClosestMatch} allows. Containment
+ * ranks ahead of edit distance, because a guessed field name is more often a fragment of the
+ * real one than a misspelling of it. Ties break on edit distance.
+ */
+export function FindSimilarNames(target: string, candidates: string[] | Set<string>, limit: number = 3): string[] {
+  const lowerTarget = target.toLowerCase();
+  const maxDistance = Math.max(3, Math.floor(target.length * 0.5));
+  const scored: Array<{ name: string; contains: boolean; distance: number }> = [];
+
+  for (const candidate of candidates) {
+    if (candidate === target) continue;
+    const lowerCandidate = candidate.toLowerCase();
+    const distance = LevenshteinDistance(lowerTarget, lowerCandidate);
+    const contains = isContainedEitherWay(lowerTarget, lowerCandidate);
+    if (contains || distance <= maxDistance) {
+      scored.push({ name: candidate, contains, distance });
+    }
+  }
+
+  return scored
+    .sort((a, b) => Number(b.contains) - Number(a.contains) || a.distance - b.distance)
+    .slice(0, limit)
+    .map(s => s.name);
+}
+
+function isContainedEitherWay(a: string, b: string): boolean {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  return shorter.length >= MIN_CONTAINED_LENGTH && longer.includes(shorter);
+}
+
 /** @deprecated Use {@link FindCaseMismatch}. */
 export function findCaseMismatch(target: string, candidates: string[] | Set<string>): string | null {
   return FindCaseMismatch(target, candidates);

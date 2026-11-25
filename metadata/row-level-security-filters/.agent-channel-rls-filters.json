@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "Name": "UI: Agent Channels - Participants Only",
+      "Description": "Restricts Agent Channel visibility and updates to active participants in MJ: Agent Channel Participants or administrative roles (Owner, System Administrator, Administrator, Admin, Administration).",
+      "FilterText": "([ID] IN (SELECT [acp].[AgentChannelID] FROM [__mj].[AgentChannelParticipant] [acp] WHERE [acp].[UserID] = '{{UserID}}') OR EXISTS (SELECT 1 FROM [__mj].[User] [u] LEFT JOIN [__mj].[UserRole] [ur] ON [ur].[UserID] = [u].[ID] LEFT JOIN [__mj].[Role] [r] ON [r].[ID] = [ur].[RoleID] WHERE [u].[ID] = '{{UserID}}' AND (LTRIM(RTRIM([u].[Type])) = 'Owner' OR [r].[Name] IN ('System Administrator', 'Administrator', 'Admin', 'Administration'))))",
+      "PlatformVariants": "{\"FilterText\":{\"postgresql\":\"(\\\"ID\\\" IN (SELECT acp.\\\"AgentChannelID\\\" FROM \\\"__mj\\\".\\\"AgentChannelParticipant\\\" acp WHERE acp.\\\"UserID\\\" = '{{UserID}}') OR EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"User\\\" u LEFT JOIN \\\"__mj\\\".\\\"UserRole\\\" ur ON ur.\\\"UserID\\\" = u.\\\"ID\\\" LEFT JOIN \\\"__mj\\\".\\\"Role\\\" r ON r.\\\"ID\\\" = ur.\\\"RoleID\\\" WHERE u.\\\"ID\\\" = '{{UserID}}' AND (BTRIM(u.\\\"Type\\\") = 'Owner' OR r.\\\"Name\\\" IN ('System Administrator', 'Administrator', 'Admin', 'Administration'))))\"},\"_meta\":{\"translatedBy\":\"manual\",\"sourceDialect\":\"sqlserver\",\"verified\":true}}"
+    },
+    "primaryKey": {
+      "ID": "8440BA03-82B3-4BD6-A3AC-942FF76AF6F8"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:02:05.391Z",
+      "checksum": "880a12d357d2fa3465fa37e2ca93599473c7b3e55cea03d1fca44dc51724e857"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UI: Agent Channel Participants - Participants Only",
+      "Description": "Restricts Agent Channel Participant visibility and updates to users enrolled in the same Agent Channel or administrative roles.",
+      "FilterText": "([AgentChannelID] IN (SELECT [acp].[AgentChannelID] FROM [__mj].[AgentChannelParticipant] [acp] WHERE [acp].[UserID] = '{{UserID}}') OR EXISTS (SELECT 1 FROM [__mj].[User] [u] LEFT JOIN [__mj].[UserRole] [ur] ON [ur].[UserID] = [u].[ID] LEFT JOIN [__mj].[Role] [r] ON [r].[ID] = [ur].[RoleID] WHERE [u].[ID] = '{{UserID}}' AND (LTRIM(RTRIM([u].[Type])) = 'Owner' OR [r].[Name] IN ('System Administrator', 'Administrator', 'Admin', 'Administration'))))",
+      "PlatformVariants": "{\"FilterText\":{\"postgresql\":\"(\\\"AgentChannelID\\\" IN (SELECT acp.\\\"AgentChannelID\\\" FROM \\\"__mj\\\".\\\"AgentChannelParticipant\\\" acp WHERE acp.\\\"UserID\\\" = '{{UserID}}') OR EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"User\\\" u LEFT JOIN \\\"__mj\\\".\\\"UserRole\\\" ur ON ur.\\\"UserID\\\" = u.\\\"ID\\\" LEFT JOIN \\\"__mj\\\".\\\"Role\\\" r ON r.\\\"ID\\\" = ur.\\\"RoleID\\\" WHERE u.\\\"ID\\\" = '{{UserID}}' AND (BTRIM(u.\\\"Type\\\") = 'Owner' OR r.\\\"Name\\\" IN ('System Administrator', 'Administrator', 'Admin', 'Administration'))))\"},\"_meta\":{\"translatedBy\":\"manual\",\"sourceDialect\":\"sqlserver\",\"verified\":true}}"
+    },
+    "primaryKey": {
+      "ID": "6053EC13-C996-4E29-9F78-ABFAAD2D45AC"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:02:05.418Z",
+      "checksum": "d0336d45277f5a183dd135486339176eb580810c084c279e0217c5c2d6c846c8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UI: Agent Suggestions - Own Rows Only",
+      "Description": "Restricts AI Agent Suggestions to the owning user or administrative roles.",
+      "FilterText": "([UserID] = '{{UserID}}' OR EXISTS (SELECT 1 FROM [__mj].[User] [u] LEFT JOIN [__mj].[UserRole] [ur] ON [ur].[UserID] = [u].[ID] LEFT JOIN [__mj].[Role] [r] ON [r].[ID] = [ur].[RoleID] WHERE [u].[ID] = '{{UserID}}' AND (LTRIM(RTRIM([u].[Type])) = 'Owner' OR [r].[Name] IN ('System Administrator', 'Administrator', 'Admin', 'Administration'))))",
+      "PlatformVariants": "{\"FilterText\":{\"postgresql\":\"(\\\"UserID\\\" = '{{UserID}}' OR EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"User\\\" u LEFT JOIN \\\"__mj\\\".\\\"UserRole\\\" ur ON ur.\\\"UserID\\\" = u.\\\"ID\\\" LEFT JOIN \\\"__mj\\\".\\\"Role\\\" r ON r.\\\"ID\\\" = ur.\\\"RoleID\\\" WHERE u.\\\"ID\\\" = '{{UserID}}' AND (BTRIM(u.\\\"Type\\\") = 'Owner' OR r.\\\"Name\\\" IN ('System Administrator', 'Administrator', 'Admin', 'Administration'))))\"},\"_meta\":{\"translatedBy\":\"manual\",\"sourceDialect\":\"sqlserver\",\"verified\":true}}"
+    },
+    "primaryKey": {
+      "ID": "B88C6E58-3CFE-4B89-B994-89C2F7E0474F"
+    },
+    "sync": {
+      "lastModified": "2026-11-20T22:02:05.437Z",
+      "checksum": "f58d35f0c0cae1fc206e2cc3a4fef3912ec511ba0cdbac28c9871b1428ad2bc7"
+    }
+  }
+]

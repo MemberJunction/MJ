@@ -376,14 +376,42 @@ describe('PostgreSQLDialect', () => {
     });
 
     describe('CommentOnObject', () => {
-        it('should generate COMMENT ON statement', () => {
+        it('should generate COMMENT ON statement with quoted schema and table', () => {
             const sql = dialect.CommentOnObject('TABLE', '__mj', 'User', 'User accounts');
-            expect(sql).toBe("COMMENT ON TABLE __mj.\"User\" IS 'User accounts'");
+            expect(sql).toBe('COMMENT ON TABLE "__mj"."User" IS \'User accounts\'');
+        });
+
+        it('should preserve mixed-case schema names in COMMENT ON TABLE and COMMENT ON COLUMN', () => {
+            expect(dialect.CommentOnObject('TABLE', 'HubSpot', 'Contact', 'Contacts')).toBe(
+                'COMMENT ON TABLE "HubSpot"."Contact" IS \'Contacts\''
+            );
+            expect(dialect.CommentOnColumn('HubSpot', 'Contact', 'Email', 'Primary email')).toBe(
+                'COMMENT ON COLUMN "HubSpot"."Contact"."Email" IS \'Primary email\';'
+            );
         });
 
         it('should escape single quotes in comments', () => {
             const sql = dialect.CommentOnObject('TABLE', '__mj', 'User', "User's accounts");
             expect(sql).toContain("User''s accounts");
+        });
+
+        it('should leave long comments uncapped and strip NUL bytes', () => {
+            expect(dialect.MaxCommentLength).toBeNull();
+            const longDesc = 'Z'.repeat(5000);
+            expect(dialect.CommentOnColumn('__mj', 'User', 'Bio', longDesc)).toContain(`IS '${longDesc}';`);
+            expect(dialect.CommentOnObject('TABLE', '__mj', 'User', 'hello\0world')).toContain("IS 'helloworld'");
+            expect(dialect.CommentOnColumn('__mj', 'User', 'Bio', "hello\0world's")).toBe(
+                'COMMENT ON COLUMN "__mj"."User"."Bio" IS \'helloworld\'\'s\';'
+            );
+        });
+
+        it('should double embedded double-quotes in CommentOnColumn and CommentOnObject identifiers', () => {
+            expect(dialect.CommentOnColumn('My"S', 'T"', 'C"', 'd')).toBe(
+                'COMMENT ON COLUMN "My""S"."T"""."C""" IS \'d\';'
+            );
+            expect(dialect.CommentOnObject('TABLE', 'My"S', 'T"', 'd')).toBe(
+                'COMMENT ON TABLE "My""S"."T""" IS \'d\''
+            );
         });
     });
 
@@ -412,6 +440,18 @@ describe('PostgreSQLDialect', () => {
         it('should map NVARCHAR without length to TEXT', () => {
             const result = dialect.TypeMap.MapTypeToString('NVARCHAR');
             expect(result).toBe('TEXT');
+        });
+
+        it('should map a NVARCHAR / VARCHAR wider than PostgreSQL allows to TEXT', () => {
+            // PostgreSQL caps VARCHAR(n) at 10485760.
+            expect(dialect.TypeMap.MapTypeToString('NVARCHAR', 10485761)).toBe('TEXT');
+            expect(dialect.TypeMap.MapTypeToString('VARCHAR', 10485761)).toBe('TEXT');
+            expect(dialect.TypeMap.MapTypeToString('NVARCHAR', 2147483646)).toBe('TEXT');
+        });
+
+        it('should keep NVARCHAR / VARCHAR at the PostgreSQL ceiling bounded', () => {
+            expect(dialect.TypeMap.MapTypeToString('NVARCHAR', 10485760)).toBe('VARCHAR(10485760)');
+            expect(dialect.TypeMap.MapTypeToString('VARCHAR', 10485760)).toBe('VARCHAR(10485760)');
         });
 
         it('should map BIT to BOOLEAN', () => {
@@ -490,6 +530,29 @@ describe('PostgreSQLDialect', () => {
             expect(dialect.TypeMap.MapTypeToString('TIMESTAMPTZ')).toBe('TIMESTAMPTZ');
             expect(dialect.TypeMap.MapTypeToString('BYTEA')).toBe('BYTEA');
             expect(dialect.TypeMap.MapTypeToString('JSONB')).toBe('JSONB');
+        });
+    });
+
+    describe('ResolveAbstractType string widths', () => {
+        const str = (maxLength?: number) => dialect.ResolveAbstractType({ type: 'string', maxLength });
+
+        it('resolves a width past the VARCHAR ceiling to TEXT, as SQL Server falls back to NVARCHAR(MAX)', () => {
+            // PostgreSQL caps VARCHAR(n) at 10485760, and a width past 2^31-1 is not even an integer to the
+            // parser: VARCHAR(2147483946) failed a whole CREATE TABLE ("syntax error at or near 2147483946").
+            expect(str(10485761)).toBe('TEXT');
+            expect(str(2147483946)).toBe('TEXT');
+            expect(str(Number.MAX_SAFE_INTEGER)).toBe('TEXT');
+        });
+
+        it('keeps the ceiling itself, ordinary widths and no width bounded', () => {
+            expect(str(10485760)).toBe('VARCHAR(10485760)');
+            expect(str(555)).toBe('VARCHAR(555)');
+            expect(str(undefined)).toBe('VARCHAR(255)');
+        });
+
+        it('casts to TEXT when asked for a bounded string wider than the ceiling', () => {
+            expect(dialect.CastToBoundedString('x', 10485761)).toBe('CAST(x AS TEXT)');
+            expect(dialect.CastToBoundedString('x', 450)).toBe('CAST(x AS VARCHAR(450))');
         });
     });
 

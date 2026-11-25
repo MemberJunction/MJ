@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { getTestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
 import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
+import { UUIDMap } from '@memberjunction/global';
 import type { PredictiveStudioEngine, RecommendationLevel } from '../engine/predictive-studio.engine';
 import { PSCatalogComponent } from './ps-catalog.component';
 
@@ -28,7 +29,7 @@ const USE_CASES = [
   { ID: 'u2', Name: 'Interpretability' },
 ];
 
-const makeEngine = (levels: Map<string, RecommendationLevel> = new Map()) =>
+const makeEngine = (levels: UUIDMap<RecommendationLevel> = new UUIDMap()) =>
   ({
     Algorithms: ALGOS,
     UseCases: USE_CASES,
@@ -53,14 +54,14 @@ describe('PSCatalogComponent (DOM)', () => {
   });
 
   it('shows the empty gallery note when the catalog is empty', () => {
-    const engine = { Algorithms: [], UseCases: [], BestLevelsForScenarios: () => new Map() } as unknown as PredictiveStudioEngine;
+    const engine = { Algorithms: [], UseCases: [], BestLevelsForScenarios: () => new UUIDMap() } as unknown as PredictiveStudioEngine;
     const fixture = render(engine);
     expect(query(fixture, '[data-testid="ps-catalog-gallery"]')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('No algorithms in the catalog yet');
   });
 
   it('hides the recommendation banner until a scenario is selected, then shows it', () => {
-    const fixture = render(makeEngine(new Map([['a1', 'Primary' as RecommendationLevel]])));
+    const fixture = render(makeEngine(new UUIDMap<RecommendationLevel>([['a1', 'Primary']])));
     expect(query(fixture, '[data-testid="ps-catalog-reco-banner"]')).toBeNull();
     (queryAll(fixture, '[data-testid="ps-catalog-scenario-chip"]')[0] as HTMLElement).click();
     fixture.detectChanges();
@@ -75,5 +76,15 @@ describe('PSCatalogComponent (DOM)', () => {
     (queryAll(fixture, '[data-testid="ps-catalog-use"]')[0] as HTMLElement).click();
     expect(asked.length).toBe(1);
     expect(asked[0]).toContain('XGBoost');
+  });
+
+  it("opens an algorithm's detail panel when the open ID spells it in another case, and closes it on its own toggle", () => {
+    const fixture = render();
+    fixture.componentInstance.DetailId = 'A1';
+    fixture.componentRef.changeDetectorRef.markForCheck();
+    fixture.detectChanges();
+    expect(queryAll(fixture, '[data-testid="ps-catalog-detail"]').length).toBe(1);
+    fixture.componentInstance.ToggleDetail('a1');
+    expect(fixture.componentInstance.DetailId).toBeNull();
   });
 });

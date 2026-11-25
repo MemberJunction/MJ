@@ -455,6 +455,7 @@ export class InteractiveFormComponent extends BaseFormComponent implements OnIni
                     Fields: ['ID', 'Name', 'Specification'],
                     ExtraFilter: `ID='${this.ComponentID}'`,
                     MaxRows: 1,
+                    SkipTotalRowCount: true,
                     ResultType: 'simple',
                     BypassCache: true,
                 }, user);

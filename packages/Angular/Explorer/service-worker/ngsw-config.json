@@ -23,7 +23,8 @@
       "updateMode": "prefetch",
       "resources": {
         "files": [
-          "/chunk-*.js"
+          "/chunk-*.js",
+          "/worker-*.js"
         ]
       }
     },
@@ -47,6 +48,7 @@
     "!/api/**",
     "!/auth/**",
     "!/**/?msal*",
-    "!/**/*__*"
+    "!/**/*__*",
+    "!/p/**"
   ]
 }

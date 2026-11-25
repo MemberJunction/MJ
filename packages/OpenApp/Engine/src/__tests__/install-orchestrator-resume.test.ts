@@ -48,6 +48,8 @@ vi.mock('../install/package-manager.js', () => ({
     RemoveAppPackages: vi.fn(),
     RunPackageInstallAsync: vi.fn(),
     BumpPrefixedDependencies: vi.fn(),
+    PreflightAppPackages: vi.fn(async () => ({ Success: true, Checks: [], Warnings: [] })),
+    ListPackageStepFiles: vi.fn(() => []),
 }));
 vi.mock('../install/config-manager.js', () => ({
     AddServerDynamicPackages: vi.fn(),
@@ -56,26 +58,18 @@ vi.mock('../install/config-manager.js', () => ({
     // Upgrade prunes stale entries before re-adding (add-only writers would otherwise leave the
     // config converging on the union of every version ever installed).
     PruneDynamicPackagesNotInManifest: vi.fn(() => ({ Success: true })),
+    AddPublicPages: vi.fn(() => ({ Success: true })),
+    CheckPublicPageSlugConflicts: vi.fn(() => ({ Success: true })),
     ToggleServerDynamicPackages: vi.fn(),
     AddEntityPackageMapping: vi.fn(),
     RemoveEntityPackageMapping: vi.fn(),
     AddExcludeSchema: vi.fn(() => ({ Success: true })),
     RemoveExcludeSchema: vi.fn(() => ({ Success: true })),
 }));
-vi.mock('../install/history-recorder.js', () => ({
-    RecordAppInstallation: vi.fn(),
-    RecordInstallHistoryEntry: vi.fn(),
-    RecordAppDependencies: vi.fn(),
-    DeleteAppDependencies: vi.fn(),
-    ReplaceAppDependenciesAtomically: vi.fn(),
-    SetAppStatus: vi.fn(),
-    SetAppStep: vi.fn(),
-    FindInstalledApp: vi.fn(),
-    FindDependentApps: vi.fn(),
-    ListInstalledApps: vi.fn(),
-    UpdateAppRecord: vi.fn(),
-    CheckSchemaSharedByOtherApps: vi.fn(),
-}));
+vi.mock('../install/history-recorder.js', async (importOriginal) => {
+    const { MockHistoryRecorder } = await import('./helpers/history-recorder-mock.js');
+    return MockHistoryRecorder(await importOriginal());
+});
 vi.mock('@memberjunction/core', () => ({
     Metadata: class { async CreateTransactionGroup() { return { Submit: async () => true }; } },
     RunView: class {},
@@ -141,7 +135,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(CreateAppSchema).mockResolvedValue({ Success: true });
     vi.mocked(RunAppMigrations).mockResolvedValue({ Success: true });
     vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, Files: [] } as unknown as Awaited<ReturnType<typeof DownloadMigrations>>);
-    vi.mocked(AddAppPackages).mockReturnValue({ Success: true });
+    vi.mocked(AddAppPackages).mockReturnValue({ Success: true, Added: [], Removed: [] });
     vi.mocked(RunPackageInstallAsync).mockResolvedValue({ Success: true });
     vi.mocked(BumpPrefixedDependencies).mockReturnValue(0);
     vi.mocked(AddServerDynamicPackages).mockReturnValue({ Success: true });

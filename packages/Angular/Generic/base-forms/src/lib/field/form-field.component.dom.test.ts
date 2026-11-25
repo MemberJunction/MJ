@@ -1,9 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
-import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { BaseEntity, DocumentNumberingEngine, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 import { MjRecordLinkDirective } from '../links/record-link.directive';
@@ -95,6 +95,7 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F10', Name: 'PhotoURL', Type: 'nvarchar', Length: 8000, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Image' },
       { ID: 'F11', Name: 'ThemeColor', Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Color' },
       { ID: 'F12', Name: 'ConfigJSON', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'JSON' },
+      { ID: 'F13', Name: 'OrderNumber', DisplayName: 'Order Number', Type: 'nvarchar', Length: 20, AllowsNull: false, AllowUpdateAPI: true },
     ],
   });
 }
@@ -433,6 +434,38 @@ describe('MjFormFieldComponent (DOM)', () => {
       // constraint, not an inference from nullability.
       const f = render({ Record: makeWidget({ Name: '' }), FieldName: 'Name', Type: 'textbox', EditMode: true });
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
+    });
+
+    describe('a field an AutoNumber policy fills (#4001)', () => {
+      afterEach(() => DocumentNumberingEngine.Instance.UnregisterPolicy('Test Widgets'));
+      const policy = () => DocumentNumberingEngine.Instance.RegisterPolicy('Test Widgets', { targetField: 'OrderNumber', pattern: 'ORD-{SEQ:4}' });
+      /** An unsaved record: never hydrated with replaceOldValues, so IsSaved is false. */
+      const newWidget = () => new TestWidgetEntity(makeWidgetEntityInfo());
+
+      it('is not marked required-empty on a new record', () => {
+        policy();
+        const f = render({ Record: newWidget(), FieldName: 'OrderNumber', Type: 'textbox', EditMode: true });
+        expect(f.componentInstance.IsRequired).toBe(false);
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
+      });
+
+      it('is still marked required-empty on a saved record', () => {
+        policy();
+        const f = render({ Record: makeWidget({ OrderNumber: null }), FieldName: 'OrderNumber', Type: 'textbox', EditMode: true });
+        expect(f.componentInstance.IsRequired).toBe(true);
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+      });
+
+      it('without a policy, the same field on a new record is marked required-empty', () => {
+        const f = render({ Record: newWidget(), FieldName: 'OrderNumber', Type: 'textbox', EditMode: true });
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+      });
+
+      it('another NOT NULL field on the same new record stays required', () => {
+        policy();
+        const f = render({ Record: newWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true });
+        expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(true);
+      });
     });
 
     it('does not flag a required field as required-empty when it has a value', () => {
@@ -845,6 +878,55 @@ describe('MjFormFieldComponent — field-level security', () => {
 
   it('FAILS OPEN on the write gate when no user has resolved', () => {
     const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
+
+  // ---- IS-A: a child whose own flag is off inherits its parent's rules ----
+
+  /**
+   * An IS-A child of the secured widget, with field security switched OFF on the child itself.
+   * Each parent field is mirrored on the child, read from the same row, so the parent's rules
+   * still apply to it — the same rule `BaseEntity.Get()` enforces.
+   */
+  function makeIsAChildWidget(user: UserInfo): BaseEntity {
+    const parent = makeSecuredEntityInfo();
+    const child = new EntityInfo({
+      ID: 'E0000002-0000-0000-0000-000000000002',
+      Name: 'Test Special Widgets',
+      Status: 'Active',
+      BaseTable: 'TestSpecialWidget',
+      BaseView: 'vwTestSpecialWidgets',
+      EnableFieldLevelSecurity: false,
+      ParentID: parent.ID,
+      Fields: parent.Fields.map((f) => ({ ID: `C-${f.ID}`, Name: f.Name, Type: f.Type, Length: f.Length, AllowsNull: f.AllowsNull, IsPrimaryKey: f.IsPrimaryKey, AllowUpdateAPI: f.AllowUpdateAPI })),
+    });
+    Object.defineProperty(child, 'ParentEntityInfo', { get: () => parent });
+    const entity = new TestWidgetEntity(child);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
+    entity.ContextCurrentUser = user;
+    return entity;
+  }
+
+  function renderIsAChildAs(fieldName: string, roleIds: string[]): ComponentFixture<MjFormFieldComponent> {
+    const user = userWithRoles(roleIds);
+    return render({ Record: makeIsAChildWidget(user), FieldName: fieldName, Type: 'textbox', Provider: { CurrentUser: user } });
+  }
+
+  it("REGRESSION: hides an IS-A child's field that its parent denies, though the child's own flag is off", () => {
+    const f = renderIsAChildAs('Description', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(false);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+  });
+
+  it("REGRESSION: marks an IS-A child's field read-only when its parent denies the update", () => {
+    const f = renderIsAChildAs('Notes', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+  });
+
+  it("renders an IS-A child's field normally for a role the parent allows", () => {
+    const f = renderIsAChildAs('Description', [HR_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('secret');
     expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
   });
 });

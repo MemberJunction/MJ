@@ -822,6 +822,7 @@ export class CredentialEditPanelComponent extends BaseAngularComponent implement
             ExtraFilter: filter,
             Fields: ['ID'],
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'simple'
         });
 

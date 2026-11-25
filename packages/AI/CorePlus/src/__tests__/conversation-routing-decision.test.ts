@@ -23,13 +23,16 @@ import {
     DECISION_ROUTING_MIN_CONFIDENCE,
     DECISION_ROUTING_TIMEOUT_MS,
     InterpretRoutingAnswers,
+    RoutingAnsweredBy,
     IsAgentAllowed,
     IsRoutableAgent,
     KeptContinuityOutcome,
+    NoAgentOutcome,
     MAX_ROUTING_ARTIFACT_VERSIONS,
     ROUTING_ARTIFACT_QUESTION,
-    ROUTING_CONTINUES_CALIBRATION,
+    ROUTING_CONTINUES_CALIBRATION_KEY,
     ROUTING_CONTINUES_QUESTION,
+    ROUTING_NO_AGENT,
     ROUTING_NO_ARTIFACT,
     ROUTING_ROUTE_QUESTION,
     type RoutingAgent,
@@ -40,7 +43,13 @@ import {
     type RoutingHistoryRow,
     type RoutingParticipant,
 } from '../conversation-routing-decision';
+import { SHIPPED_ROUTING_CALIBRATIONS, ShippedRoutingFit } from './helpers/shipped-decision-calibrations';
 import type { DecisionAnsweringModel } from '../decision-calibration';
+
+/** Reads a routing decision's answers with the shipped fit for the model that answered, as the chat does. */
+function interpret(input: Parameters<typeof InterpretRoutingAnswers>[0], result: Parameters<typeof InterpretRoutingAnswers>[1]) {
+    return InterpretRoutingAnswers(input, result, ShippedRoutingFit(RoutingAnsweredBy(result)));
+}
 
 const ACTIVE = { Status: 'Active', IsRestricted: false } as const;
 const MANAGER = { ID: 'AAAAAAAA-0000-0000-0000-000000000001', Name: 'Sage', Description: 'Routes each request.', ...ACTIVE } satisfies RoutingCatalogAgent;
@@ -131,40 +140,41 @@ describe('conversation routing decision', () => {
         it('are the figures the Phase 2 Decision Eval set', () => {
             expect(DECISION_ROUTING_TIMEOUT_MS).toBe(350);
             expect(DECISION_ROUTING_MIN_CONFIDENCE).toBe(0.7);
-            expect(ROUTING_CONTINUES_CALIBRATION).toEqual([
-                { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.13-20260917', Calibration: { A: 1.7757, B: -3.3506 } },
-                { ModelName: 'LLM Decision', ResolvedModel: 'GPT-OSS-120B', Calibration: { A: 1.6508, B: -2.9110 } }
+            expect(ROUTING_CONTINUES_CALIBRATION_KEY).toEqual({ Use: 'conversation-routing', Question: ROUTING_CONTINUES_QUESTION });
+            expect(SHIPPED_ROUTING_CALIBRATIONS['Jev']).toEqual([
+                { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'typesafe/jev-1.13-20260917', A: 1.7757, B: -0.8385 }
+            ]);
+            expect(SHIPPED_ROUTING_CALIBRATIONS['LLM Decision']).toEqual([
+                { Use: 'conversation-routing', Question: 'continues', ResolvedModel: 'GPT-OSS-120B', A: 1.6508, B: -0.3989 }
             ]);
         });
     });
 
     describe('the thread likelihood is calibrated per exact model', () => {
         it('maps a raw probability through the answering model\'s Platt calibration', () => {
-            // At the corpus's mix (127 continuations to 174 switches, so 42% continue), Jev's raw 0.5
-            // is a calibrated 0.03. A chat continues far more often; see the next test.
-            expect(CalibratedContinuesProbability(0.5, JEV)).toBeCloseTo(0.0339, 4);
-            expect(CalibratedContinuesProbability(0.5, LLM_DECISION)).toBeCloseTo(0.0516, 4);
-            expect(CalibratedContinuesProbability(0.5, { ModelName: '  Jev ', ResolvedModel: ' typesafe/jev-1.13-20260917 ' })).toBeCloseTo(0.0339, 4);
+            // The shipped fits are shifted to a chat's mix (90% of messages continue): Jev's raw 0.5
+            // is a calibrated 0.30 there, and LLM Decision's a calibrated 0.40.
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(JEV), 0.5)).toBeCloseTo(0.3019, 4);
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(LLM_DECISION), 0.5)).toBeCloseTo(0.4016, 4);
+            expect(CalibratedContinuesProbability(ShippedRoutingFit({ ModelName: '  Jev ', ResolvedModel: ' typesafe/jev-1.13-20260917 ' }), 0.5)).toBeCloseTo(0.3019, 4);
         });
 
-        it('is calibrated at the corpus\'s mix, and the documented chat-mix figures follow from the fits', () => {
-            // Platt's B absorbs the corpus's base rate. A 90%-continue prior, closer to a chat, adds
-            // ln(9 × 174/127) to the calibrated logit.
-            const chatPriorShift = Math.log(9 * 174 / 127);
-            expect(chatPriorShift).toBeCloseTo(2.51, 2);
-            const atChatMix = (calibrated: number): number =>
-                1 / (1 + Math.exp(-(Math.log(calibrated / (1 - calibrated)) + chatPriorShift)));
-            const leaveBar = 1 - DECISION_ROUTING_MIN_CONFIDENCE;
+        it('is the corpus fit shifted to a chat\'s mix, so the leave bar is a 70% chance the person moved on', () => {
+            // Platt's B absorbs the corpus's base rate (127 continuations to 174 switches). The shipped
+            // B adds logit(0.9) − logit(127/301) to the corpus fit, so it reads at a 90%-continue mix.
+            const chatPriorShift = Math.log(0.9 / 0.1) - Math.log(127 / 174);
+            expect(chatPriorShift).toBeCloseTo(2.5121, 4);
+            const jev = SHIPPED_ROUTING_CALIBRATIONS['Jev'][0];
+            const llm = SHIPPED_ROUTING_CALIBRATIONS['LLM Decision'][0];
+            expect(jev.B - chatPriorShift).toBeCloseTo(-3.3506, 3);
+            expect(llm.B - chatPriorShift).toBeCloseTo(-2.9110, 3);
 
-            // Jev's raw 0.5 is about 0.30 at a chat's mix, not 0.03
-            expect(atChatMix(CalibratedContinuesProbability(0.5, JEV) ?? Number.NaN)).toBeCloseTo(0.30, 2);
-            // The leave bar, a calibrated 0.30 at the corpus's mix, is about an 84% chance of continuing
-            expect(atChatMix(leaveBar)).toBeCloseTo(0.84, 2);
-            // In raw terms, routing leaves at Jev's raw 0.80 or below, and LLM Decision's 0.77 or below
-            expect(CalibratedContinuesProbability(0.80, JEV)).toBeLessThanOrEqual(leaveBar);
-            expect(CalibratedContinuesProbability(0.81, JEV)).toBeGreaterThan(leaveBar);
-            expect(CalibratedContinuesProbability(0.77, LLM_DECISION)).toBeLessThanOrEqual(leaveBar);
-            expect(CalibratedContinuesProbability(0.78, LLM_DECISION)).toBeGreaterThan(leaveBar);
+            // In raw terms, routing leaves at Jev's raw 0.49 or below, and LLM Decision's 0.43 or below
+            const leaveBar = 1 - DECISION_ROUTING_MIN_CONFIDENCE;
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(JEV), 0.49)).toBeLessThanOrEqual(leaveBar);
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(JEV), 0.51)).toBeGreaterThan(leaveBar);
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(LLM_DECISION), 0.43)).toBeLessThanOrEqual(leaveBar);
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(LLM_DECISION), 0.44)).toBeGreaterThan(leaveBar);
         });
 
         it('has no calibrated probability for a model it was not fitted on', () => {
@@ -183,52 +193,52 @@ describe('conversation routing decision', () => {
                 { ModelName: '__proto__', ResolvedModel: 'toString' }
             ];
             for (const answeredBy of uncalibrated) {
-                expect(CalibratedContinuesProbability(0.99, answeredBy)).toBeNull();
+                expect(CalibratedContinuesProbability(ShippedRoutingFit(answeredBy), 0.99)).toBeNull();
             }
         });
 
         it('keeps continuity for LLM Decision answered by a chat model it was not fitted on', () => {
-            // The review's probe: GPT-OSS-120B's fit turns a raw 0.75 into a calibrated 0.25, a
+            // The review's probe: GPT-OSS-120B's fit turns a raw 0.3 into a calibrated 0.14, a
             // "leaves". Applied to another chat model's answer, that would route it away.
-            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.75) };
-            expect(CalibratedContinuesProbability(0.75, LLM_DECISION)).toBeCloseTo(0.25, 2);
-            expect(InterpretRoutingAnswers(input(), answered(answers, LLM_DECISION)).Verdict).toBe('Routed');
-            const other = InterpretRoutingAnswers(input(), answered(answers, { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }));
+            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.3) };
+            expect(CalibratedContinuesProbability(ShippedRoutingFit(LLM_DECISION), 0.3)).toBeCloseTo(0.14, 2);
+            expect(interpret(input(), answered(answers, LLM_DECISION)).Verdict).toBe('Routed');
+            const other = interpret(input(), answered(answers, { ModelName: 'LLM Decision', ResolvedModel: 'GPT 5.5 Instant' }));
             expect(other.Verdict).toBe('KeptContinuity');
             expect(other.Reason).toBe('the thread likelihood is uncalibrated for LLM Decision (GPT 5.5 Instant)');
         });
 
         it('keeps continuity for Jev at a version it was not fitted on', () => {
-            // The review's probe: Jev's fit turns a raw 0.8 into a calibrated 0.29, a "leaves".
-            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.8) };
-            expect(InterpretRoutingAnswers(input(), answered(answers)).Verdict).toBe('Routed');
-            const edited = InterpretRoutingAnswers(input(), answered(answers, { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' }));
+            // The review's probe: Jev's fit turns a raw 0.3 into a calibrated 0.09, a "leaves".
+            const answers = { route: choice(WRITER.ID, 0.9), continues: likelihood(0.3) };
+            expect(interpret(input(), answered(answers)).Verdict).toBe('Routed');
+            const edited = interpret(input(), answered(answers, { ModelName: 'Jev', ResolvedModel: 'typesafe/jev-1.14-20261101' }));
             expect(edited.Verdict).toBe('KeptContinuity');
             expect(edited.Reason).toContain('uncalibrated for Jev (typesafe/jev-1.14-20261101)');
         });
 
         it('keeps continuity when the probability is not a number', () => {
-            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(Number.NaN) }));
+            const outcome = interpret(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(Number.NaN) }));
             expect(outcome.Verdict).toBe('KeptContinuity');
         });
 
         it('routes on a raw answer the uncalibrated check called unsure', () => {
-            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.02
-            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.45) }));
+            // Raw 0.45 sits in the old 0.3–0.7 middle; calibrated for Jev it is about 0.23
+            const outcome = interpret(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.45) }));
             expect(outcome.Verdict).toBe('Routed');
             expect(outcome.RoutedAgentId).toBe(WRITER.ID);
         });
 
         it('keeps continuity when the calibrated probability is still in the middle', () => {
-            // Raw 0.87 from Jev is a calibrated 0.51
-            const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) }));
+            // Raw 0.6 from Jev is a calibrated 0.47
+            const outcome = interpret(input(), answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.6) }));
             expect(outcome.Verdict).toBe('KeptContinuity');
-            expect(outcome.Reason).toContain('calibrated probability 0.506');
+            expect(outcome.Reason).toContain('calibrated probability 0.470');
         });
 
         it('keeps continuity when the answering model is unnamed or uncalibrated, however sure it sounds', () => {
             for (const answeredBy of [{}, { ModelName: 'Jev' }, { ModelName: 'Some Other Model', ResolvedModel: 'x' }]) {
-                const outcome = InterpretRoutingAnswers(input(), answered({ route: choice(WRITER.ID, 0.99), continues: likelihood(0.01) }, answeredBy));
+                const outcome = interpret(input(), answered({ route: choice(WRITER.ID, 0.99), continues: likelihood(0.01) }, answeredBy));
                 expect(outcome.Verdict).toBe('KeptContinuity');
                 expect(outcome.Reason).toContain('uncalibrated');
             }
@@ -296,11 +306,25 @@ describe('conversation routing decision', () => {
             expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup).map(p => p.Agent.ID)).toEqual([ANALYST.ID]);
         });
 
-        it('IsRoutableAgent needs an active, unrestricted agent', () => {
+        it('IsRoutableAgent needs an active, unrestricted agent unless explicitly allowed by the host', () => {
             expect(IsRoutableAgent({ Status: 'Active', IsRestricted: false })).toBe(true);
             expect(IsRoutableAgent({ Status: 'Pending', IsRestricted: false })).toBe(false);
             expect(IsRoutableAgent({ Status: 'Disabled', IsRestricted: false })).toBe(false);
             expect(IsRoutableAgent({ Status: 'Active', IsRestricted: true })).toBe(false);
+            expect(IsRoutableAgent({ ID: WRITER.ID, Status: 'Active', IsRestricted: true }, null)).toBe(false);
+            expect(IsRoutableAgent({ ID: WRITER.ID, Status: 'Active', IsRestricted: true }, [WRITER.ID])).toBe(true);
+            expect(IsRoutableAgent({ ID: WRITER.ID, Status: 'Disabled', IsRestricted: true }, [WRITER.ID])).toBe(false);
+        });
+
+        it('includes a restricted agent when the host explicitly lists it in AllowedAgentIDs', () => {
+            const restrictedSpaceAgent: RoutingCatalogAgent = { ...WRITER, IsRestricted: true };
+            const lookup = (id: string): RoutingCatalogAgent | undefined =>
+                id.toUpperCase() === restrictedSpaceAgent.ID.toUpperCase() ? restrictedSpaceAgent : undefined;
+            const rows = [agentRow('a1', restrictedSpaceAgent, 'Space reply')];
+
+            expect(CollectRoutingParticipants(rows, MANAGER.ID, null, lookup)).toEqual([]);
+            expect(CollectRoutingParticipants(rows, MANAGER.ID, [restrictedSpaceAgent.ID], lookup))
+                .toEqual([participant(restrictedSpaceAgent, 'Space reply')]);
         });
 
         it('truncates a long reply', () => {
@@ -324,6 +348,28 @@ describe('conversation routing decision', () => {
             const tagged = ConversationUtility.CreateMention('user', 'user-2', 'Dana');
             expect(BuildRecentTurns([userRow('u1', `${tagged} can you check this?`)], findAgent))
                 .toEqual(['User: @Dana can you check this?']);
+        });
+
+        it('uses person names when multiple users participate or findPersonName is supplied', () => {
+            const multiUserRows: RoutingHistoryRow[] = [
+                { ...userRow('u1', 'Can we check renewals?'), UserID: 'user-1', User: 'Alice Chen' },
+                agentRow('a1', RESEARCH, 'Here are the Q3 renewals.'),
+                { ...userRow('u2', 'Thanks Alice, I will review.'), UserID: 'user-2', User: 'Bob Rivera' },
+            ];
+            expect(BuildRecentTurns(multiUserRows, findAgent)).toEqual([
+                'Alice Chen: Can we check renewals?',
+                'Research: Here are the Q3 renewals.',
+                'Bob Rivera: Thanks Alice, I will review.',
+            ]);
+
+            const singleUserRow: RoutingHistoryRow[] = [
+                { ...userRow('u1', 'Check this'), UserID: 'user-1', User: 'Alice Chen' },
+            ];
+            // Single user without findPersonName stays "User" to preserve single-user calibration layout
+            expect(BuildRecentTurns(singleUserRow, findAgent)).toEqual(['User: Check this']);
+            // With findPersonName supplied by a multi-person host, resolves the speaker name
+            expect(BuildRecentTurns(singleUserRow, findAgent, id => id === 'user-1' ? 'Alice Chen (Team)' : undefined))
+                .toEqual(['Alice Chen (Team): Check this']);
         });
     });
 
@@ -364,9 +410,10 @@ describe('conversation routing decision', () => {
             expect(BuildRoutingQuestions(input())['continues']).toEqual(expected);
         });
 
-        it('leave the manager out when the chat does not allow it', () => {
+        it('leave the manager out when the chat does not allow it, and omit the "someone else" sentence', () => {
             const question = routeQuestion({ State: '', Questions: BuildRoutingQuestions(input({ AllowedAgentIDs: [RESEARCH.ID, WRITER.ID] })) });
             expect(question.Options.map(o => o.Value)).toEqual([RESEARCH.ID, WRITER.ID]);
+            expect(question.Instructions).not.toContain('Choose someone else');
         });
 
         it('ask nothing about artifacts when the participants have none', () => {
@@ -518,6 +565,87 @@ describe('conversation routing decision', () => {
             expect(CanAskRoutingDecision(input({ Participants: [participant(WRITER, 'x')] }))).toBe(false);
             expect(CanAskRoutingDecision(input({ Participants: [participant(RESEARCH, 'x')], ConversationManager: null }))).toBe(false);
             expect(CanAskRoutingDecision(input({ Participants: [participant(RESEARCH, 'x')] }))).toBe(true);
+            expect(CanAskRoutingDecision(input({
+                Participants: [participant(RESEARCH, 'x')],
+                ConversationManager: null,
+                AllowNoAgentOption: true,
+            }))).toBe(true);
+        });
+    });
+
+    describe('multi-person routing with AllowNoAgentOption', () => {
+        const multiPartyInput = (overrides: Partial<RoutingDecisionInput> = {}): RoutingDecisionInput =>
+            input({
+                AllowNoAgentOption: true,
+                ConversationManager: null,
+                AllowedAgentIDs: [RESEARCH.ID, WRITER.ID],
+                ...overrides,
+            });
+
+        it('offers ROUTING_NO_AGENT as an option and instructs the model when to pick it', () => {
+            const questions = BuildRoutingQuestions(multiPartyInput({ Participants: [participant(RESEARCH, 'Here are five sources.')] }));
+            const route = routeQuestion({ State: '', Questions: questions });
+            expect(route.Options.map(o => o.Value)).toEqual([RESEARCH.ID, ROUTING_NO_AGENT]);
+            expect(route.Instructions).toContain('Choose no agent when the message is addressed to another person');
+        });
+
+        it('returns NoAgent when Jev chooses ROUTING_NO_AGENT', () => {
+            const outcome = interpret(
+                multiPartyInput(),
+                answered({ route: choice(ROUTING_NO_AGENT, 0.92), continues: likelihood(0.05) })
+            );
+            expect(outcome).toMatchObject({ Verdict: 'NoAgent', RoutedAgentId: null });
+        });
+
+        it('routes to the continuity agent when Jev confidently confirms continuing', () => {
+            const outcome = interpret(
+                multiPartyInput(),
+                answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.95) })
+            );
+            expect(outcome).toMatchObject({ Verdict: 'Routed', RoutedAgentId: RESEARCH.ID });
+        });
+
+        it('routes to another active agent when Jev confidently switches', () => {
+            const outcome = interpret(
+                multiPartyInput(),
+                answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.1) })
+            );
+            expect(outcome).toMatchObject({ Verdict: 'Routed', RoutedAgentId: WRITER.ID });
+        });
+
+        it('biases toward silence (NoAgent) on low confidence, contradicting likelihood, uncalibrated model, or failure', () => {
+            expect(interpret(
+                multiPartyInput(),
+                answered({ route: choice(RESEARCH.ID, 0.55), continues: likelihood(0.95) })
+            ).Verdict).toBe('NoAgent');
+
+            expect(interpret(
+                multiPartyInput(),
+                answered({ route: choice(RESEARCH.ID, 0.9), continues: likelihood(0.1) })
+            ).Verdict).toBe('NoAgent');
+
+            expect(interpret(
+                multiPartyInput(),
+                answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.87) })
+            ).Verdict).toBe('NoAgent');
+
+            expect(interpret(
+                multiPartyInput(),
+                answered({ route: choice(WRITER.ID, 0.9), continues: likelihood(0.1) }, { ModelName: 'Jev', ResolvedModel: 'uncalibrated' })
+            ).Verdict).toBe('NoAgent');
+
+            expect(interpret(
+                multiPartyInput(),
+                { Success: false, ErrorMessage: 'timeout', Answers: {}, PromptRunID: PROMPT_RUN }
+            )).toMatchObject({ Verdict: 'NoAgent', RoutedAgentId: null, PromptRunID: PROMPT_RUN });
+
+            expect(NoAgentOutcome('timed out')).toEqual({
+                Verdict: 'NoAgent',
+                RoutedAgentId: null,
+                TargetArtifact: null,
+                Reason: 'timed out',
+                PromptRunID: null,
+            });
         });
     });
 
@@ -529,9 +657,9 @@ describe('conversation routing decision', () => {
 
     describe('the prompt run', () => {
         it('is carried, answered or failed, so a turn can be traced to it', () => {
-            const answeredRun = InterpretRoutingAnswers(input(), { ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN });
-            const failedRun = InterpretRoutingAnswers(input(), { Success: false, ErrorMessage: 'unreadable answer', Answers: {}, PromptRunID: PROMPT_RUN });
-            const noRun = InterpretRoutingAnswers(input(), { Success: false, ErrorMessage: 'no model', Answers: {} });
+            const answeredRun = interpret(input(), { ...leaves(WRITER.ID), PromptRunID: PROMPT_RUN });
+            const failedRun = interpret(input(), { Success: false, ErrorMessage: 'unreadable answer', Answers: {}, PromptRunID: PROMPT_RUN });
+            const noRun = interpret(input(), { Success: false, ErrorMessage: 'no model', Answers: {} });
 
             expect(answeredRun).toMatchObject({ Verdict: 'Routed', PromptRunID: PROMPT_RUN });
             expect(failedRun).toMatchObject({ Verdict: 'KeptContinuity', PromptRunID: PROMPT_RUN });
@@ -547,22 +675,22 @@ describe('conversation routing decision', () => {
         });
 
         it('names the version when the answer is confident', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_1, 0.9) }));
+            const outcome = interpret(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_1, 0.9) }));
             expect(outcome.TargetArtifact).toEqual({ AgentId: WRITER.ID, ArtifactVersionId: VERSION_1 });
         });
 
         it('names nothing for "none"', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice('none', 0.95) }));
+            const outcome = interpret(withArtifacts(), leaves(WRITER.ID, { artifact: choice('none', 0.95) }));
             expect(outcome.TargetArtifact).toBeNull();
         });
 
         it('names nothing when the answer is unsure', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_1, 0.6) }));
+            const outcome = interpret(withArtifacts(), leaves(WRITER.ID, { artifact: choice(VERSION_1, 0.6) }));
             expect(outcome.TargetArtifact).toBeNull();
         });
 
         it('names nothing for a version it was not offered', () => {
-            const outcome = InterpretRoutingAnswers(withArtifacts(), leaves(WRITER.ID, { artifact: choice('CCCCCCCC-0000-0000-0000-000000000001', 0.9) }));
+            const outcome = interpret(withArtifacts(), leaves(WRITER.ID, { artifact: choice('CCCCCCCC-0000-0000-0000-000000000001', 0.9) }));
             expect(outcome.TargetArtifact).toBeNull();
         });
     });

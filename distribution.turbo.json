@@ -1,5 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalPassThroughEnv": [
+    "AI_VENDOR_API_KEY__*",
+    "MJ_*",
+    "DB_*",
+    "CODEGEN_DB_*",
+    "GRAPHQL_*",
+    "OPEN_APP_*",
+    "GITHUB_TOKEN"
+  ],
   "tasks": {
     "build": {
       "outputs": ["build/**", "dist/**"],

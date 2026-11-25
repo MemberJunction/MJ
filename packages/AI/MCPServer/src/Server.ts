@@ -13,14 +13,14 @@
  * @module @memberjunction/ai-mcp-server
  */
 
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
-import { CountByUUID, IndexByUUID, UUIDsEqual } from "@memberjunction/global";
+import { EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
+import { CountByUUID, UUIDsEqual } from "@memberjunction/global";
 import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
 import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { randomUUID } from 'crypto';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'stream';
 import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
@@ -28,8 +28,10 @@ import { z } from "zod";
 import { InitConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
 import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import { LoadAgentManagementTools } from './tools/agentManagementTools.js';
+import { BuildAgentRunStepExportData } from './tools/agentRunStepExport.js';
+import { AddEntityCreateTool, AddEntityDeleteTool, AddEntityGetTool, AddEntityRunViewTool, AddEntityUpdateTool } from './tools/entityTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, ResolvePayloadAtStart, ResolvePayloadAtEnd } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { AIEngine } from "@memberjunction/aiengine";
@@ -73,6 +75,8 @@ import { Send401Response } from './auth/WWWAuthenticate.js';
 import { CreateOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
 import { ResolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
+import { ApplyTrustProxy } from './ProxySettings.js';
+import { ReleaseUnstoredStreamableSession, StreamableSessionStore } from './StreamableSessionStore.js';
 
 
 /*******************************************************************************
@@ -216,11 +220,13 @@ function buildPoolConfig(): sql.config {
 
 /**
  * Extracts an API key from an incoming HTTP request.
- * Checks multiple sources in order of preference:
+ * Keys are accepted from headers ONLY — never from URL query parameters, which leak
+ * into access logs, proxies, and browser history. Checked in order of preference:
  * 1. x-api-key header
  * 2. x-mj-api-key header
  * 3. Authorization: Bearer <token> header
- * 4. URL query parameter (apiKey or api_key)
+ *
+ * API keys are never read from the URL query string (see `ExtractCredentials` in auth/AuthGate.ts).
  *
  * @param request - The incoming HTTP request
  * @returns The extracted API key string, or null if not found
@@ -238,16 +244,22 @@ function extractAPIKeyFromRequest(request: Request | http.IncomingMessage): stri
         }
     }
 
-    // Check URL query parameters as fallback
-    if (!apiKey && request.url) {
-        const url = new URL(request.url, `http://${request.headers.host}`);
-        const queryKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key');
-        if (queryKey) {
-            apiKey = queryKey;
-        }
-    }
-
     return apiKey || null;
+}
+
+/**
+ * Compares two secrets without leaking, through timing, how many leading bytes matched.
+ * `timingSafeEqual` needs equal-length inputs, so a length mismatch is answered after a
+ * same-cost self-comparison: only the length (not secret for a fixed-format key) is observable.
+ */
+function constantTimeEquals(provided: string, expected: string): boolean {
+    const providedBytes = Buffer.from(provided, 'utf8');
+    const expectedBytes = Buffer.from(expected, 'utf8');
+    if (providedBytes.length !== expectedBytes.length) {
+        timingSafeEqual(providedBytes, providedBytes);
+        return false;
+    }
+    return timingSafeEqual(providedBytes, expectedBytes);
 }
 
 /**
@@ -323,7 +335,9 @@ async function validateApiKey(
         const sharedApiKey = _config.apiKey;
         const configuredSystemApiKey = mcpSystemKey || sharedApiKey;
 
-        if (configuredSystemApiKey && apiKey === configuredSystemApiKey) {
+        // Constant-time comparison: this is the superadmin credential, and a byte-by-byte `===`
+        // leaks how much of a guess matched through response timing.
+        if (configuredSystemApiKey && constantTimeEquals(apiKey, configuredSystemApiKey)) {
             return {
                 valid: true,
                 user: systemUser,
@@ -733,6 +747,12 @@ export interface ToolConfig {
     name: string;
     description: string;
     parameters: z.ZodObject<z.ZodRawShape>;
+    /**
+     * The input schema for one session user, for a tool whose schema differs by user (an entity
+     * tool leaves out the fields that user may not write). When absent every session is shown
+     * {@link parameters}.
+     */
+    parametersForUser?: (user: UserInfo) => z.ZodObject<z.ZodRawShape>;
     execute: (props: Record<string, unknown>, sessionContext: MCPSessionContext) => Promise<string>;
     /**
      * Scope information for authorization. Can be:
@@ -846,6 +866,7 @@ export async function GetOrBuildCompiledToolConfigs(
                     suggestion: "Use Get_Entity_List to see available entity names"
                 });
             }
+            // fls-guard: EntityInfo metadata, not record values
             return JSON.stringify(entity, null, 2);
         }
     });
@@ -872,23 +893,24 @@ export async function GetOrBuildCompiledToolConfigs(
 }
 
 /**
- * Registers all tools with the MCP server for a specific authenticated session.
- * This function is called per-connection to create user-scoped tool handlers.
+ * The function that registers one tool on a session's MCP server: it applies the tool filter,
+ * skips a duplicate name, advertises the input schema built for the session's user (a tool with
+ * `parametersForUser` omits the fields that user may not send), and checks the tool's scope on
+ * every call.
  *
- * @param server - The McpServer instance to register tools on
- * @param sessionContext - The authenticated session context with user info
- * @param systemUser - System user for server initialization tasks
+ * @param server - The McpServer instance of one authenticated session
+ * @param sessionContext - That session's context; its user selects each tool's input schema
+ * @param filterOptions - The tool include/exclude filter in force
  */
-async function registerAllTools(
+export function CreateSessionToolRegistrar(
     server: McpServer,
     sessionContext: MCPSessionContext,
-    systemUser: UserInfo
-): Promise<void> {
-    // Helper to register a tool with filter check and authorization
+    filterOptions: ToolFilterOptions
+): AddToolFn {
     // Track tools registered on THIS server instance to prevent SDK duplicate registration errors
     const registeredOnServer = new Set<string>();
-    const addToolWithFilter = (config: ToolConfig): void => {
-        if (!shouldIncludeTool(config.name, activeFilterOptions)) {
+    return (config: ToolConfig): void => {
+        if (!shouldIncludeTool(config.name, filterOptions)) {
             return;
         }
 
@@ -905,7 +927,8 @@ async function registerAllTools(
             config.name,
             {
                 description: config.description,
-                inputSchema: config.parameters.shape
+                // The schema object itself, not its shape, so a tool's unknown-key policy holds.
+                inputSchema: config.parametersForUser ? config.parametersForUser(sessionContext.user) : config.parameters
             },
             async (params: Record<string, unknown>) => {
                 // Check authorization if scopeInfo is provided
@@ -934,6 +957,23 @@ async function registerAllTools(
             }
         );
     };
+}
+
+/**
+ * Registers all tools with the MCP server for a specific authenticated session.
+ * This function is called per-connection to create user-scoped tool handlers.
+ *
+ * @param server - The McpServer instance to register tools on
+ * @param sessionContext - The authenticated session context with user info
+ * @param systemUser - System user for server initialization tasks
+ */
+async function registerAllTools(
+    server: McpServer,
+    sessionContext: MCPSessionContext,
+    systemUser: UserInfo
+): Promise<void> {
+    // Registers a tool with filter check and authorization
+    const addToolWithFilter = CreateSessionToolRegistrar(server, sessionContext, activeFilterOptions);
 
     const compiledTools = await GetOrBuildCompiledToolConfigs(systemUser, sessionContext);
     for (const toolConfig of compiledTools) {
@@ -1056,6 +1096,17 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
         // Validate OAuth configuration if OAuth is enabled
         const authMode = GetAuthMode();
+
+        // SECURITY: auth mode 'none' runs every request as the system user. Refuse it
+        // outright in production (mirrors MJServer's localDevAuth fail-loud rule); outside
+        // production the server additionally binds to loopback only (see app.listen below).
+        if (authMode === 'none' && process.env.NODE_ENV === 'production') {
+            throw new Error(
+                "MCP Server auth mode 'none' is strictly forbidden when NODE_ENV=production. " +
+                "Configure apiKey or oauth authentication."
+            );
+        }
+
         let effectiveAuthMode = authMode;
         let configuredProviderNames: string[] = [];
 
@@ -1095,6 +1146,13 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
         // Create Express app for SSE transport
         const app = express();
+
+        // Behind a reverse proxy (CloudFront, a load balancer, ...) trust its forwarded client address
+        // before anything reads req.ip; otherwise every client shares the OAuth proxy's per-IP rate limit.
+        const trustProxy = _config.mcpServerSettings?.trustProxy;
+        if (ApplyTrustProxy(app, trustProxy)) {
+            console.log(`[MCP Server] Express trust proxy: ${JSON.stringify(trustProxy)}`);
+        }
 
         // CORS must be FIRST - browser preflight OPTIONS requests need immediate handling
         // before any other middleware touches the request
@@ -1222,6 +1280,7 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                             stateTtlMs: proxySettings?.stateTtlMs,
                             jwt: jwtConfig,
                             enableConsentScreen: proxySettings?.enableConsentScreen ?? false,
+                            rateLimit: proxySettings?.rateLimit,
                         };
 
                         // Create and mount OAuth proxy router
@@ -1318,7 +1377,8 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 // Store transport for message routing
                 const sessionId = transport.sessionId;
                 transports.set(sessionId, transport);
-                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId}`);
+                // Log only a truncated session ID prefix — the full ID is a credential-like token
+                console.log(`[SSE] New session for ${sessionContext.user.Email}: ${sessionId.substring(0, 8)}…`);
 
                 // Set up keepalive ping to prevent connection timeout (every 15 seconds)
                 const keepaliveInterval = setInterval(() => {
@@ -1439,8 +1499,13 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
         // STREAMABLE HTTP TRANSPORT (newer MCP protocol - single endpoint)
         // =====================================================================
 
-        // Store for Streamable HTTP transports (session ID -> transport)
-        const streamableTransports = new Map<string, StreamableHTTPServerTransport>();
+        // Store for Streamable HTTP sessions (session ID -> transport + its McpServer). Active
+        // sessions stay open regardless of count; sessions closed by HTTP DELETE leave via onclose,
+        // and abandoned sessions are closed once idle past `mcpServerSettings.sessionIdleTtlMs`.
+        const streamableSessions = new StreamableSessionStore<StreamableHTTPServerTransport>({
+            IdleTtlMs: _config?.mcpServerSettings?.sessionIdleTtlMs,
+            SweepIntervalMs: _config?.mcpServerSettings?.sessionSweepIntervalMs,
+        });
 
         // Streamable HTTP endpoint - handles both GET (SSE stream) and POST (messages)
         // This is the newer, recommended MCP transport
@@ -1448,9 +1513,10 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             // Get or validate session ID from header
             const sessionId = req.headers['mcp-session-id'] as string | undefined;
 
-            // For existing sessions, route to the existing transport
-            if (sessionId && streamableTransports.has(sessionId)) {
-                const transport = streamableTransports.get(sessionId)!;
+            // For existing sessions, route to the existing transport (this also restarts its idle clock)
+            const existingTransport = sessionId ? streamableSessions.GetTransport(sessionId) : undefined;
+            if (sessionId && existingTransport) {
+                const transport = existingTransport;
                 try {
                     // Pass parsed body to handleRequest - required for SDK to properly parse the message
                     await transport.handleRequest(req, res, req.body);
@@ -1473,9 +1539,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
 
             const sessionContext = ToSessionContext(authResult);
 
+            // Declared outside the try so a failure part-way through can release what was created.
+            let mcpServer: McpServer | null = null;
+            let transport: StreamableHTTPServerTransport | null = null;
+            let sessionStored = false;
+
             try {
                 // Create a new MCP server for this session
-                const mcpServer = new McpServer({
+                mcpServer = new McpServer({
                     name: "MemberJunction",
                     version: "1.0.0"
                 });
@@ -1484,30 +1555,36 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                 await registerAllTools(mcpServer, sessionContext, systemUser);
 
                 // Create Streamable HTTP transport with session ID generation
-                const transport = new StreamableHTTPServerTransport({
+                const newTransport = new StreamableHTTPServerTransport({
                     sessionIdGenerator: () => randomUUID()
                 });
+                transport = newTransport;
 
-                // Connect the server to the transport
-                await mcpServer.connect(transport);
-
-                // Store for future requests (after first request establishes session)
-                transport.onclose = () => {
-                    const sid = transport.sessionId;
+                // Stop tracking the session when its transport closes (client DELETE, eviction, or
+                // error). This must be assigned BEFORE connect(): the SDK chains whatever onclose is
+                // already set with its own close handling, so assigning afterwards replaces that
+                // chain and the McpServer never learns its transport closed.
+                newTransport.onclose = () => {
+                    const sid = newTransport.sessionId;
                     if (sid) {
-                        streamableTransports.delete(sid);
+                        streamableSessions.Remove(sid);
                     }
                 };
 
+                // Connect the server to the transport
+                await mcpServer.connect(newTransport);
+
                 // Handle the current request
                 // Pass the parsed body to help the SDK recognize the initialize request
-                await transport.handleRequest(req, res, req.body);
+                await newTransport.handleRequest(req, res, req.body);
 
-                // Store the transport after successful request handling
-                const newSessionId = transport.sessionId;
+                // Store the session after successful request handling
+                const newSessionId = newTransport.sessionId;
                 if (newSessionId) {
-                    streamableTransports.set(newSessionId, transport);
-                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId}`);
+                    streamableSessions.Add(newSessionId, { Transport: newTransport, Server: mcpServer });
+                    sessionStored = true;
+                    // Log only a truncated session ID prefix — the full ID is a credential-like token
+                    console.log(`[StreamableHTTP] New session for ${sessionContext.user.Email}: ${newSessionId.substring(0, 8)}…`);
                 } else {
                     console.warn(`[StreamableHTTP] WARNING: No session ID assigned after handleRequest`);
                 }
@@ -1520,11 +1597,17 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
                         message: error instanceof Error ? error.message : 'Connection failed'
                     });
                 }
+            } finally {
+                // Nothing will ever route to a session that was not stored (the request failed, or
+                // it was not an initialize request and so got no session ID): release it now.
+                if (!sessionStored) {
+                    await ReleaseUnstoredStreamableSession(mcpServer, transport);
+                }
             }
         });
 
         // Start the Express server
-        app.listen(mcpServerPort, () => {
+        const onListening = () => {
             console.log(`MemberJunction MCP Server running on port ${mcpServerPort}`);
             console.log(`SSE endpoint: http://localhost:${mcpServerPort}/mcp/sse`);
             console.log(`Messages endpoint: http://localhost:${mcpServerPort}/mcp/messages`);
@@ -1534,7 +1617,14 @@ export async function InitializeServer(optionsOrFilterOptions: MCPServerOptions 
             if (IsOAuthEnabled()) {
                 console.log(`Protected Resource Metadata: http://localhost:${mcpServerPort}/.well-known/oauth-protected-resource`);
             }
-        });
+        };
+        if (authMode === 'none') {
+            // SECURITY: with no authentication every caller runs as the system user, so the
+            // port must never be exposed beyond loopback (mirrors MJCodeGenAPI's bind rule).
+            app.listen(mcpServerPort, '127.0.0.1', onListening);
+        } else {
+            app.listen(mcpServerPort, onListening);
+        }
 
     } catch (error) {
         console.error("Failed to initialize MCP server:", error);
@@ -2148,7 +2238,8 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
 
             let filter = dateFilter;
             if (props.agentName) {
-                filter += ` AND Agent LIKE '%${props.agentName}%'`;
+                const escapedAgentName = String(props.agentName).replace(/'/g, "''");
+                filter += ` AND Agent LIKE '%${escapedAgentName}%'`;
             }
             if (props.status !== 'all') {
                 filter += ` AND Status = '${props.status}'`;
@@ -2166,6 +2257,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
                 return JSON.stringify({ error: result.ErrorMessage });
             }
 
+            // fls-guard: RunView as the session user; the provider drops the columns it is denied
             return JSON.stringify(result.Results);
         }
     });
@@ -2176,7 +2268,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         description: "Comprehensive summary of an agent run with step-level metadata (excludes large I/O data)",
         scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: (props as Record<string, unknown>).runId as string || '*' }),
         parameters: z.object({
-            runId: z.string().describe("The agent run ID to summarize")
+            runId: z.string().uuid().describe("The agent run ID to summarize")
         }),
         async execute(props, activeSessionContext) {
             const sessionUser = (activeSessionContext ?? sessionContext).user;
@@ -2247,7 +2339,7 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
         name: "Get_Agent_Run_Step_Detail",
         description: "Detailed information about a specific step including input/output data with smart truncation",
         parameters: z.object({
-            runId: z.string().describe("The agent run ID"),
+            runId: z.string().uuid().describe("The agent run ID"),
             stepNumber: z.number().describe("The step number to retrieve (1-based)"),
             maxChars: z.number().default(5000).describe("Maximum characters for I/O data (0 = no truncation)")
         }),
@@ -2307,12 +2399,11 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
     // Tool 4: Get Agent Run Step Full Data
     addToolWithFilter({
         name: "Get_Agent_Run_Step_Full_Data",
-        description: "Export complete untruncated step data to JSON file for detailed analysis",
+        description: "Return complete untruncated step data in the MCP response for detailed analysis",
         scopeInfo: (props) => ({ scopePath: 'agent:monitor', resource: (props as Record<string, unknown>).runId as string || '*' }),
         parameters: z.object({
-            runId: z.string().describe("The agent run ID"),
-            stepNumber: z.number().describe("The step number to retrieve (1-based)"),
-            outputFile: z.string().optional().describe("File path to write JSON output (optional)")
+            runId: z.string().uuid().describe("The agent run ID"),
+            stepNumber: z.number().describe("The step number to retrieve (1-based)")
         }),
         async execute(props, activeSessionContext) {
             const sessionUser = (activeSessionContext ?? sessionContext).user;
@@ -2335,42 +2426,23 @@ function loadAgentRunDiagnosticTools(addToolWithFilter: AddToolFn, sessionContex
             }
 
             const step = steps[stepNumber - 1];
-            // A step can store its start or end payload as a pointer to an earlier step's end; export the resolved payloads.
-            const stepsById = IndexByUUID(steps);
-            const stepData: Record<string, unknown> = {
-                ...step.GetAll(),
-                PayloadAtStart: ResolvePayloadAtStart(step, stepsById),
-                PayloadAtEnd: ResolvePayloadAtEnd(step, stepsById),
-            };
-
-            // Determine output file path
-            const runIdShort = (props.runId as string).substring(0, 8);
-            const defaultFile = `./agent-run-${runIdShort}-step-${stepNumber}.json`;
-            const filePath = path.resolve(process.cwd(), (props.outputFile as string) || defaultFile);
-
-            // Write to file
+            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
+            const stepData = BuildAgentRunStepExportData(step, steps, sessionUser, md);
             const jsonContent = JSON.stringify(stepData, null, 2);
-            await fs.writeFile(filePath, jsonContent, 'utf-8');
 
             const response: Record<string, unknown> = {
                 success: true,
-                message: `Step data exported to file`,
-                filePath: filePath,
-                fileSize: jsonContent.length,
+                message: "Step data retrieved",
+                dataSize: jsonContent.length,
                 stepSummary: {
                     stepNumber: step.StepNumber,
                     stepName: step.StepName,
                     status: step.Status,
                     inputLength: step.InputData?.length || 0,
                     outputLength: step.OutputData?.length || 0
-                }
+                },
+                stepData
             };
-
-            // Include inline data if small enough
-            if (jsonContent.length < 10000) {
-                response.inlineData = stepData;
-                response.note = "Data included inline (file also saved)";
-            }
 
             return JSON.stringify(response);
         }
@@ -2940,336 +3012,25 @@ async function loadEntityTools(addToolWithFilter: AddToolFn): Promise<void> {
             const matchingEntities = getMatchingEntitiesForTool(md.Entities, tool);
             matchingEntities.forEach((entity) => {
                 if (tool.get) {
-                    addEntityGetTool(addToolWithFilter, entity);
+                    AddEntityGetTool(addToolWithFilter, entity);
                 }
                 if (tool.create) {
-                    addEntityCreateTool(addToolWithFilter, entity);
+                    AddEntityCreateTool(addToolWithFilter, entity);
                 }
                 if (tool.update) {
-                    addEntityUpdateTool(addToolWithFilter, entity);
+                    AddEntityUpdateTool(addToolWithFilter, entity);
                 }
                 if (tool.delete) {
-                    addEntityDeleteTool(addToolWithFilter, entity);
+                    AddEntityDeleteTool(addToolWithFilter, entity);
                 }
                 if (tool.runView) {
-                    addEntityRunViewTool(addToolWithFilter, entity);
+                    AddEntityRunViewTool(addToolWithFilter, entity);
                 }
             });
         });
     }
 }
 
-/**
- * Creates a RunView tool for querying entity records.
- * Allows filtering, sorting, and field selection.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityRunViewTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = z.object({
-        extraFilter: z.string().optional(),
-        orderBy: z.string().optional(),
-        fields: z.array(z.string()).optional(),
-    });
-
-    addToolWithFilter({
-        name: `Run_${entity.ClassName}_View`,
-        description: `Returns data from the ${entity.Name} entity, optionally filtered by extraFilter and ordered by orderBy`,
-        parameters: paramObject,
-        scopeInfo: { scopePath: 'view:run', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: entity.Name,
-                ExtraFilter: props.extraFilter ? props.extraFilter as string : undefined,
-                OrderBy: props.orderBy ? props.orderBy as string : undefined,
-                Fields: props.fields ? props.fields as string[] : undefined,
-            }, sessionUser);
-            return JSON.stringify(result);
-        }
-    });
-}
-
-/**
- * Creates a tool for creating new records in an entity.
- * Parameters are generated from the entity's non-readonly fields.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityCreateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = getEntityParamObject(entity, true, false, false);
-
-    addToolWithFilter({
-        name: `Create_${entity.ClassName}_Record`,
-        description: `Creates a new record in the ${entity.Name} entity`,
-        parameters: z.object(paramObject),
-        scopeInfo: { scopePath: 'entity:create', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            record.SetMany(props, true);
-            const success = await record.Save();
-            if (!success) {
-                return JSON.stringify({success, record: undefined, errorMessage: record.LatestResult.CompleteMessage });
-            }
-            else {
-                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: undefined });
-            }
-        }
-    });
-}
-
-/**
- * Creates a tool for updating existing records in an entity.
- * Requires primary key fields to identify the record, plus optional fields to update.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityUpdateTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const paramObject = getEntityParamObject(entity, true, true, true);
-
-    addToolWithFilter({
-        name: `Update_${entity.ClassName}_Record`,
-        description: `Updates the specified record in the ${entity.Name} entity`,
-        parameters: z.object(paramObject),
-        scopeInfo: { scopePath: 'entity:update', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            const loaded = await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
-            ));
-            if (loaded) {
-                // remove the primary keys from the props so we don't try to update them
-                const newProps = { ...props };
-                entity.PrimaryKeys.forEach((pk) => {
-                    delete newProps[pk.Name];
-                });
-                record.SetMany(newProps, true);
-                const success = await record.Save();
-                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });
-            }
-            else {
-                return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
-            }
-        }
-    });
-}
-
-/**
- * Creates a tool for deleting records from an entity.
- * Only requires the primary key field(s) to identify the record.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityDeleteTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
-
-    addToolWithFilter({
-        name: `Delete_${entity.ClassName}_Record`,
-        description: `Deletes the specified record from the ${entity.Name} entity`,
-        parameters: z.object(pkeyParams),
-        scopeInfo: { scopePath: 'entity:delete', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            const loaded = await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
-            ));
-            if (loaded) {
-                const savedRecordJSON = await convertEntityObjectToJSON(record);
-                const success = await record.Delete();
-                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });
-            }
-            else {
-                return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
-            }
-        }
-    });
-}
-
-
-/*******************************************************************************
- * ENTITY HELPER FUNCTIONS
- ******************************************************************************/
-
-/**
- * Converts a BaseEntity object to a JSON representation suitable for API responses.
- *
- * @param record - The entity record to convert
- * @returns JSON string representation of the entity data
- */
-async function convertEntityObjectToJSON(record: BaseEntity): Promise<string> {
-    const output = await record.GetDataObjectJSON({
-        includeRelatedEntityData: false,
-        oldValues: false,
-        omitEmptyStrings: false,
-        omitNullValues: false,
-        excludeFields: [],
-        relatedEntityList: [],
-    });
-    return output;
-}
-
-/**
- * Builds a Zod parameter object for entity CRUD operations.
- *
- * @param entity - The entity to build parameters for
- * @param excludeReadOnlyFields - If true, excludes read-only fields from the schema
- * @param includePrimaryKeys - If true, includes primary key fields
- * @param nonPKeysOptional - If true, makes non-primary-key fields optional
- * @returns Object with Zod schemas for each included field
- */
-function getEntityParamObject(
-    entity: EntityInfo,
-    excludeReadOnlyFields: boolean,
-    includePrimaryKeys: boolean,
-    nonPKeysOptional: boolean
-): Record<string, z.ZodTypeAny> {
-    const paramObject: Record<string, z.ZodTypeAny> = {};
-
-    entity.Fields.filter(f => {
-        if (f.IsPrimaryKey && includePrimaryKeys) {
-            return true;
-        }
-        else if (f.ReadOnly && excludeReadOnlyFields) {
-            return false;
-        }
-        else {
-            return true;
-        }
-    }).forEach((f) => {
-        // Primary keys are always required. For non-PK fields, mark as optional if:
-        // 1. The caller requested all non-PKs optional (e.g. Update tools), OR
-        // 2. The field allows NULL in the database, OR
-        // 3. The field has a default value defined
-        const isOptional = f.IsPrimaryKey ? false : (nonPKeysOptional || f.AllowsNull || !!f.DefaultValue);
-        addSingleParamToObject(paramObject, f, isOptional);
-    });
-
-    return paramObject;
-}
-
-/**
- * Adds a single field as a Zod parameter to the parameter object.
- * Handles type mapping from MemberJunction types to Zod schemas,
- * including support for value lists (enums).
- *
- * @param theObject - The parameter object to add the field to
- * @param field - The entity field info
- * @param optional - If true, makes the parameter optional
- */
-function addSingleParamToObject(
-    theObject: Record<string, z.ZodTypeAny>,
-    field: EntityFieldInfo,
-    optional: boolean
-): void {
-    let newParam: z.ZodTypeAny;
-    switch (field.TSType) {
-        case 'Date':
-            newParam = z.coerce.date();
-            break;
-        case 'boolean':
-            newParam = z.boolean();
-            break;
-        case 'number':
-            newParam = z.number();
-            break;
-        case 'string':
-        default:
-            // For strings, check if we have a value list and create an enum
-            if (field.ValueListTypeEnum === 'None' || field.EntityFieldValues.length === 0) {
-                newParam = z.string();
-            }
-            else {
-                const enumList = field.EntityFieldValues.map((v) => v.Value);
-                if (field.ValueListTypeEnum === 'List') {
-                    newParam = z.enum(enumList as [string, ...string[]]);
-                }
-                else {
-                    // List + user input: allow enum values or any string
-                    newParam = z.union([z.enum(enumList as [string, ...string[]]), z.string()]);
-                }
-            }
-            break;
-    }
-
-    // If the field allows NULL in the database, wrap with .nullable()
-    if (field.AllowsNull) {
-        newParam = newParam.nullable();
-    }
-
-    if (optional) {
-        theObject[field.Name] = newParam.optional();
-    }
-    else {
-        theObject[field.Name] = newParam;
-    }
-}
-
-/**
- * Builds a Zod parameter object containing only the primary key fields for an entity.
- * Used for Get and Delete operations that only need to identify the record.
- *
- * @param entity - The entity to build primary key parameters for
- * @returns Object with Zod schemas for each primary key field
- */
-function getEntityPrimaryKeyParamsObject(entity: EntityInfo): Record<string, z.ZodTypeAny> {
-    const paramObject: Record<string, z.ZodTypeAny> = {};
-    entity.PrimaryKeys.forEach((pk) => {
-        addSingleParamToObject(paramObject, pk, false);
-    });
-    return paramObject;
-}
-
-/**
- * Creates a tool for retrieving a single record from an entity by primary key.
- *
- * @param addToolWithFilter - Function to register tools with filter check
- * @param entity - The entity to create the tool for
- */
-function addEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInfo): void {
-    const pkeyParams = getEntityPrimaryKeyParamsObject(entity);
-
-    addToolWithFilter({
-        name: `Get_${entity.ClassName}_Record`,
-        description: `Retrieves the specified record from the ${entity.Name} entity`,
-        parameters: z.object(pkeyParams),
-        scopeInfo: { scopePath: 'entity:read', resource: entity.Name },
-        async execute(props, sessionContext) {
-            const sessionUser = sessionContext.user;
-            const md = new Metadata(); // global-provider-ok: MCP server bootstrap
-            const record = await md.GetEntityObject(entity.Name, sessionUser);
-            await record.InnerLoad(new CompositeKey(
-                entity.PrimaryKeys.map((pk) => ({
-                    FieldName: pk.Name,
-                    Value: props[pk.Name]
-                }))
-            ));
-            return await convertEntityObjectToJSON(record);
-        }
-    });
-}
 
 /**
  * Configuration interface for entity tool matching.

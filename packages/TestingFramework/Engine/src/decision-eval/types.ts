@@ -21,6 +21,10 @@ export type DecisionEvalLabel = (typeof DECISION_EVAL_LABELS)[number];
 /**
  * The decisions the harness knows how to build: conversation routing, and agent discovery (Sage's
  * pick of the agent for a request; its shapes are in `discovery-types.ts`).
+ *
+ * This gates only the generated eval suites and their scorecard. Fitting a calibration needs no
+ * entry here: `FitDecisionCalibrations` (`calibration-fit.ts`) fits any use and any model from
+ * labelled points.
  */
 export const DECISION_EVAL_DECISIONS = ['conversation-routing', 'agent-discovery'] as const;
 
@@ -234,7 +238,7 @@ export const DecisionEvalActualOutputSchema = z.object({
     /** The agent Choice's value and confidence, or null. */
     Route: z.object({ Value: z.string(), Confidence: z.number() }).nullable(),
     /** What production would do with these answers (`InterpretRoutingAnswers`), or null without answers. */
-    RoutingVerdict: z.enum(['Routed', 'SomeoneElse', 'KeptContinuity']).nullable(),
+    RoutingVerdict: z.enum(['Routed', 'SomeoneElse', 'KeptContinuity', 'NoAgent']).nullable(),
     /**
      * The routing policy that verdict was reached under, or null without answers. Absent from runs
      * recorded before routing was calibrated: their verdicts used raw thresholds, so the scorecard

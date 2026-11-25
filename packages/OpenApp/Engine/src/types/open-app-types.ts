@@ -162,11 +162,18 @@ export interface AppHookPayload {
     Manifest: unknown;
 }
 
+/** Names of installed apps, or 'all' of them. See {@link InstallOptions.DependenciesFromHead}. */
+export type DependenciesFromHead = 'all' | string[];
+
 /**
  * Options for the install command.
  */
 export interface InstallOptions {
-    /** GitHub repository URL or app name (for registry lookup) */
+    /**
+     * GitHub repository URL, or a `file:` locator for a folder in the consumer repository
+     * (relative to `OrchestratorContext.RepoRoot`, e.g. `file:openapps/analytics`).
+     * `NormalizeAppSource` turns a folder path into this locator.
+     */
     Source: string;
     /** Specific version to install (default: latest) */
     Version?: string;
@@ -189,6 +196,13 @@ export interface InstallOptions {
      * MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
+    /**
+     * The installed apps (by name, or 'all') whose dependencies are read from their repository's
+     * default branch, instead of those recorded for their installed version. For a developer whose
+     * apps follow their default branches; on a deployment it checks requirements of code that is
+     * not installed (#6877).
+     */
+    DependenciesFromHead?: DependenciesFromHead;
     /**
      * @internal Set by the orchestrator when installing the pre-resolved members
      * of a dependency graph in topological order — never set this directly. When
@@ -225,6 +239,12 @@ export interface UpgradeOptions {
     AppName: string;
     /** Specific version to upgrade to (default: latest) */
     Version?: string;
+    /**
+     * Run the upgrade even when the app is already at the target version: new migrations, package
+     * entries, config and hooks are applied again. A lower target version is still refused. Used
+     * to apply changes made in a local app folder without a version bump.
+     */
+    Reapply?: boolean;
     /** Enable verbose output */
     Verbose?: boolean;
     /**
@@ -237,6 +257,13 @@ export interface UpgradeOptions {
      * MJ-internal apps only.
      */
     AllowDoubleUnderscoreSchema?: boolean;
+    /**
+     * The installed apps (by name, or 'all') whose dependencies are read from their repository's
+     * default branch, instead of those recorded for their installed version. For a developer whose
+     * apps follow their default branches; on a deployment it checks requirements of code that is
+     * not installed (#6877).
+     */
+    DependenciesFromHead?: DependenciesFromHead;
 }
 
 /**
@@ -305,7 +332,7 @@ export interface InstalledAppInfo {
     PublisherEmail: string | null;
     /** Publisher website URL */
     PublisherURL: string | null;
-    /** GitHub repository URL */
+    /** Where the app is installed from: a GitHub repository URL, or a `file:` locator for a local folder */
     RepositoryURL: string;
     /** In-repo subpath to the app (for multi-app repos); null/undefined = repo root */
     Subpath?: string | null;
@@ -349,4 +376,6 @@ export interface ResolvedDependency {
     AlreadyInstalled: boolean;
     /** Currently installed version (if installed) */
     InstalledVersion?: string;
+    /** Version resolved from the declared range for a not-yet-installed dependency; undefined = no constraint (default branch) */
+    ResolvedVersion?: string;
 }

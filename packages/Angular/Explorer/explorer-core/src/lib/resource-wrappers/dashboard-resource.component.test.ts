@@ -4,9 +4,9 @@ import type { ChangeDetectorRef, ViewContainerRef } from '@angular/core';
 import type { ResolvedLayoutConfig } from 'golden-layout';
 import { LogError } from '@memberjunction/core';
 import type { RunViewParams } from '@memberjunction/core';
-import { SQLParser } from '@memberjunction/sql-parser';
+import { SQLParser, SqlDocument } from '@memberjunction/sql-parser';
 import { PostgreSQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
-import type { SQLParserDialect } from '@memberjunction/sql-dialect';
+import type { SQLDialect } from '@memberjunction/sql-dialect';
 import type { RecentAccessService } from '@memberjunction/ng-shared';
 import type { DashboardUserPermissions, MJArtifactEntity, MJArtifactVersionEntity, MJDashboardEntity, ResourceData } from '@memberjunction/core-entities';
 import type { DashboardNavRequestEvent, PanelConfig } from '@memberjunction/ng-dashboard-viewer';
@@ -187,6 +187,11 @@ vi.mock('@memberjunction/global', async importOriginal => {
       Instance: {
         ClassFactory: {
           GetRegistrationAsync: vi.fn(async () => ({ SubClass: class {} })),
+          DescribeMissingRegistration: vi.fn(
+            (_base: unknown, key: string) =>
+              `ClassFactory: no registration found for base class 'BaseDashboard' with key '${key}'. ` +
+              `Registered keys for 'BaseDashboard': 'HomeDashboard'.`,
+          ),
         },
       },
     },
@@ -461,6 +466,30 @@ describe('DashboardResource tab scoping of child dashboards', () => {
 });
 
 describe('DashboardResource code-based dashboard error surfacing', () => {
+  it('explains an unresolved DriverClass with the registered keys and the likely causes', async () => {
+    const { DashboardResource } = await import('./dashboard-resource.component');
+    const { MJGlobal } = await import('@memberjunction/global');
+    const getRegistration = MJGlobal.Instance.ClassFactory.GetRegistrationAsync as ReturnType<typeof vi.fn>;
+    getRegistration.mockResolvedValueOnce(null);
+
+    const resource = new DashboardResource(
+      { createComponent: vi.fn() } as any,
+      { detectChanges: vi.fn(), markForCheck: vi.fn() } as any,
+    ) as any;
+    resource.containerElement = { nativeElement: { innerHTML: '', appendChild: vi.fn() } };
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await resource.loadCodeBasedDashboard({ ID: 'dash-x', Name: 'Forms Home', DriverClass: 'FormsHomeDashboard' });
+    consoleError.mockRestore();
+
+    expect(MJGlobal.Instance.ClassFactory.DescribeMissingRegistration).toHaveBeenCalledWith(expect.anything(), 'FormsHomeDashboard');
+    expect(resource.errorMessage).toContain('Forms Home');
+    expect(resource.errorDetails).toContain("Dashboard class 'FormsHomeDashboard' is not registered.");
+    expect(resource.errorDetails).toContain("Registered keys for 'BaseDashboard': 'HomeDashboard'.");
+    expect(resource.errorDetails).toContain('not installed in this Explorer');
+    expect(resource.errorDetails).toContain('tree-shook it out');
+  });
+
   /**
    * BaseDashboard guarantees the loading screen is released when initDashboard()/loadData() throws
    * — it logs, emits its `Error` output, then fires NotifyLoadComplete() in a finally. The host must
@@ -1274,11 +1303,11 @@ function sourceProvider(artifacts: ArtifactRowDouble[] = [], versions: VersionRo
  * which parses as a read-only SELECT when it is wrapped as the WHERE of `__mj_clause_screen`, and which
  * reads no other table.
  */
-function clientFilterRefusal(filter: string, dialect: SQLParserDialect): string | null {
+function clientFilterRefusal(filter: string, dialect: SQLDialect): string | null {
   if (SQLParser.HasStackedStatements(filter, dialect)) return `${dialect.ParserDialect}: more than one statement`;
   const wrapped = `SELECT 1 FROM __mj_clause_screen WHERE (${filter})`;
   const parser = new SQLParser(wrapped, dialect);
-  if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+  if (!parser.IsValid || !SqlDocument.Parse(wrapped, dialect).IsReadOnly().Value.IsReadOnly || parser.StatementKind !== 'select') {
     return `${dialect.ParserDialect}: not a safe read-only filter fragment`;
   }
   const tables = SQLParser.ExtractTableRefs(wrapped, dialect).map(table => table.TableName.toLowerCase());
@@ -1617,6 +1646,18 @@ describe('DashboardResource AI pane', () => {
 
     expect([resource.MainSizePct, resource.CopilotSizePct]).toEqual([68, 32]);
     expect(doubles.userInfo.SetSettingDebounced).not.toHaveBeenCalled();
+  });
+
+  it('opens an artifact the chat asks for in its own tab', async () => {
+    const { resource, internals } = await configTab();
+    const openArtifact = vi.fn(() => 'tab-9');
+    const openNavItem = vi.fn(async () => null);
+    internals['navigationService'] = { OpenArtifact: openArtifact, OpenNavItemByName: openNavItem };
+
+    resource.OnChatNavigationRequest({ navItemName: '', ArtifactID: 'art-9', ArtifactName: 'Sales — Live Sheet' });
+
+    expect(openArtifact).toHaveBeenCalledExactlyOnceWith('art-9', 'Sales — Live Sheet');
+    expect(openNavItem).not.toHaveBeenCalled();
   });
 
   it('logs a page the chat links to that the shell cannot open', async () => {

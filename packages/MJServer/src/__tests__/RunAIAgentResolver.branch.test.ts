@@ -41,6 +41,8 @@ vi.mock('@memberjunction/ai-agents', () => ({
         }
     },
     ArtifactToolManager: class {},
+    CanAgentOwnSubAgentConsults: vi.fn(() => false),
+    LoadOpenSubAgentConsults: vi.fn(async () => []),
 }));
 
 vi.mock('../realtimeWidget/widgetGuestElevation.js', () => ({
@@ -220,6 +222,8 @@ describe('executeAIAgent — ConversationBranchID', () => {
         await execute(...base, null);
         const [withBranch, trunk] = hoisted.runAgentInConversation.mock.calls.map(c => c[0] as Record<string, unknown>);
         expect(withBranch.ConversationBranchID).toBe('branch-b');
+        expect(withBranch.handoffChain).toBeUndefined();
         expect(trunk).not.toHaveProperty('ConversationBranchID');
+        expect(trunk.handoffChain).toBeUndefined();
     });
 });

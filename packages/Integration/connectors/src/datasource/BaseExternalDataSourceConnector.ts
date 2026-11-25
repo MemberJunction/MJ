@@ -76,6 +76,15 @@ export abstract class BaseExternalDataSourceConnector extends BaseIntegrationCon
         return true;
     }
 
+    /**
+     * A source table's change timestamp is set when a row is written, not when its transaction commits,
+     * so a long transaction can make a row visible after a newer one was already fetched. Five minutes of
+     * overlap re-reads that window on each incremental (#3085); the upsert is idempotent.
+     */
+    public override get WatermarkLookbackSeconds(): number {
+        return 300;
+    }
+
     // ─── The bridge: CompanyIntegration → shared EDS data-source row ──────────────
 
     /**

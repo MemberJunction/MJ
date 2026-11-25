@@ -1,10 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Component } from '@angular/core';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, text, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { BaseEntity, EntityInfo, IMetadataProvider, LogError } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { MjEntityFormHostComponent } from './entity-form-host.component';
+import {
+  CUSTOM_VIEW_BANNER_DISMISSED_KEY,
+  MjEntityFormHostComponent,
+} from './entity-form-host.component';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent } from '../base-form-component';
 import { BaseFormSectionComponent } from '../base-form-section-component';
@@ -187,18 +191,59 @@ async function mountSwitchHost(opts: {
 const switchButton = (f: ComponentFixture<MjEntityFormHostComponent>): HTMLButtonElement | null =>
   query(f, '.mj-form-host-mode-switch') as HTMLButtonElement | null;
 
+const dismissButton = (f: ComponentFixture<MjEntityFormHostComponent>): HTMLButtonElement | null =>
+  query(f, '.mj-form-host-mode-dismiss') as HTMLButtonElement | null;
+
 describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
-  it('offers the standard form above a custom class form', async () => {
+  beforeEach(() => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('shows a dismissible custom-view notice above a custom class form (switch lives in More menu)', async () => {
     const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
     expect(query(f, '.mj-form-host-mode-strip')).not.toBeNull();
-    expect(switchButton(f)?.textContent?.trim()).toBe('Open standard form');
+    expect(text(f, '.mj-form-host-mode-text')).toContain('More menu');
+    expect(switchButton(f)).toBeNull();
+    expect(dismissButton(f)).not.toBeNull();
     expect(query(f, '.custom')).not.toBeNull();
     expect(query(f, '.gen')).toBeNull();
   });
 
-  it('clicking the switch mounts the standard form and emits FormModeChange', async () => {
+  it('dismissing the custom-view notice hides it and persists per-entity in UserInfoEngine', async () => {
+    const setSpy = vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    dismissButton(f)?.click();
+    f.detectChanges(false);
+
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    expect(setSpy).toHaveBeenCalledWith(
+      CUSTOM_VIEW_BANNER_DISMISSED_KEY,
+      JSON.stringify({ [ENTITY_NAME]: true }),
+    );
+  });
+
+  it('starts with the custom-view notice hidden when already dismissed for that entity, but shows for another entity', async () => {
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(
+      JSON.stringify({ [ENTITY_NAME]: true }),
+    );
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+
+    // Switching to standard mode still renders the standard-form banner with Back to custom view
+    f.componentInstance.SwitchFormMode('standard');
+    await settle(f);
+    expect(query(f, '.mj-form-host-mode-strip')).not.toBeNull();
+    expect(switchButton(f)?.textContent?.trim()).toBe('Back to custom view');
+  });
+
+  it('switching via FormModeSwitch mounts the standard form and emits FormModeChange', async () => {
     const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
-    switchButton(f)?.click();
+    f.componentInstance.Form?.FormModeSwitch?.Switch('standard');
     await settle(f);
     expect(query(f, '.gen')).not.toBeNull();
     expect(query(f, '.custom')).toBeNull();
@@ -297,17 +342,17 @@ describe('MjEntityFormHostComponent — standard-form switch (DOM)', () => {
     expect(notifications.map((n) => n.Type)).toEqual(['warning']);
   });
 
-  it('returns keyboard focus to the switch button after a strip-initiated switch', async () => {
-    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+  it('unmounts the strip during reload when clicking Back to custom view from standard mode', async () => {
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), inputs: { FormMode: 'standard' } });
     const before = switchButton(f);
+    expect(before?.textContent?.trim()).toBe('Back to custom view');
     before?.focus();
     before?.click();
-    f.detectChanges(false); // the post-click CD pass the app's zone would run: the strip unmounts while loading
+    f.detectChanges(false); // the post-click CD pass: the strip unmounts while loading
     expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
     await settle(f);
-    const after = switchButton(f);
-    expect(after?.textContent?.trim()).toBe('Back to custom view');
-    expect(document.activeElement).toBe(after);
+    expect(query(f, '.custom')).not.toBeNull();
+    expect(dismissButton(f)).not.toBeNull();
   });
 
   it('announces the mode text politely and is not a landmark', async () => {
@@ -594,5 +639,71 @@ describe('MjEntityFormHostComponent — overlapping loads (DOM)', () => {
     for (let i = 0; i < 4; i++) await tick();
 
     expect(created).toBe(0);
+  });
+});
+
+describe('MjEntityFormHostComponent — phone width mounts the user\'s mode and hides the strip (DOM)', () => {
+  const useViewport = (mobile: boolean) => {
+    window.matchMedia = ((q: string) => ({
+      matches: mobile && q.includes('768'),
+      media: q, onchange: null,
+      addListener: () => undefined, removeListener: () => undefined,
+      addEventListener: () => undefined, removeEventListener: () => undefined, dispatchEvent: () => false,
+    }) as MediaQueryList) as typeof window.matchMedia;
+  };
+  afterEach(() => { delete (window as { matchMedia?: unknown }).matchMedia; });
+
+  it('phone width mounts the user\'s mode and hides the strip', async () => {
+    useViewport(true);
+    const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    expect(query(f, '.custom')).not.toBeNull();
+    expect(query(f, '.gen')).toBeNull();
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+    expect(modeChanges).toEqual([]);
+    expect(f.componentInstance.FormMode).toBe('default');
+  });
+
+  it('phone width with FormMode "standard" mounts the standard form and hides the strip', async () => {
+    useViewport(true);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), inputs: { FormMode: 'standard' } });
+    expect(query(f, '.gen')).not.toBeNull();
+    expect(query(f, '.custom')).toBeNull();
+    expect(query(f, '.mj-form-host-mode-strip')).toBeNull();
+  });
+
+  it('host hands the form a FormModeSwitch when a standard alternative exists', async () => {
+    useViewport(true);
+    const { f, modeChanges } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    const sw = f.componentInstance.Form?.FormModeSwitch;
+    expect(sw).toBeDefined();
+    expect(sw).not.toBeNull();
+    expect(sw?.Mode).toBe('default');
+    expect(sw?.Switch('standard')).toBe(true);
+    await settle(f);
+    expect(modeChanges).toEqual(['standard']);
+    expect(f.componentInstance.Form?.FormModeSwitch?.Mode).toBe('standard');
+  });
+
+  it('host sets FormModeSwitch to null when no standard alternative exists', async () => {
+    useViewport(true);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm, GenForm) });
+    expect(f.componentInstance.Form?.FormModeSwitch).toBeNull();
+  });
+
+  it('ShowFormModeSwitch=false leaves the form without a FormModeSwitch at phone width, even over a custom form', async () => {
+    useViewport(true);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm), inputs: { ShowFormModeSwitch: false } });
+    expect(f.componentInstance.HasStandardFormAlternative).toBe(true);
+    expect(f.componentInstance.Form?.FormModeSwitch).toBeNull();
+  });
+
+  it('keeps the dismissible notice and the custom view at desktop width', async () => {
+    useViewport(false);
+    vi.spyOn(UserInfoEngine.Instance, 'GetSetting').mockReturnValue(undefined);
+    const { f } = await mountSwitchHost({ resolution: classResolution(GenForm) });
+    expect(query(f, '.custom')).not.toBeNull();
+    expect(query(f, '.mj-form-host-mode-text')).not.toBeNull();
+    expect(dismissButton(f)).not.toBeNull();
+    expect(switchButton(f)).toBeNull();
   });
 });

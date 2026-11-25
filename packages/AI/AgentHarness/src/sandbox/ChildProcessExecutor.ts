@@ -12,6 +12,7 @@ import { HarnessProcess, HarnessProcessSpec, SandboxExecutor } from './SandboxEx
  */
 export function WrapChildProcess(child: ChildProcessWithoutNullStreams): HarnessProcess {
     return {
+        Stdin: child.stdin,
         Stdout: readLines(child.stdout),
         Stderr: readLines(child.stderr),
         ExitCode: new Promise<number | null>((resolve) => {
@@ -91,7 +92,7 @@ export class ChildProcessExecutor implements SandboxExecutor {
      * because a container has no business inheriting the host developer's identity.
      */
     private baseEnvironment(): Record<string, string> {
-        const allowed = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'TERM'];
+        const allowed = ['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'TERM', 'XDG_CONFIG_HOME'];
         const env: Record<string, string> = {};
         for (const key of allowed) {
             const value = process.env[key];

@@ -22,8 +22,9 @@ import type express from 'express';
 const {
     mockCrudCreate, mockCrudGet, mockCrudUpdate, mockCrudDelete,
     mockOpsRunView, mockOpsRunViews, mockOpsListEntities,
-    mockLogError, mockEntityList,
+    mockLogError, mockEntityList, mockCheckScope,
 } = vi.hoisted(() => ({
+    mockCheckScope: vi.fn(),
     mockCrudCreate: vi.fn(),
     mockCrudGet: vi.fn(),
     mockCrudUpdate: vi.fn(),
@@ -55,6 +56,10 @@ vi.mock('../rest/ViewOperationsHandler.js', () => ({
         runViews: mockOpsRunViews,
         listEntities: mockOpsListEntities,
     },
+}));
+
+vi.mock('../auth/APIKeyRequestScope.js', () => ({
+    AssertAPIKeyScopeForRequest: mockCheckScope,
 }));
 
 vi.mock('@memberjunction/core', async (importOriginal) => {
@@ -94,6 +99,27 @@ interface HandlerInternals {
 
 function makeHandler(options: RESTEndpointHandlerOptions = {}): HandlerInternals {
     return new RESTEndpointHandler(options) as unknown as HandlerInternals;
+}
+
+/**
+ * Sends one request through the handler's real router, so a test sees the middleware chain a
+ * route is registered with, and resolves once a response is written or the chain runs out.
+ */
+function dispatch(method: string, url: string, apiKeyHash?: string): Promise<{ status: number; body: unknown }> {
+    const router = new RESTEndpointHandler().GetRouter();
+    return new Promise((resolve) => {
+        let status = 200;
+        const res = {
+            status(code: number) { status = code; return res; },
+            json(body: unknown) { resolve({ status, body }); return res; },
+            send(body?: unknown) { resolve({ status, body }); return res; },
+        };
+        const req = {
+            method, url, originalUrl: `/api/v1${url}`, headers: { 'user-agent': 'vitest' }, ip: '127.0.0.1',
+            query: {}, body: {}, mjUser: MJ_USER, userPayload: { apiKeyHash },
+        };
+        router(req as unknown as express.Request, res as unknown as express.Response, () => resolve({ status: 404, body: undefined }));
+    });
 }
 
 const MJ_USER = {
@@ -214,13 +240,15 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         expect(wildcard.isEntityAllowed('Users')).toBe(true);
     });
 
-    it('SECURITY GAP: a mixed-case exact exclusion silently fails to exclude', () => {
-        // isEntityAllowed lowercases the entity name but compares it with === against
-        // the RAW configured pattern (only the wildcard branch lowercases patterns).
-        // An operator writing excludeEntities: ['Secrets'] — the natural casing —
-        // gets NO exclusion. Pinned so a normalization fix flips this test.
+    it('a mixed-case exact exclusion excludes (lists are normalized to lowercase)', () => {
         const handler = makeHandler({ ExcludeEntities: ['Secrets'] });
-        expect(handler.isEntityAllowed('Secrets')).toBe(true); // exclusion ineffective!
+        expect(handler.isEntityAllowed('Secrets')).toBe(false);
+        expect(handler.isEntityAllowed('Users')).toBe(true);
+    });
+
+    it('mixed-case schema lists match whatever casing the caller passes', () => {
+        expect(makeHandler({ ExcludeSchemas: ['VAULT'] }).isEntityAllowed('Secrets')).toBe(false);
+        expect(makeHandler({ IncludeSchemas: ['CRM'] }).isEntityAllowed('Users')).toBe(true);
     });
 
     it('exclusions override inclusions for the same entity', () => {
@@ -236,9 +264,10 @@ describe('RESTEndpointHandler.isEntityAllowed', () => {
         expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 
-    it('SECURITY GAP: a mixed-case exact inclusion fails to include (same raw-pattern comparison)', () => {
+    it('a mixed-case exact inclusion includes (lists are normalized to lowercase)', () => {
         const handler = makeHandler({ IncludeEntities: ['Users'] });
-        expect(handler.isEntityAllowed('Users')).toBe(false); // include list active, but never matches
+        expect(handler.isEntityAllowed('Users')).toBe(true);
+        expect(handler.isEntityAllowed('Secrets')).toBe(false);
     });
 });
 
@@ -693,5 +722,63 @@ describe('RESTEndpointHandler user and metadata routes', () => {
                 TSType: 'string',
             }]);
         });
+    });
+});
+
+// ─── API-key scope tier ─────────────────────────────────────────────────────
+
+describe('RESTEndpointHandler API-key scopes', () => {
+    beforeEach(() => {
+        mockCheckScope.mockResolvedValue(undefined);
+        mockCrudCreate.mockResolvedValue({ success: true, entity: { ID: '1' } });
+        mockCrudUpdate.mockResolvedValue({ success: true, entity: { ID: '1' } });
+        mockCrudDelete.mockResolvedValue({ success: true });
+        mockOpsRunView.mockResolvedValue({ success: true, result: { Results: [] } });
+        mockOpsListEntities.mockResolvedValue({ Results: [] });
+    });
+
+    it.each([
+        ['POST', '/entities/Users', 'entity:create', 'Users'],
+        ['PUT', '/entities/Users/1', 'entity:update', 'Users'],
+        ['DELETE', '/entities/Users/1', 'entity:delete', 'Users'],
+        ['GET', '/entities/Users', 'view:run', 'Users'],
+        ['POST', '/views/Users', 'view:run', 'Users'],
+        ['PUT', '/users/user-1/favorites/Users/1', 'entity:update', 'User Favorites'],
+        ['DELETE', '/users/user-1/favorites/Users/1', 'entity:delete', 'User Favorites'],
+    ])('%s %s requires %s on %s', async (method, url, scope, resource) => {
+        await dispatch(method, url, 'hash-1');
+
+        expect(mockCheckScope).toHaveBeenCalledTimes(1);
+        expect(mockCheckScope).toHaveBeenCalledWith(
+            'hash-1',
+            scope,
+            resource,
+            MJ_USER,
+            { endpoint: `/api/v1${url}`, method, ipAddress: '127.0.0.1', userAgent: 'vitest' }
+        );
+    });
+
+    it('answers 403 and never reaches the handler when the key lacks the scope', async () => {
+        mockCheckScope.mockRejectedValue(new Error("API key lacks scope 'entity:create' for 'Users'"));
+
+        const response = await dispatch('POST', '/entities/Users', 'hash-1');
+
+        expect(response.status).toBe(403);
+        expect(response.body).toEqual({ error: "API key lacks scope 'entity:create' for 'Users'" });
+        expect(mockCrudCreate).not.toHaveBeenCalled();
+    });
+
+    it('runs the handler when the scope check passes', async () => {
+        const response = await dispatch('POST', '/entities/Users', 'hash-1');
+
+        expect(response.status).toBe(201);
+        expect(mockCrudCreate).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes an undefined key hash for a JWT session, which the scope check treats as not applicable', async () => {
+        await dispatch('DELETE', '/entities/Users/1');
+
+        expect(mockCheckScope.mock.calls[0][0]).toBeUndefined();
+        expect(mockCrudDelete).toHaveBeenCalledTimes(1);
     });
 });

@@ -4,7 +4,7 @@ const mockRerank = vi.hoisted(() => vi.fn());
 
 vi.mock('cohere-ai', () => ({
   CohereClient: class MockCohereClient {
-    rerank = mockRerank;
+    v2 = { rerank: mockRerank };
     constructor(_opts: Record<string, unknown>) {}
   },
 }));

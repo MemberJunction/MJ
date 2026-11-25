@@ -8,6 +8,7 @@ import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { GetReadOnlyProvider } from '../util.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /**
  * Input type for batch query execution - allows running multiple queries in a single network call
@@ -163,6 +164,7 @@ export class RunQueriesWithCacheCheckOutput {
   errorMessage?: string;  // case-violation-ok-legacy-back-compat: the property name is the GraphQL schema field name — renaming it breaks every client query
 }
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RunQueryResolver extends ResolverBase {
   private async findQuery(md: IMetadataProvider, QueryID: string, QueryName?: string, CategoryID?: string, CategoryPath?: string, refreshMetadataIfNotFound: boolean = false): Promise<MJQueryEntity | null> {
@@ -248,6 +250,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: QueryID,
       QueryName: queryName || 'Unknown Query',
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -298,6 +301,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: result.QueryID || '',
       QueryName: QueryName,
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -361,6 +365,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: QueryID,
       QueryName: queryName || 'Unknown Query',
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -410,6 +415,7 @@ export class RunQueryResolver extends ResolverBase {
       QueryID: result.QueryID || '',
       QueryName: QueryName,
       Success: result.Success ?? false,
+      // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
       Results: JSON.stringify(result.Results ?? null),
       RowCount: result.RowCount ?? 0,
       TotalRowCount: result.TotalRowCount ?? 0,
@@ -465,6 +471,7 @@ export class RunQueryResolver extends ResolverBase {
         QueryID: result.QueryID || inputItem.QueryID || '',
         QueryName: result.QueryName || inputItem.QueryName || 'Unknown Query',
         Success: result.Success ?? false,
+        // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
         Results: JSON.stringify(result.Results ?? null),
         RowCount: result.RowCount ?? 0,
         TotalRowCount: result.TotalRowCount ?? 0,
@@ -517,6 +524,7 @@ export class RunQueryResolver extends ResolverBase {
         QueryID: result.QueryID || inputItem.QueryID || '',
         QueryName: result.QueryName || inputItem.QueryName || 'Unknown Query',
         Success: result.Success ?? false,
+        // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
         Results: JSON.stringify(result.Results ?? null),
         RowCount: result.RowCount ?? 0,
         TotalRowCount: result.TotalRowCount ?? 0,
@@ -585,6 +593,7 @@ export class RunQueryResolver extends ResolverBase {
         queryIndex: result.queryIndex,
         queryId: result.queryId,
         status: result.status,
+        // fls-guard: saved-query rows. Its SQL is refused before it runs if it reads a field the caller is denied, unless the query has `MJ: Query Permissions` rows, which authorize it by role alone
         Results: result.results ? JSON.stringify(result.results) : undefined,
         maxUpdatedAt: result.maxUpdatedAt,
         rowCount: result.rowCount,

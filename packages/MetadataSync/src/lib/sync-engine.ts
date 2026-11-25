@@ -23,6 +23,7 @@ import { SyncMetadataEngine } from './sync-metadata-engine';
 import { ParseEnvReference, OptionalEnvMissingError, EnvVariableNotSetError } from './env-reference';
 import { EnvDisplayMask, EnvSourceLabel, MIN_MASKED_VALUE_LENGTH } from './env-display';
 import { LOOKUP_OPTIONAL_MESSAGE, ParseLookupCreateFields, SplitLookupReference } from './lookup-reference';
+import type { LookupSqlCriterion, LookupSqlSource } from './lookup-sql';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
@@ -104,6 +105,8 @@ export interface SyncResolutionCollector {
   fieldPrefix: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Field name → names of the variables whose values went into that field. Filled only when present. */
   EnvFields?: Map<string, Set<string>>;
+  /** Field name → the `@lookup` its value came from, for the SQL log (#5626). Filled only when present. */
+  LookupSources?: Map<string, LookupSqlSource>;
 }
 
 /**
@@ -164,6 +167,8 @@ export class SyncEngine {
   public readonly ResolvedEnvVariables = new Set<string>();
   /** Runs right before a `@lookup:…?create` lookup saves the record it creates, with the env-sourced fields of that record. */
   public BeforeLookupCreateSave: ((entity: BaseEntity, envFields: ReadonlyMap<string, ReadonlySet<string>>) => void) | null = null;
+  /** Runs right before a `@lookup:…?create` lookup saves the record it creates, with the lookup that creates it. */
+  public BeforeLookupCreateSaveSource: ((entity: BaseEntity, lookup: LookupSqlSource) => void) | null = null;
 
   public SetMetadataEngine(engine: SyncMetadataEngine): void {
     this.syncMetadataEngine = engine;
@@ -499,6 +504,9 @@ export class SyncEngine {
 
       // Collector for nested resolutions within this lookup
       const nestedResolutions: NestedSyncResolution[] = [];
+      // What the lookup matched on, so the SQL log can match on it too
+      const sqlCriteria: LookupSqlCriterion[] = [];
+      let criteriaFromEnv = false;
       // Criteria and create fields whose values came from @env:, for the lookup messages
       const lookupEnvFields = new Map<string, Set<string>>();
 
@@ -512,7 +520,7 @@ export class SyncEngine {
 
         // Recursively process the field value to resolve any nested @ commands
         // Create a temporary collector to capture nested resolutions and env-sourced criteria
-        const nestedCollector: SyncResolutionCollector = { notes: [], fieldPrefix: '', EnvFields: new Map() };
+        const nestedCollector: SyncResolutionCollector = { notes: [], fieldPrefix: '', EnvFields: new Map(), LookupSources: new Map() };
         const processedValue = await this.ProcessFieldValue(
           rawFieldValue,
           baseDir,
@@ -526,6 +534,9 @@ export class SyncEngine {
         );
 
         const criteriaVariables = this.addLookupEnvField(lookupEnvFields, lookupFieldName.trim(), nestedCollector);
+        const nestedSource = nestedCollector.LookupSources?.get(lookupFieldName);
+        criteriaFromEnv = criteriaFromEnv || Boolean(criteriaVariables) || nestedSource?.EnvSourced === true;
+        sqlCriteria.push({ FieldName: lookupFieldName.trim(), Value: nestedSource ?? String(processedValue) });
 
         // If the raw value was a lookup expression that got resolved, track it as nested
         if (rawFieldValue.startsWith(METADATA_KEYWORDS.LOOKUP) && rawFieldValue !== processedValue) {
@@ -564,7 +575,11 @@ export class SyncEngine {
         }
       }
 
-      const resolvedValue = await this.ResolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value, recordProvider, lookupEnvFields);
+      const lookupSource: LookupSqlSource = { Expression: value, EntityName: entityName, Criteria: sqlCriteria, EnvSourced: criteriaFromEnv };
+      const resolvedValue = await this.ResolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value, recordProvider, lookupEnvFields, lookupSource);
+      if (fieldName) {
+        resolutionCollector?.LookupSources?.set(fieldName, lookupSource);
+      }
       const sourceVariables = this.recordCopiedEnvValue(resolvedValue, resolutionCollector, fieldName);
 
       // Track the resolution if collector is provided
@@ -693,7 +708,8 @@ export class SyncEngine {
     allowDefer: boolean = false,
     originalValue?: string,
     recordProvider?: IMetadataProvider,
-    envFields?: ReadonlyMap<string, ReadonlySet<string>>
+    envFields?: ReadonlyMap<string, ReadonlySet<string>>,
+    lookupSource?: LookupSqlSource
   ): Promise<string> {
     // Criteria and create fields whose values came from @env: print as labels
     const envMask = new EnvDisplayMask(envFields);
@@ -818,16 +834,24 @@ export class SyncEngine {
           const escaped = fieldValue.replace(/'/g, "''");
           filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(`'${escaped}'`)}`);
         } else {
-          filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+          // An unquoted value is spliced into the SQL verbatim, so it must be a pure
+          // numeric/boolean token — anything else (e.g. `1 OR 1=1`) would rewrite the lookup.
+          const trimmedLookupVal = fieldValue.trim();
+          if (!quotes && !/^-?\d+(\.\d+)?$/.test(trimmedLookupVal) && !/^(true|false)$/i.test(trimmedLookupVal)) {
+            throw new Error(`Lookup value '${fieldValue}' for non-string field '${fieldName}' on entity '${entityName}' must be a numeric or boolean literal`);
+          }
+          const formattedVal = quotes ? fieldValue.replace(/'/g, "''") : trimmedLookupVal;
+          filterParts.push(`${fieldName} = ${quotes}${formattedVal}${quotes}`);
         }
       }
     }
-    
+
     const extraFilter = filterParts.join(' AND ');
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: extraFilter,
       MaxRows: 1,
+      SkipTotalRowCount: true,
       // BypassCache: lookups during a push must always go to the DB.
       // The provider's RunView cache can return stale or filtered results
       // (especially across the LOWER()-based case-insensitive lookups
@@ -893,6 +917,9 @@ export class SyncEngine {
       console.log(`📝 Auto-creating ${entityName} record where ${this.describeLookupFilter(lookupFields, envMask)}`);
       if (envFields) {
         this.BeforeLookupCreateSave?.(newEntity, envFields);
+      }
+      if (lookupSource) {
+        this.BeforeLookupCreateSaveSource?.(newEntity, lookupSource);
       }
       const saved = await newEntity.Save();
       if (!saved) {
@@ -976,9 +1003,10 @@ export class SyncEngine {
     allowDefer: boolean = false,
     originalValue?: string,
     recordProvider?: IMetadataProvider,
-    envFields?: ReadonlyMap<string, ReadonlySet<string>>
+    envFields?: ReadonlyMap<string, ReadonlySet<string>>,
+    lookupSource?: LookupSqlSource
   ): Promise<string> {
-    return this.ResolveLookup(entityName, lookupFields, autoCreate, createFields, batchContext, allowDefer, originalValue, recordProvider, envFields);
+    return this.ResolveLookup(entityName, lookupFields, autoCreate, createFields, batchContext, allowDefer, originalValue, recordProvider, envFields, lookupSource);
   }
 
   /**
@@ -1504,17 +1532,41 @@ export class SyncEngine {
         throw new Error(`Missing primary key value for ${pk.Name} in entity ${entityName}`);
       }
       
+      // Reject non-primitive or non-finite values from untrusted JSON metadata (e.g. arrays/objects/NaN)
+      // before building either quoted or unquoted SQL primary-key predicates.
+      if (
+        (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') ||
+        (typeof value === 'number' && !Number.isFinite(value))
+      ) {
+        throw new Error(`Primary key value for '${pk.Name}' on entity '${entityName}' must be a string, finite number, or boolean primitive`);
+      }
+
       // Check if field needs quotes
       const field = entityInfo.Fields.find(f => f.Name === pk.Name);
       const quotes = field?.NeedsQuotes ? "'" : '';
-      const escapedValue = field?.NeedsQuotes && typeof value === 'string' ? value.replace(/'/g, "''") : value;
-      filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
+      if (!quotes) {
+        // An unquoted value is spliced into the SQL verbatim, so string forms must also be pure
+        // numeric/boolean tokens — anything else would splice SQL into the primary-key filter.
+        if (typeof value === 'string') {
+          const trimmedPk = value.trim();
+          if (!/^-?\d+(\.\d+)?$/.test(trimmedPk) && !/^(true|false)$/i.test(trimmedPk)) {
+            throw new Error(`Primary key value '${value}' for non-string field '${pk.Name}' on entity '${entityName}' must be a numeric or boolean literal`);
+          }
+          filters.push(`${pk.Name} = ${trimmedPk}`);
+        } else {
+          filters.push(`${pk.Name} = ${String(value)}`);
+        }
+      } else {
+        const escapedValue = String(value).replace(/'/g, "''");
+        filters.push(`${pk.Name} = '${escapedValue}'`);
+      }
     }
     
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: filters.join(' AND '),
-      MaxRows: 1
+      MaxRows: 1,
+      SkipTotalRowCount: true
     }, this.contextUser);
     
     // If no record found, return null without attempting to load
@@ -1533,6 +1585,20 @@ export class SyncEngine {
       this.syncMetadataEngine.addEntityToCache(entityName, loadedEntity);
     }
     return loadedEntity;
+  }
+
+  /**
+   * Loads a record by primary key straight from the database, never from the preload cache, on
+   * `recordProvider` when one is passed (so the read joins that provider's transaction). Returns
+   * `null` when no row exists. A hit is not cached. Used where the cache can be stale inside the
+   * push transaction, such as a row an earlier delete's cascade removed (#4935).
+   */
+  async LoadEntityFromDatabase(entityName: string, primaryKey: Record<string, unknown>, recordProvider?: IMetadataProvider): Promise<BaseEntity | null> {
+    const entityInfo = this.GetEntityInfo(entityName);
+    if (!entityInfo) {
+      throw new Error(`Entity not found: ${entityName}`);
+    }
+    return this.loadFromDatabase(entityName, entityInfo, primaryKey, recordProvider, false);
   }
 
   /** @deprecated Use {@link LoadEntity}. */

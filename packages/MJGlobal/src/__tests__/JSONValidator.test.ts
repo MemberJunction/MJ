@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { JSONValidator } from '../JSONValidator';
 import { ValidationErrorType } from '../ValidationTypes';
 
@@ -250,10 +250,83 @@ describe('JSONValidator', () => {
       expect(clean).toEqual([{ a: 1 }, { b: 2 }]);
     });
 
+    it('keeps keys that clean to the same name unchanged instead of overwriting one (#4827)', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const clean = validator.cleanValidationSyntax<Record<string, unknown>>({
+        'Is it urgent?': 'yes',
+        'Is it urgent': 'no',
+        'name?': 'John',
+      });
+      expect(clean).toEqual({ 'Is it urgent?': 'yes', 'Is it urgent': 'no', name: 'John' });
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0][0]).toContain('Is it urgent');
+      warn.mockRestore();
+    });
+
+    it('does not warn when no keys collide', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      validator.cleanValidationSyntax({ 'a?': 1, 'b*': 2 });
+      expect(warn).not.toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
     it('should pass primitives and null through unchanged', () => {
       expect(validator.cleanValidationSyntax<string>('hi')).toBe('hi');
       expect(validator.cleanValidationSyntax<null>(null)).toBeNull();
       expect(validator.cleanValidationSyntax<undefined>(undefined)).toBeUndefined();
+    });
+
+    it('should preserve data keys containing colons when trailing segments are not validation rules (#4827)', () => {
+      const input = {
+        Formats: {
+          '16:9': { Width: 1920, Height: 1080 },
+          '9:16': { Width: 1080, Height: 1920 },
+          '1:1': { Width: 1080, Height: 1080 },
+          '4:5': { Width: 1080, Height: 1350 },
+        },
+        Assets: {
+          'brand:logo': '/logo.svg',
+          'http://localhost:8080': { status: 'up' },
+        },
+      };
+      const cleaned = validator.CleanValidationSyntax<typeof input>(input);
+      expect(cleaned).toEqual(input);
+    });
+
+    it('should strip only the trailing recognized validation rule when a colon-bearing key also has a rule suffix', () => {
+      const dirty = {
+        '16:9:object': { 'Width:number': 1920, 'Height:number?': 1080 },
+        'brand:tags:array:[1+]': ['primary'],
+      };
+      const cleaned = validator.CleanValidationSyntax<Record<string, unknown>>(dirty);
+      expect(cleaned).toEqual({
+        '16:9': { Width: 1920, Height: 1080 },
+        'brand:tags': ['primary'],
+      });
+    });
+
+    it('should handle colon-bearing keys with rule suffixes, optional colons, and rule whitespace', () => {
+      const dirty = {
+        '16:9:string?': 'ratio',
+        'brand:logo:string:!empty': 'logo.svg',
+        'items:[1+]:?': ['item1'],
+        'optionalField:?': 'val',
+        'http://example.com:string': 'url',
+        'age : number': 30,
+        'tags : [1+]': ['t1'],
+        'notes : !empty': 'good',
+      };
+      const cleaned = validator.CleanValidationSyntax<Record<string, unknown>>(dirty);
+      expect(cleaned).toEqual({
+        '16:9': 'ratio',
+        'brand:logo': 'logo.svg',
+        'items': ['item1'],
+        'optionalField': 'val',
+        'http://example.com': 'url',
+        'age': 30,
+        'tags': ['t1'],
+        'notes': 'good',
+      });
     });
   });
 });

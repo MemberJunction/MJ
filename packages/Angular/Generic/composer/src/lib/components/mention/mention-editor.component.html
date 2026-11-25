@@ -59,11 +59,17 @@
   @if (showMentionDropdown && enableMentions) {
     <mj-mention-dropdown
       [suggestions]="mentionSuggestions"
+      [ActiveTrigger]="ActiveTriggerChar"
+      [SearchQuery]="ActiveMentionQuery"
+      [PopulationFilter]="MentionPopulationFilter"
+      [SearchField]="MentionSearchField"
       [position]="mentionDropdownPosition"
       [showAbove]="mentionDropdownShowAbove"
       [alignRight]="mentionDropdownAlignRight"
       [useFixedPositioning]="true"
       [visible]="true"
+      (PopulationFilterChange)="OnMentionPopulationFilterChanged($event)"
+      (SearchFieldChange)="OnMentionSearchFieldChanged($event)"
       (suggestionSelected)="onMentionSelected($event)"
       (closed)="closeMentionDropdown()">
     </mj-mention-dropdown>

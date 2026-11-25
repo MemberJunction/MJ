@@ -17,6 +17,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingStatus"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.230Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         },
         {
@@ -25,6 +29,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingExpectedShards"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.238Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         },
         {
@@ -33,6 +41,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingCapturedSamples"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.245Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         },
         {
@@ -41,6 +53,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingGaps"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.260Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         },
         {
@@ -49,6 +65,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingAssemblyVersion"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.267Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         },
         {
@@ -57,6 +77,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingFileID"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.282Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         },
         {
@@ -65,6 +89,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Sessions&Name=RecordingMedia"
+          },
+          "sync": {
+            "lastModified": "2026-10-28T00:36:05.289Z",
+            "checksum": "7a30e2a99a4d8b420d7d3342e5a6b21d830bbe2f419782becacf7b0cc8e3a90e"
           }
         }
       ]

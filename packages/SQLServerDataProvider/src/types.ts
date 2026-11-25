@@ -7,7 +7,7 @@
  * @module @memberjunction/sqlserver-dataprovider/types
  */
 
-import { ProviderConfigDataBase, UserInfo } from '@memberjunction/core';
+import { ProviderConfigDataBase, UserInfo, DiagnosticContext } from '@memberjunction/core';
 import sql from 'mssql';
 
 /**
@@ -87,6 +87,8 @@ export interface InternalSQLOptions {
   contextUser?: UserInfo;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** The longest the statement may run, in milliseconds, before it is cancelled on the server */
   timeoutMs?: number;  // case-violation-ok-legacy-back-compat: matches the lower-case members of this options shape and of ExecuteSQLOptions, which it mirrors
+  /** Captured diagnostic context preserved across transaction queues */
+  diagnosticContext?: DiagnosticContext;  // case-violation-ok-legacy-back-compat: matches the lower-case members of this options shape
 }
 
 /**

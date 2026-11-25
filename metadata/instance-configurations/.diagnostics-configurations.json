@@ -1,0 +1,380 @@
+[
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Capture.Enabled",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Enable Diagnostic Session Capture",
+      "Description": "Allow administrators to start diagnostic recording sessions and assemble .mjdiag bundles on this instance.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000001"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.231Z",
+      "checksum": "dd1c987bcf9f25ed5263e8f84b99e83c448f7d74e5184b74ec8f7ddff7486c5e"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.SelfServiceRecording",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Allow Self-Service Problem Recording",
+      "Description": "When enabled, non-admin users may start a self-scoped diagnostic session from 'Report a problem'; resulting bundles go to the local administrator queue.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000002"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.245Z",
+      "checksum": "74a3f491f9d7960a06e34ed12af162a25ec2c599df1da47726e14830fa7d4180"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.RequireLiteralScrubbing",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Require SQL & Filter Literal Scrubbing",
+      "Description": "Forces ScrubLiterals = true on all sessions and bundles, replacing inline SQL and filter string/number/UUID literals with ? placeholders.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000003"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.259Z",
+      "checksum": "9cbe896046d288d32452dce7e517b6ec74e155a0e81142fd7fc1875dea7e8c29"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.Enabled",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Allow External Bundle Transmission",
+      "Description": "Permits administrators holding 'Diagnostics: Send Externally' to transmit encrypted .mjdiag.enc bundles to configured external destinations.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000004"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.270Z",
+      "checksum": "c9722629dc5970fc5c876e261fccd160ec821f18340916c4dacae9fad2d3243a"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.Destinations",
+      "Value": "[]",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Allowed External Bundle Destinations",
+      "Description": "JSON array of allowed external destination identifiers: MJC, CustomerCollector, StorageAccount.",
+      "DefaultValue": "[]"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000005"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.281Z",
+      "checksum": "2ade5118b55cb5777916793ab224de5447dd74b5a328ab538b343b93a2a22e9f"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.CollectorUrl",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Customer Collector Intake Base URL",
+      "Description": "Public API URL of the collector (its MJAPI_PUBLIC_URL, for example https://support.example.com/api). The sender appends /diagnostics/intake/v1 to it to reach the intake and to build the signed audience. Empty means no external collector.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000006"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.297Z",
+      "checksum": "06e4e2b11d7ac04fc195de3b4409111a7a96e906f265586a3555a8e256f6c715"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.MaxSessionMinutes",
+      "Value": "60",
+      "ValueType": "number",
+      "Category": "Diagnostics",
+      "DisplayName": "Maximum Diagnostic Session Duration (Minutes)",
+      "Description": "Maximum duration in minutes allowed for a single diagnostic recording session.",
+      "DefaultValue": "60"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000007"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.309Z",
+      "checksum": "57b06ec2a2ea0b9f00b10c2c0e6fa9bd712ca850cb87ccf031e47022c827ec45"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.RetentionDays",
+      "Value": "14",
+      "ValueType": "number",
+      "Category": "Diagnostics",
+      "DisplayName": "Local Diagnostic Retention Period (Days)",
+      "Description": "Number of days to retain local diagnostic sessions, chunks, and bundles before automatic purge.",
+      "DefaultValue": "14"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000008"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.320Z",
+      "checksum": "52dc36ae3fa85954f74c9f782c5f49435ae2ff3bd0393b65d8f0fe77c0617464"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.Enabled",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Enable Standard MJAPI Bundle Intake",
+      "Description": "Enables the /diagnostics/intake/v1 endpoints on this MJAPI instance to receive, verify, malware-scan, and store external .mjdiag.enc bundles.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000009"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.332Z",
+      "checksum": "9736c321bdff47d747040b246604759422b0c264366175f492355f45026360d1"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.StorageProviderID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Intake Verified MJStorage Provider ID",
+      "Description": "MJ: File Storage Providers ID where verified, malware-clean .mjdiag bundles are promoted and stored.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000010"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.344Z",
+      "checksum": "305c96b9c83949306a5e681c06060ebf20ecae3123cfae0374b37a1534bd2857"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.QuarantineStorageProviderID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Intake Quarantine MJStorage Provider ID",
+      "Description": "Optional quarantine MJ: File Storage Providers ID where incoming payloads are staged during malware scanning before promotion.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000011"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.355Z",
+      "checksum": "2934893d61464bbf624a79f119cd22ec6aa8cfe95e6c9b74d6ae7e7ce7ef68ff"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.DecryptOnIngest",
+      "Value": "true",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Decrypt & Verify Bundles on Ingest",
+      "Description": "Decrypt incoming .mjdiag.enc envelopes using the receiver's X25519 private key in MJ: Credentials, run VerifyBundleArchive, and index manifest/findings.",
+      "DefaultValue": "true"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000012"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.367Z",
+      "checksum": "58f4201cf30c664777caa533f6feb0a47ef8bad29b16ce1a09b3ab3151039727"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.RetentionDays",
+      "Value": "30",
+      "ValueType": "number",
+      "Category": "Diagnostics",
+      "DisplayName": "Received Bundle Retention Period (Days)",
+      "Description": "Number of days to retain received diagnostic bundles before automatic purge.",
+      "DefaultValue": "30"
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000013"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.379Z",
+      "checksum": "823bfa216f1bbbbf039cf8904a8e32a4ed5def9bdf40ebe8065f67e8b9a71f98"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.OnBundleReceivedActionID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Post-Intake Action ID",
+      "Description": "Optional MJ: Actions ID invoked asynchronously after a received bundle passes cryptographic, structural, and malware verification.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "8F71C490-5B21-4E3A-9C14-201000000014"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.390Z",
+      "checksum": "331c4bfc2dafb9cb3aece3e19a7eff920e64802a30d89beef8bfcca0a13fb5ff"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.Intake.KeyPairCredentialID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Intake Receiver Key Credential ID",
+      "Description": "MJ: Credentials ID (type Diagnostics Intake Key) holding this collector's keys as JSON values: keyId, publicKey (X25519 SPKI base64) and privateKey (PKCS#8 base64), plus signingPublicKey and signingPrivateKey (the Ed25519 key that signs the public key). Each public key must match its private key. Intake stays disabled while this is empty or invalid.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "A28A085F-7988-45D6-8E3A-74F307293ED9"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.401Z",
+      "checksum": "41515caa03203586090d4456c3c509ff6145280e84a92c15cf4fbd700caf9daa"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.SenderCredentialID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Sender Key Credential ID",
+      "Description": "MJ: Credentials ID (type Diagnostics Sender Key) holding the Ed25519 key this installation signs collector requests with. Set by Diagnostics.EnrolSender; empty means this installation is not enrolled.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "98876DA9-9923-42DD-861B-55367B1E4947"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.412Z",
+      "checksum": "8300b14c03a69a7f1c074d973fe81e05dad2afed3c52f6b5f2fe706f187d72f6"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.SenderKeyID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Sender Key ID",
+      "Description": "Key ID of this installation's enrolled Ed25519 sender key, sent as keyId in every signed collector request. Set by Diagnostics.EnrolSender.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "D5EFF460-0E62-4E21-B88A-889FD3531AF6"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.422Z",
+      "checksum": "1377bd3150090543fe70ee3b4070744a95c450c2616358942fbc266bcb0d3d2c"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.CollectorPublicKeyBase64",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Pinned Collector Public Key",
+      "Description": "The collector's X25519 public key (SPKI base64) returned at enrolment. Set by Diagnostics.EnrolSender.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "ECDC9B5B-9B62-4EED-A7DB-B271F0D8C0B6"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.434Z",
+      "checksum": "3e92c3c20f3ce5958d378301302ba314dfa0e6409df260ae725f2a7fece9a18d"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.CollectorSigningPublicKeyBase64",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Pinned Collector Signing Key",
+      "Description": "The collector's Ed25519 signing public key (SPKI base64) returned at enrolment. Every send checks the collector's public key signature against it and refuses on a mismatch. Set by Diagnostics.EnrolSender.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "ADF504AD-CF53-4206-895E-3DD884627DA9"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.445Z",
+      "checksum": "d21a61fc40e0ef061dbd0c4728789e060862b06dbc293a85db3ddb2d610d2170"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.InstallID",
+      "Value": "",
+      "ValueType": "string",
+      "Category": "Diagnostics",
+      "DisplayName": "Installation ID",
+      "Description": "Stable ID of this installation, used as installId when it sends diagnostic bundles to a collector. Generated once when empty.",
+      "DefaultValue": ""
+    },
+    "primaryKey": {
+      "ID": "5377B6BF-9029-4650-8BB1-CA7A8AC1ABDC"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.456Z",
+      "checksum": "909a6bf5222581e80783ea69b11f093c8917b83cdcd81906e660cc1e72840ded"
+    }
+  },
+  {
+    "fields": {
+      "FeatureKey": "Diagnostics.External.AllowUnscrubbedSend",
+      "Value": "false",
+      "ValueType": "boolean",
+      "Category": "Diagnostics",
+      "DisplayName": "Allow Unscrubbed External Send",
+      "Description": "When false, a bundle built without SQL & filter literal scrubbing cannot be sent to an external collector. When true, such a bundle can be sent to the collector at Diagnostics.External.CollectorUrl.",
+      "DefaultValue": "false"
+    },
+    "primaryKey": {
+      "ID": "2EF677D5-9C0F-466A-A101-B8BD817BF48E"
+    },
+    "sync": {
+      "lastModified": "2026-11-03T23:45:58.468Z",
+      "checksum": "55be6128c56069a51faac946e77db69e92d19e0dd457f7a682f89254af327484"
+    }
+  }
+]

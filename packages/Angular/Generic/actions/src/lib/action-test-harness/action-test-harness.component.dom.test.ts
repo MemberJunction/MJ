@@ -3,7 +3,8 @@ import { Component, Directive, EventEmitter, Input, Output } from '@angular/core
 import { FormsModule } from '@angular/forms';
 import type { MJActionEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import type { ActionResult } from '@memberjunction/actions-base';
-import { renderComponentFixture, query } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
+import { MJSwitchComponent } from '@memberjunction/ng-ui-components';
 import { ActionTestHarnessComponent } from './action-test-harness.component';
 
 /**
@@ -23,7 +24,7 @@ class AccordionBodyStub {}
 @Component({ standalone: true, selector: 'mj-alert', template: '<ng-content></ng-content>' })
 class AlertStub { @Input() Variant = ''; @Input() Title = ''; @Input() Dismissible = false; @Input() Icon = ''; }
 
-const CHILDREN = [FormsModule, AccordionStub, AccordionTitleStub, AccordionBodyStub, AlertStub];
+const CHILDREN = [FormsModule, AccordionStub, AccordionTitleStub, AccordionBodyStub, AlertStub, MJSwitchComponent];
 const ACTION = { Name: 'Send Email' } as unknown as MJActionEntity;
 const PARAMS = [
   { ID: 'p1', Name: 'to', Type: 'Input', IsRequired: true, IsArray: false, DefaultValue: null, Description: 'Recipient' },
@@ -77,6 +78,47 @@ describe('ActionTestHarnessComponent (DOM)', () => {
     f.componentInstance.ClearResults();
     expect(f.componentInstance.ExecutionResult).toBeNull();
     expect(f.componentInstance.ExecutionError).toBeNull();
+  });
+
+  it('shows its own action buttons by default and hides them when a host renders them instead', () => {
+    const f = render();
+    expect(query(f, '.action-buttons')).not.toBeNull();
+    f.componentRef.setInput('ShowActionButtons', false);
+    f.detectChanges();
+    expect(query(f, '.action-buttons')).toBeNull();
+  });
+
+  it('hides its heading when the host already names the action, and keeps the Skip Action Log switch', () => {
+    const f = render();
+    expect(query(f, '.harness-header h3')?.textContent).toContain('Send Email');
+    f.componentRef.setInput('ShowTitle', false);
+    f.detectChanges();
+    expect(query(f, '.harness-header h3')).toBeNull();
+    expect(query(f, '.harness-header [role="switch"]')).not.toBeNull();
+  });
+
+  it('makes Skip Action Log a named, keyboard-reachable switch bound to SkipActionLog', async () => {
+    const f = render();
+    await f.whenStable();
+    const sw = query(f, '.harness-header button[role="switch"]') as HTMLButtonElement;
+    expect(sw).not.toBeNull();
+    // A real button: in the tab order, not display:none.
+    expect(sw.tabIndex).toBe(0);
+    const label = query(f, `label[for="${sw.id}"]`);
+    expect(label?.textContent?.trim()).toBe('Skip Action Log');
+    expect(sw.getAttribute('aria-checked')).toBe('false');
+    sw.click();
+    f.detectChanges();
+    expect(f.componentInstance.SkipActionLog).toBe(true);
+    expect(sw.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('announces a state change on ClearResults and ResetParams so a host footer can refresh', () => {
+    const f = render({ ExecutionResult: { Success: true } as unknown as ActionResult });
+    const changes = capture<void>(f.componentInstance.StateChange);
+    f.componentInstance.ClearResults();
+    f.componentInstance.ResetParams();
+    expect(changes.length).toBeGreaterThanOrEqual(2);
   });
 
   it('re-initializes the parameter model and clears results on ResetParams', () => {

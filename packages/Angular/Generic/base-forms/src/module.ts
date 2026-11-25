@@ -25,7 +25,7 @@ import { MJReactModule } from '@memberjunction/ng-react';
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJSafeRichHtmlPipe, SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MjIconPickerComponent, MJBottomSheetComponent, MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 import { InteractiveFormPanelComponent } from './lib/interactive-form/interactive-form-panel.component';
 import { MjEntityFormHostComponent } from './lib/host/entity-form-host.component';
@@ -38,6 +38,10 @@ import { MjRecordLinksDrawerComponent } from './lib/links/record-links-drawer.co
 import { MjRecordLinkDirective } from './lib/links/record-link.directive';
 import { MjRecordLinkComponent } from './lib/links/record-link.component';
 import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-preview-popover.component';
+import { MjRecordCommentsComponent } from './lib/comments/record-comments.component';
+import { MjCommentCardDriverHostComponent } from './lib/comments/comment-card-driver-host.component';
+import { FieldSuggestionCardComponent } from './lib/comments/field-suggestion-card.component';
+import { MjFoldedSubtypeSectionComponent } from './lib/subtype-ui-driver/folded-subtype-section.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -84,7 +88,11 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     MjRecordLinksDrawerComponent,
     MjRecordLinkDirective,
     MjRecordLinkComponent,
-    MjRecordPreviewPopoverComponent
+    MjRecordPreviewPopoverComponent,
+    MjRecordCommentsComponent,
+    MjCommentCardDriverHostComponent,
+    FieldSuggestionCardComponent,
+    MjFoldedSubtypeSectionComponent
   ],
   imports: [
     CommonModule,
@@ -104,6 +112,8 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     SharedGenericModule,
     MJButtonDirective,
     MjIconPickerComponent,
+    MJBottomSheetComponent,
+    MJConfirmDialogComponent,
     RecordCloneSlideInComponent
   ],
   exports: [
@@ -131,7 +141,11 @@ import { MjRecordPreviewPopoverComponent } from './lib/preview-popover/record-pr
     MjRecordLinksDrawerComponent,
     MjRecordLinkDirective,
     MjRecordLinkComponent,
-    MjRecordPreviewPopoverComponent
+    MjRecordPreviewPopoverComponent,
+    MjRecordCommentsComponent,
+    MjCommentCardDriverHostComponent,
+    FieldSuggestionCardComponent,
+    MjFoldedSubtypeSectionComponent
   ]
 })
 export class BaseFormsModule { }

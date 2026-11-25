@@ -38,6 +38,7 @@ import { InstallerError } from '../errors/InstallerError.js';
 import { ProcessRunner } from '../adapters/ProcessRunner.js';
 import { FileSystemAdapter } from '../adapters/FileSystemAdapter.js';
 import { PackageManagerCommands, type PackageManagerType } from '../models/PackageManager.js';
+import { TagToNpmVersion } from './DependencyPhase.js';
 import { ClassifyTurboFailures } from '../util/turboOutput.js';
 
 /**
@@ -63,6 +64,26 @@ export interface CodeGenContext {
   VersionTag?: string;
   /** Package manager for build/manifest shell-outs (`'pnpm'` default, `'npm'` override). */
   PackageManager: PackageManagerType;
+}
+
+/** One place a package may be installed, and whether the detected layout puts it there. */
+interface NodeModulesCandidate {
+  Path: string;
+  Expected: boolean;
+}
+
+/**
+ * Names every checked `node_modules` directory for a missing-artifact message, the detected
+ * layout's MJAPI location first, so the message points at the one path that should exist.
+ */
+function describeCandidates(dir: string, candidates: readonly NodeModulesCandidate[]): string {
+  const dirOf = (candidate: NodeModulesCandidate): string => {
+    const rel = path.relative(dir, candidate.Path).split(path.sep);
+    return `${rel.slice(0, rel.lastIndexOf('node_modules') + 1).join('/')}/`;
+  };
+  const expected = candidates.filter((c) => c.Expected).map(dirOf);
+  const others = candidates.filter((c) => !c.Expected).map(dirOf);
+  return `expected under ${expected.join(', ')} for this layout; also checked ${others.join(' and ')}`;
 }
 
 /**
@@ -269,12 +290,34 @@ export class CodeGenPhase {
   // ---------------------------------------------------------------------------
 
   /**
+   * Where a package can sit in `node_modules` for this install, in lookup order: the repo root
+   * (npm hoists workspace packages there), then MJAPI's own `node_modules` for the detected layout
+   * (pnpm links a workspace package into each dependent and never creates the root entry,
+   * MemberJunction/MJ#4599, #4707), then MJAPI's `node_modules` for the other layout. MJAPI lives at
+   * `packages/MJAPI` in a monorepo install and at `apps/MJAPI` in a distribution install
+   * (MemberJunction/MJ#4562). The detected layout's MJAPI entry is marked `Expected`.
+   *
+   * @param dir - Repo root directory.
+   * @param packagePath - Path segments under `node_modules` (e.g. `['mj_generatedentities']`).
+   */
+  private async nodeModulesCandidates(dir: string, packagePath: string[]): Promise<NodeModulesCandidate[]> {
+    const monorepoApi = path.join(dir, 'packages', 'MJAPI', 'node_modules', ...packagePath);
+    const distributionApi = path.join(dir, 'apps', 'MJAPI', 'node_modules', ...packagePath);
+    const isDistribution = await this.isDistributionLayout(dir);
+    return [
+      { Path: path.join(dir, 'node_modules', ...packagePath), Expected: false },
+      { Path: isDistribution ? distributionApi : monorepoApi, Expected: true },
+      { Path: isDistribution ? monorepoApi : distributionApi, Expected: false },
+    ];
+  }
+
+  /**
    * Resolve the CLI command and arguments.
    *
-   * Tries the local CLI binary first (used by the full monorepo where
-   * `@memberjunction/cli` is a workspace dependency). Falls back to
-   * the local CLI binary. Falls back to `npx @memberjunction/cli@<version>` for
-   * the distribution layout where the CLI may not be installed locally.
+   * Tries a locally installed CLI binary first, in every location
+   * {@link nodeModulesCandidates} lists (the full monorepo has `@memberjunction/cli`
+   * as a workspace dependency). Falls back to `npx @memberjunction/cli@<version>`
+   * for the distribution layout where the CLI may not be installed locally.
    *
    * @param dir - Repo root directory.
    * @param versionTag - Release tag (e.g., `"v5.9.0"`) for version pinning.
@@ -287,10 +330,7 @@ export class CodeGenPhase {
     versionTag: string | undefined,
     cliArgs: string[]
   ): Promise<{ cmd: string; args: string[] }> {
-    const candidates = [
-      path.join(dir, 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
-      path.join(dir, 'apps', 'MJAPI', 'node_modules', '@memberjunction', 'cli', 'bin', 'run.js'),
-    ];
+    const candidates = (await this.nodeModulesCandidates(dir, ['@memberjunction', 'cli', 'bin', 'run.js'])).map((c) => c.Path);
 
     for (const localCli of candidates) {
       if (await this.fileSystem.FileExists(localCli)) {
@@ -301,7 +341,7 @@ export class CodeGenPhase {
     // Fall back to the package manager's remote-exec with version pinning
     // (distribution layout): `npx <spec>` / `pnpm dlx <spec>`.
     const cliPackage = versionTag
-      ? `@memberjunction/cli@${versionTag.replace(/^v/, '')}`
+      ? `@memberjunction/cli@${TagToNpmVersion(versionTag)}`
       : '@memberjunction/cli';
 
     const dlx = pm.Dlx(cliPackage, cliArgs);
@@ -426,8 +466,9 @@ export class CodeGenPhase {
    *
    * Two-tier check:
    * - **Critical**: `mj_generatedentities` must be resolvable by MJAPI (it can't start without it): the
-   *   repo-root `node_modules` under npm hoisting, or `apps/MJAPI/node_modules` under pnpm, which links
+   *   repo-root `node_modules` under npm hoisting, or MJAPI's own `node_modules` under pnpm, which links
    *   workspace packages into each dependent and never populates the root (MemberJunction/MJ#4599, #4707).
+   *   MJAPI is `packages/MJAPI` in a monorepo install and `apps/MJAPI` in a distribution install (#4562).
    * - **Secondary**: `packages/GeneratedEntities` is expected but absence is only a warning.
    *
    * @param dir - Repo root directory.
@@ -445,18 +486,16 @@ export class CodeGenPhase {
     // Secondary: packages/GeneratedEntities is expected but its absence is a warning, not a blocker.
     // npm hoists workspace packages to the repo root; pnpm (the installer default) links them into each
     // dependent's own node_modules and never creates the root entry (MemberJunction/MJ#4599, #4707).
-    // Same two locations resolveCli() already checks for the CLI.
-    const criticalCandidates = [
-      path.join(dir, 'node_modules', 'mj_generatedentities'),
-      path.join(dir, 'apps', 'MJAPI', 'node_modules', 'mj_generatedentities'),
-    ];
+    // MJAPI sits at packages/MJAPI in a monorepo install and apps/MJAPI in a distribution install
+    // (#4562). Same locations resolveCli() checks for the CLI.
+    const criticalCandidates = await this.nodeModulesCandidates(dir, ['mj_generatedentities']);
     const barrelPath = path.join(dir, 'packages', 'GeneratedEntities', 'src', 'generated', 'entity_subclasses.ts');
     const secondaryPath = path.join(dir, 'packages', 'GeneratedEntities');
 
     let criticalFoundAt: string | undefined;
     for (const candidate of criticalCandidates) {
-      if (await this.fileSystem.DirectoryExists(candidate)) {
-        criticalFoundAt = candidate;
+      if (await this.fileSystem.DirectoryExists(candidate.Path)) {
+        criticalFoundAt = candidate.Path;
         break;
       }
     }
@@ -491,7 +530,7 @@ export class CodeGenPhase {
     }
 
     const missingCritical: string[] = [];
-    if (!criticalExists) missingCritical.push('mj_generatedentities (checked node_modules/ and apps/MJAPI/node_modules/)');
+    if (!criticalExists) missingCritical.push(`mj_generatedentities (${describeCandidates(dir, criticalCandidates)})`);
     if (!barrelExists) missingCritical.push('packages/GeneratedEntities/src/generated/entity_subclasses.ts');
 
     return {

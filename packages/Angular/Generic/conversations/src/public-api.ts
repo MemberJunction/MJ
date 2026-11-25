@@ -13,13 +13,15 @@ export * from './lib/models/navigation-request.model';
 // Host rules for an agent turn: reply mode, routes, and the host turn handler contract
 export * from './lib/models/agent-turn.model';
 export * from './lib/utils/agent-turn-routing';
-// Opt-in decision routing for an unmentioned message (EnableDecisionRouting)
+export * from './lib/utils/agent-handoff-map';
+// Decision routing for an unmentioned message (EnableDecisionRouting, on by default)
 // NOTE: the routing decision's builders and types, and IsAgentAllowed, live in
 // @memberjunction/ai-core-plus — import them from there directly.
 export * from './lib/utils/decision-routing';
 // Fork rules: the delete guard and the open view (Main or one fork)
 export * from './lib/utils/conversation-branching';
 export * from './lib/utils/conversation-forks';
+export * from './lib/utils/thread-replies';
 export * from './lib/utils/agent-failure-display';
 
 // Services - State
@@ -29,6 +31,7 @@ export * from './lib/services/agent-state.service';
 export * from './lib/services/conversation-liveness-dom.service';
 export * from './lib/services/conversation-agent.service';
 export * from './lib/services/active-tasks.service';
+export * from './lib/services/conversation-tasks-filter';
 export * from './lib/services/conversation-streaming.service';
 export * from './lib/services/dialog.service';
 export * from './lib/services/export.service';
@@ -43,6 +46,7 @@ export * from './lib/services/collection-permission.service';
 export * from './lib/services/artifact-permission.service';
 export * from './lib/services/artifact-use-tracking.service';
 export * from './lib/services/collection-state.service';
+export * from './lib/services/library-creation.service';
 export * from './lib/services/conversation-attachment.service';
 export * from './lib/services/graphql-attachment-blob-store';
 export * from './lib/services/ui-command-handler.service';
@@ -57,16 +61,23 @@ export * from './lib/services/realtime-pairing';
 export * from './lib/services/user-authorization';
 export * from './lib/services/realtime-sessions-adapter';
 export * from './lib/services/realtime-session-review.service';
+// Shared lazy ONNX/WASM Edge AI worker host + Stage 6C.1 pre-discovery service
+export * from './lib/services/edge-ai/edge-ai-protocol';
+export * from './lib/services/edge-ai/edge-ai-worker-host';
+export * from './lib/services/edge-ai/edge-agent-pre-discovery.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
 export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
+export * from './lib/components/sidebar/my-agents-section.component';
 export * from './lib/components/sidebar/routines-section.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
+export * from './lib/components/conversation/conversation-remote-browser-controller';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
+export * from './lib/components/message/agent-handoff-card.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
 // AI-aware composer wrapper (mj-ai-composer): mj-message-input-box + the three AI trigger
@@ -95,6 +106,7 @@ export * from './lib/components/task/tasks-full-view.component';
 export * from './lib/components/tasks/task-widget.component';
 export * from './lib/components/agent/agent-process-panel.component';
 export * from './lib/components/agent/active-agent-indicator.component';
+export * from './lib/components/agent/agent-instance-editor-modal.component';
 export * from './lib/components/active-tasks/active-tasks-panel.component';
 export * from './lib/components/share/share-modal.component';
 export * from './lib/components/notification/notification-badge.component';
@@ -120,6 +132,10 @@ export * from './lib/components/dialogs/input-dialog.component';
 export * from './lib/components/dialogs/rating-dialog.component';
 export * from './lib/components/export/export-modal.component';
 export * from './lib/components/library/library-full-view.component';
+export * from './lib/components/library/library.models';
+export * from './lib/components/library/library-workspace.component';
+export * from './lib/components/library/library-remote-drive-pane.component';
+export * from './lib/components/library/library-create-dialog.component';
 export * from './lib/components/members/members-modal.component';
 export * from './lib/components/message/actionable-commands.component';
 export * from './lib/components/message/workflow-plan-card.component';
@@ -173,6 +189,7 @@ export * from './lib/components/realtime/channels/channel-onboarding-panel.compo
 // NOTE: the whiteboard itself (engine, tools, components, export builders) lives in
 // @memberjunction/ng-whiteboard — import board types/components from there directly.
 export * from './lib/components/realtime/whiteboard/whiteboard-channel';
+export * from './lib/components/realtime/whiteboard/whiteboard-channel-config';
 export * from './lib/components/realtime/whiteboard/whiteboard-artifact-viewer.component';
 // Remote Browser channel plugin (client-direct, server-hosted browser) + its live surface + tools.
 export * from './lib/components/realtime/remote-browser/remote-browser-channel';
@@ -208,6 +225,10 @@ export * from './lib/components/realtime/interactive-component/component-spec-co
 export * from './lib/components/realtime/interactive-component/run-view-component-artifact-source';
 export * from './lib/components/realtime/interactive-component/interactive-component-channel';
 export * from './lib/components/realtime/interactive-component/realtime-interactive-component-surface.component';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-types';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-engine';
+export * from './lib/components/realtime/artifact-workspace/artifact-workspace-channel';
+export * from './lib/components/realtime/artifact-workspace/realtime-artifact-workspace-surface.component';
 // Time-aligned Evidence Playback component (recorded session audio synced to the transcript).
 export * from './lib/components/realtime/evidence-playback/realtime-evidence-playback.component';
 export * from './lib/services/composer-draft-store';

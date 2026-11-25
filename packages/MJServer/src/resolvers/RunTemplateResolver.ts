@@ -1,10 +1,12 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJTemplateContentEntity, MJTemplateEntityExtended } from '@memberjunction/core-entities';
 import { GetTemplateRunRefusal, TemplateEngineServer } from '@memberjunction/templates';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 @ObjectType()
 export class TemplateRunResult {
@@ -28,6 +30,7 @@ export class TemplateRunResult {
  * only for backward compatibility with existing external API consumers and may be removed in a future
  * major version.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class RunTemplateResolver extends ResolverBase {
     /** @deprecated Use the `Template.Run` Remote Operation instead. Retained for backcompat. */
@@ -84,12 +87,13 @@ export class RunTemplateResolver extends ResolverBase {
             }
 
             // Load template content (get the first/highest priority content)
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(p);
             const templateContentResult = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: 'MJ: Template Contents',
-                ExtraFilter: `TemplateID = '${templateId}'`,
+                ExtraFilter: `TemplateID = '${EscapeSQLString(templateEntity.ID)}'`,
                 OrderBy: 'Priority ASC',
                 MaxRows: 1,
+                SkipTotalRowCount: true,
                 ResultType: 'entity_object'
             }, currentUser);
 
@@ -102,12 +106,14 @@ export class RunTemplateResolver extends ResolverBase {
             }
 
             // Configure and render the template
-            await TemplateEngineServer.Instance.Config(true /*always refresh to get latest templates*/, currentUser);
+            await TemplateEngineServer.Instance.Config(true /*always refresh to get latest templates*/, currentUser, p);
             const result = await TemplateEngineServer.Instance.RenderTemplate(
                 templateEntity, 
                 templateContentResult.Results[0], 
-                data, 
-                true // skip validation for execution
+                data,
+                true, // skip validation for execution
+                undefined,
+                { ContextUser: currentUser },
             );
 
             const executionTime = Date.now() - startTime;

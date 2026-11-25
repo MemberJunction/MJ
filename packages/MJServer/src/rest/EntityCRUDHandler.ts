@@ -1,7 +1,8 @@
 import { 
-    BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
-    EntitySaveOptions, LogError, Metadata, UserInfo 
+    AssertClientInputWritableForUser, BaseEntity, CompositeKey, EntityDeleteOptions, EntityPermissionType, 
+    EntitySaveOptions, LogError, Metadata, ServerOperationScopeManager, UserInfo 
 } from '@memberjunction/core';
+import { ProjectValuesForCaller } from '../generic/fieldSecurityTransport.js';
 
 /**
  * Entity CRUD Implementation Functions for REST endpoints
@@ -12,6 +13,7 @@ export class EntityCRUDHandler {
      * Create a new entity
      */
     static async CreateEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -28,20 +30,25 @@ export class EntityCRUDHandler {
             // Create new record
             entity.NewRecord();
             
-            // Extract save options if provided
+            // Extract save options if provided (wire-unreachable flags like ReplayOnly/SkipRecordChanges are never honored)
             const options = new EntitySaveOptions();
             if (data.options) {
                 const { IgnoreDirtyState, SkipEntityAIActions, SkipEntityActions, ReplayOnly, SkipOldValuesCheck } = data.options;
                 if (IgnoreDirtyState !== undefined) options.IgnoreDirtyState = !!IgnoreDirtyState;
                 if (SkipEntityAIActions !== undefined) options.SkipEntityAIActions = !!SkipEntityAIActions;
                 if (SkipEntityActions !== undefined) options.SkipEntityActions = !!SkipEntityActions;
-                if (ReplayOnly !== undefined) options.ReplayOnly = !!ReplayOnly;
+                if (ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST create requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
                 if (SkipOldValuesCheck !== undefined) options.SkipOldValuesCheck = !!SkipOldValuesCheck;
                 
                 // Remove options from data
                 delete data.options;
             }
             
+            // Field-level security: refuse a key the caller may not read, or that names no field
+            AssertClientInputWritableForUser(entity.EntityInfo, data, user);
+
             // Set values on the entity
             for (const key in data) {
                 entity.Set(key, data[key]);
@@ -70,12 +77,13 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await entity.GetDataObject();
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link CreateEntity}. */
@@ -114,7 +122,7 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await entity.GetDataObject();
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
@@ -131,6 +139,7 @@ export class EntityCRUDHandler {
      * Update an existing entity
      */
     static async UpdateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -157,20 +166,25 @@ export class EntityCRUDHandler {
                 };
             }
             
-            // Extract save options if provided
+            // Extract save options if provided (wire-unreachable flags like ReplayOnly/SkipRecordChanges are never honored)
             const options = new EntitySaveOptions();
             if (data.options) {
                 const { IgnoreDirtyState, SkipEntityAIActions, SkipEntityActions, ReplayOnly, SkipOldValuesCheck } = data.options;
                 if (IgnoreDirtyState !== undefined) options.IgnoreDirtyState = !!IgnoreDirtyState;
                 if (SkipEntityAIActions !== undefined) options.SkipEntityAIActions = !!SkipEntityAIActions;
                 if (SkipEntityActions !== undefined) options.SkipEntityActions = !!SkipEntityActions;
-                if (ReplayOnly !== undefined) options.ReplayOnly = !!ReplayOnly;
+                if (ReplayOnly) {
+                    LogError(`Ignoring ReplayOnly on a ${entityName} REST create requested by ${user?.Email ?? 'an unidentified caller'}`);
+                }
                 if (SkipOldValuesCheck !== undefined) options.SkipOldValuesCheck = !!SkipOldValuesCheck;
                 
                 // Remove options from data
                 delete data.options;
             }
             
+            // Field-level security: refuse a key the caller may not read, or that names no field
+            AssertClientInputWritableForUser(entity.EntityInfo, data, user);
+
             // Update entity with new values
             for (const key in data) {
                 entity.Set(key, data[key]);
@@ -179,7 +193,7 @@ export class EntityCRUDHandler {
             // Check if entity is dirty
             if (!entity.Dirty && !options.IgnoreDirtyState) {
                 // Nothing changed, return success
-                const entityData = await entity.GetDataObject();
+                const entityData = await this.responseData(entity, user, md);
                 return { success: true, entity: entityData };
             }
             
@@ -206,12 +220,13 @@ export class EntityCRUDHandler {
             }
             
             // Get entity data for response
-            const entityData = await entity.GetDataObject();
+            const entityData = await this.responseData(entity, user, md);
             return { success: true, entity: entityData };
         } catch (error: any) {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link UpdateEntity}. */
@@ -223,6 +238,7 @@ export class EntityCRUDHandler {
      * Delete an entity
      */
     static async DeleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
+        return ServerOperationScopeManager.Instance.RunInClientCrudBoundary(async () => {
         try {
             // Get entity object
             const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
@@ -249,6 +265,16 @@ export class EntityCRUDHandler {
                 };
             }
             
+            // Sanitize delete options from wire (never allow ReplayOnly or SkipRecordChanges)
+            if (options?.ReplayOnly) {
+                LogError(`Ignoring ReplayOnly on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                options.ReplayOnly = false;
+            }
+            if (options?.SkipRecordChanges) {
+                LogError(`Ignoring SkipRecordChanges on a ${entityName} REST delete requested by ${user?.Email ?? 'an unidentified caller'}`);
+                options.SkipRecordChanges = false;
+            }
+
             // Delete the entity
             const deleteSuccess = await entity.Delete(options);
             
@@ -266,6 +292,7 @@ export class EntityCRUDHandler {
             LogError(error);
             return { success: false, error: error?.message || 'Unknown error' };
         }
+        });
     }
 
     /** @deprecated Use {@link DeleteEntity}. */
@@ -273,6 +300,16 @@ export class EntityCRUDHandler {
         return this.DeleteEntity(entityName, id, options, user);
     }
     
+    /**
+     * The record's field values for the response, reduced to what `user` may READ. An entity
+     * object built for a restricted user holds no denied value already; this is the backstop for
+     * one that does.
+     */
+    private static async responseData(entity: BaseEntity, user: UserInfo, md: Metadata): Promise<Record<string, unknown>> {
+        // fls-guard: projected by ProjectValuesForCaller
+        return ProjectValuesForCaller(entity.EntityInfo, await entity.GetDataObject() as Record<string, unknown>, user, md);
+    }
+
     /**
      * Build the record key from the `:id` path segment. A single-column key (any column name) is
      * the bare value; a composite key is the URL-encoded `Field1|Value1||Field2|Value2` segment.

@@ -9,8 +9,8 @@
 ## 📋 Before You Start (Prerequisites)
 
 1. **Docker Desktop** installed and running ([Download Docker Desktop](https://www.docker.com/products/docker-desktop)):
-   - Allocate at least **8–12 GB of RAM** to Docker Desktop in **Settings → Resources** (SQL Server + MJAPI + MJExplorer run together inside the container stack).
-2. **Node.js 20+** installed on your machine ([Download Node.js](https://nodejs.org/)) — required only if you run `npx @memberjunction/cli agent init` directly on your host machine.
+   - Allocate at least **8–12 GB of RAM** to Docker Desktop in **Settings → Resources** for a single workspace (or **16+ GB** if running multiple workspaces simultaneously; stop unused workspaces with `docker compose stop` to free memory).
+2. **Node.js 20+** installed on your machine ([Download Node.js](https://nodejs.org/)) — required only if you run `npx @memberjunction/cli@edge agent init` directly on your host machine.
 3. **One LLM API Key** (OpenAI, Anthropic, Google Gemini, Groq, or Mistral).
 4. **Windows / PowerShell Note**: When running headless test prompts with quotes or multiple lines on Windows PowerShell, pass `-f /work/<prompt-file.txt>` (`--prompt-file`) to `mj ai agents run` instead of inline `-p "..."` strings to avoid PowerShell quote stripping.
 
@@ -26,7 +26,7 @@ Please review the MemberJunction Citizen Agent Builder guide at:
 https://github.com/MemberJunction/MJ/tree/next/citizen-builder
 
 Follow the instructions in that guide:
-1. Initialize a new MemberJunction agent builder workspace here using `npx @memberjunction/cli agent init .`
+1. Initialize a new MemberJunction agent builder workspace here using `npx @memberjunction/cli@edge agent init .`
 2. Start the local Docker environment and verify services are running.
 3. Review available entities and actions in CAPABILITIES.md.
 4. Build me an AI agent that:
@@ -41,9 +41,9 @@ Your coding agent will read the guide, scaffold the workspace, start the local d
 ### Option B: The Manual / Step-by-Step Path
 If you prefer to initialize the workspace and start the Docker environment yourself before handing off to an agent:
 
-1. **Scaffold the workspace**:
+1. **Scaffold the workspace** (use `@edge` while v6.2 is in pre-release, or `@latest` once published):
    ```bash
-   npx @memberjunction/cli agent init ./my-agents
+   npx @memberjunction/cli@edge agent init ./my-agents
    cd ./my-agents
    ```
 2. **Add your LLM API Key**:

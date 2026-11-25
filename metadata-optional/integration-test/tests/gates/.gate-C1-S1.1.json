@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S1.1",
+    "Description": "Gate G1.1 (phase 1, dataset C1, criterion S1.1): the C1 renewal Prediction Unit (person x dues period, next period within 400 days, censored at the corpus end) yields exactly the reference corpus's resolved person-year keys: 4,873 of 4,873 matched and 0 extra. It fails when the unit row reader ignores the unit's row filter, so extra keys appear.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G1.1\",\"owner:PR3\",\"phase:1\",\"dataset:C1\",\"criterion:S1.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "4,873 of 4,873 reference person-year keys matched by the unit's rows, 0 extra."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s1-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "B31EFDBE-5DE5-44FE-AC49-1B633D85E443"
+  }
+}

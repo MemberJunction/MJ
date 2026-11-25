@@ -22,31 +22,33 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 4
+            "Priority": 4,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A701"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:57.750Z",
-            "checksum": "1e7874941d1b849fc110a1540a3a03477cf46e6d70627fe1d1f464638fe7f8fa"
+            "lastModified": "2026-11-24T20:27:11.625Z",
+            "checksum": "040721887676535c736e244fa1c2f79e32e24998f332384896e40b8037d680d4"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 4 Hydrogen",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
-            "Priority": 3
+            "Priority": 3,
+            "EffortLevel": 20
           },
           "primaryKey": {
             "ID": "3F9A8B71-14E2-4D9A-821C-5E4B9D12A702"
           },
           "sync": {
-            "lastModified": "2026-10-20T23:18:57.761Z",
-            "checksum": "55d984a2bbc8cde4528cbc04ea32f7eb4525eafc95d825fd6fdcc714d6945fd2"
+            "lastModified": "2026-11-24T20:27:11.633Z",
+            "checksum": "957a5f1211ea01f8c600a4774e274a548e7172b9de7e1f13b2d5ce0d4d3120ea"
           }
         },
         {
@@ -181,8 +183,8 @@
       "ID": "E8A29C71-4A12-4F5B-9283-C9E82D7F4A11"
     },
     "sync": {
-      "lastModified": "2026-10-20T23:18:57.720Z",
-      "checksum": "faef48481d2ccf32106ab1f7754c76ca7a4dd4ec5b4a3b314400ba1583e306fb"
+      "lastModified": "2026-11-24T20:27:11.614Z",
+      "checksum": "3d4de52c08ab249a1cdae5cdf619db9a958594d93316504100dd26c4a1ae98e2"
     }
   }
 ]

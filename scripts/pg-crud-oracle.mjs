@@ -35,9 +35,11 @@
  *      PG_USER (default mj_admin), PG_PASSWORD (default Claude2Pg99)
  *
  * Output: summary JSON to stdout (exit 1 if any entity fails);
- *         full per-entity report to /tmp/pg-crud-oracle-report.json
+ *         full per-entity report to <tmpdir>/pg-crud-oracle-XXXXXX/report.json (path printed as fullReport)
  */
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 
@@ -45,7 +47,7 @@ const DB = process.env.ORACLE_DB;
 const CONTAINER = process.env.PG_CONTAINER || 'postgres-claude';
 const PG_USER = process.env.PG_USER || 'mj_admin';
 const PG_PASSWORD = process.env.PG_PASSWORD || 'Claude2Pg99';
-const REPORT_PATH = '/tmp/pg-crud-oracle-report.json';
+const REPORT_PATH = join(mkdtempSync(join(tmpdir(), 'pg-crud-oracle-')), 'report.json');
 const MAX_PARENT_DEPTH = 4;
 const onlyIdx = process.argv.indexOf('--only');
 const ONLY = onlyIdx > -1 ? process.argv[onlyIdx + 1] : null;

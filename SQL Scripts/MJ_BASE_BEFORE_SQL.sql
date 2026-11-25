@@ -148,24 +148,41 @@ GO
 
 DROP VIEW IF EXISTS [__mj].[vwTableUniqueKeys]
 GO
+-- One row per KEY column of every enabled unique index/constraint (#4536). Disabled and
+-- hypothetical indexes enforce nothing, so they are left out; INCLUDE columns are not keys.
 CREATE VIEW [__mj].[vwTableUniqueKeys] AS
 SELECT
     s.name AS SchemaName,
     t.name AS TableName,
-    c.name AS ColumnName
-FROM 
+    c.name AS ColumnName,
+    i.name AS IndexName,
+    CAST(ic.key_ordinal AS INT) AS KeyOrdinal,
+    kc.KeyColumnCount,
+    i.has_filter AS IsFiltered,
+    i.filter_definition AS FilterDefinition
+FROM
     sys.tables t
-INNER JOIN 
+INNER JOIN
     sys.schemas s ON t.schema_id = s.schema_id
-INNER JOIN 
+INNER JOIN
     sys.indexes i ON t.object_id = i.object_id
-INNER JOIN 
+INNER JOIN
     sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
-INNER JOIN 
+INNER JOIN
     sys.columns c ON ic.object_id = c.object_id AND c.column_id = ic.column_id
-WHERE 
+CROSS APPLY (
+    SELECT COUNT(*) AS KeyColumnCount
+    FROM sys.index_columns k
+    WHERE k.object_id = i.object_id
+      AND k.index_id = i.index_id
+      AND k.is_included_column = 0
+) kc
+WHERE
     i.is_unique = 1
-    AND i.is_primary_key = 0;
+    AND i.is_primary_key = 0
+    AND i.is_disabled = 0
+    AND i.is_hypothetical = 0
+    AND ic.is_included_column = 0;
 GO
 
 
@@ -702,22 +719,71 @@ GO
 ----- CREATE PROCEDURE FOR RecordChange for INTERNAL USE WITHIN DataProvider
 ------------------------------------------------------------
 CREATE PROCEDURE __mj.[spCreateRecordChange_Internal]
-    @EntityName       NVARCHAR(100),
-    @RecordID         NVARCHAR(750),
-    @UserID           UNIQUEIDENTIFIER,
-    @Type             NVARCHAR(20),
-    @ChangesJSON      NVARCHAR(MAX),
-    @ChangesDescription NVARCHAR(MAX),
-    @FullRecordJSON   NVARCHAR(MAX),
-    @Status           NCHAR(15),
-    @Comments         NVARCHAR(MAX),
-    @Source           NVARCHAR(20)     = NULL,
-    @RestoredFromID   UNIQUEIDENTIFIER = NULL,
-    @RestoreReason    NVARCHAR(MAX)    = NULL,
-    @ChangeContext    NVARCHAR(MAX)    = NULL
+    @EntityName          NVARCHAR(100),
+    @RecordID            NVARCHAR(750),
+    @UserID              UNIQUEIDENTIFIER,
+    @Type                NVARCHAR(20),
+    @ChangesJSON         NVARCHAR(MAX),
+    @ChangesDescription  NVARCHAR(MAX),
+    @FullRecordJSON      NVARCHAR(MAX),
+    @Status              NCHAR(15),
+    @Comments            NVARCHAR(MAX),
+    @Source              NVARCHAR(20)     = NULL,
+    @RestoredFromID      UNIQUEIDENTIFIER = NULL,
+    @RestoreReason       NVARCHAR(MAX)    = NULL,
+    @ChangeContext       NVARCHAR(MAX)    = NULL,
+    @EntityID            UNIQUEIDENTIFIER = NULL,
+    @SuppressReturn      BIT              = 0,
+    @IntegrationID       UNIQUEIDENTIFIER = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
+
+    DECLARE @ResolvedEntityID UNIQUEIDENTIFIER = COALESCE(
+        @EntityID,
+        (SELECT ID FROM __mj.[Entity] WHERE [Name] = @EntityName)
+    );
+
+    IF @SuppressReturn = 1
+    BEGIN
+        INSERT INTO __mj.[RecordChange]
+            (
+                EntityID,
+                RecordID,
+                UserID,
+                Type,
+                Source,
+                ChangedAt,
+                ChangesJSON,
+                ChangesDescription,
+                FullRecordJSON,
+                Status,
+                Comments,
+                RestoredFromID,
+                RestoreReason,
+                ChangeContext,
+                IntegrationID
+            )
+        VALUES
+            (
+                @ResolvedEntityID,
+                @RecordID,
+                @UserID,
+                @Type,
+                ISNULL(@Source, 'Internal'),
+                GETUTCDATE(),
+                @ChangesJSON,
+                @ChangesDescription,
+                @FullRecordJSON,
+                @Status,
+                @Comments,
+                @RestoredFromID,
+                @RestoreReason,
+                @ChangeContext,
+                @IntegrationID
+            );
+        RETURN;
+    END
 
     DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER);
 
@@ -736,12 +802,13 @@ BEGIN
             Comments,
             RestoredFromID,
             RestoreReason,
-            ChangeContext
+            ChangeContext,
+            IntegrationID
         )
     OUTPUT INSERTED.[ID] INTO @InsertedRow
     VALUES
         (
-            (SELECT ID FROM __mj.Entity WHERE Name = @EntityName),
+            @ResolvedEntityID,
             @RecordID,
             @UserID,
             @Type,
@@ -754,7 +821,8 @@ BEGIN
             @Comments,
             @RestoredFromID,
             @RestoreReason,
-            @ChangeContext
+            @ChangeContext,
+            @IntegrationID
         );
 
     -- Return the new record from the base view so calculated fields are included
@@ -1252,8 +1320,10 @@ BEGIN
         re.ID AS RelatedEntityID,
         fk.referenced_column AS RelatedEntityFieldName,
         CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END AS IsPrimaryKey,
+        -- IsUnique: the column alone is the primary key, or alone is the key of an unfiltered
+        -- unique index/constraint (#4536). Composite keys are recorded in EntityUniqueKey.
         CASE 
-            WHEN pk.ColumnName IS NOT NULL THEN 1 
+            WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1 
             ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
         END AS IsUnique
     FROM
@@ -1279,13 +1349,18 @@ BEGIN
         re.BaseTable = fk.referenced_table AND
         re.SchemaName = fk.[referenced_schema]
     LEFT OUTER JOIN 
-        [__mj].vwTablePrimaryKeys pk
+        (SELECT SchemaName, TableName, ColumnName,
+                COUNT(*) OVER (PARTITION BY SchemaName, TableName) AS KeyColumnCount
+         FROM [__mj].vwTablePrimaryKeys) pk
     ON
         e.BaseTable = pk.TableName AND
         ef.Name = pk.ColumnName AND
         e.SchemaName = pk.SchemaName
     LEFT OUTER JOIN 
-        [__mj].vwTableUniqueKeys uk
+        (SELECT DISTINCT SchemaName, TableName, ColumnName
+         FROM [__mj].vwTableUniqueKeys
+         WHERE KeyColumnCount = 1
+           AND IsFiltered = 0) uk
     ON
         e.BaseTable = uk.TableName AND
         ef.Name = uk.ColumnName AND
@@ -1315,7 +1390,7 @@ BEGIN
           ISNULL(LTRIM(RTRIM(ef.RelatedEntityFieldName)), '') <> ISNULL(LTRIM(RTRIM(fk.referenced_column)), '') OR
           ef.IsPrimaryKey <> CASE WHEN pk.ColumnName IS NOT NULL THEN 1 ELSE 0 END OR
           ef.IsUnique <> CASE
-              WHEN pk.ColumnName IS NOT NULL THEN 1
+              WHEN pk.ColumnName IS NOT NULL AND pk.KeyColumnCount = 1 THEN 1
               ELSE CASE WHEN uk.ColumnName IS NOT NULL THEN 1 ELSE 0 END
           END OR
           -- Detect AllowUpdateAPI that needs clearing on virtual transition
@@ -1626,45 +1701,10 @@ GO
 
 
 
-DROP PROC IF EXISTS __mj.spDeleteEntityWithCoreDependencies
-GO
-CREATE PROC __mj.spDeleteEntityWithCoreDependencies
-  @EntityID uniqueidentifier
-AS
-DELETE FROM __mj.EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM __mj.EntityField WHERE EntityID = @EntityID)
-DELETE FROM __mj.EntitySetting WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityField WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityPermission WHERE EntityID = @EntityID
-DELETE FROM __mj.EntityRelationship WHERE EntityID = @EntityID OR RelatedEntityID = @EntityID
-DELETE FROM __mj.UserApplicationEntity WHERE EntityID = @EntityID
-DELETE FROM __mj.ApplicationEntity WHERE EntityID = @EntityID
-DELETE FROM __mj.RecordChange WHERE EntityID = @EntityID
-DELETE FROM __mj.AuditLog WHERE EntityID=@EntityID
-DELETE FROM __mj.[Conversation] WHERE LinkedEntityID=@EntityID
-DELETE FROM __mj.ListDetail WHERE ListID IN (SELECT ID FROM __mj.List WHERE EntityID=@EntityID)
-DELETE FROM __mj.List WHERE EntityID=@EntityID
-
-DELETE FROM [__mj].[EntityDocument] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[CompanyIntegrationRecordMap] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[ResourceType] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[UserApplicationEntity] WHERE [EntityID] = @EntityID;
-
-UPDATE __mj.Dataset SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN (SELECT DatasetID FROM __mj.DatasetItem WHERE EntityID=@EntityID)
-DELETE FROM [__mj].[DatasetItem] WHERE [EntityID] = @EntityID;
-
-DELETE FROM [__mj].[UserViewCategory] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[UserView] WHERE [EntityID] = @EntityID;
-
-DELETE FROM [__mj].[EntityAIAction] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[EntityCommunicationMessageType] WHERE [EntityID] = @EntityID;
-DELETE FROM [__mj].[EntityAIAction] WHERE [OutputEntityID] = @EntityID;
-
--- Clear inbound metadata references from OTHER entities' fields that point AT this entity,
--- so the Entity row can be deleted without tripping FK_EntityField_RelatedEntity.
-UPDATE __mj.EntityField SET RelatedEntityID = NULL WHERE RelatedEntityID = @EntityID
-
-DELETE FROM __mj.Entity WHERE ID = @EntityID
-GO
+-- spDeleteEntityWithCoreDependencies is no longer defined here. Its current definition ships
+-- only in migrations (latest: migrations/v6/V202611101200__v6.3.x__Entity_Unique_Key_Sets.sql).
+-- The body that used to live here predated the FK coverage and transaction handling, so running
+-- this script would have replaced the migrated proc with an older, weaker one.
 
 
 

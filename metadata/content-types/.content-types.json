@@ -1,0 +1,20 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Docs",
+      "Description": "Documents written in MJ Docs (Markdown Document artifacts), indexed from their latest version as they are saved.",
+      "AIModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash-Lite",
+      "MinTags": 1,
+      "MaxTags": 8,
+      "EmbeddingModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)"
+    },
+    "primaryKey": {
+      "ID": "51EEB98E-735F-42DB-A2C9-4F05CCA9EF79"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:46.469Z",
+      "checksum": "e19c09b72ca6d61f3401155f576e360e663c3d878897e19c58d773ad46a598e6"
+    }
+  }
+]

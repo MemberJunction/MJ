@@ -42,8 +42,64 @@ import {
     ParsedPathWithOperations,
     ParsePathWithOperations, 
     ParsePathsWithOperations,
-    isOperationAllowed 
+    isOperationAllowed
 } from './types/payload-operations';
+import { IsUnsafeObjectKey, StripUnsafeObjectKeys } from './unsafe-object-keys';
+import {
+    BuildNestedValue,
+    FormatPayloadPath,
+    IsPathKey,
+    ParsePathKey,
+    PayloadPathSegment,
+    ResolvePayloadPath
+} from './payload-path-keys';
+
+type ChangeBucket = 'updateElements' | 'newElements' | 'removeElements' | 'replaceElements';
+
+const CHANGE_BUCKETS: ChangeBucket[] = ['updateElements', 'newElements', 'removeElements', 'replaceElements'];
+
+/** The operation each bucket performs, used when a path key in it is refused. */
+const BUCKET_OPERATION: Record<ChangeBucket, PayloadOperation> = {
+    updateElements: 'update',
+    newElements: 'add',
+    removeElements: 'delete',
+    replaceElements: 'update'
+};
+
+/** A `replaceElements` path key, applied at its exact location after the rest of the change. */
+interface PathReplacement {
+    Key: string;
+    Segments: PayloadPathSegment[];
+    Value: unknown;
+}
+
+/** A path key in update/new/remove, merged into its bucket as nested objects and sparse arrays. */
+interface PathExpansion {
+    Bucket: ChangeBucket;
+    Segments: PayloadPathSegment[];
+    Value: unknown;
+}
+
+/** One blocked operation, as reported in {@link PayloadManagerResult.blockedOperations}. */
+type BlockedOperation = NonNullable<PayloadManagerResult['blockedOperations']>[number];
+
+/** Everything needed to route one path key; the arrays collect the outcome. */
+interface PathKeyRoute {
+    Bucket: ChangeBucket;
+    Key: string;
+    Value: unknown;
+    Root: Record<string, unknown>;
+    Expansions: PathExpansion[];
+    Replacements: PathReplacement[];
+    Warnings: string[];
+    BlockedOperations: BlockedOperation[];
+}
+
+/** A change request with its path keys resolved into the nested form the merge understands. */
+interface NormalizedChangeRequest {
+    Request: AgentPayloadChangeRequest<Record<string, unknown>>;
+    Replacements: PathReplacement[];
+}
 
 
 /**
@@ -486,8 +542,8 @@ export class PayloadManager {
             timestamp: string;
         }>;
     } {
-        // Get all paths from sub-agent payload
-        const subAgentPaths = this.getAllPaths(subAgentPayload);
+        // Get all paths (with raw segment arrays) from sub-agent payload
+        const subAgentEntries = this.getAllPathEntries(subAgentPayload);
         const parsedUpstreamRules = this.getParsedPatternRules(upstreamPaths);
         const counts = { additions: 0, updates: 0, deletions: 0 };
         
@@ -501,9 +557,22 @@ export class PayloadManager {
         }> = [];
         
         // Check each path against allowed patterns
-        for (const actualPath of subAgentPaths) {
-            const subAgentValue = _.get(subAgentPayload, actualPath);
-            const originalValue = _.get(result, actualPath);
+        for (const entry of subAgentEntries) {
+            const { path: actualPath, segments } = entry;
+            const subAgentValue = this.getAtSegments(subAgentPayload, segments);
+            const originalValue = this.getAtSegments(result, segments);
+
+            // When a sub-agent empties a previously non-empty array, defer to the deletion loop
+            // below so per-element delete permissions, blocked-operation records, deletion counts,
+            // and pruneVacatedArrayElements all run instead of overwriting via an array-level update.
+            if (
+                Array.isArray(subAgentValue) &&
+                subAgentValue.length === 0 &&
+                Array.isArray(originalValue) &&
+                originalValue.length > 0
+            ) {
+                continue;
+            }
             
             // Determine the operation type
             const operation: PayloadOperation = originalValue === undefined ? 'add' : 'update';
@@ -517,7 +586,7 @@ export class PayloadManager {
                 } else if (!_.isEqual(originalValue, subAgentValue)) {
                     counts.updates++;
                 }
-                _.set(result as object, actualPath, this.fastCloneDeep(subAgentValue));
+                this.setAtSegments(result, subAgentPayload, segments, this.fastCloneDeep(subAgentValue));
             } else {
                 // Only track if the sub-agent is trying to change the value
                 if (!_.isEqual(subAgentValue, originalValue)) {
@@ -536,16 +605,17 @@ export class PayloadManager {
         }
         
         // Also check for deletions (paths in result but not in subAgentPayload)
-        const resultPaths = this.getAllPaths(result);
+        const resultEntries = this.getAllPathEntries(result);
 
-        // Paths this merge actually removed. Only the array elements sitting on these paths may
-        // be pruned for recursive emptiness afterwards — see pruneVacatedArrayElements for why
+        // Segment paths this merge actually removed. Only the array elements sitting on these paths
+        // may be pruned for recursive emptiness afterwards — see pruneVacatedArrayElements for why
         // that scope is the whole point.
-        const vacatedPaths: string[] = [];
+        const vacatedSegmentsList: string[][] = [];
 
-        for (const resultPath of resultPaths) {
-            const resultValue = _.get(result, resultPath);
-            const subAgentValue = _.get(subAgentPayload, resultPath);
+        for (const entry of resultEntries) {
+            const { path: resultPath, segments } = entry;
+            const resultValue = this.getAtSegments(result, segments);
+            const subAgentValue = this.getAtSegments(subAgentPayload, segments);
             
             // If the path exists in result but not in subAgentPayload, it's a deletion attempt
             if (resultValue !== undefined && subAgentValue === undefined) {
@@ -554,8 +624,8 @@ export class PayloadManager {
                 
                 if (isDeleteAllowed) {
                     // Delete the path from result
-                    _.unset(result, resultPath);
-                    vacatedPaths.push(resultPath);
+                    this.unsetAtSegments(result, segments);
+                    vacatedSegmentsList.push(segments);
                     counts.deletions++;
                 } else {
                     const isPathAllowed = this.isPathAllowed(resultPath, upstreamPaths, parsedUpstreamRules);
@@ -573,7 +643,7 @@ export class PayloadManager {
         // Drop the array elements this merge emptied out. Scoped to the paths just unset, so it
         // cannot touch a pre-existing element that merely looks empty, nor one whose deletion was
         // blocked above.
-        this.pruneVacatedArrayElements(result, vacatedPaths);
+        this.pruneVacatedArrayElements(result, vacatedSegmentsList);
 
         // Clean up any empty objects that resulted from property deletions in arrays
         this.cleanupEmptyArrayElements(result);
@@ -632,14 +702,25 @@ export class PayloadManager {
      * 
      * @private
      */
-    private countChanges(original: any, modified: any, counts: { additions: number; updates: number; deletions: number }): void {
-        const originalPaths = this.getAllPaths(original || {});
-        const modifiedPaths = this.getAllPaths(modified || {});
+    private countChanges(original: unknown, modified: unknown, counts: { additions: number; updates: number; deletions: number }): void {
+        const originalEntries = this.getAllPathEntries(original || {});
+        const modifiedEntries = this.getAllPathEntries(modified || {});
+        const modifiedPathSet = new Set(modifiedEntries.map(e => e.path));
         
         // Check for additions and updates
-        for (const path of modifiedPaths) {
-            const originalValue = _.get(original, path);
-            const modifiedValue = _.get(modified, path);
+        for (const entry of modifiedEntries) {
+            const originalValue = this.getAtSegments(original, entry.segments);
+            const modifiedValue = this.getAtSegments(modified, entry.segments);
+
+            // An emptied array is accounted for as per-element deletions in the loop below.
+            if (
+                Array.isArray(modifiedValue) &&
+                modifiedValue.length === 0 &&
+                Array.isArray(originalValue) &&
+                originalValue.length > 0
+            ) {
+                continue;
+            }
             
             if (originalValue === undefined) {
                 counts.additions++;
@@ -649,8 +730,8 @@ export class PayloadManager {
         }
         
         // Check for deletions
-        for (const path of originalPaths) {
-            if (!modifiedPaths.includes(path)) {
+        for (const entry of originalEntries) {
+            if (!modifiedPathSet.has(entry.path)) {
                 counts.deletions++;
             }
         }
@@ -700,33 +781,171 @@ export class PayloadManager {
     }
 
     /**
-     * Gets all leaf paths from an object.
-     * 
+     * Gets all leaf paths (and empty container paths) from an object, preserving literal
+     * segment names so keys containing `.` or `[` are not split during value lookup/assignment.
+     *
      * @private
      */
-    private getAllPaths(obj: any, currentPath: string[] = []): string[] {
-        const paths: string[] = [];
-        
+    private getAllPathEntries(
+        obj: unknown,
+        currentPath: string[] = [],
+        currentSegments: string[] = []
+    ): Array<{ path: string; segments: string[] }> {
+        const entries: Array<{ path: string; segments: string[] }> = [];
+
         if (!obj || typeof obj !== 'object') {
-            return currentPath.length > 0 ? [currentPath.join('.')] : [];
+            return currentPath.length > 0 ? [{ path: currentPath.join('.'), segments: currentSegments }] : [];
         }
-        
+
         if (Array.isArray(obj)) {
-            obj.forEach((item, index) => {
-                paths.push(...this.getAllPaths(item, [...currentPath, `[${index}]`]));
-            });
+            if (obj.length === 0 && currentPath.length > 0) {
+                entries.push({ path: currentPath.join('.'), segments: currentSegments });
+            } else {
+                obj.forEach((item, index) => {
+                    entries.push(
+                        ...this.getAllPathEntries(
+                            item,
+                            [...currentPath, `[${index}]`],
+                            [...currentSegments, String(index)]
+                        )
+                    );
+                });
+            }
         } else {
-            const keys = Object.keys(obj);
+            const record = obj as Record<string, unknown>;
+            const keys = Object.keys(record).filter(k => !IsUnsafeObjectKey(k));
             if (keys.length === 0 && currentPath.length > 0) {
-                paths.push(currentPath.join('.'));
+                entries.push({ path: currentPath.join('.'), segments: currentSegments });
             } else {
                 for (const key of keys) {
-                    paths.push(...this.getAllPaths(obj[key], [...currentPath, key]));
+                    entries.push(
+                        ...this.getAllPathEntries(
+                            record[key],
+                            [...currentPath, key],
+                            [...currentSegments, key]
+                        )
+                    );
                 }
             }
         }
-        
-        return paths;
+
+        return entries;
+    }
+
+    /**
+     * Reads a nested property by walking literal path segments without splitting segment keys on `.` or `[`.
+     *
+     * @private
+     */
+    private getAtSegments(obj: unknown, segments: string[]): unknown {
+        if (segments.length === 0) {
+            return obj;
+        }
+        let cur: unknown = obj;
+        for (const seg of segments) {
+            if (cur === null || cur === undefined || typeof cur !== 'object') {
+                return undefined;
+            }
+            if (Array.isArray(cur)) {
+                const idx = /^\d+$/.test(seg) ? Number(seg) : -1;
+                if (idx < 0 || idx >= cur.length) {
+                    return undefined;
+                }
+                cur = cur[idx];
+            } else {
+                if (IsUnsafeObjectKey(seg) || !Object.prototype.hasOwnProperty.call(cur, seg)) {
+                    return undefined;
+                }
+                cur = (cur as Record<string, unknown>)[seg];
+            }
+        }
+        return cur;
+    }
+
+    /**
+     * Writes a nested property by walking literal path segments without splitting segment keys on `.` or `[`.
+     * Uses `sourceTemplate` to decide whether a missing intermediate container should be an array or plain object.
+     *
+     * @private
+     */
+    private setAtSegments(target: unknown, sourceTemplate: unknown, segments: string[], value: unknown): void {
+        if (!target || typeof target !== 'object' || segments.length === 0) {
+            return;
+        }
+        let curTarget: unknown = target;
+        let curSource: unknown = sourceTemplate;
+
+        for (let i = 0; i < segments.length - 1; i++) {
+            const seg = segments[i];
+            if (IsUnsafeObjectKey(seg)) {
+                return;
+            }
+            const nextSource = this.getAtSegments(curSource, [seg]);
+            const shouldBeArray = Array.isArray(nextSource);
+
+            if (Array.isArray(curTarget)) {
+                const idx = /^\d+$/.test(seg) ? Number(seg) : -1;
+                if (idx < 0) {
+                    return;
+                }
+                const existing = curTarget[idx];
+                if (existing === null || existing === undefined || typeof existing !== 'object' || Array.isArray(existing) !== shouldBeArray) {
+                    curTarget[idx] = shouldBeArray ? [] : {};
+                }
+                curTarget = curTarget[idx];
+            } else if (curTarget && typeof curTarget === 'object') {
+                const rec = curTarget as Record<string, unknown>;
+                const existing = Object.prototype.hasOwnProperty.call(rec, seg) ? rec[seg] : undefined;
+                if (existing === null || existing === undefined || typeof existing !== 'object' || Array.isArray(existing) !== shouldBeArray) {
+                    rec[seg] = shouldBeArray ? [] : {};
+                }
+                curTarget = rec[seg];
+            } else {
+                return;
+            }
+            curSource = nextSource;
+        }
+
+        const lastSeg = segments[segments.length - 1];
+        if (IsUnsafeObjectKey(lastSeg)) {
+            return;
+        }
+        if (Array.isArray(curTarget)) {
+            const idx = /^\d+$/.test(lastSeg) ? Number(lastSeg) : -1;
+            if (idx >= 0) {
+                curTarget[idx] = value;
+            }
+        } else if (curTarget && typeof curTarget === 'object') {
+            (curTarget as Record<string, unknown>)[lastSeg] = value;
+        }
+    }
+
+    /**
+     * Unsets a property by walking literal path segments without splitting segment keys on `.` or `[`.
+     * For array elements, uses `delete arr[idx]` so {@link pruneVacatedArrayElements} can splice holes in descending order.
+     *
+     * @private
+     */
+    private unsetAtSegments(target: unknown, segments: string[]): void {
+        if (!target || typeof target !== 'object' || segments.length === 0) {
+            return;
+        }
+        const parent = segments.length === 1 ? target : this.getAtSegments(target, segments.slice(0, -1));
+        if (!parent || typeof parent !== 'object') {
+            return;
+        }
+        const lastSeg = segments[segments.length - 1];
+        if (IsUnsafeObjectKey(lastSeg)) {
+            return;
+        }
+        if (Array.isArray(parent)) {
+            const idx = /^\d+$/.test(lastSeg) ? Number(lastSeg) : -1;
+            if (idx >= 0 && idx < parent.length) {
+                delete parent[idx];
+            }
+        } else {
+            delete (parent as Record<string, unknown>)[lastSeg];
+        }
     }
 
     /**
@@ -783,7 +1002,7 @@ export class PayloadManager {
      * performed on the parent's own data, by a sub-agent with no write permission for it.
      *
      * So the recursive-vacancy criterion is applied to exactly the positions this merge touched:
-     * the paths handed to `_.unset` on an AUTHORIZED delete. An untouched element is never a
+     * the paths handed to `unsetAtSegments` on an AUTHORIZED delete. An untouched element is never a
      * candidate no matter how empty it looks, which keeps every pre-existing payload byte-identical
      * through a merge and keeps the guardrail's blocked/allowed decision the only thing that can
      * remove parent data.
@@ -791,7 +1010,7 @@ export class PayloadManager {
      * MECHANICS
      *
      * For each vacated path, every prefix is a candidate position — the vacated leaf's own slot
-     * included, since `_.unset` on an array index leaves a hole (`['a', 'b', <hole>]`, which
+     * included, since deleting an array index leaves a hole (`['a', 'b', <hole>]`, which
      * serializes as `["a","b",null]`) rather than shortening the array. A prefix qualifies when
      * its last segment is an array index and its parent resolves to an array; the element there is
      * then dropped if {@link isVacantValue}. Unlike the global sweep, nested ARRAYS are eligible
@@ -807,13 +1026,12 @@ export class PayloadManager {
      * running off the shortened end, and no candidate index lands on its former neighbour.
      *
      * @param result The merged payload, mutated in place.
-     * @param vacatedPaths Paths passed to `_.unset` during this merge's authorized deletions, in
-     *                     `getAllPaths()` form (array indices as `[0]`, segments joined with `.`).
+     * @param vacatedSegmentsList Segment arrays passed to `unsetAtSegments` during this merge's authorized deletions.
      *
      * @private
      */
-    private pruneVacatedArrayElements(result: unknown, vacatedPaths: string[]): void {
-        if (!result || typeof result !== 'object' || vacatedPaths.length === 0) {
+    private pruneVacatedArrayElements(result: unknown, vacatedSegmentsList: string[][]): void {
+        if (!result || typeof result !== 'object' || vacatedSegmentsList.length === 0) {
             return;
         }
 
@@ -822,10 +1040,7 @@ export class PayloadManager {
         // literally named '0.1' collide with the nested path ['0', '1'].
         const candidates = new Map<string, { containerSegments: string[]; indices: Set<number> }>();
 
-        for (const vacatedPath of vacatedPaths) {
-            // `_.toPath` understands the `rows.[1].name` form `getAllPaths` produces.
-            const segments = _.toPath(vacatedPath);
-
+        for (const segments of vacatedSegmentsList) {
             for (let depth = segments.length; depth >= 1; depth--) {
                 const segment = segments[depth - 1];
                 if (!/^\d+$/.test(segment)) {
@@ -833,11 +1048,9 @@ export class PayloadManager {
                 }
 
                 const containerSegments = segments.slice(0, depth - 1);
-                // `_.get(obj, [])` is undefined, so the payload root has to be named directly —
-                // a payload can legitimately BE an array.
                 const container = containerSegments.length === 0
                     ? result
-                    : _.get(result as object, containerSegments);
+                    : this.getAtSegments(result, containerSegments);
                 if (!Array.isArray(container)) {
                     continue; // a numeric key on a plain object is not an array position
                 }
@@ -860,7 +1073,7 @@ export class PayloadManager {
         for (const { containerSegments, indices } of ordered) {
             const container = containerSegments.length === 0
                 ? result
-                : _.get(result as object, containerSegments);
+                : this.getAtSegments(result, containerSegments);
             if (!Array.isArray(container)) {
                 continue; // an ancestor element was already removed, taking this array with it
             }
@@ -942,24 +1155,21 @@ export class PayloadManager {
         if (compiled) {
             return compiled;
         }
-        if (pathPattern.includes('**')) {
-            const regexStr = pathPattern
-                .replace(/\\/g, '\\\\')
-                .replace(/\./g, '\\.')
-                .replace(/\*\*/g, '.*')
-                .replace(/\*/g, '[^.]+');
-            compiled = new RegExp(`^${regexStr}$`);
-        } else if (pathPattern.endsWith('.*')) {
-            const basePath = pathPattern.slice(0, -2);
+        // Paths are checked in dot form (`items.0.price`), so `items[*]` / `items[0]` become `items.*` / `items.0`.
+        const pattern = pathPattern.replace(/\[(\*|\d+)\]/g, '.$1');
+        const toSegmentRegex = (part: string): string => part
+            .replace(/\\/g, '\\\\')
+            .replace(/\./g, '\\.')
+            .replace(/\*/g, '[^.]+');
+        if (pattern.includes('**')) {
+            // `**` spans any number of segments; it is split out first so the single-`*` rule can't rewrite it
+            compiled = new RegExp(`^${pattern.split('**').map(toSegmentRegex).join('.*')}$`);
+        } else if (pattern.endsWith('.*')) {
+            const basePath = pattern.slice(0, -2);
             const escapedBase = basePath.replace(/\\/g, '\\\\').replace(/\./g, '\\.');
             compiled = new RegExp(`^${escapedBase}(\\..*)?$`);
         } else {
-            const regexStr = pathPattern
-                .replace(/\\/g, '\\\\')
-                .replace(/\./g, '\\.')
-                .replace(/\*/g, '[^.]+')
-                .replace(/\[(\*|\d+)\]/g, '\\[(\\*|\\d+)\\]');
-            compiled = new RegExp(`^${regexStr}$`);
+            compiled = new RegExp(`^${toSegmentRegex(pattern)}$`);
         }
         this._pathPatternRegexCache.set(pathPattern, compiled);
         return compiled;
@@ -1117,6 +1327,7 @@ export class PayloadManager {
         const result: Record<string, unknown> = {};
 
         for (const key of Object.keys(destObj)) {
+            if (IsUnsafeObjectKey(key)) continue;
             if (!Object.prototype.hasOwnProperty.call(srcObj, key)) {
                 result[key] = this.fastCloneDeep(destObj[key]);
             } else {
@@ -1125,6 +1336,7 @@ export class PayloadManager {
         }
 
         for (const key of Object.keys(srcObj)) {
+            if (IsUnsafeObjectKey(key)) continue;
             const srcVal = srcObj[key];
             const destVal = destObj[key];
             // Only plain objects merge key by key. A Date or class instance has no own keys to merge,
@@ -1180,6 +1392,8 @@ export class PayloadManager {
             const keys = Object.keys(value);
             for (let i = 0; i < keys.length; i++) {
                 const k = keys[i];
+                // Assigning `__proto__` on the copy would replace its prototype instead of copying data.
+                if (IsUnsafeObjectKey(k)) continue;
                 const val = (value as Record<string, unknown>)[k];
                 copy[k] = (val !== null && typeof val === 'object') ? this.fastCloneDeep(val) : val;
             }
@@ -1210,8 +1424,171 @@ export class PayloadManager {
     }
 
     /**
+     * Resolves path keys at the top of each bucket (`"meta.title"`, `"dependencies[2].code"`), so a
+     * change can name one nested field without restating the objects and arrays around it.
+     *
+     * - A key the payload already holds as a literal property name is left as it is.
+     * - Path keys in updateElements, newElements and removeElements become the nested form the merge
+     *   already handles. A newElements path that already holds a value is treated as an update.
+     * - Path keys in replaceElements are set at their exact location after the rest of the change,
+     *   because the nested form would replace the whole top-level property.
+     * - A path that can't be written (index out of range, a step through a string) is refused as a
+     *   blocked operation with a warning. It is never written as a literal key.
+     */
+    private normalizePathKeys(
+        changeRequest: AgentPayloadChangeRequest<Record<string, unknown>>,
+        originalPayload: unknown,
+        warnings: string[],
+        blockedOperations: BlockedOperation[]
+    ): NormalizedChangeRequest {
+        const root: Record<string, unknown> = this.isPlainObject(originalPayload) ? originalPayload : {};
+        const replacements: PathReplacement[] = [];
+        if (!CHANGE_BUCKETS.some(bucket => this.bucketHasPathKeys(changeRequest[bucket], root))) {
+            return { Request: changeRequest, Replacements: replacements };
+        }
+        const request: AgentPayloadChangeRequest<Record<string, unknown>> = { ...changeRequest };
+        const expansions: PathExpansion[] = [];
+        for (const bucket of CHANGE_BUCKETS) {
+            const source = changeRequest[bucket];
+            if (!this.isPlainObject(source) || !this.bucketHasPathKeys(source, root)) continue;
+            const kept: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(source)) {
+                if (IsPathKey(key) && !(key in root)) {
+                    this.routePathKey({ Bucket: bucket, Key: key, Value: value, Root: root, Expansions: expansions, Replacements: replacements, Warnings: warnings, BlockedOperations: blockedOperations });
+                } else {
+                    kept[key] = value;
+                }
+            }
+            request[bucket] = kept;
+        }
+        for (const expansion of expansions) {
+            this.mergePathExpansion(request, expansion);
+        }
+        return { Request: request, Replacements: replacements };
+    }
+
+    /** True when a bucket has a top-level path key that is not a literal property of the payload. */
+    private bucketHasPathKeys(bucket: unknown, root: Record<string, unknown>): boolean {
+        if (!this.isPlainObject(bucket)) return false;
+        return Object.keys(bucket).some(key => IsPathKey(key) && !(key in root));
+    }
+
+    /** Checks one path key against the payload and sends it to the bucket that will apply it. */
+    private routePathKey(route: PathKeyRoute): void {
+        const segments = ParsePathKey(route.Key);
+        // A path segment named like a prototype key would walk into Object.prototype when the
+        // change is applied, the same hole StripUnsafeObjectKeys closes for whole keys.
+        const unsafe = segments?.find(segment => typeof segment === 'string' && IsUnsafeObjectKey(segment));
+        if (unsafe !== undefined) {
+            this.refusePathKey(route, `Cannot apply '${route.Key}' in ${route.Bucket}: '${unsafe}' is not a data key`);
+            return;
+        }
+        const resolved = segments ? ResolvePayloadPath(route.Root, segments) : null;
+        if (!resolved || resolved.Error) {
+            const reason = resolved?.Error ?? 'the path is malformed';
+            this.refusePathKey(route, `Cannot apply '${route.Key}' in ${route.Bucket}: ${reason}`);
+            return;
+        }
+        switch (route.Bucket) {
+            case 'replaceElements':
+                route.Replacements.push({ Key: route.Key, Segments: resolved.Segments, Value: route.Value });
+                return;
+            case 'removeElements':
+                if (!resolved.Exists) {
+                    route.Warnings.push(`Nothing to remove at '${route.Key}': the payload has no value there`);
+                    return;
+                }
+                break;
+            case 'newElements':
+                if (resolved.Exists) {
+                    route.Warnings.push(`Auto-corrected: '${route.Key}' was in newElements but already exists (treated as update)`);
+                    route.Expansions.push({ Bucket: 'updateElements', Segments: resolved.Segments, Value: route.Value });
+                    return;
+                }
+                break;
+        }
+        route.Expansions.push({ Bucket: route.Bucket, Segments: resolved.Segments, Value: route.Value });
+    }
+
+    /** Records a path key that can't be applied, so the caller sees a refusal, not a silent no-op. */
+    private refusePathKey(route: PathKeyRoute, message: string): void {
+        route.Warnings.push(message);
+        route.BlockedOperations.push({
+            path: route.Key,
+            operation: BUCKET_OPERATION[route.Bucket],
+            to: route.Value,
+            reason: message,
+            timestamp: new Date().toISOString()
+        });
+    }
+
+    /**
+     * Merges one resolved path into its bucket as nested objects and sparse arrays. A top-level
+     * property the bucket already had is copied before the merge, so the caller's request is not
+     * changed.
+     */
+    private mergePathExpansion(request: AgentPayloadChangeRequest<Record<string, unknown>>, expansion: PathExpansion): void {
+        const existing = request[expansion.Bucket];
+        const bucket: Record<string, unknown> = this.isPlainObject(existing) ? existing : {};
+        const rootKey = String(expansion.Segments[0]);
+        if (rootKey in bucket) {
+            bucket[rootKey] = this.fastCloneDeep(bucket[rootKey]);
+        }
+        _.merge(bucket, BuildNestedValue(expansion.Segments, expansion.Value));
+        request[expansion.Bucket] = bucket;
+    }
+
+    /**
+     * Sets each replaceElements path key at its exact location in `result`, after the rest of the
+     * change is applied. Missing parent objects are created. Each write is checked against
+     * `allowedPaths` as an add (nothing there yet) or an update.
+     */
+    private applyPathReplacements(
+        result: unknown,
+        replacements: PathReplacement[],
+        counts: { additions: number; updates: number; deletions: number },
+        warnings: string[],
+        allowedPaths: string[] | undefined,
+        blockedOperations: BlockedOperation[]
+    ): void {
+        for (const replacement of replacements) {
+            const resolved = ResolvePayloadPath(result, replacement.Segments);
+            if (resolved.Error) {
+                const message = `Cannot apply '${replacement.Key}' in replaceElements: ${resolved.Error}`;
+                warnings.push(message);
+                blockedOperations.push({ path: replacement.Key, operation: 'update', to: replacement.Value, reason: message, timestamp: new Date().toISOString() });
+                continue;
+            }
+            const operation: PayloadOperation = resolved.Exists ? 'update' : 'add';
+            const permissionPath = replacement.Segments.join('.');
+            if (allowedPaths && !this.isOperationAllowedForPath(permissionPath, operation, allowedPaths)) {
+                const message = `Operation denied: Cannot replace '${FormatPayloadPath(replacement.Segments)}' - operation '${operation}' not allowed`;
+                warnings.push(message);
+                blockedOperations.push({ path: permissionPath, operation, to: replacement.Value, reason: `operation '${operation}' not allowed`, timestamp: new Date().toISOString() });
+                continue;
+            }
+            this.setAtPath(result, replacement.Segments, replacement.Value);
+            if (resolved.Exists) counts.deletions++;
+            counts.additions++;
+        }
+    }
+
+    /** Writes `value` at `segments`, creating missing parent objects. The path must already resolve. */
+    private setAtPath(root: unknown, segments: PayloadPathSegment[], value: unknown): void {
+        let node = root as Record<string | number, unknown>;
+        for (let i = 0; i < segments.length - 1; i++) {
+            const segment = segments[i];
+            if (node[segment] === undefined) {
+                node[segment] = {};
+            }
+            node = node[segment] as Record<string | number, unknown>;
+        }
+        node[segments[segments.length - 1]] = value;
+    }
+
+    /**
      * Applies an AgentPayloadChangeRequest to a payload
-     * 
+     *
      * @param originalPayload The original payload to apply changes to
      * @param changeRequest The change request from the AI agent
      * @param options Configuration options for the operation
@@ -1241,6 +1618,12 @@ export class PayloadManager {
             timestamp: string;
         }> = [];
 
+        // The change request is model-written JSON. A `__proto__` key in it would lead the key walk
+        // below into Object.prototype and write there, so those keys are dropped before anything runs.
+        for (const removedPath of StripUnsafeObjectKeys(changeRequest)) {
+            warnings.push(`Ignored unsafe key '${removedPath}' in payloadChangeRequest`);
+        }
+
         // Auto-correct stray keys in the changeRequest unless ignoreStrayKeys is true.
         // LLMs sometimes place payload properties (e.g. changeRequest, dataRequirements) as
         // siblings of updateElements/newElements instead of inside them. This detects those
@@ -1249,19 +1632,24 @@ export class PayloadManager {
             this.autoCorrectStrayKeys(changeRequest, originalPayload, warnings, options?.agentName, options?.allowedPaths);
         }
 
+        // Resolve path keys ("meta.title", "dependencies[2].code") into nested form. The caller's
+        // request is left as it was; `request` is a copy whenever anything had to change.
+        const { Request: request, Replacements: replacements } =
+            this.normalizePathKeys(changeRequest, originalPayload, warnings, blockedOperations);
+
         const result = this.fastCloneDeep(originalPayload) || {} as P;
         const counts = { additions: 0, updates: 0, deletions: 0 };
         const requestHasDottedKeys =
-            this.hasDottedKeys(changeRequest.newElements) ||
-            this.hasDottedKeys(changeRequest.updateElements) ||
-            this.hasDottedKeys(changeRequest.removeElements) ||
-            this.hasDottedKeys(changeRequest.replaceElements);
+            this.hasDottedKeys(request.newElements) ||
+            this.hasDottedKeys(request.updateElements) ||
+            this.hasDottedKeys(request.removeElements) ||
+            this.hasDottedKeys(request.replaceElements);
 
         // Process all changes recursively
         this.processChangeRequest(
             result,
             originalPayload,
-            changeRequest,
+            request,
             [],
             counts,
             warnings,
@@ -1269,7 +1657,8 @@ export class PayloadManager {
             blockedOperations,
             requestHasDottedKeys
         );
-        
+        this.applyPathReplacements(result, replacements, counts, warnings, options?.allowedPaths, blockedOperations);
+
         // Log if requested and in verbose mode
         if (options?.logChanges && options?.verbose) {
             this.logChangesSummary(counts, changeRequest.reasoning, options.agentName);
@@ -1278,7 +1667,7 @@ export class PayloadManager {
         // Analyze changes if requested
         let analysis: PayloadAnalysisResult | undefined;
         if (options?.analyzeChanges !== false) { // Default to true
-            analysis = this._defaultAnalyzer.AnalyzeChangeRequest(originalPayload, changeRequest, result);
+            analysis = this._defaultAnalyzer.AnalyzeChangeRequest<unknown>(originalPayload, request, result);
             
             // Add analysis warnings to the main warnings array
             if (analysis.warnings.length > 0) {
@@ -1341,12 +1730,13 @@ export class PayloadManager {
             reason: string;
             timestamp: string;
         }>,
-        requestHasDottedKeys: boolean = false
+        requestHasDottedKeys: boolean = false,
+        basePath: string[] = []
     ): void {
         if (Array.isArray(target)) {
-            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys);
+            this.processArrayChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys, basePath);
         } else if (typeof target === 'object' && target !== null) {
-            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys);
+            this.processObjectChanges(target, original, changeRequest, path, counts, warnings, allowedPaths, blockedOperations, requestHasDottedKeys, basePath);
         }
     }
 
@@ -1486,30 +1876,41 @@ export class PayloadManager {
             reason: string;
             timestamp: string;
         }>,
-        requestHasDottedKeys: boolean = false
+        requestHasDottedKeys: boolean = false,
+        basePath: string[] = []
     ): void {
-        const pathStr = path.join('.');
-        
-        // Get change arrays for this path
-        const removeArray = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
-        const updateArray = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
-        const newArray = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
-        const replaceArray = pathStr ? _.get(changeRequest.replaceElements, pathStr) : changeRequest.replaceElements;
+        // Get change arrays for this path using segment-aware lookup so keys containing '.' or '[' work
+        const removeArray = (path.length > 0
+            ? this.getChangeBucketValue(changeRequest.removeElements, path, requestHasDottedKeys)
+            : changeRequest.removeElements) as unknown[] | undefined;
+        const updateArray = (path.length > 0
+            ? this.getChangeBucketValue(changeRequest.updateElements, path, requestHasDottedKeys)
+            : changeRequest.updateElements) as unknown[] | undefined;
+        const newArray = (path.length > 0
+            ? this.getChangeBucketValue(changeRequest.newElements, path, requestHasDottedKeys)
+            : changeRequest.newElements) as unknown[] | undefined;
+        const replaceArray = (path.length > 0
+            ? this.getChangeBucketValue(changeRequest.replaceElements, path, requestHasDottedKeys)
+            : changeRequest.replaceElements) as unknown[] | undefined;
         
         // Build a new array with all changes applied
         const newTargetArray: unknown[] = [];
+        const arrayPath = [...basePath, ...path].join('.');
+        const blocked = { warnings, blockedOperations };
         
         // Process existing elements
         for (let i = 0; i < target.length; i++) {
-            if (removeArray && removeArray[i] === '__DELETE__') {
-                counts.deletions++;
-                continue; // Skip deleted items
-            }
-            
-            // Check for __DELETE__ in updateArray as well
-            if (updateArray && updateArray[i] === '__DELETE__') {
-                counts.deletions++;
-                continue; // Skip deleted items
+            // __DELETE__ may come from removeElements or, forgivingly, from updateElements
+            const deleteRequested = (removeArray && removeArray[i] === '__DELETE__') ||
+                                    (updateArray && updateArray[i] === '__DELETE__');
+            if (deleteRequested) {
+                if (this.isArrayElementOperationAllowed(arrayPath, i, 'delete', allowedPaths)) {
+                    counts.deletions++;
+                    continue; // Skip deleted items
+                }
+                this.recordBlockedOperation(blocked, `${arrayPath}.${i}`, 'delete', target[i], undefined);
+                newTargetArray.push(target[i]); // A refused delete keeps the element unchanged
+                continue;
             }
             
             // Use updated value if provided, otherwise keep original
@@ -1534,12 +1935,15 @@ export class PayloadManager {
                         warnings,
                         allowedPaths,
                         blockedOperations,
-                        requestHasDottedKeys
+                        requestHasDottedKeys,
+                        [...basePath, ...path, i.toString()] // ...so permissions see the element's full path
                     );
-                } else {
+                } else if (this.isArrayElementOperationAllowed(arrayPath, i, 'update', allowedPaths)) {
                     // For primitives or arrays, replace entirely (existing behavior)
                     elementToAdd = updateArray[i];
                     counts.updates++;
+                } else {
+                    this.recordBlockedOperation(blocked, `${arrayPath}.${i}`, 'update', elementToAdd, updateArray[i]);
                 }
             } else if (
                 typeof elementToAdd === 'object' &&
@@ -1565,7 +1969,8 @@ export class PayloadManager {
                     warnings,
                     allowedPaths,
                     blockedOperations,
-                    requestHasDottedKeys
+                    requestHasDottedKeys,
+                    basePath
                 );
             }
             
@@ -1576,14 +1981,17 @@ export class PayloadManager {
         // These should be treated as additions (AI put new items in updateElements)
         if (updateArray && Array.isArray(updateArray)) {
             for (let i = target.length; i < updateArray.length; i++) {
-                if (this.isSignificantValue(updateArray[i])) {
+                if (!this.isSignificantValue(updateArray[i])) continue;
+                if (this.isArrayElementOperationAllowed(arrayPath, i, 'add', allowedPaths)) {
                     newTargetArray.push(updateArray[i]);
                     counts.additions++;
+                } else {
+                    this.recordBlockedOperation(blocked, `${arrayPath}.${i}`, 'add', undefined, updateArray[i]);
                 }
             }
         }
 
-        // Add new elements
+        // Add new elements. Appends are not checked against allowedPaths (they never have been).
         if (newArray && Array.isArray(newArray)) {
             for (const item of newArray) {
                 if (this.isSignificantValue(item)) {
@@ -1598,6 +2006,53 @@ export class PayloadManager {
         target.push(...newTargetArray);
     }
 
+
+    /**
+     * Whether an operation on one array element is allowed. Element operations used to be gated only
+     * by 'update' on the array itself, so that permission still allows them. A pattern naming the
+     * element path (for example `dependencies.*`) allows them too.
+     */
+    private isArrayElementOperationAllowed(
+        arrayPath: string,
+        index: number,
+        operation: PayloadOperation,
+        allowedPaths?: string[]
+    ): boolean {
+        if (!allowedPaths) return true;
+        return this.isOperationAllowedForPath(arrayPath, 'update', allowedPaths) ||
+               this.isOperationAllowedForPath(`${arrayPath}.${index}`, operation, allowedPaths);
+    }
+
+    /**
+     * Whether a `"__DELETE__"` value in updateElements may delete `key`. It needs 'delete' or 'update'
+     * on the key itself, or 'update' on the object that holds it (the gate it used to pass through).
+     */
+    private isUpdateDeleteAllowed(containerPath: string[], key: string, allowedPaths?: string[]): boolean {
+        if (!allowedPaths) return true;
+        const keyPath = [...containerPath, key].join('.');
+        return this.isOperationAllowedForPath(keyPath, 'delete', allowedPaths) ||
+               this.isOperationAllowedForPath(keyPath, 'update', allowedPaths) ||
+               (containerPath.length > 0 && this.isOperationAllowedForPath(containerPath.join('.'), 'update', allowedPaths));
+    }
+
+    /** Adds a warning and a blocked-operation record for an operation `allowedPaths` refused. */
+    private recordBlockedOperation(
+        sink: { warnings: string[]; blockedOperations?: BlockedOperation[] },
+        path: string,
+        operation: PayloadOperation,
+        from: unknown,
+        to: unknown
+    ): void {
+        sink.warnings.push(`Operation denied: Cannot ${operation} '${path}' - operation '${operation}' not allowed`);
+        sink.blockedOperations?.push({
+            path,
+            operation,
+            from,
+            to,
+            reason: `operation '${operation}' not allowed`,
+            timestamp: new Date().toISOString()
+        });
+    }
 
     /**
      * Process changes for object properties
@@ -1618,10 +2073,11 @@ export class PayloadManager {
             reason: string;
             timestamp: string;
         }>,
-        requestHasDottedKeys: boolean = false
+        requestHasDottedKeys: boolean = false,
+        basePath: string[] = []
     ): void {
         // Get all unique keys from change request
-        const changeKeys = this.getChangeKeys(changeRequest, path);
+        const changeKeys = this.getChangeKeys(changeRequest, path, requestHasDottedKeys);
         
         // Process changes for each key
         for (const key of changeKeys) {
@@ -1635,21 +2091,27 @@ export class PayloadManager {
                 warnings,
                 allowedPaths,
                 blockedOperations,
-                requestHasDottedKeys
+                requestHasDottedKeys,
+                basePath
             );
         }
         
         // After processing all changes, check for "_DELETE_" values in updateElements
         // This allows deletion within update operations at any depth
-        const pathStr = path.join('.');
-        const updateObj = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
+        const updateObj = path.length > 0
+            ? this.getChangeBucketValue(changeRequest.updateElements, path, requestHasDottedKeys)
+            : changeRequest.updateElements;
         
         if (updateObj && typeof updateObj === 'object' && !Array.isArray(updateObj)) {
             const keysToDelete: string[] = [];
             
             for (const [key, value] of Object.entries(updateObj)) {
                 if (value === '__DELETE__' && key in target) {
-                    keysToDelete.push(key);
+                    if (this.isUpdateDeleteAllowed([...basePath, ...path], key, allowedPaths)) {
+                        keysToDelete.push(key);
+                    } else {
+                        this.recordBlockedOperation({ warnings, blockedOperations }, [...basePath, ...path, key].join('.'), 'delete', target[key], undefined);
+                    }
                 }
             }
             
@@ -1673,7 +2135,8 @@ export class PayloadManager {
                         warnings,
                         allowedPaths,
                         blockedOperations,
-                        requestHasDottedKeys
+                        requestHasDottedKeys,
+                        basePath
                     );
                 }
             }
@@ -1700,21 +2163,24 @@ export class PayloadManager {
             reason: string;
             timestamp: string;
         }>,
-        requestHasDottedKeys: boolean = false
+        requestHasDottedKeys: boolean = false,
+        basePath: string[] = []
     ): void {
-        const pathStr = keyPath.join('.');
+        // The path checked against allowedPaths and reported when blocked. It differs from keyPath
+        // inside an array element merge, where keyPath is relative to the element.
+        const permissionPath = [...basePath, ...keyPath].join('.');
         
         // Check for replacement first (complete replacement - remove then add)
-        const replaceValue = _.get(changeRequest.replaceElements, pathStr);
+        const replaceValue = this.getChangeBucketValue(changeRequest.replaceElements, keyPath, requestHasDottedKeys);
         if (replaceValue !== undefined) {
             // Check if appropriate operation is allowed (delete if exists, add if not)
             const operation = key in target ? 'update' : 'add';
-            if (allowedPaths && !this.isOperationAllowedForPath(pathStr, operation, allowedPaths)) {
-                const warning = `Operation denied: Cannot replace '${pathStr}' - operation '${operation}' not allowed`;
+            if (allowedPaths && !this.isOperationAllowedForPath(permissionPath, operation, allowedPaths)) {
+                const warning = `Operation denied: Cannot replace '${permissionPath}' - operation '${operation}' not allowed`;
                 warnings.push(warning);
                 if (blockedOperations) {
                     blockedOperations.push({
-                        path: pathStr,
+                        path: permissionPath,
                         operation: operation,
                         from: target[key],
                         to: replaceValue,
@@ -1739,15 +2205,15 @@ export class PayloadManager {
         }
         
         // Check for deletion
-        const removeValue = _.get(changeRequest.removeElements, pathStr);
+        const removeValue = this.getChangeBucketValue(changeRequest.removeElements, keyPath, requestHasDottedKeys);
         if (removeValue === '__DELETE__') {
             // Check if delete operation is allowed
-            if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'delete', allowedPaths)) {
-                const warning = `Operation denied: Cannot delete '${pathStr}' - operation 'delete' not allowed`;
+            if (allowedPaths && !this.isOperationAllowedForPath(permissionPath, 'delete', allowedPaths)) {
+                const warning = `Operation denied: Cannot delete '${permissionPath}' - operation 'delete' not allowed`;
                 warnings.push(warning);
                 if (blockedOperations) {
                     blockedOperations.push({
-                        path: pathStr,
+                        path: permissionPath,
                         operation: 'delete',
                         from: target[key],
                         to: undefined,
@@ -1764,15 +2230,15 @@ export class PayloadManager {
         }
         
         // Check for addition first
-        const newValue = _.get(changeRequest.newElements, pathStr);
+        const newValue = this.getChangeBucketValue(changeRequest.newElements, keyPath, requestHasDottedKeys);
         if (newValue !== undefined && !(key in target)) {
             // Check if add operation is allowed
-            if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'add', allowedPaths)) {
-                const warning = `Operation denied: Cannot add '${pathStr}' - operation 'add' not allowed`;
+            if (allowedPaths && !this.isOperationAllowedForPath(permissionPath, 'add', allowedPaths)) {
+                const warning = `Operation denied: Cannot add '${permissionPath}' - operation 'add' not allowed`;
                 warnings.push(warning);
                 if (blockedOperations) {
                     blockedOperations.push({
-                        path: pathStr,
+                        path: permissionPath,
                         operation: 'add',
                         from: undefined,
                         to: newValue,
@@ -1788,7 +2254,7 @@ export class PayloadManager {
         }
         
         // Check for update
-        const updateValue = _.get(changeRequest.updateElements, pathStr);
+        const updateValue = this.getChangeBucketValue(changeRequest.updateElements, keyPath, requestHasDottedKeys);
 
         // Be forgiving: if AI put an update in newElements by mistake, treat it as an update
         // EXCEPTIONS where we should NOT treat newElements as updateElements:
@@ -1809,13 +2275,17 @@ export class PayloadManager {
                                     undefined;
         
         if (effectiveUpdateValue !== undefined && key in target) {
-            // Check if update operation is allowed
-            if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'update', allowedPaths)) {
-                const warning = `Operation denied: Cannot update '${pathStr}' - operation 'update' not allowed`;
+            // When the update merges into an existing object or array, permission is checked on each
+            // value it writes inside, not on the container: allowing `dependencies.*.code` must let a
+            // change write that code without also allowing every other update to `dependencies`.
+            const mergesIntoContainer = typeof effectiveUpdateValue === 'object' && effectiveUpdateValue !== null &&
+                                        typeof target[key] === 'object' && target[key] !== null;
+            if (!mergesIntoContainer && allowedPaths && !this.isOperationAllowedForPath(permissionPath, 'update', allowedPaths)) {
+                const warning = `Operation denied: Cannot update '${permissionPath}' - operation 'update' not allowed`;
                 warnings.push(warning);
                 if (blockedOperations) {
                     blockedOperations.push({
-                        path: pathStr,
+                        path: permissionPath,
                         operation: 'update',
                         from: target[key],
                         to: effectiveUpdateValue,
@@ -1827,8 +2297,7 @@ export class PayloadManager {
             }
             
             // If both values are objects or arrays, we need to recursively process the update
-            if (typeof effectiveUpdateValue === 'object' && effectiveUpdateValue !== null &&
-                typeof target[key] === 'object' && target[key] !== null) {
+            if (mergesIntoContainer) {
                 // Recursively process nested updates for both objects and arrays
                 this.processChangeRequest(
                     target[key],
@@ -1839,7 +2308,8 @@ export class PayloadManager {
                     warnings,
                     allowedPaths,
                     blockedOperations,
-                    requestHasDottedKeys
+                    requestHasDottedKeys,
+                    basePath
                 );
             } else {
                 // For primitives or type mismatches, replace the value
@@ -1854,12 +2324,12 @@ export class PayloadManager {
         } else if (updateValue !== undefined && !(key in target)) {
             // Be forgiving: if AI put an addition in updateElements by mistake, treat it as an addition
             // Check if add operation is allowed
-            if (allowedPaths && !this.isOperationAllowedForPath(pathStr, 'add', allowedPaths)) {
-                const warning = `Operation denied: Cannot add '${pathStr}' - operation 'add' not allowed`;
+            if (allowedPaths && !this.isOperationAllowedForPath(permissionPath, 'add', allowedPaths)) {
+                const warning = `Operation denied: Cannot add '${permissionPath}' - operation 'add' not allowed`;
                 warnings.push(warning);
                 if (blockedOperations) {
                     blockedOperations.push({
-                        path: pathStr,
+                        path: permissionPath,
                         operation: 'add',
                         from: undefined,
                         to: updateValue,
@@ -1886,7 +2356,8 @@ export class PayloadManager {
                 warnings,
                 allowedPaths,
                 blockedOperations,
-                requestHasDottedKeys
+                requestHasDottedKeys,
+                basePath
             );
         } else if (newValue !== undefined && Array.isArray(newValue) && Array.isArray(target[key])) {
             // Handle array append: newElements has an array for an existing array key
@@ -1900,7 +2371,8 @@ export class PayloadManager {
                 warnings,
                 allowedPaths,
                 blockedOperations,
-                requestHasDottedKeys
+                requestHasDottedKeys,
+                basePath
             );
         } else if (bothAreObjects) {
             // Handle object in newElements for existing object key
@@ -1914,28 +2386,62 @@ export class PayloadManager {
                 warnings,
                 allowedPaths,
                 blockedOperations,
-                requestHasDottedKeys
+                requestHasDottedKeys,
+                basePath
             );
         }
     }
 
     /**
+     * Resolves a value inside a changeRequest bucket (`newElements`, `updateElements`, `removeElements`,
+     * `replaceElements`) by walking literal path segments first so keys containing `.` or `[`
+     * (e.g. `Files["index.html"]`) are never split into nested paths by lodash `_.get`.
+     * Falls back to `_.get` only when flat dotted keys were used at the top level (e.g. `TransformChangeRequestPaths`).
+     *
+     * @private
+     */
+    private getChangeBucketValue(bucket: unknown, segments: string[], requestHasDottedKeys: boolean): unknown {
+        if (!bucket || typeof bucket !== 'object' || segments.length === 0) {
+            return segments.length === 0 ? bucket : undefined;
+        }
+        const direct = this.getAtSegments(bucket, segments);
+        if (direct !== undefined || !requestHasDottedKeys) {
+            return direct;
+        }
+        if (segments.some(s => s.includes('.') || s.includes('['))) {
+            return undefined;
+        }
+        return _.get(bucket, segments.join('.'));
+    }
+
+    /**
      * Get all unique keys from change request for a given path
      */
-    private getChangeKeys<P = any>(changeRequest: AgentPayloadChangeRequest<P>, path: string[]): Set<string> {
+    private getChangeKeys<P = unknown>(
+        changeRequest: AgentPayloadChangeRequest<P>,
+        path: string[],
+        requestHasDottedKeys: boolean = false
+    ): Set<string> {
         const keys = new Set<string>();
-        const pathStr = path.join('.');
         
         const addKeysFromObject = (obj: unknown) => {
             if (obj && typeof obj === 'object' && !Array.isArray(obj)) {
-                Object.keys(obj).forEach(k => keys.add(k));
+                Object.keys(obj).filter(k => !IsUnsafeObjectKey(k)).forEach(k => keys.add(k));
             }
         };
         
-        const removeObj = pathStr ? _.get(changeRequest.removeElements, pathStr) : changeRequest.removeElements;
-        const updateObj = pathStr ? _.get(changeRequest.updateElements, pathStr) : changeRequest.updateElements;
-        const newObj = pathStr ? _.get(changeRequest.newElements, pathStr) : changeRequest.newElements;
-        const replaceObj = pathStr ? _.get(changeRequest.replaceElements, pathStr) : changeRequest.replaceElements;
+        const removeObj = path.length > 0
+            ? this.getChangeBucketValue(changeRequest.removeElements, path, requestHasDottedKeys)
+            : changeRequest.removeElements;
+        const updateObj = path.length > 0
+            ? this.getChangeBucketValue(changeRequest.updateElements, path, requestHasDottedKeys)
+            : changeRequest.updateElements;
+        const newObj = path.length > 0
+            ? this.getChangeBucketValue(changeRequest.newElements, path, requestHasDottedKeys)
+            : changeRequest.newElements;
+        const replaceObj = path.length > 0
+            ? this.getChangeBucketValue(changeRequest.replaceElements, path, requestHasDottedKeys)
+            : changeRequest.replaceElements;
         
         addKeysFromObject(removeObj);
         addKeysFromObject(updateObj);

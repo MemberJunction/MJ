@@ -255,3 +255,23 @@ describe('NewItemOption', () => {
     expect(option.Icon).toBe('fa-plus');
   });
 });
+
+// ======================= BaseUserMenu (Diagnostic Bundle & About) =======================
+describe('BaseUserMenu diagnostic-bundle & about items', () => {
+  it('includes the diagnostic-bundle menu item and signals the shell when clicked', async () => {
+    const { BaseUserMenu } = await import('../user-menu/base-user-menu');
+    const menu = new BaseUserMenu();
+    const items = menu.GetMenuItems();
+    const diagItem = items.find(i => i.id === 'diagnostic-bundle');
+    expect(diagItem).toBeDefined();
+    expect(diagItem?.label).toBe('Diagnostic Bundle');
+    expect(diagItem?.group).toBe('system');
+
+    const result = await menu.HandleItemClick('diagnostic-bundle');
+    expect(result).toEqual({
+      success: true,
+      closeMenu: true,
+      message: 'diagnostic-bundle',
+    });
+  });
+});

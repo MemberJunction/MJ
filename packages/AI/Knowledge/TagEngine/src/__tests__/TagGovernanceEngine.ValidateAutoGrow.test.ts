@@ -52,11 +52,13 @@ vi.mock('@memberjunction/global', () => ({
         return a.toLowerCase() === b.toLowerCase();
     },
     NormalizeUUID: (id: string) => id.toLowerCase(),
+    EscapeSQLString: (v: string | null | undefined) => (v ?? '').replace(/'/g, "''"),
     RegisterClass: vi.fn(),
     // Needed because @memberjunction/ai-engine-base's PriceUnitTypes marks its base class
     // @RequiresSubclass(); this mock replaces the module wholesale, so an unlisted symbol
     // anywhere in the dependency chain stops the suite collecting.
     RequiresSubclass: () => (target: unknown) => target,
+    IsBrowser: () => false,
 }));
 
 vi.mock('@memberjunction/core', () => ({

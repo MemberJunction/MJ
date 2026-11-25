@@ -144,6 +144,7 @@ export class ArtifactPermissionService {
             EntityName: 'MJ: Artifact Permissions',
             ExtraFilter: `ArtifactID='${artifactId}' AND UserID='${userId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, currentUser);
 
@@ -515,6 +516,7 @@ export class ArtifactPermissionService {
             EntityName: 'MJ: Artifacts',
             ExtraFilter: `ID='${artifactId}'`,
             MaxRows: 1,
+            SkipTotalRowCount: true,
             ResultType: 'entity_object'
         }, currentUser);
 
@@ -532,11 +534,26 @@ export class ArtifactPermissionService {
         currentUser: UserInfo
     ): Promise<MJCollectionArtifactEntity[]> {
         const rv = RunView.FromMetadataProvider(this.Provider);
+        const versionsRes = await rv.RunView<{ ID?: string | null }>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ArtifactID='${artifactId}'`,
+            Fields: ['ID'],
+            ResultType: 'simple'
+        }, currentUser);
+        const versionIds = Array.from(
+            new Set(
+                (versionsRes.Success && versionsRes.Results ? versionsRes.Results : [])
+                    .map((row) => (row.ID ?? '').trim())
+                    .filter((id) => id.length > 0)
+            )
+        );
+        if (versionIds.length === 0) {
+            return [];
+        }
+        const quotedVersionIds = versionIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(', ');
         const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
-            ExtraFilter: `ArtifactVersionID IN (
-                SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
-            )`,
+            ExtraFilter: `ArtifactVersionID IN (${quotedVersionIds})`,
             ResultType: 'entity_object'
         }, currentUser);
 

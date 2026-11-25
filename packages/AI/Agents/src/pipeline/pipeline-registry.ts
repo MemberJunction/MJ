@@ -9,10 +9,30 @@
  *
  * @module @memberjunction/ai-agents
  */
+import { SanitizeToolName } from '../native-tools/action-tool-builder';
+import type { ActiveRunTaint } from '../ArtifactToolManager';
 import { PipelineInvocable } from './pipeline.types';
 
 export class PipelineToolRegistry {
     private byName = new Map<string, PipelineInvocable>();
+    private highestTaint: ActiveRunTaint | undefined;
+
+    /** Records highest-severity external-data taint observed by a capability stage in this registry (`'Untrusted'` wins over `'SemiTrusted'`). */
+    public RecordTaint(sourceName: string, trustLevel: ActiveRunTaint['TrustLevel']): void {
+        if (!this.highestTaint || (this.highestTaint.TrustLevel === 'SemiTrusted' && trustLevel === 'Untrusted')) {
+            this.highestTaint = { TrustLevel: trustLevel, SourceName: sourceName };
+        }
+    }
+
+    /** Highest-severity external-data taint recorded during the current pipeline execution, if any. */
+    public get HighestTaint(): ActiveRunTaint | undefined {
+        return this.highestTaint;
+    }
+
+    /** Clears recorded taint at the start of a pipeline run so reusing a registry never bleeds taint across runs. */
+    public ResetTaint(): void {
+        this.highestTaint = undefined;
+    }
 
     /** Register an invocable. Throws if its name collides with an already-registered tool. */
     public Register(invocable: PipelineInvocable): void {
@@ -32,9 +52,23 @@ export class PipelineToolRegistry {
         invocables.forEach((i) => this.Register(i));
     }
 
-    /** Resolve a tool name (case-insensitive), or undefined if unknown. */
+    /**
+     * Resolve a tool name (case-insensitive), falling back to a unique native-tool-name match
+     * (e.g. `"calculate_expression"` → `"Calculate Expression"`) when the model runs with
+     * native tool calling enabled and references Actions by their declared native tool name.
+     */
     public Resolve(name: string): PipelineInvocable | undefined {
-        return this.byName.get(name.trim().toLowerCase());
+        const key = name.trim().toLowerCase();
+        const exact = this.byName.get(key);
+        if (exact) {
+            return exact;
+        }
+        const sanitized = SanitizeToolName(name);
+        if (!sanitized) {
+            return undefined;
+        }
+        const matches = [...this.byName.values()].filter((i) => SanitizeToolName(i.toolName) === sanitized);
+        return matches.length === 1 ? matches[0] : undefined;
     }
 
     /** All registered tool names, in registration order — for error messages / tool docs. */

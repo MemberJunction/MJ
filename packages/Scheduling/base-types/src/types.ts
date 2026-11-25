@@ -42,6 +42,7 @@ export interface AgentJobConfiguration extends ScheduledJobConfiguration {
     StartingPayload?: any;
     InitialMessage?: string;
     ConfigurationID?: string;
+    CompanyID?: string;
     OverrideModelID?: string;
 }
 

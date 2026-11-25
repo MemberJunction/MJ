@@ -1,0 +1,32 @@
+[
+  {
+    "fields": {
+      "Name": "UserAccessibleAIAgents",
+      "Description": "Enforces 2x2 AI Agent visibility parity with AIAgentPermissionHelper: allows Owner/Admin roles, the agent's OwnerUserID, public root catalog agents (BaseAgentID IS NULL with zero AIAgentPermission rows), or any agent where the user or one of their roles has an explicit AIAgentPermission grant.",
+      "FilterText": "([OwnerUserID] = '{{UserID}}' OR ([BaseAgentID] IS NULL AND NOT EXISTS (SELECT 1 FROM [__mj].[AIAgentPermission] [ap] WHERE [ap].[AgentID] = [ID])) OR EXISTS (SELECT 1 FROM [__mj].[AIAgentPermission] [ap] WHERE [ap].[AgentID] = [ID] AND ([ap].[CanView] = 1 OR [ap].[CanRun] = 1 OR [ap].[CanEdit] = 1 OR [ap].[CanDelete] = 1) AND ([ap].[UserID] = '{{UserID}}' OR [ap].[RoleID] IN (SELECT [ur].[RoleID] FROM [__mj].[UserRole] [ur] WHERE [ur].[UserID] = '{{UserID}}'))) OR EXISTS (SELECT 1 FROM [__mj].[User] [u] LEFT JOIN [__mj].[UserRole] [ur] ON [ur].[UserID] = [u].[ID] LEFT JOIN [__mj].[Role] [r] ON [r].[ID] = [ur].[RoleID] WHERE [u].[ID] = '{{UserID}}' AND (LTRIM(RTRIM([u].[Type])) = 'Owner' OR [r].[Name] IN ('System Administrator', 'Administrator', 'Admin', 'Administration', 'Agent Administrator'))))",
+      "PlatformVariants": "{\"FilterText\":{\"postgresql\":\"(\\\"OwnerUserID\\\" = '{{UserID}}' OR (\\\"BaseAgentID\\\" IS NULL AND NOT EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"AIAgentPermission\\\" ap WHERE ap.\\\"AgentID\\\" = \\\"ID\\\")) OR EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"AIAgentPermission\\\" ap WHERE ap.\\\"AgentID\\\" = \\\"ID\\\" AND (ap.\\\"CanView\\\" = TRUE OR ap.\\\"CanRun\\\" = TRUE OR ap.\\\"CanEdit\\\" = TRUE OR ap.\\\"CanDelete\\\" = TRUE) AND (ap.\\\"UserID\\\" = '{{UserID}}' OR ap.\\\"RoleID\\\" IN (SELECT ur.\\\"RoleID\\\" FROM \\\"__mj\\\".\\\"UserRole\\\" ur WHERE ur.\\\"UserID\\\" = '{{UserID}}'))) OR EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"User\\\" u LEFT JOIN \\\"__mj\\\".\\\"UserRole\\\" ur ON ur.\\\"UserID\\\" = u.\\\"ID\\\" LEFT JOIN \\\"__mj\\\".\\\"Role\\\" r ON r.\\\"ID\\\" = ur.\\\"RoleID\\\" WHERE u.\\\"ID\\\" = '{{UserID}}' AND (BTRIM(u.\\\"Type\\\") = 'Owner' OR r.\\\"Name\\\" IN ('System Administrator', 'Administrator', 'Admin', 'Administration', 'Agent Administrator'))))\"},\"_meta\":{\"translatedBy\":\"manual\",\"sourceDialect\":\"sqlserver\",\"verified\":true}}"
+    },
+    "primaryKey": {
+      "ID": "6FCE5955-49D9-4AD8-98E1-595EFEC85133"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:52.601Z",
+      "checksum": "c80fc6e12eaaa6d6c385e2cb935fe270e718dc3babaf781db9c004d2a5bb4503"
+    }
+  },
+  {
+    "fields": {
+      "Name": "UserOwnedDerivedAIAgents",
+      "Description": "Restricts UI-role updates and deletes on MJ: AI Agents to derived agent instances owned by the current user (BaseAgentID IS NOT NULL AND OwnerUserID = current user) or administrative roles.",
+      "FilterText": "(([BaseAgentID] IS NOT NULL AND [OwnerUserID] = '{{UserID}}') OR EXISTS (SELECT 1 FROM [__mj].[User] [u] LEFT JOIN [__mj].[UserRole] [ur] ON [ur].[UserID] = [u].[ID] LEFT JOIN [__mj].[Role] [r] ON [r].[ID] = [ur].[RoleID] WHERE [u].[ID] = '{{UserID}}' AND (LTRIM(RTRIM([u].[Type])) = 'Owner' OR [r].[Name] IN ('System Administrator', 'Administrator', 'Admin', 'Administration', 'Agent Administrator'))))",
+      "PlatformVariants": "{\"FilterText\":{\"postgresql\":\"((\\\"BaseAgentID\\\" IS NOT NULL AND \\\"OwnerUserID\\\" = '{{UserID}}') OR EXISTS (SELECT 1 FROM \\\"__mj\\\".\\\"User\\\" u LEFT JOIN \\\"__mj\\\".\\\"UserRole\\\" ur ON ur.\\\"UserID\\\" = u.\\\"ID\\\" LEFT JOIN \\\"__mj\\\".\\\"Role\\\" r ON r.\\\"ID\\\" = ur.\\\"RoleID\\\" WHERE u.\\\"ID\\\" = '{{UserID}}' AND (BTRIM(u.\\\"Type\\\") = 'Owner' OR r.\\\"Name\\\" IN ('System Administrator', 'Administrator', 'Admin', 'Administration', 'Agent Administrator'))))\"},\"_meta\":{\"translatedBy\":\"manual\",\"sourceDialect\":\"sqlserver\",\"verified\":true}}"
+    },
+    "primaryKey": {
+      "ID": "8316C0C4-A844-47CD-9546-D6CE575641A3"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:52.630Z",
+      "checksum": "339bf1d2c82806ee343da6cc4576c068617b6546eb4f5967f5616c71cbf03e53"
+    }
+  }
+]

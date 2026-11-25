@@ -1,10 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, RunViewParams, UserInfo } from '@memberjunction/core';
+import type { MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 
+import { BindingWithdrawnError, type ScoringBindingMode } from '../scoring-binding';
 import {
   CreateScoringProcess,
   type CreateScoringProcessOptions,
 } from '../scoring-process';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
 
 /**
  * Unit tests for the on-demand `createScoringProcess` helper (the "Operate this model"
@@ -26,6 +29,8 @@ import {
 
 /** An in-memory MJ: Record Processes double capturing the fields the helper sets. */
 class FakeRecordProcess {
+  /** The id the saved Record Process carries; the helper copies it onto the scoring binding. */
+  public ID = 'rp-1';
   // Strongly-typed columns the helper sets directly.
   public Name = '';
   public EntityID = '';
@@ -80,13 +85,16 @@ class FakeRecordProcess {
  */
 class FakeScoringBinding {
   public ID = 'binding-1';
-  public MLModelID = '';
+  public MLTrainingPipelineID = '';
+  public FeatureName = '';
+  public ViewAuthorizationID: string | null = null;
   public RecordProcessID: string | null = null;
   public TargetEntityID: string | null = null;
   public TargetColumn: string | null = null;
-  public Mode: 'OnDemand' | 'Scheduled' | 'Materialized' = 'Scheduled';
-  public LastScoredAt: Date | null = null;
-  public LastRowCount: number | null = null;
+  public TargetColumnSource: string | null = null;
+  public Status: MJMLModelScoringBindingEntity['Status'] = 'Active';
+  public Mode: ScoringBindingMode = 'Scheduled';
+  public LoadedId: string | null = null;
   public SaveCalled = false;
 
   public constructor(
@@ -94,7 +102,11 @@ class FakeScoringBinding {
     private readonly completeMessage?: string,
   ) {}
 
-  public async Load(): Promise<boolean> {
+  public NewRecord(): boolean {
+    return true;
+  }
+  public async Load(id: string): Promise<boolean> {
+    this.LoadedId = id;
     return true;
   }
   public async Save(): Promise<boolean> {
@@ -103,6 +115,18 @@ class FakeScoringBinding {
   }
   public get LatestResult(): { CompleteMessage?: string } | undefined {
     return this.saveResult ? undefined : { CompleteMessage: this.completeMessage };
+  }
+}
+
+/** A provider transaction double: records whether the helper committed or rolled back. */
+class FakeTransaction {
+  public Committed = false;
+  public RolledBack = false;
+  public async Commit(): Promise<void> {
+    this.Committed = true;
+  }
+  public async Rollback(): Promise<void> {
+    this.RolledBack = true;
   }
 }
 
@@ -117,8 +141,20 @@ function fakeProvider(
   entityId: string,
   rp: FakeRecordProcess,
   binding: FakeScoringBinding,
+  existingBindings: ReadonlyArray<{ ID: string; MLTrainingPipelineID: string }> = [],
+  transaction: FakeTransaction = new FakeTransaction(),
 ): IMetadataProvider {
   return {
+    SupportsEntityTransactions: true,
+    async BeginEntityTransaction() {
+      return transaction;
+    },
+    Authorizations: [{ ID: SEEDED_AUTHORIZATION_ID, Name: 'View Model Predictions' }],
+    async RunView(params: RunViewParams) {
+      if (params.EntityName === 'MJ: ML Models') return { Success: true, Results: [MODEL_ROW], ErrorMessage: '' };
+      if (params.EntityName === 'MJ: ML Model Scoring Bindings') return { Success: true, Results: [...existingBindings], ErrorMessage: '' };
+      throw new Error(`unexpected RunView('${params.EntityName}')`);
+    },
     EntityByName(n: string) {
       return n.trim().toLowerCase() === entityName.trim().toLowerCase()
         ? { ID: entityId, Name: entityName }
@@ -133,6 +169,9 @@ function fakeProvider(
 }
 
 const USER = { ID: 'test-user' } as unknown as UserInfo;
+const SEEDED_AUTHORIZATION_ID = 'auth-view-model-predictions';
+/** The model the helper binds: pipeline `pipe-1` ("Renewal"), a classification. */
+const MODEL_ROW = { ID: 'model-1', PipelineID: 'pipe-1', Pipeline: 'Renewal', ProblemType: 'classification' };
 const ENTITY_NAME = 'Memberships';
 const ENTITY_ID = 'ENT-MEMBERSHIPS';
 
@@ -148,10 +187,12 @@ function setup(
   completeMessage?: string,
   bindingSaveResult = true,
   bindingCompleteMessage?: string,
-): { opts: CreateScoringProcessOptions; rp: FakeRecordProcess; binding: FakeScoringBinding } {
+  existingBindings: ReadonlyArray<{ ID: string; MLTrainingPipelineID: string }> = [],
+): { opts: CreateScoringProcessOptions; rp: FakeRecordProcess; binding: FakeScoringBinding; transaction: FakeTransaction } {
   const rp = new FakeRecordProcess(saveResult, completeMessage);
   const binding = new FakeScoringBinding(bindingSaveResult, bindingCompleteMessage);
-  const provider = fakeProvider(ENTITY_NAME, ENTITY_ID, rp, binding);
+  const transaction = new FakeTransaction();
+  const provider = fakeProvider(ENTITY_NAME, ENTITY_ID, rp, binding, existingBindings, transaction);
   const opts: CreateScoringProcessOptions = {
     modelId: 'model-1',
     targetEntityName: ENTITY_NAME,
@@ -161,7 +202,7 @@ function setup(
     provider,
     ...overrides,
   };
-  return { opts, rp, binding };
+  return { opts, rp, binding, transaction };
 }
 
 // ----- createScoringProcess — happy path (on-demand row) -----------------------
@@ -195,16 +236,18 @@ describe('createScoringProcess — assembled on-demand Record Process', () => {
     expect(JSON.parse(rp.Configuration as string).primaryKeyField).toBe('MembershipID');
   });
 
-  it('writes OutputMapping mapping the output field to $.score by default', async () => {
-    const { opts, rp } = setup();
+  it('writes no OutputMapping in write-back mode: the binding names the column and its copy source (the score by default)', async () => {
+    const { opts, rp, binding } = setup();
     await CreateScoringProcess(opts);
-    expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalScore: '$.score' } });
+    expect(rp.OutputMapping).toBeNull();
+    expect([binding.TargetColumn, binding.TargetColumnSource]).toEqual(['RenewalScore', '$.AdverseProbability']);
   });
 
-  it('writes OutputMapping mapping to $.class when valueKind=class', async () => {
-    const { opts, rp } = setup({ valueKind: 'class', outputField: 'RenewalSegment' });
+  it('writes no OutputMapping when valueKind=class: the binding copies the class', async () => {
+    const { opts, rp, binding } = setup({ valueKind: 'class', outputField: 'RenewalSegment' });
     await CreateScoringProcess(opts);
-    expect(JSON.parse(rp.OutputMapping as string)).toEqual({ fields: { RenewalSegment: '$.class' } });
+    expect(rp.OutputMapping).toBeNull();
+    expect([binding.TargetColumn, binding.TargetColumnSource]).toEqual(['RenewalSegment', '$.Class']);
   });
 
   it('generates a descriptive default name (with the write-back column + On Demand) when none is supplied', async () => {
@@ -223,12 +266,17 @@ describe('createScoringProcess — assembled on-demand Record Process', () => {
 // ----- scoring binding (lineage) -----------------------------------------------
 
 describe('createScoringProcess — scoring binding (lineage row)', () => {
-  it('upserts a binding with the model, record-process, target-entity, target-column, and Mode=OnDemand', async () => {
+  it('creates an Active binding of the model\'s pipeline: feature name, view authorization, record process, column and source, Mode=OnDemand', async () => {
     const { opts, rp, binding } = setup();
     const result = await CreateScoringProcess(opts);
 
     expect(binding.SaveCalled).toBe(true);
-    expect(binding.MLModelID).toBe('model-1');
+    expect(binding.MLTrainingPipelineID).toBe('pipe-1');
+    expect(binding.FeatureName).toBe('Renewal');
+    expect(binding.ViewAuthorizationID).toBe(SEEDED_AUTHORIZATION_ID);
+    expect(binding.Status).toBe('Active');
+    expect(binding.TargetColumnSource).toBe('$.AdverseProbability');
+    expect(binding.LoadedId).toBeNull();
     expect(binding.RecordProcessID).toBe(rp.ID);
     expect(binding.TargetEntityID).toBe(ENTITY_ID);
     expect(binding.TargetColumn).toBe('RenewalScore');
@@ -244,27 +292,72 @@ describe('createScoringProcess — scoring binding (lineage row)', () => {
     expect(binding.TargetColumn).toBe('RenewalSegment');
   });
 
-  it('throws (and does not swallow) when the binding fails to save after the RP saved', async () => {
+  it('rolls the Record Process back with a binding that fails to save, and throws the binding\'s error', async () => {
+    const errors = ConsoleCapture.Errors();
     // RP saves OK (true); the binding save fails (false) with a message.
-    const { opts, rp, binding } = setup({}, true, undefined, false, 'binding duplicate key');
+    const { opts, rp, binding, transaction } = setup({}, true, undefined, false, 'binding duplicate key');
     await expect(CreateScoringProcess(opts)).rejects.toThrow(/binding duplicate key/);
-    // The RP WAS saved (the failure is surfaced, not rolled back — no cross-row txn).
-    expect(rp.SaveCalled).toBe(true);
-    expect(binding.SaveCalled).toBe(true);
+    expect([rp.SaveCalled, binding.SaveCalled]).toEqual([true, true]);
+    // Both saves ran in one transaction, rolled back: no Record Process (and no schedule) is left without its binding.
+    expect([transaction.Committed, transaction.RolledBack]).toEqual([false, true]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining(`ScoringBindings.Upsert: failed to save scoring binding "Renewal" of pipeline 'pipe-1': binding duplicate key`), expect.stringContaining("createScoringProcess: the scoring binding of Record Process 'rp-1' failed for model 'model-1'; the Record Process is rolled back with it")]);
+  });
+
+  it('commits the Record Process and its binding together', async () => {
+    const { opts, transaction } = setup();
+    await CreateScoringProcess(opts);
+    expect([transaction.Committed, transaction.RolledBack]).toEqual([true, false]);
+  });
+
+  it('refuses a provider without entity transactions before saving anything', async () => {
+    const { opts, rp } = setup();
+    const noTransactions: IMetadataProvider = Object.assign(Object.create(opts.provider), { SupportsEntityTransactions: false });
+    await expect(CreateScoringProcess({ ...opts, provider: noTransactions })).rejects.toThrow(/needs a server-side transaction/);
+    expect(rp.SaveCalled).toBe(false);
+  });
+
+  it('takes the feature name, view authorization and class copy source from the options', async () => {
+    const { opts, binding } = setup({ featureName: 'Churn risk', viewAuthorizationId: 'auth-custom', valueKind: 'class' });
+    await CreateScoringProcess(opts);
+    expect(binding).toMatchObject({ FeatureName: 'Churn risk', ViewAuthorizationID: 'auth-custom', TargetColumnSource: '$.Class' });
+  });
+
+  it('updates the pipeline\'s existing binding of the feature on the entity instead of creating a second one', async () => {
+    const { opts, binding } = setup({}, true, undefined, true, undefined, [{ ID: 'existing-binding', MLTrainingPipelineID: 'PIPE-1' }]);
+    await CreateScoringProcess(opts);
+    expect(binding.LoadedId).toBe('existing-binding');
+  });
+
+  it('refuses an existing Withdrawn binding of the feature with a structured error instead of reporting success on it', async () => {
+    const errors = ConsoleCapture.Errors();
+    const { opts, binding } = setup({}, true, undefined, true, undefined, [{ ID: 'existing-binding', MLTrainingPipelineID: 'PIPE-1' }]);
+    binding.Status = 'Withdrawn';
+    await expect(CreateScoringProcess(opts)).rejects.toBeInstanceOf(BindingWithdrawnError);
+    expect([binding.Status, binding.SaveCalled]).toEqual(['Withdrawn', false]);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("createScoringProcess: the scoring binding of Record Process 'rp-1' failed for model 'model-1'; the Record Process is rolled back with it")]);
+  });
+
+  it('refuses when no view authorization is given and none is seeded', async () => {
+    const errors = ConsoleCapture.Errors();
+    const { opts, binding } = setup();
+    const noSeed: IMetadataProvider = Object.assign(Object.create(opts.provider), { Authorizations: [] });
+    await expect(CreateScoringProcess({ ...opts, provider: noSeed })).rejects.toThrow(/no view authorization was given and the 'View Model Predictions' authorization is not in the metadata/);
+    expect(binding.SaveCalled).toBe(false);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("createScoringProcess: the scoring binding of Record Process 'rp-1' failed")]);
   });
 });
 
 // ----- generic output (no write-back column) -----------------------------------
 
 describe('createScoringProcess — generic output (no outputField)', () => {
-  it('omits OutputMapping and creates no binding (binding is null), keeping the RP otherwise intact', async () => {
+  it('omits OutputMapping and creates a binding with no column, keeping the RP otherwise intact', async () => {
     const { opts, rp, binding } = setup({ outputField: undefined });
     const result = await CreateScoringProcess(opts);
 
-    // Generic mode: no write-back mapping, no lineage binding row.
+    // Generic mode: no write-back mapping; the binding defines the feature with no column.
     expect(rp.OutputMapping).toBeNull();
-    expect(result.binding).toBeNull();
-    expect(binding.SaveCalled).toBe(false);
+    expect(result.binding as unknown as FakeScoringBinding).toBe(binding);
+    expect(binding).toMatchObject({ SaveCalled: true, TargetColumn: null, TargetColumnSource: null, MLTrainingPipelineID: 'pipe-1' });
 
     // The RP is still a correct on-demand ML Model scoring row.
     expect(rp.SaveCalled).toBe(true);
@@ -337,7 +430,7 @@ describe('createScoringProcess — validation', () => {
 
   it('does NOT throw when outputField is omitted (generic output is valid)', async () => {
     const { opts } = setup({ outputField: undefined });
-    await expect(CreateScoringProcess(opts)).resolves.toMatchObject({ binding: null });
+    await expect(CreateScoringProcess(opts)).resolves.toMatchObject({ binding: { TargetColumn: null } });
   });
 
   it('throws when no scope selector is populated', async () => {

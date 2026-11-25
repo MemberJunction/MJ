@@ -17,6 +17,7 @@ vi.mock('@lmstudio/sdk', () => {
 // The cancellation classification is pure and shared, so the stand-in BaseLLM below builds its
 // cancelled results from the real module rather than from a hand-copied shape.
 import * as actualCancellation from '../../../../Core/src/generic/cancellation';
+import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 
 vi.mock('@memberjunction/global', () => ({
   RegisterClass: () => (_target: unknown) => {},
@@ -24,6 +25,8 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/ai', () => {
+  // The finish-reason normalization is pure, so the driver uses the real one.
+  const actual = actualChatTypes;
   class MockBaseLLM {
     protected _additionalSettings: Record<string, unknown> = {};
     constructor(_apiKey: string) {}
@@ -99,6 +102,10 @@ vi.mock('@memberjunction/ai', () => {
     SummarizeParams: class {},
     SummarizeResult: class {},
     ErrorAnalyzer: { analyzeError: vi.fn().mockReturnValue({ category: 'unknown' }) },
+    NormalizeFinishReason: actual.NormalizeFinishReason,
+    CHAT_FINISH_REASON_STOP: actual.CHAT_FINISH_REASON_STOP,
+    CHAT_FINISH_REASON_LENGTH: actual.CHAT_FINISH_REASON_LENGTH,
+    CHAT_FINISH_REASON_TOOL_CALLS: actual.CHAT_FINISH_REASON_TOOL_CALLS,
   };
 });
 
@@ -324,11 +331,13 @@ describe('LMStudioLLM', () => {
       const controller = new AbortController();
       // An OngoingPrediction is both async-iterable and a thenable that settles only when the
       // prediction finishes; the stream must be iterable before that happens.
+      const stats = { stopReason: 'eosFound', promptTokensCount: 3, predictedTokensCount: 1 };
       const prediction = {
         async *[Symbol.asyncIterator]() {
           yield { content: 'partial' };
         },
         then: vi.fn(),
+        result: vi.fn().mockResolvedValue({ stats }),
       };
       const mockRespond = vi.fn().mockReturnValue(prediction);
       mockModel.mockResolvedValue({ respond: mockRespond });
@@ -346,7 +355,62 @@ describe('LMStudioLLM', () => {
       for await (const fragment of stream) {
         fragments.push(fragment);
       }
-      expect(fragments).toEqual([{ content: 'partial' }]);
+      // The fragments, then one end marker with the finished prediction's stats (#5651).
+      expect(fragments).toEqual([{ content: 'partial' }, { Kind: 'LMStudioPredictionEnd', Stats: stats }]);
+    });
+  });
+
+  /* ---- Stop reasons (#5651, #4335) ---- */
+  describe('stop reasons', () => {
+    type Finalized = {
+      success: boolean;
+      errorMessage: string | null;
+      errorInfo?: { errorType: string; severity: string; canFailover: boolean };
+      data: { choices: Array<{ finish_reason: string; message: { content: string } }>; usage: { promptTokens: number; completionTokens: number } };
+    };
+    const call = <T>(name: string, ...args: unknown[]): T =>
+      (llm as unknown as Record<string, (...a: unknown[]) => T>)[name].bind(llm)(...args);
+    const end = (stats: Record<string, unknown>) => ({ Kind: 'LMStudioPredictionEnd', Stats: stats });
+
+    it('fails a streamed prediction LM Studio stopped on its own, retriably, instead of returning the partial text', () => {
+      const last = end({ stopReason: 'userStopped', promptTokensCount: 5, predictedTokensCount: 2 });
+      call<unknown>('processStreamingChunk', last);
+      const result = call<Finalized>('finalizeStreamingResponse', 'partial', last, null);
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBe('LM Studio stopped the prediction before it finished');
+      expect(result.errorInfo).toMatchObject({ severity: 'Retriable', canFailover: true });
+    });
+
+    it('fails a streamed prediction whose model was unloaded', () => {
+      const result = call<Finalized>('finalizeStreamingResponse', 'partial', end({ stopReason: 'modelUnloaded' }), null);
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBe('LM Studio unloaded the model before the prediction finished');
+    });
+
+    it('takes real token counts and a normalized finish reason from the stream end', () => {
+      const result = call<Finalized>('finalizeStreamingResponse', 'answer', end({ stopReason: 'maxPredictedTokensReached', promptTokensCount: 11, predictedTokensCount: 7 }), null);
+      expect(result.success).toBe(true);
+      expect(result.data.choices[0].finish_reason).toBe('length');
+      expect(result.data.usage).toMatchObject({ promptTokens: 11, completionTokens: 7 });
+    });
+
+    it('reports eosFound as stop when streaming', () => {
+      const processed = call<{ finishReason?: string }>('processStreamingChunk', end({ stopReason: 'eosFound' }));
+      expect(processed.finishReason).toBe('stop');
+    });
+
+    it('fails a non-streaming prediction whose model was unloaded', async () => {
+      mockModel.mockResolvedValue({ respond: vi.fn().mockResolvedValue({ nonReasoningContent: 'partial', stats: { stopReason: 'modelUnloaded' } }) });
+      const result = await call<Promise<Finalized>>('nonStreamingChatCompletion', { model: 'm', messages: [{ role: 'user', content: 'Hi' }] });
+      expect(result.success).toBe(false);
+      expect(result.errorMessage).toBe('LM Studio unloaded the model before the prediction finished');
+    });
+
+    it('normalizes a non-streaming stop reason (contextLengthReached -> length)', async () => {
+      mockModel.mockResolvedValue({ respond: vi.fn().mockResolvedValue({ nonReasoningContent: 'cut', stats: { stopReason: 'contextLengthReached' } }) });
+      const result = await call<Promise<Finalized>>('nonStreamingChatCompletion', { model: 'm', messages: [{ role: 'user', content: 'Hi' }] });
+      expect(result.success).toBe(true);
+      expect(result.data.choices[0].finish_reason).toBe('length');
     });
   });
 

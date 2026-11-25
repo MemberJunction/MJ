@@ -53,9 +53,12 @@ jobs:
     # Skip on schedule: the nightly cron is for e2e; test.yml's nightly already
     # runs the full unit backstop.
     if: github.event_name != 'schedule'
-    # 60, matching test.yml: the full suite was still running at ~27 min when a
-    # 30-min cap killed it — and this job may run with a cold turbo cache.
-    timeout-minutes: 60
+    # 90: unlike test.yml, which shards the suite, this job runs all of it in one
+    # runner, and it may start with a cold turbo cache (about 10 extra minutes of
+    # build). At 60 a release gate was cancelled at the limit with every test still
+    # passing. Sharding it the way test.yml does would bring this back down.
+    # 150 since v6.3.0-edge.2 halved the test concurrency below (a cold full run is slower).
+    timeout-minutes: 150
     runs-on: ubuntu-latest
     env:
       TURBO_CACHE_DIR: .turbo/cache
@@ -67,7 +70,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # workflow_call without a branch input → validate the CALLING commit
           # (publish gates the exact sha being released). Dispatch → the chosen
@@ -76,10 +79,10 @@ jobs:
           persist-credentials: false
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Set up node
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -100,7 +103,7 @@ jobs:
         run: node .github/scripts/check-turbo-cache-env.mjs
 
       - name: Restore turbo build cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -139,8 +142,14 @@ jobs:
       - name: Spec type-check gate
         run: npx turbo run test:types
 
+      # --concurrency=2, not 4: this single runner runs the WHOLE suite, so the heavy packages
+      # (ai-agents, ng-conversations, ng-dashboards, ng-explorer-core) end up running together.
+      # At 4 they exhausted the 16 GB runner: hung tests, vitest 'Timeout calling "onTaskUpdate"',
+      # then "The runner has received a shutdown signal" (5 breakdowns across the v6.3.0-edge.1
+      # and edge.2 publishes; test.yml's note on exit 137 OOMs at concurrency 4 is the same cause).
+      # Sharding like test.yml would be the real fix; this keeps one runner inside its memory.
       - name: Run unit tests
-        run: npm test -- --concurrency=4
+        run: npm test -- --concurrency=2
 
   e2e:
     name: Playwright e2e (Explorer)
@@ -167,18 +176,18 @@ jobs:
 
       - name: Checkout repo
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.branch || github.sha }}
           persist-credentials: false
 
       - name: Set up pnpm
         if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
       - name: Set up node
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: 'pnpm'
@@ -195,7 +204,7 @@ jobs:
 
       - name: Restore turbo build cache
         if: steps.prereq.outputs.READY == 'true'
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: .turbo/cache
           key: turbo-v1-${{ runner.os }}-${{ github.sha }}
@@ -298,7 +307,7 @@ jobs:
 
       - name: Upload Playwright report
         if: always() && steps.prereq.outputs.READY == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: playwright-report
           path: playwright-report/

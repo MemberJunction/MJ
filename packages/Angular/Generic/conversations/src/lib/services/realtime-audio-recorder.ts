@@ -65,7 +65,11 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
     private resampler: LinearResampler | null = null;
     private recording = false;
 
-    /** True once the agent's remote stream has been wired into the mix (prevents double-attach). */
+    /** The agent's remote stream currently wired into the mix (prevents duplicate attach of the same stream). */
+    private remoteStream: MediaStream | null = null;
+    /** The source node reading the agent's remote stream, replaced on mid-call WebRTC reconnect. */
+    private remoteSource: MediaStreamAudioSourceNode | null = null;
+    /** True while a remote stream is wired into the active mix graph. */
     private remoteAttached = false;
     /** A remote stream handed to AttachRemoteStream before the audio graph was ready; wired at setup. */
     private pendingRemoteStream: MediaStream | null = null;
@@ -136,17 +140,16 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
     }
 
     /**
-     * Wires the agent's remote-audio stream into the live mix once it arrives. The WebRTC
-     * `ontrack` that delivers the agent voice usually lands AFTER recording has already begun
-     * (mic-only), so the session attaches it here when it lands. Idempotent, and safe to call
-     * before the audio graph finishes its async setup (the stream is connected once ready).
+     * Wires the agent's remote-audio stream into the live mix once it arrives, or replaces the
+     * previous remote-audio stream when a WebRTC transport reconnects mid-call. Idempotent for the
+     * same `MediaStream` instance, and safe to call before the audio graph finishes its async setup.
      */
     public AttachRemoteStream(stream: MediaStream): void {
-        if (this.remoteAttached || stream.getAudioTracks().length === 0) {
+        if (this.remoteStream === stream || stream.getAudioTracks().length === 0) {
             return;
         }
         if (this.audioContext && this.captureNode()) {
-            this.remoteAttached = this.connectRemoteStream(this.audioContext, stream);
+            this.connectRemoteStream(this.audioContext, stream);
         } else {
             // Audio-graph setup still in flight (awaiting resume / worklet load) — connect at setup.
             this.pendingRemoteStream = stream;
@@ -298,7 +301,7 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
         const remote = remoteStream ?? this.pendingRemoteStream;
         this.pendingRemoteStream = null;
         if (remote && remote.getAudioTracks().length > 0) {
-            this.remoteAttached = this.connectRemoteStream(audioContext, remote);
+            this.connectRemoteStream(audioContext, remote);
         }
         return 'done';
     }
@@ -320,14 +323,22 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
     }
 
     /**
-     * Connects the agent stream, degrading to mic-only on failure. Unlike the mic (whose failure
-     * rightly disables the recorder), the agent stream is best-effort: a browser may reject it
+     * Connects (or replaces) the agent stream, degrading to mic-only on failure. Unlike the mic (whose
+     * failure rightly disables the recorder), the agent stream is best-effort: a browser may reject it
      * (cross-sample-rate `NotSupportedError`) and that must not discard the user's recording.
-     * Returns whether it was connected, so the caller only marks it attached on success.
      */
     private connectRemoteStream(audioContext: AudioContext, stream: MediaStream): boolean {
         try {
-            this.connectStream(audioContext, stream);
+            const replacement = this.connectStream(audioContext, stream);
+            if (!replacement) {
+                return false;
+            }
+            if (this.remoteSource) {
+                this.disconnectNode(this.remoteSource);
+            }
+            this.remoteSource = replacement;
+            this.remoteStream = stream;
+            this.remoteAttached = true;
             return true;
         } catch (error) {
             console.warn('[RealtimeAudioRecorder] Could not mix the agent stream into the recording — continuing mic-only:', error);
@@ -446,6 +457,11 @@ export class RealtimeAudioRecorder implements IRealtimeSessionRecorder {
     /** Releases the audio graph + capture node. Idempotent; leaves the encoder and the sample count alone. */
     private releaseGraph(): void {
         this.setupGeneration++;
+        if (this.remoteSource) {
+            this.disconnectNode(this.remoteSource);
+            this.remoteSource = null;
+        }
+        this.remoteStream = null;
         this.remoteAttached = false;
         this.pendingRemoteStream = null;
         this.micStream = null;

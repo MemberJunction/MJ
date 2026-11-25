@@ -77,21 +77,15 @@ export class ActionRecordProcessor implements IRecordProcessor {
             Filters: [],
         });
 
-        // The detail row the tracker writes from this result carries ActionExecutionLogID, which has a
-        // foreign key to the log row — and the engine writes that row fire-and-forget on its own queue,
-        // which the tracker's queue cannot wait on. The promise settles after the log row's 'ended' UPDATE
-        // too (on the validation-failure and FailuresOnly paths that UPDATE is the write that creates the
-        // row), so every logged record waits about one log round-trip, not only when the action beat the
-        // INSERT.
-        if (result.LogEntryPersisted) {
-            await result.LogEntryPersisted;
-        }
-
+        // The engine writes the log row fire-and-forget, so ActionExecutionLogID can name a row that does
+        // not exist yet. Pass the promise on without awaiting it: the tracker's queued detail write waits
+        // for the log row, and this record's loop slot does not (GenericProcessRunTracker.RecordResult).
         return {
             Status: result.Success ? 'Succeeded' : 'Failed',
             ResultPayload: ActionRecordProcessor.extractOutputs(result.Params),
             ErrorMessage: result.Success ? undefined : (result.Message ?? 'Action failed'),
             ActionExecutionLogID: result.LogEntry?.ID,
+            ActionExecutionLogPersisted: result.LogEntryPersisted,
         };
     }
 }

@@ -409,6 +409,11 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
             padding: 10px 0 2px;
             border-top: 1px solid var(--mj-border-subtle);
         }
+        /* When no model/voice rows sit between the list and record row, the list's bottom border already divides them. */
+        .mj-voice-picker__list + .mj-voice-picker__record-row {
+            margin-top: 0;
+            border-top: none;
+        }
         .mj-voice-picker__record-label {
             display: flex; align-items: center; gap: 8px;
             font-size: 12px; color: var(--mj-text-secondary);
@@ -437,6 +442,16 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
         }
         @media (prefers-reduced-motion: reduce) {
             .mj-voice-picker__switch-track, .mj-voice-picker__switch-track::after { transition: none; }
+        }
+        /* Prevent iOS Safari auto-zoom when focusing inputs/selects inside the mobile voice picker. */
+        @media (max-width: 640px) {
+            .mj-voice-picker__search input,
+            .mj-voice-picker__select {
+                font-size: 16px;
+            }
+            :host ::ng-deep .mj-voice-picker__voice-row .mj-dropdown {
+                font-size: 16px;
+            }
         }
         .mj-voice-picker__footer {
             display: flex; align-items: center; gap: 8px;

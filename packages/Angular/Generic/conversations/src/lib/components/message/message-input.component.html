@@ -7,6 +7,20 @@
     </div>
   }
 
+  @if (!emptyStateMode && CurrentRouteAgent) {
+    <div class="composer-route route" [style.--agent-accent]="CurrentRouteAccentVar">
+      <span class="to">
+        <span class="dot" aria-hidden="true"></span>
+        <span>Replying to <b>{{ CurrentRouteAgentName }}</b></span>
+      </span>
+      @if (ShowReturnToSage) {
+        <button type="button" class="linkish" (click)="ReturnToSage()">
+          Return to {{ ConverationManagerAgent?.Name || 'Assistant' }}
+        </button>
+      }
+    </div>
+  }
+
   <!-- AI composer (mic + Plan Mode buttons live in its in-composer toolbar): wraps the
        generic mj-message-input-box with the '@' agent / '#' record / '/' skill trigger
        plugins built in — all three on by default, preserving the standard chat behavior. -->
@@ -22,6 +36,8 @@
     [TargetAgentId]="pickerTargetAgentId"
     [AllowedAgentIDs]="AllowedAgentIDs"
     [MentionPeople]="MentionPeople"
+    [DefaultChatAgentID]="DefaultAgentId"
+    [InThreadAgentIDs]="InThreadAgentIDs"
     [enableAttachments]="enableAttachments"
     [maxAttachments]="maxAttachments"
     [maxAttachmentSizeBytes]="maxAttachmentSizeBytes"

@@ -125,6 +125,8 @@ class MintProvider {
     public AvatarRejectionFirst = false;
     /** A server that predates the `showsAgentVideo` argument. */
     public RejectAgentVideo = false;
+    /** A server that predates the catalog timing fields: it rejects `ConnectionMaxSeconds` (the first one asked for). */
+    public RejectTiming = false;
     /** What the mint returns, over the defaults. */
     public MintOverrides: Partial<StartRealtimeClientSessionResult> = {};
     public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }];
@@ -143,6 +145,9 @@ class MintProvider {
                     : null,
                 this.RejectAgentVideo && query.includes('showsAgentVideo')
                     ? 'Unknown argument "showsAgentVideo" on field "Mutation.StartRealtimeClientSession".'
+                    : null,
+                this.RejectTiming && query.includes('ConnectionMaxSeconds')
+                    ? 'Cannot query field "ConnectionMaxSeconds" on type "StartRealtimeClientSessionResult".'
                     : null,
             ].filter((message): message is string => message !== null);
             if (rejections.length > 0) {
@@ -484,6 +489,45 @@ describe('DefaultRealtimeSessionLauncher', () => {
             await expect(launch(provider)).rejects.toThrow('RelayUrl is not reachable');
             expect(provider.mints()).toHaveLength(1);
         });
+    });
+});
+
+describe('DefaultRealtimeSessionLauncher: the catalog timing (F1)', () => {
+    beforeEach(() => vi.spyOn(console, 'warn').mockImplementation(() => undefined));
+    afterEach(() => vi.restoreAllMocks());
+    const launch = (provider: MintProvider, launcher = new DefaultRealtimeSessionLauncher()) =>
+        launcher.Launch(request(), { Provider: provider as unknown as IMetadataProvider });
+
+    it('asks for the four timing fields in every mint and returns them', async () => {
+        const provider = new MintProvider();
+        provider.MintOverrides = { ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false };
+        const result = await launch(provider);
+        const [mint] = provider.mints();
+        for (const field of ['ConnectionMaxSeconds', 'SessionMaxSeconds', 'ReconnectBufferSeconds', 'TrustNativeResumption']) {
+            expect(mint.query).toMatch(new RegExp(`\\n\\s+${field}\\n`));
+        }
+        expect(result).toMatchObject({ ConnectionMaxSeconds: 45, SessionMaxSeconds: 1200, ReconnectBufferSeconds: 7, TrustNativeResumption: false });
+    });
+
+    it('drops only the timing fields for a server that predates them, keeping the other extensions, and remembers', async () => {
+        const provider = new MintProvider();
+        provider.RejectTiming = true;
+        const launcher = new DefaultRealtimeSessionLauncher();
+        const result = await launch(provider, launcher);
+        expect(result.EphemeralToken).toBe('t');
+        const [rejected, retried] = provider.mints();
+        expect(rejected.query).toContain('ConnectionMaxSeconds');
+        expect(retried.query).not.toContain('ConnectionMaxSeconds');
+        expect(retried.query).not.toContain('TrustNativeResumption');
+        expect(retried.query).toContain('AvatarStatusJson');
+        expect(retried.query).toContain('RelayUrl');
+        expect(vi.mocked(console.warn).mock.calls.map((call) => String(call[0]))).toContain(
+            '[RealtimeSession] The server does not report the session timing — minting without it; the client driver uses its own connection limits.'
+        );
+
+        await launch(provider, launcher);
+        expect(provider.mints()).toHaveLength(3);
+        expect(provider.mints()[2].query).not.toContain('ConnectionMaxSeconds');
     });
 });
 

@@ -82,16 +82,6 @@
   cursor: not-allowed;
 }
 
-.btn-icon.btn-save {
-  color: var(--mj-status-success);
-  border-color: color-mix(in srgb, var(--mj-status-success) 30%, var(--mj-bg-surface));
-}
-
-.btn-icon.btn-save:hover {
-  background: color-mix(in srgb, var(--mj-status-success) 8%, var(--mj-bg-surface));
-  border-color: var(--mj-status-success);
-}
-
 .btn-icon.btn-open {
   color: var(--mj-brand-primary);
   border-color: color-mix(in srgb, var(--mj-brand-primary) 30%, var(--mj-bg-surface));
@@ -164,74 +154,9 @@
   color: var(--mj-text-disabled);
 }
 
-/* Dropdown wrapper */
-.dropdown-wrapper {
-  position: relative;
-}
-
-.btn-icon.btn-warning {
-  color: var(--mj-status-warning);
-  border-color: color-mix(in srgb, var(--mj-status-warning) 30%, var(--mj-bg-surface));
-}
-
-.btn-icon.btn-warning:hover {
-  background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
-  border-color: var(--mj-status-warning);
-}
-
 .btn-icon.btn-muted {
   color: var(--mj-text-disabled);
   border-color: var(--mj-border-default);
-}
-
-/* Query actions dropdown */
-.query-dropdown {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 4px;
-  background: var(--mj-bg-surface);
-  border: 1px solid var(--mj-border-default);
-  border-radius: 8px;
-  box-shadow: var(--mj-shadow-md);
-  overflow: hidden;
-  min-width: 280px;
-  z-index: 100;
-}
-
-.query-dropdown-item {
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 12px;
-  cursor: pointer;
-  border-bottom: 1px solid var(--mj-border-default);
-  transition: background 0.1s;
-}
-
-.query-dropdown-item:last-child {
-  border-bottom: none;
-}
-
-.query-dropdown-item:hover {
-  background: var(--mj-bg-surface-sunken);
-}
-
-.query-dropdown-item i {
-  width: 16px;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.dropdown-label {
-  font-weight: 500;
-}
-
-.dropdown-desc {
-  font-size: 11px;
-  color: var(--mj-text-muted);
-  margin-top: 2px;
 }
 
 /* ─── Table Tab Strip ─── */
@@ -319,4 +244,8 @@
 .computation-value {
   color: var(--mj-text-primary);
   font-weight: 600;
+}
+
+.update-query-failure {
+  padding: var(--mj-space-2) var(--mj-space-3) 0;
 }

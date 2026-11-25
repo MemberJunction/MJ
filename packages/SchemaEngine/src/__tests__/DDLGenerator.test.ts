@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { DDLGenerator, ValidateIdentifier } from '../DDLGenerator.js';
+import { DDLGenerator, GetDialect, ValidateIdentifier } from '../DDLGenerator.js';
+import { SchemaEvolution } from '../SchemaEvolution.js';
 import type { TableDefinition } from '../interfaces.js';
 
 const makeTable = (overrides: Partial<TableDefinition> = {}): TableDefinition => ({
@@ -119,9 +120,35 @@ describe('DDLGenerator', () => {
       expect(sql).toContain('External ID');
     });
 
-    it('does NOT emit extended properties for PostgreSQL', () => {
+    it('emits COMMENT ON TABLE and COMMENT ON COLUMN for PostgreSQL (not sp_addextendedproperty)', () => {
       const sql = gen.GenerateCreateTable(makeTable({ Description: 'desc' }), 'postgresql');
       expect(sql).not.toContain('sp_addextendedproperty');
+      expect(sql).toContain(`COMMENT ON TABLE "custom"."TestTable" IS 'desc';`);
+      expect(sql).toContain(`COMMENT ON COLUMN "custom"."TestTable"."ExternalId" IS 'External ID';`);
+    });
+
+    it('skips whitespace-only and NUL-only table and column descriptions', () => {
+      const table = makeTable({
+        Description: '   \t\n ',
+        Columns: [
+          { Name: 'ExternalId', Type: 'string', IsNullable: false, MaxLength: 100, Description: '   ' },
+          { Name: 'Notes', Type: 'text', IsNullable: true, Description: '\0   ' },
+        ],
+      });
+      const ssSql = gen.GenerateCreateTable(table, 'sqlserver', { IfNotExists: true });
+      expect(ssSql).not.toContain('sp_addextendedproperty');
+
+      const pgSql = gen.GenerateCreateTable(table, 'postgresql', { IfNotExists: true });
+      expect(pgSql).not.toContain('COMMENT ON');
+    });
+
+    it('validates identifiers when GenerateDescriptions is called directly', () => {
+      const ss = GetDialect('sqlserver');
+      expect(() => gen.GenerateDescriptions(makeTable({ SchemaName: 'bad schema!' }), ss)).toThrow();
+      expect(() => gen.GenerateDescriptions(makeTable({ TableName: 'bad table!' }), ss)).toThrow();
+      expect(() => gen.GenerateDescriptions(makeTable({
+        Columns: [{ Name: 'bad col!', Type: 'string', IsNullable: true, Description: 'desc' }],
+      }), ss)).toThrow();
     });
 
     it('emits DEFAULT clause when column has DefaultValue', () => {
@@ -198,6 +225,49 @@ describe('DDLGenerator', () => {
       );
       expect(sql).toBe('ALTER TABLE "custom"."TestTable"\n    ADD COLUMN "Score" INTEGER NULL;');
     });
+
+    it('emits guarded MS_Description on SQL Server and COMMENT ON COLUMN on PostgreSQL when Description is set', () => {
+      const col = { Name: 'Score', Type: 'integer' as const, IsNullable: true, Description: "Customer's loyalty score;\n0-100" };
+
+      const ssSql = gen.GenerateAlterTableAddColumn('custom', 'TestTable', col, 'sqlserver');
+      expect(ssSql).toContain('ALTER TABLE [custom].[TestTable]\n    ADD [Score] INT NULL;');
+      expect(ssSql).toContain("IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'custom', N'TABLE', N'TestTable', N'COLUMN', N'Score'))");
+      expect(ssSql).toContain("@value = N'Customer''s loyalty score;\n0-100'");
+      expect(GetDialect('sqlserver').SplitStatements(ssSql)).toHaveLength(2);
+
+      const pgSql = gen.GenerateAlterTableAddColumn('custom', 'TestTable', col, 'postgresql');
+      expect(pgSql).toContain('ALTER TABLE "custom"."TestTable"\n    ADD COLUMN "Score" INTEGER NULL;');
+      expect(pgSql).toContain(`COMMENT ON COLUMN "custom"."TestTable"."Score" IS 'Customer''s loyalty score;\n0-100';`);
+      expect(GetDialect('postgresql').SplitStatements(pgSql)).toHaveLength(2);
+    });
+
+    it('omits description DDL when Description is whitespace-only or NUL-only', () => {
+      const col = { Name: 'Score', Type: 'integer' as const, IsNullable: true, Description: '  \t\0 ' };
+      expect(gen.GenerateAlterTableAddColumn('custom', 'TestTable', col, 'sqlserver')).not.toContain('sp_addextendedproperty');
+      expect(gen.GenerateAlterTableAddColumn('custom', 'TestTable', col, 'postgresql')).not.toContain('COMMENT ON');
+    });
+
+    it('flows added column descriptions through SchemaEvolution.GenerateEvolutionMigration', () => {
+      const evo = new SchemaEvolution();
+      const desired = makeTable({
+        Columns: [
+          { Name: 'ExternalId', Type: 'string', IsNullable: false, MaxLength: 100 },
+          { Name: 'Notes', Type: 'text', IsNullable: true, Description: 'Freeform notes' },
+        ],
+      });
+      const existing = {
+        SchemaName: 'custom',
+        TableName: 'TestTable',
+        Columns: [{ Name: 'ExternalId', SqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null }],
+      };
+      const diff = evo.DiffSchema(desired, existing);
+      const ssSql = evo.GenerateEvolutionMigration(diff, 'custom', 'TestTable', 'sqlserver');
+      expect(ssSql).toContain('sp_addextendedproperty');
+      expect(ssSql).toContain("@value = N'Freeform notes'");
+
+      const pgSql = evo.GenerateEvolutionMigration(diff, 'custom', 'TestTable', 'postgresql');
+      expect(pgSql).toContain(`COMMENT ON COLUMN "custom"."TestTable"."Notes" IS 'Freeform notes';`);
+    });
   });
 
   describe('GenerateAlterTableAlterColumn', () => {
@@ -243,6 +313,82 @@ describe('DDLGenerator', () => {
 
     it('rejects SQL injection attempts', () => {
       expect(() => ValidateIdentifier("'; DROP TABLE", 'table')).toThrow();
+    });
+  });
+
+  // ─── Soft PK, Soft FK, and Organic Key Auto-Indexing ────────────────
+
+  describe('Soft PK, Soft FK, and Organic Key Auto-Indexing', () => {
+    it('emits non-unique indexes for SoftPrimaryKeys, Soft ForeignKeys, and OrganicKeys and caps oversized string columns on SQL Server', () => {
+      const table = makeTable({
+        SoftPrimaryKeys: ['ExternalId'],
+        Columns: [
+          { Name: 'ExternalId', Type: 'string', RawSqlType: 'NVARCHAR(MAX)', IsNullable: false },
+          { Name: 'AccountId', Type: 'string', RawSqlType: 'NVARCHAR(800)', IsNullable: true },
+          { Name: 'Email', Type: 'string', RawSqlType: 'NVARCHAR(MAX)', IsNullable: true },
+        ],
+        ForeignKeys: [
+          {
+            ColumnName: 'AccountId',
+            ReferencedSchema: 'custom',
+            ReferencedTable: 'Account',
+            ReferencedColumn: 'ExternalId',
+            IsSoft: true,
+          },
+        ],
+        OrganicKeys: [['Email']],
+      });
+
+      const sql = gen.GenerateCreateTable(table, 'sqlserver', { IfNotExists: true });
+      expect(sql).toContain('[ExternalId] NVARCHAR(450) NOT NULL');
+      expect(sql).toContain('[AccountId] NVARCHAR(450) NULL');
+      expect(sql).toContain('[Email] NVARCHAR(450) NULL');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_PK] ON [custom].[TestTable]([ExternalId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_FK_AccountId] ON [custom].[TestTable]([AccountId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_OK_Email] ON [custom].[TestTable]([Email])');
+      expect(sql).toContain('sys.index_columns');
+    });
+
+    it('emits AddedIndexes and idempotent CREATE INDEX statements in SchemaEvolution', () => {
+      const evo = new SchemaEvolution();
+      const desired = makeTable({
+        SoftPrimaryKeys: ['ExternalId'],
+        Columns: [
+          { Name: 'ExternalId', Type: 'string', RawSqlType: 'NVARCHAR(100)', IsNullable: false },
+          { Name: 'AccountId', Type: 'string', RawSqlType: 'NVARCHAR(800)', IsNullable: true },
+          { Name: 'Email', Type: 'string', RawSqlType: 'NVARCHAR(255)', IsNullable: true },
+        ],
+        ForeignKeys: [
+          {
+            ColumnName: 'AccountId',
+            ReferencedSchema: 'custom',
+            ReferencedTable: 'Account',
+            ReferencedColumn: 'ExternalId',
+            IsSoft: true,
+          },
+        ],
+        OrganicKeys: [['Email']],
+      });
+      const existing = {
+        SchemaName: 'custom',
+        TableName: 'TestTable',
+        Columns: [
+          { Name: 'ExternalId', SqlType: 'NVARCHAR(100)', IsNullable: false, MaxLength: 100, Precision: null, Scale: null },
+        ],
+      };
+
+      const diff = evo.DiffSchema(desired, existing);
+      expect(diff.AddedIndexes).toEqual([
+        { IndexName: 'IX_custom_TestTable_PK', Columns: ['ExternalId'], Unique: false },
+        { IndexName: 'IX_custom_TestTable_FK_AccountId', Columns: ['AccountId'], Unique: false },
+        { IndexName: 'IX_custom_TestTable_OK_Email', Columns: ['Email'], Unique: false },
+      ]);
+
+      const sql = evo.GenerateEvolutionMigration(diff, 'custom', 'TestTable', 'sqlserver');
+      expect(sql).toContain('ADD [AccountId] NVARCHAR(450) NULL');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_PK] ON [custom].[TestTable]([ExternalId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_FK_AccountId] ON [custom].[TestTable]([AccountId])');
+      expect(sql).toContain('CREATE INDEX [IX_custom_TestTable_OK_Email] ON [custom].[TestTable]([Email])');
     });
   });
 });

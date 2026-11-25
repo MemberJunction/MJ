@@ -19,6 +19,7 @@ export interface BCGeneralLedgerEntry {
     description: string;
     debitAmount: number;
     creditAmount: number;
+    /** debitAmount - creditAmount; Business Central does not return it. */
     amount: number;
     lastModifiedDateTime: Date;
     dimensionSetLines?: BCDimensionSetLine[];
@@ -81,31 +82,25 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
             // Account filter
             const accountNumber = this.getParamValue(params.Params, 'AccountNumber');
             if (accountNumber) {
-                filters.push(`accountNumber eq '${accountNumber}'`);
+                filters.push(`accountNumber eq '${EscapeODataString(String(accountNumber))}'`);
             }
 
             // Document number filter
             const documentNumber = this.getParamValue(params.Params, 'DocumentNumber');
             if (documentNumber) {
-                filters.push(`documentNumber eq '${documentNumber}'`);
+                filters.push(`documentNumber eq '${EscapeODataString(String(documentNumber))}'`);
             }
 
             // Document type filter
             const documentType = this.getParamValue(params.Params, 'DocumentType');
             if (documentType) {
-                filters.push(`documentType eq '${documentType}'`);
+                filters.push(`documentType eq '${EscapeODataString(String(documentType))}'`);
             }
 
-            // Amount filters
-            const minAmount = this.getParamValue(params.Params, 'MinAmount');
-            if (minAmount !== undefined) {
-                filters.push(`amount ge ${minAmount}`);
-            }
-
-            const maxAmount = this.getParamValue(params.Params, 'MaxAmount');
-            if (maxAmount !== undefined) {
-                filters.push(`amount le ${maxAmount}`);
-            }
+            // Business Central's generalLedgerEntry has no `amount` property, so MinAmount / MaxAmount
+            // are applied after the read to the computed amount (debitAmount - creditAmount).
+            const minAmount = this.getOptionalNumberParam(params.Params, 'MinAmount');
+            const maxAmount = this.getOptionalNumberParam(params.Params, 'MaxAmount');
 
             // Select fields to retrieve
             const select = [
@@ -119,7 +114,6 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
                 'description',
                 'debitAmount',
                 'creditAmount',
-                'amount',
                 'lastModifiedDateTime'
             ];
 
@@ -152,6 +146,9 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
 
             // Map entries and get account names
             for (const entry of bcEntries) {
+                if (!this.isAmountInRange(this.computeEntryAmount(entry), minAmount, maxAmount)) {
+                    continue;
+                }
                 const mappedEntry = await this.mapBCEntryToGLEntry(entry, contextUser);
                 glEntries.push(mappedEntry);
             }
@@ -239,10 +236,41 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
             description: bcEntry.description || '',
             debitAmount: bcEntry.debitAmount || 0,
             creditAmount: bcEntry.creditAmount || 0,
-            amount: bcEntry.amount || 0,
+            amount: this.computeEntryAmount(bcEntry),
             lastModifiedDateTime: this.parseBCDate(bcEntry.lastModifiedDateTime),
             dimensionSetLines: bcEntry.dimensionSetLines ? this.mapDimensionSetLines(bcEntry.dimensionSetLines) : undefined
         };
+    }
+
+    /**
+     * The entry's signed amount: debitAmount - creditAmount. Business Central API v2.0 returns
+     * only the two sides, not a combined `amount`.
+     */
+    private computeEntryAmount(bcEntry: { debitAmount?: number; creditAmount?: number }): number {
+        return (bcEntry.debitAmount || 0) - (bcEntry.creditAmount || 0);
+    }
+
+    /** True when `amount` lies within the optional inclusive bounds. */
+    private isAmountInRange(amount: number, minAmount: number | undefined, maxAmount: number | undefined): boolean {
+        if (minAmount !== undefined && amount < minAmount) {
+            return false;
+        }
+        if (maxAmount !== undefined && amount > maxAmount) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * A param's value as a finite number, or `undefined` when it is absent, blank or not numeric.
+     */
+    private getOptionalNumberParam(params: ActionParam[], name: string): number | undefined {
+        const text = this.getOptionalStringParam(params, name);
+        if (text === undefined) {
+            return undefined;
+        }
+        const value = Number(text);
+        return Number.isFinite(value) ? value : undefined;
     }
 
     /**
@@ -365,4 +393,9 @@ export class GetBusinessCentralGeneralLedgerEntriesAction extends BusinessCentra
 
         return [...baseParams, ...specificParams];
     }
+}
+
+/** Escapes a value for a single-quoted OData string literal (a quote is doubled). */
+export function EscapeODataString(value: string): string {
+    return value.replace(/'/g, "''");
 }

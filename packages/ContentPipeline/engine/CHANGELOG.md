@@ -1,0 +1,818 @@
+# @memberjunction/content-pipeline
+
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 30460b0: Canon unification phase U0 (findings F3, F4, F11) and three integration-check repairs.
+  - **Edge type registry (F3).** Seeds the edge types the derived providers emit (`Subsets`, `Is A`, `References`, `Reads`, `Composes`, `Field Of`) as provider-only rows, plus `Same As` and `Preferred Over`. Retires `NarrowerThan` as a stored type (it is BroaderThan's inverse label; `AllowStored = 0`). Seeds `MJ: Graph Edge Type Endpoints` rows for `Defines`, `Describes`, `Measures` and `Implements`. A unit test fails when a provider or the synthesizer emits an edge type name with no seeded row.
+  - **One direction for the concept edges (F4).** `Defines`, `Describes`, `Measures` and `Implements` run artifact to concept. The Content Pipeline synthesizer now writes them that way, so a pipeline-trained metric concept appears in `ExplainEntity`'s `MeasuringQueries`. Two on-demand FieldRules Record Processes (dry run first) flip edges stored the old way and retype `NarrowerThan` edges.
+  - **Proposers check the contract before writing.** `EntityGraphOverlayStore` refuses, logs and counts (`RejectedEdgeCount`) an edge whose type has no row or whose endpoints break the type's endpoint rows. `GraphEdgeEndpointAllows` is the shared rule.
+  - **Delete stages (F11).** `GraphEvidenceRetractor` already removes the `Inferred` edges both delete stages leave behind; `DeleteStage` now also keeps a chunk as a tombstone while a `Declared` graph edge still names it, so that edge never points at nothing.
+  - **Integration checks.** `fls-closeout-client` probes REST readiness on a scoped route, so CW7/CW8 no longer run before MJAPI's scope cache has the minted key's `full_access` rule (REST enforces key scopes since MJ 6817). `work-bus-core` gives the context user an active Chief of Staff policy for WBC10 (wakes need one since MJ 6825) and restores it in teardown.
+
+- d7a630c: MJ Docs feed the semantic graph as they are saved, and what the graph shows from a document follows the document's own permissions (minor: adds `MJ: Graph Concepts.Origin` and seeds a content source, graph and edge types).
+  - **Artifact indexing.** `ArtifactGraphIndexer` (started by `ContentPipelineStartup`) pushes the latest version of each artifact into every push-only Content Source whose `Configuration.Artifacts.ArtifactTypes` names its type: one Content Item per artifact, debounced per artifact, linked to the `MJ: Artifacts` record. A deleted or emptied artifact is taken out of the index. Seeded: content source "MJ Docs" (Markdown Document artifacts, deterministic concept synthesis, so no LLM key is required) feeding a new Knowledge graph, "Library Knowledge".
+  - **Text ingest.** `ContentUploadIngestor.IngestText` / `RemoveText` index text that belongs to an entity record without an `MJ: Files` row, at a `record://<entity>/<id>` URL; unchanged text keeps the item (updating its name and description if the record was renamed) and changed text replaces it. `Remove` accepts these items as well as `upload://` ones.
+  - **Links and relatedness.** `[[Name]]` in a document becomes a `LinksTo` `MJ: Record Links` row to the artifact of that name (reconciled on every save), projected by the graph's Record Link edge provider. Names are matched case-insensitively and resolved as the document's owner, so a link only points at an artifact its author can open. Deleting an artifact deletes the links to and from it. New `SharedConceptEdgeProvider` relates two records that were sources of the same concept (`SharesConceptWith`), derived on read as the viewer, from `Approved` evidence in the requested graph (plus `Proposed` when the request asks for it, through the new `GraphEdgeRequest.IncludeProposed`). New edge types `LinksTo` and `SharesConceptWith`.
+  - **Retraction.** Deleting a content item or chunk now retracts the `Inferred` edges the Graph stage wrote for it (inside a new pipeline retraction scope that `MJGraphEdgeEntityServer` honours for `Inferred` edges only), and deletes a synthesized concept left with no source unless it is `Approved` in a Canon graph, has children or carries a `Declared` edge.
+  - **Provenance.** `MJ: Graph Concepts` gains `Origin` (`Declared` | `Inferred`; existing concepts with `SourcedFrom` edges are backfilled `Inferred`). The Graph stage marks what it creates `Inferred`, and the provenance policy hides an `Inferred` concept with no source left instead of treating it as authored. A concept whose sources the viewer can read only in part is redacted.
+  - New deterministic integration test IT185 (`docs-semantic-graph`) proves the path against a live database, including that a document's items and chunks are visible exactly when `ArtifactPermissionEngine` lets the viewer read the document.
+
+- d7a630c: Semantic graph authority tiers are now fully metadata-driven, and the graph engine accepts pluggable access policies (minor: adds three `MJ: Graph Types` columns).
+  - `MJ: Graph Types` gains `DefaultAuthorityTierID`, `DefaultConceptTaxonomyMode` and `DefaultGroundingMode`. The Graph stage reads the target graph's real type and fills in what a content source leaves unset from it; `IsCanon` comes from the graph type, never from a configured type name. Seeded types keep their previous behaviour, and Network graphs now default to `Constrained` as documented.
+  - Authority tier precedence comes only from `MJ: Graph Authority Tiers` rows: `AuthorityTierPrecedence` is removed and `GetAuthorityTierRank` requires the tier rows. A source may name its tier by ID (`AuthorityTierID`) or name; a name that matches no active tier fails the stage. A source with no tier is unranked instead of silently `Reference`. The `IContentSourceGraphOverlayConfig` keys `Enabled`, `DefaultAuthorityTier` and `DefaultAuthorityTierID` are honoured.
+  - `GraphEngine` runs `BaseGraphNodeAccessPolicy` (per entity, `Extend` or `Replace`) and `BaseGraphEdgeAccessPolicy` (per edge type) registrations. Policies only narrow, run once per entity per viewer, and fail closed when they throw or cannot be created.
+  - Built-in provenance policies: a content item, its chunks and the concepts synthesized from them are visible only to someone who can read the source record. An `Approved` concept in a Canon graph stays visible to anyone who can read concepts.
+  - Edge type names are compared ignoring case and whitespace when filtering edges and when finding an edge access policy, matching how the content pipeline resolves them on write, so an edge cannot skip its policy because its name is spaced differently. Providers that name no edge type fall back to `RelatedTo`, the seeded type. `IsCanonGraph` decides from the graph type's `IsCanon` flag only, no longer from a graph named "MJ Canon".
+  - The seeded edge type `Broader Than` (inverse `Narrower Than`) is renamed `BroaderThan` (inverse `NarrowerThan`), so every seeded edge type name is CamelCase. The row keeps its ID, and the content pipeline now writes the CamelCase name.
+
+- 3d5adab: Add WebVTT/SubRip caption cue parsing (`ParseCaptionCues`, `LooksLikeCaptionText`) and raw caption text fallback to `TranscriptSegmenter`, register `VTT` and `SRT` in `MJ: Content File Types` metadata, persist multimodal chunk fields (`StartMs`, `EndMs`, `StartOffset`, `EndOffset`, `PageNumber`, `SegmentTitle`, `Transcript`, `SegmenterKey`, `ParentChunkID`) through `SegmentStage`, `PipelineProcessor`, `WorkingRecordHydrator`, and `EmbedStage`, export `UploadTokenManager` from `@memberjunction/server`, and add `EnableInlineMedia` support to `@memberjunction/ng-markdown` to upgrade `/media/:fileId` video tags into HTML5 `<video>` players with WebVTT caption tracks and a lazy click-to-seek transcript drawer.
+
+### Patch Changes
+
+- 4fe5106: Gate `MJ: Graph Concepts` approval, deprecation, governed-field edits, and protected deletes behind the `Graph: Approve Edges` authorization, matching `MJ: Graph Edges`:
+  - `MJGraphConceptEntityServer` requires `Graph: Approve Edges` when creating an `Approved` or `Deprecated` concept, transitioning into or out of `Approved` or `Deprecated`, modifying governed fields on an `Approved` or `Deprecated` concept, or deleting a concept that is not `Draft` or `Proposed`. Brand-new policy-approved concept creates from the Content Pipeline `Graph` stage are allowed inside `GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION`, while edits to existing governed concepts remain refused.
+  - `ResolverBase` forces `MustLoadTruthFromDatabase` on `mj: graph concepts` so stored `Status` and `Dirty` governed columns always evaluate against the database row.
+  - `EntityGraphOverlayStore.UpsertConcept` preserves existing `Approved` and `Deprecated` concepts without overwriting them and scopes saves to `MJ: Graph Concepts` under `GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION`.
+  - `GraphViewComponent` (`CanApproveNodes`, default `false`) and `SemanticGraphExplorerComponent` hide and block the "Approve into Canon" action unless the caller holds `Graph: Approve Edges` (tested via `CanUserApproveGraph`).
+  - Integration test bundle `graph-runtime` (`IT167`) extends `GR3` and adds `GR7` (mutation tier) to verify concept approval, edit, deprecation, delete, and Content Pipeline preservation end to end.
+
+- 3c2a521: Replace name-resolved `[[Name]]` doc links with durable record-mention tokens (`ConversationUtility.CreateRecordLink`), `[[` autocomplete in the MJ Docs editor (searching readable artifacts as the current user), batched permission-aware link chip rendering (`ArtifactPermissionEngine.ResolvePermissionsBatch` + batched PK-only entity `RunViews`), and plain-label export.
+- 18a02db: Add native multimodal content embedding support (`Contents?: ChatMessageContent[]`) to `AIEmbeddingRunner` via `BaseEmbeddings.EmbedContent` (with bounded concurrency, per-attempt abort propagation, output dimensions, catalog prefix handling, and prompt-run tracking), and add `HasMediaInput` / `ResolveEmbedContent` hooks to `EmbedStage` so video, image, and audio chunks can embed natively alongside text chunks in the same routed vector index.
+
+  Note: `EmbeddingRunParams.Texts` is now optional (`Texts?: string[]`) to allow mutually exclusive `Texts` or `Contents` inputs; downstream TypeScript code reading `params.Texts` under strict null checks should guard with `params.Texts ?? []`.
+
+- f7d0f48: Content pipeline: Segment chooses the cleaner by the item's detected file type. A `Cleaners` map in the configuration JSON, keyed by file type (`{ "html": "Html", "pdf": "MyPdfCleaner" }`), can sit on the run, the Content Source and the Content Type (or its source type's configuration). Until now one cleaner served every item of a source, so a source holding pages, PDFs and text files (an SFTP drop, a document library) cleaned them all the same way.
+
+  Segment takes the first of: the run's entry for the file type, then the run's `CleanerKey`; the Content Source's entry for the file type; the Content Type's entry for the file type, then the Content Source Type's (the standard cleaner for that kind of file); the source's `CleanerKey`, now its default for a file type nothing maps or an item whose type was not detected; the content type's `CleanerKey` (now also read from its `Configuration`), then the source type's; and finally `Html` for markup, `PlainText` otherwise. A source overrides the standard cleaner for one file type by naming it in its own map. A cleaner key that is not registered is skipped with one warning and the next choice applies; when none applies, markup is cleaned as HTML (it used to fall to `PlainText`).
+
+  File types match case-insensitively and with or without a leading dot, and an item loaded from the database (whose file type is its Content File Type's name, `HTML`, or for a custom type perhaps `Word Document`) is matched by the same key as one Extract just detected (`html`, `docx`). Nothing changes for a configuration without a `Cleaners` map: the plain keys keep their order (run, source, content type).
+
+  Integration coverage: `content-pipeline.CP23` runs one source's HTML, text and Markdown items through the real Discover, Extract and Segment stages and checks each is cleaned by the cleaner the order above chooses, with the file type read back from the database.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [18a02db]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/content-pipeline-base@6.3.0-edge.2
+  - @memberjunction/ai-prompts@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ai-segmentation@6.3.0-edge.2
+  - @memberjunction/record-set-processor@6.3.0-edge.2
+  - @memberjunction/record-set-processor-base@6.3.0-edge.2
+  - @memberjunction/tag-engine@6.3.0-edge.2
+  - @memberjunction/ai-vectors@6.3.0-edge.2
+  - @memberjunction/content-autotagging@6.3.0-edge.2
+  - @memberjunction/credentials@6.3.0-edge.2
+  - @memberjunction/storage@6.3.0-edge.2
+  - @memberjunction/ai-vectordb@6.3.0-edge.2
+  - @memberjunction/document-parsing@6.3.0-edge.2
+  - @memberjunction/network-utils@6.3.0-edge.2
+
+## 6.3.0-edge.1
+
+### Minor Changes
+
+- 8c2b0d0: Content pipeline: a driver can fetch a page of its own locators in one session. A driver may implement `FetchBatch({ URLs, ... })`, returning one result per locator (its bytes, or the error its fetch ended in). Stages gain an optional bulk step, `Prepare(records, context)`, that the processor runs over a page before any record runs (only for the run's first stage); Extract uses it to call `FetchBatch` once per source in the page, and each item then reads what came back for it. An item the batch did not return is fetched alone; one whose batch fetch failed fails (a permanent 4xx) or retries (anything else) alone, as a single fetch would; a `Prepare` that fails is logged and every record runs as before. The processor now pages a run whose first stage has a `Prepare` even when its last stage has no `Finalize`, finishing each record exactly as a single-record run does.
+- 8c2b0d0: Content pipeline: the website crawler's Discover gains sitemap seeding, walks in parts and page rendering, and Extract can read pages through a renderer.
+
+  `AutotagWebsite.Discover` now runs `WebsiteCrawl`: breadth-first over in-scope links (same root URL, pattern, `MaxDepth` and sibling-path rules as before), with its frontier and the URLs it has seen kept in a compact resume token, so a crawl past its deadline carries on in its next walk (each part reads at least one page, so a walk always moves on). New `Configuration.Website` settings: `UseSitemaps` (seed from the sitemaps robots.txt names, else /sitemap.xml, following sitemap indexes; a page whose `lastmod` is older than the walk's `Since` is not reported but its links are followed), `SitemapURLs`, `CrawlDelayMs` (default 1000), `MaxPages` and `RenderTimeoutMs`. The legacy `Autotag` crawl is unchanged.
+
+  Page rendering: `BasePageRenderer` (content-pipeline-base) is a registered way of loading a page as a browser builds it, chosen per source with `Configuration.PageRenderer`. The pipeline ships `Headless` (`HeadlessPageRenderer`), which loads pages in a headless Chromium through Playwright, an optional peer dependency imported only when a page is rendered; one browser is shared and closed after a minute idle. Every request a rendered page makes is refused when it resolves to a private or reserved address (MJ's SSRF guard), checked at every redirect hop (Playwright's route sees only a redirect's first request, so the renderer fetches each request without following redirects: the page's own redirects are checked and followed one navigation at a time, and those of what it loads are followed hop by hop in the route). The page may open no WebSocket. The source's session headers go only to the session's own origins, hop by hop. The crawler reads pages through the source's renderer, and Extract fetches a web page through it when the source names one and its driver has no `Fetch` of its own; a page the renderer reports as an error status fails as an HTTP fetch would. Login works as before, through the Access layer.
+
+- 7ffe806: Content pipeline: a changed decorator re-segments the item. Segment copies an item's `Decorator` onto every chunk and Embed embeds it in front of the chunk's text, but the committer treated a new decorator like any other metadata and only promoted the item to `MetadataOnly`, which refreshes vector metadata and leaves the old decorator in every chunk and vector. A commit that changes an item's `Decorator` (Extract, or Discover finding an existing item again) now sets `SegmentationStatus` and `EmbeddingStatus` back to `Pending`: Segment cuts new chunks that carry the new decorator, the old ones are retired for the Delete stage, and Embed embeds the new ones. Extraction, tagging and the content `Checksum` are untouched, and other metadata changes still refresh only the vector metadata. A chunk whose own decorator changes is embedded again in full.
+- 4ffdf7c: Content pipeline: a Content Item's `EmbeddingStatus` now follows its chunks. Embed runs over chunks, so until now an item stayed at the `Pending` that Extract set, even after every chunk was embedded, and anything that read the item to ask "is this document embedded?" got the wrong answer. After each Embed page the pipeline reads the live chunks of the items that page touched and, once none has embedding work left, sets the item: `Failed` if any chunk failed, `Skipped` if every chunk was skipped, `Complete` (with `LastEmbeddedAt`) otherwise. An item Segment is due to cut again, or one being deleted, is left alone. When Segment ends an item without chunks (it failed, or there was nothing to cut) the item's `EmbeddingStatus` takes the same value in that commit. A new `SettleItemEmbedding` stage and the `Content Pipeline — Settle Item Embedding` Record Process settle an item an Embed page missed (a process stopped between committing the chunks and settling the item). `RollUpItemEmbedding` and `ItemEmbeddingRollup` are exported. Because items now reach `Complete`, a metadata change marks the item `MetadataOnly` along with its chunks, and the rollup returns it to `Complete` once they are refreshed.
+- 7b84db6: Content pipeline: Content Items can be a product's IS-A extension of `MJ: Content Items`. The pipeline always created, loaded and saved items as `MJ: Content Items`, so an item it created had no extension row, stages could not read the extension's fields, a driver's `Columns` naming one was refused, and vectors could not carry one. A source's items are now the entity named by its `Configuration.ItemEntity`, else its Content Source Type's, else its Content Type's, else `ContentPipeline.ItemEntity` on the default AI Configuration (beside `ContentPipeline.DefaultVectorIndexID`), else plain `MJ: Content Items` (`ItemEntityResolver`). The hydrator reads items as that entity (using the extension row MJ's IS-A discovery already links when it loads the core row); the committer creates new items as it, so their save writes the extension row too, and gives an existing item that lacks one its row (`AttachToParent`) before committing to it; `Columns` are checked against the extension's fields, with the framework-owned columns still refused; Embed loads items as their entity, so `VectorMetadata` can name extension fields (a `FieldStrategy` of `all` or `exclude` now includes them). A name that is not an entity, or not an extension of `MJ: Content Items`, fails the item rather than creating it without its extension row. `ItemEntity` is added to the typed Configuration of Content Sources, Content Source Types and Content Types. No schema change.
+- 8c2b0d0: Content pipeline: a `Manifest` extractor expands a CSV or TSV that lists documents into child items, the way an archive expands into its members. Each row becomes a Content Item with `ParentID` set to the manifest, so a Sync leaves the rows alone unless the manifest is removed and a re-extraction retires rows no longer listed. A row with text is complete as listed; a row with only a link becomes an item at that link (relative links resolve against the manifest's address), which its own Extract fetches through the source's fetch and Access path. Which columns hold the link, text, title, date, decorator and a stable row key is configuration (`ExtractorOptions.Manifest`), and further columns map to item columns through `Columns`, including an IS-A extension's fields. A CSV is never a manifest by default: the extractor runs only when the extractor order selects it, and it refuses a manifest with no link or text column, a configured column the header lacks, an unreadable date, or more rows than `MaxArchiveMembers` (and, like an archive, reading with no limit configured). Supporting changes in the extractor contract: `ExtractRequest.Options` carries an extractor's `ExtractorOptions[<key>]`, layered from the source type's Configuration, the source's settings and Configuration, and the run's Options; a `ContentBlock` can carry its own `URL` and well-known `Fields` (a field's `Date` replaces the inherited one); `ExtractResult.IsContainer` keeps a one-block result a container; and the confidence scale gains `DiscoveredDecorator`.
+- 8c2b0d0: Content pipeline: a Discover walk can run in parts, and a driver can report removals.
+
+  Walks in parts. A source too large to walk in one run had to finish in one go or start over every time. A driver's `Discover` may now end early by returning `{ ResumeToken }` (an `async *` generator's `return`), typically when the walk passes `DiscoverRequest.Deadline` (set from the new `Options.Tuning.DiscoverWalkBudgetMs`). The Discover stage keeps the token on the source in the new `ContentSource.DiscoverState` column (JSON, typed `IContentSourceDiscoverState`: `ResumeToken`, `WalkStartedAt`, `Mode`, `ItemsFound`) and hands it back as `DiscoverRequest.ResumeToken` on the next walk, which keeps the first part's `Since`. Until the walk finishes the source stays due (`ForceDiscovery` stays set, `LastDiscoveredAt` / `LastSyncedAt` do not move); the part that finishes stamps the first part's start and clears the state. The token is saved only when every item the part found commits: a part whose items could not be saved keeps the old token, so the next run walks that part again (and reports its removals again) instead of resuming past items that were never saved. A walk resumes only in the mode it started in. A Sync that runs in parts marks nothing for deletion by absence, since no single run saw the whole source.
+
+  Removals. A driver can yield `{ URL, Removed: true }` for a locator it knows is gone; once the walk's items have committed, the source's top-level item at that URL is marked `DeleteStatus = 'Pending'` for the Delete stage, without waiting for a Sync. Child items go with their parent, as with Sync.
+
+  Migration `V202611170732__v6.3.x__ContentPipeline_Discover_State` adds the column with its regenerated view, procedures, GraphQL type and form field.
+
+- c5a5197: Content pipeline: a Retry outcome now waits and tries again instead of failing. Until now every outcome but Complete and Skipped was committed as the stage's `Failed` status, which no stage selects again, so a record a stage asked to retry (a rate limit, a timeout, a stage out of its time budget) stayed failed for good. A Retry now leaves the status ready and sets a wait on the record: Content Items and Content Item Chunks gain `RetryCount` and `RetryAfter`, the wait doubles with each Retry in a row (`Options.Tuning.RetryBackoffBaseMs`, default one minute; `RetryBackoffMaxMs`, default one hour), and every pipeline Record Process's `ScopeFilter` skips the record until `RetryAfter` has passed. A Delete that cannot finish, which already stayed `Pending`, now waits the same way instead of being selected by every run.
+
+  Record Set Processing: a run can be stopped from the calling code. `RecordProcessExecutor.Run`/`RunByID` and `RecordSetProcessor.Process` take an optional `Signal` (an `AbortSignal`): the run starts no record after it fires and ends `Paused` without moving its resume cursor past the page it was on. Processors receive it as `RecordProcessorContext.Signal`, and the content pipeline hands it to each stage's `context.Signal` (with the stage budget), so a stage in flight can stop too; a record the run was stopped on is not committed, and stays ready.
+
+- 041b645: Content pipeline: Segment cleans an item's text before splitting it, and Extract stores HTML as it was served. The content cleaners in `@memberjunction/ai-segmentation` (`Html`, `PlainText`, and any registered `BaseContentCleaner`) and the `CleanerKey` columns on Content Sources and Content Types existed, but no stage used them, and the Html extractor stripped every tag before storing the page, so navigation, footers and banners reached the chunks and no selector could remove them. The Html extractor now stores the page's markup as the item's `Text` (a page with no readable text still yields nothing), and Segment resolves a cleaner (the run's `CleanerKey`, then the Content Source's `CleanerKey` or Configuration, then the Content Type's, then `Html` for an item the Html extractor read and `PlainText` otherwise), cleans with the layered `CleaningOptions` (content type, then source, then run), and splits the result. A wrong cleaner or selector is fixed by running Segment again, without fetching the page again. A page that cleaning leaves empty is Skipped. The item's `Text` keeps what Extract stored; the cleaner that ran is recorded on the run's detail (`Segment.cleanerKey`).
+
+  Upgrade note: an HTML item extracted again after this change stores markup instead of text, so its content checksum changes once and the item is re-segmented and re-embedded. Readers of an HTML item's `Text` outside Segment (Tag, and any application that shows or searches the item's full text) now see the page's markup.
+
+### Patch Changes
+
+- 45d6c34: Require `ExtractionStatus === 'Complete'` in `ContentUploadIngestor` before advancing items to `Segment` and `Tag` during `RunNow` uploads so deferred archive members stay `Pending`, and log load or save failures instead of throwing in `markItemsFailed`.
+- Updated dependencies [13a71da]
+- Updated dependencies [d4350c0]
+- Updated dependencies [ae69eec]
+- Updated dependencies [a1d83dc]
+- Updated dependencies [49731ee]
+- Updated dependencies [b5c4a3c]
+- Updated dependencies [2f64a46]
+- Updated dependencies [e5a392f]
+- Updated dependencies [5c0fba9]
+- Updated dependencies [2d938cf]
+- Updated dependencies [2006748]
+- Updated dependencies [7a3333e]
+- Updated dependencies [0f4d357]
+- Updated dependencies [1351528]
+- Updated dependencies [3abebb3]
+- Updated dependencies [b076358]
+- Updated dependencies [4ba5642]
+- Updated dependencies [44b885a]
+- Updated dependencies [e768fd4]
+- Updated dependencies [e912249]
+- Updated dependencies [acd082e]
+- Updated dependencies [e73f729]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [7b84db6]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [c5a5197]
+- Updated dependencies [8c2b0d0]
+- Updated dependencies [0fdcb51]
+- Updated dependencies [880a114]
+- Updated dependencies [fa811cc]
+- Updated dependencies [c75494d]
+- Updated dependencies [bc39181]
+- Updated dependencies [09cdf29]
+- Updated dependencies [1f24d8a]
+- Updated dependencies [c51c6f3]
+- Updated dependencies [35bffba]
+- Updated dependencies [86326f2]
+- Updated dependencies [a9e640a]
+- Updated dependencies [46173bd]
+- Updated dependencies [4262206]
+- Updated dependencies [0fcfce3]
+- Updated dependencies [f53f828]
+- Updated dependencies [2b4969f]
+- Updated dependencies [dc30912]
+- Updated dependencies [1864853]
+- Updated dependencies [d1bf1c9]
+- Updated dependencies [0af123e]
+- Updated dependencies [cdcbfd1]
+- Updated dependencies [05100bd]
+- Updated dependencies [fff3a52]
+- Updated dependencies [f5ccd44]
+- Updated dependencies [38ca94f]
+- Updated dependencies [6ea73e6]
+- Updated dependencies [7ad8b8a]
+- Updated dependencies [9066253]
+- Updated dependencies [e781aec]
+- Updated dependencies [1197598]
+- Updated dependencies [ce32cbf]
+- Updated dependencies [64cc6f4]
+- Updated dependencies [7747b73]
+- Updated dependencies [3e9d745]
+- Updated dependencies [31c2439]
+- Updated dependencies [687393c]
+  - @memberjunction/storage@6.3.0-edge.1
+  - @memberjunction/ai-core-plus@6.3.0-edge.1
+  - @memberjunction/core@6.3.0-edge.1
+  - @memberjunction/core-entities@6.3.0-edge.1
+  - @memberjunction/ai-prompts@6.3.0-edge.1
+  - @memberjunction/global@6.3.0-edge.1
+  - @memberjunction/tag-engine@6.3.0-edge.1
+  - @memberjunction/content-pipeline-base@6.3.0-edge.1
+  - @memberjunction/content-autotagging@6.3.0-edge.1
+  - @memberjunction/record-set-processor-base@6.3.0-edge.1
+  - @memberjunction/record-set-processor@6.3.0-edge.1
+  - @memberjunction/credentials@6.3.0-edge.1
+  - @memberjunction/aiengine@6.3.0-edge.1
+  - @memberjunction/document-parsing@6.3.0-edge.1
+  - @memberjunction/ai-segmentation@6.3.0-edge.1
+  - @memberjunction/ai-vectors@6.3.0-edge.1
+  - @memberjunction/ai-vectordb@6.3.0-edge.1
+  - @memberjunction/network-utils@6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+### Minor Changes
+
+- 63636e0: Semantic graph runtime review fixes: every graph node is checked as the caller and every audience reader at the hop it is reached (row-level security applies; no Owner bypass), query permission uses `UserCanRun().canRun`, edge approval requires `Graph: Approve Edges` and fails closed, unknown or inactive graphs return nothing, `GraphEngine` loads lazily and caches stored edges for Preload graphs only, per-step reads are bounded and ordered, and the graph search lane ranks by hop-attenuated RRF. Ships the "MJ Canon" graph and its metadata providers, the `Graph: Approve Edges` authorization, the `Semantic Graph` search provider and the `Get Graph Context` action metadata, and registers the graph expansion service at MJAPI startup. The Content Pipeline Graph stage keeps auto-approving the Inferred edges its content source's GraphOverlay policy approves, through a server operation scope API callers cannot enter; every other edge that starts Approved, of any origin, requires `Graph: Approve Edges`. Graph seeds pass the same caller-and-audience check as expanded nodes; only Approved concepts seed or appear unless proposed content is asked for; node labels, edge text and concept matches use only fields every principal may read; editing, demoting or deleting an Approved edge needs the authorization and the review stamp is server-written; Preload graph edges load lazily and reload per graph.
+
+### Patch Changes
+
+- Updated dependencies [62eca59]
+- Updated dependencies [4d2c52d]
+- Updated dependencies [7ed32af]
+- Updated dependencies [567d7b9]
+- Updated dependencies [c07f654]
+- Updated dependencies [9ec4dce]
+- Updated dependencies [0d484c2]
+- Updated dependencies [03bb8b6]
+- Updated dependencies [a01e840]
+- Updated dependencies [6555a44]
+- Updated dependencies [3c4de2b]
+- Updated dependencies [5850233]
+- Updated dependencies [0ebebfe]
+- Updated dependencies [16ac431]
+- Updated dependencies [9eb002d]
+- Updated dependencies [1dd1af1]
+- Updated dependencies [87ac205]
+- Updated dependencies [18bb8fa]
+- Updated dependencies [6049806]
+- Updated dependencies [3f95ef5]
+- Updated dependencies [63636e0]
+- Updated dependencies [abb285b]
+- Updated dependencies [4884a47]
+- Updated dependencies [5c3d369]
+- Updated dependencies [b2789ee]
+- Updated dependencies [31cc053]
+- Updated dependencies [2641e47]
+- Updated dependencies [b332459]
+- Updated dependencies [100b9c2]
+- Updated dependencies [6bd8271]
+- Updated dependencies [6fd9fb7]
+- Updated dependencies [70b5e38]
+- Updated dependencies [28cec7d]
+- Updated dependencies [b9fda3f]
+- Updated dependencies [b68d388]
+- Updated dependencies [5c4fa7c]
+- Updated dependencies [8c3c8a4]
+- Updated dependencies [fbbc06a]
+- Updated dependencies [7ace3ee]
+- Updated dependencies [2b349b9]
+- Updated dependencies [d87bb40]
+- Updated dependencies [c889b72]
+  - @memberjunction/core@6.3.0-edge.0
+  - @memberjunction/core-entities@6.3.0-edge.0
+  - @memberjunction/global@6.3.0-edge.0
+  - @memberjunction/storage@6.3.0-edge.0
+  - @memberjunction/ai-vectors@6.3.0-edge.0
+  - @memberjunction/aiengine@6.3.0-edge.0
+  - @memberjunction/credentials@6.3.0-edge.0
+  - @memberjunction/ai-core-plus@6.3.0-edge.0
+  - @memberjunction/record-set-processor@6.3.0-edge.0
+  - @memberjunction/tag-engine@6.3.0-edge.0
+  - @memberjunction/ai-prompts@6.3.0-edge.0
+  - @memberjunction/ai-segmentation@6.3.0-edge.0
+  - @memberjunction/ai-vectordb@6.3.0-edge.0
+  - @memberjunction/content-autotagging@6.3.0-edge.0
+  - @memberjunction/content-pipeline-base@6.3.0-edge.0
+  - @memberjunction/record-set-processor-base@6.3.0-edge.0
+  - @memberjunction/document-parsing@6.3.0-edge.0
+  - @memberjunction/network-utils@6.3.0-edge.0
+
+## 6.2.0
+
+### Minor Changes
+
+- 1090caa: Add the content pipeline framework: Discover, Extract, Tag, Segment, Embed and Delete stages that run over
+  Content Sources, Items and Chunks through Record Set Processing's new `Pipeline Stage` work type. One
+  working record passes between stages, each well-known field carrying a confidence score so stages resolve
+  a shared field on merit. Only the hydrator and committer touch the database, so a test run is the same
+  code with commits withheld.
+
+  The stages reuse what MJ already has. Discover and Extract call the Content Source Type's existing driver
+  (new optional `Discover` and `Fetch` on `AutotagBase`); file-type detection reads `MJ: Content File Types`
+  (new `ByteSignature`, `IsText`, `ExtractorKey` columns, seeded in metadata); durable copies go through
+  `FileStorageEngine.UploadFile`; Tag, Embed and Delete share the autotagger's prompt helpers and its new
+  `ContentVectorInfrastructure`, which also routes a source or content type that names only a `VectorIndexID`
+  (with no `EmbeddingModelID`) to that index using the index's own `EmbeddingModelID`. Document parsing moves
+  into `@memberjunction/document-parsing`, used by Get File Content (which now trims extracted PDF and Word
+  text) and the pipeline. Record Set Processing gains a per-work-type tracker pairing, so scheduled and
+  on-change runs record the same detail rows as manual ones. Additionally, `AutotagLocalFileSystem` skips
+  symbolic links and recurses into subfolders during tagging; `AutotagCloudStorage` normalizes extensions
+  written with or without a leading dot and prefers the provider's first configured `MJ: File Storage Accounts`
+  row over environment variables; `NormalizeAutotagKeywords` in `@memberjunction/content-autotagging` drops blank
+  tag names; and `ContentItemTagBridge` in `@memberjunction/tag-engine` delegates `MJ: Tagged Items` creation to
+  `TagEngine.CreateTaggedItem` (updating the stored weight on re-tagging).
+
+- c8c48e1: Add an `Upload` content source type for content an application pushes instead of the pipeline discovering it. `ContentUploadIngestor.Ingest` takes a stored `MJ: Files` row (plus an optional origin record, linked through `MJ: Entity Record Documents` using `CompositeKey.ToCompactURLSegment()` so search's origin check applies) and creates the Content Item with `URL = upload://<FileID>` and `CallerTitle` confidence on `Name`, then can run Extract, Segment, Tag, and Embed in order for that item; `Remove` detaches `FileID` on the root `upload://<FileID>` row and marks the item, its descendants, and their chunks for deletion. Discover and Sync skip push-only sources instead of failing, so uploaded items are never treated as orphans. Delete treats a stored file as the caller's if and only if the item's locator is `upload://<FileID>` (push-only sources get no special case and there is no "keep when unsure" path; items moved onto an Upload source must be re-ingested through `ContentUploadIngestor` so they receive the `upload://` locator, otherwise their file is treated as a pipeline copy). Embed skips a read-only vector index instead of retrying.
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [0d81c53]
+- Updated dependencies [ddcd666]
+- Updated dependencies [622f166]
+- Updated dependencies [f555162]
+- Updated dependencies [043f418]
+- Updated dependencies [1419ba7]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [96d6ec2]
+- Updated dependencies [a709bb6]
+- Updated dependencies [39b35f1]
+- Updated dependencies [e97d95c]
+- Updated dependencies [79279f2]
+- Updated dependencies [3fbda62]
+- Updated dependencies [eaa9455]
+- Updated dependencies [ff00d60]
+- Updated dependencies [38c4a81]
+- Updated dependencies [e51296c]
+- Updated dependencies [a50948e]
+- Updated dependencies [2552b1e]
+- Updated dependencies [25bb295]
+- Updated dependencies [432cb73]
+- Updated dependencies [3080e83]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [6c36fb6]
+- Updated dependencies [b518dfa]
+- Updated dependencies [0eeb89d]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [52b9fd5]
+- Updated dependencies [cc36de5]
+- Updated dependencies [9cb815b]
+- Updated dependencies [709de1a]
+- Updated dependencies [c159e2f]
+- Updated dependencies [29129bd]
+- Updated dependencies [37891d3]
+- Updated dependencies [6ad6434]
+- Updated dependencies [1d6e3e8]
+- Updated dependencies [d2db108]
+- Updated dependencies [dfe40a4]
+- Updated dependencies [d43d86e]
+- Updated dependencies [92ecdf9]
+- Updated dependencies [a3539d2]
+- Updated dependencies [db39145]
+- Updated dependencies [41274aa]
+- Updated dependencies [91cba84]
+- Updated dependencies [b14c72f]
+- Updated dependencies [cc41d33]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c671f85]
+- Updated dependencies [49f26d9]
+- Updated dependencies [660ef45]
+- Updated dependencies [5e4205c]
+- Updated dependencies [10c2311]
+- Updated dependencies [8fd1c46]
+- Updated dependencies [5da3ad2]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [7be1684]
+- Updated dependencies [21f9e15]
+- Updated dependencies [1090caa]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [f2248d5]
+- Updated dependencies [81aea34]
+- Updated dependencies [7384dd6]
+- Updated dependencies [6849b00]
+- Updated dependencies [67f6c85]
+- Updated dependencies [ac9b00b]
+- Updated dependencies [eb3a8d3]
+- Updated dependencies [5465489]
+- Updated dependencies [3bace5a]
+- Updated dependencies [88e6902]
+- Updated dependencies [953086f]
+- Updated dependencies [e8e6cd6]
+- Updated dependencies [142d524]
+- Updated dependencies [bb3028a]
+- Updated dependencies [6dc3aa9]
+- Updated dependencies [c87f87a]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [e1fd4c1]
+- Updated dependencies [28fdf22]
+- Updated dependencies [4248fb3]
+- Updated dependencies [e1dd673]
+- Updated dependencies [664baea]
+- Updated dependencies [f3c6161]
+- Updated dependencies [01fafc6]
+- Updated dependencies [9b8a84e]
+- Updated dependencies [35ffb95]
+- Updated dependencies [5148534]
+- Updated dependencies [d29b5c2]
+- Updated dependencies [59e32e0]
+- Updated dependencies [d122a41]
+- Updated dependencies [0a7c255]
+- Updated dependencies [0adaf76]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [64b6fa5]
+- Updated dependencies [d86bcbc]
+- Updated dependencies [42d701e]
+- Updated dependencies [1419678]
+- Updated dependencies [307da67]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [af6f892]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [7110019]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [f65fec7]
+- Updated dependencies [513e608]
+- Updated dependencies [ef43cf3]
+- Updated dependencies [6e6e3f1]
+- Updated dependencies [1d38a22]
+- Updated dependencies [9b5b489]
+- Updated dependencies [cb205de]
+- Updated dependencies [b44c7cf]
+- Updated dependencies [0d61b53]
+- Updated dependencies [0c634ba]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [432fe69]
+- Updated dependencies [56d7614]
+- Updated dependencies [223669e]
+- Updated dependencies [9d4a28a]
+- Updated dependencies [683f652]
+- Updated dependencies [26c0178]
+- Updated dependencies [594f2e0]
+- Updated dependencies [914e6ff]
+- Updated dependencies [a8be410]
+- Updated dependencies [cd39c95]
+- Updated dependencies [7316ac3]
+- Updated dependencies [2274f42]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [0fb3649]
+- Updated dependencies [131f3c4]
+- Updated dependencies [861cbf0]
+- Updated dependencies [9096523]
+- Updated dependencies [6fd16d2]
+- Updated dependencies [63e6af4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [705ab4e]
+- Updated dependencies [a7da50b]
+- Updated dependencies [0f04590]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [5fed75a]
+- Updated dependencies [e51ce8a]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [1cb1d52]
+- Updated dependencies [96daca8]
+- Updated dependencies [aa912ca]
+- Updated dependencies [1d43161]
+- Updated dependencies [0a75bb2]
+- Updated dependencies [f26084f]
+- Updated dependencies [db39145]
+- Updated dependencies [f48dffc]
+- Updated dependencies [41c2c08]
+- Updated dependencies [630bb88]
+- Updated dependencies [e69634e]
+- Updated dependencies [7658d68]
+- Updated dependencies [7110019]
+- Updated dependencies [f2a4171]
+- Updated dependencies [e482249]
+- Updated dependencies [37e2f6b]
+- Updated dependencies [6779eed]
+- Updated dependencies [b73e3bc]
+- Updated dependencies [08be974]
+- Updated dependencies [6d5c6ad]
+- Updated dependencies [29b6ec3]
+- Updated dependencies [0b406e8]
+- Updated dependencies [1141164]
+- Updated dependencies [44faf83]
+- Updated dependencies [17cc774]
+- Updated dependencies [dae1d31]
+- Updated dependencies [bfd67c6]
+- Updated dependencies [c018cb9]
+- Updated dependencies [80905a1]
+- Updated dependencies [4c97994]
+- Updated dependencies [397ae9a]
+- Updated dependencies [08b3d7b]
+- Updated dependencies [7e72c86]
+- Updated dependencies [e9ab27b]
+- Updated dependencies [a17a228]
+- Updated dependencies [21175fa]
+- Updated dependencies [6b08ebf]
+- Updated dependencies [4e4c82d]
+- Updated dependencies [5fed75a]
+- Updated dependencies [ee1f0d9]
+- Updated dependencies [ce758af]
+- Updated dependencies [89a5b59]
+- Updated dependencies [1ea4085]
+- Updated dependencies [975948b]
+- Updated dependencies [22c9074]
+- Updated dependencies [88b85fc]
+- Updated dependencies [373b180]
+- Updated dependencies [aee2d53]
+- Updated dependencies [8420f36]
+- Updated dependencies [f0c78c3]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [25f7b82]
+- Updated dependencies [8b90b41]
+- Updated dependencies [02bb563]
+- Updated dependencies [104125c]
+- Updated dependencies [7e57b48]
+- Updated dependencies [7e57b48]
+- Updated dependencies [d296edd]
+- Updated dependencies [66fd011]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [fd84ab1]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [509d2aa]
+- Updated dependencies [68f5c01]
+- Updated dependencies [196160a]
+- Updated dependencies [5513c2a]
+- Updated dependencies [90829e3]
+- Updated dependencies [1d29837]
+- Updated dependencies [14e2a3a]
+- Updated dependencies [5986939]
+- Updated dependencies [4d647e6]
+- Updated dependencies [c35f7e5]
+- Updated dependencies [8c120db]
+- Updated dependencies [57096ab]
+- Updated dependencies [bea2386]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [3ab85f9]
+- Updated dependencies [aac148b]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [17a4137]
+- Updated dependencies [b4afc13]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [539dfe3]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [60bd774]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [ac18db8]
+- Updated dependencies [35da130]
+- Updated dependencies [5b41d48]
+- Updated dependencies [4b9542c]
+- Updated dependencies [28c92e0]
+- Updated dependencies [5f707d1]
+- Updated dependencies [369e229]
+- Updated dependencies [0cc6b08]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [8a5d2c0]
+- Updated dependencies [d13cf6b]
+- Updated dependencies [aca4317]
+- Updated dependencies [d52f9ba]
+- Updated dependencies [ec97ad4]
+- Updated dependencies [0e5a4cd]
+- Updated dependencies [fd7479e]
+- Updated dependencies [b968642]
+- Updated dependencies [68a7e3b]
+- Updated dependencies [718b01c]
+- Updated dependencies [57fea6a]
+- Updated dependencies [374b1a4]
+- Updated dependencies [2c590b0]
+- Updated dependencies [1ba9315]
+- Updated dependencies [b8a9e5e]
+- Updated dependencies [e8258a1]
+- Updated dependencies [c8fb9d7]
+- Updated dependencies [2854a2e]
+- Updated dependencies [03c085c]
+- Updated dependencies [28df136]
+- Updated dependencies [b0b2cc9]
+- Updated dependencies [dc38250]
+- Updated dependencies [49e0bd8]
+  - @memberjunction/core-entities@6.2.0
+  - @memberjunction/ai-prompts@6.2.0
+  - @memberjunction/aiengine@6.2.0
+  - @memberjunction/ai-core-plus@6.2.0
+  - @memberjunction/global@6.2.0
+  - @memberjunction/core@6.2.0
+  - @memberjunction/tag-engine@6.2.0
+  - @memberjunction/content-autotagging@6.2.0
+  - @memberjunction/storage@6.2.0
+  - @memberjunction/credentials@6.2.0
+  - @memberjunction/record-set-processor@6.2.0
+  - @memberjunction/content-pipeline-base@6.2.0
+  - @memberjunction/document-parsing@6.2.0
+  - @memberjunction/record-set-processor-base@6.2.0
+  - @memberjunction/ai-vectordb@6.2.0
+  - @memberjunction/network-utils@6.2.0
+  - @memberjunction/ai-vectors@6.2.0
+  - @memberjunction/ai-segmentation@6.2.0
+
+## 6.2.0-edge.8
+
+### Minor Changes
+
+- 539dfe3: Add Semantic Graph substrate (`MJ: Graph Types`, `MJ: Graph Concept Types`, `MJ: Graph Authority Tiers`, `MJ: Graphs`, `MJ: Graph Concepts`, `MJ: Graph Edge Types`, `MJ: Graph Edge Type Endpoints`, `MJ: Graph Edge Providers`, `MJ: Graph Edges`, and `ContentSource.GraphID`), Content Pipeline `GraphStage` with `EntityGraphOverlayStore` and `DeterministicConceptSynthesizer`, deterministic `TaskGraph` DAG similarity & workflow health telemetry in `@memberjunction/ai-core-plus`, and Semantic Graph & Canon Explorer UI in `@memberjunction/ng-graph-view` and `@memberjunction/ng-dashboards`.
+
+### Patch Changes
+
+- Updated dependencies [6c36fb6]
+- Updated dependencies [9cb815b]
+- Updated dependencies [d2db108]
+- Updated dependencies [c671f85]
+- Updated dependencies [6849b00]
+- Updated dependencies [59e32e0]
+- Updated dependencies [5f0baf7]
+- Updated dependencies [a6f8c1c]
+- Updated dependencies [56d7614]
+- Updated dependencies [9ce7cf4]
+- Updated dependencies [63e6af4]
+- Updated dependencies [902d086]
+- Updated dependencies [62c91ea]
+- Updated dependencies [dd34a5c]
+- Updated dependencies [e69634e]
+- Updated dependencies [373b180]
+- Updated dependencies [539dfe3]
+- Updated dependencies [ac18db8]
+  - @memberjunction/core@6.2.0-edge.8
+  - @memberjunction/core-entities@6.2.0-edge.8
+  - @memberjunction/aiengine@6.2.0-edge.8
+  - @memberjunction/tag-engine@6.2.0-edge.8
+  - @memberjunction/storage@6.2.0-edge.8
+  - @memberjunction/global@6.2.0-edge.8
+  - @memberjunction/ai-core-plus@6.2.0-edge.8
+  - @memberjunction/document-parsing@6.2.0-edge.8
+  - @memberjunction/content-autotagging@6.2.0-edge.8
+  - @memberjunction/ai-prompts@6.2.0-edge.8
+  - @memberjunction/content-pipeline-base@6.2.0-edge.8
+  - @memberjunction/ai-segmentation@6.2.0-edge.8
+  - @memberjunction/ai-vectors@6.2.0-edge.8
+  - @memberjunction/ai-vectordb@6.2.0-edge.8
+  - @memberjunction/credentials@6.2.0-edge.8
+  - @memberjunction/record-set-processor-base@6.2.0-edge.8
+  - @memberjunction/record-set-processor@6.2.0-edge.8
+  - @memberjunction/network-utils@6.2.0-edge.8
+
+## 6.2.0-edge.7
+
+### Minor Changes
+
+- c8c48e1: Add an `Upload` content source type for content an application pushes instead of the pipeline discovering it. `ContentUploadIngestor.Ingest` takes a stored `MJ: Files` row (plus an optional origin record, linked through `MJ: Entity Record Documents` using `CompositeKey.ToCompactURLSegment()` so search's origin check applies) and creates the Content Item with `URL = upload://<FileID>` and `CallerTitle` confidence on `Name`, then can run Extract, Segment, Tag, and Embed in order for that item; `Remove` detaches `FileID` on the root `upload://<FileID>` row and marks the item, its descendants, and their chunks for deletion. Discover and Sync skip push-only sources instead of failing, so uploaded items are never treated as orphans. Delete treats a stored file as the caller's if and only if the item's locator is `upload://<FileID>` (push-only sources get no special case and there is no "keep when unsure" path; items moved onto an Upload source must be re-ingested through `ContentUploadIngestor` so they receive the `upload://` locator, otherwise their file is treated as a pipeline copy). Embed skips a read-only vector index instead of retrying.
+
+### Patch Changes
+
+- 9a2d7cc: RunView's `TotalRowCount` contract is now explicit: a number is always a real total, and `undefined` means the caller passed `SkipTotalRowCount: true`.
+
+  **Contract change.** `RunViewResult.TotalRowCount` is now optional (`TotalRowCount?: number`). With `SkipTotalRowCount: true` it is always `undefined`, including on a page that was not full, where it used to be the number of rows returned. A caller that needs a total must not pass the flag. Strict TypeScript consumers that read the field will see a compile error; a call without the flag always gets a number, so `?? 0` is safe there. `ResultType: 'count_only'` ignores the flag and always counts.
+
+  `MaxRows: 1` is no longer special-cased: a full page of one row now runs the same count as any other full page and reports the real total. Callers that only read `Results` should pass `SkipTotalRowCount: true` to avoid that second query; about 270 such reads in this repo now do. `SkipTotalRowCount` is now sent over GraphQL, so browser callers can use it too.
+
+- Updated dependencies [1419ba7]
+- Updated dependencies [c93c0f8]
+- Updated dependencies [ecf36eb]
+- Updated dependencies [91cba84]
+- Updated dependencies [29b16ee]
+- Updated dependencies [a6a4656]
+- Updated dependencies [c8c48e1]
+- Updated dependencies [3bace5a]
+- Updated dependencies [953086f]
+- Updated dependencies [f4cd5fb]
+- Updated dependencies [42df19d]
+- Updated dependencies [4283a82]
+- Updated dependencies [d6b39c4]
+- Updated dependencies [f65fec7]
+- Updated dependencies [0fb3649]
+- Updated dependencies [4c0eaec]
+- Updated dependencies [6779eed]
+- Updated dependencies [0b406e8]
+- Updated dependencies [c018cb9]
+- Updated dependencies [397ae9a]
+- Updated dependencies [89a5b59]
+- Updated dependencies [4ef13d6]
+- Updated dependencies [8b90b41]
+- Updated dependencies [509d2aa]
+- Updated dependencies [9a2d7cc]
+- Updated dependencies [36a3f9e]
+- Updated dependencies [4b9542c]
+- Updated dependencies [ba00ac7]
+- Updated dependencies [aca4317]
+- Updated dependencies [c8fb9d7]
+- Updated dependencies [b0b2cc9]
+  - @memberjunction/ai-core-plus@6.2.0-edge.7
+  - @memberjunction/global@6.2.0-edge.7
+  - @memberjunction/aiengine@6.2.0-edge.7
+  - @memberjunction/core-entities@6.2.0-edge.7
+  - @memberjunction/core@6.2.0-edge.7
+  - @memberjunction/content-pipeline-base@6.2.0-edge.7
+  - @memberjunction/content-autotagging@6.2.0-edge.7
+  - @memberjunction/ai-prompts@6.2.0-edge.7
+  - @memberjunction/tag-engine@6.2.0-edge.7
+  - @memberjunction/record-set-processor@6.2.0-edge.7
+  - @memberjunction/record-set-processor-base@6.2.0-edge.7
+  - @memberjunction/ai-segmentation@6.2.0-edge.7
+  - @memberjunction/ai-vectors@6.2.0-edge.7
+  - @memberjunction/ai-vectordb@6.2.0-edge.7
+  - @memberjunction/credentials@6.2.0-edge.7
+  - @memberjunction/storage@6.2.0-edge.7
+  - @memberjunction/document-parsing@6.2.0-edge.7
+  - @memberjunction/network-utils@6.2.0-edge.7
+
+## 6.2.0-edge.6
+
+### Minor Changes
+
+- 1090caa: Add the content pipeline framework: Discover, Extract, Tag, Segment, Embed and Delete stages that run over
+  Content Sources, Items and Chunks through Record Set Processing's new `Pipeline Stage` work type. One
+  working record passes between stages, each well-known field carrying a confidence score so stages resolve
+  a shared field on merit. Only the hydrator and committer touch the database, so a test run is the same
+  code with commits withheld.
+
+  The stages reuse what MJ already has. Discover and Extract call the Content Source Type's existing driver
+  (new optional `Discover` and `Fetch` on `AutotagBase`); file-type detection reads `MJ: Content File Types`
+  (new `ByteSignature`, `IsText`, `ExtractorKey` columns, seeded in metadata); durable copies go through
+  `FileStorageEngine.UploadFile`; Tag, Embed and Delete share the autotagger's prompt helpers and its new
+  `ContentVectorInfrastructure`, which also routes a source or content type that names only a `VectorIndexID`
+  (with no `EmbeddingModelID`) to that index using the index's own `EmbeddingModelID`. Document parsing moves
+  into `@memberjunction/document-parsing`, used by Get File Content (which now trims extracted PDF and Word
+  text) and the pipeline. Record Set Processing gains a per-work-type tracker pairing, so scheduled and
+  on-change runs record the same detail rows as manual ones. Additionally, `AutotagLocalFileSystem` skips
+  symbolic links and recurses into subfolders during tagging; `AutotagCloudStorage` normalizes extensions
+  written with or without a leading dot and prefers the provider's first configured `MJ: File Storage Accounts`
+  row over environment variables; `NormalizeAutotagKeywords` in `@memberjunction/content-autotagging` drops blank
+  tag names; and `ContentItemTagBridge` in `@memberjunction/tag-engine` delegates `MJ: Tagged Items` creation to
+  `TagEngine.CreateTaggedItem` (updating the stored weight on re-tagging).
+
+### Patch Changes
+
+- Updated dependencies [622f166]
+- Updated dependencies [4c6a28b]
+- Updated dependencies [cc36de5]
+- Updated dependencies [709de1a]
+- Updated dependencies [d43d86e]
+- Updated dependencies [cc41d33]
+- Updated dependencies [1090caa]
+- Updated dependencies [f2248d5]
+- Updated dependencies [e8e6cd6]
+- Updated dependencies [142d524]
+- Updated dependencies [0ff7523]
+- Updated dependencies [f7d5ab5]
+- Updated dependencies [a65dfb8]
+- Updated dependencies [cb205de]
+- Updated dependencies [914e6ff]
+- Updated dependencies [f26084f]
+- Updated dependencies [1141164]
+- Updated dependencies [dae1d31]
+- Updated dependencies [4c97994]
+- Updated dependencies [d296edd]
+- Updated dependencies [6a5fb64]
+- Updated dependencies [fd84ab1]
+- Updated dependencies [0e93e1f]
+- Updated dependencies [68f5c01]
+- Updated dependencies [c65f754]
+- Updated dependencies [49d0d3c]
+- Updated dependencies [5931f0d]
+- Updated dependencies [0a348e2]
+- Updated dependencies [33226e0]
+- Updated dependencies [5b41d48]
+- Updated dependencies [718b01c]
+- Updated dependencies [374b1a4]
+  - @memberjunction/ai-core-plus@6.2.0-edge.6
+  - @memberjunction/aiengine@6.2.0-edge.6
+  - @memberjunction/core-entities@6.2.0-edge.6
+  - @memberjunction/core@6.2.0-edge.6
+  - @memberjunction/global@6.2.0-edge.6
+  - @memberjunction/credentials@6.2.0-edge.6
+  - @memberjunction/content-pipeline-base@6.2.0-edge.6
+  - @memberjunction/document-parsing@6.2.0-edge.6
+  - @memberjunction/record-set-processor-base@6.2.0-edge.6
+  - @memberjunction/record-set-processor@6.2.0-edge.6
+  - @memberjunction/content-autotagging@6.2.0-edge.6
+  - @memberjunction/ai-vectordb@6.2.0-edge.6
+  - @memberjunction/network-utils@6.2.0-edge.6
+  - @memberjunction/tag-engine@6.2.0-edge.6
+  - @memberjunction/ai-prompts@6.2.0-edge.6
+  - @memberjunction/storage@6.2.0-edge.6
+  - @memberjunction/ai-segmentation@6.2.0-edge.6
+  - @memberjunction/ai-vectors@6.2.0-edge.6

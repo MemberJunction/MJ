@@ -253,6 +253,153 @@ function formatToolSignature(tool: ClientToolMetadata): string {
     return `${tool.Name}(${params})${desc}`;
 }
 
+function formatAgentSignature(agent: AppContextAgentRef): string {
+    return `${agent.Name}${agent.Description ? ` — ${agent.Description}` : ''}`;
+}
+
+function formatViewLines(view: AppContextSnapshot['View'] | undefined): string[] {
+    if (!view) {
+        return [];
+    }
+    const lines: string[] = [];
+    if (view.VisibleEntities && view.VisibleEntities.length > 0) {
+        lines.push(`viewing: ${view.VisibleEntities.join(', ')}`);
+    }
+    if (view.Selection && view.Selection.RecordIDs && view.Selection.RecordIDs.length > 0) {
+        const ent = view.Selection.EntityName ? `${view.Selection.EntityName} ` : '';
+        lines.push(`selected: ${ent}${view.Selection.RecordIDs.length} record(s)`);
+    }
+    if (view.FreeText) {
+        const trimmed = view.FreeText.trim();
+        if (trimmed.length > 0) {
+            lines.push(trimmed);
+        }
+    }
+    return lines;
+}
+
+function canonicalSectionKey(snapshot: AppContextSnapshot): string {
+    const names = new Set<string>();
+    const activeName = snapshot.ActiveNavItem?.Name?.trim();
+    if (activeName && activeName !== '(none)' && activeName !== 'Unknown') {
+        names.add(activeName);
+    }
+    for (const item of snapshot.OtherNavItems ?? []) {
+        const name = item.Name?.trim();
+        if (name) {
+            names.add(name);
+        }
+    }
+    return Array.from(names).sort().join('\u0000');
+}
+
+function canonicalAppKey(snapshot: AppContextSnapshot): string {
+    const names = new Set<string>();
+    const appName = snapshot.App?.Name?.trim();
+    if (appName) {
+        names.add(appName);
+    }
+    for (const app of snapshot.NavigableApps ?? []) {
+        const name = app.Name?.trim();
+        if (name) {
+            names.add(name);
+        }
+    }
+    return Array.from(names).sort().join('\u0000');
+}
+
+/**
+ * Computes the minimal {@link Partial} {@link AppContextSnapshot} delta between `previous` and `next`
+ * for live wire streaming via {@link FormatAppContextNote}.
+ *
+ * - Returns `next` when `previous` is `null` or `undefined`.
+ * - Returns `null` when nothing visible in {@link FormatAppContextNote} changed.
+ * - Suppresses unchanged static lists (`OtherNavItems` across intra-app tab switches, `NavigableApps`
+ *   across app switches within the same app catalog, and unchanged `Capabilities.Tools` / `Agents`)
+ *   so live screen updates stay ~150-300 chars instead of repeating a ~2,000-char manifest.
+ */
+export function DiffAppContextSnapshot(
+    previous: AppContextSnapshot | null | undefined,
+    next: AppContextSnapshot
+): Partial<AppContextSnapshot> | null {
+    if (!previous) {
+        return next;
+    }
+
+    const appChanged = (previous.App?.Name ?? '') !== (next.App?.Name ?? '');
+    const navChanged =
+        (previous.ActiveNavItem?.Name ?? '') !== (next.ActiveNavItem?.Name ?? '') ||
+        (previous.ActiveNavItem?.ResourceType ?? '') !== (next.ActiveNavItem?.ResourceType ?? '');
+    const locationChanged = appChanged || navChanged;
+
+    const prevViewLines = formatViewLines(previous.View);
+    const nextViewLines = formatViewLines(next.View);
+    const viewChanged = prevViewLines.join('\n') !== nextViewLines.join('\n');
+    const viewCleared = prevViewLines.length > 0 && nextViewLines.length === 0;
+
+    const prevCtxLines = previous.AdditionalContext ? formatAdditionalContext(previous.AdditionalContext) : [];
+    const nextCtxLines = next.AdditionalContext ? formatAdditionalContext(next.AdditionalContext) : [];
+    const ctxChanged = prevCtxLines.join('\n') !== nextCtxLines.join('\n');
+    const ctxCleared = prevCtxLines.length > 0 && nextCtxLines.length === 0;
+
+    const otherNavItemsChanged = appChanged
+        ? (next.OtherNavItems?.length ?? 0) > 0
+        : ((previous.OtherNavItems?.length ?? 0) === 0 && (next.OtherNavItems?.length ?? 0) > 0) ||
+          canonicalSectionKey(previous) !== canonicalSectionKey(next);
+
+    const navigableAppsChanged =
+        ((previous.NavigableApps?.length ?? 0) === 0 && (next.NavigableApps?.length ?? 0) > 0) ||
+        canonicalAppKey(previous) !== canonicalAppKey(next);
+
+    const prevToolSigs = (previous.Capabilities?.Tools ?? []).map(formatToolSignature);
+    const nextToolSigs = (next.Capabilities?.Tools ?? []).map(formatToolSignature);
+    const toolsChanged = prevToolSigs.join('\n') !== nextToolSigs.join('\n');
+    const toolsCleared = prevToolSigs.length > 0 && nextToolSigs.length === 0;
+
+    const prevAgentSigs = (previous.Capabilities?.Agents ?? []).map(formatAgentSignature);
+    const nextAgentSigs = (next.Capabilities?.Agents ?? []).map(formatAgentSignature);
+    const agentsChanged = prevAgentSigs.join('\n') !== nextAgentSigs.join('\n');
+    const agentsCleared = prevAgentSigs.length > 0 && nextAgentSigs.length === 0;
+
+    if (
+        !locationChanged &&
+        !viewChanged &&
+        !ctxChanged &&
+        !otherNavItemsChanged &&
+        !navigableAppsChanged &&
+        !toolsChanged &&
+        !agentsChanged
+    ) {
+        return null;
+    }
+
+    const delta: Partial<AppContextSnapshot> = {};
+    if (locationChanged || viewCleared || ctxCleared || toolsCleared || agentsCleared) {
+        delta.App = next.App;
+        delta.ActiveNavItem = next.ActiveNavItem;
+    }
+    if (viewChanged && nextViewLines.length > 0) {
+        delta.View = next.View;
+    }
+    if (ctxChanged && nextCtxLines.length > 0) {
+        delta.AdditionalContext = next.AdditionalContext;
+    }
+    if (otherNavItemsChanged && next.OtherNavItems && next.OtherNavItems.length > 0) {
+        delta.OtherNavItems = next.OtherNavItems;
+    }
+    if (navigableAppsChanged && next.NavigableApps && next.NavigableApps.length > 0) {
+        delta.NavigableApps = next.NavigableApps;
+    }
+    if ((toolsChanged && nextToolSigs.length > 0) || (agentsChanged && nextAgentSigs.length > 0)) {
+        delta.Capabilities = {
+            ...(toolsChanged && next.Capabilities?.Tools ? { Tools: next.Capabilities.Tools } : {}),
+            ...(agentsChanged && next.Capabilities?.Agents ? { Agents: next.Capabilities.Agents } : {}),
+        };
+    }
+
+    return FormatAppContextNote(delta).length > 0 ? delta : null;
+}
+
 /**
  * Serialize an {@link AppContextSnapshot} (or a partial delta) to the text form sent to a realtime
  * model via `SendContextNote`. The model reads this as live background context — it is the co-agent's
@@ -276,19 +423,7 @@ export function FormatAppContextNote(snapshot: Partial<AppContextSnapshot>): str
     }
 
     // WHAT the user sees (structured View)
-    const view = snapshot.View;
-    if (view) {
-        if (view.VisibleEntities && view.VisibleEntities.length > 0) {
-            lines.push(`viewing: ${view.VisibleEntities.join(', ')}`);
-        }
-        if (view.Selection && view.Selection.RecordIDs && view.Selection.RecordIDs.length > 0) {
-            const ent = view.Selection.EntityName ? `${view.Selection.EntityName} ` : '';
-            lines.push(`selected: ${ent}${view.Selection.RecordIDs.length} record(s)`);
-        }
-        if (view.FreeText) {
-            lines.push(view.FreeText);
-        }
-    }
+    lines.push(...formatViewLines(snapshot.View));
 
     // The rich state the active surface published (counts, filters, selected items, available views/queries/etc.)
     if (snapshot.AdditionalContext) {
@@ -319,7 +454,7 @@ export function FormatAppContextNote(snapshot: Partial<AppContextSnapshot>): str
         if (caps.Agents && caps.Agents.length > 0) {
             lines.push('specialists you can delegate to (invoke-target-agent):');
             for (const a of caps.Agents) {
-                lines.push(`  - ${a.Name}${a.Description ? ` — ${a.Description}` : ''}`);
+                lines.push(`  - ${formatAgentSignature(a)}`);
             }
         }
     }

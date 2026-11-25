@@ -1,22 +1,21 @@
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { RunViewParams } from '@memberjunction/core';
+import { RunQueryParams } from '@memberjunction/core';
 import { createFakeProvider, useFakeGlobalProvider, query, queryAll, capture, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsUsagePatternsComponent } from './usage-patterns.component';
 
 /**
- * DOM coverage for <app-analytics-usage-patterns> — the time-of-day heatmap view. It loads prompt
- * runs through `RunView.FromMetadataProvider(this.ProviderToUse)`, so a `createFakeProvider` supplies
- * canned `MJ: AI Prompt Runs` rows via the `[Provider]` input. `TotalRuns === 0` gates the empty
+ * DOM coverage for <app-analytics-usage-patterns> — the time-of-day heatmap view. It reads the
+ * AIUsageHourly aggregate through `this.ProviderToUse`, so a `createFakeProvider` supplies canned
+ * hourly rows via the `[Provider]` input. `TotalRuns === 0` gates the empty
  * state; a non-empty run set renders the heatmap grid (7×24), the day-distribution + peak panels, and
  * the hourly-throughput chart. `mj-loading` / `mj-empty-state` are stubbed. Change detection is driven
  * explicitly (`detectChanges(false)`) because `loadData()` toggles `IsLoading` across an await.
  */
 
 const RUNS = [
-  { RunAt: '2026-01-05T09:15:00Z' }, // Monday
-  { RunAt: '2026-01-05T09:40:00Z' },
-  { RunAt: '2026-01-06T14:05:00Z' }, // Tuesday
+  { HourBucket: '2026-01-05T09:00:00', Runs: 2, TokensPrompt: 100, TokensCacheRead: 0, TokensCacheWrite: 0 }, // Monday
+  { HourBucket: '2026-01-06T14:00:00', Runs: 1, TokensPrompt: 50, TokensCacheRead: 0, TokensCacheWrite: 0 }, // Tuesday
 ];
 
 async function render(rows: unknown[] = RUNS): Promise<ComponentFixture<AnalyticsUsagePatternsComponent>> {
@@ -25,7 +24,7 @@ async function render(rows: unknown[] = RUNS): Promise<ComponentFixture<Analytic
     imports: [StubLoadingComponent, StubEmptyStateComponent],
   });
   const fixture = TestBed.createComponent(AnalyticsUsagePatternsComponent);
-  const provider = createFakeProvider({ runViewResults: (_p: RunViewParams) => rows });
+  const provider = createFakeProvider({ RunQueryResults: (_p: RunQueryParams) => rows });
   fixture.componentRef.setInput('Provider', provider);
   fixture.detectChanges(false);
   await new Promise((r) => setTimeout(r, 0));
@@ -56,6 +55,13 @@ describe('AnalyticsUsagePatternsComponent (DOM)', () => {
     installProvider({ runViewResults: RUNS });
     const fixture = await render();
     expect(queryAll(fixture, '.day-bar-row').length).toBe(7);
+  });
+
+  it('counts every run in range from the aggregate, not a sample', async () => {
+    installProvider({ runViewResults: [] });
+    const fixture = await render();
+    expect(fixture.componentInstance.TotalRuns).toBe(3);
+    expect(query(fixture, '.panel__subtitle')?.textContent).toContain('3 runs in range');
   });
 
   it('renders 24 hourly-throughput bars and the peak-summary cards', async () => {

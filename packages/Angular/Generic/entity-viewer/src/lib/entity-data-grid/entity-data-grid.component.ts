@@ -20,9 +20,17 @@ import { LogError, LogStatus, RunView, RunViewParams, Metadata, EntityInfo, Enti
 import { UUIDsEqual, MJGlobal, MJEvent } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
+import { ExcelAddinClient, type ExcelWorkbookSourceRequest } from '@memberjunction/excel-addin';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import {
+  ExcelSourceMenuDescription,
+  ExcelSourceTooltip,
+  ResolveGridExcelSource,
+} from './open-in-excel';
+import {
   BuildPkString,
+  BuildUsablePkString,
   CanonicalizeColumnFields,
   ComputeFieldsList,
   ResolvePolymorphicTargetEntity,
@@ -953,6 +961,19 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     return this._showExportButton;
   }
 
+  private _showOpenInExcelButton: boolean = true;
+  /**
+   * Show the "Open in Excel" button in the toolbar. It appears only for a saved view, and only when the
+   * MemberJunction host serves the Excel add-in; it downloads a workbook that loads the view in Excel.
+   */
+  @Input()
+  set ShowOpenInExcelButton(value: boolean) {
+    this._showOpenInExcelButton = value;
+  }
+  get ShowOpenInExcelButton(): boolean {
+    return this._showOpenInExcelButton;
+  }
+
   private _showDeleteButton: boolean = false;
   /**
    * Show the "Delete" button in toolbar (deletes selected rows)
@@ -1062,6 +1083,179 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     } catch {
       // Non-fatal: leave Send Message hidden, and retry on the next entity resolution.
       this._communicationCheckedForEntityID = null;
+    }
+  }
+
+  private static _nextExcelMenuInstanceId = 0;
+  private _excelAddinEnabled = false;
+  private _savedViewID: string | null = null;
+  @ViewChild('excelMenuTrigger') private _excelMenuTrigger?: ElementRef<HTMLButtonElement>;
+
+  /** Unique DOM id pairing the unified Export/Excel disclosure trigger with its action popover. */
+  public readonly ExcelMenuId = `mj-entity-grid-excel-menu-${++EntityDataGridComponent._nextExcelMenuInstanceId}`;
+  /** True while the unified Export/Excel toolbar action popover is open. */
+  public ShowExcelMenu = false;
+
+  /**
+   * Optional ID of the persisted `MJ: User Views` record backing the rows on screen when a parent
+   * container (such as `<mj-entity-viewer>` / `<mj-grid-view-renderer>`) loads the view itself and
+   * feeds the grid `[Data]` + `{ EntityName }` params. Used by Open in Excel without giving the grid
+   * ownership of persisting the `UserView` record.
+   */
+  @Input()
+  set SavedViewID(value: string | null) {
+    const normalized = value?.trim() || null;
+    if (normalized !== this._savedViewID) {
+      this._savedViewID = normalized;
+      if (normalized) {
+        void this.resolveExcelAddinAvailability();
+      }
+    }
+  }
+  get SavedViewID(): string | null {
+    return this._savedViewID;
+  }
+
+  /** The saved view ID to open in Excel: explicit `SavedViewID` input, else the grid's loaded `_viewEntity`. */
+  private get effectiveSavedViewID(): string | null {
+    if (this._savedViewID) {
+      return this._savedViewID;
+    }
+    const view = this._viewEntity;
+    if (!view || view.IsSaved === false) {
+      return null;
+    }
+    return view.ID?.trim() || null;
+  }
+
+  /** Resolves the workbook source (`View` for saved views, `Entity` for unscoped default entity grids). */
+  private get resolvedExcelSource(): ExcelWorkbookSourceRequest | null {
+    return ResolveGridExcelSource({
+      ShowButton: this._showOpenInExcelButton,
+      AddinEnabled: this._excelAddinEnabled,
+      SavedViewID: this.effectiveSavedViewID,
+      EntityID: this._entityInfo?.ID ?? null,
+      ExtraFilter: this._params?.ExtraFilter ?? null,
+      AlternateBaseView: this._alternateBaseView ?? this._params?.AlternateBaseView ?? null,
+    });
+  }
+
+  /** True while Open in Excel is building the workbook. */
+  public IsOpeningInExcel = false;
+
+  /** Tooltip matching the resolved workbook source (`View` vs `Entity`). */
+  get OpenInExcelTooltip(): string {
+    return ExcelSourceTooltip(this.resolvedExcelSource);
+  }
+
+  /** Subtitle shown under "Open in Excel" inside the unified toolbar menu. */
+  get OpenInExcelDescription(): string {
+    return ExcelSourceMenuDescription(this.resolvedExcelSource);
+  }
+
+  /** True when the toolbar offers Open in Excel (saved view or unscoped entity, and the host serves the add-in). */
+  get CanOpenInExcel(): boolean {
+    return this.resolvedExcelSource !== null;
+  }
+
+  /** Toggles the unified Export/Excel action popover. */
+  public ToggleExcelMenu(): void {
+    if (this.ShowOverflowMenu) {
+      this.CloseOverflowMenu();
+    }
+    this.ShowExcelMenu = !this.ShowExcelMenu;
+    this.cdr.detectChanges();
+
+    if (this.ShowExcelMenu) {
+      setTimeout(() => {
+        document.addEventListener('click', this.handleExcelMenuOutsideClick);
+      }, 0);
+    } else {
+      document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+    }
+  }
+
+  /** Closes the unified Export/Excel action popover, optionally restoring focus to the trigger button. */
+  public CloseExcelMenu(restoreFocus = false): void {
+    if (!this.ShowExcelMenu) {
+      document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+      return;
+    }
+    this.ShowExcelMenu = false;
+    document.removeEventListener('click', this.handleExcelMenuOutsideClick);
+    this.cdr.detectChanges();
+    if (restoreFocus) {
+      this._excelMenuTrigger?.nativeElement?.focus();
+    }
+  }
+
+  /** Handles Escape key dismissal inside the unified Export/Excel dropdown. */
+  public OnExcelMenuEscape(event: Event): void {
+    if (!this.ShowExcelMenu) {
+      return;
+    }
+    event.stopPropagation();
+    this.CloseExcelMenu(true);
+  }
+
+  /** Invokes Open in Excel from the unified toolbar popover. */
+  public OnOpenInExcelFromMenu(): void {
+    this.CloseExcelMenu();
+    void this.OnOpenInExcelClick();
+  }
+
+  /** Invokes static snapshot export from the unified toolbar popover. */
+  public OnExportSnapshotFromMenu(): void {
+    this.CloseExcelMenu();
+    this.OnExportClick();
+  }
+
+  private handleExcelMenuOutsideClick = (): void => {
+    this.CloseExcelMenu();
+  };
+
+  /**
+   * Asks the host, once per provider (the client caches the answer), whether it serves the Excel add-in.
+   */
+  private async resolveExcelAddinAvailability(): Promise<void> {
+    const provider = this.ProviderToUse;
+    if ((!this.effectiveSavedViewID && !this._entityInfo?.ID) || this._excelAddinEnabled || !provider) {
+      return;
+    }
+    try {
+      this._excelAddinEnabled = await ExcelAddinClient.Instance.IsEnabled(provider);
+      if (this._excelAddinEnabled) {
+        this.cdr.detectChanges();
+      }
+    } catch (e) {
+      // Non-fatal: the option stays hidden. The client already treats an unreadable status as "off".
+      LogError(`EntityDataGrid: Excel add-in status check failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  /** Builds a workbook that loads the saved view or unscoped entity in Excel, and downloads it. */
+  public async OnOpenInExcelClick(): Promise<void> {
+    const source = this.resolvedExcelSource;
+    if (!source || this.IsOpeningInExcel) {
+      return;
+    }
+    this.IsOpeningInExcel = true;
+    this.cdr.detectChanges();
+    try {
+      const result = await ExcelAddinClient.Instance.OpenInExcel([source], this.ProviderToUse);
+      if (result.Success) {
+        MJNotificationService.Instance?.CreateSimpleNotification(
+          `Downloaded ${result.FileName}. Open it in Excel and sign in to load the data.`, 'success', 5000);
+      } else {
+        MJNotificationService.Instance?.CreateSimpleNotification(result.ErrorMessage || 'The workbook could not be built.', 'error', 6000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      LogError(`EntityDataGrid: Open in Excel failed: ${message}`);
+      MJNotificationService.Instance?.CreateSimpleNotification(`Open in Excel failed: ${message}`, 'error', 6000);
+    } finally {
+      this.IsOpeningInExcel = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -1763,9 +1957,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  /** Get row ID function for AG Grid */
-  public GetRowId = (params: GetRowIdParams<Record<string, unknown>>) =>
-    params.data['__pk'] as string;
+  /**
+   * Get row ID function for AG Grid.
+   *
+   * `__pk` is minted by {@link getRowKey}, which guarantees a non-empty, collision-free value.
+   * The guard here covers the one case that does not come from there: the infinite row model
+   * hands `getRowId` a node whose `data` is not yet loaded, and reading `['__pk']` off that
+   * throws inside ag-Grid's own call stack.
+   */
+  public GetRowId = (params: GetRowIdParams<Record<string, unknown>>): string => this.resolveRowId(params);
+
+  /**
+   * The body of {@link GetRowId}, on the prototype so it is reachable without constructing the
+   * component (the public member has to stay an arrow field: the template passes it to ag-Grid
+   * as a bare reference, `[getRowId]="getRowId"` (the deprecated accessor returning this field), which would lose `this`).
+   */
+  private resolveRowId(params: GetRowIdParams<Record<string, unknown>>): string {
+    const pk = params.data?.['__pk'];
+    return typeof pk === 'string' && pk.length > 0
+      ? pk
+      : `mjrow_pending_${this._syntheticRowKeySeq++}`;
+  }
 
   /** @deprecated Use {@link GetRowId}. */
   public get getRowId() {
@@ -2015,6 +2227,8 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       clearTimeout(this._patchedRowClearTimer);
       this._patchedRowClearTimer = null;
     }
+    document.removeEventListener('click', this.handleOutsideClick);
+    document.removeEventListener('click', this.handleExcelMenuOutsideClick);
 
     this.destroy$.next();
     this.destroy$.complete();
@@ -2160,6 +2374,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
         EntityName: this._entityInfo.Name,
         ExtraFilter: ck.ToWhereClause(),
         MaxRows: 1,
+        SkipTotalRowCount: true,
         ResultType: 'simple',
         Fields: ComputeFieldsList(this._entityInfo, this._gridState, this.hostColumnFieldNames()),
       });
@@ -2364,6 +2579,7 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
       // Entity is resolved by now — self-load its actions if auto-load is enabled.
       void this.maybeAutoLoadEntityActions();
       void this.resolveCommunicationSupport();
+      void this.resolveExcelAddinAvailability();
     }
   }
 
@@ -4352,14 +4568,62 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.cdr.detectChanges();
   }
 
+  /**
+   * Per-row synthetic identity for rows that carry no usable key, so {@link getRowKey} can
+   * never hand ag-Grid the same id twice.
+   *
+   * Keyed on the row object reference, so the same source row keeps the same id across
+   * re-processing (a sort, a filter, a re-render). A WeakMap, so it never retains rows past
+   * their lifetime. Mirrors `query-data-grid.component.ts`, which already solved this.
+   */
+  private _syntheticRowKeys = new WeakMap<object, string>();
+  private _syntheticRowKeySeq = 0;
+
+  /**
+   * Stable identity for one row — the value behind `__pk`, and therefore behind
+   * {@link getRowId}.
+   *
+   * ag-Grid treats `getRowId` as authoritative and SILENTLY MERGES rows that share an id
+   * (raising error #2, *"Duplicate node id … from getRowId"*). Both previous branches could
+   * return the same value for every row in the grid:
+   *
+   * - `buildPkString` formats without validating, so a row whose primary-key column was not
+   *   selected produced the constant `"ID|undefined"`;
+   * - the configured-key-field branch returned `''` whenever that field was absent or null.
+   *
+   * Either way N rows collapsed to one, which reads as a data-loading bug rather than an
+   * identity bug. A key is used only when it is actually a key; otherwise the row gets a
+   * synthetic id, which cannot collide.
+   *
+   * The trade-off matches query-data-grid's: a synthetic id is per-object rather than
+   * value-derived, so a keyless row loses its selection across a REFETCH. Not dropping rows
+   * matters far more than preserving a selection on rows that cannot be addressed anyway.
+   */
   private getRowKey(entity: Record<string, unknown>): string {
     // Build key from EntityInfo PK fields when available
     if (this._entityInfo) {
-      return BuildPkString(entity, this._entityInfo);
+      const pk = BuildUsablePkString(entity, this._entityInfo);
+      if (pk !== null) {
+        return pk;
+      }
+    } else {
+      // Fallback to configured key field via direct property access
+      const keyValue = entity[this._keyField];
+      if (keyValue != null && String(keyValue).length > 0) {
+        return String(keyValue);
+      }
     }
-    // Fallback to configured key field via direct property access
-    const keyValue = entity[this._keyField];
-    return keyValue != null ? String(keyValue) : '';
+    return this.syntheticRowKey(entity);
+  }
+
+  /** Mint (or reuse) this row object's synthetic id. See {@link _syntheticRowKeys}. */
+  private syntheticRowKey(entity: Record<string, unknown>): string {
+    let key = this._syntheticRowKeys.get(entity);
+    if (!key) {
+      key = `mjrow_${this._syntheticRowKeySeq++}`;
+      this._syntheticRowKeys.set(entity, key);
+    }
+    return key;
   }
 
   private computeRowClasses(index: number, _entity: Record<string, unknown>): string[] {
@@ -5689,6 +5953,9 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   // ========================================
 
   ToggleOverflowMenu(): void {
+    if (this.ShowExcelMenu) {
+      this.CloseExcelMenu();
+    }
     this.ShowOverflowMenu = !this.ShowOverflowMenu;
     this.cdr.detectChanges();
 

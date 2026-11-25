@@ -53,11 +53,11 @@ describe('dev domain usage declarations', () => {
     }
   });
 
-  it('teaches the generator: the five files, member detection, and overwrite safety', () => {
+  it('teaches the generator: the four files, member detection, and overwrite safety', () => {
     const text = DEV_WORKSPACE_USAGE.description ?? '';
     expect(text).toContain('pnpm-workspace.yaml');
     expect(text).toContain('.npmrc');
-    expect(text).toContain('turbo.json');
+    expect(text).not.toContain('turbo.json'); // #4913: no longer generated
     expect(text).toContain('.mj-dev-workspace.json');
     expect(text).toContain('mj-app.json');
     expect(text).toContain('@mj-biz-apps');

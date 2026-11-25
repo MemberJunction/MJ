@@ -10,9 +10,10 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
 import {
     AIModelConfiguration,
+    ApplyEmbeddingInputPrefix,
     IsPrefixPromptCache,
     IsZeroDataRetention,
     ParseModelConfiguration,
@@ -230,6 +231,15 @@ describe('LLM control-flow knobs', () => {
         expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
     });
 
+    it('takes ChatCompletionsToolsRequireNoReasoning from the vendor row over the model layer (#6210)', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true } },
+            { LLM: { ChatCompletionsToolsRequireNoReasoning: true } }
+        );
+        expect(merged?.LLM?.ChatCompletionsToolsRequireNoReasoning).toBe(true);
+        expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+
     it('an explicit null at a higher layer REPLACES (tri-state), it does not inherit', () => {
         const merged = ResolveEffectiveModelConfiguration(
             { LLM: { NativeControlFlow: 'implicit' } },
@@ -353,6 +363,32 @@ describe('ResolveIsModelFullDuplex — metadata wins over driver fallback', () =
     });
 });
 
+describe('ApplyEmbeddingInputPrefix — catalog-driven query/document prefixes', () => {
+    const gemma: AIModelConfiguration = {
+        Embedding: { QueryPrefix: 'task: search result | query: ', DocumentPrefix: 'title: none | text: ' },
+    };
+
+    it('prepends the query prefix for a query', () => {
+        expect(ApplyEmbeddingInputPrefix('red planet?', 'query', gemma)).toBe('task: search result | query: red planet?');
+    });
+
+    it('prepends the document prefix for a document, and when inputType is omitted', () => {
+        expect(ApplyEmbeddingInputPrefix('Mars', 'document', gemma)).toBe('title: none | text: Mars');
+        expect(ApplyEmbeddingInputPrefix('Mars', undefined, gemma)).toBe('title: none | text: Mars');
+    });
+
+    it('returns the text unchanged when the model declares no prefix', () => {
+        expect(ApplyEmbeddingInputPrefix('Mars', 'query', null)).toBe('Mars');
+        expect(ApplyEmbeddingInputPrefix('Mars', 'query', { Embedding: { DocumentPrefix: 'doc: ' } })).toBe('Mars');
+    });
+
+    it('takes the prefix from the most specific catalog layer', () => {
+        const merged = ResolveEffectiveModelConfiguration(gemma, { Embedding: { QueryPrefix: 'task: code retrieval | query: ' } });
+        expect(ApplyEmbeddingInputPrefix('sort a list', 'query', merged)).toBe('task: code retrieval | query: sort a list');
+        expect(ApplyEmbeddingInputPrefix('Mars', 'document', merged)).toBe('title: none | text: Mars');
+    });
+});
+
 describe('Realtime.Pricing — prices for output the token cost rows do not cover', () => {
     const avatarVideo: RealtimeUnitPrice = { Price: 0.37152, Unit: 'Per Minute', Currency: 'USD' };
 
@@ -380,6 +416,26 @@ describe('Realtime.Pricing — prices for output the token cost rows do not cove
         const row: AIModelConfiguration = { Realtime: { Pricing: { AvatarVideoOutput: null } } };
 
         expect(ResolveEffectiveModelConfiguration(model, row)?.Realtime?.Pricing?.AvatarVideoOutput).toBeNull();
+    });
+
+    it('merges the audio prices per key beside the avatar video price', () => {
+        const audioInput: RealtimeUnitPrice = { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' };
+        const audioOutput: RealtimeUnitPrice = { Price: 64, Unit: 'Per 1M Tokens', Currency: 'USD' };
+        const vendorDefaults: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: audioInput, AudioOutput: audioOutput } } };
+        const row: AIModelConfiguration = { Realtime: { Pricing: { AvatarVideoOutput: avatarVideo, AudioOutput: { Price: 48 } } } };
+
+        expect(ResolveEffectiveModelConfiguration(null, null, vendorDefaults, row)?.Realtime?.Pricing).toEqual({
+            AvatarVideoOutput: avatarVideo,
+            AudioInput: audioInput,
+            AudioOutput: { Price: 48, Unit: 'Per 1M Tokens', Currency: 'USD' },
+        });
+    });
+
+    it('an explicit null on a more specific layer withdraws an inherited audio price', () => {
+        const model: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: { Price: 32, Unit: 'Per 1M Tokens', Currency: 'USD' } } } };
+        const row: AIModelConfiguration = { Realtime: { Pricing: { AudioInput: null } } };
+
+        expect(ResolveEffectiveModelConfiguration(model, row)?.Realtime?.Pricing?.AudioInput).toBeNull();
     });
 });
 
@@ -433,14 +489,43 @@ describe('Realtime.Pricing as seeded for Gemini 3.8 Live (metadata/ai-models)', 
         expect(ResolveEffectiveModelConfiguration(Model, Row)?.Realtime?.Pricing).toBeUndefined();
     });
 
-    it('the Vertex AI row states the Google row\'s Realtime knobs, so only the price and the turn coverage differ', () => {
-        const { Pricing, TurnDetection: vertexTurns, ...vertexKnobs } = seededLayers('Gemini 3.8 Live', 'Vertex AI').Row?.Realtime ?? {};
-        const { TurnDetection: googleTurns, ...googleKnobs } = seededLayers('Gemini 3.8 Live', 'Google').Row?.Realtime ?? {};
+    it('the Vertex AI row states the Google row\'s Realtime knobs, so only the price, turn coverage, and TrustNativeResumption differ', () => {
+        const {
+            Pricing,
+            TurnDetection: vertexTurns,
+            TrustNativeResumption: vertexTrust,
+            ...vertexKnobs
+        } = seededLayers('Gemini 3.8 Live', 'Vertex AI').Row?.Realtime ?? {};
+        const {
+            TurnDetection: googleTurns,
+            TrustNativeResumption: googleTrust,
+            ...googleKnobs
+        } = seededLayers('Gemini 3.8 Live', 'Google').Row?.Realtime ?? {};
 
         expect(Pricing).toBeDefined();
         expect(vertexTurns?.Coverage, 'Vertex AI refuses TURN_INCLUDES_AUDIO_ACTIVITY_AND_ALL_VIDEO at session setup').toBe('audioActivityOnly');
+        expect(vertexTrust).toBe(true);
+        expect(googleTrust).toBeUndefined();
         expect(vertexKnobs).toEqual(googleKnobs);
         expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
+    });
+
+    it('cascades ConnectionMaxSeconds, SessionMaxSeconds, ReconnectBufferSeconds, and TrustNativeResumption from AIModel to AIModelVendor', () => {
+        const { Model, Row: googleRow } = seededLayers('Gemini 3.8 Live', 'Google');
+        const { Row: vertexRow } = seededLayers('Gemini 3.8 Live', 'Vertex AI');
+
+        const googleEffective = ResolveEffectiveModelConfiguration(Model, googleRow)?.Realtime;
+        const vertexEffective = ResolveEffectiveModelConfiguration(Model, vertexRow)?.Realtime;
+
+        expect(googleEffective?.ConnectionMaxSeconds).toBe(600);
+        expect(googleEffective?.SessionMaxSeconds).toBe(1800);
+        expect(googleEffective?.ReconnectBufferSeconds).toBe(10);
+        expect(googleEffective?.TrustNativeResumption).toBeUndefined();
+
+        expect(vertexEffective?.ConnectionMaxSeconds).toBe(600);
+        expect(vertexEffective?.SessionMaxSeconds).toBe(1800);
+        expect(vertexEffective?.ReconnectBufferSeconds).toBe(10);
+        expect(vertexEffective?.TrustNativeResumption).toBe(true);
     });
 });
 
@@ -587,3 +672,16 @@ describe('Lockstep — the JSONType source CodeGen generates from declares what 
     });
 });
 
+
+describe('ResolveEffectiveModelConfiguration — prototype pollution (CodeQL #169, #553)', () => {
+    afterEach(() => {
+        delete (Object.prototype as { polluted?: unknown }).polluted;
+    });
+
+    it('does not write a __proto__ layer key into Object.prototype', () => {
+        const hostile = JSON.parse('{"__proto__":{"polluted":1},"Realtime":{"__proto__":{"polluted":1}}}') as AIModelConfiguration;
+        const effective = ResolveEffectiveModelConfiguration({ Realtime: { FullDuplex: true } }, hostile);
+        expect(({} as { polluted?: unknown }).polluted).toBeUndefined();
+        expect(effective).toEqual({ Realtime: { FullDuplex: true } });
+    });
+});

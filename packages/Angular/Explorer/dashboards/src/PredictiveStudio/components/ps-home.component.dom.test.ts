@@ -34,7 +34,13 @@ describe('PSHomeComponent (DOM)', () => {
     const fixture = render();
     expect(query(fixture, '[data-testid="ps-home-hero"]')?.textContent).toContain('Build a predictive model');
     const kpiLabels = queryAll(fixture, '.hero-stats .l').map((e) => e.textContent?.trim());
-    expect(kpiLabels).toEqual(expect.arrayContaining(['Published', 'Active Experiments', 'Best Holdout AUC', 'Scored this week']));
+    expect(kpiLabels).toEqual(expect.arrayContaining(['Published', 'Active Experiments', 'Highest holdout AUC', 'Scored this week']));
+  });
+
+  it('calls the largest published holdout AUC the highest, never the best: no gate decides a KPI', () => {
+    const fixture = render();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect([/best holdout/i.test(text), (text.match(/Highest holdout AUC/g) ?? []).length]).toEqual([false, 2]);
   });
 
   it('renders the three entry-path cards', () => {

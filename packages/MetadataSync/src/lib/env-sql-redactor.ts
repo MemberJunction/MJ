@@ -12,6 +12,7 @@ import fs from 'fs';
 import type { BaseEntity } from '@memberjunction/core';
 import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { EnvDisplayMask } from './env-display';
+import { ANY_SAVE_CALL_SUFFIX, OwningLevel, SaveCallHashesIn, SetLinePattern, SqlLiteralsOf } from './sql-set-line';
 import type { SyncEngine } from './sync-engine';
 
 interface RedactedField {
@@ -27,17 +28,11 @@ interface RedactedPrimaryKey {
   Variables: Set<string>;
 }
 
-/** Registrations made without a save-call hash, which match any 12-hex suffix. */
-const ANY_SUFFIX = '';
-
-/** The 12-hex save-call hash of a variable suffix in a statement (`_<hash>` or `_<hash>_<n>`). */
-const SAVE_CALL_SUFFIX = /_([0-9a-fA-F]{12})(?![0-9a-fA-F])/g;
-
 /** Replaces registered SET lines and gives names-only warnings for one push. */
 export class EnvSqlRedactor {
   private readonly variables: ReadonlySet<string>;
   private readonly env: NodeJS.ProcessEnv;
-  /** Registrations by save-call hash; `ANY_SUFFIX` holds those registered without a hash. */
+  /** Registrations by save-call hash; `ANY_SAVE_CALL_SUFFIX` holds those registered without a hash. */
   private readonly fieldsByHash = new Map<string, Map<string, RedactedField>>();
   private readonly primaryKeys = new Map<string, RedactedPrimaryKey>();
   private transformFailed = false;
@@ -63,11 +58,11 @@ export class EnvSqlRedactor {
     variableNames: ReadonlySet<string>,
     saveCallHash?: string
   ): void {
-    const literals = sqlLiteralsOf(value);
+    const literals = SqlLiteralsOf(value);
     if (literals.length === 0) {
       return;
     }
-    const hash = saveCallHash?.toLowerCase() ?? ANY_SUFFIX;
+    const hash = saveCallHash?.toLowerCase() ?? ANY_SAVE_CALL_SUFFIX;
     const fields = this.fieldsForHash(hash);
     const key = [entityName, fieldName, codeName, ...literals].join('\u0000');
     if (fields.has(key)) {
@@ -77,7 +72,7 @@ export class EnvSqlRedactor {
       EntityName: entityName,
       FieldName: fieldName,
       Sources: sourcesOf(variableNames),
-      Pattern: setLinePattern(codeName, hash, literals),
+      Pattern: SetLinePattern(codeName, hash, literals),
       Matched: false,
     });
   }
@@ -116,7 +111,7 @@ export class EnvSqlRedactor {
         this.RegisterPrimaryKey(entity.EntityInfo.Name, fieldName, variables);
         continue;
       }
-      const level = owningLevel(entity, fieldName);
+      const level = OwningLevel(entity, fieldName);
       const field = level.GetFieldByName(fieldName);
       const levelInfo = level.EntityInfo;
       const holdsField = fullRow || !levelInfo.spUpdateGenerated || fieldName in level.GetChangesSinceLastSave();
@@ -166,10 +161,7 @@ export class EnvSqlRedactor {
 
   /** The registrations that can match the statement: those of each suffix in it, and those without a hash. */
   private candidateFields(sql: string): RedactedField[] {
-    const hashes = new Set<string>([ANY_SUFFIX]);
-    for (const match of sql.matchAll(SAVE_CALL_SUFFIX)) {
-      hashes.add(match[1].toLowerCase());
-    }
+    const hashes = SaveCallHashesIn(sql);
     const candidates: RedactedField[] = [];
     for (const hash of hashes) {
       this.fieldsByHash.get(hash)?.forEach((field) => candidates.push(field));
@@ -232,15 +224,6 @@ export class EnvSqlRedactor {
   }
 }
 
-/** The IS-A level of `entity` whose table holds the field: walks up while a parent holds it. */
-function owningLevel(entity: BaseEntity, fieldName: string): BaseEntity {
-  let level = entity;
-  while (level.ISAParent && level.EntityInfo.ParentEntityFieldNames?.has(fieldName)) {
-    level = level.ISAParent;
-  }
-  return level;
-}
-
 /** The log text, or null when the file cannot be read. */
 function readLog(sqlLogPath: string): string | null {
   try {
@@ -258,61 +241,6 @@ function valueIsInText(name: string, text: string, env: NodeJS.ProcessEnv): bool
 /** `@env:A` or `@env:A, @env:B`, sorted. */
 function sourcesOf(variableNames: ReadonlySet<string>): string {
   return [...variableNames].sort().map((name) => `@env:${name}`).join(', ');
-}
-
-/** The literal forms SQL Server writes for a value in a SET line. Empty when none can be matched. */
-function sqlLiteralsOf(value: unknown): string[] {
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? [] : [`'${value.toISOString()}'`];
-  }
-  if (typeof value === 'boolean') {
-    return [value ? '1' : '0'];
-  }
-  if (typeof value === 'number' || typeof value === 'bigint') {
-    return [String(value)];
-  }
-  if (value !== null && typeof value === 'object') {
-    return quotedLiterals(JSON.stringify(value));
-  }
-  if (typeof value !== 'string') {
-    return [];
-  }
-  return [...quotedLiterals(value), ...stringValueLiterals(value)];
-}
-
-/** The number or bit literal forms of a string value that holds a number or a boolean. */
-function stringValueLiterals(value: string): string[] {
-  const trimmed = value.trim();
-  const literals: string[] = [];
-  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
-    literals.push(trimmed);
-  }
-  const lower = trimmed.toLowerCase();
-  if (lower === 'true') {
-    literals.push('1');
-  } else if (lower === 'false') {
-    literals.push('0');
-  }
-  return literals;
-}
-
-function quotedLiterals(text: string): string[] {
-  const escaped = text.replace(/'/g, "''");
-  return [`N'${escaped}'`, `'${escaped}'`];
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * One whole `SET @<codeName>_<suffix>[_n] = <literal>` line; group 1 is the indent. The suffix is
- * the given hash, or any 12 hex when the hash is `ANY_SUFFIX`.
- */
-function setLinePattern(codeName: string, hash: string, literals: string[]): RegExp {
-  const alternatives = literals.map(escapeRegExp).join('|');
-  const suffix = hash === ANY_SUFFIX ? '[0-9a-fA-F]{12}' : escapeRegExp(hash);
-  return new RegExp(`^([ \\t]*)SET @${escapeRegExp(codeName)}_${suffix}(?:_\\d+)? = (?:${alternatives})[ \\t]*$`, 'gm');
 }
 
 /** The sync engine members an `EnvSqlLog` uses. */

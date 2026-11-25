@@ -6,6 +6,7 @@ import { AgGridModule } from 'ag-grid-angular';
 
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { ComposerModule } from '@memberjunction/ng-composer';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 import { QueryViewerModule } from '@memberjunction/ng-query-viewer';
@@ -15,19 +16,22 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 // component-artifact viewer branch (componentRole === 'form').
 import { BaseFormsModule } from '@memberjunction/ng-base-forms';
 // Generic media player — embedded by the audio/video artifact viewer plugins (standalone component).
-import { MJMediaPlayerComponent } from '@memberjunction/ng-media-player';
-import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { MJMediaPlayerComponent, MJStorageMediaPlayerComponent } from '@memberjunction/ng-media-player';
+import { MJEmptyStateComponent, MJAlertComponent, MJButtonDirective, MJMenuComponent, MJMenuItemComponent, MJMenuTriggerDirective } from '@memberjunction/ng-ui-components';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
 import { CodeArtifactViewerComponent } from './components/plugins/code-artifact-viewer.component';
 import { MarkdownArtifactViewerComponent } from './components/plugins/markdown-artifact-viewer.component';
+import { SlideDeckArtifactViewerComponent } from './components/plugins/slide-deck-artifact-viewer.component';
+import { SpreadsheetArtifactViewerComponent } from './components/plugins/spreadsheet-artifact-viewer.component';
 import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-viewer.component';
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
 import { DataArtifactViewerComponent } from './components/plugins/data-artifact-viewer.component';
 import { MLExperimentResultsViewerComponent } from './components/plugins/ml-experiment-results-viewer.component';
 import { SaveQueryPanelComponent } from './components/plugins/save-query-dialog.component';
+import { SaveAsListDialogComponent } from './components/plugins/save-as-list-dialog.component';
 import { DataRequirementsViewerComponent } from './components/plugins/data-requirements-viewer/data-requirements-viewer.component';
 import { ComponentFeedbackPanelComponent } from './components/plugins/component-feedback-panel/component-feedback-panel.component';
 
@@ -41,12 +45,20 @@ import { XlsxPreviewComponent } from './components/previews/xlsx-preview.compone
 import { ImageArtifactViewerComponent } from './components/plugins/image-artifact-viewer.component';
 import { VideoArtifactViewerComponent } from './components/plugins/video-artifact-viewer.component';
 import { AudioArtifactViewerComponent } from './components/plugins/audio-artifact-viewer.component';
+import { VideoProductionViewerComponent } from './components/plugins/video-production/video-production-viewer.component';
+import { VideoProductionStoryboardTabComponent } from './components/plugins/video-production/video-production-storyboard-tab.component';
+import { VideoProductionReviewTabComponent } from './components/plugins/video-production/video-production-review-tab.component';
+import { MJVideoBadgeComponent } from './components/plugins/video-production/video-badge.component';
+import { MJVideoFormatGlyphComponent } from './components/plugins/video-production/video-format-glyph.component';
+import { MJVideoBeatStripComponent } from './components/plugins/video-production/video-beat-strip.component';
 
 // Inline preview components (lightweight, rendered inside conversation message cards)
 import { ImageArtifactPreviewComponent } from './components/previews/image-artifact-preview.component';
 import { VideoArtifactPreviewComponent } from './components/previews/video-artifact-preview.component';
 import { AudioArtifactPreviewComponent } from './components/previews/audio-artifact-preview.component';
+import { VideoProductionArtifactPreviewComponent } from './components/previews/video-production-artifact-preview.component';
 import { MJGlobal } from '@memberjunction/global';
+import { RegisterClientArtifactFileBytesLoader } from './services/artifact-file.service';
 import { BaseArtifactViewerPluginComponent } from './components/base-artifact-viewer.component';
 import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewer-plugin.interface';
 
@@ -54,7 +66,21 @@ import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewe
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
+import { ArtifactRelatedPanelComponent } from './components/artifact-related-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
+import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
+import { ArtifactAgentRegionIndicatorComponent } from './components/presence/artifact-agent-region-indicator.component';
+import { ArtifactCommandPaletteComponent } from './components/plugins/artifact-command-palette.component';
+import { MjContextMenuComponent } from './components/context-menu/mj-context-menu.component';
+
+// Git-style Version History & Diff components (standalone)
+import { ArtifactVersionCompareComponent } from './components/version-diff/artifact-version-compare.component';
+import { GitDiffLinesViewComponent } from './components/version-diff/git-diff-lines-view.component';
+import { DocsVersionDiffComponent } from './components/version-diff/docs-version-diff.component';
+import { SlidesVersionDiffComponent } from './components/version-diff/slides-version-diff.component';
+import { SpreadsheetVersionDiffComponent } from './components/version-diff/spreadsheet-version-diff.component';
+import { ComponentVersionDiffComponent } from './components/version-diff/component-version-diff.component';
+import { QueryVersionDiffComponent } from './components/version-diff/query-version-diff.component';
 
 /**
  * Module for artifact viewer plugin system.
@@ -72,20 +98,26 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
 
     // Plugin components
     JsonArtifactViewerComponent,
     CodeArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
     MLExperimentResultsViewerComponent,
     SaveQueryPanelComponent,
+    VideoProductionViewerComponent,
 
     // Custom tab components (used by plugins via dynamic component tabs)
     DataRequirementsViewerComponent,
+    VideoProductionStoryboardTabComponent,
+    VideoProductionReviewTabComponent,
 
     // File viewer toolbar and plugins
     FileArtifactToolbarComponent,
@@ -102,12 +134,15 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ImageArtifactPreviewComponent,
     VideoArtifactPreviewComponent,
     AudioArtifactPreviewComponent,
+    VideoProductionArtifactPreviewComponent,
   ],
   imports: [
+    ArtifactRelatedPanelComponent,
     CommonModule,
     FormsModule,
     MarkdownModule,
     CodeEditorModule,
+    ComposerModule,
     MJReactModule,
     MJNotificationsModule,
     QueryViewerModule,
@@ -115,13 +150,32 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     NgTreesModule,
     BaseFormsModule,
     ComponentFeedbackPanelComponent,
+    SaveAsListDialogComponent,
     MJMediaPlayerComponent,
+    MJStorageMediaPlayerComponent,
     AgGridModule,
     MJEmptyStateComponent,
     MJAlertComponent,
     MJButtonDirective,
+    MJMenuComponent,
+    MJMenuItemComponent,
+    MJMenuTriggerDirective,
+    MJVideoBadgeComponent,
+    MJVideoFormatGlyphComponent,
+    MJVideoBeatStripComponent,
+    ArtifactVersionCompareComponent,
+    GitDiffLinesViewComponent,
+    DocsVersionDiffComponent,
+    SlidesVersionDiffComponent,
+    SpreadsheetVersionDiffComponent,
+    ComponentVersionDiffComponent,
+    QueryVersionDiffComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
+    ArtifactCommandPaletteComponent,
   ],
   exports: [
+    ArtifactRelatedPanelComponent,
     // Export artifact type plugin viewer
     ArtifactTypePluginViewerComponent,
 
@@ -129,16 +183,35 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ArtifactViewerPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
+    MjContextMenuComponent,
+    ArtifactAgentPresenceBarComponent,
+    ArtifactAgentRegionIndicatorComponent,
+    ArtifactCommandPaletteComponent,
+    ArtifactVersionCompareComponent,
+    GitDiffLinesViewComponent,
+    DocsVersionDiffComponent,
+    SlidesVersionDiffComponent,
+    SpreadsheetVersionDiffComponent,
+    ComponentVersionDiffComponent,
+    QueryVersionDiffComponent,
 
     // Export plugin components
     JsonArtifactViewerComponent,
     CodeArtifactViewerComponent,
     MarkdownArtifactViewerComponent,
+    SlideDeckArtifactViewerComponent,
+    SpreadsheetArtifactViewerComponent,
     HtmlArtifactViewerComponent,
     SvgArtifactViewerComponent,
     ComponentArtifactViewerComponent,
     DataArtifactViewerComponent,
     MLExperimentResultsViewerComponent,
+    VideoProductionViewerComponent,
+    VideoProductionStoryboardTabComponent,
+    VideoProductionReviewTabComponent,
+    MJVideoBadgeComponent,
+    MJVideoFormatGlyphComponent,
+    MJVideoBeatStripComponent,
 
     // File viewer toolbar and plugins
     FileArtifactToolbarComponent,
@@ -155,6 +228,7 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     ImageArtifactPreviewComponent,
     VideoArtifactPreviewComponent,
     AudioArtifactPreviewComponent,
+    VideoProductionArtifactPreviewComponent,
   ],
   providers: [
     // Plugins are registered via @RegisterClass decorator on component classes, no providers needed
@@ -168,6 +242,8 @@ export class ArtifactsModule {
       JsonArtifactViewerComponent,
       CodeArtifactViewerComponent,
       MarkdownArtifactViewerComponent,
+      SlideDeckArtifactViewerComponent,
+      SpreadsheetArtifactViewerComponent,
       HtmlArtifactViewerComponent,
       SvgArtifactViewerComponent,
       ComponentArtifactViewerComponent,
@@ -179,12 +255,19 @@ export class ArtifactsModule {
       ImageArtifactViewerComponent,
       VideoArtifactViewerComponent,
       AudioArtifactViewerComponent,
+      VideoProductionViewerComponent,
+      VideoProductionStoryboardTabComponent,
+      VideoProductionReviewTabComponent,
       // Preview components are referenced via plugins' previewComponentType — list them here too
       // so the bundler can't tree-shake the dynamically-rendered preview classes.
       ImageArtifactPreviewComponent,
       VideoArtifactPreviewComponent,
       AudioArtifactPreviewComponent,
+      VideoProductionArtifactPreviewComponent,
     ];
+
+    // Ensure the client-side file-bytes loader is wired before live blocks inspect File-backed embeds
+    RegisterClientArtifactFileBytesLoader();
 
     // Registration-time guard: every registered artifact-viewer plugin must expose at least one of
     // componentType / previewComponentType. `componentType` is required by the interface (so this is

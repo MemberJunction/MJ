@@ -87,6 +87,12 @@ Array of 50 distinct colors (purple, magenta, teal, indigo, vermillion, brown, e
 4. Ensures consistent colors per value across dataset
 5. Unknown values: Check `statusColorMap` first, then hash-based fallback index
 
+## Header Styling
+- `headerStyle` ({ background, color, borderColor }, all optional) colors the header row through each column's antd `onHeaderCell`; `borderColor` draws a 2px bottom border
+- Memoized into `headerCellStyle` from its three fields, so a new object with the same values does not rebuild the columns
+- Unset, or with no fields set, the header keeps the antd theme the host derives from the viewer's theme
+- Callers pass their table-header brand tokens here: `headerStyle={{ background: brand.tableHeaderBackground, color: brand.tableHeaderText, borderColor: brand.tableHeaderBorder }}`
+
 ## Filter Debouncing (useEffect)
 - `setTimeout` with `filterDebounceTime` (300ms default)
 - Updates `debouncedFilter` after delay
@@ -124,7 +130,7 @@ If `paging=true`:
 
 ## Sort Handling
 `handleTableChange` extracts sorter from Ant Table onChange:
-- Updates `sortConfig` state
+- Always updates `sortConfig` state (the export reads it, so it is tracked even without `onSortChanged`)
 - Fires `onSortChanged` with `{sortState: {column: sorter.field, direction: sorter.order === 'ascend' ? 'asc' : 'desc'}}`
 
 ## Row Click Handling
@@ -174,6 +180,25 @@ Wrapper div with `.data-grid-component` class:
    - locale: emptyText uses `entityName` if provided
    - size: 'middle'
    - onRow: Returns object with onClick handler and cursor style
+
+## Built-in Export
+Dependency: registry component `ExportableData` (`Generic/UI/Export`), read from `components`. When `exportable === false`, or the host did not provide `ExportableData`, the grid renders exactly as before with no wrapper.
+
+Helpers declared at the top of the component body (plain functions, no hooks; MJ components must be a single top-level function):
+- `activeTableSort(tableColumns, sortConfig)`: the sort the table shows. If any column has a controlled `sortOrder` (antd's rule), the one set to ascend/descend; otherwise the column whose `key` matches `sortConfig.columnKey` (or `field`) with `sortConfig.order`.
+- `sortRowsLikeTable(rows, sort)`: copies `rows` and sorts them with that column's own `sorter` function, negating the result for `descend` exactly as antd does. Array sort is stable, so ties keep the `data` order like the table.
+- `buildExportColumns(tableColumns, entityInfo, data)`: `{field: dataIndex, label: title, type}` per displayed column; type from `exportTypeFromFieldType(fieldInfo.Type)` (value-list fields are text) or `sniffExportType` over the first 200 rows.
+- `gridExportID(label)`: kebab-case of the label plus `-grid`, else `data-grid`.
+
+Render: the existing `.data-grid-component` div becomes `grid`; the component returns
+```jsx
+<ExportableData exportID={gridExportID(exportTitle)} label={exportTitle} kind="table"
+  getRows={getExportRows} columns={exportColumns}
+  placement={filtering ? 'toolbar' : 'overlay'} style={{ width: '100%' }}>{grid}</ExportableData>
+```
+In auto-fit mode the antd Table sits in a `width: 100%; overflowX: auto; contain: inline-size` div: columns still shrink and wrap, but a table whose unbreakable content (an email, a tag) cannot fit scrolls inside the grid instead of spilling past its parent and widening the page. `contain: inline-size` keeps the table's width out of the parent's minimum size, so a flex item or `fr` grid track holding the grid (a roster beside a side panel) shrinks to fit instead of growing past the page. `minWidth: 240` keeps a squeezed grid usable. Trade-off: a parent that sizes to its content (an absolutely positioned popover, `inline-block`, a table cell, an `auto` grid track) no longer sees the table's width, so the grid there takes the search row's width and scrolls; stretch layouts (cards, flex rows, `fr` tracks, modals, drawers) are unaffected.
+
+`getRows` is a closure over `filteredData`, `tableColumns` and `sortConfig`, so the sort runs only when the user exports. With filtering on, the search row gets `paddingRight: 40` and the 32px toolbar button sits flush with the top and bottom of the search box, 8px to its right. `exportGetRows` (EntityDataGrid) replaces this closure.
 
 ## Performance Optimizations
 - useMemo for column building, filtered data, data with keys
