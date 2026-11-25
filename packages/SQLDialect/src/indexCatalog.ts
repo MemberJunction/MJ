@@ -81,37 +81,33 @@ export interface IndexCatalogQueryOptions {
  */
 export function NormalizeIndexType(nativeType: string | null | undefined): NormalizedIndexType {
     const normalized = (nativeType ?? '').trim().toUpperCase();
-    if (!normalized) {
-        return 'Other';
+    switch (normalized) {
+        case 'BTREE':
+        case 'CLUSTERED':
+        case 'NONCLUSTERED':
+            return 'BTree';
+        case 'HASH':
+        case 'NONCLUSTERED HASH':
+            return 'Hash';
+        case 'FULLTEXT':
+        case 'FULL-TEXT':
+            return 'FullText';
+        case 'GIN':
+            return 'GIN';
+        case 'GIST':
+        case 'SPGIST':
+        case 'SP-GIST':
+            return 'GiST';
+        case 'BRIN':
+            return 'BRIN';
+        case 'SPATIAL':
+        case 'RTREE':
+            return 'Spatial';
+        case 'XML':
+            return 'XML';
+        default:
+            return normalized.includes('COLUMNSTORE') ? 'Columnstore' : 'Other';
     }
-    if (normalized === 'BTREE' || normalized === 'CLUSTERED' || normalized === 'NONCLUSTERED') {
-        return 'BTree';
-    }
-    if (normalized === 'HASH' || normalized === 'NONCLUSTERED HASH') {
-        return 'Hash';
-    }
-    if (normalized === 'FULLTEXT' || normalized === 'FULL-TEXT') {
-        return 'FullText';
-    }
-    if (normalized.includes('COLUMNSTORE')) {
-        return 'Columnstore';
-    }
-    if (normalized === 'GIN') {
-        return 'GIN';
-    }
-    if (normalized === 'GIST' || normalized === 'SPGIST' || normalized === 'SP-GIST') {
-        return 'GiST';
-    }
-    if (normalized === 'BRIN') {
-        return 'BRIN';
-    }
-    if (normalized === 'SPATIAL' || normalized === 'RTREE') {
-        return 'Spatial';
-    }
-    if (normalized === 'XML') {
-        return 'XML';
-    }
-    return 'Other';
 }
 
 function indexGroupKey(schemaName: string, tableName: string, indexName: string): string {

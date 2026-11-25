@@ -11,10 +11,9 @@ import {
   BaseEntity,
   EntityInfo,
   IMetadataProvider,
-  Metadata,
   UserInfo,
 } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { NormalizeUUID } from '@memberjunction/global';
 import type { IndexProposal } from './IndexAdvisorTypes.js';
 
 /** Maximum identifier length for generated proposed index names (fits SQL Server 128-char limit). */
@@ -57,21 +56,29 @@ function findEntityForTable(entities: readonly EntityInfo[], schemaName: string,
   );
 }
 
+function buildKeySignature(fieldIDs: readonly string[]): string {
+  return fieldIDs.map((id) => NormalizeUUID(id)).join('|');
+}
+
 function proposalAlreadyTracked(entity: EntityInfo, proposedName: string, keyFieldIDs: readonly string[]): boolean {
   const lowerName = proposedName.toLowerCase();
+  const targetSignature = buildKeySignature(keyFieldIDs);
+  const existingNames = new Set<string>();
+  const existingKeySignatures = new Set<string>();
+
   for (const existing of entity.Indexes) {
-    if (existing.Name?.trim().toLowerCase() === lowerName) {
-      return true;
+    if (existing.Name) {
+      existingNames.add(existing.Name.trim().toLowerCase());
     }
     const existingKeys = existing.KeyFields;
-    if (
-      existingKeys.length === keyFieldIDs.length &&
-      existingKeys.every((f, idx) => f.EntityFieldID != null && UUIDsEqual(f.EntityFieldID, keyFieldIDs[idx]))
-    ) {
-      return true;
+    if (existingKeys.length > 0 && existingKeys.every((f) => f.EntityFieldID != null)) {
+      existingKeySignatures.add(
+        existingKeys.map((f) => NormalizeUUID(f.EntityFieldID!)).join('|'),
+      );
     }
   }
-  return false;
+
+  return existingNames.has(lowerName) || existingKeySignatures.has(targetSignature);
 }
 
 function resolveFieldIDs(entity: EntityInfo, columnNames: readonly string[]): string[] | null {
@@ -129,7 +136,9 @@ async function saveProposedIndex(
       Role: 'Key',
       SortDirection: 'ASC',
     });
-    await fieldEntity.Save();
+    if (!(await fieldEntity.Save())) {
+      return false;
+    }
   }
   for (const fieldID of includeFieldIDs) {
     const fieldEntity = await provider.GetEntityObject<BaseEntity>(ENTITY_INDEX_FIELDS_NAME, contextUser);
@@ -142,7 +151,9 @@ async function saveProposedIndex(
       Role: 'Include',
       SortDirection: 'ASC',
     });
-    await fieldEntity.Save();
+    if (!(await fieldEntity.Save())) {
+      return false;
+    }
   }
 
   return true;
@@ -162,7 +173,7 @@ export async function PersistIndexProposalsToMJMetadata(
     return result;
   }
 
-  const provider = options.Provider !== undefined ? options.Provider : Metadata.Provider;
+  const provider = options.Provider;
   if (!provider || !provider.Entities || provider.Entities.length === 0) {
     result.Skipped = proposals.length;
     result.SkippedReason = 'MJ metadata provider is not configured';
