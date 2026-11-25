@@ -1,5 +1,15 @@
 # @memberjunction/theme-engine
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 66258b1: Implement UI Phase 0 Workstream 4 contract fixes: retoken the default MJ font family to Montserrat with a `--mj-font-family-display` seed/token (and Theme Studio heading-font control + seamless normalization for saved themes), bundle Font Awesome Free 6.7.2 from npm in `explorer-app`, remove hardcoded `Ubuntu`/`Inter` font stacks from Angular component stylesheets, and strip hardcoded hex fallbacks and the duplicated TS stylesheet from `card-grid`.
+
+  Note for standalone hosts (outside `explorer-app`) that render `<mj-card-grid>`: add `@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';` to your global stylesheet alongside the other `@memberjunction/ng-ui-components` global styles.
+
+- 375f9f1: Add Phase 0 Workstream 6b design tokens: surface and elevation ramp B (`sunken`, `base`, `elevated`, `overlay`) mapped per `NAMING.md`, 3-step control-height scale (`32px / 40px / 52px` on desktop, `44px` on coarse pointers), radius role tokens (`--mj-radius-{control,surface,overlay,pill}`), ambient layer defaults, and dark-mode elevated surface text contrast tiers in `_tokens.scss` and `ThemeEngine`.
+
 ## 6.3.0-edge.1
 
 ## 6.3.0-edge.0

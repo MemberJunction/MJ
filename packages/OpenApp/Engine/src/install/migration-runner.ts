@@ -30,6 +30,8 @@ interface SkywayConfig {
         Database: string;
         User: string;
         Password: string;
+        /** Skyway calls this for each new connection; `Password` is then not used. */
+        PasswordProvider?: () => Promise<string>;
         Options?: { Encrypt?: boolean; TrustServerCertificate?: boolean; RequestTimeout?: number };
     };
     Migrations: {
@@ -132,9 +134,9 @@ export interface SkywayDatabaseConfig {
      */
     SSL?: Record<string, unknown>;
     /**
-     * PostgreSQL token logins only: gives the password for a new connection. When set, each
-     * migration run and each metadata refresh takes its password from here and `Password` is not
-     * used. Build it with `BuildPgPasswordSource` from `@memberjunction/postgresql-dataprovider`.
+     * PostgreSQL token logins only: gives the password for a new connection. When set, every
+     * connection the migration run and the metadata refresh open asks it for a password, and
+     * `Password` is not used. Build it with `BuildPgPasswordSource` from `@memberjunction/postgresql-dataprovider`.
      */
     PasswordSource?: () => Promise<string>;
 }
@@ -196,11 +198,7 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
         // optionalDependencies guidance instead of a raw resolver error.
         const Skyway = await ImportSkywayClass('@memberjunction/skyway-core', 'Skyway', 'the Skyway migration engine');
         AssertPasswordSourceTransport(DatabaseConfig);
-        // Skyway takes the password as a string, so a token login fetches one for this run.
-        const runDatabaseConfig = DatabaseConfig.PasswordSource
-            ? { ...DatabaseConfig, Password: await DatabaseConfig.PasswordSource() }
-            : DatabaseConfig;
-        const config = BuildSkywayConfig(MigrationsDir, SchemaName, runDatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
+        const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders, platform, TransactionMode);
         // Skyway 0.6.x requires an explicit provider, selected by platform.
         config.Provider = await CreateSkywayProvider(platform, config.Database);
 
@@ -394,6 +392,9 @@ export function BuildSkywayConfig(
             Database: dbConfig.Database,
             User: dbConfig.User,
             Password: dbConfig.Password,
+            // A token login: Skyway asks the source for each new connection, so a long run never
+            // presents a token that expired after the first connection opened.
+            ...(dbConfig.PasswordSource ? { PasswordProvider: dbConfig.PasswordSource } : {}),
             Options: {
                 Encrypt: encrypt,
                 TrustServerCertificate: trustCert,

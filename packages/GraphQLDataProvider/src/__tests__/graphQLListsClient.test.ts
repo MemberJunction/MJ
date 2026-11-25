@@ -398,3 +398,94 @@ describe('GraphQLListsClient.CreateListFromQuery', () => {
     expect(result.StaticReason).toBeUndefined();
   });
 });
+
+describe('GraphQLListsClient bulk member operations', () => {
+  const ok = { Success: true, ResultCode: 'SUCCESS', Message: 'ok', TargetListId: 'list-1', AddedCount: 2, RemovedCount: 0, FailedCount: 0 };
+
+  /** The name of the first field selected by the operation, i.e. the mutation called. */
+  function mutationName(query: string): string {
+    const op = parse(query).definitions.find((d) => d.kind === Kind.OPERATION_DEFINITION);
+    if (!op || op.kind !== Kind.OPERATION_DEFINITION) throw new Error('no operation');
+    expect(op.operation).toBe('mutation');
+    const first = op.selectionSet.selections[0];
+    return first.kind === Kind.FIELD ? first.name.value : '';
+  }
+
+  it('AddRecordsToList sends the list and record IDs and parses the counts', async () => {
+    const { provider, calls } = makeProvider({ AddRecordsToList: ok });
+    const result = await new GraphQLListsClient(provider as never).AddRecordsToList('list-1', ['a', 'b']);
+
+    expect(mutationName(calls[0].query)).toBe('AddRecordsToList');
+    expect(calls[0].variables).toEqual({ listId: 'list-1', recordIds: ['a', 'b'] });
+    expect(result).toMatchObject({ Success: true, TargetListId: 'list-1', Counts: { Added: 2, Removed: 0, Failed: 0 } });
+  });
+
+  it('AddRecordsToList sends the status and order options when given', async () => {
+    const { provider, calls } = makeProvider({ AddRecordsToList: ok });
+    await new GraphQLListsClient(provider as never).AddRecordsToList('list-1', ['a', 'b'], { Status: 'Active', SequenceFromOrder: true });
+
+    expect(calls[0].variables).toEqual({ listId: 'list-1', recordIds: ['a', 'b'], status: 'Active', sequenceFromOrder: true });
+    expect(calls[0].query).toContain('status: $status');
+    expect(calls[0].query).toContain('sequenceFromOrder: $sequenceFromOrder');
+  });
+
+  it('RemoveRecordsFromList sends the list and record IDs', async () => {
+    const { provider, calls } = makeProvider({ RemoveRecordsFromList: { ...ok, AddedCount: 0, RemovedCount: 2 } });
+    const result = await new GraphQLListsClient(provider as never).RemoveRecordsFromList('list-1', ['a', 'b']);
+
+    expect(mutationName(calls[0].query)).toBe('RemoveRecordsFromList');
+    expect(calls[0].variables).toEqual({ listId: 'list-1', recordIds: ['a', 'b'] });
+    expect(result.Counts?.Removed).toBe(2);
+  });
+
+  it('DuplicateList sends a null name when none is given and reads the new list ID', async () => {
+    const { provider, calls } = makeProvider({ DuplicateList: { ...ok, CreatedListId: 'list-2', TargetListId: 'list-2' } });
+    const result = await new GraphQLListsClient(provider as never).DuplicateList('list-1');
+
+    expect(mutationName(calls[0].query)).toBe('DuplicateList');
+    expect(calls[0].variables).toEqual({ listId: 'list-1', listName: null });
+    expect(result.CreatedListId).toBe('list-2');
+  });
+
+  it('DuplicateList sends the given name', async () => {
+    const { provider, calls } = makeProvider({ DuplicateList: ok });
+    await new GraphQLListsClient(provider as never).DuplicateList('list-1', 'Renamed');
+    expect(calls[0].variables).toEqual({ listId: 'list-1', listName: 'Renamed' });
+  });
+
+  it('CopyRecordsToList sends source, target, records and the move flag', async () => {
+    const { provider, calls } = makeProvider({ CopyRecordsToList: { ...ok, RemovedCount: 2 } });
+    const result = await new GraphQLListsClient(provider as never).CopyRecordsToList({
+      SourceListId: 'list-1', TargetListId: 'list-2', RecordIds: ['a', 'b'], RemoveFromSource: true,
+    });
+
+    expect(mutationName(calls[0].query)).toBe('CopyRecordsToList');
+    expect(calls[0].variables).toEqual({ sourceListId: 'list-1', targetListId: 'list-2', recordIds: ['a', 'b'], removeFromSource: true });
+    expect(result.Counts).toEqual({ Added: 2, Removed: 2, Failed: 0 });
+  });
+
+  it('SetRecordStatus calls SetListRecordStatus and reads UpdatedCount into Counts.Updated', async () => {
+    const { provider, calls } = makeProvider({
+      SetListRecordStatus: { ...ok, AddedCount: 0, UpdatedCount: 2 },
+    });
+    const result = await new GraphQLListsClient(provider as never).SetRecordStatus('list-1', ['a', 'b'], 'Complete');
+
+    expect(mutationName(calls[0].query)).toBe('SetListRecordStatus');
+    expect(calls[0].query).toContain('UpdatedCount');
+    expect(calls[0].variables).toEqual({ listId: 'list-1', recordIds: ['a', 'b'], status: 'Complete' });
+    expect(result.Counts).toEqual({ Added: 0, Removed: 0, Failed: 0, Updated: 2 });
+  });
+
+  it('CreateListFromRecords sends the entity, records and options', async () => {
+    const { provider, calls } = makeProvider({ CreateListFromRecords: { ...ok, CreatedListId: 'list-9' } });
+    const result = await new GraphQLListsClient(provider as never).CreateListFromRecords({
+      EntityName: 'Contacts', RecordIds: ['a'], ListName: 'New', Description: 'd', CategoryId: 'cat-1',
+    });
+
+    expect(mutationName(calls[0].query)).toBe('CreateListFromRecords');
+    expect(calls[0].variables).toEqual({
+      entityName: 'Contacts', recordIds: ['a'], options: { ListName: 'New', Description: 'd', CategoryId: 'cat-1' },
+    });
+    expect(result.CreatedListId).toBe('list-9');
+  });
+});

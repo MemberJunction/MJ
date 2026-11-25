@@ -1,5 +1,7 @@
 # @memberjunction/document-parsing
 
+## 6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

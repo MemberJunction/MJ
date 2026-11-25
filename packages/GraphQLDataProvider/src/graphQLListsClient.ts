@@ -208,6 +208,149 @@ export class GraphQLListsClient {
   }
 
   /**
+   * Adds records to a list on the server. Records the list already holds are skipped.
+   * `recordIds` are in `MJ: List Details.RecordID` form. `opts.Status` is the status of the new
+   * members; `opts.SequenceFromOrder` saves each new member's input position as its `Sequence`.
+   */
+  public async AddRecordsToList(
+    listId: string,
+    recordIds: readonly string[],
+    opts?: { Status?: string; SequenceFromOrder?: boolean },
+  ): Promise<ApplyResult> {
+    if (opts) return this.addRecordsToListWithOptions(listId, recordIds, opts);
+    const mutation = gql`
+      mutation AddRecordsToList($listId: String!, $recordIds: [String!]!) {
+        AddRecordsToList(listId: $listId, recordIds: $recordIds) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { listId, recordIds });
+    return parseApplyResult(result?.AddRecordsToList);
+  }
+
+  /** `AddRecordsToList` with the status and sequence arguments. */
+  private async addRecordsToListWithOptions(
+    listId: string,
+    recordIds: readonly string[],
+    opts: { Status?: string; SequenceFromOrder?: boolean },
+  ): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation AddRecordsToList($listId: String!, $recordIds: [String!]!, $status: String, $sequenceFromOrder: Boolean) {
+        AddRecordsToList(listId: $listId, recordIds: $recordIds, status: $status, sequenceFromOrder: $sequenceFromOrder) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const variables = { listId, recordIds, status: opts.Status ?? null, sequenceFromOrder: opts.SequenceFromOrder === true };
+    const result = await this.dataProvider.ExecuteGQL(mutation, variables);
+    return parseApplyResult(result?.AddRecordsToList);
+  }
+
+  /** Removes records from a list on the server. Records the list does not hold are ignored. */
+  public async RemoveRecordsFromList(listId: string, recordIds: readonly string[]): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation RemoveRecordsFromList($listId: String!, $recordIds: [String!]!) {
+        RemoveRecordsFromList(listId: $listId, recordIds: $recordIds) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { listId, recordIds });
+    return parseApplyResult(result?.RemoveRecordsFromList);
+  }
+
+  /**
+   * Copies a list and all its members into a new plain list owned by the caller. With no
+   * `listName`, the name is the source name followed by " (Copy)". `CreatedListId` is the new list.
+   */
+  public async DuplicateList(listId: string, listName?: string): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation DuplicateList($listId: String!, $listName: String) {
+        DuplicateList(listId: $listId, listName: $listName) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { listId, listName: listName ?? null });
+    return parseApplyResult(result?.DuplicateList);
+  }
+
+  /**
+   * Copies records from one list to another. With `RemoveFromSource` the records are then removed
+   * from the source list, but only when every add succeeded; otherwise the result is
+   * `PARTIAL_SUCCESS` and the source is unchanged.
+   */
+  public async CopyRecordsToList(args: {
+    SourceListId: string;
+    TargetListId: string;
+    RecordIds: readonly string[];
+    RemoveFromSource: boolean;
+  }): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation CopyRecordsToList($sourceListId: String!, $targetListId: String!, $recordIds: [String!]!, $removeFromSource: Boolean!) {
+        CopyRecordsToList(sourceListId: $sourceListId, targetListId: $targetListId, recordIds: $recordIds, removeFromSource: $removeFromSource) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      sourceListId: args.SourceListId,
+      targetListId: args.TargetListId,
+      recordIds: args.RecordIds,
+      removeFromSource: args.RemoveFromSource,
+    });
+    return parseApplyResult(result?.CopyRecordsToList);
+  }
+
+  /**
+   * Sets the Status of list members on the server. `status` must be a `MJ: List Details.Status`
+   * value or the result is `UNEXPECTED_ERROR`. `Counts.Updated` is the number of members changed.
+   */
+  public async SetRecordStatus(listId: string, recordIds: readonly string[], status: string): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation SetListRecordStatus($listId: String!, $recordIds: [String!]!, $status: String!) {
+        SetListRecordStatus(listId: $listId, recordIds: $recordIds, status: $status) {
+          ...ApplyResultFields
+          UpdatedCount
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { listId, recordIds, status });
+    return parseApplyResult(result?.SetListRecordStatus);
+  }
+
+  /** Creates a plain list (no source, never refreshes) holding the given records of an entity. */
+  public async CreateListFromRecords(args: {
+    EntityName: string;
+    RecordIds: readonly string[];
+    ListName: string;
+    Description?: string;
+    CategoryId?: string;
+  }): Promise<ApplyResult> {
+    const mutation = gql`
+      mutation CreateListFromRecords($entityName: String!, $recordIds: [String!]!, $options: CreateListFromRecordsInput!) {
+        CreateListFromRecords(entityName: $entityName, recordIds: $recordIds, options: $options) {
+          ...ApplyResultFields
+        }
+      }
+      ${APPLY_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      entityName: args.EntityName,
+      recordIds: args.RecordIds,
+      options: { ListName: args.ListName, Description: args.Description, CategoryId: args.CategoryId },
+    });
+    return parseApplyResult(result?.CreateListFromRecords);
+  }
+
+  /**
    * Refresh a list from its linked source. Leave `Mode` out to use the list's own RefreshMode.
    * When the source changed since it was approved, nothing is applied: the result is
    * `SOURCE_CHANGED` with `SourceChange` set, until the owner calls {@link ApproveSource}.
@@ -662,6 +805,7 @@ function parseApplyResult(raw: unknown): ApplyResult {
     AddedCount?: number | null;
     RemovedCount?: number | null;
     FailedCount?: number | null;
+    UpdatedCount?: number | null;
     Errors?: string[] | null;
     SourceChange?: WireSourceChange | null;
   };
@@ -672,11 +816,12 @@ function parseApplyResult(raw: unknown): ApplyResult {
     CreatedListId: r.CreatedListId ?? undefined,
     TargetListId: r.TargetListId ?? undefined,
     Counts:
-      r.AddedCount != null || r.RemovedCount != null || r.FailedCount != null
+      r.AddedCount != null || r.RemovedCount != null || r.FailedCount != null || r.UpdatedCount != null
         ? {
             Added: r.AddedCount ?? 0,
             Removed: r.RemovedCount ?? 0,
             Failed: r.FailedCount ?? 0,
+            ...(r.UpdatedCount != null ? { Updated: r.UpdatedCount } : {}),
           }
         : undefined,
     Errors: r.Errors ?? undefined,

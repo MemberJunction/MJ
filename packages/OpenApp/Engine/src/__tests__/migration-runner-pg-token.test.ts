@@ -6,7 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 interface CapturedSkywayConfig {
-    Database: { Password: string };
+    Database: { Password: string; PasswordProvider?: () => Promise<string> };
 }
 
 const captured = vi.hoisted(() => ({
@@ -72,11 +72,22 @@ describe('RunAppMigrations — PostgreSQL token login', () => {
         captured.pgClients.length = 0;
     });
 
-    it('takes a new password from the source for each migration run', async () => {
-        const databaseConfig = tokenConfig();
+    it('hands Skyway the source itself, so each connection a run opens asks for its own token', async () => {
+        const source = vi.fn(async () => 'token');
+        const databaseConfig: SkywayDatabaseConfig = { ...tokenConfig(), PasswordSource: source };
         await migrate(databaseConfig, 'app_one');
         await migrate(databaseConfig, 'app_two');
-        expect(captured.skyway.map((c) => c.Database.Password)).toEqual(['token-1', 'token-2']);
+        expect(captured.skyway).toHaveLength(2);
+        expect(captured.skyway.map((c) => c.Database.PasswordProvider)).toEqual([source, source]);
+        // MJ never resolves a token for Skyway; Skyway's provider calls the source when it connects.
+        expect(source).not.toHaveBeenCalled();
+    });
+
+    it('gives Skyway no PasswordProvider for a password login', async () => {
+        const { PasswordSource: _omit, ...databaseConfig } = tokenConfig();
+        await migrate({ ...databaseConfig, Password: 'secret' }, 'app_one');
+        expect(captured.skyway[0].Database.PasswordProvider).toBeUndefined();
+        expect(captured.skyway[0].Database.Password).toBe('secret');
     });
 
     it('gives the metadata refresh connection the source, so the driver asks it when it connects', async () => {

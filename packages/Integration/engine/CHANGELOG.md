@@ -1,5 +1,70 @@
 # @memberjunction/integration-engine
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 5f514f2: Implement the MJ Peer Sync (`MemberJunctionConnector`) core and in-process pipeline (#6021 / #6502), including the `RecordChange` T-SQL migration (`CHK_RecordChange_Source` `'Sync'`, `spCreateRecordChange_Internal` `@IntegrationID`, and `IX_RecordChange_EntityID_ChangedAt`), server-only `BaseEntity.SetSyncContext` (`RecordChange.Source = 'Sync'`, `Integration.ID` FK binding, and `IRecordChangeSyncContext` provenance with optional `OriginUserEmail` for service accounts across `MJCore` and SQL Server / PostgreSQL data providers), Tarjan SCC + two-pass nullable FK cycle planning in `@memberjunction/record-graph`, per-record `EntityVectorSyncer.VectorizeRecords` and batch `DuplicateRecordDetector.FindCandidatesForValues`, `ComputeThreeWayFieldMerge` and the `BaseIntegrationConnector.RunPipeline` seam (plus incremental push `'MJ: Record Changes'` and `EntityID` record-map lookup fixes), and the `SchemaPlanner`, `ChangeSetPlanner`, `PeerIdentityGate`, `PeerSyncApplier`, `PeerSyncEndpointService` (`InProcessPeerSyncTransport` + per-run `FlushDeferredForeignKeys`), `PeerSyncDoorbell`, and `MemberJunctionConnector` modules.
+
+### Patch Changes
+
+- b428089: Incremental push (Push / Bidirectional entity maps) now selects, pushes and advances correctly. Four defects in `IntegrationEngine`'s push path, found while proving the Informz bidirectional connector against the real engine, each made incremental push a silent no-op or a permanently stalled loop for every connector:
+  - **Record Changes entity name.** The push loader queried the unprefixed `Record Changes` entity; the only registration is `MJ: Record Changes`, so the RunView failed, the loader returned nothing, and no incremental push ever found a change.
+  - **JSON-quoted push watermark.** A `simple` RunView returns `ChangedAt` as a `Date`; assigned to the text watermark it serialised with quotes (`"2026-…Z"`), and the next pass's `ChangedAt > '…'` filter could never match. `ChangedAt` is now normalised to ISO text in the loader.
+  - **A Delete that cannot be performed errored forever.** A Delete for a record with no record map (never pushed) or for a connector without delete support was routed into the create/update branches with no attributes, refused by the connector, counted errored, and re-selected on every pass because the watermark was held. It is now a documented `PUSH_SKIPPED` and the watermark may advance (while a failed record-map read throws so transient lookup errors retry instead of skipping). The push record-map lookup also scopes by `EntityID`.
+  - **Watermark precision.** `ChangedAt` has up to seven fractional digits in the database but reaches the engine at millisecond precision, so a record changed at `.2666667` sat above a `.266` watermark and was re-pushed on the next pass. The stored push watermark rounds up to the next whole millisecond whenever doing so remains strictly below the earliest failed record's timestamp.
+
+  Deployed Push or Bidirectional maps that have silently pushed nothing will begin pushing MJ changes to their vendors after this lands. On a map with no existing push watermark (`WatermarkValue` null), the first incremental push runs with no `ChangedAt` lower bound and replays the entity's full `MJ: Record Changes` history (excluding System-user rows); operators who want to push only new changes going forward should set a push watermark before upgrading.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/integration-engine-base@6.3.0-edge.2
+  - @memberjunction/integration-pk-classifier@6.3.0-edge.2
+  - @memberjunction/integration-progress-artifacts@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

@@ -33,8 +33,9 @@ function resolveSkillActivations(requested: SkillActivationRequest[], availableS
 }
 
 // Mirrors BaseAgent.buildSkillActivationMessage
-function buildSkillActivationMessage(skills: MockSkill[]): string {
-    const sections = skills.map(s => `## Skill Activated: ${s.Name}\n\n${s.Instructions}`);
+function buildSkillActivationMessage(skills: MockSkill[], resolvedInstructions?: ReadonlyMap<string, string>): string {
+    const sections = skills.map(s =>
+        `## Skill Activated: ${s.Name}\n\n${resolvedInstructions?.get(s.ID) ?? s.Instructions}`);
     return `The following skill(s) have been activated. Their instructions are now in effect ` +
         `for the remainder of this run:\n\n${sections.join('\n\n')}`;
 }
@@ -103,6 +104,13 @@ describe('buildSkillActivationMessage', () => {
         const message = buildSkillActivationMessage([SKILLS[0]]);
         expect(message).toContain('Report Builder');
         expect(message).toContain('Build reports carefully.');
+    });
+
+    it('uses the resolved text for a skill in the map, and stored Instructions for the rest', () => {
+        const message = buildSkillActivationMessage(SKILLS, new Map([[SKILLS[0].ID, 'Rendered for this run.']]));
+        expect(message).toContain('## Skill Activated: Report Builder\n\nRendered for this run.');
+        expect(message).not.toContain('Build reports carefully.');
+        expect(message).toContain('Data Validator');
     });
 
     it('concatenates multiple activated skills', () => {

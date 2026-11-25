@@ -1,5 +1,65 @@
 # @memberjunction/esignature
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- d498eb9: Security hardening across MCP Server, MJServer resolvers/dev-auth, eSignature webhooks, CoreActions, API keys, and Docker configurations.
+  - MCP Server: auth mode `none` is refused when `NODE_ENV=production` and binds strictly to `127.0.0.1` otherwise; session IDs are logged as truncated prefixes; API keys in URL query parameters log a warning and are ignored; API-key scope lookup escapes `apiKeyId` and passes `systemUser` as `contextUser`; OAuth `user_not_found` / `user_inactive` resolutions return a generic 403 `Access denied` without echoing the probed email.
+  - MJServer: `CheckEntityPermissionsSystemUser` is gated with `@RequireSystemUser()`; `UserFavoriteResolver` verifies that the requested `UserID` matches the caller (system user excepted); `SqlLoggingConfigResolver` rejects `fileName`s containing path separators or `..` and validates containment with `path.relative`; `localDevAuth` trusts Docker bridge source IPs only when `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` is explicitly set (never inferred from `/.dockerenv`).
+  - eSignature: webhooks where `VerifyWebhookSignature === 'NotConfigured'` are refused by default unless `MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true` is explicitly enabled.
+  - CoreActions & APIKeys: `URLLinkValidatorAction.checkSSL` routes through `SafeFetch` for SSRF protection on redirects; `APIKeyEngine` escapes `apiKey.UserID` in its `RunView` filter.
+  - Angular AI Test Harness: `RenderMarkdown` restricts anchor emission to `http:`, `https:`, and `mailto:` URLs with `rel="noopener noreferrer"` before `bypassSecurityTrustHtml`.
+  - Docker: MJAPI image no longer bakes `root:Docker!` into image layers (set at container startup only when `WEBSITE_INSTANCE_ID` starts Azure App Service `sshd`); regression compose binds test SQL Server port `11433` to `127.0.0.1`.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/credentials@6.3.0-edge.2
+  - @memberjunction/storage@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

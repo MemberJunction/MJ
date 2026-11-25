@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual, MJGlobal, IndexByUUID } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
-import { MJListEntity, MJListEntityExtended, MJListDetailEntity, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { MJListEntity, MJListEntityExtended, MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEntity, BaseEntityEvent, Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -13,6 +13,7 @@ import type { ListRefreshSummary } from '@memberjunction/ng-list-management';
 import { CapabilitiesForLevel, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists-base';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { validateEnumParam, validateStringParam } from '../../shared/agent-tool-validation';
+import { CreateListsClient, DuplicateListNotice } from '../../shared/lists-client';
 import { buildListBrowseAgentContext, resolveNamedRecord, buildNotFoundError } from '../lists-agent-context';
 import {
   AttentionMessage,
@@ -3676,73 +3677,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.cdr.detectChanges();
 
     try {
-      const md = this.ProviderToUse;
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-
-      const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists', md.CurrentUser);
-      newList.Name = `${listToDuplicate.Name} (Copy)`;
-      newList.Description = listToDuplicate.Description;
-      newList.EntityID = listToDuplicate.EntityID;
-      newList.CategoryID = listToDuplicate.CategoryID;
-      newList.UserID = md.CurrentUser!.ID;
-
-      const listSaved = await newList.Save();
-      if (!listSaved) {
-        this.notificationService.CreateSimpleNotification('Failed to duplicate list', 'error', 4000);
-        return;
-      }
-
-      // BypassCache to avoid any stale RunView cache that might mask members.
-      // High MaxRows to cover large lists; entity_object so we have typed access.
-      const itemsResult = await rv.RunView<MJListDetailEntity>({
-        EntityName: 'MJ: List Details',
-        ExtraFilter: `ListID = '${listToDuplicate.ID}'`,
-        ResultType: 'entity_object',
-        MaxRows: 100000,
-        BypassCache: true
-      });
-
-      if (!itemsResult.Success) {
-        console.error('Duplicate: failed to load source list members', itemsResult.ErrorMessage);
-        this.notificationService.CreateSimpleNotification(
-          `Could not load source list members: ${itemsResult.ErrorMessage || 'unknown'}`,
-          'error', 6000
-        );
-        return;
-      }
-
-      const sourceItems = itemsResult.Results ?? [];
-      if (sourceItems.length === 0) {
-        this.notificationService.CreateSimpleNotification('List duplicated (source had no records)', 'success', 3000);
-      } else {
-        // Batch all detail inserts into one transaction group so this is
-        // a single round-trip instead of 1-per-row. All-or-nothing: if any
-        // row fails server-side validation the whole group rolls back.
-        const tg = await md.CreateTransactionGroup();
-        for (const item of sourceItems) {
-          const newItem = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
-          newItem.ListID = newList.ID;
-          newItem.RecordID = item.RecordID;
-          newItem.Sequence = item.Sequence;
-          newItem.TransactionGroup = tg;
-          await newItem.Save(); // queued into tg, not sent yet
-        }
-        const submitted = await tg.Submit();
-        if (submitted) {
-          this.notificationService.CreateSimpleNotification(
-            `List duplicated with ${sourceItems.length} item${sourceItems.length !== 1 ? 's' : ''}`,
-            'success', 3000
-          );
-        } else {
-          console.error('Duplicate: transaction group submit failed');
-          this.notificationService.CreateSimpleNotification(
-            `Duplicated list but failed to copy ${sourceItems.length} items — see console`,
-            'error', 6000
-          );
-        }
-      }
-
-      await this.loadData();
+      const result = await CreateListsClient(this.ProviderToUse).DuplicateList(listToDuplicate.ID);
+      const notice = DuplicateListNotice(result);
+      this.notificationService.CreateSimpleNotification(notice.Message, notice.Style, notice.Duration);
+      if (result.CreatedListId) await this.loadData();
     } catch (error) {
       console.error('Error duplicating list:', error);
       this.notificationService.CreateSimpleNotification('Error duplicating list. Please try again.', 'error', 4000);
@@ -3802,22 +3740,6 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.cdr.detectChanges();
 
     try {
-      // spDeleteList doesn't cascade to MJ: List Details, so the FK
-      // constraint (FK_ListDetail_List) blocks the delete if the list
-      // has any members. Cascade-delete the details first in a
-      // transaction group so the whole thing rolls back if any single
-      // delete fails. The proper long-term fix is a migration that
-      // adds ON DELETE CASCADE (or extends the SP); this keeps the UI
-      // unblocked in the meantime.
-      const cascadeOk = await this.cascadeDeleteListMembers(listToDelete.ID);
-      if (!cascadeOk) {
-        this.notificationService.CreateSimpleNotification(
-          `Failed to delete list members for "${listName}" — list not deleted`,
-          'error', 6000,
-        );
-        return;
-      }
-
       const deleted = await listToDelete.Delete();
       if (deleted) {
         this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
@@ -3832,7 +3754,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
         this.buildCategoryTree();
         this.cdr.detectChanges();
       } else {
-        const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
+        const errorMessage = listToDelete.LatestResult?.CompleteMessage || 'Unknown error occurred';
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
@@ -3854,36 +3776,6 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   /** @deprecated Use {@link DeleteList}. */
   async deleteList() {
     return this.DeleteList();
-  }
-
-  /** Delete every MJ: List Details row for a given list in a single
-   *  transaction group. Returns true if everything succeeded (including
-   *  the trivial "no members" case). */
-  private async cascadeDeleteListMembers(listId: string): Promise<boolean> {
-    const md = this.ProviderToUse;
-    const rv = RunView.FromMetadataProvider(md);
-    const lookup = await rv.RunView<MJListDetailEntity>({
-      EntityName: 'MJ: List Details',
-      ExtraFilter: `ListID='${listId}'`,
-      ResultType: 'entity_object',
-    });
-    if (!lookup.Success) {
-      console.error('Failed to load list details for cascade-delete:', lookup.ErrorMessage);
-      return false;
-    }
-    const details = lookup.Results ?? [];
-    if (details.length === 0) return true;
-
-    const tg = await md.CreateTransactionGroup();
-    for (const d of details) {
-      d.TransactionGroup = tg;
-      await d.Delete();
-    }
-    const ok = await tg.Submit();
-    if (!ok) {
-      console.error('Cascade-delete transaction failed for list', listId);
-    }
-    return ok;
   }
 
   CloseCreateDialog() {

@@ -250,7 +250,8 @@ export interface ApplyResult {
   /** Populated when `MaterializeFromView` (or similar) creates a new list. */
   CreatedListId?: string;
   TargetListId?: string;
-  Counts?: { Added: number; Removed: number; Failed: number };
+  /** `Updated` is set by operations that change existing members, such as a status update. */
+  Counts?: { Added: number; Removed: number; Failed: number; Updated?: number };
   Errors?: string[];
   /** Set when `ResultCode` is `SOURCE_CHANGED`. */
   SourceChange?: ListSourceChange;

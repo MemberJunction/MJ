@@ -566,6 +566,14 @@ async function runDeterministicScriptedAgent(
             agent,
             conversationMessages: UserTurn(userMessage),
             payload: initialPayload,
+            // Disable agent-side decision calls (e.g., Sage's decisionDiscovery) while TestLLM is
+            // registered across chat drivers: otherwise LLMDecision's internal chat prompt steals
+            // Reply #1 from this run's scripted FIFO queue, cutting PB7 from 4 Prompt steps to 3.
+            data: { __agentTypePromptParams: { decisionsEnabled: false } },
+            // BaseAgent.Execute drops `__agentTypePromptParams` from `data` unless the run trusts it, so
+            // without this flag the override above never reaches the agent and discovery still runs.
+            // The harness stands in for trusted server code, as agent-decisions-switch does.
+            TrustReservedRunData: true,
             apiKeys: SCRIPTED_API_KEYS,
             CredentialScope: 'RuntimeOnly',
         });

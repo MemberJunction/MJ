@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/workflow.mjs';
@@ -283,6 +285,43 @@ describe('pnpm store cache', () => {
         expect(preflight).toMatch(/--lockfile-only/);
         expect(preflight).not.toMatch(/cache: '?pnpm'?/);
     });
+
+    it('a job that runs a filtered pnpm install does not write the shared setup-node pnpm cache', () => {
+        const integration = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const sidecar = integration.split(/^ {2}ps-sidecar-pytest:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(sidecar).toMatch(/--filter /);
+        expect(sidecar).not.toMatch(/cache: '?pnpm'?/);
+    });
+});
+
+describe('test.yml — failed-job re-run cache fallback', () => {
+    it('shard and esm-guard cache restores fall back to attempt 1 and next build seed', () => {
+        for (const job of ['test', 'esm-guard']) {
+            const step = readJobSteps(job).find((s) => s.name === "Restore the build job's turbo cache");
+            expect(step, `${job} must restore the build handoff cache`).toBeDefined();
+            const body = step.body.join('\n');
+            expect(body).toMatch(/restore-keys:/);
+            expect(body).toMatch(/turbo-run-\$\{\{\s*github\.run_id\s*\}\}-/);
+            expect(body).toMatch(/turbo-v1-\$\{\{\s*runner\.os\s*\}\}-/);
+        }
+    });
+
+    it('cleanup always deletes the run-scoped turbo cache so red PR runs never orphan ~3 GB entries', () => {
+        const delStep = readJobSteps('cleanup').find((s) => s.name === 'Delete the run-scoped turbo cache');
+        expect(delStep).toBeDefined();
+        expect(delStep.body.join('\n')).not.toMatch(/^\s*if:/m);
+    });
+});
+
+describe('integration.yml — CodeGen idempotency skips duplicate warm-twice', () => {
+    it('passes --skip-warm to --stage single-column after --stage warm-twice', () => {
+        const integration = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const lines = integration.split('\n').filter((l) => /codegen-idempotency-check\.mjs\s+--stage\s+single-column/.test(l));
+        expect(lines.length).toBeGreaterThanOrEqual(2);
+        for (const line of lines) {
+            expect(line).toMatch(/--skip-warm\b/);
+        }
+    });
 });
 
 describe('test.yml — backstop integrity', () => {
@@ -333,5 +372,133 @@ describe('test.yml — backstop integrity', () => {
         const names = steps.map((s) => s.name);
         expect(names).toContain('Alert on backstop failure');
         expect(names).toContain('Resolve backstop alarm on green');
+    });
+});
+
+describe('test.yml — intra-package sharding & read-only next test cache seed (Option A)', () => {
+    it('passes --split-above to plan-test-shards and passes splitPackages via env', () => {
+        const planStep = readJobSteps('build').find((s) => s.name === 'Plan test shards');
+        expect(planStep).toBeDefined();
+        expect(planStep.body.join('\n')).toMatch(/--split-above=\d+/);
+
+        const runStep = readJobSteps('test').find((s) => s.name === 'Run unit tests');
+        expect(runStep).toBeDefined();
+        const body = runStep.body.join('\n');
+        expect(body).toMatch(/SHARD_SPLIT_PACKAGES: \$\{\{ matrix\.shard\.splitPackages \|\| '' \}\}/);
+        expect(body).toMatch(/npx turbo run test --continue --only --filter="\$pkg" -- --shard="\$shard_arg"/);
+    });
+
+    it('a split package builds its graph without pass-through args before running only its own test task', () => {
+        // turbo hashes `-- --shard=j/k` into every task of the run, so without the separate build
+        // and `--only` every dependency build of a split package misses the cache and recompiles.
+        const body = readJobSteps('test').find((s) => s.name === 'Run unit tests').body.join('\n');
+        const build = body.indexOf('npx turbo run build --filter="$pkg"');
+        const test = body.indexOf('npx turbo run test --continue --only --filter="$pkg"');
+        expect(build).toBeGreaterThan(-1);
+        expect(test).toBeGreaterThan(build);
+        expect(body.slice(build, test)).not.toMatch(/--shard/);
+    });
+
+    it('a red shard still runs every task it was given, then fails', () => {
+        // Without --continue (and with `bash -e` exiting on the first failed pipeline) a shard
+        // stopped at its first failing package, so later packages and split halves never ran.
+        const body = readJobSteps('test').find((s) => s.name === 'Run unit tests').body.join('\n');
+        expect(body).toMatch(/npx turbo run test --continue --concurrency=2 "\$\{FILTER_ARGS\[@\]\}" .*\|\| STATUS=1/);
+        expect(body).toMatch(/--shard="\$shard_arg" .*\|\| STATUS=1/);
+        expect(body).toMatch(/else\s+STATUS=1/); // a failed split-package build fails the shard too
+        expect(body).toMatch(/exit "\$STATUS"/);
+    });
+
+    describe('Determine test scope computes is_full_suite / turbo_filter', () => {
+        /** Run the step's real script with a stub `git` that reports `changed` as the PR diff. */
+        const runScope = (eventName, changed) => {
+            const step = readJobSteps('build').find((s) => s.name === 'Determine test scope');
+            const runAt = step.body.findIndex((l) => /^ {8}run: \|\s*$/.test(l));
+            const script = step.body
+                .slice(runAt + 1)
+                .filter((l) => l.startsWith('          ') || l.trim() === '')
+                .map((l) => l.slice(10))
+                .join('\n')
+                .replaceAll('${{ github.event_name }}', eventName)
+                .replaceAll('${{ runner.os }}', 'Linux');
+            const dir = mkdtempSync(join(tmpdir(), 'mj-scope-'));
+            try {
+                const git = join(dir, 'git');
+                writeFileSync(
+                    git,
+                    `#!/usr/bin/env bash\ncase "$1" in\n  diff) printf '%s\\n' ${changed.map((c) => `'${c}'`).join(' ')} ;;\n  rev-parse) echo 0123456789abcdef ;;\nesac\n`,
+                );
+                chmodSync(git, 0o755);
+                const output = join(dir, 'out');
+                writeFileSync(output, '');
+                const res = spawnSync('bash', ['-e', '-c', script], {
+                    encoding: 'utf8',
+                    env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_OUTPUT: output, PR_BASE_REF: 'next' },
+                });
+                expect(res.status, res.stderr).toBe(0);
+                return Object.fromEntries(
+                    readFileSync(output, 'utf8')
+                        .split('\n')
+                        .filter(Boolean)
+                        .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
+                );
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        };
+
+        it('a PR touching only package files is scoped (is_full_suite=false)', () => {
+            const out = runScope('pull_request', ['packages/MJCore/src/index.ts']);
+            expect(out.is_full_suite).toBe('false');
+            expect(out.turbo_filter).toBe('--filter=...[origin/next]');
+        });
+
+        it.each(['vitest.shared.ts', 'pnpm-lock.yaml', 'turbo.json', 'tsconfig.json', '.github/workflows/test.yml'])(
+            'a PR touching %s runs the full suite (is_full_suite=true)',
+            (file) => {
+                const out = runScope('pull_request', ['packages/MJCore/src/index.ts', file]);
+                expect(out.is_full_suite).toBe('true');
+                expect(out.turbo_filter).toBe('');
+            },
+        );
+
+        it.each(['push', 'schedule', 'workflow_dispatch'])('a %s run is the full-suite backstop', (event) => {
+            const out = runScope(event, []);
+            expect(out.is_full_suite).toBe('true');
+            expect(out.turbo_filter).toBe('');
+            expect(out.test_seed_prefix).toMatch(/^turbo-test-v1-Linux-v[\d.]+-0123456789ab-$/);
+        });
+    });
+
+    it('restores turbo-test-v1 read-only in scoped test shards, skips it on full-suite PR runs, and only publishes it from next backstops', () => {
+        const testSteps = readJobSteps('test');
+        const restoreSeed = testSteps.find((s) => s.name === 'Restore next test cache seed');
+        expect(restoreSeed).toBeDefined();
+        const restoreBody = restoreSeed.body.join('\n');
+        expect(restoreBody).toMatch(/if:\s*github\.event_name != 'pull_request' \|\| needs\.build\.outputs\.is_full_suite != 'true'/);
+        expect(restoreBody).toMatch(/uses: actions\/cache\/restore@/);
+        expect(restoreBody).toMatch(/key: \$\{\{ needs\.build\.outputs\.test_seed_prefix \}\}\$\{\{ github\.sha \}\}/);
+
+        // Test shards must NEVER directly call actions/cache/save for turbo-test-v1
+        const directSave = testSteps.find((s) => /actions\/cache\/save@/.test(s.body.join('\n')));
+        expect(directSave).toBeUndefined();
+
+        // Delta upload in test shards must be gated to push/schedule on next
+        const uploadDelta = testSteps.find((s) => s.name === 'Upload test cache delta for next seed');
+        expect(uploadDelta).toBeDefined();
+        expect(uploadDelta.body.join('\n')).toMatch(/\(github\.event_name == 'push' \|\| github\.event_name == 'schedule'\) && github\.ref_name == 'next'/);
+
+        // Cleanup job saves turbo-test-v1 ONLY on push/schedule on next when test succeeded
+        const cleanupSteps = readJobSteps('cleanup');
+        const saveSeed = cleanupSteps.find((s) => s.name === 'Save next test cache seed');
+        expect(saveSeed).toBeDefined();
+        const saveBody = saveSeed.body.join('\n');
+        expect(saveBody).toMatch(/needs\.test\.result == 'success'/);
+        expect(saveBody).toMatch(/\(github\.event_name == 'push' \|\| github\.event_name == 'schedule'\) && github\.ref_name == 'next'/);
+        expect(saveBody).toMatch(/key: \$\{\{ needs\.build\.outputs\.test_seed_prefix \}\}\$\{\{ github\.sha \}\}/);
+
+        // Guards job runs the Vitest threads safety guard
+        const guardSteps = readJobSteps('guards');
+        expect(guardSteps.some((s) => s.name === 'Vitest threads safety guard')).toBe(true);
     });
 });

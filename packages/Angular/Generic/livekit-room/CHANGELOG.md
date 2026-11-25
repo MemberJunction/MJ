@@ -1,5 +1,20 @@
 # @memberjunction/ng-livekit-room
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [3c70bf7]
+- Updated dependencies [60b406c]
+- Updated dependencies [6e740d7]
+- Updated dependencies [df69cd5]
+- Updated dependencies [66258b1]
+  - @memberjunction/ai-realtime-client@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/ng-realtime-media@6.3.0-edge.2
+  - @memberjunction/livekit-room-core@6.3.0-edge.2
+  - @memberjunction/ng-whiteboard@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes
