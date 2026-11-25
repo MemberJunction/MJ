@@ -16,9 +16,14 @@ function createChannelContext(spoken: string[]): RealtimeChannelContext {
     AgentName: 'Sage',
     Provider: null,
     SendContextNote: () => undefined,
-    RequestSpokenResponse: (instructions: string) => spoken.push(instructions),
+    RequestSpokenResponse: (instructions: string) => {
+      spoken.push(instructions);
+    },
     RequestSave: () => undefined,
     SetFocusMode: () => undefined,
+    SaveAsArtifact: async () => null,
+    AgentSessionID: null,
+    ExecuteServerAction: async () => null,
   };
 }
 
@@ -97,7 +102,7 @@ describe('TourChannel (headless Guided Tour realtime channel)', () => {
   it('exposes activeStep and visibleAnchors state and routes highlight / goToStep / prepareStep verbs', async () => {
     const spoken: string[] = [];
     const channel = new TourChannel();
-    channel.Initialize(createChannelContext(spoken), null);
+    channel.Initialize(createChannelContext(spoken));
 
     const state = channel.GetState();
     expect(state['activeStep']).toMatchObject({
@@ -160,7 +165,7 @@ describe('TourChannel (headless Guided Tour realtime channel)', () => {
   it('routes selectChoice, advanceStep, goBack, and demonstrateStep through TourRealtimeBridge', async () => {
     const spoken: string[] = [];
     const channel = new TourChannel();
-    channel.Initialize(createChannelContext(spoken), null);
+    channel.Initialize(createChannelContext(spoken));
 
     const timedHighlight = await channel.ApplyVerb(
       'highlight',
@@ -208,16 +213,13 @@ describe('TourChannel (headless Guided Tour realtime channel)', () => {
     RegisterTourRealtimeBridge(null);
     const executed: Array<{ name: string; params: Record<string, unknown> }> = [];
     const channel = new TourChannel();
-    channel.Initialize(
-      {
-        ...createChannelContext([]),
-        ExecuteClientTool: async (toolName, params) => {
-          executed.push({ name: toolName, params });
-          return { Success: true, Result: { ok: true } };
-        },
+    channel.Initialize({
+      ...createChannelContext([]),
+      ExecuteClientTool: async (toolName, params) => {
+        executed.push({ name: toolName, params });
+        return { Success: true, Result: { ok: true } };
       },
-      null,
-    );
+    });
 
     await channel.ApplyVerb('selectChoice', { choiceKey: 'branch-a' }, 'agent');
     await channel.ApplyVerb('advanceStep', {}, 'agent');
