@@ -69,7 +69,7 @@
             "Sequence": 2,
             "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
             "Title": "User Tour Launcher",
-            "Body": "Open the **User Avatar Menu** and select **Tours & Learning Paths** to browse **For This Screen**, **All Apps**, and **Paths** anytime without cluttering the Home screen.",
+            "Body": "Open the **User Avatar Menu** and select **Tours** to browse **For This Screen**, **All Apps**, and **Paths** anytime without cluttering the Home screen.",
             "Configuration": {
               "ShowProgress": true
             },

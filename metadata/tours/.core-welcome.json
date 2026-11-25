@@ -248,7 +248,7 @@
             "Sequence": 8,
             "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
             "Title": "Revisit Tours & Learning Paths Anytime",
-            "Body": "Open your User Avatar Menu and choose **Tours & Learning Paths** anytime to browse **For This Screen**, **All Apps**, and **Paths**.",
+            "Body": "Open your User Avatar Menu and choose **Tours** anytime to browse **For This Screen**, **All Apps**, and **Paths**.",
             "Configuration": {
               "ShowProgress": true,
               "NextButtonText": "Finish"

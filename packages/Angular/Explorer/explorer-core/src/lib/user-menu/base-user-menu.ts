@@ -134,7 +134,7 @@ export class BaseUserMenu {
             },
             {
                 id: 'tours-and-help',
-                label: 'Tours & Learning Paths',
+                label: 'Tours',
                 icon: 'fa-solid fa-route',
                 group: 'primary',
                 order: 15,

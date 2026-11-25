@@ -60,7 +60,7 @@ flowchart LR
 
 ### Core Design Principles
 
-- **Clean Workspace Chrome**: Tours and Learning Paths live inside the **User Avatar Menu** (`Tours & Learning Paths`) rather than occupying permanent real estate on the Home dashboard. While a tour is actively running, a compact route indicator pill appears in the header for one-click pause/resume/stop controls.
+- **Clean Workspace Chrome**: Tours and Learning Paths live inside the **User Avatar Menu** (**Tours**) rather than occupying permanent real estate on the Home dashboard. While a tour is actively running, a compact route indicator pill appears in the header for one-click pause/resume/stop controls.
 - **Immutable Version Snapshots**: Editing a draft tour never mutates in-flight runs or historical analytics. Publishing a tour computes a canonical SHA-256 content hash and writes an immutable `MJ: Tour Versions` snapshot (`v1`, `v2`, …) referenced by `Tour.CurrentVersionID` and `TourRun.TourVersionID`.
 - **Semantic & Resilient Anchors**: Tours anchor to `data-mj-tour-anchor="<prefix>.<area>.<element>"` attributes, semantic entity form hooks (`FormField`, `FormSection`, `FormRailGroup`, `FormToolbarAction`), or `NavItem` driver classes — never brittle CSS class chains — and declare `OnMissing: "Center"` fallbacks so UI layout changes never strand a user mid-tour.
 - **True Directed Acyclic Graph (DAG) Execution**: Every tour compiles into an `@memberjunction/graph` `IGraphRepository`, supporting `Choice` branching, `CompositeFilter` / `SafeExpressionEvaluator` edge conditions, convergence onto shared summary steps, and static cycle rejection via `DetectCycle`.
@@ -70,13 +70,13 @@ flowchart LR
 
 ## 2. Discovery Surfaces: User Menu Launcher, First-Visit Offers & Omnibar
 
-### A. Clean Home & User Avatar Menu (`Tours & Learning Paths`)
+### A. Clean Home & User Avatar Menu (`Tours`)
 
-Opening the **User Avatar Menu** in the top-right shell header reveals **Tours & Learning Paths** (`core.shell.tours-launcher`) directly beneath **My Profile**, keeping the Home workspace focused on pinned items and applications:
+Opening the **User Avatar Menu** in the top-right shell header reveals **Tours** (`core.shell.tours-launcher`) directly beneath **My Profile**, keeping the Home workspace focused on pinned items and applications:
 
-![Clean Home Workspace and User Menu Tours & Learning Paths Entry](assets/guided-tours/01-clean-home-and-user-menu.png)
+![Clean Home Workspace and User Menu Tours Entry](assets/guided-tours/01-clean-home-and-user-menu.png)
 
-Clicking **Tours & Learning Paths** opens a three-tab launcher popover:
+Clicking **Tours** opens the **Tours & Learning Paths** three-tab launcher popover:
 
 1. **For This Screen**: Contextual tours matching the active application, dashboard `DriverClass`, or open entity record.
 2. **All Apps**: Global catalog grouping every eligible active tour across MemberJunction Core and installed OpenApps (`Orders`, `Sales`, `Accounting`, `Sonar`, `AI`, `Knowledge Hub`, etc.) with live **`✓ Completed`** and **`In Progress`** status badges so users can launch or replay any tour from anywhere.

@@ -83,7 +83,7 @@
             "Sequence": 3,
             "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
             "Title": "Tours & Learning Paths Anytime",
-            "Body": "Open your profile menu and select **Tours & Learning Paths** whenever you want to explore guided walkthroughs or track multi-tour learning paths across apps.",
+            "Body": "Open your profile menu and select **Tours** whenever you want to explore guided walkthroughs or track multi-tour learning paths across apps.",
             "Configuration": {
               "ShowProgress": true,
               "NextButtonText": "Done"
