@@ -6,7 +6,6 @@ export default mergeConfig(
   defineProject({
     test: {
       environment: 'node',
-      pool: 'threads',
     },
   })
 );

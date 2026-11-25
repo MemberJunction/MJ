@@ -35,6 +35,19 @@ const DEFAULT_WEIGHTS_PATH = join(HERE, 'test-shard-weights.json');
 const PER_TASK_OVERHEAD_SECONDS = 3;
 
 /**
+ * How much more a split sub-shard costs its shard than the same weight of whole packages.
+ *
+ * Whole packages run together in one `turbo run test --concurrency=4`, so a shard finishes its
+ * aggregate weight in roughly aggregate / 3 of wall time (run 45512966433: 2220s of weight in
+ * 615s). A split sub-shard runs ALONE, after that block, so its wall time is its own vitest
+ * duration (ng-conversations --shard=2/2: 219s for a 388s share of the weight, ≈0.56×). In the
+ * aggregate units the packer balances, that is ≈ 0.56 × 3 ≈ 1.8× its weight. Counting it at
+ * face value put a split half on top of a full shard's work and made that shard the slowest of
+ * the run (shard 6/6: 15m21s block + 8m40s split).
+ */
+export const SPLIT_SERIAL_COST_FACTOR = 1.8;
+
+/**
  * Load the weight table. A missing or unparseable file is NOT fatal — the planner falls back
  * to a uniform weight, which still produces a correct (merely less balanced) plan. Shard
  * planning must never be the reason CI cannot start.
@@ -100,7 +113,8 @@ export function extractTestPackages(dryRunJson) {
  * When `splitThresholdSeconds > 0` and `shardCount >= 2`, any package whose weight exceeds the
  * threshold (and whose test command is pure `vitest run`, when `commands` is supplied) is split
  * into `ceil(weight / splitThresholdSeconds)` Vitest `--shard=j/k` work items so no single
- * mega-package caps wall time.
+ * mega-package caps wall time. Each sub-shard is packed at `SPLIT_SERIAL_COST_FACTOR` × its share
+ * of the weight, because it runs on its own after the shard's concurrent block.
  *
  * Returns only NON-EMPTY shards: a matrix entry that runs zero packages still pays ~4 minutes
  * of checkout+install for nothing, so a 3-package scope produces 3 shards, not 6. The returned
@@ -124,7 +138,7 @@ export function planShards(
         const w = weightOf(name);
         if (splitThresholdSeconds > 0 && shardCount >= 2 && w > splitThresholdSeconds && canSplit(name)) {
             const parts = Math.min(shardCount, Math.ceil(w / splitThresholdSeconds));
-            const partWeight = w / parts;
+            const partWeight = (w / parts) * SPLIT_SERIAL_COST_FACTOR;
             for (let j = 1; j <= parts; j++) {
                 workItems.push({ kind: 'split', name, spec: `${name}:${j}/${parts}`, weight: partWeight });
             }

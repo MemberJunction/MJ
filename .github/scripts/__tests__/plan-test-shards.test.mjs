@@ -7,6 +7,7 @@ import {
     extractTestPackages,
     extractTestPackageCommands,
     planShards,
+    SPLIT_SERIAL_COST_FACTOR,
     loadWeights,
     parseArgs,
     readTurboTestPackages,
@@ -226,6 +227,26 @@ describe('planShards — intra-package Vitest splitting', () => {
         });
         expect(shards.every((s) => s.splitPackages === undefined)).toBe(true);
         expect(allPackages(shards).sort()).toEqual(['@mj/compound', '@mj/small']);
+    });
+
+    it('packs a split sub-shard above its share of the weight, because it runs alone after the concurrent block', () => {
+        const commands = new Map([
+            ['@mj/mega', 'vitest run'],
+            ['@mj/a', 'vitest run'],
+            ['@mj/b', 'vitest run'],
+        ]);
+        // mega: 797 + 3 overhead = 800 → 2 halves of 400, each packed at 400 × 1.8 = 720.
+        // a, b: 497 + 3 = 500 each. 720 | 720, then one 500 onto each → 1220 | 1220.
+        // At face value the halves would pack as 400 and each shard would claim only 900.
+        const shards = planShards(['@mj/mega', '@mj/a', '@mj/b'], 2, {
+            packages: { '@mj/mega': 797, '@mj/a': 497, '@mj/b': 497 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 700,
+            commands,
+        });
+        expect(SPLIT_SERIAL_COST_FACTOR).toBeGreaterThan(1);
+        expect(shards.map((s) => s.weight)).toEqual([1220, 1220]);
+        expect(shards.map((s) => s.splitPackages)).toEqual(['@mj/mega:1/2', '@mj/mega:2/2']);
     });
 
     it('fans a single mega-package out across multiple shards when splitThresholdSeconds is set', () => {

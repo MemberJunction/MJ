@@ -205,6 +205,7 @@ jobs:
             .github/scripts/check-turbo-root-inputs.mjs
             # The Vitest threads safety guard runs in the guards job; its suite lives in __tests__ above.
             .github/scripts/check-vitest-threads-safety.mjs
+            .github/scripts/vitest-threads-allowlist.json
             # Video Studio real-render workflow: an edit to it must run the workflow guard suites.
             .github/workflows/video-studio-render.yml
             # The turbo remote-cache coverage guard (turbo-remote-cache-coverage.test.mjs) asserts the
@@ -678,7 +679,7 @@ jobs:
           # runtime/setup changes invalidate the seed automatically (cleanup has no checkout, so
           # computing this once here guarantees test and cleanup agree on the exact prefix).
           SETUP_HASH="$(git rev-parse HEAD:.github/actions/mj-setup | cut -c1-12)"
-          NODE_VER="$(node -v | tr -c 'A-Za-z0-9._-' '-')"
+          NODE_VER="$(node -v | tr -cd 'A-Za-z0-9._-')"
           echo "test_seed_prefix=turbo-test-v1-${{ runner.os }}-${NODE_VER}-${SETUP_HASH}-" >> "$GITHUB_OUTPUT"
 
       # `test:types` = the spec type-check gate (tsc --noEmit -p tsconfig.spec.json in each
@@ -801,9 +802,13 @@ jobs:
           if-no-files-found: error
 
       # Partition the in-scope packages into balanced shards for the matrix below. Runs after
-      # the build so the turbo dry-run it uses reads a warm graph. `--split-above=420` splits
-      # mega-packages (>7 min, pure `vitest run`) into Vitest `--shard=j/k` sub-shards across
-      # runners so no single package caps wall time.
+      # the build so the turbo dry-run it uses reads a warm graph. `--split-above=700` splits only
+      # the packages whose measured suite (>~11.5 min of aggregate weight, pure `vitest run`) is
+      # at or above a shard's whole wall-time budget — today ng-conversations and ai-agents — into
+      # Vitest `--shard=j/k` sub-shards on different runners. Lower is worse, not better: a
+      # sub-shard runs alone after the shard's concurrent block, so splitting a package that fits
+      # inside that block only adds serial time (420 split six packages and lengthened every shard
+      # it touched, in the planner's model, at both 6 and 8 shards).
       - name: Plan test shards
         id: plan
         env:
@@ -812,7 +817,7 @@ jobs:
         # (`--filter=...[base]`), and in the space form the parser cannot tell that apart from
         # a valueless flag followed by the next option — it silently drops the `--filter=`
         # prefix and turbo then reports the remainder as an unknown TASK name.
-        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --split-above=420 --turbo-args="$TURBO_FILTER"
+        run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --split-above=700 --turbo-args="$TURBO_FILTER"
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
       # read by another run, and deleted by the cleanup job at the end — the repo shares one
@@ -1036,15 +1041,29 @@ jobs:
           # exit with tee's status and a failed test task would leave the shard green.
           set -o pipefail
           : > /tmp/shard-test.log
+          # --continue, and no early exit between the whole-package run and the split runs: a red
+          # shard must still run EVERY task it was given, so one failure cannot hide others (or
+          # leave a split half like ng-conversations --shard=1/2 never run). The step still fails
+          # at the end if any run failed.
+          STATUS=0
           if [ ${#FILTER_ARGS[@]} -gt 0 ]; then
-            npx turbo run test --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee -a /tmp/shard-test.log
+            npx turbo run test --continue --concurrency=4 "${FILTER_ARGS[@]}" 2>&1 | tee -a /tmp/shard-test.log || STATUS=1
           fi
+          # A split package builds its dependency graph first WITHOUT pass-through args, then runs
+          # only its own test task. turbo hashes `-- --shard=j/k` into EVERY task of the run, so
+          # `turbo run test --filter=pkg -- --shard=…` missed the cache on all ~80 dependency
+          # builds and recompiled them (run 45512966433: 81/81 misses, 8m40s for a 219s suite).
           for spec in "${SPLIT_SPECS[@]}"; do
             pkg="${spec%:*}"
             shard_arg="${spec##*:}"
             echo "Running split package ${pkg} (--shard=${shard_arg})..."
-            npx turbo run test --filter="$pkg" -- --shard="$shard_arg" 2>&1 | tee -a /tmp/shard-test.log
+            if npx turbo run build --filter="$pkg" 2>&1 | tee -a /tmp/shard-test.log; then
+              npx turbo run test --continue --only --filter="$pkg" -- --shard="$shard_arg" 2>&1 | tee -a /tmp/shard-test.log || STATUS=1
+            else
+              STATUS=1
+            fi
           done
+          exit "$STATUS"
 
       # Upload only newly produced `test` task cache entries from backstop runs on `next` so the
       # cleanup job can publish a compact `turbo-test-v1` seed for PR shards to restore read-only.

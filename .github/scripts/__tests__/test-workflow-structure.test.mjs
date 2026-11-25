@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdtempSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/workflow.mjs';
@@ -346,7 +348,89 @@ describe('test.yml — intra-package sharding & read-only next test cache seed (
         expect(runStep).toBeDefined();
         const body = runStep.body.join('\n');
         expect(body).toMatch(/SHARD_SPLIT_PACKAGES: \$\{\{ matrix\.shard\.splitPackages \|\| '' \}\}/);
-        expect(body).toMatch(/npx turbo run test --filter="\$pkg" -- --shard="\$shard_arg"/);
+        expect(body).toMatch(/npx turbo run test --continue --only --filter="\$pkg" -- --shard="\$shard_arg"/);
+    });
+
+    it('a split package builds its graph without pass-through args before running only its own test task', () => {
+        // turbo hashes `-- --shard=j/k` into every task of the run, so without the separate build
+        // and `--only` every dependency build of a split package misses the cache and recompiles.
+        const body = readJobSteps('test').find((s) => s.name === 'Run unit tests').body.join('\n');
+        const build = body.indexOf('npx turbo run build --filter="$pkg"');
+        const test = body.indexOf('npx turbo run test --continue --only --filter="$pkg"');
+        expect(build).toBeGreaterThan(-1);
+        expect(test).toBeGreaterThan(build);
+        expect(body.slice(build, test)).not.toMatch(/--shard/);
+    });
+
+    it('a red shard still runs every task it was given, then fails', () => {
+        // Without --continue (and with `bash -e` exiting on the first failed pipeline) a shard
+        // stopped at its first failing package, so later packages and split halves never ran.
+        const body = readJobSteps('test').find((s) => s.name === 'Run unit tests').body.join('\n');
+        expect(body).toMatch(/npx turbo run test --continue --concurrency=4 "\$\{FILTER_ARGS\[@\]\}" .*\|\| STATUS=1/);
+        expect(body).toMatch(/--shard="\$shard_arg" .*\|\| STATUS=1/);
+        expect(body).toMatch(/else\s+STATUS=1/); // a failed split-package build fails the shard too
+        expect(body).toMatch(/exit "\$STATUS"/);
+    });
+
+    describe('Determine test scope computes is_full_suite / turbo_filter', () => {
+        /** Run the step's real script with a stub `git` that reports `changed` as the PR diff. */
+        const runScope = (eventName, changed) => {
+            const step = readJobSteps('build').find((s) => s.name === 'Determine test scope');
+            const runAt = step.body.findIndex((l) => /^ {8}run: \|\s*$/.test(l));
+            const script = step.body
+                .slice(runAt + 1)
+                .filter((l) => l.startsWith('          ') || l.trim() === '')
+                .map((l) => l.slice(10))
+                .join('\n')
+                .replaceAll('${{ github.event_name }}', eventName)
+                .replaceAll('${{ runner.os }}', 'Linux');
+            const dir = mkdtempSync(join(tmpdir(), 'mj-scope-'));
+            try {
+                const git = join(dir, 'git');
+                writeFileSync(
+                    git,
+                    `#!/usr/bin/env bash\ncase "$1" in\n  diff) printf '%s\\n' ${changed.map((c) => `'${c}'`).join(' ')} ;;\n  rev-parse) echo 0123456789abcdef ;;\nesac\n`,
+                );
+                chmodSync(git, 0o755);
+                const output = join(dir, 'out');
+                writeFileSync(output, '');
+                const res = spawnSync('bash', ['-e', '-c', script], {
+                    encoding: 'utf8',
+                    env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_OUTPUT: output, PR_BASE_REF: 'next' },
+                });
+                expect(res.status, res.stderr).toBe(0);
+                return Object.fromEntries(
+                    readFileSync(output, 'utf8')
+                        .split('\n')
+                        .filter(Boolean)
+                        .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
+                );
+            } finally {
+                rmSync(dir, { recursive: true, force: true });
+            }
+        };
+
+        it('a PR touching only package files is scoped (is_full_suite=false)', () => {
+            const out = runScope('pull_request', ['packages/MJCore/src/index.ts']);
+            expect(out.is_full_suite).toBe('false');
+            expect(out.turbo_filter).toBe('--filter=...[origin/next]');
+        });
+
+        it.each(['vitest.shared.ts', 'pnpm-lock.yaml', 'turbo.json', 'tsconfig.json', '.github/workflows/test.yml'])(
+            'a PR touching %s runs the full suite (is_full_suite=true)',
+            (file) => {
+                const out = runScope('pull_request', ['packages/MJCore/src/index.ts', file]);
+                expect(out.is_full_suite).toBe('true');
+                expect(out.turbo_filter).toBe('');
+            },
+        );
+
+        it.each(['push', 'schedule', 'workflow_dispatch'])('a %s run is the full-suite backstop', (event) => {
+            const out = runScope(event, []);
+            expect(out.is_full_suite).toBe('true');
+            expect(out.turbo_filter).toBe('');
+            expect(out.test_seed_prefix).toMatch(/^turbo-test-v1-Linux-v[\d.]+-0123456789ab-$/);
+        });
     });
 
     it('restores turbo-test-v1 read-only in scoped test shards, skips it on full-suite PR runs, and only publishes it from next backstops', () => {
