@@ -37,7 +37,7 @@ These are settled. Each row names where it was decided so nobody reopens it by a
 | URLs | Backwards compatible from here. A breaking change ships with a URL mapping layer. | Meeting 2026-11-03 |
 | Elevation ramp | Ramp B (soft), ambient off by default, Montserrat as the one heading face. Ships with its contrast table as the contract. | Mockup review 2026-09-18 (Matt) |
 | Control heights and density | One scale with three steps: `--mj-control-height-sm` / `md` / `lg` at 32 / 40 / 52, with sm and md at 44 on touch. This replaces both earlier sets of numbers, the 32 / 44 / 52 from the September mockup review and the five-step 28 / 32 / 38 / 44 / 52 proposal. Density is the same axis, not a second set of numbers: it is the user preference that picks which step controls default to. Details in [NAMING.md](NAMING.md). | Naming review 2026-11-10 (Matt, Colin) |
-| Dialogs and sheets | Slide-outs for heavy configuration, dialogs for simple prompts. On phones a dialog becomes a bottom sheet or full screen. | Meeting 2026-11-03 (Matt); shipping in custom-forms-phone-layout |
+| Dialogs and sheets | Slide-outs for heavy configuration, dialogs for simple prompts. On phones a dialog becomes a bottom sheet or full screen, and so do menus and pickers: anything people choose from or fill in opens as a sheet. Tooltips, and suggestion lists tied to a field being typed into, stay anchored. Details in [WAVE_0_SPEC.md](WAVE_0_SPEC.md) Section 6.2.1. | Meeting 2026-11-03 (Matt); shipping in custom-forms-phone-layout. Menus and pickers added 2026-11-23 (Matt) |
 | Button order | The affirmative button (Yes, OK, Submit) goes on the left and the decline button (Cancel, No) to its right, everywhere: dialogs, modals, popovers and action button groups. This is the Windows order, and it is already the rule in `packages/Angular/CLAUDE.md`. Not part of the overhaul's scope. | Amith, PR review 2026-11-09 |
 | App builder (WS7 builder) | Study Form Studio, Form Builder, component spec and metadata dashboards before building. No build until demand is shown. | Meeting 2026-11-03 (Amith) |
 | Kit gallery, token index, CI gate | Yes from everyone. Includes when-to-use guidance with positive and negative examples, written for agents as much as people. | Meeting 2026-11-03 |
@@ -106,7 +106,7 @@ Phase 2 is where WS6a and Lego waves 1 and 2 become one stream. It ends when the
 - [ ] WS6a per-component variables land as exposed values on those primitives, under the Phase 0 naming rule, so nothing Colin already wrote for Betty is lost (Colin lists them, Matt lands them)
 - [ ] Generic typed slot becomes named parts on the primitive; the five slot systems in the tree (chat, form panel, card-grid, accordion, login) converge on parts plus one region-override directive, one per release (Matt)
 - [ ] Theming additions from overhaul screen 3: type scale splits for subsections, theme-carried settings, ambient as a theme value (Colin, on ThemeEngine seeds)
-- [ ] Dialog and sheet rule enforced in the primitives: heavy configuration opens a sheet, simple prompts a dialog, dialogs collapse to sheets on phones (Matt)
+- [ ] Dialog and sheet rule enforced in the primitives: heavy configuration opens a sheet, simple prompts a dialog, and on phones dialogs, menus and pickers present as sheets (Matt)
 - [ ] Codemods with the first high-count conversion (Matt)
 - [ ] Angular Elements check: `mj-realtime-widget` rebuilt on wave 0 tokens and base styles instead of vendoring SCSS by file path (Matt, with the Elements owners)
 

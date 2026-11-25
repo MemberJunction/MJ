@@ -69,3 +69,7 @@ packages/Angular/Generic/artifacts/src/lib/components/plugins/component-feedback
 # Suggestion type-badge identity colors — entity badge teal (#11998e) distinguishes it
 # from the brand-blue user badge; no teal semantic token exists.
 packages/Angular/Generic/conversations/src/lib/components/mention/mention-dropdown.component.css
+
+# Category 1: Theme Token Seed Definitions
+# Wave 0 prototype gate host fixture seeding 3 distinct look palettes (MJ Default, Sidecar LXP, Editorial) as --mj-* tokens.
+packages/Angular/Generic/ui-primitives-prototype/sample/gate.css

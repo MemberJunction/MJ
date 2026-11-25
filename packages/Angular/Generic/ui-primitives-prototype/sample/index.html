@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en" data-theme="light" data-look="mj">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csp-nonce" content="__CSP_NONCE__" />
+    <title>Fall Cohort · UX Systems Studio</title>
+    <link rel="stylesheet" href="./fonts.css" />
+    <link rel="stylesheet" href="./gate.css" />
+    <script nonce="__CSP_NONCE__" defer src="../dist/element/mj-wave0-prototype.js"></script>
+    <script nonce="__CSP_NONCE__" defer src="./gate.js"></script>
+  </head>
+  <body>
+    <main class="gate-shell">
+      <header class="gate-topbar">
+        <div class="gate-brand-row">
+          <div class="gate-heading">
+            <span class="gate-eyebrow">Fall Cohort · Section B</span>
+            <h1 class="gate-title">UX Systems &amp; Interaction Studio</h1>
+            <p class="gate-subtitle">
+              Manage weekly curriculum modules, learner submissions, and cohort schedule settings.
+            </p>
+          </div>
+          <div class="gate-segmented" role="group" aria-label="Theme look">
+            <button type="button" class="host-btn is-active" data-set-look="mj" aria-pressed="true">Look: MJ Default</button>
+            <button type="button" class="host-btn" data-set-look="lxp" aria-pressed="false">Look: LXP</button>
+            <button type="button" class="host-btn" data-set-look="editorial" aria-pressed="false">Look: Editorial</button>
+          </div>
+        </div>
+
+        <div class="host-controls" role="toolbar" aria-label="Cohort actions">
+          <button type="button" class="host-btn" id="toggle-theme" aria-pressed="false">Dark mode</button>
+          <div class="gate-actions">
+            <button type="button" class="host-btn host-btn-primary" id="open-dialog">Open Dialog</button>
+            <button type="button" class="host-btn" id="open-sheet">Open Sheet</button>
+            <button
+              type="button"
+              class="host-btn"
+              id="open-popover"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >
+              Open Popover ▾
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div class="host-grid">
+        <mj-surface level="base" elevation="sm">
+          <div mj-surface-header>
+            <span>Curriculum Modules</span>
+            <span class="gate-badge">3 lessons</span>
+          </div>
+          <div mj-surface-body role="listbox" aria-label="Curriculum modules">
+            <mj-row interactive="true" item-role="option" selected="true">
+              <span mj-row-leading class="gate-avatar" aria-hidden="true">01</span>
+              <span mj-row-content>
+                <span class="gate-row-title">Design Scales &amp; Color Contrast</span>
+                <span class="gate-row-meta">45 min · Required reading</span>
+              </span>
+              <span mj-row-trailing>
+                <span class="gate-badge gate-badge-accent">Current</span>
+              </span>
+            </mj-row>
+            <mj-row interactive="true" item-role="option" tone="plum" visual-role="nav-item">
+              <span mj-row-leading class="gate-avatar gate-avatar-accent" aria-hidden="true">02</span>
+              <span mj-row-content>
+                <span class="gate-row-title">Overlay Focus &amp; Dismissal</span>
+                <span class="gate-row-meta">60 min · Live studio workshop</span>
+              </span>
+              <span mj-row-trailing>
+                <span class="gate-badge">Thu 2pm</span>
+              </span>
+            </mj-row>
+            <mj-row interactive="true" item-role="option">
+              <span mj-row-leading class="gate-avatar gate-avatar-neutral" aria-hidden="true">03</span>
+              <span mj-row-content>
+                <span class="gate-row-title">Responsive Density &amp; Touch Targets</span>
+                <span class="gate-row-meta">35 min · Self-paced lab</span>
+              </span>
+              <span mj-row-trailing>
+                <span class="gate-badge">Week 3</span>
+              </span>
+            </mj-row>
+          </div>
+          <div mj-surface-footer>
+            <span class="gate-row-meta">28 learners enrolled</span>
+            <span class="gate-row-meta">Term: Q4</span>
+          </div>
+        </mj-surface>
+
+        <mj-surface level="elevated" elevation="md" class="host-override-surface">
+          <div mj-surface-footer>
+            <span class="gate-badge">2 awaiting review</span>
+            <span class="gate-row-meta">Due Friday</span>
+          </div>
+          <div mj-surface-body>
+            <div class="gate-section-intro">
+              <span class="gate-row-title">Submission Queue</span>
+              <span class="gate-row-meta">
+                Recent lab critiques queued for instructor feedback before Friday's session.
+              </span>
+            </div>
+            <mj-surface level="sunken" padding="sm">
+              <div mj-surface-body>
+                <mj-row>
+                  <span mj-row-content>
+                    <button type="button" class="gate-item-link">Jordan Alvarez · Lab 01 Audit</button>
+                    <span class="gate-row-meta">Submitted 2 hours ago</span>
+                  </span>
+                  <span mj-row-trailing>
+                    <button type="button" class="host-btn host-btn-sm">Review</button>
+                  </span>
+                </mj-row>
+                <mj-row density="sm" interactive="true" item-role="button" pressed="false">
+                  <span mj-row-content>
+                    <span class="gate-row-title">Include archived submissions</span>
+                    <span class="gate-row-meta">Show 14 graded critiques from Week 1</span>
+                  </span>
+                  <span mj-row-trailing class="gate-check" aria-hidden="true">✓</span>
+                </mj-row>
+              </div>
+            </mj-surface>
+          </div>
+        </mj-surface>
+      </div>
+
+      <mj-layer id="proto-dialog" kind="dialog" closeable="true">
+        <div mj-layer-header>
+          <h2 mj-layer-title>Publish Cohort Schedule?</h2>
+          <button type="button" class="host-btn host-btn-icon" data-close-layer="proto-dialog" mj-layer-close aria-label="Close dialog">✕</button>
+        </div>
+        <div mj-layer-body>
+          <p class="gate-dialog-copy">
+            Publishing notifies all 28 enrolled learners and locks workshop dates for Weeks 1 through 3. You can still post announcements afterward.
+          </p>
+        </div>
+        <div mj-layer-footer>
+          <button type="button" class="host-btn host-btn-primary" id="close-dialog" data-autofocus>Confirm</button>
+          <button type="button" class="host-btn" id="cancel-dialog">Cancel</button>
+        </div>
+      </mj-layer>
+
+      <mj-layer id="proto-sheet" kind="sheet" placement="end" modal="true" closeable="true" label="Module Inspector">
+        <div mj-layer-header>
+          <h2 mj-layer-title>Module 02 Details</h2>
+          <button type="button" class="host-btn host-btn-icon" data-close-layer="proto-sheet" mj-layer-close aria-label="Close sheet">✕</button>
+        </div>
+        <div mj-layer-body>
+          <p class="gate-dialog-copy">
+            Live studio workshop covering modal focus containment, non-modal menus, and responsive phone sheet layouts.
+          </p>
+          <mj-surface level="sunken" padding="sm">
+            <div mj-surface-body>
+              <mj-row density="sm">
+                <span mj-row-content>
+                  <span class="gate-row-title">Lead Instructor</span>
+                  <span class="gate-row-meta">Maya Lin · Principal UX Researcher</span>
+                </span>
+              </mj-row>
+              <mj-row density="sm">
+                <span mj-row-content>
+                  <span class="gate-row-title">Session Format</span>
+                  <span class="gate-row-meta">Interactive critique · 60 minutes</span>
+                </span>
+              </mj-row>
+              <mj-row density="sm">
+                <span mj-row-content>
+                  <span class="gate-row-title">Prerequisites</span>
+                  <span class="gate-row-meta">Module 01 contrast exercise completed</span>
+                </span>
+              </mj-row>
+            </div>
+          </mj-surface>
+        </div>
+        <div mj-layer-footer>
+          <button type="button" class="host-btn host-btn-primary" id="close-sheet" data-autofocus>Done</button>
+        </div>
+      </mj-layer>
+
+      <mj-layer id="proto-popover" kind="menu" closeable="true" anchor="#open-popover" label="Theme preset">
+        <div mj-layer-body>
+          <span class="gate-popover-label" mj-layer-title aria-hidden="true">Appearance Preset</span>
+          <mj-row density="sm" interactive="true" item-role="menuitemradio" selected="true" data-popover-action="mj">
+            <span mj-row-content>MJ Default</span>
+            <span mj-row-trailing class="gate-check" aria-hidden="true">✓</span>
+          </mj-row>
+          <mj-row density="sm" interactive="true" item-role="menuitemradio" selected="false" data-popover-action="lxp">
+            <span mj-row-content>Sidecar LXP</span>
+            <span mj-row-trailing class="gate-check" aria-hidden="true">✓</span>
+          </mj-row>
+          <mj-row density="sm" interactive="true" item-role="menuitemradio" selected="false" data-popover-action="editorial">
+            <span mj-row-content>Editorial Serif</span>
+            <span mj-row-trailing class="gate-check" aria-hidden="true">✓</span>
+          </mj-row>
+        </div>
+      </mj-layer>
+    </main>
+  </body>
+</html>

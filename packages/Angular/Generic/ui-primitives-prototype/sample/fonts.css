@@ -1,0 +1,27 @@
+/*
+ * Montserrat, MJ's default UI font (--mj-font-family), loaded the way a host page loads it.
+ * The element bundle ships no fonts; loading them is the host's job.
+ *
+ * serve.mjs serves the files from @fontsource-variable/montserrat, so this works under the gate's
+ * strict CSP (same origin only) and the screenshot baselines never depend on the network or on the
+ * fonts installed on the machine.
+ *
+ * The family is named 'Montserrat' (not Fontsource's 'Montserrat Variable') so it matches the token.
+ * font-display: block keeps screenshots from catching the fallback font mid-swap; a real host
+ * would normally use swap.
+ */
+@font-face {
+  font-family: 'Montserrat';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('/fonts/montserrat-latin-wght-normal.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Montserrat';
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: block;
+  src: url('/fonts/montserrat-latin-wght-italic.woff2') format('woff2');
+}
