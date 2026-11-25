@@ -1,5 +1,114 @@
 # @memberjunction/ai-mcp-server
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- d635ec5: Memory-leak audit Round 23 fixes.
+  - `ArtifactCollaborationServer` omits full `BaseVersionText` document bodies from server watermarks whenever a room's working state matches its persisted base version (`Working === Base`), retaining `BaseVersionText` only while uncompacted working-state edits exist and dropping it immediately on compaction — eliminating duplicate multi-MB artifact strings across closed rooms without an arbitrary watermark count cap.
+  - `ConversationToolManager` loads conversation history fresh per agent run via `ConversationEngine.LoadWindowRowsFresh` (memoized on the per-run manager instance and cleared in `BaseAgent.endRun`), preventing server-side agent runs from populating `ConversationEngine`'s process-global UI detail cache.
+  - The fallback artifact suggestion store shared by the document, spreadsheet and slide-deck tool libraries deletes superseded ephemeral content-hash keys when standalone suggestions are accepted and expires idle keys after 2 hours without an arbitrary count cap.
+  - `BaseResourceComponent` replaces `destroy$` with an already-fired notifier on destroy, so a `takeUntil(this.destroy$)` attached after an `await` in a component that was destroyed meanwhile ends immediately instead of living for the session.
+  - `DataExplorerDashboardComponent`, `FormBuilderResourceComponent`, `QueryPartComponent`, `ArtifactTypePluginViewerComponent`, and `PdfArtifactViewerComponent` guard post-`await` timers, subscriptions, plugin instantiations, and PDF document/blob-URL resources when destroyed mid-load.
+  - The MCP server closes Streamable HTTP sessions once idle past `mcpServerSettings.sessionIdleTtlMs` (default 24 hours, swept every `sessionSweepIntervalMs`) without evicting active sessions under a hard count cap, sets `transport.onclose` before `connect()` so the SDK's own close handling runs, and releases sessions whose first request fails.
+  - `CloudDetachedSessionRegistry` clears detached sessions deterministically on terminal turn completion or non-detached `EndSession()` teardown and expires abandoned sessions after their 24-hour idle TTL without an arbitrary count cap.
+
+- d498eb9: Security hardening across MCP Server, MJServer resolvers/dev-auth, eSignature webhooks, CoreActions, API keys, and Docker configurations.
+  - MCP Server: auth mode `none` is refused when `NODE_ENV=production` and binds strictly to `127.0.0.1` otherwise; session IDs are logged as truncated prefixes; API keys in URL query parameters log a warning and are ignored; API-key scope lookup escapes `apiKeyId` and passes `systemUser` as `contextUser`; OAuth `user_not_found` / `user_inactive` resolutions return a generic 403 `Access denied` without echoing the probed email.
+  - MJServer: `CheckEntityPermissionsSystemUser` is gated with `@RequireSystemUser()`; `UserFavoriteResolver` verifies that the requested `UserID` matches the caller (system user excepted); `SqlLoggingConfigResolver` rejects `fileName`s containing path separators or `..` and validates containment with `path.relative`; `localDevAuth` trusts Docker bridge source IPs only when `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` is explicitly set (never inferred from `/.dockerenv`).
+  - eSignature: webhooks where `VerifyWebhookSignature === 'NotConfigured'` are refused by default unless `MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true` is explicitly enabled.
+  - CoreActions & APIKeys: `URLLinkValidatorAction.checkSSL` routes through `SafeFetch` for SSRF protection on redirects; `APIKeyEngine` escapes `apiKey.UserID` in its `RunView` filter.
+  - Angular AI Test Harness: `RenderMarkdown` restricts anchor emission to `http:`, `https:`, and `mailto:` URLs with `rel="noopener noreferrer"` before `bypassSecurityTrustHtml`.
+  - Docker: MJAPI image no longer bakes `root:Docker!` into image layers (set at container startup only when `WEBSITE_INSTANCE_ID` starts Azure App Service `sshd`); regression compose binds test SQL Server port `11433` to `127.0.0.1`.
+
+- 447f7fa: Security hardening sweep: Data Mapper refuses templates that reach JavaScript internals (SSTI defense) and drops nunjucks function globals; HTTP Request action strips credential headers on cross-origin redirects; /media serves only passive content types inline (attachment otherwise) and adds Referrer-Policy: no-referrer; /media/upload-stage verifies the upload token before buffering the request body; REST transport now enforces API-key scopes (entity:create/update/delete, view:run, view:batch) like GraphQL, including on the entity list route; multi-tenancy header mode rejects requests that omit the tenant header instead of degrading to an unscoped session (admin roles and the system user exempt); MCP server stops accepting API keys from query strings and compares the system key in constant time; CSV export neutralizes leading formula characters in text cells (signed numbers stay as they are); user-search terms refuse structural SQL characters when a UserSearchParamFormatAPI format splices the term outside a string literal.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [061fa06]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [2463948]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [17406fc]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [d6c032f]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [f3e942f]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [87f0917]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [18a02db]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [3651ef2]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [df4eea4]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [d498eb9]
+- Updated dependencies [447f7fa]
+- Updated dependencies [6946765]
+- Updated dependencies [43a0897]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9fa004a]
+- Updated dependencies [9920c0b]
+  - @memberjunction/ai-agents@6.3.0-edge.2
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/server@6.3.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/ai-provider-bundle@6.3.0-edge.2
+  - @memberjunction/ai-agent-manager@6.3.0-edge.2
+  - @memberjunction/actions@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/ai-prompts@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/api-keys@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/credentials@6.3.0-edge.2
+  - @memberjunction/encryption@6.3.0-edge.2
+  - @memberjunction/auth-providers@6.3.0-edge.2
+  - @memberjunction/config@6.3.0-edge.2
+  - @memberjunction/dynamic-packages@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

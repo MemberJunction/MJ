@@ -99,6 +99,13 @@ import { AgentRunner, HandoffBriefMessage, type ConversationExecutionResult } fr
 import { BaseAgent } from '../base-agent';
 import { MJAIAgentRequestEntityServer } from '../MJAIAgentRequestEntityServer';
 
+/**
+ * Wall-clock ceiling for the pathological-input check. It guards against catastrophic or polynomial
+ * backtracking (seconds), not machine speed: tight millisecond bounds fail on shared CI runners
+ * (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 const USER = { ID: '00000000-0000-4000-8000-000000000001', Email: 'it@example.com' } as unknown as UserInfo;
 const CONV_ID = '00000000-0000-4000-8000-000000000010';
 const BRANCH_1 = '00000000-0000-4000-8000-000000000020';
@@ -1023,7 +1030,7 @@ describe('VS-SAGE-3: Server-side Handoff Execution', () => {
             });
             const elapsedMs = performance.now() - start;
 
-            expect(elapsedMs).toBeLessThan(200);
+            expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
             expect(sourceRow.Message).toContain(
                 `The current user does not have permission to run ${'.'.repeat(50_000)}x.`
             );

@@ -265,6 +265,25 @@ describe('GetSkillDetailsAction', () => {
         assert.equal(details.BundledSubAgents.length, 1);
         assert.equal(details.BundledSubAgents[0].Name, 'Codesmith Agent');
         assert.ok(details.Instructions.includes('Always start with GitHub - Get Repository Context'));
+        assert.equal(details.InstructionsAreTemplate, false);
+    });
+
+    it('returns templated instructions unrendered and flags them with InstructionsAreTemplate', async () => {
+        const skill = SKILLS_FIXTURE[2];
+        const original = skill.Instructions;
+        skill.Instructions = '{# mj:template #}\n# Board Deck\n{% if brand %}Use {{ brand }} colors.{% endif %}';
+        try {
+            const action = new GetSkillDetailsAction();
+            const res = await (action as unknown as { InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; Message: string }> }).InternalRunAction(
+                makeParams({ SkillID: skill.ID }),
+            );
+            assert.equal(res.Success, true);
+            const details = JSON.parse(res.Message);
+            assert.equal(details.Instructions, skill.Instructions);
+            assert.equal(details.InstructionsAreTemplate, true);
+        } finally {
+            skill.Instructions = original;
+        }
     });
 
     it('omits Instructions when IncludeInstructions is false and returns SKILL_NOT_FOUND for unknown skill', async () => {
@@ -279,6 +298,7 @@ describe('GetSkillDetailsAction', () => {
         assert.equal(res1.Success, true);
         const details = JSON.parse(res1.Message);
         assert.equal(details.Instructions, undefined);
+        assert.equal(details.InstructionsAreTemplate, undefined);
 
         const missingParams = makeParams({ SkillName: 'Nonexistent Quantum Skill' });
         const res2 = await (action as unknown as { InternalRunAction: (p: RunActionParams) => Promise<{ Success: boolean; ResultCode: string }> }).InternalRunAction(

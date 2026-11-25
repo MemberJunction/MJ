@@ -40,6 +40,7 @@ import { TrailingRuntimeStateChecks } from '../checks/trailing-runtime-state.che
 import { AgentDecisionsSwitchChecks } from '../checks/agent-decisions-switch.checks';
 import { AgentPromptCancellationChecks } from '../checks/agent-prompt-cancellation.checks';
 import { ListsChecks } from '../checks/lists.checks';
+import { ListsMembersClientChecks } from '../checks/lists-members-client.checks';
 import { ListRefreshChecks } from '../checks/list-refresh.checks';
 import { ListFromQueryChecks } from '../checks/list-from-query.checks';
 import { OpenAppLocalSourceChecks } from '../checks/open-app-local-source.checks';
@@ -218,7 +219,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['scheduled-jobs', ScheduledJobsChecks, 2],
         ['field-rules-bulk-update', FieldRulesBulkUpdateChecks, 3],
         ['remote-operations', RemoteOperationsChecks, 7],
-        ['ai-skills', AiSkillsChecks, 21],
+        ['ai-skills', AiSkillsChecks, 22],
         ['api-keys', ApiKeysChecks, 3],
         ['diagnostics', DiagnosticsChecks, 4], // DIAG1-DIAG4 session capture, bundle assembly, encrypted intake (IT163)
         ['predictive-studio', PredictiveStudioChecks, 5],
@@ -233,7 +234,8 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['concurrent', ConcurrentChecks, 2],
         ['agent-runner', AgentRunnerChecks, 1],
         ['remote-op-ai-authoring', RemoteOpAiAuthoringChecks, 3],
-        ['lists', ListsChecks, 3],
+        ['lists', ListsChecks, 4],
+        ['lists-members-client', ListsMembersClientChecks, 1], // LC1 add, move, remove over the API (IT193)
         ['list-refresh', ListRefreshChecks, 7], // LR1-LR7 source fingerprint, routine, approval (IT175)
         ['list-from-query', ListFromQueryChecks, 5], // LQ1-LQ5 conversation SQL saved Pending, list linked, refresh, edit stops it (IT179)
         ['open-app-local-source', OpenAppLocalSourceChecks, 11], // OLS1-OLS11 install, upgrade and remove from a local folder (IT178)
@@ -426,7 +428,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
-        'ai-skills': 21,
+        'ai-skills': 22,
         'ai-vendor-effort': 2,
         'alternate-base-views': 6,
         'api-keys': 3,
@@ -496,7 +498,8 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'layered-base-views': 6,
         'list-from-query': 5,
         'list-refresh': 7,
-        'lists': 3,
+        'lists': 4,
+        'lists-members-client': 1,
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
@@ -711,7 +714,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(291);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(292);
     });
 });
 

@@ -35,3 +35,4 @@ export * from './lib/models/list-refresh.models';
 // Utils
 export * from './lib/utils/record-display-field';
 export * from './lib/utils/cron-description';
+export * from './lib/utils/list-member-changes';

@@ -102,8 +102,8 @@ async function countQueries(user: UserInfo, categoryID: string, name: string): P
 /** Over GraphQL. */
 export class ClientBackend implements MatrixBackend {
     readonly Label = 'client';
-    private readonly oracleQueries = new Map<string, string>();
-    private readonly oracleRows = new Map<string, Record<string, unknown>[]>();
+    private readonly oracleQueries = new Map<string, Promise<string>>();
+    private readonly oracleRows = new Map<string, Promise<Record<string, unknown>[]>>();
     /** The category the oracle queries are saved in (the fixture's). */
     OracleCategoryID = '';
 
@@ -129,24 +129,39 @@ export class ClientBackend implements MatrixBackend {
         await QueryEngine.Instance.Config(true, this.ctx.User, this.ctx.Provider);
     }
 
-    /** The oracle saved as a plain query, once per text. */
-    private async oracleQuery(sql: string): Promise<string> {
+    /** The oracle saved as a plain query, coalesced so concurrent callers never double-save the same SQL. */
+    private oracleQuery(sql: string): Promise<string> {
         const known = this.oracleQueries.get(sql);
         if (known) return known;
         const name = `${this.prefix} oracle ${createHash('sha256').update(sql).digest('hex').slice(0, 12)}`;
-        const saved = await this.SaveQuery(this.OracleCategoryID, { Name: name, SQL: sql });
-        if (!saved.Record) throw new Error(`the oracle query could not be saved: ${saved.Message.slice(0, 300)}`);
-        this.oracleQueries.set(sql, saved.Record.ID);
-        return saved.Record.ID;
+        const pending = this.SaveQuery(this.OracleCategoryID, { Name: name, SQL: sql })
+            .then((saved) => {
+                if (!saved.Record) throw new Error(`the oracle query could not be saved: ${saved.Message.slice(0, 300)}`);
+                return saved.Record.ID;
+            })
+            .catch((err: unknown) => {
+                this.oracleQueries.delete(sql);
+                throw err;
+            });
+        this.oracleQueries.set(sql, pending);
+        return pending;
     }
 
-    async Rows(sql: string): Promise<Record<string, unknown>[]> {
+    Rows(sql: string): Promise<Record<string, unknown>[]> {
         const cached = this.oracleRows.get(sql);
         if (cached) return cached;
-        const result = await new RunQuery().RunQuery({ QueryID: await this.oracleQuery(sql) }, this.ctx.User);
-        if (!result.Success) throw new Error(`the oracle query failed: ${result.ErrorMessage}`);
-        this.oracleRows.set(sql, result.Results);
-        return result.Results;
+        const pending = this.oracleQuery(sql)
+            .then((queryID) => new RunQuery().RunQuery({ QueryID: queryID }, this.ctx.User))
+            .then((result) => {
+                if (!result.Success) throw new Error(`the oracle query failed: ${result.ErrorMessage}`);
+                return result.Results;
+            })
+            .catch((err: unknown) => {
+                this.oracleRows.delete(sql);
+                throw err;
+            });
+        this.oracleRows.set(sql, pending);
+        return pending;
     }
 
     async Describe(sql: string): Promise<DescribedColumn[]> {

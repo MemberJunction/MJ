@@ -1,5 +1,73 @@
 # @memberjunction/realtime-runtime
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 3c70bf7: Add AssemblyAI's current voice stack as a realtime model. `AssemblyAIVoiceRealtime` runs STT 3.7 Realtime Agent, an LLM Gateway model and TTS-1 as one voice agent inside MJAPI, and replaces the Voice Agent API that AssemblyAI retires on February 1, 2027 (`AssemblyAIRealtime`, unchanged here). Set `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime` to use it. MJAPI's realtime proxy can now connect a browser to an upstream that runs inside the process (`RealtimeProxyIssueParams.OpenInProcess`), so such a driver needs no host of its own and the prompt, tools and key stay on the server.
+- 96bf010: Add full-screen Present Mode with dual-window `BroadcastChannel` Presenter/Audience sync, progressive reveal steps, blackout/whiteout/laser/numeric-jump shortcuts, 5 new visual slide layouts (`KpiStrip`, `Timeline`, `BentoGrid`, `Quadrant`, `MetricComparison`), 8 designer theme presets, 1-click deterministic `BeautifySlide` ("Polish") + agent tools (`apply_design_preset`, `beautify_slide`, `list_design_options` with schema validation), canonical live-session channel tab ordering on resume with natural co-agent continuity, Docs/Sheets polish parity (YAML frontmatter cover strip + reading time, Sheets Freeze Panes menu, formula autocomplete, `SPARKLINE(...)` SVG inline cell rendering), calm single-row 40px progressive-disclosure toolbars with shared `Cmd/Ctrl+K` command palette across Docs/Sheets/Slides and floating slide design pill, passive focused-surface switch notes & all-channel `GetState()` snapshots, read-only `ContextTool` / `ArtifactWorkspace` peek (`get_workspace_state`, `get_state`), upfront artifact tool parameter schema validation, auto-returned document outline/blocks on missing `blockId`, and pre-display + runtime Media URL health checks.
+
+### Patch Changes
+
+- df69cd5: Improve mobile audio UX for realtime voice sessions: remove the 420px horizontal overflow floor on narrow viewports, scale the hero orb and banner for phone screens, clamp the microphone device menu inside the viewport, prevent iOS Safari focus zoom on picker/composer inputs, hide dead side-panel controls below 860px, and omit desktop-only side-panel channels (such as Whiteboard) on mobile with clear desktop-only context messaging so the co-agent explains why instead of reporting a permissions error.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [60b406c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/ai-realtime-client@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

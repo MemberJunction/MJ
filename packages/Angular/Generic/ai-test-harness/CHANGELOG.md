@@ -1,5 +1,91 @@
 # @memberjunction/ng-ai-test-harness
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- d498eb9: Security hardening across MCP Server, MJServer resolvers/dev-auth, eSignature webhooks, CoreActions, API keys, and Docker configurations.
+  - MCP Server: auth mode `none` is refused when `NODE_ENV=production` and binds strictly to `127.0.0.1` otherwise; session IDs are logged as truncated prefixes; API keys in URL query parameters log a warning and are ignored; API-key scope lookup escapes `apiKeyId` and passes `systemUser` as `contextUser`; OAuth `user_not_found` / `user_inactive` resolutions return a generic 403 `Access denied` without echoing the probed email.
+  - MJServer: `CheckEntityPermissionsSystemUser` is gated with `@RequireSystemUser()`; `UserFavoriteResolver` verifies that the requested `UserID` matches the caller (system user excepted); `SqlLoggingConfigResolver` rejects `fileName`s containing path separators or `..` and validates containment with `path.relative`; `localDevAuth` trusts Docker bridge source IPs only when `MJ_DEV_AUTH_ALLOW_DOCKER_BRIDGE=true` is explicitly set (never inferred from `/.dockerenv`).
+  - eSignature: webhooks where `VerifyWebhookSignature === 'NotConfigured'` are refused by default unless `MJ_ESIGNATURE_ALLOW_UNVERIFIED_WEBHOOKS=true` is explicitly enabled.
+  - CoreActions & APIKeys: `URLLinkValidatorAction.checkSSL` routes through `SafeFetch` for SSRF protection on redirects; `APIKeyEngine` escapes `apiKey.UserID` in its `RunView` filter.
+  - Angular AI Test Harness: `RenderMarkdown` restricts anchor emission to `http:`, `https:`, and `mailto:` URLs with `rel="noopener noreferrer"` before `bypassSecurityTrustHtml`.
+  - Docker: MJAPI image no longer bakes `root:Docker!` into image layers (set at container startup only when `WEBSITE_INSTANCE_ID` starts Azure App Service `sshd`); regression compose binds test SQL Server port `11433` to `127.0.0.1`.
+
+- dccf367: Redesign the Workflows Explorer app and shared flow/task-graph editors (`@memberjunction/ng-flow-editor`, `@memberjunction/ng-task-graph-editor`) around a unified token-authentic spatial studio and live X-Ray debugger, and polish the custom-form switcher in `@memberjunction/ng-base-forms`:
+  - **`@memberjunction/ng-base-forms`**: Move `Open standard form` / `Back to custom view` into `<mj-form-toolbar>`'s `More` (`...`) menu across all viewports and make `<mj-entity-form-host>`'s custom-view notice strip dismissible per user and per entity via `UserInfoEngine`.
+  - **`@memberjunction/ng-flow-editor`**: Replace dead CSS tokens and hardcoded light colors with semantic `--mj-*` tokens; switch `FlowLayoutService` to static ESM `@dagrejs/dagre`; synchronize port sides with `LR`/`TB` orientation; cap fit-to-screen zoom (`<= 95%`) and persist per-workflow pan/zoom viewports via `UserInfoEngine`; fix `ForEachTask`/`WhileTask` loop detection and skipped-label strikethrough; add squircle icons, multi-output ports, breakpoint gutters, live `NodeProgress` bars, expandable X-Ray telemetry slots, and `+` quick-add ports; upgrade `<mj-flow-agent-editor>` to `Canvas | Split Playbook | Playbook` with searchable pickers, clickable `{{ step.output }}` mapping pills, structured loop fields, `Human` step support, and Saga rollback configuration.
+  - **`@memberjunction/ng-task-graph-editor`**: Register all 8 renderable step types; preserve ghosted untaken paths alongside forced-verdict overrides; upgrade `<mj-task-graph-debug-toolbar>` to DAG-native `Continue` / `Step Next` / `Step Wave` controls plus `X-Ray`, Blast-Radius `Impact` preview, Engine Pulse, and targeted `Step(taskID)`; add plain-English diagnostic co-pilot banners, `Tree | Before ⇄ After` payload diffs with search and Copy JSON, docked interactive replay scrubbing, and adaptive 360px embedded layout.
+  - **`@memberjunction/ng-ai-test-harness`**: Add optional `initialDebugMode` support when opening the workflow test/debug harness for an agent.
+  - **`@memberjunction/ng-dashboards` (`Workflows`)**: Upgrade the Workflows catalog with Blueprint mini-SVG topology cards, Ops Table toggle with 10-run spark-barcodes and `p50` latency, reconciled trigger summaries, `Needs Your Decision` person-step inbox, and direct `Run`/`Debug` actions; upgrade `CreateWorkflowComponent` with starter recipes, iterative AI refinement, live spatial preview before saving, and past-run `TaskGraphSpec` projection; host an in-app Workflow Studio (`<mj-flow-agent-editor>`, `<mj-agent-invocations>`, and recent workflow runs) with query-param round-tripping; and upgrade `WorkflowRunsResourceComponent` with a collapsible run rail, fixed `In Progress` and `Waiting on Person` filters, inline person-step approvals, zero-clipping debugger layout, and a synchronized execution waterfall.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6e740d7]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [dccf367]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.3.0-edge.2
+  - @memberjunction/ng-shared-generic@6.3.0-edge.2
+  - @memberjunction/ng-base-types@6.3.0-edge.2
+  - @memberjunction/ng-code-editor@6.3.0-edge.2
+  - @memberjunction/ng-notifications@6.3.0-edge.2
+  - @memberjunction/ng-container-directives@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

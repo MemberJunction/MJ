@@ -27,8 +27,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Record Changes&Name=ChangeContext"
           },
           "sync": {
-            "lastModified": "2026-10-02T21:42:44.933Z",
-            "checksum": "66b4ca08ddb881076180e4d3712e8665c93b733ba1c7b736d109591faf377267"
+            "lastModified": "2026-11-24T20:26:32.401Z",
+            "checksum": "70427d91abb10b550c2cc9f0fddbdbc99cdcc8d20d70832f8d9eb3ed1a81418d"
           }
         }
       ]

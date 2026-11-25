@@ -85,6 +85,13 @@ vi.mock('@memberjunction/actions', () => ({
 
 import { ScopedSearchAction } from '../custom/search/scoped-search.action';
 
+/**
+ * Wall-clock ceiling for the pathological-input check. It guards against catastrophic or polynomial
+ * backtracking (seconds), not machine speed: tight millisecond bounds fail on shared CI runners
+ * (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 class TestableScopedSearchAction extends ScopedSearchAction {
     public RunForTest(params: RunActionParams): Promise<ActionResultSimple> {
         return this.InternalRunAction(params);
@@ -165,7 +172,7 @@ describe('NormalizeScopedSearchQuery', () => {
         expect(NormalizeScopedSearchQuery(`${backslashes}'single quoted'`)).toBe('single quoted');
         expect(NormalizeScopedSearchQuery(`${backslashes}`)).toBe(backslashes);
         const elapsedMs = performance.now() - start;
-        expect(elapsedMs).toBeLessThan(100);
+        expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     });
 
     it('reduces empty or whitespace-only quotes to empty string', () => {

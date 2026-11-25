@@ -8,6 +8,12 @@ import type { RemoteOpResult } from '@memberjunction/core';
 import type { PredictiveStudioScoreRecordSetOutput } from '@memberjunction/core-entities';
 import { HarnessScoring } from '../score';
 
+/**
+ * Wall-clock ceiling for the pathological-input check (200k digits). It guards against catastrophic backtracking
+ * (seconds), not machine speed: tight bounds fail on the publish gate's single shared runner.
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 const RUN_ID = '8983F416-CF3E-4DC5-A6CD-8867C5383B50';
 
 function failed(message: string): RemoteOpResult<PredictiveStudioScoreRecordSetOutput> {
@@ -31,6 +37,6 @@ describe('HarnessScoring.AttemptOf', () => {
     const attempt = HarnessScoring.AttemptOf(failed(message), 5);
     const elapsedMs = performance.now() - start;
     expect(attempt.Failed).toBe(0);
-    expect(elapsedMs).toBeLessThan(1000);
+    expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
   });
 });

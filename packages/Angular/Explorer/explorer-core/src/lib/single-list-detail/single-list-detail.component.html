@@ -244,12 +244,6 @@
       @if (isApplyingMoveCopy) {
         <div class="dialog-loading">
           <mj-loading [text]="(moveCopyMode === 'move' ? 'Moving' : 'Copying') + ' records...'" size="small"></mj-loading>
-          @if (moveCopyTotal > 0) {
-            <mj-progress-bar
-              [Value]="moveCopyProgressPercent"
-              class="progress-bar">
-            </mj-progress-bar>
-          }
         </div>
       } @else {
         <p class="dialog-instruction">
@@ -336,12 +330,6 @@
       @if (isRemoving) {
         <div class="dialog-loading">
           <mj-loading text="Removing records..." size="small"></mj-loading>
-          @if (removeTotal > 0) {
-            <mj-progress-bar
-              [Value]="removeProgressPercent"
-              class="progress-bar">
-            </mj-progress-bar>
-          }
         </div>
       } @else {
         <div class="dialog-message">
@@ -381,12 +369,6 @@
       @if (addDialogSaving) {
         <div class="dialog-loading">
           <mj-loading text="Adding records to list..." size="small"></mj-loading>
-          @if (addTotal > 0) {
-            <mj-progress-bar
-              [Value]="addProgressPercent"
-              class="progress-bar">
-            </mj-progress-bar>
-          }
         </div>
       } @else {
         <!-- Search Input -->
@@ -552,15 +534,7 @@
     <div class="dialog-content">
       @if (showAddFromViewLoader && fetchingRecordsToSave) {
         <div class="dialog-loading">
-          <mj-loading text="Loading records from views..." size="small"></mj-loading>
-        </div>
-      } @else if (showAddFromViewLoader && addFromViewTotal > 0) {
-        <div class="dialog-loading">
-          <mj-loading text="Adding records to list..." size="small"></mj-loading>
-          <mj-progress-bar
-            [Value]="addFromViewProgressPercent"
-            class="progress-bar">
-          </mj-progress-bar>
+          <mj-loading text="Adding records from views..." size="small"></mj-loading>
         </div>
       } @else if (showAddFromViewLoader) {
         <div class="dialog-loading">

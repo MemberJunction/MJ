@@ -3,6 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { TagEngine, SeedTaxonomyResult } from '@memberjunction/tag-engine';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /* ───── GraphQL output ───── */
 
@@ -33,6 +34,7 @@ export class GenerateSeedTaxonomyResult {
 
 /* ───── Resolver ───── */
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class GenerateSeedTaxonomyResolver extends ResolverBase {
     /**

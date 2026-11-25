@@ -1,5 +1,17 @@
 # @memberjunction/installer
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- e750895: `mj migrate` on PostgreSQL now checks the database before it applies the first migration, and `mj doctor --db` runs the same checks on their own. The checks cover the server version (14 or later), the `cdp_*` group roles, the extensions the pending migrations create (including the `azure.extensions` allowlist on Azure), whether the migrate login has `CREATE` on the database and owns the target schema, TLS, and `max_connections`. When a check fails, the command exits non-zero with the SQL an administrator must run. That SQL comes from the installer's `BuildPostgresSetupSteps`, which `@memberjunction/installer` now exports with `POSTGRES_MJ_GROUP_ROLES`, `POSTGRES_MJ_EXTENSIONS`, `QuotePgIdentifier`, `QuotePgLiteral` and `PgSetupStep`. Before this, an unprovisioned database failed partway through the baseline. Pass `--skip-preflight` to skip the checks.
+- 066bf01: T-SQL → PostgreSQL converter fixes found by converting the unreleased 6.3 migrations against a real PostgreSQL 16.
+  - Converted migrations emit `CREATE EXTENSION` only for an extension the body actually uses (`uuid-ossp` for `uuid_generate_*`, `pgcrypto` for `digest`/`crypt`/`gen_salt`/`hmac`/`pgp_*`). MJ's minimum is PostgreSQL 14, where `gen_random_uuid()` is built in, so new migrations no longer need either extension allowlisted on a managed host. The installer still creates both, because shipped migrations still contain the statements.
+  - Index columns with `ASC`/`DESC` are quoted (they folded to lowercase and failed); `ASC`/`DESC` is stripped from `UNIQUE` and composite primary-key lists.
+  - `ORDER BY`/`GROUP BY` quoting no longer quotes an alias qualifier (`"cirInner"."StartedAt"` against an unquoted alias).
+  - CodeGen's 6.3 single-write `spUpdate` (named columns, `IF @@ROWCOUNT = 0 … ELSE …`) converts to a `RETURNS TABLE` function with `RETURN QUERY`, matching native PostgreSQL CodeGen.
+  - A bare `DROP TRIGGER` before a re-create is skipped like the other drops; `@var` renaming in DECLARE/DML blocks ignores comments; `OUTER APPLY` / `CROSS APPLY` inside functions become `LEFT JOIN LATERAL … ON TRUE` / `CROSS JOIN LATERAL`.
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

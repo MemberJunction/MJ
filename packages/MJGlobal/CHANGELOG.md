@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/global
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 6cd3f38: Unify result expiration, compaction, execution limits, and lazy `ArtifactToolManager` spillover across directly-attached (`AIAgentAction`) and skill-bundled (`AISkillAction`) actions via `Action.Config` (`IActionConfiguration`), preserve external-data trust wrapping across artifact spillover, workspace tools, pipelines, message compaction/recovery, and sub-agent boundaries, defer artifact spillover until compaction/expiry/recovery fires, cap Sage at 20 iterations per run with a 120k context compaction budget, and configure 1-turn result compaction defaults on `Run Ad-hoc Query` and `Run Stored Query` (#6395). Active per-agent `AIAgentAction` rows with `ResultExpirationTurns` configured continue to take precedence over `Action.Config` defaults (set `ResultExpirationMode = 'None'` with `ResultExpirationTurns = 0` to opt a specific agent out), and `ExecuteAgentParams.messageExpirationOverride` (including `expirationMode: 'None'`) overrides both.
+
+### Patch Changes
+
+- d635ec5: Memory-leak audit Round 23 fixes.
+  - `ArtifactCollaborationServer` omits full `BaseVersionText` document bodies from server watermarks whenever a room's working state matches its persisted base version (`Working === Base`), retaining `BaseVersionText` only while uncompacted working-state edits exist and dropping it immediately on compaction — eliminating duplicate multi-MB artifact strings across closed rooms without an arbitrary watermark count cap.
+  - `ConversationToolManager` loads conversation history fresh per agent run via `ConversationEngine.LoadWindowRowsFresh` (memoized on the per-run manager instance and cleared in `BaseAgent.endRun`), preventing server-side agent runs from populating `ConversationEngine`'s process-global UI detail cache.
+  - The fallback artifact suggestion store shared by the document, spreadsheet and slide-deck tool libraries deletes superseded ephemeral content-hash keys when standalone suggestions are accepted and expires idle keys after 2 hours without an arbitrary count cap.
+  - `BaseResourceComponent` replaces `destroy$` with an already-fired notifier on destroy, so a `takeUntil(this.destroy$)` attached after an `await` in a component that was destroyed meanwhile ends immediately instead of living for the session.
+  - `DataExplorerDashboardComponent`, `FormBuilderResourceComponent`, `QueryPartComponent`, `ArtifactTypePluginViewerComponent`, and `PdfArtifactViewerComponent` guard post-`await` timers, subscriptions, plugin instantiations, and PDF document/blob-URL resources when destroyed mid-load.
+  - The MCP server closes Streamable HTTP sessions once idle past `mcpServerSettings.sessionIdleTtlMs` (default 24 hours, swept every `sessionSweepIntervalMs`) without evicting active sessions under a hard count cap, sets `transport.onclose` before `connect()` so the SDK's own close handling runs, and releases sessions whose first request fails.
+  - `CloudDetachedSessionRegistry` clears detached sessions deterministically on terminal turn completion or non-detached `EndSession()` teardown and expires abandoned sessions after their 24-hour idle TTL without an arbitrary count cap.
+
+- be7f58e: Execute the Video Studio post-release hardening workstreams (`plans/video-studio-hardening.md`): add shared real-render test gates (`VIDEO_STUDIO_RENDER_TESTS_REQUIRED=1`) and CI workflow (`.github/workflows/video-studio-render.yml`, WS1); fix `PayloadManager` dotted/bracketed keys and empty-array upstream merges, update `JSONValidator.CleanValidationSyntax` and `AIPromptRunner` so colon-bearing keys like `16:9` and unrecognized `:rule` suffixes stay intact (#4827), and remove all `INTERIM` workarounds across Video Studio including unused `RestoreStrippedFormatKeys` (WS2); record Consult & Handoff ownership and independent review findings (WS3); unify stage-name normalization in `gates.ts` and decompose long orchestrator methods in `VideoStudioAgent` (WS4); add the orchestrator Loop vs code-led decision record (WS5); and record shipped scope in `plans/video-studio.md` §15 (WS6-2).
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

@@ -12,6 +12,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:53.436Z",
+      "checksum": "47a50de53f2f81dbb855f61c8ecb50bf130e9c3742a87412f1ad5057ead79bdc"
     }
   },
   {
@@ -27,6 +31,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&RoleID=@lookup:MJ: Roles.Name=Developer&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:53.447Z",
+      "checksum": "3a8104ab2e735232fd2c7a3f5f48f2f9134eb0b9daca2254b55a99ca104f2aa3"
     }
   },
   {
@@ -42,6 +50,10 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Feature Values&RoleID=@lookup:MJ: Roles.Name=Integration&Type=Allow"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:53.460Z",
+      "checksum": "154ac5fed69fffd57390d5bad705c554a7fc86ef44085c375225e703ccbfbcf6"
     }
   }
 ]

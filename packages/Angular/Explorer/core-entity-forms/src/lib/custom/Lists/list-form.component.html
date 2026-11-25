@@ -679,15 +679,10 @@
     <div class="dialog-content">
       @if (showAddFromViewLoader && fetchingRecordsToSave) {
         <div class="dialog-loading">
-          <mj-loading text="Loading records from views..." size="small"></mj-loading>
+          <mj-loading text="Adding records from views..." size="small"></mj-loading>
         </div>
       }
-      @if (showAddFromViewLoader && addFromViewTotal > 0 && !fetchingRecordsToSave) {
-        <div class="dialog-loading">
-          <mj-loading [text]="'Adding ' + addFromViewTotal + ' records to list...'" size="small"></mj-loading>
-        </div>
-      }
-      @if (showAddFromViewLoader && !fetchingRecordsToSave && addFromViewTotal === 0) {
+      @if (showAddFromViewLoader && !fetchingRecordsToSave) {
         <div class="dialog-loading">
           <mj-loading text="Loading views..." size="small"></mj-loading>
         </div>
