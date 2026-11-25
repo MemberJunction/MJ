@@ -1,5 +1,34 @@
 # @memberjunction/sql-converter
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- a5dbc84: Add DefaultAgentConfigurationID on MJ: AI Agent Rhythm Templates and AgentConfigurationID on MJ: User Routines to assign default model tiers (Draft/Fast, Standard, High/High Power) per rhythm, seed routines from their template defaults, and pass resolved configuration overrides into agent wake runs.
+
+### Patch Changes
+
+- 488d789: PostgreSQL converter fixes. Legacy path: one boolean-column registry per run (latest baseline plus each converted file), so a view over a table an earlier migration created compares with `TRUE` (#5016); `HASHBYTES` and `CONVERT(VARCHAR, <binary>, 1|2)` become sha256/sha512/md5 and hex text (#6538); unique indexes and constraints get `NULLS NOT DISTINCT` (#5194). Split path: `DATEDIFF(day)` as date subtraction, mixed-case user functions keep their name, a self-aliased `UPDATE … FROM … LEFT JOIN` becomes a ctid self-join, the same HASHBYTES / unique-index fixes, `DROP COLUMN` drops dependent views first, and MJ's catalog views use their hand-written PG text (#6348, #6538, #3345). Bake: the working DB's boolean columns are re-read after each migration; `mj migrate rebake --file … [--capture-only]` keeps a baked file's hand region and replaces only its CodeGen section, a full `rebake` is a dry run without `--write`, and a capture failure after the apply names the resume command. `convert` skips migrations older than the oldest baseline.
+- 8a73d1b: PostgreSQL converter: an Open App's `[${mjSchema}].sp…` core calls in an mj-sync log now convert on the legacy path, keeping `${mjSchema}` for the installer to substitute; and on the split / bake path an mj-sync log is converted inline (one `DO` block per save) instead of becoming a "re-seeded by `mj sync push`" marker, so a migrate-only install gets its seed rows (#5543). A save that does not convert is a reported gap.
+- 736858d: `mj migrate convert --split` / `--bake-codegen`: Open App CodeGen metadata written against `${mjSchema}` (EntityField / Entity / ApplicationEntity UPDATEs, EntitySetting and GeneratedCode INSERTs) is recovered from the CodeGen block; a `vw…` view in a feature migration with no CodeGen banner and no CodeGen routines is treated as hand-written and transpiled; metadata DML dropped in statement mode outside an mj-sync log is a named `METADATA-DML-DROPPED` gap; CodeGen's core refresh calls (`spUpdateExistingEntitiesFromSchema` and siblings) convert to PostgreSQL calls, with `@IncludedSchemaNames` turned into an apply-time excluded list and `@EntityIDs` passed to the two that take it; each `sp_refreshview` is a named, non-blocking warning on both paths; and the bake runs the PostgreSQL field sync between apply and capture, baking `DefaultValue` changes into the file (#5550, #5551, #5919, #5649, #5650).
+- b150b0e: PostgreSQL conversion: a `-- Save` line followed by `GO` (older mj-sync logs, such as the v5.14 Metadata_Sync log) stays with the block it announces, so it no longer reports a false `MISSING SAVES` gap. Three comment and batch-splitting regexes that backtracked polynomially on long whitespace runs are replaced with linear forms.
+- 9f70e4f: PostgreSQL conversion: `DROP INDEX name ON table` (bare or behind an `IF EXISTS (… sys.indexes …)` guard) becomes `DROP INDEX IF EXISTS schema."name"` on both converter paths (#5955); `WITH c AS (…) DELETE FROM c` over one table becomes a `ctid` delete on that table, and any other CTE-targeted delete is a counted gap (#3166). `mj migrate convert` renumbers EntityField Sequence collisions only in the files the run wrote, never in committed `.pg.sql` files (#3166).
+- 7f49eac: Legacy converter: saves a Metadata_Sync log announces but the output lacks count as gaps. String literals are no longer rewritten by the N-prefix, common-function, schema-reference and type-name passes (#6097, #5918, #5838).
+- a2ab9a1: Legacy converter: index names and `ASC`/`DESC` or `__mj_` index columns are quoted; guarded grants (`IF OBJECT_ID(…) IS NOT NULL` / `IF EXISTS (… sys.database_principals …)` around `sp_executesql N'GRANT …'`) become guarded DO blocks or counted gaps instead of being dropped; a statement after a CTE statement (`PRINT`, a guarded index drop) is split off; a self-referencing CTE gets `RECURSIVE`; `TRY_CONVERT` to uniqueidentifier or an integer type becomes a guarded cast (other targets are a gap); the UPDATE-alias rewrite accepts `${mjSchema}`-qualified joins; `DATEDIFF(day, …)` becomes a `date - date` difference; and a unique index on a table an earlier batch deletes rows from is written after that delete (#5567, #5799, #5920).
+- 066bf01: T-SQL → PostgreSQL converter fixes found by converting the unreleased 6.3 migrations against a real PostgreSQL 16.
+  - Converted migrations emit `CREATE EXTENSION` only for an extension the body actually uses (`uuid-ossp` for `uuid_generate_*`, `pgcrypto` for `digest`/`crypt`/`gen_salt`/`hmac`/`pgp_*`). MJ's minimum is PostgreSQL 14, where `gen_random_uuid()` is built in, so new migrations no longer need either extension allowlisted on a managed host. The installer still creates both, because shipped migrations still contain the statements.
+  - Index columns with `ASC`/`DESC` are quoted (they folded to lowercase and failed); `ASC`/`DESC` is stripped from `UNIQUE` and composite primary-key lists.
+  - `ORDER BY`/`GROUP BY` quoting no longer quotes an alias qualifier (`"cirInner"."StartedAt"` against an unquoted alias).
+  - CodeGen's 6.3 single-write `spUpdate` (named columns, `IF @@ROWCOUNT = 0 … ELSE …`) converts to a `RETURNS TABLE` function with `RETURN QUERY`, matching native PostgreSQL CodeGen.
+  - A bare `DROP TRIGGER` before a re-create is skipped like the other drops; `@var` renaming in DECLARE/DML blocks ignores comments; `OUTER APPLY` / `CROSS APPLY` inside functions become `LEFT JOIN LATERAL … ON TRUE` / `CROSS JOIN LATERAL`.
+
+- Updated dependencies [488d789]
+- Updated dependencies [8b8b278]
+- Updated dependencies [736858d]
+- Updated dependencies [9f70e4f]
+  - @memberjunction/sqlglot-ts@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

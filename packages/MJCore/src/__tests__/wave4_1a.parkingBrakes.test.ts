@@ -11,6 +11,12 @@ import { TransformSimpleObjectToEntityObject } from '../generic/util';
 import { RunViewParams } from '../views/runView';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 
+/**
+ * Wall-clock ceiling for the microtask coalescing path. Kept below the 500 ms coalesce window so it
+ * still proves the window wasn't waited out, with room for slow shared CI runners.
+ */
+const MICROTASK_PATH_CEILING_MS = 400;
+
 class Wave41aTestProvider extends TestMetadataProvider {
     public internalRunViewsCalls: RunViewParams[][] = [];
     public trustServerCache = false;
@@ -126,7 +132,7 @@ describe('Wave 4.1a — Core & Engine Parking Brakes', () => {
             expect(results).toHaveLength(1);
             expect(results[0].Success).toBe(true);
             expect(provider.internalRunViewsCalls).toHaveLength(1);
-            expect(elapsedMs).toBeLessThan(100);
+            expect(elapsedMs).toBeLessThan(MICROTASK_PATH_CEILING_MS);
         });
 
         it('coalesces callers arriving across adjacent microtask hops into a single mega-batch', async () => {

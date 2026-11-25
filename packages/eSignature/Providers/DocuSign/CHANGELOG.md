@@ -1,5 +1,16 @@
 # @memberjunction/esignature-docusign
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [d635ec5]
+- Updated dependencies [d498eb9]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/esignature@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes
