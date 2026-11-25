@@ -8,6 +8,7 @@ import {
     extractTestPackageCommands,
     planShards,
     SPLIT_SERIAL_COST_FACTOR,
+    HEAVY_SUITE_SECONDS,
     loadWeights,
     parseArgs,
     readTurboTestPackages,
@@ -247,6 +248,27 @@ describe('planShards — intra-package Vitest splitting', () => {
         expect(SPLIT_SERIAL_COST_FACTOR).toBeGreaterThan(1);
         expect(shards.map((s) => s.weight)).toEqual([1220, 1220]);
         expect(shards.map((s) => s.splitPackages)).toEqual(['@mj/mega:1/2', '@mj/mega:2/2']);
+    });
+
+    it('deals heavy whole suites out evenly instead of stacking them where weight alone would put them', () => {
+        // Two split halves (cost 1.8 × 400 = 720 each) fill shards 1 and 2 first. By weight alone,
+        // all three ~300s heavy suites would then pile into the empty shard 3 — the stacking that
+        // shut down a runner twice. Heavy suites go one per shard; split halves do not count.
+        const commands = new Map([
+            ['@mj/mega', 'vitest run'],
+            ['@mj/h1', 'vitest run'],
+            ['@mj/h2', 'vitest run'],
+            ['@mj/h3', 'vitest run'],
+        ]);
+        const shards = planShards(['@mj/mega', '@mj/h1', '@mj/h2', '@mj/h3'], 3, {
+            packages: { '@mj/mega': 797, '@mj/h1': 300, '@mj/h2': 299, '@mj/h3': 298 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 700,
+            commands,
+        });
+        expect(HEAVY_SUITE_SECONDS).toBeLessThanOrEqual(300);
+        expect(shards.map((s) => s.packages.split(',').filter(Boolean).length)).toEqual([1, 1, 1]);
+        expect(shards.map((s) => s.splitPackages ?? '')).toEqual(['@mj/mega:1/2', '@mj/mega:2/2', '']);
     });
 
     it('fans a single mega-package out across multiple shards when splitThresholdSeconds is set', () => {

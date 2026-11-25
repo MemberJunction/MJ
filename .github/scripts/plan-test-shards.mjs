@@ -48,6 +48,17 @@ const PER_TASK_OVERHEAD_SECONDS = 3;
 export const SPLIT_SERIAL_COST_FACTOR = 1.8;
 
 /**
+ * A whole-package suite at or above this many seconds counts as HEAVY, and heavy suites are dealt
+ * out evenly across shards before weight decides. (Split sub-shards do not count: they run alone,
+ * after the shard's concurrent block, so they never compete with it for memory.) The heaviest suites are the
+ * Angular DOM packages (ng-dashboards, ng-explorer-core, ng-bootstrap, …), each running jsdom +
+ * AOT-compile workers, and weight balance alone can stack several in one shard: with the split
+ * halves packed first, run 45521116368 put five of them in shard 5/6 and its runner was shut
+ * down (exit 143) on both attempts while every other shard passed.
+ */
+export const HEAVY_SUITE_SECONDS = 200;
+
+/**
  * Load the weight table. A missing or unparseable file is NOT fatal — the planner falls back
  * to a uniform weight, which still produces a correct (merely less balanced) plan. Shard
  * planning must never be the reason CI cannot start.
@@ -140,10 +151,10 @@ export function planShards(
             const parts = Math.min(shardCount, Math.ceil(w / splitThresholdSeconds));
             const partWeight = (w / parts) * SPLIT_SERIAL_COST_FACTOR;
             for (let j = 1; j <= parts; j++) {
-                workItems.push({ kind: 'split', name, spec: `${name}:${j}/${parts}`, weight: partWeight });
+                workItems.push({ kind: 'split', name, spec: `${name}:${j}/${parts}`, weight: partWeight, heavy: false });
             }
         } else {
-            workItems.push({ kind: 'whole', name, spec: name, weight: w });
+            workItems.push({ kind: 'whole', name, spec: name, weight: w, heavy: w >= HEAVY_SUITE_SECONDS });
         }
     }
 
@@ -153,16 +164,20 @@ export function planShards(
     // Heaviest first; ties broken by spec so the plan is deterministic for a given input.
     workItems.sort((a, b) => b.weight - a.weight || a.spec.localeCompare(b.spec));
 
-    const bins = Array.from({ length: effective }, () => ({ packages: [], splitPackages: [], weight: 0 }));
+    const bins = Array.from({ length: effective }, () => ({ packages: [], splitPackages: [], weight: 0, heavy: 0 }));
     for (const item of workItems) {
-        // Lightest bin wins; ties go to the lowest bin index, again for determinism.
-        let target = bins[0];
+        // A heavy item may only go to a bin holding the fewest heavy items so far; among the
+        // eligible bins the lightest wins, ties to the lowest index for determinism.
+        const fewestHeavy = item.heavy ? Math.min(...bins.map((b) => b.heavy)) : null;
+        let target = null;
         for (const bin of bins) {
-            if (bin.weight < target.weight) target = bin;
+            if (fewestHeavy !== null && bin.heavy !== fewestHeavy) continue;
+            if (target === null || bin.weight < target.weight) target = bin;
         }
         if (item.kind === 'split') target.splitPackages.push(item.spec);
         else target.packages.push(item.name);
         target.weight += item.weight;
+        if (item.heavy) target.heavy++;
     }
 
     return bins
