@@ -42,12 +42,13 @@
 
 // Base adapter and types
 export { BaseMessagingAdapter } from './base/BaseMessagingAdapter.js';
-export type { UploadableFile } from './base/BaseMessagingAdapter.js';
+export type { UploadableFile, ResolveAgentResult } from './base/BaseMessagingAdapter.js';
 export {
     MessagingAdapterSettings,
     IncomingMessage,
     FormattedResponse,
     AgentIdentity,
+    AgentResponseMetadata,
     ThreadHistoryResult,
     MarkdownSection,
     RequestWithRawBody,

@@ -1887,6 +1887,17 @@
           "primaryKey": {
             "ID": "AB9A7DFE-F06B-4759-81F9-5E56175234E6"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT194 - Messaging Adapters Security and Routing",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9EEB89B9-60A5-44CE-9CED-BE4011AE7A0A"
+          }
         }
       ]
     },

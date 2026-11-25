@@ -41,7 +41,10 @@ vi.mock('@memberjunction/generic-database-provider', () => {
     // Models the real UserCache: BaseSingleton's constructor returns the shared instance, and
     // `Instance` is the only supported accessor (see BaseMessagingAdapter.test.ts for the full
     // note — `new UserCache()` wipes the shared cache and is why this mock must expose Instance).
-    const users = [{ ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' }];
+    const users = [
+        { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' },
+        { ID: 'u-test', Email: 'test@example.com', Name: 'Test User' },
+    ];
     const store: { instance?: MockUserCache } = {};
     class MockUserCache {
         _users = users;
@@ -52,6 +55,45 @@ vi.mock('@memberjunction/generic-database-provider', () => {
         }
     }
     return { UserCache: MockUserCache };
+});
+
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    const agents = [
+        { ID: 'sage-id', Name: 'Sage', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+        { ID: 'research-id', Name: 'Research Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+        { ID: 'research-bot-id', Name: 'ResearchBot', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+        { ID: 'skip-id', Name: 'Skip', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+        { ID: 'codesmith-id', Name: 'Codesmith Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+        { ID: 'agent-guid-123', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+    ];
+    const mockInstance = {
+        Config: vi.fn().mockResolvedValue(undefined),
+        Agents: agents,
+        AgentPermissions: [],
+    };
+    return {
+        ...orig,
+        AIAgentPermissionHelper: {
+            IsDirectlyDiscoverable: orig.AIAgentPermissionHelper.IsDirectlyDiscoverable.bind(orig.AIAgentPermissionHelper),
+            ComputeEffectivePermissionsSync: orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync.bind(orig.AIAgentPermissionHelper),
+            GetEffectivePermissions: vi.fn(async (agentId: string, user: unknown) => {
+                const agent = agents.find(a => a.ID.toLowerCase() === agentId.toLowerCase());
+                if (!agent) {
+                    return { canView: false, canRun: false, canEdit: false, canDelete: false, isOwner: false };
+                }
+                return orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                    agent as never,
+                    agents as never,
+                    [] as never,
+                    user as never
+                );
+            }),
+        },
+        AIEngineBase: {
+            get Instance() { return mockInstance; },
+        },
+    };
 });
 
 vi.mock('@memberjunction/ai-agents', () => ({

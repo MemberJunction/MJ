@@ -14,6 +14,7 @@
 import { WebClient, type KnownBlock } from '@slack/web-api';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { SanitizeForLog } from '@memberjunction/global';
 import { BaseMessagingAdapter, type UploadableFile } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { BuildRichResponse, BuildErrorBlocks, BuildAgentContextBlock, BuildDivider } from './slack-block-builder.js';
@@ -438,7 +439,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
             const result = await this.client.users.info({ user: platformUserId });
             return result.user?.profile?.email ?? null;
         } catch (error) {
-            LogStatus(`Slack user email lookup failed for '${platformUserId}' (falling back to service account)`);
+            LogStatus(`Slack user email lookup failed for '${SanitizeForLog(platformUserId)}'`);
             return null;
         }
     }

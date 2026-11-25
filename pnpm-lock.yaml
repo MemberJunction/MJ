@@ -14604,6 +14604,9 @@ importers:
       '@memberjunction/ai-core-plus':
         specifier: 6.3.0-edge.2
         version: link:../AI/CorePlus
+      '@memberjunction/ai-engine-base':
+        specifier: 6.3.0-edge.2
+        version: link:../AI/BaseAIEngine
       '@memberjunction/communication-engine':
         specifier: 6.3.0-edge.2
         version: link:../Communication/engine
@@ -17398,6 +17401,9 @@ importers:
       '@memberjunction/livekit-room-server':
         specifier: 6.3.0-edge.2
         version: link:../../LiveKitRoomServer
+      '@memberjunction/messaging-adapters':
+        specifier: 6.3.0-edge.2
+        version: link:../../MessagingAdapters
       '@memberjunction/metadata-sync':
         specifier: 6.3.0-edge.2
         version: link:../../MetadataSync

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT194 - Messaging Adapters Security and Routing",
+    "Description": "Verifies @memberjunction/messaging-adapters against live UserCache, AIEngineBase, and AIAgentPermissionHelper: fail-closed unmapped/inactive sender resolution, opt-in AllowFallbackUser, IsDirectlyDiscoverable filtering, AllowedAgentIDs allow-list enforcement, and live per-user CanView/CanRun RBAC on @mention and thread affinity.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "UserCache singleton integrity, fail-closed sender mapping, IsDirectlyDiscoverable exclusion, AllowedAgentIDs host allow-list, and live RBAC enforcement across @mention and thread affinity all pass deterministically."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "messaging-adapters"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "44E59332-02EE-43C3-9CA3-29316540813B"
+  }
+}

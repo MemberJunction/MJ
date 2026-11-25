@@ -10,10 +10,63 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { BaseMessagingAdapter, ResolveAgentResult } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 
 // ─── Mock external modules ──────────────────────────────────────────────────
+
+// Keep the real AIAgentPermissionHelper (2x2 RBAC, ancestor CanRun, IsDirectlyDiscoverable)
+// and back AIEngineBase.Instance with an in-memory catalog so tests exercise real permission math.
+const aiEngineState = vi.hoisted(() => ({
+    agents: [] as Array<Record<string, unknown>>,
+    permissions: [] as Array<Record<string, unknown>>,
+    configCalls: [] as Array<{ forceRefresh?: boolean; user?: unknown }>,
+}));
+
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    const mockInstance = {
+        Config: vi.fn(async (forceRefresh?: boolean, user?: unknown) => {
+            aiEngineState.configCalls.push({ forceRefresh, user });
+        }),
+        get Agents() { return aiEngineState.agents; },
+        get AgentPermissions() { return aiEngineState.permissions; },
+    };
+    const MockPermissionHelper = {
+        IsDirectlyDiscoverable: orig.AIAgentPermissionHelper.IsDirectlyDiscoverable.bind(orig.AIAgentPermissionHelper),
+        ComputeEffectivePermissionsSync: orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync.bind(orig.AIAgentPermissionHelper),
+        GetEffectivePermissions: vi.fn(async (agentId: string, user: UserInfo) => {
+            const agent = aiEngineState.agents.find(
+                a => String(a['ID'] ?? '').toLowerCase() === agentId.toLowerCase()
+            );
+            if (!agent) {
+                return { canView: false, canRun: false, canEdit: false, canDelete: false, isOwner: false };
+            }
+            return orig.AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
+                agent as never,
+                aiEngineState.agents as never,
+                aiEngineState.permissions as never,
+                user
+            );
+        }),
+        HasPermission: vi.fn(async (agentId: string, user: UserInfo, perm: 'view' | 'run' | 'edit' | 'delete') => {
+            const eff = await MockPermissionHelper.GetEffectivePermissions(agentId, user);
+            if (perm === 'view') return eff.canView;
+            if (perm === 'run') return eff.canRun;
+            if (perm === 'edit') return eff.canEdit;
+            if (perm === 'delete') return eff.canDelete;
+            return false;
+        }),
+    };
+    return {
+        ...orig,
+        AIAgentPermissionHelper: MockPermissionHelper,
+        AIEngineBase: {
+            get Instance() { return mockInstance; },
+        },
+    };
+});
 
 vi.mock('@memberjunction/generic-database-provider', () => {
     // A FAITHFUL model of the real UserCache, footgun included. The real class extends
@@ -195,13 +248,22 @@ class TestAdapter extends BaseMessagingAdapter {
         return this.shouldRespond(msg);
     }
 
-    public testResolveContextUser(msg: IncomingMessage): Promise<UserInfo> {
+    public testResolveContextUser(msg: IncomingMessage): Promise<UserInfo | null> {
         return this.resolveContextUser(msg);
     }
 
-    public async testResolveAgent(msg: IncomingMessage, threadHistory: IncomingMessage[] = []): Promise<{ agent: unknown; multiAgentNote: string | null }> {
-        // Use fallbackContextUser for testing; Initialize() must be called first
-        return this.resolveAgent(msg, this.fallbackContextUser!, threadHistory);
+    public testMatchAgentMentions(text: string): string[] {
+        return this.matchAgentMentions(text);
+    }
+
+    public async testResolveAgent(
+        msg: IncomingMessage,
+        threadHistory: IncomingMessage[] = [],
+        user?: UserInfo,
+        rememberedAgentId?: string
+    ): Promise<ResolveAgentResult> {
+        // Use specified user or fallbackContextUser for testing; Initialize() must be called first
+        return this.resolveAgent(msg, user ?? this.fallbackContextUser!, threadHistory, rememberedAgentId);
     }
 
     public testBuildConversationMessages(history: IncomingMessage[], current: IncomingMessage) {
@@ -240,6 +302,15 @@ class SingleBotTestAdapter extends TestAdapter {
     protected respondsToUnaddressedThreadReplies(): boolean { return true; }
 }
 
+/** A TestAdapter modeled on Teams: loads history from MJ: Conversation Details and rolls over DMs/group chats. */
+class DBHistoryTestAdapter extends SingleBotTestAdapter {
+    protected override UsesMJConversationHistory(): boolean { return true; }
+    protected override IsRollingConversation(message: IncomingMessage): boolean {
+        const convType = (message.RawEvent?.['conversationType'] as string | undefined);
+        return convType ? convType !== 'channel' : true;
+    }
+}
+
 // ─── Test helpers ────────────────────────────────────────────────────────────
 
 const defaultSettings: MessagingAdapterSettings = {
@@ -257,6 +328,7 @@ function createMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessag
         Text: 'Hello agent',
         SenderID: 'user-1',
         SenderName: 'Test User',
+        SenderEmail: 'alice@example.com',
         ChannelID: 'channel-1',
         ThreadID: null,
         IsDirectMessage: false,
@@ -272,14 +344,28 @@ function createMessage(overrides: Partial<IncomingMessage> = {}): IncomingMessag
 describe('BaseMessagingAdapter', () => {
     let adapter: TestAdapter;
 
+    const defaultTestAgents = [
+        { ID: 'agent-guid-123', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'sage-id', Name: 'Sage', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'research-id', Name: 'Research Bot', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'marketing-id', Name: 'Marketing Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+        { ID: 'codesmith-id', Name: 'Codesmith', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null, OwnerUserID: null },
+    ];
+
     beforeEach(() => {
         // Re-warm the shared cache each test the way server bootstrap does — the mock models the
         // real singleton, so a stray construction in one test would otherwise starve the rest.
         (UserCache.Instance as unknown as { _users: unknown[] })._users = [
-            { ID: 'u1', Email: 'alice@example.com', Name: 'Alice' },
-            { ID: 'u2', Email: 'bob@example.com', Name: 'Bob' },
-            { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account' },
+            { ID: 'u1', Email: 'alice@example.com', Name: 'Alice', IsActive: true, UserRoles: [{ RoleID: 'role-member' }] },
+            { ID: 'u2', Email: 'bob@example.com', Name: 'Bob', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] },
+            { ID: 'u3', Email: 'inactive@example.com', Name: 'Inactive User', IsActive: false, UserRoles: [{ RoleID: 'role-member' }] },
+            { ID: 'fallback', Email: 'bot@company.com', Name: 'Service Account', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] },
         ];
+        aiEngineState.agents = defaultTestAgents.map(a => ({ ...a }));
+        aiEngineState.permissions = [];
+        aiEngineState.configCalls = [];
+        vi.mocked(AIEngineBase.Instance.Config).mockClear();
+
         adapter = new TestAdapter(defaultSettings);
         // Mock RunView for agent lookup: first call = loadDefaultAgent, second = loadAvailableAgents
         const callCount = { n: 0 };
@@ -288,18 +374,12 @@ describe('BaseMessagingAdapter', () => {
                 callCount.n++;
                 if (callCount.n === 1) {
                     // loadDefaultAgent
-                    return { Success: true, Results: [{ ID: 'agent-guid-123', Name: 'Default Agent' }] };
+                    return { Success: true, Results: [defaultTestAgents[0]] };
                 }
                 // loadAvailableAgents
                 return {
                     Success: true,
-                    Results: [
-                        { ID: 'agent-guid-123', Name: 'Default Agent' },
-                        { ID: 'sage-id', Name: 'Sage' },
-                        { ID: 'research-id', Name: 'Research Bot' },
-                        { ID: 'marketing-id', Name: 'Marketing Agent' },
-                        { ID: 'codesmith-id', Name: 'Codesmith' }
-                    ]
+                    Results: defaultTestAgents.map(a => ({ ...a })),
                 };
             })
         };
@@ -341,32 +421,72 @@ describe('BaseMessagingAdapter', () => {
         it('should resolve user by SenderEmail', async () => {
             const msg = createMessage({ SenderEmail: 'alice@example.com' });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('alice@example.com');
+            expect(user?.Email).toBe('alice@example.com');
         });
 
         it('should look up email via platform API when SenderEmail is not set', async () => {
             adapter.MockLookupEmails.set('user-bob', 'bob@example.com');
             const msg = createMessage({ SenderID: 'user-bob', SenderEmail: undefined });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('bob@example.com');
+            expect(user?.Email).toBe('bob@example.com');
         });
 
-        it('should fall back to service account when email lookup fails', async () => {
+        it('should return null (fail closed) by default when email lookup fails', async () => {
             const msg = createMessage({ SenderID: 'unknown-user', SenderEmail: undefined });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('bot@company.com');
+            expect(user).toBeNull();
         });
 
-        it('should fall back to service account when email not in MJ UserCache', async () => {
+        it('should return null (fail closed) by default when email not in MJ UserCache', async () => {
             const msg = createMessage({ SenderEmail: 'nonexistent@nowhere.com' });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('bot@company.com');
+            expect(user).toBeNull();
+        });
+
+        it('should return null (fail closed) when matched MJ user is inactive', async () => {
+            const msg = createMessage({ SenderEmail: 'inactive@example.com' });
+            const user = await adapter.testResolveContextUser(msg);
+            expect(user).toBeNull();
+        });
+
+        it('should fall back to service account when AllowFallbackUser is explicitly true', async () => {
+            const openAdapter = new TestAdapter({ ...defaultSettings, AllowFallbackUser: true });
+            await openAdapter.Initialize();
+            const unknownEmailUser = await openAdapter.testResolveContextUser(
+                createMessage({ SenderEmail: 'guest@external.org' })
+            );
+            const missingEmailUser = await openAdapter.testResolveContextUser(
+                createMessage({ SenderID: 'unknown-user', SenderEmail: undefined })
+            );
+            expect(unknownEmailUser?.Email).toBe('bot@company.com');
+            expect(missingEmailUser?.Email).toBe('bot@company.com');
         });
 
         it('should be case-insensitive for email matching', async () => {
             const msg = createMessage({ SenderEmail: 'ALICE@EXAMPLE.COM' });
             const user = await adapter.testResolveContextUser(msg);
-            expect(user.Email).toBe('alice@example.com');
+            expect(user?.Email).toBe('alice@example.com');
+        });
+
+        it('should refuse unmapped senders in HandleMessage without running any agent or showing typing', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const runSpy = vi.fn();
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: runSpy,
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const msg = createMessage({
+                IsDirectMessage: true,
+                SenderID: 'external-guest-1',
+                SenderEmail: 'guest@external.org',
+            });
+            await adapter.HandleMessage(msg);
+
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(adapter.TypeIndicatorShown).toBe(false);
+            expect(adapter.FinalMessages).toHaveLength(1);
+            expect(adapter.FinalMessages[0].PlainText).toContain('MemberJunction user');
         });
     });
 
@@ -661,20 +781,20 @@ describe('BaseMessagingAdapter', () => {
         // (and the resolveContextUser suite) fail if either call site regresses to `new`.
         it('Initialize resolves the fallback user from a warmed cache and leaves it intact', async () => {
             await adapter.Initialize();
-            expect(UserCache.Instance.Users.length).toBe(3);
+            expect(UserCache.Instance.Users.length).toBe(4);
         });
 
         it('sender resolution does not empty the shared cache', async () => {
             await adapter.Initialize();
             const user = await adapter.testResolveContextUser(createMessage({ SenderEmail: 'alice@example.com' }));
-            expect(user.Email).toBe('alice@example.com');
-            expect(UserCache.Instance.Users.length).toBe(3);
+            expect(user?.Email).toBe('alice@example.com');
+            expect(UserCache.Instance.Users.length).toBe(4);
         });
 
         it('the mock itself reproduces the footgun (keeps these tests able to fail)', () => {
             // If someone "simplifies" the mock back to a static list, this fails — and with it
             // goes the suite's ability to catch a regression to `new UserCache()`.
-            expect(UserCache.Instance.Users.length).toBe(3);
+            expect(UserCache.Instance.Users.length).toBe(4);
             const constructed = new (UserCache as unknown as new () => { Users: unknown[] })();
             expect(constructed.Users.length).toBe(0);          // construction wiped the shared instance
             expect(UserCache.Instance.Users.length).toBe(0);   // ...which IS the shared instance
@@ -1651,6 +1771,957 @@ describe('BaseMessagingAdapter', () => {
                 'convo-created-1',
                 'convo-created-1',
             ]);
+        });
+    });
+
+    describe('agent permission, discoverability, and AllowedAgentIDs enforcement (#6717)', () => {
+        const alice = { ID: 'u1', Email: 'alice@example.com', Name: 'Alice', IsActive: true, UserRoles: [{ RoleID: 'role-member' }] } as unknown as UserInfo;
+        const bob = { ID: 'u2', Email: 'bob@example.com', Name: 'Bob', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] } as unknown as UserInfo;
+
+        function seedCatalog(
+            agents: Array<Record<string, unknown>>,
+            permissions: Array<Record<string, unknown>> = [],
+            defaultAgentRow?: Record<string, unknown>
+        ): void {
+            aiEngineState.agents = agents;
+            aiEngineState.permissions = permissions;
+            const callCount = { n: 0 };
+            vi.mocked(RunView).mockImplementation(() => ({
+                RunView: vi.fn().mockImplementation(() => {
+                    callCount.n++;
+                    if (callCount.n === 1) {
+                        return { Success: true, Results: [defaultAgentRow ?? agents[0]] };
+                    }
+                    return { Success: true, Results: agents };
+                }),
+            }) as unknown as RunView);
+        }
+
+        it('warms AIEngineBase as the service account during Initialize', async () => {
+            await adapter.Initialize();
+            expect(aiEngineState.configCalls.length).toBeGreaterThanOrEqual(1);
+            expect((aiEngineState.configCalls[0].user as { Email?: string })?.Email).toBe('bot@company.com');
+        });
+
+        it('excludes sub-agents, child agents, and Required prototype templates from AvailableAgentNames and refuses direct mentions', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'sub-id', Name: 'Internal Sub', Status: 'Active', InvocationMode: 'Sub-Agent', ParentID: null },
+                { ID: 'child-id', Name: 'Child Helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: 'default-id' },
+                { ID: 'proto-id', Name: 'Template Proto', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, InstantiationMode: 'Required' },
+            ];
+            seedCatalog(catalog);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            expect(secAdapter.AvailableAgentNames).toEqual(['Default Agent']);
+
+            const subRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Internal Sub run', MentionedAgentNames: ['Internal Sub'] }),
+                [],
+                alice
+            );
+            expect(subRes.agent).toBeNull();
+            expect(subRes.refusalMessage).toContain('cannot be invoked directly');
+
+            const childRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Child Helper run', MentionedAgentNames: ['Child Helper'] }),
+                [],
+                alice
+            );
+            expect(childRes.agent).toBeNull();
+            expect(childRes.refusalMessage).toContain('cannot be invoked directly');
+
+            const protoRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Template Proto run', MentionedAgentNames: ['Template Proto'] }),
+                [],
+                alice
+            );
+            expect(protoRes.agent).toBeNull();
+            expect(protoRes.refusalMessage).toContain('cannot be invoked directly');
+        });
+
+        it('throws at Initialize when DefaultAgentName is a Sub-Agent or outside AllowedAgentIDs', async () => {
+            const subDefault = { ID: 'sub-id', Name: 'Sub Default', Status: 'Active', InvocationMode: 'Sub-Agent', ParentID: null };
+            seedCatalog([subDefault], [], subDefault);
+            const badSubAdapter = new TestAdapter({ ...defaultSettings, DefaultAgentName: 'Sub Default' });
+            await expect(badSubAdapter.Initialize()).rejects.toThrow(/not directly discoverable/i);
+
+            const topDefault = { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null };
+            seedCatalog([topDefault], [], topDefault);
+            const badAllowAdapter = new TestAdapter({ ...defaultSettings, AllowedAgentIDs: ['other-id'] });
+            await expect(badAllowAdapter.Initialize()).rejects.toThrow(/not in AllowedAgentIDs/i);
+        });
+
+        it('enforces AllowedAgentIDs across AvailableAgentNames, @mention, ExecuteAgentParams.data, and fallback delegation', async () => {
+            const { AgentRunner, ResolveHandoffTarget } = await import('@memberjunction/ai-agents');
+            vi.mocked(ResolveHandoffTarget).mockClear();
+
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, Description: 'Default' },
+                { ID: 'sage-id', Name: 'Sage', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, Description: 'Sage' },
+                { ID: 'billing-id', Name: 'Billing Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, Description: 'Billing' },
+            ];
+            seedCatalog(catalog);
+
+            const scopedAdapter = new TestAdapter({
+                ...defaultSettings,
+                AllowedAgentIDs: ['DEFAULT-ID', 'SAGE-ID'], // mixed case to prove UUID-insensitive matching
+            });
+            await scopedAdapter.Initialize();
+
+            expect(scopedAdapter.AvailableAgentNames).toEqual(['Default Agent', 'Sage']);
+
+            // Explicit mention of disallowed agent is refused
+            const blocked = await scopedAdapter.testResolveAgent(
+                createMessage({ Text: '@Billing Agent invoice', MentionedAgentNames: ['Billing Agent'] }),
+                [],
+                alice
+            );
+            expect(blocked.agent).toBeNull();
+            expect(blocked.refusalMessage).toContain('not available in this app');
+
+            // Allowed agent succeeds and propagates ALL_AVAILABLE_AGENTS + HostAllowedIDs
+            let capturedParams: Record<string, unknown> | undefined;
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation((params: Record<string, unknown>) => {
+                    capturedParams = params;
+                    return Promise.resolve(wrapInConversationResult({
+                        success: true,
+                        payload: { invokeAgent: 'Billing Agent' },
+                        agentRun: { Message: 'Handing off to Billing Agent.', Steps: [] },
+                    }));
+                }),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            await scopedAdapter.HandleMessage(createMessage({ IsDirectMessage: true, SenderEmail: 'alice@example.com' }));
+
+            expect((capturedParams?.data as { ALL_AVAILABLE_AGENTS?: Array<{ ID: string }> })?.ALL_AVAILABLE_AGENTS?.map(a => a.ID)).toEqual([
+                'default-id',
+                'sage-id',
+            ]);
+            expect(ResolveHandoffTarget).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    AgentName: 'Billing Agent',
+                    HostAllowedIDs: ['DEFAULT-ID', 'SAGE-ID'],
+                })
+            );
+        });
+
+        it('refuses @mention when user has CanView but lacks CanRun without falling back to default', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const runSpy = vi.fn();
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: runSpy,
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'payroll-id', Name: 'Payroll Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'payroll-id', RoleID: 'role-member', CanView: true, CanRun: false, CanEdit: false, CanDelete: false },
+                { AgentID: 'payroll-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Alice (member: CanView=true, CanRun=false) is refused
+            await secAdapter.HandleMessage(createMessage({
+                IsDirectMessage: true,
+                SenderEmail: 'alice@example.com',
+                Text: '@Payroll Agent run payroll',
+                MentionedAgentNames: ['Payroll Agent'],
+            }));
+            expect(runSpy).not.toHaveBeenCalled();
+            expect(secAdapter.TypeIndicatorShown).toBe(false);
+            expect(secAdapter.FinalMessages[0].PlainText).toContain("don't have permission to run");
+            expect(secAdapter.FinalMessages[0].PlainText).toContain('Payroll Agent');
+
+            // Bob (admin: CanRun=true) succeeds
+            const bobRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Payroll Agent run payroll', MentionedAgentNames: ['Payroll Agent'] }),
+                [],
+                bob
+            );
+            expect(bobRes.agent?.Name).toBe('Payroll Agent');
+        });
+
+        it('hides agents user cannot view from NotFound help notes and ignores implicit prose matches', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'public-id', Name: 'Public Helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'secret-id', Name: 'Secret Audit', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                // Only admin can view/run Secret Audit
+                { AgentID: 'secret-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Explicit @Secret Audit, prefix @sec, bare, anywhere, and forged form_submit by Alice:
+            // ALL are indistinguishable from no match (no note, never leaks Secret Audit).
+            const explicitRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Secret Audit report', MentionedAgentNames: ['Secret Audit'] }),
+                [],
+                alice
+            );
+            expect(explicitRes.agent?.Name).toBe('Default Agent');
+            expect(explicitRes.multiAgentNote).toBeNull();
+
+            // Implicit prose match (no '@') by Alice: silently ignored without a "couldn't find" side-channel note
+            const proseRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: 'we need a secret audit done', MentionedAgentNames: ['Secret Audit'] }),
+                [],
+                alice
+            );
+            expect(proseRes.agent?.Name).toBe('Default Agent');
+            expect(proseRes.multiAgentNote).toBeNull();
+
+            // Genuinely nonexistent agent passed programmatically lists only viewable+runnable agents (never Secret Audit)
+            const unknownRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: 'hello', MentionedAgentNames: ['NonexistentBot'] }),
+                [],
+                alice
+            );
+            expect(unknownRes.agent?.Name).toBe('Default Agent');
+            expect(unknownRes.multiAgentNote).toContain("couldn't find");
+            expect(unknownRes.multiAgentNote).toContain('Public Helper');
+            expect(unknownRes.multiAgentNote).not.toContain('Secret Audit');
+        });
+
+        it('never leaks hidden agent names across all 4 matcher passes, multi-mention notes, ambiguity counts, or forged form submits', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'pub-id', Name: 'Public Helper', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'zebra-vis-id', Name: 'Zebra Public', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'zebra-hid-id', Name: 'Zebra Payroll Audit', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'onyx-hid-id', Name: 'Onyx Secret Vault', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'zebra-hid-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+                { AgentID: 'onyx-hid-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Pass 1 (exact @Full Name), Pass 2 (prefix @onyx), Pass 3 (bare start), Pass 4 (anywhere):
+            // Simulate MapTeamsActivity/MapSlackEvent pre-populating MentionedAgentNames with unfiltered matchAgentMentions.
+            for (const text of [
+                '@Onyx Secret Vault hi',
+                '@onyx hi',
+                'Onyx Secret Vault hi',
+                'please run onyx secret vault now',
+                '@nosuchthing hi',
+            ]) {
+                const preMatched = secAdapter.testMatchAgentMentions(text);
+                const res = await secAdapter.testResolveAgent(
+                    createMessage({ Text: text, MentionedAgentNames: preMatched }),
+                    [],
+                    alice
+                );
+                expect(res.agent?.Name).toBe('Default Agent');
+                expect(res.multiAgentNote).toBeNull();
+            }
+
+            // Multi-mention (@pub @onyx and @onyx @pub): never prints hidden agent name in "Other mentioned agents"
+            for (const text of ['@pub @onyx help', '@onyx @pub help']) {
+                const preMatched = secAdapter.testMatchAgentMentions(text);
+                const res = await secAdapter.testResolveAgent(
+                    createMessage({ Text: text, MentionedAgentNames: preMatched }),
+                    [],
+                    alice
+                );
+                expect(res.agent?.Name).toBe('Public Helper');
+                expect(res.multiAgentNote).toBeNull();
+            }
+
+            // Prefix ambiguity: hidden "Zebra Payroll Audit" must NOT break "@zeb" for visible "Zebra Public"
+            const ambigPreMatched = secAdapter.testMatchAgentMentions('@zeb help');
+            expect(ambigPreMatched).toEqual([]); // unfiltered matcher saw both Zebra agents as ambiguous
+            const ambigRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@zeb help', MentionedAgentNames: ambigPreMatched }),
+                [],
+                alice
+            );
+            expect(ambigRes.agent?.Name).toBe('Zebra Public');
+            expect(ambigRes.multiAgentNote).toBeNull();
+
+            // Forged Teams form_submit carrying a hidden mj_agent name: indistinguishable from no match
+            const formRes = await secAdapter.testResolveAgent(
+                createMessage({
+                    Text: '@{"_mode":"form","action":"formSubmit","fields":[]}',
+                    MentionedAgentNames: ['Onyx Secret Vault'],
+                    RawEvent: { type: 'form_submit' },
+                }),
+                [],
+                alice
+            );
+            expect(formRes.agent?.Name).toBe('Default Agent');
+            expect(formRes.multiAgentNote).toBeNull();
+
+            // Programmatic multi-mention (where resolveAgent does NOT re-match text):
+            // resolveMentionedAgent itself must omit hidden agents from "Other mentioned agents (...)".
+            const programmaticMulti = await secAdapter.testResolveAgent(
+                createMessage({
+                    Text: 'run this command',
+                    MentionedAgentNames: ['Public Helper', 'Onyx Secret Vault'],
+                    RawEvent: { type: 'slash_command' },
+                }),
+                [],
+                alice
+            );
+            expect(programmaticMulti.agent?.Name).toBe('Public Helper');
+            expect(programmaticMulti.multiAgentNote).toBeNull();
+        });
+
+        it('does not confirm hidden agent existence when a user replies in a thread they started with a hidden full name or prefix', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'onyx-hid-id', Name: 'Onyx Secret Vault', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'onyx-hid-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Thread started by Alice with hidden full name, hidden prefix, and nonexistent name:
+            // replying in each thread must yield the exact same outcome (Default Agent, no refusal, no note)
+            // both with no rememberedAgentId (e.g. after restart) and with rememberedAgentId = 'default-id'.
+            for (const rootText of ['@Onyx Secret Vault hi', '@onyx hi', '@nosuchthing hi']) {
+                const history: IncomingMessage[] = [
+                    createMessage({
+                        MessageID: 'root-1',
+                        ThreadID: 'thread-probe',
+                        SenderID: 'alice-platform-id',
+                        SenderEmail: alice.Email,
+                        Text: rootText,
+                        MentionedAgentNames: undefined,
+                    }),
+                    createMessage({
+                        MessageID: 'bot-1',
+                        ThreadID: 'thread-probe',
+                        SenderID: 'BOT123',
+                        Text: 'Hello!',
+                    }),
+                ];
+
+                const replyNoRemembered = await secAdapter.testResolveAgent(
+                    createMessage({ ThreadID: 'thread-probe', Text: 'follow up', MentionedAgentNames: [] }),
+                    history,
+                    alice
+                );
+                expect(replyNoRemembered.agent?.Name).toBe('Default Agent');
+                expect(replyNoRemembered.refusalMessage).toBeUndefined();
+                expect(replyNoRemembered.multiAgentNote).toBeNull();
+
+                const replyWithDefaultRemembered = await secAdapter.testResolveAgent(
+                    createMessage({ ThreadID: 'thread-probe', Text: 'follow up', MentionedAgentNames: [] }),
+                    history,
+                    alice,
+                    'default-id'
+                );
+                expect(replyWithDefaultRemembered.agent?.Name).toBe('Default Agent');
+                expect(replyWithDefaultRemembered.refusalMessage).toBeUndefined();
+                expect(replyWithDefaultRemembered.multiAgentNote).toBeNull();
+            }
+        });
+
+        it('uses live AIEngineBase agent status in fallback handleDelegation so agents deactivated after Initialize are refused', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'target-id', Name: 'Target Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            seedCatalog(catalog, []);
+
+            const { AgentRunner, ResolveHandoffTarget } = await import('@memberjunction/ai-agents');
+            const origResolve = vi.mocked(ResolveHandoffTarget).getMockImplementation();
+            const seenTargetStatuses: Array<string | undefined> = [];
+            vi.mocked(ResolveHandoffTarget).mockImplementation(async (params: { AgentName?: string; Agents?: Array<{ Name?: string; Status?: string }> }) => {
+                const target = (params.Agents ?? []).find(a => a.Name === params.AgentName);
+                seenTargetStatuses.push(target?.Status);
+                if (!target || target.Status !== 'Active') {
+                    return { Target: null, Refusal: { Reason: 'NotFound', Message: 'Target agent is inactive' } };
+                }
+                return { Target: target as never };
+            });
+
+            const executedAgents: string[] = [];
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(async (params: { agent: { Name: string } }) => {
+                    executedAgents.push(params.agent.Name);
+                    return {
+                        agentResult: {
+                            success: true,
+                            payload: params.agent.Name === 'Default Agent' ? { invokeAgent: 'Target Agent' } : {},
+                            agentRun: { Message: 'Done.', Steps: [] },
+                        },
+                        conversationId: 'deleg-convo-1',
+                        userMessageDetailId: 'u-1',
+                        agentResponseDetailId: 'a-1',
+                        artifactInfo: undefined,
+                    };
+                }),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            try {
+                const delegAdapter = new TestAdapter(defaultSettings);
+                await delegAdapter.Initialize();
+
+                // Deactivate Target Agent in live AIEngineBase cache AFTER Initialize()
+                aiEngineState.agents[1]['Status'] = 'Disabled';
+
+                await delegAdapter.HandleMessage(createMessage({
+                    IsDirectMessage: true,
+                    SenderEmail: alice.Email,
+                    Text: 'delegate please',
+                }));
+
+                // ResolveHandoffTarget must receive the live 'Disabled' status, NOT the stale 'Active' snapshot
+                expect(seenTargetStatuses).toEqual(['Disabled']);
+                expect(executedAgents).toEqual(['Default Agent']);
+            } finally {
+                if (origResolve) {
+                    vi.mocked(ResolveHandoffTarget).mockImplementation(origResolve);
+                }
+            }
+        });
+
+        it('refuses agents deactivated after Initialize() and fails closed when GetEffectivePermissions throws', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'live-id', Name: 'Live Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            seedCatalog(catalog, []);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Confirm Live Agent works while Active
+            const before = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Live Agent hi', MentionedAgentNames: ['Live Agent'] }),
+                [],
+                alice
+            );
+            expect(before.agent?.Name).toBe('Live Agent');
+
+            // Deactivate Live Agent in live AIEngineBase cache AFTER Initialize()
+            aiEngineState.agents[1]['Status'] = 'Disabled';
+
+            const afterMention = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Live Agent hi', MentionedAgentNames: ['Live Agent'] }),
+                [],
+                alice
+            );
+            expect(afterMention.agent?.Name).toBe('Default Agent');
+            expect(afterMention.multiAgentNote).toBeNull();
+
+            // Restore Active, then simulate GetEffectivePermissions throwing -> must fail closed (NotFound, never Allowed)
+            aiEngineState.agents[1]['Status'] = 'Active';
+            const { AIAgentPermissionHelper } = await import('@memberjunction/ai-engine-base');
+            const origImpl = vi.mocked(AIAgentPermissionHelper.GetEffectivePermissions).getMockImplementation();
+            vi.mocked(AIAgentPermissionHelper.GetEffectivePermissions).mockRejectedValueOnce(new Error('DB transient failure'));
+            try {
+                const verdict = await (secAdapter as unknown as {
+                    evaluateAgentAccess(agent: unknown, user: unknown): Promise<string>;
+                }).evaluateAgentAccess(aiEngineState.agents[1], alice);
+                expect(verdict).toBe('NotFound');
+            } finally {
+                if (origImpl) {
+                    vi.mocked(AIAgentPermissionHelper.GetEffectivePermissions).mockImplementation(origImpl);
+                }
+            }
+        });
+
+        it('narrows ALL_AVAILABLE_AGENTS in ExecuteAgentParams.data to agents the calling user can view and run', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Description: 'Public default', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'secret-id', Name: 'Secret Agent', Description: 'Admin-only secret description', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'secret-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const capturedData: Array<Record<string, unknown> | undefined> = [];
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(async (params: { data?: Record<string, unknown> }) => {
+                    capturedData.push(params.data);
+                    return {
+                        agentResult: { success: true, agentRun: { Message: 'Ok.', Steps: [] } },
+                        conversationId: 'convo-narrow-1',
+                        userMessageDetailId: 'u-1',
+                        agentResponseDetailId: 'a-1',
+                        artifactInfo: undefined,
+                    };
+                }),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const scopedAdapter = new TestAdapter({
+                ...defaultSettings,
+                AllowedAgentIDs: ['default-id', 'secret-id'],
+            });
+            await scopedAdapter.Initialize();
+
+            await scopedAdapter.HandleMessage(createMessage({
+                IsDirectMessage: true,
+                SenderEmail: alice.Email,
+                Text: 'hello',
+            }));
+
+            expect(capturedData).toHaveLength(1);
+            const available = capturedData[0]?.['ALL_AVAILABLE_AGENTS'] as Array<{ ID: string; Name: string }>;
+            expect(available.map(a => a.ID)).toEqual(['default-id']);
+            expect(JSON.stringify(available)).not.toContain('Secret Agent');
+        });
+
+        it('enforces permissions on thread affinity when another user replies to an admin thread', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+                { ID: 'finance-id', Name: 'Finance Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'finance-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            const threadHistory: IncomingMessage[] = [
+                createMessage({
+                    MessageID: 't1',
+                    SenderID: 'bob-platform-id',
+                    SenderEmail: 'bob@example.com',
+                    Text: '@Finance Agent pull Q4 numbers',
+                    MentionedAgentNames: ['Finance Agent'],
+                }),
+                createMessage({
+                    MessageID: 't2',
+                    SenderID: 'BOT123',
+                    Text: 'Here are the Q4 numbers.',
+                }),
+            ];
+
+            // Bob (admin) continues thread with Finance Agent (both via history and rememberedAgentId)
+            const bobReply = await secAdapter.testResolveAgent(
+                createMessage({ ThreadID: 't1', Text: 'break down by region', MentionedAgentNames: [] }),
+                threadHistory,
+                bob,
+                'finance-id'
+            );
+            expect(bobReply.agent?.Name).toBe('Finance Agent');
+
+            // Alice (cannot view/run Finance Agent) replying in a thread actually served by Finance Agent
+            // (rememberedAgentId='finance-id') is refused without naming Finance Agent.
+            const aliceReply = await secAdapter.testResolveAgent(
+                createMessage({ ThreadID: 't1', Text: 'show me too', MentionedAgentNames: [] }),
+                threadHistory,
+                alice,
+                'finance-id'
+            );
+            expect(aliceReply.agent).toBeNull();
+            expect(aliceReply.refusalMessage).toContain("don't have permission");
+            expect(aliceReply.refusalMessage).not.toContain('Finance Agent');
+        });
+
+        it('refuses when user lacks CanRun on the default agent itself', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null },
+            ];
+            const perms = [
+                { AgentID: 'default-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+            seedCatalog(catalog, perms);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            const aliceRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: 'hello', MentionedAgentNames: [] }),
+                [],
+                alice
+            );
+            expect(aliceRes.agent).toBeNull();
+            expect(aliceRes.refusalMessage).toContain("don't have permission");
+        });
+
+        it('enforces derived-agent privacy (2x2 RBAC: derived with 0 ACL rows is owner-only)', async () => {
+            const catalog = [
+                { ID: 'default-id', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: null },
+                { ID: 'derived-id', Name: 'Bob Personal Bot', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null, BaseAgentID: 'default-id', OwnerUserID: 'u2' },
+            ];
+            seedCatalog(catalog, []);
+
+            const secAdapter = new TestAdapter(defaultSettings);
+            await secAdapter.Initialize();
+
+            // Bob (OwnerUserID === 'u2') can run his personal derived agent
+            const bobRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Bob Personal Bot hi', MentionedAgentNames: ['Bob Personal Bot'] }),
+                [],
+                bob
+            );
+            expect(bobRes.agent?.Name).toBe('Bob Personal Bot');
+
+            // Alice cannot view or run Bob's private derived agent
+            const aliceRes = await secAdapter.testResolveAgent(
+                createMessage({ Text: '@Bob Personal Bot hi', MentionedAgentNames: ['Bob Personal Bot'] }),
+                [],
+                alice
+            );
+            expect(aliceRes.agent?.Name).toBe('Default Agent');
+            expect(aliceRes.multiAgentNote).toBeNull();
+        });
+
+        it('stays silent when multi-bot thread gate declines an unmapped sender in another bot thread', async () => {
+            await adapter.Initialize();
+            adapter.MockThreadHistory = [
+                createMessage({ MessageID: 't1', SenderID: 'user-1', Text: 'starting a thread' }),
+                createMessage({ MessageID: 't2', SenderID: 'BOT999', Text: 'other bot reply', RawEvent: { bot_id: 'B999' } }),
+            ];
+            await adapter.HandleMessage(createMessage({
+                MessageID: 'm9',
+                ThreadID: 't1',
+                SenderID: 'external-guest',
+                SenderEmail: 'guest@external.org',
+                Text: 'follow-up',
+            }));
+            expect(adapter.FinalMessages).toHaveLength(0);
+            expect(adapter.TypeIndicatorShown).toBe(false);
+        });
+    });
+
+    describe('Teams multi-turn DB history, /new command, and idle rollover', () => {
+        const alice = { ID: 'u1', Email: 'alice@example.com', Name: 'Alice', IsActive: true, UserRoles: [{ RoleID: 'role-member' }] } as unknown as UserInfo;
+        const bob = { ID: 'u2', Email: 'bob@example.com', Name: 'Bob', IsActive: true, UserRoles: [{ RoleID: 'role-admin' }] } as unknown as UserInfo;
+
+        it('loads prior turns chronologically from MJ: Conversation Details as contextUser and preserves agent affinity', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const observedMessages: Array<Array<{ role: string; content: string }>> = [];
+            const observedAgents: string[] = [];
+            const observedConvoIds: Array<string | undefined> = [];
+            const detailRunViewCalls: Array<{ params: Record<string, unknown>; user: UserInfo }> = [];
+
+            let initCall = 0;
+            vi.mocked(RunView).mockImplementation(() => ({
+                RunView: vi.fn().mockImplementation((params: Record<string, unknown>, user: UserInfo) => {
+                    if (params.EntityName === 'MJ: Conversation Details') {
+                        detailRunViewCalls.push({ params, user });
+                        // Returned newest-first (OrderBy: __mj_CreatedAt DESC)
+                        return {
+                            Success: true,
+                            Results: [
+                                { ID: 'd2', Role: 'AI', Message: 'Q3 revenue was $4.2M.', AgentID: 'research-id' },
+                                { ID: 'd1', Role: 'User', Message: '@Research Bot check Q3 revenue', AgentID: null },
+                            ],
+                        };
+                    }
+                    initCall++;
+                    if (initCall === 1) {
+                        return { Success: true, Results: [defaultTestAgents[0]] };
+                    }
+                    return { Success: true, Results: defaultTestAgents.map(a => ({ ...a })) };
+                }),
+            }) as unknown as RunView);
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(
+                    async (params: { agent: { Name: string }; conversationMessages: Array<{ role: string; content: string }> }, opts: { conversationId?: string }) => {
+                        observedAgents.push(params.agent.Name);
+                        observedMessages.push([...params.conversationMessages]);
+                        observedConvoIds.push(opts.conversationId);
+                        return {
+                            agentResult: { success: true, agentRun: { Message: 'Done.', Steps: [] } },
+                            conversationId: opts.conversationId ?? 'teams-convo-1',
+                            userMessageDetailId: 'u-det',
+                            agentResponseDetailId: 'a-det',
+                            artifactInfo: undefined,
+                        };
+                    }
+                ),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const dbAdapter = new DBHistoryTestAdapter(defaultSettings);
+            await dbAdapter.Initialize();
+
+            // Turn 1: mention Research Bot
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 't-1',
+                ThreadID: 'conv-dm-1',
+                IsDirectMessage: true,
+                SenderEmail: 'alice@example.com',
+                Text: '@Research Bot check Q3 revenue',
+                MentionedAgentNames: ['Research Bot'],
+            }));
+
+            // Turn 2: follow-up with NO @mention and empty platform threadHistory
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 't-2',
+                ThreadID: 'conv-dm-1',
+                IsDirectMessage: true,
+                SenderEmail: 'alice@example.com',
+                Text: 'Now break it down by region',
+                MentionedAgentNames: [],
+            }));
+
+            expect(observedConvoIds).toEqual([undefined, 'teams-convo-1']);
+            expect(observedAgents).toEqual(['Research Bot', 'Research Bot']);
+            expect(observedMessages[1]).toEqual([
+                { role: 'user', content: '@Research Bot check Q3 revenue' },
+                { role: 'assistant', content: 'Q3 revenue was $4.2M.' },
+                { role: 'user', content: 'Now break it down by region' },
+            ]);
+            // Must query MJ: Conversation Details as the calling user (Alice), never fallback
+            expect(detailRunViewCalls).toHaveLength(1);
+            expect(detailRunViewCalls[0].user.Email).toBe('alice@example.com');
+            expect(String(detailRunViewCalls[0].params.ExtraFilter)).toContain("ConversationID='teams-convo-1'");
+        });
+
+        it('enforces permissions on remembered DB conversation agent when an unauthorized user replies', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const runSpy = vi.fn().mockResolvedValue({
+                agentResult: { success: true, agentRun: { Message: 'Admin report.', Steps: [] } },
+                conversationId: 'group-convo-1',
+                userMessageDetailId: 'u-det',
+                agentResponseDetailId: 'a-det',
+                artifactInfo: undefined,
+            });
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: runSpy,
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            // Restrict Research Bot to Bob's admin role only
+            aiEngineState.permissions = [
+                { AgentID: 'research-id', RoleID: 'role-admin', CanView: true, CanRun: true, CanEdit: false, CanDelete: false },
+            ];
+
+            let initCall = 0;
+            vi.mocked(RunView).mockImplementation(() => ({
+                RunView: vi.fn().mockImplementation((params: Record<string, unknown>) => {
+                    if (params.EntityName === 'MJ: Conversation Details') {
+                        return { Success: true, Results: [] };
+                    }
+                    initCall++;
+                    if (initCall === 1) return { Success: true, Results: [defaultTestAgents[0]] };
+                    return { Success: true, Results: defaultTestAgents.map(a => ({ ...a })) };
+                }),
+            }) as unknown as RunView);
+
+            const dbAdapter = new DBHistoryTestAdapter(defaultSettings);
+            await dbAdapter.Initialize();
+
+            // Bob starts group chat with Research Bot
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'g-1',
+                ThreadID: 'group-chat-1',
+                IsBotMention: true,
+                SenderEmail: bob.Email,
+                Text: '@Research Bot pull sensitive metrics',
+                MentionedAgentNames: ['Research Bot'],
+            }));
+            expect(runSpy).toHaveBeenCalledTimes(1);
+
+            // Alice (lacks CanView/CanRun on Research Bot) follows up without @mention -> refused without leaking name
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'g-2',
+                ThreadID: 'group-chat-1',
+                IsBotMention: true,
+                SenderEmail: alice.Email,
+                Text: 'show me more',
+                MentionedAgentNames: [],
+            }));
+            expect(runSpy).toHaveBeenCalledTimes(1);
+            const lastMsg = dbAdapter.FinalMessages[dbAdapter.FinalMessages.length - 1];
+            expect(lastMsg.PlainText).toContain("don't have permission");
+            expect(lastMsg.PlainText).not.toContain('Research Bot');
+        });
+
+        it('handles bare /new and /new <prompt> by resetting the MJ Conversation and clearing prior history', async () => {
+            const { AgentRunner } = await import('@memberjunction/ai-agents');
+            const observedConvoIds: Array<string | undefined> = [];
+            const observedMessages: Array<Array<{ role: string; content: string }>> = [];
+            const observedAgents: string[] = [];
+            let createdCount = 0;
+
+            vi.mocked(AgentRunner).mockImplementation(() => ({
+                RunAgentInConversation: vi.fn().mockImplementation(
+                    async (params: { agent: { Name: string }; conversationMessages: Array<{ role: string; content: string }> }, opts: { conversationId?: string }) => {
+                        observedConvoIds.push(opts.conversationId);
+                        observedMessages.push([...params.conversationMessages]);
+                        observedAgents.push(params.agent.Name);
+                        return {
+                            agentResult: { success: true, agentRun: { Message: 'Reply.', Steps: [] } },
+                            conversationId: opts.conversationId ?? `convo-${++createdCount}`,
+                            userMessageDetailId: 'u-det',
+                            agentResponseDetailId: 'a-det',
+                            artifactInfo: undefined,
+                        };
+                    }
+                ),
+                FollowHandoffs: vi.fn().mockResolvedValue([]),
+            }) as ReturnType<typeof vi.fn>);
+
+            const dbAdapter = new DBHistoryTestAdapter(defaultSettings);
+            await dbAdapter.Initialize();
+
+            // Turn 1: creates convo-1 with Research Bot
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-1',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: '@Research Bot first topic',
+                MentionedAgentNames: ['Research Bot'],
+            }));
+            expect(observedConvoIds).toEqual([undefined]);
+
+            // Turn 2: bare /new resets without invoking AgentRunner
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-2',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: '<@BOT123> /new',
+            }));
+            expect(observedConvoIds).toHaveLength(1);
+            expect(dbAdapter.FinalMessages.some(m => m.PlainText.includes('Started a fresh conversation'))).toBe(true);
+
+            // Turn 3: next message starts convo-2 and resets back to Default Agent
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-3',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: 'fresh question',
+            }));
+            expect(observedConvoIds).toEqual([undefined, undefined]);
+            expect(observedAgents).toEqual(['Research Bot', 'Default Agent']);
+
+            // Turn 4: `/new <prompt>` immediately resets convo-2 and runs prompt in convo-3
+            await dbAdapter.HandleMessage(createMessage({
+                MessageID: 'm-4',
+                ThreadID: 'dm-reset',
+                IsDirectMessage: true,
+                Text: '/new @Sage start third topic',
+            }));
+            expect(observedConvoIds).toEqual([undefined, undefined, undefined]);
+            expect(observedAgents).toEqual(['Research Bot', 'Default Agent', 'Sage']);
+            expect(observedMessages[2]).toEqual([{ role: 'user', content: '@Sage start third topic' }]);
+        });
+
+        it('rolls over rolling conversations after ConversationIdleTimeoutMs of inactivity while sliding on active turns', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2026-11-24T12:00:00.000Z'));
+
+                const { AgentRunner } = await import('@memberjunction/ai-agents');
+                const observedConvoIds: Array<string | undefined> = [];
+                let createdCount = 0;
+
+                vi.mocked(AgentRunner).mockImplementation(() => ({
+                    RunAgentInConversation: vi.fn().mockImplementation(
+                        async (_params: Record<string, unknown>, opts: { conversationId?: string }) => {
+                            observedConvoIds.push(opts.conversationId);
+                            return {
+                                agentResult: { success: true, agentRun: { Message: 'Ok.', Steps: [] } },
+                                conversationId: opts.conversationId ?? `idle-convo-${++createdCount}`,
+                                userMessageDetailId: 'u-det',
+                                agentResponseDetailId: 'a-det',
+                                artifactInfo: undefined,
+                            };
+                        }
+                    ),
+                    FollowHandoffs: vi.fn().mockResolvedValue([]),
+                }) as ReturnType<typeof vi.fn>);
+
+                const idleAdapter = new DBHistoryTestAdapter({
+                    ...defaultSettings,
+                    ConversationIdleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+                });
+                await idleAdapter.Initialize();
+
+                // T=0: creates idle-convo-1
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-1', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 1' }));
+
+                // T=20m (< 30m): reuses idle-convo-1 and slides lastActivityAt to T=20m
+                vi.advanceTimersByTime(20 * 60 * 1000);
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-2', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 2' }));
+
+                // T=40m (20m since T=20m, still < 30m): still reuses idle-convo-1!
+                vi.advanceTimersByTime(20 * 60 * 1000);
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-3', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 3' }));
+
+                // T=71m (31m since T=40m, > 30m): rolls over to a brand-new conversation (undefined -> idle-convo-2)
+                vi.advanceTimersByTime(31 * 60 * 1000);
+                await idleAdapter.HandleMessage(createMessage({ MessageID: 'i-4', ThreadID: 'dm-idle', IsDirectMessage: true, Text: 'turn 4' }));
+
+                expect(observedConvoIds).toEqual([undefined, 'idle-convo-1', 'idle-convo-1', undefined]);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('does not prematurely evict a rolling conversation whose ConversationIdleTimeoutMs exceeds 24 hours', async () => {
+            vi.useFakeTimers();
+            try {
+                vi.setSystemTime(new Date('2026-11-24T12:00:00.000Z'));
+
+                const { AgentRunner } = await import('@memberjunction/ai-agents');
+                const observedConvoIds: Array<string | undefined> = [];
+                let createdCount = 0;
+
+                vi.mocked(AgentRunner).mockImplementation(() => ({
+                    RunAgentInConversation: vi.fn().mockImplementation(
+                        async (_params: Record<string, unknown>, opts: { conversationId?: string }) => {
+                            observedConvoIds.push(opts.conversationId);
+                            return {
+                                agentResult: { success: true, agentRun: { Message: 'Ok.', Steps: [] } },
+                                conversationId: opts.conversationId ?? `long-convo-${++createdCount}`,
+                                userMessageDetailId: 'u-det',
+                                agentResponseDetailId: 'a-det',
+                                artifactInfo: undefined,
+                            };
+                        }
+                    ),
+                    FollowHandoffs: vi.fn().mockResolvedValue([]),
+                }) as ReturnType<typeof vi.fn>);
+
+                const longAdapter = new DBHistoryTestAdapter({
+                    ...defaultSettings,
+                    ConversationIdleTimeoutMs: 48 * 60 * 60 * 1000, // 48 hours
+                });
+                await longAdapter.Initialize();
+
+                // T=0: creates long-convo-1 for thread A
+                await longAdapter.HandleMessage(createMessage({ MessageID: 'l-1', ThreadID: 'dm-long-a', IsDirectMessage: true, Text: 'turn 1' }));
+
+                // T=30h (> 24h default TTL, < 48h configured timeout): another thread triggers evictExpiredThreadEntries()
+                vi.advanceTimersByTime(30 * 60 * 60 * 1000);
+                await longAdapter.HandleMessage(createMessage({ MessageID: 'l-b1', ThreadID: 'dm-long-b', IsDirectMessage: true, Text: 'other chat' }));
+
+                // Thread A must still reuse long-convo-1 (not evicted at 24h)
+                await longAdapter.HandleMessage(createMessage({ MessageID: 'l-2', ThreadID: 'dm-long-a', IsDirectMessage: true, Text: 'turn 2' }));
+
+                expect(observedConvoIds).toEqual([undefined, undefined, 'long-convo-1']);
+            } finally {
+                vi.useRealTimers();
+            }
         });
     });
 });

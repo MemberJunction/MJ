@@ -74,6 +74,7 @@
     "@memberjunction/integration-engine": "6.3.0-edge.2",
     "@memberjunction/integration-schema-builder": "6.3.0-edge.2",
     "@memberjunction/livekit-room-server": "6.3.0-edge.2",
+    "@memberjunction/messaging-adapters": "6.3.0-edge.2",
     "@memberjunction/metadata-sync": "6.3.0-edge.2",
     "@memberjunction/notifications": "6.3.0-edge.2",
     "@memberjunction/open-app-engine": "6.3.0-edge.2",

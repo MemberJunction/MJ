@@ -144,6 +144,7 @@ import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
 import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
+import { MessagingAdaptersChecks } from '../checks/messaging-adapters.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
 
@@ -352,6 +353,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 5], // ISP1-ISP5 live SQL native typing, key capping, Soft PK/FK/Organic Key auto-indexing, and ADD COLUMN descriptions (IT165)
         ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
+        ['messaging-adapters', MessagingAdaptersChecks, 6], // MA1-MA6 UserCache singleton integrity, fail-closed sender resolution, IsDirectlyDiscoverable, AllowedAgentIDs, and live RBAC on @mention & thread affinity (IT194)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -503,6 +505,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'livekit-room': 1,
         'materialized-entity-read': 2,
         'materialized-read': 3,
+        'messaging-adapters': 6,
         'metadata-consistency': 8,
         'metadata-payload-client': 3,
         'metadata-sync': 9,
@@ -714,7 +717,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(292);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(293);
     });
 });
 
@@ -967,6 +970,8 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'jsontype-live-sync.JL8',
         'jsontype-live-sync.JL9',
         'livekit-room.LKR1',
+        'messaging-adapters.MA5',
+        'messaging-adapters.MA6',
         'metadata-sync-push.MSP1',
         'metadata-sync-push.MSP10',
         'metadata-sync-push.MSP11',

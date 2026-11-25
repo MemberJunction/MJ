@@ -59,6 +59,21 @@ vi.mock('@memberjunction/generic-database-provider', () => {
     return { UserCache: MockUserCache };
 });
 
+vi.mock('@memberjunction/ai-engine-base', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('@memberjunction/ai-engine-base')>();
+    const mockInstance = {
+        Config: vi.fn().mockResolvedValue(undefined),
+        Agents: [{ ID: 'agent-guid-123', Name: 'Default Agent', Status: 'Active', InvocationMode: 'Top-Level', ParentID: null }],
+        AgentPermissions: [],
+    };
+    return {
+        ...orig,
+        AIEngineBase: {
+            get Instance() { return mockInstance; },
+        },
+    };
+});
+
 vi.mock('@memberjunction/ai-agents', () => ({
     AgentRunner: vi.fn().mockImplementation(() => ({
         RunAgent: vi.fn().mockResolvedValue({ success: true, payload: 'ok', agentRun: { Steps: [] } })
@@ -429,6 +444,36 @@ describe('SlackMessagingExtension', () => {
             const lines = vi.mocked(LogStatus).mock.calls.map((c) => String(c[0]));
             expect(lines.some((l) => l.startsWith('Slack slash command:'))).toBe(true);
             expect(lines.some((l) => /[\r\n]/.test(l))).toBe(false);
+        });
+
+        it('keeps slash-command ephemeral replies neutral without naming restricted agents before permission checks', async () => {
+            const app = createMockApp();
+            await extension.Initialize(app, createConfig({
+                SlashCommands: { '/secret': 'Secret Payroll Agent' },
+            }));
+            const handler = (extension as unknown as { handleSlashCommand: (req: Request, res: Response) => Promise<void> })
+                .handleSlashCommand.bind(extension);
+
+            // Unknown command must not enumerate configured agent names
+            const unknownRes = { json: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+            await handler(
+                { body: { command: '/nope', text: '', user_id: 'U1', user_name: 'bob', channel_id: 'C1' } } as unknown as Request,
+                unknownRes
+            );
+            expect(unknownRes.json).toHaveBeenCalledWith({
+                response_type: 'ephemeral',
+                text: 'Unknown command `/nope`.',
+            });
+
+            // Known command ack must not reveal the target agent name before HandleMessage authorizes the sender
+            const knownRes = { json: vi.fn(), status: vi.fn().mockReturnThis(), send: vi.fn() } as unknown as Response;
+            await handler(
+                { body: { command: '/secret', text: 'run', user_id: 'U1', user_name: 'bob', channel_id: 'C1' } } as unknown as Request,
+                knownRes
+            );
+            const ackPayload = vi.mocked(knownRes.json).mock.calls[0][0] as { text: string };
+            expect(ackPayload.text).not.toContain('Secret Payroll Agent');
+            expect(ackPayload.text).toContain('/secret');
         });
     });
 

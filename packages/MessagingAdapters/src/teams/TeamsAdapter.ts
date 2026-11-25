@@ -9,9 +9,10 @@
  * - Stripping bot `<at>` mentions from message text
  */
 
-import { TurnContext, ActivityTypes, Activity, ConversationReference } from 'botbuilder';
+import { TurnContext, ActivityTypes, Activity, ConversationReference, TeamsInfo } from 'botbuilder';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatus } from '@memberjunction/core';
+import { SanitizeForLog, UUIDSet } from '@memberjunction/global';
 import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { MarkdownToAdaptiveCard } from './teams-formatter.js';
@@ -51,6 +52,29 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     }
 
     /**
+     * Load multi-turn Teams history from MJ's own `MJ: Conversation Details` instead of
+     * calling Microsoft Graph `ChannelMessage.Read.All`.
+     */
+    protected override UsesMJConversationHistory(): boolean {
+        return true;
+    }
+
+    /**
+     * Teams DMs (`personal`), group chats (`groupChat`), and meeting chats share one
+     * `activity.conversation.id` indefinitely, so they roll over on idle (`ConversationIdleTimeoutMs`,
+     * default 2 hours). Channel threads (`channel`) carry a per-thread conversation ID and keep the
+     * 24-hour thread TTL.
+     */
+    protected override IsRollingConversation(message: IncomingMessage): boolean {
+        const activity = (message.RawEvent as Record<string, unknown> | undefined)?.['activity'] as Partial<Activity> | undefined;
+        const convType = activity?.conversation?.conversationType;
+        if (convType === 'channel') {
+            return false;
+        }
+        return true;
+    }
+
+    /**
      * Stored conversation references for proactive messaging.
      * Maps conversation ID to the reference needed to send proactive messages.
      * Entries are evicted after 24 hours to prevent unbounded growth.
@@ -80,8 +104,16 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         const conversationRef = TurnContext.getConversationReference(activity);
         this.storeConversationRef(activity.conversation?.id ?? '', conversationRef);
 
-        // Extract sender email from activity (available in Teams)
-        const senderEmail = (activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined;
+        // Extract sender email only for tenant-verified Microsoft Teams activities.
+        // Non-Teams Bot Framework channels (Web Chat, Emulator, Direct Line) do not carry
+        // an Entra-verified tenant and may pass client-controlled `from.email`, so they are
+        // not trusted for email-to-user identity mapping (dev/demo Web Chat can opt in via
+        // AllowFallbackUser: true).
+        const trustActivityEmail =
+            activity.channelId === 'msteams' && this.checkActivityTenant(turnContext).allowed;
+        const senderEmail = trustActivityEmail
+            ? ((activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined)
+            : undefined;
 
         return {
             MessageID: activity.id ?? '',
@@ -107,16 +139,61 @@ export class TeamsAdapter extends BaseMessagingAdapter {
         };
     }
 
+    /** Whether at least one trusted Entra tenant ID is configured for Teams tenant verification. */
+    public get HasConfiguredTenants(): boolean {
+        return this.getAllowedTenantIds().Size > 0;
+    }
+
     /**
-     * Initialize: set the bot ID from config or environment.
+     * Initialize: set the bot ID from config or environment and warn if no trusted Entra
+     * tenant ID is configured (since `msteams` activities fail closed without one).
      */
     protected async onInitialize(): Promise<void> {
         const settings = this.settings;
         this.botID = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
+        if (!this.HasConfiguredTenants) {
+            LogError(
+                'TeamsAdapter: neither MicrosoftAppTenantId (MICROSOFT_APP_TENANT_ID) nor AllowedTenantIDs is configured — ' +
+                'all Microsoft Teams messages will fail closed until at least one trusted Entra tenant ID is configured.'
+            );
+        }
     }
 
     protected getBotUserId(): string {
         return this.botID;
+    }
+
+    /**
+     * Enforce Entra ID tenant verification for Microsoft Teams activities before delegating
+     * to `BaseMessagingAdapter.HandleMessage`.
+     *
+     * Refuses (fails closed) any `msteams` activity (or any activity carrying a tenant ID)
+     * whose tenant is not `MicrosoftAppTenantId` or in `AllowedTenantIDs`, even if
+     * `AllowFallbackUser` is enabled.
+     */
+    public override async HandleMessage(message: IncomingMessage): Promise<void> {
+        const turnContext = (message.RawEvent as Record<string, unknown> | undefined)?.['turnContext'] as TurnContext | undefined;
+        const activity = turnContext?.activity ?? ((message.RawEvent as Record<string, unknown> | undefined)?.['activity'] as Partial<Activity> | undefined);
+        const isTeamsActivity =
+            message.ChannelID === 'msteams' ||
+            activity?.channelId === 'msteams' ||
+            this.extractActivityTenantId(activity) != null;
+
+        if (isTeamsActivity) {
+            const tenantCheck = this.checkActivityTenant(turnContext, activity);
+            if (!tenantCheck.allowed) {
+                LogStatus(
+                    `Teams: refusing message from sender '${SanitizeForLog(message.SenderID)}' (${tenantCheck.reason})`
+                );
+                if (this.defaultAgent && turnContext) {
+                    const refusal = await this.formatResponse(null, this.defaultAgent, 'This bot is not authorized for your tenant.');
+                    await this.sendFinalMessage(message, refusal);
+                }
+                return;
+            }
+        }
+
+        await super.HandleMessage(message);
     }
 
     /**
@@ -133,20 +210,14 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     /**
      * Fetch thread history from Teams.
      *
-     * NOTE: Not yet implemented. Requires Microsoft Graph API access with
-     * `ChannelMessage.Read.All` permission. Currently returns empty array,
-     * meaning conversations are single-turn.
-     *
-     * Future implementation would use:
-     * `GET /teams/{id}/channels/{id}/messages/{id}/replies`
+     * Returns `[]` — Teams multi-turn history is loaded from MJ's own
+     * `MJ: Conversation Details` via `UsesMJConversationHistory()`, avoiding the
+     * Microsoft Graph `ChannelMessage.Read.All` permission requirement.
      */
     protected async fetchThreadHistory(
         _channelId: string,
         _threadId: string
     ): Promise<IncomingMessage[]> {
-        // TODO: Implement via Microsoft Graph API
-        // GET /teams/{team-id}/channels/{channel-id}/messages/{message-id}/replies
-        // Requires Graph API client and ChannelMessage.Read.All permission
         return [];
     }
 
@@ -279,17 +350,169 @@ export class TeamsAdapter extends BaseMessagingAdapter {
     }
 
     /**
-     * Look up the email for a Teams user.
-     * In Teams, the email is often available directly on the activity's `from` property.
+     * Short-lived cache of Teams user ID → email resolved via `TeamsInfo.getMember`.
+     * Avoids a Bot Framework roster round-trip on every message while letting new MJ
+     * accounts take effect immediately (UserCache is still queried fresh per message).
+     */
+    private userEmailCache = new Map<string, { email: string; timestamp: number }>();
+    /** 5-minute TTL: avoids Bot Framework roster throttling on active chats while picking up UPN/email changes promptly. */
+    private static readonly USER_EMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
+    /** Memory-safety ceiling for the in-process roster cache (matches CONV_REF_MAX_SIZE); oldest entry is evicted FIFO when exceeded. */
+    private static readonly USER_EMAIL_CACHE_MAX_SIZE = 10_000;
+
+    /**
+     * Look up the email for a Teams user via `TeamsInfo.getMember`.
      *
-     * @param platformUserId - Teams user ID.
+     * Teams activities often omit `activity.from.email` and carry only `{ id, name, aadObjectId }`.
+     * Calling `TeamsInfo.getMember(turnContext, userId)` resolves `email` / `userPrincipalName`
+     * using the bot's existing Bot Framework token (no Microsoft Graph API permission required).
+     * Non-Teams channels (Web Chat, Emulator) return `null` cleanly.
+     *
+     * @param platformUserId - Teams user ID (`activity.from.id`).
+     * @param message - Incoming message whose `RawEvent.turnContext` provides the active turn.
      * @returns Email address, or `null` if not available.
      */
-    protected async lookupUserEmail(platformUserId: string): Promise<string | null> {
-        // Teams provides email in the activity `from` field for most message types
-        // The caller already extracted SenderEmail from the activity
-        // For additional lookups, Graph API would be needed
-        return null;
+    protected async lookupUserEmail(platformUserId: string, message?: IncomingMessage): Promise<string | null> {
+        if (!platformUserId) {
+            return null;
+        }
+
+        const turnContext = (message?.RawEvent as Record<string, unknown> | undefined)?.['turnContext'] as TurnContext | undefined;
+        if (!turnContext || turnContext.activity?.channelId !== 'msteams') {
+            return null;
+        }
+
+        const tenantCheck = this.checkActivityTenant(turnContext);
+        if (!tenantCheck.allowed || !tenantCheck.tenantId) {
+            LogStatus(
+                `Teams: refusing user email lookup for '${SanitizeForLog(platformUserId)}' (${tenantCheck.reason})`
+            );
+            return null;
+        }
+
+        const cacheKey = `${tenantCheck.tenantId.toLowerCase()}:${platformUserId}`;
+        const cached = this.getCachedUserEmail(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        try {
+            const member = await TeamsInfo.getMember(turnContext, platformUserId);
+            const memberTenantId = member?.tenantId?.trim();
+            if (memberTenantId && !this.getAllowedTenantIds().Has(memberTenantId)) {
+                LogStatus(
+                    `Teams: refusing member '${SanitizeForLog(platformUserId)}' from untrusted tenant`
+                );
+                return null;
+            }
+
+            const email = member?.email?.trim() || member?.userPrincipalName?.trim() || null;
+            if (email) {
+                this.storeCachedUserEmail(cacheKey, email);
+            }
+            return email;
+        } catch (error) {
+            LogStatus(`Teams user email lookup via TeamsInfo.getMember failed for '${SanitizeForLog(platformUserId)}'`);
+            LogError('TeamsInfo.getMember failed:', undefined, error);
+            return null;
+        }
+    }
+
+    /**
+     * Build the set of trusted Entra ID tenant IDs from `MicrosoftAppTenantId` (or
+     * `MICROSOFT_APP_TENANT_ID` env var) and `AllowedTenantIDs`.
+     */
+    private getAllowedTenantIds(): UUIDSet {
+        const allowed = new UUIDSet();
+        const primaryTenant = (this.settings.MicrosoftAppTenantId ?? process.env.MICROSOFT_APP_TENANT_ID ?? '').trim();
+        if (primaryTenant) {
+            allowed.Add(primaryTenant);
+        }
+        if (Array.isArray(this.settings.AllowedTenantIDs)) {
+            for (const tid of this.settings.AllowedTenantIDs) {
+                const trimmed = tid?.trim();
+                if (trimmed) {
+                    allowed.Add(trimmed);
+                }
+            }
+        }
+        return allowed;
+    }
+
+    /**
+     * Extract the Entra ID tenant ID from a Bot Framework activity (`conversation.tenantId`
+     * or `channelData.tenant.id`).
+     */
+    private extractActivityTenantId(activity?: Partial<Activity>): string | null {
+        const convTenant = activity?.conversation?.tenantId?.trim();
+        if (convTenant) {
+            return convTenant;
+        }
+        const channelData = activity?.channelData as { tenant?: { id?: string } } | undefined;
+        const cdTenant = channelData?.tenant?.id?.trim();
+        return cdTenant || null;
+    }
+
+    /**
+     * Verify that the activity's Entra tenant is explicitly allowed.
+     * Fails closed when no tenant is configured or the activity carries no matching tenant ID.
+     */
+    private checkActivityTenant(
+        turnContext?: TurnContext,
+        activityOverride?: Partial<Activity>
+    ): { allowed: boolean; tenantId: string | null; reason?: string } {
+        const allowedTenants = this.getAllowedTenantIds();
+        const activity = turnContext?.activity ?? activityOverride;
+        const tenantId = this.extractActivityTenantId(activity);
+
+        if (allowedTenants.Size === 0) {
+            return {
+                allowed: false,
+                tenantId,
+                reason: 'no MicrosoftAppTenantId or AllowedTenantIDs configured',
+            };
+        }
+        if (!tenantId) {
+            return {
+                allowed: false,
+                tenantId: null,
+                reason: 'activity is missing a tenant ID',
+            };
+        }
+        if (!allowedTenants.Has(tenantId)) {
+            return {
+                allowed: false,
+                tenantId,
+                reason: 'activity tenant is not in the configured allow-list',
+            };
+        }
+        return { allowed: true, tenantId };
+    }
+
+    private getCachedUserEmail(userId: string): string | null {
+        const entry = this.userEmailCache.get(userId);
+        if (!entry) return null;
+        if (Date.now() - entry.timestamp > TeamsAdapter.USER_EMAIL_CACHE_TTL_MS) {
+            this.userEmailCache.delete(userId);
+            return null;
+        }
+        return entry.email;
+    }
+
+    private storeCachedUserEmail(userId: string, email: string): void {
+        const now = Date.now();
+        this.userEmailCache.set(userId, { email, timestamp: now });
+        for (const [key, entry] of this.userEmailCache) {
+            if (now - entry.timestamp > TeamsAdapter.USER_EMAIL_CACHE_TTL_MS) {
+                this.userEmailCache.delete(key);
+            }
+        }
+        if (this.userEmailCache.size > TeamsAdapter.USER_EMAIL_CACHE_MAX_SIZE) {
+            const oldest = [...this.userEmailCache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+            for (const [key] of oldest.slice(0, oldest.length - TeamsAdapter.USER_EMAIL_CACHE_MAX_SIZE)) {
+                this.userEmailCache.delete(key);
+            }
+        }
     }
 
     /**
@@ -361,7 +584,11 @@ export class TeamsAdapter extends BaseMessagingAdapter {
             const messageText = `@${formResponse}`;
 
             // Build a synthetic IncomingMessage and route through the adapter
-            const senderEmail = (activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined;
+            const trustActivityEmail =
+                activity.channelId === 'msteams' && this.checkActivityTenant(turnContext).allowed;
+            const senderEmail = trustActivityEmail
+                ? ((activity.from as unknown as Record<string, unknown>)?.['email'] as string | undefined)
+                : undefined;
 
             // Store conversation reference for proactive messaging
             const conversationRef = TurnContext.getConversationReference(activity);
@@ -394,7 +621,7 @@ export class TeamsAdapter extends BaseMessagingAdapter {
                 IsBotMention: true,
                 MentionedAgentNames: formAgentName ? [formAgentName] : undefined,
                 Timestamp: activity.timestamp ? new Date(activity.timestamp) : new Date(),
-                RawEvent: { activity, turnContext } as unknown as Record<string, unknown>,
+                RawEvent: { activity, turnContext, type: 'form_submit' } as unknown as Record<string, unknown>,
             };
 
             await this.HandleMessage(incomingMessage);

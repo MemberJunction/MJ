@@ -90,10 +90,16 @@ export class TeamsMessagingExtension extends BaseServerExtension {
     async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
         try {
             const settings = config.Settings as unknown as MessagingAdapterSettings;
+            if (!settings.ExplorerBaseURL && process.env.MJ_EXPLORER_BASE_URL) {
+                settings.ExplorerBaseURL = process.env.MJ_EXPLORER_BASE_URL;
+            }
 
             const appId = settings.MicrosoftAppId ?? process.env.MICROSOFT_APP_ID ?? '';
             const appPassword = settings.MicrosoftAppPassword ?? process.env.MICROSOFT_APP_PASSWORD ?? '';
             const appTenantId = settings.MicrosoftAppTenantId ?? process.env.MICROSOFT_APP_TENANT_ID ?? '';
+            if (appTenantId && !settings.MicrosoftAppTenantId) {
+                settings.MicrosoftAppTenantId = appTenantId;
+            }
             const appType = settings.MicrosoftAppType ?? process.env.MICROSOFT_APP_TYPE ?? (appTenantId ? 'SingleTenant' : 'MultiTenant');
 
             // Pre-flight: skip silently if the extension is enabled but not actually
@@ -219,7 +225,8 @@ export class TeamsMessagingExtension extends BaseServerExtension {
             Name: 'TeamsMessagingExtension',
             Details: {
                 adapterInitialized: this.adapter !== null,
-                cloudAdapterInitialized: this.cloudAdapterInstance !== null
+                cloudAdapterInitialized: this.cloudAdapterInstance !== null,
+                tenantConfigured: this.adapter?.HasConfiguredTenants ?? false,
             }
         };
     }

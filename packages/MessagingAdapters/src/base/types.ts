@@ -53,10 +53,38 @@ export interface MessagingAdapterSettings {
     DefaultAgentName: string;
 
     /**
-     * Fallback MJ User email for agent execution when the platform user
-     * cannot be mapped to an MJ user. Acts as a service account.
+     * MJ User email for the adapter's service account, used during initialization
+     * (loading metadata and agent definitions).
+     *
+     * By default (`AllowFallbackUser` omitted or `false`), incoming messages whose
+     * sender email cannot be mapped to an active MJ user are refused rather than
+     * executed under this service account.
      */
     ContextUserEmail: string;
+
+    /**
+     * Allow unmapped platform senders (users whose email cannot be resolved or does
+     * not match an active MJ user) to execute agents under `ContextUserEmail`.
+     *
+     * Defaults to `false` (fail closed) so external guests or unlinked accounts
+     * cannot inherit the service account's permissions. Set `true` only for
+     * intentionally open dev/demo or public bots.
+     *
+     * @default false
+     */
+    AllowFallbackUser?: boolean;
+
+    /**
+     * Optional allow-list of MJ Agent IDs this adapter instance may route to
+     * (via `@mention`, thread affinity, slash commands, form submissions, and
+     * delegation/handoffs).
+     *
+     * When omitted, any active, directly-discoverable agent the calling user has
+     * view and run permission for may be invoked. When specified (including `[]`),
+     * only agents whose ID is in this list are reachable; `DefaultAgentName` must
+     * also belong to this list when set.
+     */
+    AllowedAgentIDs?: string[];
 
     /** Platform-specific bot token for API access. */
     BotToken: string;
@@ -79,6 +107,18 @@ export interface MessagingAdapterSettings {
      * @default 50
      */
     MaxThreadMessages?: number;
+
+    /**
+     * Idle timeout in milliseconds before a rolling conversation (DM, Teams group chat,
+     * or Teams meeting) automatically starts a fresh MJ Conversation.
+     *
+     * Measured from the most recent message activity (sliding window), so an active
+     * conversation never rolls over mid-session.
+     *
+     * Defaults to `7200000` (2 hours) for rolling conversations; explicit channel threads
+     * keep the 24-hour TTL unless this setting is configured to a shorter duration.
+     */
+    ConversationIdleTimeoutMs?: number;
 
     /**
      * Per-IP rate limit on the HTTP webhook routes (Slack events, interactivity and slash
@@ -153,9 +193,19 @@ export interface MessagingAdapterSettings {
 
     /**
      * Microsoft App Tenant ID for single-tenant Bot Framework authentication.
-     * Required when the Azure Bot is configured as Single Tenant.
+     * Required when the Azure Bot is configured as Single Tenant, and also acts
+     * as the default trusted Entra ID tenant for Microsoft Teams identity mapping.
+     * Falls back to `MICROSOFT_APP_TENANT_ID` env var.
      */
     MicrosoftAppTenantId?: string;
+
+    /**
+     * Explicit list of Entra ID (Azure AD) tenant IDs trusted by the Microsoft Teams adapter.
+     * On `msteams` channels, activities (and resolved roster members) whose tenant ID is not
+     * equal to `MicrosoftAppTenantId` or present in `AllowedTenantIDs` are refused before
+     * email-to-user mapping — failing closed when neither is configured.
+     */
+    AllowedTenantIDs?: string[];
 
     /**
      * Microsoft App Type: 'SingleTenant', 'MultiTenant', or 'UserAssignedMsi'.
