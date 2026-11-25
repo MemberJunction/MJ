@@ -98,6 +98,7 @@ export const TRIGGER_GLOBS = [
     'tsconfig*',
     'turbo.json',
     '.github/workflows/integration.yml',
+    '.github/actions/restore-sqlserver-db-snapshot/**',
     'scripts/codegen-idempotency-check.mjs',
     '.github/scripts/wait-for-mjapi.sh',
     '.github/scripts/check-fls-wire-bundles-ran.mjs',
