@@ -15,7 +15,6 @@ import {
     type RemoteOpResult,
     UserInfo,
     type RemoteOpServerContext,
-    type UserInfo,
 } from '@memberjunction/core';
 import { RemoteOperationEngineBase } from '@memberjunction/core-entities';
 import { DispatchRemoteOperationInProcess } from '@memberjunction/core';
@@ -38,6 +37,7 @@ interface TestOpOutput {
 class ContextEchoOperation extends BaseRemotableOperation<TestOpInput, TestOpOutput> {
     public readonly OperationKey = 'TestServer.ContextEcho';
     public override readonly ContractFingerprint = 'ro_fp_expected12345678';
+    public override readonly AllowScopeLimitedPrincipals = true;
 
     protected override async Authorize(
         _input: TestOpInput,

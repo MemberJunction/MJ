@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {
     extractTestPackages,
+    extractTestPackageCommands,
     planShards,
+    SPLIT_SERIAL_COST_FACTOR,
+    HEAVY_SUITE_SECONDS,
     loadWeights,
     parseArgs,
     readTurboTestPackages,
@@ -174,6 +177,145 @@ describe('planShards — balance', () => {
     });
 });
 
+describe('planShards — intra-package Vitest splitting', () => {
+    it('extractTestPackageCommands preserves raw test commands for split eligibility', () => {
+        const dry = {
+            tasks: [
+                { task: 'test', package: '@mj/vitest', command: 'vitest run' },
+                { task: 'test', package: '@mj/compound', command: 'vitest run && tsc -p tsconfig.rigs.json' },
+                { task: 'build', package: '@mj/vitest', command: 'tsc' },
+                { task: 'test', package: '@mj/none', command: '<NONEXISTENT>' },
+            ],
+        };
+        const cmds = extractTestPackageCommands(dry);
+        expect(cmds.get('@mj/vitest')).toBe('vitest run');
+        expect(cmds.get('@mj/compound')).toBe('vitest run && tsc -p tsconfig.rigs.json');
+        expect(cmds.has('@mj/none')).toBe(false);
+    });
+
+    it('splits a pure vitest run package above splitThresholdSeconds across shards', () => {
+        const commands = new Map([
+            ['@mj/mega', 'vitest run'],
+            ['@mj/small', 'vitest run'],
+        ]);
+        const shards = planShards(['@mj/mega', '@mj/small'], 4, {
+            packages: { '@mj/mega': 900, '@mj/small': 10 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 420,
+            commands,
+        });
+        // 903s / 420 = ceil(2.15) = 3 sub-shards
+        const allSplits = shards
+            .flatMap((s) => (s.splitPackages ? s.splitPackages.split(',') : []))
+            .sort();
+        expect(allSplits).toEqual(['@mj/mega:1/3', '@mj/mega:2/3', '@mj/mega:3/3']);
+        // @mj/mega must NOT also run as a whole package
+        expect(allPackages(shards)).toEqual(['@mj/small']);
+        // Sub-shards land on distinct runners
+        expect(shards.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('never splits compound test scripts where forwarding --shard would hit the wrong command', () => {
+        const commands = new Map([
+            ['@mj/compound', 'vitest run && tsc -p tsconfig.rigs.json'],
+            ['@mj/small', 'vitest run'],
+        ]);
+        const shards = planShards(['@mj/compound', '@mj/small'], 4, {
+            packages: { '@mj/compound': 900, '@mj/small': 10 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 420,
+            commands,
+        });
+        expect(shards.every((s) => s.splitPackages === undefined)).toBe(true);
+        expect(allPackages(shards).sort()).toEqual(['@mj/compound', '@mj/small']);
+    });
+
+    it('packs a split sub-shard above its share of the weight, because it runs alone after the concurrent block', () => {
+        const commands = new Map([
+            ['@mj/mega', 'vitest run'],
+            ['@mj/a', 'vitest run'],
+            ['@mj/b', 'vitest run'],
+        ]);
+        // mega: 797 + 3 overhead = 800 (> mean shard weight 700) → 2 halves of 400, each packed
+        // at 400 × 1.8 = 720. a, b: 297 + 3 = 300 each. 720 | 720, then one 300 onto each →
+        // 1020 | 1020. At face value the halves would pack as 400 and each shard would claim 700.
+        const shards = planShards(['@mj/mega', '@mj/a', '@mj/b'], 2, {
+            packages: { '@mj/mega': 797, '@mj/a': 297, '@mj/b': 297 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 700,
+            commands,
+        });
+        expect(SPLIT_SERIAL_COST_FACTOR).toBeGreaterThan(1);
+        expect(shards.map((s) => s.weight)).toEqual([1020, 1020]);
+        expect(shards.map((s) => s.splitPackages)).toEqual(['@mj/mega:1/2', '@mj/mega:2/2']);
+    });
+
+    it('keeps full-suite mega-packages unsplit when they fit below the mean shard weight, while splitting them on small scoped PRs', () => {
+        const table = loadWeights(WEIGHTS_PATH);
+        const allNames = Object.keys(table.packages);
+        const allCmds = new Map(allNames.map((p) => [p, 'vitest run']));
+
+        // Full-suite scope (~17,000s total → mean ~2,130s at 8 shards): ng-conversations (777s)
+        // and ai-agents (766s) are well below the mean shard weight, so they stay unsplit inside
+        // the concurrent block and every heavy Angular DOM suite lands on its own shard.
+        for (const shardCount of [6, 8]) {
+            const full = planShards(allNames, shardCount, {
+                ...table,
+                splitThresholdSeconds: 700,
+                commands: allCmds,
+            });
+            expect(full.every((s) => s.splitPackages === undefined)).toBe(true);
+        }
+
+        // Small scoped PR touching ng-conversations: 780s >> mean (~105s across 8 shards), so
+        // it splits into 1/2 and 2/2 across idle shards.
+        const scoped = planShards(['@memberjunction/ng-conversations', '@memberjunction/ng-shared'], 8, {
+            ...table,
+            splitThresholdSeconds: 700,
+            commands: allCmds,
+        });
+        const splits = scoped.flatMap((s) => (s.splitPackages ? s.splitPackages.split(',') : [])).sort();
+        expect(splits).toEqual(['@memberjunction/ng-conversations:1/2', '@memberjunction/ng-conversations:2/2']);
+    });
+
+    it('deals heavy whole suites out evenly instead of stacking them where weight alone would put them', () => {
+        // Two split halves (cost 1.8 × 400 = 720 each) fill shards 1 and 2 first. By weight alone,
+        // all three ~300s heavy suites would then pile into the empty shard 3 — the stacking that
+        // shut down a runner twice. Heavy suites go one per shard; split halves do not count.
+        const commands = new Map([
+            ['@mj/mega', 'vitest run'],
+            ['@mj/h1', 'vitest run'],
+            ['@mj/h2', 'vitest run'],
+            ['@mj/h3', 'vitest run'],
+        ]);
+        const shards = planShards(['@mj/mega', '@mj/h1', '@mj/h2', '@mj/h3'], 3, {
+            packages: { '@mj/mega': 797, '@mj/h1': 300, '@mj/h2': 299, '@mj/h3': 298 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 700,
+            commands,
+        });
+        expect(HEAVY_SUITE_SECONDS).toBeLessThanOrEqual(300);
+        expect(shards.map((s) => s.packages.split(',').filter(Boolean).length)).toEqual([1, 1, 1]);
+        expect(shards.map((s) => s.splitPackages ?? '')).toEqual(['@mj/mega:1/2', '@mj/mega:2/2', '']);
+    });
+
+    it('fans a single mega-package out across multiple shards when splitThresholdSeconds is set', () => {
+        const commands = new Map([['@mj/mega', 'vitest run']]);
+        const shards = planShards(['@mj/mega'], 4, {
+            packages: { '@mj/mega': 850 },
+            defaultSeconds: 4,
+            splitThresholdSeconds: 420,
+            commands,
+        });
+        expect(shards).toHaveLength(3);
+        expect(shards.map((s) => s.splitPackages).sort()).toEqual([
+            '@mj/mega:1/3',
+            '@mj/mega:2/3',
+            '@mj/mega:3/3',
+        ]);
+    });
+});
+
 describe('loadWeights', () => {
     it('reads the committed table', () => {
         const table = loadWeights(WEIGHTS_PATH);
@@ -308,6 +450,37 @@ describe('CLI end to end (real turbo graph)', () => {
     it('accepts a real turbo filter in the form the workflow passes it', () => {
         const out = runCli(['--turbo-args=--filter=@memberjunction/global']);
         expect(out).toMatch(/1 package\(s\) with a test task → 1 shard\(s\)/);
+    });
+
+    it('Vitest --shard=1/2 and --shard=2/2 partition a real package disjointly and completely', () => {
+        const pkgDir = join(REPO_ROOT, 'packages', 'SQLDialect');
+        const vitestBin = join(REPO_ROOT, 'node_modules', '.bin', 'vitest');
+        const all = execFileSync(vitestBin, ['list', '--filesOnly'], { cwd: pkgDir, encoding: 'utf8' })
+            .split('\n')
+            .map((l) => l.trim())
+            .filter((l) => l.endsWith('.test.ts') || l.endsWith('.spec.ts'))
+            .map((l) => join(pkgDir, l))
+            .sort();
+        const runShard = (shardSpec) => {
+            const raw = execFileSync(vitestBin, ['run', `--shard=${shardSpec}`, '--reporter=json'], {
+                cwd: pkgDir,
+                encoding: 'utf8',
+                maxBuffer: 32 * 1024 * 1024,
+            });
+            const report = JSON.parse(raw.slice(raw.indexOf('{')));
+            return report.testResults.map((r) => r.name).sort();
+        };
+
+        const half1 = runShard('1/2');
+        const half2 = runShard('2/2');
+        expect(all.length).toBeGreaterThan(5);
+        expect(half1.length).toBeGreaterThan(0);
+        expect(half2.length).toBeGreaterThan(0);
+        // Disjoint: no test file runs in both shards
+        const overlap = half1.filter((f) => half2.includes(f));
+        expect(overlap).toEqual([]);
+        // Complete: union equals the unsplit list
+        expect([...half1, ...half2].sort()).toEqual(all);
     });
 }, 120000);
 

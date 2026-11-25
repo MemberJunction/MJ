@@ -57,7 +57,8 @@ jobs:
     # runner, and it may start with a cold turbo cache (about 10 extra minutes of
     # build). At 60 a release gate was cancelled at the limit with every test still
     # passing. Sharding it the way test.yml does would bring this back down.
-    timeout-minutes: 90
+    # 150 since v6.3.0-edge.2 halved the test concurrency below (a cold full run is slower).
+    timeout-minutes: 150
     runs-on: ubuntu-latest
     env:
       TURBO_CACHE_DIR: .turbo/cache
@@ -141,8 +142,14 @@ jobs:
       - name: Spec type-check gate
         run: npx turbo run test:types
 
+      # --concurrency=2, not 4: this single runner runs the WHOLE suite, so the heavy packages
+      # (ai-agents, ng-conversations, ng-dashboards, ng-explorer-core) end up running together.
+      # At 4 they exhausted the 16 GB runner: hung tests, vitest 'Timeout calling "onTaskUpdate"',
+      # then "The runner has received a shutdown signal" (5 breakdowns across the v6.3.0-edge.1
+      # and edge.2 publishes; test.yml's note on exit 137 OOMs at concurrency 4 is the same cause).
+      # Sharding like test.yml would be the real fix; this keeps one runner inside its memory.
       - name: Run unit tests
-        run: npm test -- --concurrency=4
+        run: npm test -- --concurrency=2
 
   e2e:
     name: Playwright e2e (Explorer)

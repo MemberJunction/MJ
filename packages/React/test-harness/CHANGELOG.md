@@ -1,5 +1,78 @@
 # @memberjunction/react-test-harness
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- b550fbc: The test page's network is now an allowlist.
+  - Pages opened by `BrowserManager` may reach only the origins (scheme, host and port) of the core runtime CDN URLs and their fallbacks, and of registered Component Library CDN URLs (`CDNUrl`, `CDNCssUrl`), plus `allowedNetworkHosts`. A bare host name in `allowedNetworkHosts` allows that host on any port. Other requests are aborted, every WebSocket is closed, service workers are blocked, and WebRTC is removed from every frame. A context the harness creates also sends its traffic through an in-process allowlisting proxy (`AllowlistProxy`), which refuses what request routing never sees (Speculation Rules prefetches, WebRTC's TURN connections), and gets a context-wide route. A browser the harness launches also gets flags that send WebRTC only through that proxy and turn off DNS prefetching. A reused external context is not a sandbox: only the harness's own pages in it are routed.
+  - `NavigateTo(url)` lets the page it opens reach that URL's origin, and only that page. New `BrowserManager.AllowNetworkUrlsForPage(page, urls)` does the same for any page, and `ClosePage(page)` removes a page's routes before closing it.
+  - `ComponentExecutionResult.blockedNetworkRequests` lists blocked requests as origin + path (query strings dropped), and each one raises a medium `network-request-blocked` warning (`NETWORK_REQUEST_BLOCKED_RULE`). Warnings do not change `codeExecutionSuccess`. `proxyBlockedNetworkRequests` lists what the proxy refused during the run; no page is known for those, and they raise no warning.
+  - `networkAccess: 'unrestricted'` turns the filter off for local debugging. New exports: `NetworkAllowlist`, `NetworkAccessMode`, `HostOfUrl`, `RedactUrl`, `LibraryNetworkUrls`, `CoreRuntimeNetworkUrls`, `BROWSER_LAUNCH_ARGS`, `DISABLE_WEBRTC_SCRIPT`, `AllowlistProxy`; new `BrowserManager.AllowNetworkUrls()`, `GetBlockedRequests(page)` and `GetProxyBlockedRequests()`.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [3b2cd33]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [6757289]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core-entities-server@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/react-linter@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/react-runtime@6.3.0-edge.2
+  - @memberjunction/sql-parser@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

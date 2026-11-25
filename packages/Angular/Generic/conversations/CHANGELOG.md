@@ -1,5 +1,127 @@
 # @memberjunction/ng-conversations
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 3c70bf7: Add AssemblyAI's current voice stack as a realtime model. `AssemblyAIVoiceRealtime` runs STT 3.7 Realtime Agent, an LLM Gateway model and TTS-1 as one voice agent inside MJAPI, and replaces the Voice Agent API that AssemblyAI retires on February 1, 2027 (`AssemblyAIRealtime`, unchanged here). Set `AI_VENDOR_API_KEY__AssemblyAIVoiceRealtime` to use it. MJAPI's realtime proxy can now connect a browser to an upstream that runs inside the process (`RealtimeProxyIssueParams.OpenInProcess`), so such a driver needs no host of its own and the prompt, tools and key stay on the server.
+- c799eea: Epic 4a Slice 4: add Library `Shared with Me` and `Shared by Me` views displaying shared conversations (including `ParentID` side threads) and artifacts with owner Revoke actions, restrict conversation sharing UI strictly to owners with `ParentID` privacy indicators, verify direct `NavigationService` deep links with post-revocation access denial, and add unit/DOM + Playwright E2E coverage.
+- 96bf010: Add full-screen Present Mode with dual-window `BroadcastChannel` Presenter/Audience sync, progressive reveal steps, blackout/whiteout/laser/numeric-jump shortcuts, 5 new visual slide layouts (`KpiStrip`, `Timeline`, `BentoGrid`, `Quadrant`, `MetricComparison`), 8 designer theme presets, 1-click deterministic `BeautifySlide` ("Polish") + agent tools (`apply_design_preset`, `beautify_slide`, `list_design_options` with schema validation), canonical live-session channel tab ordering on resume with natural co-agent continuity, Docs/Sheets polish parity (YAML frontmatter cover strip + reading time, Sheets Freeze Panes menu, formula autocomplete, `SPARKLINE(...)` SVG inline cell rendering), calm single-row 40px progressive-disclosure toolbars with shared `Cmd/Ctrl+K` command palette across Docs/Sheets/Slides and floating slide design pill, passive focused-surface switch notes & all-channel `GetState()` snapshots, read-only `ContextTool` / `ArtifactWorkspace` peek (`get_workspace_state`, `get_state`), upfront artifact tool parameter schema validation, auto-returned document outline/blocks on missing `blockId`, and pre-display + runtime Media URL health checks.
+
+### Patch Changes
+
+- 4d51997: Add personal and shared AI Agent instances via multi-level prototype inheritance (`AIAgent.BaseAgentID`, `MaxDepth = 5`), `InstantiationMode` (`None | Optional | Required`), `AdditionalInstructions`, exclusive `IsPrimaryInstance` sibling sync, 2x2 RBAC with SQL Row-Level Security (`UserAccessibleAIAgents`), ancestor policy/limit ceiling intersection, unified text + Realtime voice personas with audience-aware tone framing, `Manage My Agent Instance` action, `LocalJsonCommunicationProvider` for local JSON-backed Email & Calendar testing, Frecency + FK-style Smart `@Mention` autocomplete, per-user Default Chat Agent (`chat.defaultAgentId`), and the unified **My Agents** Explorer application (`Overview`, `Agents`, `Agent Channels`).
+- c6b3913: Pre-freeze AI Agents improvements (Epics B, C, D, and post-`#6852` Epic E hardening):
+  - **Chief of Staff routing parity (Epic B):** Enabled `"enableHandoff": true` on Chief of Staff (`metadata/agents/.chief-of-staff-agent.json`), extracted Section 4 ("Agent Delegation") into a shared `{@include ../_includes/agent-delegation.md}` fragment parameterized by `{{ agentName }}` with zero hard-coded `"Sage"` references, included it in both Sage and Chief of Staff system prompts while keeping each agent's own sub-agents separate, and verified `BaseAgentID` prototype inheritance passes `enableHandoff` cleanly to derived instances.
+  - **Per-user default agent (Epic C):** Extended `DefaultAgentResolver` (`ResolveWithDetails` + `Resolve`) with per-user `UserInfoEngine` preference (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`) and automatic primary-instance (`IsPrimaryInstance = 1`) resolution for instantiable org/app default templates, validating `Active` status and full `BaseAgentID` ancestor `CanRun` permissions with graceful fallback and one-time non-blocking user notice. Added a "Default for new chats" toggle in `ConversationAgentPickerComponent` and unified Chat / My Agents default-agent settings and conversation-manager cache invalidation.
+  - **Remove hard-coded `'Sage'` assumptions (Epic D):** Updated `MemoryManagerAgent`, `LiveKitRoomResourceComponent`, Conversations UI (`conversation-chat-area`, `message-input`, `agent-handoff-card`, `agent-handoff-map`, `agent-turn-routing`, `realtime-*`), and `metadata/prompts/templates/sage/check-intent.template.md` (`{{ conversationManagerName }}`) to use the resolved conversation manager / default agent with neutral `'Assistant'` fallback, keeping `DefaultAgentResolver.FALLBACK_AGENT_NAME = 'Sage'` strictly as the last-resort safety net.
+  - **Post-`#6852` Agent Instances hardening (Epic E `E1`–`E5`):** Enforced `mj.config.cjs` (`MjConfig`) at the root ceiling of `LimitsConfigResolver` / `ResolveAgentRunLimits` so user policies can only narrow org ceilings unless an authorized admin override applies (`E2`/`F1`); resolved `Required` templates to the user's `IsPrimaryInstance = 1` across `AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage` and `UserRoutineDispatcherDriver` (`E1`); hid `"Set up My Chief of Staff"` / create CTAs in `MyAgentsSectionComponent` when the user lacks `CanCreate` on `MJ: AI Agents` (`E5`); and added unit tests covering `E1`–`E5` including derived-instance `ScopeCommonReach` / `SupportsAudience` enforcement and transitive ancestor `CanRun` validation.
+
+- 346cdf3: `ConversationAgentService` reads an agent's output artifact links from `MJ: Conversation Detail Artifacts` with its own `RunView` instead of a subquery over `[__mj].[vwConversationDetailArtifacts]`. MJ 6.2's `ClientClauseScreen` refused that subquery for any user whose read of conversation detail artifacts is row-filtered, so their follow-up turns lost the agent's previous output (`FindLatestAgentOutputVersion`, `FindAgentArtifacts` and the continuity intent check returned nothing). The intent check now calls the public `FindAgentArtifacts`, so a subclass override applies, and `FindArtifactVersionById` escapes its ID.
+- 8369c1c: Memory-leak audit Round 22 fixes.
+  - `AgentUserPolicyEngine` scopes per-request `IMetadataProvider` policy caches via a `WeakMap` (with O(1) generation-stamped pair invalidation across live providers) instead of stringifying per-request provider IDs into a singleton `Map` that pinned dead request providers.
+  - `BaseModelRunner` removes prompt runs from `_trackedPromptRunsById` deterministically in `_promptRunQueue.Settled(promptRun).finally(...)` as soon as each INSERT settles, so long-lived runners never accumulate prompt-run entities while keeping all concurrent in-flight parent runs tracked.
+  - `ArtifactCollaborationServer` removes entries from `CompactedVectorKeysByArtifact` when `CompactedStateVectors` evicts their last vector key instead of keeping orphan per-artifact entries for the life of the process.
+  - The Tasks view and message rows no longer restart their polling / elapsed-time intervals when a task load settles after the component is destroyed.
+
+- df69cd5: Improve mobile audio UX for realtime voice sessions: remove the 420px horizontal overflow floor on narrow viewports, scale the hero orb and banner for phone screens, clamp the microphone device menu inside the viewport, prevent iOS Safari focus zoom on picker/composer inputs, hide dead side-panel controls below 860px, and omit desktop-only side-panel channels (such as Whiteboard) on mobile with clear desktop-only context messaging so the co-agent explains why instead of reporting a permissions error.
+- 346795c: Tests only: widen tight wall-clock ceilings added since v6.3.0-edge.1 so the publish gate's single shared runner doesn't flake. Pathological-input checks get 2 s; the fast-judge early-return and microtask coalescing checks stay below the timings they prove (500 ms).
+- b7ee801: Only the user who started an agent run, or the owner of its conversation, can stop it.
+  - **The rule is enforced where the stop is saved.** `MJAIAgentRunEntityExtended.Save` refuses any unmarked save of an existing run with `Status = 'Cancelled'` (regardless of `CancellationReason` or client-supplied dirty flags) from any user other than the run's persisted starter (`UserID`) or the owner of its conversation (walking `ParentRunID` for child sub-agent runs; owner is the conversation's `UserID`, an Owner-level grant, or an inherited Owner-level folder grant: the same rule as Share), returning `false` with `StopRefusedMessage` in `LatestResult`. Already-cancelled rows in the database remain updatable, and trusted server-side cancellations (`BaseAgent.createCancelledResult`) authorize a single save via the non-field capability marker `MarkServerCancellation()`. Server-side only: on a client provider the server's own copy of the save runs the check. New: `MarkServerCancellation`, `IsStopRequest`, static `StopPermitted` (the rule, shared with the UI), `StopRefusedMessage`, `StopCheckFailedMessage`; `UserOwnsConversation` in core-entities beside `UserMayWriteConversation`.
+  - **The controls offer only what the rule allows.** In a shared conversation the composer's stop control and the per-reply Stop pill cover the runs the viewer started; the owner stops every run. While only other users' runs are in flight the slot stays Send and the status line says whose work it is ("Sage is working for another user", "2 agents working for other users"). A run whose starter cannot be told is treated as the viewer's own. New on the chat area: `CanStopAnyRun`, `CanStopDetail`, `StoppableDetailIds`, `StoppableCount`, `OthersInFlightCount`; the message list takes `StoppableDetailIds` and stamps `StopAllowed` on each item.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [a87fe90]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [60b406c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [1d4a3f0]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6e740d7]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [df69cd5]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [dccf367]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/conversations-runtime@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/ng-composer@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ng-artifacts@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/ai-realtime-client@6.3.0-edge.2
+  - @memberjunction/realtime-runtime@6.3.0-edge.2
+  - @memberjunction/ng-base-forms@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/ng-markdown@6.3.0-edge.2
+  - @memberjunction/ng-realtime-media@6.3.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.3.0-edge.2
+  - @memberjunction/ng-shared-generic@6.3.0-edge.2
+  - @memberjunction/ai-agent-client@6.3.0-edge.2
+  - @memberjunction/ng-forms@6.3.0-edge.2
+  - @memberjunction/ng-realtime-channels@6.3.0-edge.2
+  - @memberjunction/ng-tasks@6.3.0-edge.2
+  - @memberjunction/ng-user-routines@6.3.0-edge.2
+  - @memberjunction/ng-testing@6.3.0-edge.2
+  - @memberjunction/ng-base-types@6.3.0-edge.2
+  - @memberjunction/ng-code-editor@6.3.0-edge.2
+  - @memberjunction/ng-notifications@6.3.0-edge.2
+  - @memberjunction/ng-react@6.3.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.3.0-edge.2
+  - @memberjunction/ai-vectors-memory@6.3.0-edge.2
+  - @memberjunction/ng-container-directives@6.3.0-edge.2
+  - @memberjunction/ng-media-player@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+  - @memberjunction/ng-agent-client@6.3.0-edge.2
+  - @memberjunction/ng-whiteboard@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

@@ -135,6 +135,30 @@ export function VerifyTrackingSignature(
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * What an open-pixel signature signs in place of a click target. It is not an `http(s)` URL, so an
+ * open signature can never pass as a click signature for the same tracking token.
+ */
+const OPEN_PIXEL_SIGNATURE_SCOPE = 'open';
+
+/**
+ * Returns the `sig` parameter of an open-pixel URL: the hex HMAC-SHA256 of
+ * `trackingToken + ':open'`. With it the `/comms/open` route can tell a pixel this system issued
+ * from a guessed token without reading the database.
+ */
+export function ComputeOpenPixelSignature(trackingToken: string, secret: string): string {
+  return ComputeTrackingSignature(trackingToken, OPEN_PIXEL_SIGNATURE_SCOPE, secret);
+}
+
+/** Checks an open-pixel signature in constant time. */
+export function VerifyOpenPixelSignature(
+  trackingToken: string,
+  signature: string,
+  secret: string,
+): boolean {
+  return VerifyTrackingSignature(trackingToken, OPEN_PIXEL_SIGNATURE_SCOPE, signature, secret);
+}
+
 function buildCommsRouteUrl(baseUrl: string, subpath: string): string {
   let end = baseUrl.length;
   while (end > 0 && baseUrl.charCodeAt(end - 1) === 47) {
@@ -221,15 +245,18 @@ export function RewriteLinksForTracking(
 }
 
 /**
- * Adds the 1x1 open-tracking image (`<baseUrl>/comms/open/<trackingToken>.gif`) before `</body>`,
- * or at the end when there is no body tag.
+ * Adds the 1x1 open-tracking image (`<baseUrl>/comms/open/<trackingToken>.gif?sig=<signature>`)
+ * before `</body>`, or at the end when there is no body tag. The signature is left off when no
+ * `secret` is given; the route then has to look the token up before it records the open.
  */
 export function InjectOpenPixel(
   html: string,
   trackingToken: string,
   baseUrl: string = '',
+  secret: string = '',
 ): string {
-  const pixel = `<img src="${buildCommsRouteUrl(baseUrl, `/open/${trackingToken}.gif`)}" width="1" height="1" alt="" style="display:none;" />`;
+  const signature = secret ? `?sig=${ComputeOpenPixelSignature(trackingToken, secret)}` : '';
+  const pixel = `<img src="${buildCommsRouteUrl(baseUrl, `/open/${trackingToken}.gif`)}${signature}" width="1" height="1" alt="" style="display:none;" />`;
   if (/<\/body>/i.test(html)) {
     return html.replace(/<\/body>/i, () => `${pixel}</body>`);
   }
@@ -1113,7 +1140,7 @@ export class V2SendService {
     }
 
     if (hasHtml && obligations.AllowOpenPixel && envelope.TrackOpens !== false) {
-      html = InjectOpenPixel(html, trackingToken, baseUrl);
+      html = InjectOpenPixel(html, trackingToken, baseUrl, hmacSecret);
     }
 
     const headers: Record<string, string> = {

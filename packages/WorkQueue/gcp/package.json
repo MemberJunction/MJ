@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/work-queue-gcp",
   "type": "module",
-  "version": "6.3.0-edge.1",
+  "version": "6.3.0-edge.2",
   "description": "MemberJunction: Google Cloud Pub/Sub transport and Cloud Run HTTP push adapter for the durable work queue. No MemberJunction runtime dependencies.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -34,7 +34,7 @@
   "license": "BUSL-1.1",
   "dependencies": {
     "@google-cloud/pubsub": "^6.4.1",
-    "@memberjunction/work-queue-core": "6.3.0-edge.1"
+    "@memberjunction/work-queue-core": "6.3.0-edge.2"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

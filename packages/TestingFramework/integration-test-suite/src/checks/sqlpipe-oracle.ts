@@ -23,25 +23,34 @@ export interface DescribedColumn {
 
 /** Runs and describes oracle SQL, caching by text (the oracle data never changes during a run). */
 export class OracleRunner {
-    private readonly rows = new Map<string, Record<string, unknown>[]>();
-    private readonly described = new Map<string, DescribedColumn[]>();
+    private readonly rows = new Map<string, Promise<Record<string, unknown>[]>>();
+    private readonly described = new Map<string, Promise<DescribedColumn[]>>();
+    private probeCounter = 0;
 
     constructor(private readonly provider: DatabaseProviderBase, private readonly user: UserInfo, private readonly platform: DatabasePlatform) {}
 
-    async Rows(sql: string): Promise<Record<string, unknown>[]> {
+    Rows(sql: string): Promise<Record<string, unknown>[]> {
         const cached = this.rows.get(sql);
         if (cached) return cached;
-        const result = await this.provider.ExecuteSQL<Record<string, unknown>>(sql, undefined, { description: 'sqlpipe oracle' }, this.user);
-        this.rows.set(sql, result);
-        return result;
+        const pending = this.provider.ExecuteSQL<Record<string, unknown>>(sql, undefined, { description: 'sqlpipe oracle' }, this.user)
+            .catch((err: unknown) => {
+                this.rows.delete(sql);
+                throw err;
+            });
+        this.rows.set(sql, pending);
+        return pending;
     }
 
-    async Describe(sql: string): Promise<DescribedColumn[]> {
+    Describe(sql: string): Promise<DescribedColumn[]> {
         const cached = this.described.get(sql);
         if (cached) return cached;
-        const columns = this.platform === 'postgresql' ? await this.describePostgres(sql) : await this.describeSqlServer(sql);
-        this.described.set(sql, columns);
-        return columns;
+        const pending = (this.platform === 'postgresql' ? this.describePostgres(sql) : this.describeSqlServer(sql))
+            .catch((err: unknown) => {
+                this.described.delete(sql);
+                throw err;
+            });
+        this.described.set(sql, pending);
+        return pending;
     }
 
     private async describeSqlServer(sql: string): Promise<DescribedColumn[]> {
@@ -54,7 +63,7 @@ export class OracleRunner {
     }
 
     private async describePostgres(sql: string): Promise<DescribedColumn[]> {
-        const view = `${MOCK_SCHEMA}."zz_probe"`;
+        const view = `${MOCK_SCHEMA}."zz_probe_${++this.probeCounter}"`;
         await this.provider.ExecuteSQL(`DROP VIEW IF EXISTS ${view}`, undefined, undefined, this.user);
         await this.provider.ExecuteSQL(`CREATE VIEW ${view} AS ${sql}`, undefined, undefined, this.user);
         try {

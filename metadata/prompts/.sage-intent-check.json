@@ -64,12 +64,20 @@
           },
           "primaryKey": {
             "ID": "62B4A73E-C327-433D-9849-E8C454C423FA"
+          },
+          "sync": {
+            "lastModified": "2026-11-24T20:27:41.727Z",
+            "checksum": "678044bc528794ef1fbe0c708b488d8a5f0583e4ea828d9e33f0c7a66cd1757a"
           }
         }
       ]
     },
     "primaryKey": {
       "ID": "278E47C4-7D0C-46A7-B178-7C68D1DD9756"
+    },
+    "sync": {
+      "lastModified": "2026-11-24T20:27:41.713Z",
+      "checksum": "07d3c64983a9afc55ea5fdd1be97a7e0376701ac17ee430f25d7702c747141b4"
     }
   }
 ]

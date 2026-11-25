@@ -268,6 +268,17 @@ interface BenchmarkFixture {
 
 let benchmarkFixture: BenchmarkFixture | undefined;
 
+/**
+ * True when compiled COUNT SQL reads the RecordChange base table rather than its view, on either
+ * dialect: SQL Server brackets identifiers (`[RecordChange]`), PostgreSQL double-quotes them
+ * (`"RecordChange"`).
+ */
+function targetsRecordChangeBaseTable(sql: string): boolean {
+    const readsBase = sql.includes('[RecordChange]') || sql.includes('"RecordChange"');
+    const readsView = sql.includes('[vwRecordChanges]') || sql.includes('"vwRecordChanges"');
+    return readsBase && !readsView;
+}
+
 function requireFixture(): BenchmarkFixture {
     if (!benchmarkFixture) {
         throw new Error(`${BUNDLE} fixture not initialized — lifecycle Setup must run first.`);
@@ -555,6 +566,10 @@ async function runDeterministicScriptedAgent(
             agent,
             conversationMessages: UserTurn(userMessage),
             payload: initialPayload,
+            // Disable agent-side decision calls (e.g., Sage's decisionDiscovery) while TestLLM is
+            // registered across chat drivers: otherwise LLMDecision's internal chat prompt steals
+            // Reply #1 from this run's scripted FIFO queue, cutting PB7 from 4 Prompt steps to 3.
+            data: { __agentTypePromptParams: { decisionsEnabled: false } },
             apiKeys: SCRIPTED_API_KEYS,
             CredentialScope: 'RuntimeOnly',
         });
@@ -1919,7 +1934,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
 
             const normalizedCountSql = countSqlCaptured.replace(/\s+/g, ' ').trim();
             const targetsBaseTable =
-                normalizedCountSql.includes('[RecordChange]') && !normalizedCountSql.includes('[vwRecordChanges]');
+                targetsRecordChangeBaseTable(normalizedCountSql);
             fx.Primitives.RecordChangesCountTargetsBaseTable = targetsBaseTable;
             fx.Primitives.RecordChangesCountSql = normalizedCountSql;
 
@@ -2894,7 +2909,7 @@ export const PerformanceBenchmarkChecks: NamedCheck[] = [
             const existsCountMs = Number((performance.now() - tExists0).toFixed(2));
             const normalizedExistsSql = existsCountSql.replace(/\s+/g, ' ').trim();
             const existsTargetsBaseTable =
-                normalizedExistsSql.includes('[RecordChange]') && !normalizedExistsSql.includes('[vwRecordChanges]');
+                targetsRecordChangeBaseTable(normalizedExistsSql);
 
             Assert(
                 existsTargetsBaseTable,

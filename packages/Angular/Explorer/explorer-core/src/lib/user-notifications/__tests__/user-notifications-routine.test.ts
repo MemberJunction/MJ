@@ -6,6 +6,13 @@ import { EntityInfo } from '@memberjunction/core';
 import { MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { ClassifyNotificationMessage, StripNotificationMarkdown, UserNotificationsComponent } from '../user-notifications.component';
 
+/**
+ * Wall-clock ceiling for the pathological-input check. It guards against catastrophic or polynomial
+ * backtracking (seconds), not machine speed: tight millisecond bounds fail on shared CI runners
+ * (v6.3.0-edge.0's publish gate failed one at 211 ms vs 200 ms).
+ */
+const PATHOLOGICAL_INPUT_CEILING_MS = 2000;
+
 function createNotificationEntity(id: string, title: string, message: string): MJUserNotificationEntity {
   const info = new EntityInfo({
     Name: 'MJ: User Notifications',
@@ -212,7 +219,7 @@ describe('ClassifyNotificationMessage & StripNotificationMarkdown — routine & 
 
       expect(classified.Kind).toBe('text');
       expect(stripped).toBe(input);
-      expect(elapsedMs).toBeLessThan(100);
+      expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
     }
   });
 

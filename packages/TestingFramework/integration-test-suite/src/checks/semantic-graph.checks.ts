@@ -295,7 +295,7 @@ async function checkSg2PhysicalConstraints(ctx: IntegrationCheckContext): Promis
                   FROM pg_constraint con
                   JOIN pg_namespace nsp ON nsp.oid = con.connamespace
                  WHERE nsp.nspname = '__mj'
-                   AND con.conname IN (${expectedConstraints.map((c) => `'${c.toLowerCase()}'`).join(', ')})
+                   AND lower(con.conname) IN (${expectedConstraints.map((c) => `'${c.toLowerCase()}'`).join(', ')})
             `);
             foundLower = new Set(rows.map((r) => String(r.name).toLowerCase()));
         } else {

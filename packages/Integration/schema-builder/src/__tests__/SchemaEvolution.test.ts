@@ -201,7 +201,7 @@ describe('SchemaEvolution', () => {
             expect(snapshotCol?.Description).toBe(STANDARD_COLUMN_DESCRIPTIONS['__mj_integration_LastSyncedSnapshot']);
             const ssSql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
             expect(ssSql).toContain('sp_addextendedproperty');
-            expect(ssSql).toContain("@level2name = '__mj_integration_LastSyncedSnapshot'");
+            expect(ssSql).toContain("@level2name = N'__mj_integration_LastSyncedSnapshot'");
 
             const pgDiff = evo.DiffSchema(MakeSourceObject(), target, existing, 'postgresql');
             const pgSql = evo.GenerateEvolutionMigration(pgDiff, 'hubspot', 'Contact', 'postgresql');
@@ -302,7 +302,7 @@ describe('SchemaEvolution', () => {
             const ssSql = evo.GenerateEvolutionMigration(diff, 'hubspot', 'Contact', 'sqlserver');
             expect(ssSql).toContain('sp_addextendedproperty');
             expect(ssSql).toContain("@value = N'Primary business phone number'");
-            expect(ssSql).toContain("@level2name = 'Phone'");
+            expect(ssSql).toContain("@level2name = N'Phone'");
 
             const pgDiff = {
                 ...diff,

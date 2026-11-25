@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-public-host",
-  "version": "6.3.0-edge.1",
+  "version": "6.3.0-edge.2",
   "description": "MemberJunction: Hosts public pages from Open Apps that visitors open before sign-in, and the main.ts hook that starts them.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,7 +27,7 @@
   "author": "",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/theme-engine": "6.3.0-edge.1",
+    "@memberjunction/theme-engine": "6.3.0-edge.2",
     "tslib": "^2.8.1"
   },
   "peerDependencies": {

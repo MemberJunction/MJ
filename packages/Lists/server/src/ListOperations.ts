@@ -9,7 +9,7 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJListDetailEntity, MJListEntity, MJUserRoutineEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 
 import {
   ComputeSourceSignature,
@@ -54,6 +54,33 @@ type NewListLineage =
       refreshMode: ListRefreshMode;
       autoRefresh: boolean;
     };
+
+/** A list member to insert: its record ID, its position in the list and, optionally, its status. */
+interface ListMemberSeed {
+  recordId: string;
+  sequence: number;
+  status?: MJListDetailEntity['Status'];
+}
+
+/** Options for {@link ListOperations.AddRecordsToList}. */
+export interface AddRecordsToListOptions {
+  /** Status of the new members. Without it the database default applies. */
+  Status?: MJListDetailEntity['Status'];
+  /** When true, each new member's `Sequence` is its zero-based position in the input. Otherwise 0. */
+  SequenceFromOrder?: boolean;
+}
+
+/** What a bulk member write did. `updated` is set only by operations that change existing members. */
+interface MemberWriteOutcome {
+  added: number;
+  removed: number;
+  updated?: number;
+  failed: number;
+  errors: string[];
+}
+
+/** A list loaded for a bulk member operation, or the result to return when it can't be used. */
+type LoadedList = { ok: true; list: MJListEntity } | { ok: false; failure: ApplyResult };
 
 /**
  * A provider that screens client SQL clauses (GenericDatabaseProvider does, as
@@ -599,6 +626,133 @@ export class ListOperations {
     return this.ApplyDelta(delta, { ConfirmDrops: false, DeltaToken: delta.DeltaToken });
   }
 
+  /**
+   * Adds records to a list. Records the list already holds are skipped and are not failures, and
+   * a record given twice is added once. `recordIds` are in `MJ: List Details.RecordID` form.
+   * `Counts.Added` is the number of rows inserted. A missing list returns `TARGET_NOT_FOUND`.
+   * `opts` sets the status and the sequence of the new members.
+   */
+  public async AddRecordsToList(
+    listId: string,
+    recordIds: readonly string[],
+    opts: AddRecordsToListOptions = {},
+  ): Promise<ApplyResult> {
+    const invalid = opts.Status ? this.checkDetailStatus(opts.Status) : null;
+    if (invalid) return invalid;
+    const target = await this.loadEditableList(listId);
+    if (!target.ok) return target.failure;
+    const seeds = this.uniqueRecordIds(recordIds).map((recordId, index) => ({
+      recordId,
+      sequence: opts.SequenceFromOrder ? index : 0,
+      status: opts.Status,
+    }));
+    const outcome = await this.addMissingMemberSeeds(listId, seeds);
+    return this.memberWriteResult(listId, outcome);
+  }
+
+  /**
+   * Removes records from a list. Records the list does not hold are ignored. `Counts.Removed` is
+   * the number of rows deleted. A missing list returns `TARGET_NOT_FOUND`.
+   */
+  public async RemoveRecordsFromList(listId: string, recordIds: readonly string[]): Promise<ApplyResult> {
+    const target = await this.loadEditableList(listId);
+    if (!target.ok) return target.failure;
+    const removal = await this.removeDeltaRecords(listId, this.uniqueRecordIds(recordIds));
+    return this.memberWriteResult(listId, { added: 0, removed: removal.removed, failed: removal.errors.length, errors: removal.errors });
+  }
+
+  /**
+   * Creates a plain list (no source, never refreshes) owned by the acting user, with the source
+   * list's description, entity and category, and copies every member with its `Sequence`. The
+   * name is `opts.ListName`, or the source name followed by " (Copy)". `CreatedListId` and
+   * `TargetListId` are the new list. A missing source list returns `TARGET_NOT_FOUND`.
+   */
+  public async DuplicateList(listId: string, opts: { ListName?: string } = {}): Promise<ApplyResult> {
+    const source = await this.loadList(listId);
+    if (!source.ok) return source.failure;
+    const members = await this.loadMemberSeeds(listId);
+    if (!members.ok) return members.failure;
+
+    const created = await this.createListWithLineage({
+      entityId: source.list.EntityID,
+      opts: {
+        ListName: opts.ListName?.trim() || `${source.list.Name} (Copy)`,
+        Description: source.list.Description ?? undefined,
+        CategoryId: source.list.CategoryID ?? undefined,
+      },
+      lineage: null,
+    });
+    if (!created.ok) return created.failure;
+
+    const inserted = await this.insertListMemberSeeds(created.listId, members.seeds);
+    return { ...this.memberWriteResult(created.listId, { ...inserted, removed: 0 }), CreatedListId: created.listId };
+  }
+
+  /**
+   * Adds records to the target list the same way as {@link AddRecordsToList}. With
+   * `RemoveFromSource`, the records are then removed from the source list, but only when every add
+   * succeeded: after a failed add nothing is removed and the result is `PARTIAL_SUCCESS`. A failed
+   * removal also gives `PARTIAL_SUCCESS`; `Message` says which of the two happened. Both
+   * lists must exist (`TARGET_NOT_FOUND`), be different lists and hold the same entity.
+   * `TargetListId` is the target list.
+   */
+  public async CopyRecordsToList(
+    sourceListId: string,
+    targetListId: string,
+    recordIds: readonly string[],
+    opts: { RemoveFromSource: boolean },
+  ): Promise<ApplyResult> {
+    const refusal = await this.checkCopyLists(sourceListId, targetListId);
+    if (refusal) return refusal;
+
+    const unique = this.uniqueRecordIds(recordIds);
+    const added = await this.addMissingMembers(targetListId, unique);
+    if (!opts.RemoveFromSource) return this.memberWriteResult(targetListId, added);
+    if (added.failed > 0) {
+      const result = this.memberWriteResult(targetListId, added);
+      return { ...result, Message: `Added ${added.added} member(s), ${added.failed} failed; nothing was removed from the source list` };
+    }
+
+    const removal = await this.removeDeltaRecords(sourceListId, unique);
+    const result = this.memberWriteResult(targetListId, {
+      ...added,
+      removed: removal.removed,
+      failed: removal.errors.length,
+      errors: removal.errors,
+    });
+    if (removal.errors.length === 0) return result;
+    return {
+      ...result,
+      Message: `Added ${added.added} member(s) to the target list; removed ${removal.removed}, ${removal.errors.length} could not be removed from the source list`,
+    };
+  }
+
+  /**
+   * Sets `Status` on the list's members for the given records. The status must be one of the
+   * `MJ: List Details.Status` values in metadata, or the result is `UNEXPECTED_ERROR` and nothing
+   * changes. `Counts.Updated` is the number of rows saved. A missing list returns `TARGET_NOT_FOUND`.
+   */
+  public async SetRecordStatus(
+    listId: string,
+    recordIds: readonly string[],
+    status: MJListDetailEntity['Status'],
+  ): Promise<ApplyResult> {
+    const invalid = this.checkDetailStatus(status);
+    if (invalid) return invalid;
+    const target = await this.loadEditableList(listId);
+    if (!target.ok) return target.failure;
+
+    const lookup = await this.loadMemberRows(listId, this.uniqueRecordIds(recordIds));
+    const saved = await this.saveMemberStatus(listId, lookup.rows, status);
+    return this.memberWriteResult(listId, {
+      added: 0,
+      removed: 0,
+      updated: saved.updated,
+      failed: saved.errors.length + lookup.errors.length,
+      errors: [...lookup.errors, ...saved.errors],
+    });
+  }
+
   // --- private helpers --------------------------------------------------
 
   private async resolveListSource(listId: string): Promise<ResolvedRecordSet> {
@@ -974,10 +1128,10 @@ export class ListOperations {
     }
 
     if (delta.ToRemove.length > 0) {
-      const removalErrors = await this.removeDeltaRecords(delta.TargetListId!, delta.ToRemove);
-      removed = delta.ToRemove.length - removalErrors.length;
-      failed += removalErrors.length;
-      errors.push(...removalErrors);
+      const removal = await this.removeDeltaRecords(delta.TargetListId!, delta.ToRemove);
+      removed = removal.removed;
+      failed += removal.errors.length;
+      errors.push(...removal.errors);
     }
 
     const success = failed === 0;
@@ -1000,34 +1154,222 @@ export class ListOperations {
   }
 
   /**
-   * Locate and delete the `MJ: List Details` rows that map to the given
-   * record IDs. We scope the lookup to a single `ListID` so a bad RecordID
-   * value can't accidentally drop rows from other lists.
+   * Deletes the `MJ: List Details` rows of one list for the given record IDs. The lookup is scoped
+   * to that `ListID`, so a bad RecordID can't drop rows from another list. Record IDs the list
+   * does not hold are not counted.
    */
-  private async removeDeltaRecords(targetListId: string, recordIds: string[]): Promise<string[]> {
-    if (recordIds.length === 0) return [];
-    const rv = this.runView();
-    const filterIds = recordIds.map((id) => `'${id.replace(/'/g, "''")}'`).join(',');
-    const result = await rv.RunView<MJListDetailEntity>({
-      EntityName: 'MJ: List Details',
-      ExtraFilter: `ListID='${targetListId}' AND RecordID IN (${filterIds})`,
-      ResultType: 'entity_object',
-    }, this.contextUser);
+  private async removeDeltaRecords(
+    targetListId: string,
+    recordIds: readonly string[],
+  ): Promise<{ removed: number; errors: string[] }> {
+    const lookup = await this.loadMemberRows(targetListId, recordIds);
+    const errors = [...lookup.errors];
+    let removed = 0;
 
-    const errors: string[] = [];
-    if (!result.Success) {
-      return recordIds.map((id) => `Lookup failed for '${id}': ${result.ErrorMessage}`);
-    }
-
-    await this.forEachConcurrent(result.Results ?? [], ListOperations.WRITE_CONCURRENCY, async (detail) => {
-      const ok = await detail.Delete();
-      if (!ok) {
-        const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
-        errors.push(`Failed to remove '${detail.RecordID}': ${msg}`);
-        LogError(`ApplyDelta remove failed for list ${targetListId} record ${detail.RecordID}: ${msg}`);
+    await this.forEachConcurrent(lookup.rows, ListOperations.WRITE_CONCURRENCY, async (detail) => {
+      if (await detail.Delete()) {
+        removed++;
+        return;
       }
+      const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
+      errors.push(`Failed to remove '${detail.RecordID}': ${msg}`);
+      LogError(`List member remove failed for list ${targetListId} record ${detail.RecordID}: ${msg}`);
     });
-    return errors;
+    return { removed, errors };
+  }
+
+  /**
+   * Loads the `MJ: List Details` rows of one list for the given record IDs, as entity objects.
+   * The IDs are looked up {@link LOOKUP_CHUNK_SIZE} at a time. A failed lookup reports one error
+   * per record ID in that chunk.
+   */
+  private async loadMemberRows(
+    listId: string,
+    recordIds: readonly string[],
+  ): Promise<{ rows: MJListDetailEntity[]; errors: string[] }> {
+    const rows: MJListDetailEntity[] = [];
+    const errors: string[] = [];
+    for (const chunk of this.chunk(recordIds, ListOperations.LOOKUP_CHUNK_SIZE)) {
+      const result = await this.runView().RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
+        ExtraFilter: this.memberFilter(listId, chunk),
+        ResultType: 'entity_object',
+      }, this.contextUser);
+      if (result.Success) rows.push(...(result.Results ?? []));
+      else errors.push(...chunk.map((id) => `Lookup failed for '${id}': ${result.ErrorMessage}`));
+    }
+    return { rows, errors };
+  }
+
+  /**
+   * The record IDs, of those given, that the list already holds. `unchecked` holds the IDs whose
+   * lookup failed, so a caller can leave them alone rather than risk a duplicate.
+   */
+  private async findMemberRecordIds(
+    listId: string,
+    recordIds: readonly string[],
+  ): Promise<{ present: UUIDSet; unchecked: UUIDSet; errors: string[] }> {
+    const present = new UUIDSet();
+    const unchecked = new UUIDSet();
+    const errors: string[] = [];
+    for (const chunk of this.chunk(recordIds, ListOperations.LOOKUP_CHUNK_SIZE)) {
+      const result = await this.runView().RunView<{ RecordID: string }>({
+        EntityName: 'MJ: List Details',
+        ExtraFilter: this.memberFilter(listId, chunk),
+        Fields: ['RecordID'],
+        ResultType: 'simple',
+      }, this.contextUser);
+      if (result.Success) {
+        for (const row of result.Results ?? []) present.Add(row.RecordID);
+      } else {
+        for (const id of chunk) unchecked.Add(id);
+        errors.push(...chunk.map((id) => `Lookup failed for '${id}': ${result.ErrorMessage}`));
+      }
+    }
+    return { present, unchecked, errors };
+  }
+
+  /** `ListID = <list> AND RecordID IN (<ids>)`, with every value escaped. */
+  private memberFilter(listId: string, recordIds: readonly string[]): string {
+    const ids = recordIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    return `ListID='${EscapeSQLString(listId)}' AND RecordID IN (${ids})`;
+  }
+
+  /** Inserts the given records the list does not hold yet. Records it holds are not failures. */
+  private async addMissingMembers(listId: string, recordIds: readonly string[]): Promise<MemberWriteOutcome> {
+    return this.addMissingMemberSeeds(listId, recordIds.map((recordId) => ({ recordId, sequence: 0 })));
+  }
+
+  /** {@link addMissingMembers} with a `Sequence` and an optional status for each member. */
+  private async addMissingMemberSeeds(listId: string, seeds: readonly ListMemberSeed[]): Promise<MemberWriteOutcome> {
+    const existing = await this.findMemberRecordIds(listId, seeds.map((seed) => seed.recordId));
+    const missing = seeds.filter((seed) => !existing.present.Has(seed.recordId) && !existing.unchecked.Has(seed.recordId));
+    const inserted = await this.insertListMemberSeeds(listId, missing);
+    return {
+      added: inserted.added,
+      removed: 0,
+      failed: inserted.failed + existing.unchecked.Size,
+      errors: [...existing.errors, ...inserted.errors],
+    };
+  }
+
+  /** Every member of a list with its `Sequence`, in `Sequence` order. */
+  private async loadMemberSeeds(
+    listId: string,
+  ): Promise<{ ok: true; seeds: ListMemberSeed[] } | { ok: false; failure: ApplyResult }> {
+    const result = await this.runView().RunView<{ RecordID: string; Sequence: number }>({
+      EntityName: 'MJ: List Details',
+      ExtraFilter: `ListID='${EscapeSQLString(listId)}'`,
+      Fields: ['RecordID', 'Sequence'],
+      OrderBy: 'Sequence',
+      ResultType: 'simple',
+    }, this.contextUser);
+    if (!result.Success) {
+      return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Failed to load the members of list '${listId}': ${result.ErrorMessage}`) };
+    }
+    return { ok: true, seeds: (result.Results ?? []).map((row) => ({ recordId: row.RecordID, sequence: row.Sequence })) };
+  }
+
+  /** Sets `Status` on each row and saves it. */
+  private async saveMemberStatus(
+    listId: string,
+    rows: readonly MJListDetailEntity[],
+    status: MJListDetailEntity['Status'],
+  ): Promise<{ updated: number; errors: string[] }> {
+    let updated = 0;
+    const errors: string[] = [];
+    await this.forEachConcurrent(rows, ListOperations.WRITE_CONCURRENCY, async (detail) => {
+      detail.Status = status;
+      if (await detail.Save()) {
+        updated++;
+        return;
+      }
+      const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
+      errors.push(`Failed to update '${detail.RecordID}': ${msg}`);
+      LogError(`List member status update failed for list ${listId} record ${detail.RecordID}: ${msg}`);
+    });
+    return { updated, errors };
+  }
+
+  /** Null when the status is one of the `MJ: List Details.Status` values in metadata, else the failure. */
+  private checkDetailStatus(status: string): ApplyResult | null {
+    const field = this.metadata().EntityByName('MJ: List Details')?.Fields.find((f) => f.Name === 'Status');
+    const allowed = field?.EntityFieldValues.map((v) => v.Value) ?? [];
+    if (allowed.includes(status)) return null;
+    return this.failure('UNEXPECTED_ERROR', `'${status}' is not a valid list member status. Allowed values: ${allowed.join(', ')}`);
+  }
+
+  /** Loads a list. A missing list is `TARGET_NOT_FOUND`. */
+  private async loadList(listId: string): Promise<LoadedList> {
+    const list = await this.metadata().GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
+    if (!(await list.Load(listId))) {
+      return { ok: false, failure: this.failure('TARGET_NOT_FOUND', `List '${listId}' not found`) };
+    }
+    return { ok: true, list };
+  }
+
+  /** Loads a list whose members the acting user is about to change. */
+  private async loadEditableList(listId: string): Promise<LoadedList> {
+    const loaded = await this.loadList(listId);
+    if (!loaded.ok) return loaded;
+    const permission = await this.checkEditorPermission(listId);
+    return permission.ok ? loaded : permission;
+  }
+
+  /** Null when both lists exist, can be edited, are different lists and hold the same entity; else the failure. */
+  private async checkCopyLists(sourceListId: string, targetListId: string): Promise<ApplyResult | null> {
+    if (UUIDsEqual(sourceListId, targetListId)) {
+      return this.failure('UNEXPECTED_ERROR', 'The source and target lists are the same list.');
+    }
+    const source = await this.loadEditableList(sourceListId);
+    if (!source.ok) return source.failure;
+    const target = await this.loadEditableList(targetListId);
+    if (!target.ok) return target.failure;
+    if (!UUIDsEqual(source.list.EntityID, target.list.EntityID)) {
+      return this.failure('UNEXPECTED_ERROR', `Lists '${source.list.Name}' and '${target.list.Name}' hold different entities.`);
+    }
+    return null;
+  }
+
+  /** The record IDs with repeats removed, first occurrence kept, compared case-insensitively. */
+  private uniqueRecordIds(recordIds: readonly string[]): string[] {
+    const seen = new UUIDSet();
+    const unique: string[] = [];
+    for (const id of recordIds) {
+      if (!id || seen.Has(id)) continue;
+      seen.Add(id);
+      unique.push(id);
+    }
+    return unique;
+  }
+
+  /** `items` split into arrays of at most `size`. */
+  private chunk<T>(items: readonly T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+    return chunks;
+  }
+
+  /** The `ApplyResult` of a bulk member write on one list. */
+  private memberWriteResult(listId: string, outcome: MemberWriteOutcome): ApplyResult {
+    const ok = outcome.failed === 0;
+    const summary = outcome.updated !== undefined
+      ? `Updated ${outcome.updated} member(s)`
+      : `Added ${outcome.added}, removed ${outcome.removed} member(s)`;
+    LogStatus(`ListOperations list=${listId} +${outcome.added}/-${outcome.removed}/~${outcome.updated ?? 0}/!${outcome.failed}`);
+    return {
+      Success: ok,
+      ResultCode: ok ? 'SUCCESS' : 'PARTIAL_SUCCESS',
+      Message: ok ? summary : `${summary}, ${outcome.failed} failed`,
+      TargetListId: listId,
+      Counts: {
+        Added: outcome.added,
+        Removed: outcome.removed,
+        Failed: outcome.failed,
+        ...(outcome.updated !== undefined ? { Updated: outcome.updated } : {}),
+      },
+      Errors: outcome.errors.length > 0 ? outcome.errors : undefined,
+    };
   }
 
   /** Loads the list a refresh or approval acts on. It must exist and have a source query or view. */
@@ -1397,29 +1739,41 @@ export class ListOperations {
     listId: string,
     recordIds: readonly string[],
   ): Promise<{ added: number; failed: number; errors: string[] }> {
+    return this.insertListMemberSeeds(listId, recordIds.map((recordId) => ({ recordId, sequence: 0 })));
+  }
+
+  /** {@link insertListMembers} with a `Sequence` and an optional status for each member. */
+  private async insertListMemberSeeds(
+    listId: string,
+    seeds: readonly ListMemberSeed[],
+  ): Promise<{ added: number; failed: number; errors: string[] }> {
     const md = this.metadata();
     let added = 0;
     let failed = 0;
     const errors: string[] = [];
 
-    await this.forEachConcurrent(recordIds, ListOperations.WRITE_CONCURRENCY, async (recordId) => {
+    await this.forEachConcurrent(seeds, ListOperations.WRITE_CONCURRENCY, async (seed) => {
       const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', this.contextUser);
       detail.NewRecord();
       detail.ListID = listId;
-      detail.RecordID = recordId;
-      detail.Sequence = 0;
+      detail.RecordID = seed.recordId;
+      detail.Sequence = seed.sequence;
+      if (seed.status) detail.Status = seed.status;
       const ok = await detail.Save();
       if (ok) {
         added++;
       } else {
         failed++;
         const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
-        errors.push(`Failed to add '${recordId}': ${msg}`);
-        LogError(`insertListMembers list=${listId} record=${recordId}: ${msg}`);
+        errors.push(`Failed to add '${seed.recordId}': ${msg}`);
+        LogError(`insertListMembers list=${listId} record=${seed.recordId}: ${msg}`);
       }
     });
     return { added, failed, errors };
   }
+
+  /** Max record IDs in one `RecordID IN (...)` lookup. */
+  private static readonly LOOKUP_CHUNK_SIZE = 500;
 
   /**
    * Max in-flight entity writes for bulk member insert/remove. Concurrency

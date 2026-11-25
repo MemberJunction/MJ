@@ -1,5 +1,100 @@
 # @memberjunction/task-graph
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 2122c07: Add code-only `BaseRemotableOperation` contracts and server implementations (`Limits.GetDiagnostics`, `Limits.ResumePausedRun`, `Limits.PauseRun`), wire the `AdminLimitsResourceComponent` execution-limits governance dashboard into Explorer's Admin application navigation, add end-to-end 5,000-node workflow and 2,000-turn agent-channel plus synthetic runaway tests, and document the 5-tier limits configuration architecture and sweep inventory.
+- 0711e70: Add per-workflow and per-graph execution isolation levels (`InProcess`, `Worker`, `Process`, `Container`), dual-dialect `AIAgent.Isolation` schema migrations backfilling existing rows to `InProcess`, `Workflow.Draft` default of `Worker`, `LimitsConfigResolver` isolation defaults/ceilings, and Node `worker_threads` / `child_process` / container isolation execution runners with documented fault-boundary guarantees.
+- 59afb5f: Human-task providers can now be the install's default, opt-in, for workflows and for agents.
+  - **The contract moved to `@memberjunction/ai-core-plus`** (`BaseHumanTaskProvider`, `ResolveHumanTaskProvider`) so agents can use it; `@memberjunction/task-graph` no longer exports it. `RaiseTask` and `WithdrawTask` now receive a `Subject`: `{ Kind: 'WorkflowStep', TaskID, ParentTaskID }` or `{ Kind: 'AgentRequest', AgentRequestID, AgentRunID }`. `WithdrawTask` also receives a `Reason` (`'expired'`, `'cancelled'`, `'completed-elsewhere'`).
+  - **Opt-in default.** A provider declares it may be the default with `@RegisterClassEx(BaseHumanTaskProvider, { key, metadata: { CanBeDefault: true } })`; an install chooses it with `humanTasks.defaultProvider` in `mj.config.cjs` (env `MJ_HUMAN_TASKS_DEFAULT_PROVIDER`). Both are needed: installing a provider never reroutes approvals by itself. A configured provider that is missing or ineligible is ignored with an error and asks stay in the inbox.
+  - **Workflows.** Human steps that name no provider go to the default, chosen at submit and written into the step, so running workflows are not rerouted when the setting changes. `'AgentRequest'` still means the built-in inbox.
+  - **Agents.** A Chat step's feedback request is also raised through the default provider; the `MJ: AI Agent Requests` row stays the source of truth and still resumes the agent. New columns `HumanTaskProvider` and `HumanTaskExternalReference` record where it went. Providers answer with `AnswerAgentRequestFromProvider` (`@memberjunction/ai-agents`), which accepts only the provider the request was raised through, only while it is open, and saves as the request's owner. An answer given in the inbox or the conversation withdraws the provider's copy. Plan approvals stay in the inbox.
+
+- 49a5866: Workflows gain waiting steps, a pluggable Human-step provider, durable retries, and lose the 50-step cap (minor: migrations `V202611181900__v6.3.x__TaskGraph_Waiting_Steps` and `V202611182100__v6.3.x__TaskGraph_Durable_Retry`).
+  - **External steps run.** A step reached by the dispatcher waits until something completes it through the new `TaskGraph.CompleteWaitingStep` operation (or `TaskGraphWaitingSteps.CompleteWaitingStep` in-process), by task ID or by `correlationKey`. The signal's payload is merged into the workflow payload; a signal that arrives early is held and applied when the step is reached; `expiresInHours` fails the step when nothing arrives. New column `Task.CorrelationKey`.
+  - **Wait steps.** `{ until }` (timestamp or `payload.<path>`) or `{ durationSeconds }`, durable on `Task.DueAt` and judged on the database clock.
+  - **Human-step providers.** A Human step may name `provider`; any package can register `@RegisterClass(BaseHumanTaskProvider, '<key>')`, raise the ask in its own system, and complete the step through the same completion path. Omitted or `AgentRequest` keeps the built-in inbox. Unregistered providers are refused at submit.
+  - Drawn workflows (`AIAgentStep`) accept `External` and `Wait` steps, and Save-as-Workflow now keeps Human, External and Wait steps instead of dropping them. The flow editor's palette offers Person, External Signal and Wait steps with fields for their settings, and the task-graph canvas renders Wait steps.
+  - A waiting step records its output taint like any runner: a Wait passes on its input taint, a signal that carries a payload taints what follows (it is outside content), and a provider's completion never clears taint.
+  - The 50-node cap now applies only to model-authored graphs (`MAX_TASKS_PER_AGENT_GRAPH`); code-built and drawn graphs are bounded by a 10,000-node blast-radius ceiling.
+  - Record-change triggers follow the workflow's status: bindings are `Active` only while the workflow is, and a removed trigger's binding is disabled. Two triggers on one entity and scope with different filters are reported instead of one silently overwriting the other.
+  - **Retries are durable.** A step with `policy.retryCount` that fails goes back to `Pending` with `Task.AttemptCount` and `Task.NextAttemptAt` (database clock) instead of being retried by sleeping inside the claim, so a retry survives a restart and runs on any instance. Action steps retry only when their action is idempotent (unchanged), Prompt and Decision steps now retry, Agent steps never do. Viewers receive a `ClaimChanged` frame with `ClaimEvent: 'retry-scheduled'`. `TaskGraph.RetryTask` resets the count.
+
+### Patch Changes
+
+- dfc0449: Add strongly-typed 5-tier `LimitsConfigResolver` with approved backstop defaults (`DEFAULT_MJ_LIMITS_CONFIG` / `CODE_FALLBACK_LIMITS`) in `@memberjunction/core`, migrate `RunawayGuard`, `ResourceGuard`, and `Tuning` work bounds across AI/TaskGraph/Actions/Bridge/Server to resolve through `LimitsConfigResolver.Instance`, commit the categorized `docs/limits-sweep-inventory.csv` sweep inventory, and enforce the `limits-literals` CI/Standards guard.
+- 90174df: Implement Slice 2 queued graph execution (`Dispatch: 'Queue'`), recoverable terminal caller notifications across restarts, `Enqueue` step waiting-state coordination, and bounded 10,000-item `ForEach` + `Enqueue` WorkQueue fan-out with early-completion reconciliation, idempotent deduplication, and terminal failure propagation.
+- 4c44c40: Skip redundant runtime JSON parsing and already-settled terminal row re-ingestion during `TaskGraphGovernanceCoordinator` synchronization passes so large 5,000-node workflow graphs avoid $O(N^2)$ overhead under concurrent CI load.
+- 0b32bd4: Use `UserCache.GetSystemUser()` for internal `TaskGraphService` persistence writes (`MJ: Task Types`, `MJ: Tasks`, `MJ: Task Dependencies`) so non-Owner `UI` users can submit and retry durable task graphs — including on fresh databases where `'AI Workflow'` does not yet exist — while keeping all caller authorization (`resolveAgents`, `resolveActions`, `resolvePrompts`, `FindCrossUserAssignments`) and row attribution (`submittedByUserID`, `Human` step `UserID`, `SecurityEnvelope`) strictly bound to `context.ContextUser`.
+- 5331ce5: `TaskGraph.CompleteWaitingStep` now refuses a Human step raised by a plugged-in provider. Only the provider completes that step, in process, when the person it asked decides; through the operation the run's owner could complete their own approval with any payload.
+- 193d979: Implement SupportsAudience typed action/workflow seams, fail-closed server-side budget and audience controls, whole-workflow USD cost and wall-clock duration caps across agent trees and task graphs, and zero silent row-cap truncation enforcement on decision-critical RunView reads.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [061fa06]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [17406fc]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [f3e942f]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [18a02db]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9fa004a]
+  - @memberjunction/ai-agents@6.3.0-edge.2
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/aiengine@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/notifications@6.3.0-edge.2
+  - @memberjunction/ai-prompts@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

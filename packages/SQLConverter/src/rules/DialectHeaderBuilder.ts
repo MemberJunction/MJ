@@ -12,15 +12,82 @@
 export interface DialectHeaderBuilder {
   /** Target dialect identifier (e.g., 'postgres', 'mysql') */
   readonly TargetDialect: string;
-  /** Build the header string for the given schema */
-  BuildHeader(schema: string): string;
+  /**
+   * Build the header string for the given schema.
+   *
+   * @param schema - The target schema the converted file is written for.
+   * @param body - The converted SQL that will follow the header. A builder uses it to emit only the
+   *   prerequisites the body actually needs (for PostgreSQL, the extensions it calls into). Builders
+   *   that need nothing from the body may ignore it.
+   */
+  BuildHeader(schema: string, body: string): string;
+}
+
+/**
+ * A PostgreSQL extension and the functions that make a converted body depend on it.
+ */
+export interface PgExtensionRequirement {
+  /** The extension name, as written in `CREATE EXTENSION`. */
+  readonly Extension: string;
+  /** Matches a call to any function the extension provides. */
+  readonly Pattern: RegExp;
+}
+
+/**
+ * The extensions a converted migration may need, and how to tell from its body.
+ *
+ * The conversion itself needs neither: MJ's PostgreSQL floor is 14, and `gen_random_uuid()` — the only
+ * UUID generator the converter emits — has been built in since PostgreSQL 13. Managed hosts (Azure
+ * HorizonDB, Azure Flexible Server, some RDS parameter groups) refuse a `CREATE EXTENSION` that is not
+ * on their allowlist, so an unused one is a pure liability. Each is emitted only when the body calls
+ * one of its functions.
+ *
+ * The patterns are deliberately broad. They scan the raw text, comments and string literals included,
+ * because a call can sit inside dynamic SQL (`EXECUTE '... digest(...) ...'`). A false positive only
+ * restores the old behaviour of emitting the extension; a false negative breaks the migration.
+ */
+export const PG_EXTENSION_REQUIREMENTS: readonly PgExtensionRequirement[] = Object.freeze([
+  {
+    Extension: 'pgcrypto',
+    Pattern: /\b(?:digest|hmac|crypt|gen_salt|gen_random_bytes|encrypt|decrypt|encrypt_iv|decrypt_iv|armor|dearmor|pgp_[a-z0-9_]+)\s*\(/i,
+  },
+  {
+    Extension: 'uuid-ossp',
+    Pattern: /\b(?:uuid_generate_v[1345](?:mc)?|uuid_nil|uuid_ns_(?:dns|url|oid|x500))\s*\(/i,
+  },
+]);
+
+/**
+ * Names the PostgreSQL extensions a converted body calls into, in a stable order.
+ *
+ * @param body - Converted PostgreSQL SQL.
+ * @returns The names from {@link PG_EXTENSION_REQUIREMENTS} whose functions the body calls.
+ */
+export function RequiredPgExtensions(body: string): string[] {
+  return PG_EXTENSION_REQUIREMENTS.filter((req) => req.Pattern.test(body)).map((req) => req.Extension);
+}
+
+/**
+ * Builds the `CREATE EXTENSION` block for a converted body: one statement per extension the body
+ * needs, or a comment saying none is needed. Every PostgreSQL header the converter emits (the
+ * rule-based pipeline and both split-and-regenerate headers) uses it, so the rule has one home.
+ *
+ * @param body - Converted PostgreSQL SQL that will follow the header.
+ * @returns The extension lines, without a trailing newline.
+ */
+export function BuildPgExtensionStatements(body: string): string {
+  const needed = RequiredPgExtensions(body);
+  if (needed.length === 0) {
+    return '-- None required: UUID defaults use the built-in gen_random_uuid() (PostgreSQL 13+).';
+  }
+  return needed.map((ext) => `CREATE EXTENSION IF NOT EXISTS "${ext}";`).join('\n');
 }
 
 /**
  * PostgreSQL header builder.
  *
  * Produces the standard MJ PostgreSQL header with:
- * - pgcrypto and uuid-ossp extensions
+ * - only the extensions the body calls into (see {@link PG_EXTENSION_REQUIREMENTS})
  * - Schema creation and search_path
  * - Standard conforming strings
  * - Implicit integer->boolean cast (for BIT column compatibility)
@@ -34,15 +101,14 @@ export interface DialectHeaderBuilder {
 export class PostgreSQLHeaderBuilder implements DialectHeaderBuilder {
   readonly TargetDialect = 'postgres';
 
-  BuildHeader(schema: string): string {
+  BuildHeader(schema: string, body: string): string {
     return `-- ============================================================================
 -- MemberJunction PostgreSQL Migration
 -- Converted from SQL Server using TypeScript conversion pipeline
 -- ============================================================================
 
 -- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+${BuildPgExtensionStatements(body)}
 
 -- Schema
 --

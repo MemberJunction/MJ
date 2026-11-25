@@ -12,15 +12,16 @@
  * Fixtures: one category and two saved queries over a literal derived table (valid unchanged on
  * SQL Server and PostgreSQL), deleted in teardown. Self-cleaning, so the deterministic tier.
  */
-import { Metadata, RunQuery, RunView } from '@memberjunction/core';
-import type { EntitySaveOptions, RunQueryParams, RunQueryResult, UserInfo } from '@memberjunction/core';
-import { GetQueryApprovalStateAsync, QueryEngine } from '@memberjunction/core-entities';
+import { EntityPermissionType, Metadata, RunQuery, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import type { EntitySaveOptions, IRunQueryProvider, RunQueryParams, RunQueryResult } from '@memberjunction/core';
+import { GetQueryApprovalStateAsync, QueryEngine, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { MJQueryEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
 import { FixtureQuerySaveOptions } from './query-fixture-save-options';
 import { CreateRenderCategory, DeleteRenderQueries, RefreshRenderQueries } from './runquery-rendering-fixture';
+import { ForPlatform, PlatformOf } from './query-extraction-fixture';
 import type { RenderFixtures } from './runquery-rendering-fixture';
 
 /** Three rows, 1 to 3, valid unchanged on both platforms. */
@@ -123,6 +124,47 @@ async function captureErrors<T>(fn: () => Promise<T>): Promise<{ value: T; logge
 
 function rowNumbers(result: RunQueryResult): number[] {
     return (result.Results as Array<{ N: number | string }>).map(r => Number(r.N)).sort();
+}
+
+/**
+ * The caller as a plain UI user: the same person, holding only the UI role. The UI role may create
+ * queries but does not hold `Queries: Approve`, so it can save drafts and cannot approve.
+ */
+function uiOnlyUser(ctx: IntegrationCheckContext): UserInfo {
+    const ui = ctx.Provider.Roles.find(r => r.Name?.trim().toLowerCase() === 'ui');
+    Assert(!!ui, "the 'UI' role is required to act as a plain user and was not found");
+    return new UserInfo(ctx.Provider, {
+        ID: ctx.User.ID, Name: ctx.User.Name, Email: ctx.User.Email, Type: 'User', IsActive: true,
+        UserRoles: [new UserRoleInfo({ UserID: ctx.User.ID, RoleID: ui!.ID })],
+    });
+}
+
+/** The query's status as stored, bypassing every cache. */
+async function storedStatus(queryID: string, user: UserInfo): Promise<string | null> {
+    const result = await new RunView().RunView<{ Status: string | null }>({
+        EntityName: 'MJ: Queries', ExtraFilter: `ID='${EscapeSQLString(queryID)}'`,
+        Fields: ['Status'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    Assert(result.Success && result.Results.length === 1, `query ${queryID} did not read back: ${result.ErrorMessage}`);
+    return result.Results[0].Status;
+}
+
+/**
+ * Reloads a fixture query as the holder and keeps that copy for teardown: the UI role has no
+ * Delete on queries, so a copy the UI user saved could not delete itself.
+ */
+async function adoptAsHolder(ctx: IntegrationCheckContext, name: string, queryID: string): Promise<MJQueryEntity> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+    Assert(await query.Load(queryID), `the query ${queryID} did not load for the holder`);
+    fixtures!.Queries.set(name, query);
+    return query;
+}
+
+/** Runs a saved query as `user`, after refreshing the engine so it runs what is stored. */
+async function runAs(ctx: IntegrationCheckContext, queryID: string, user: UserInfo): Promise<RunQueryResult> {
+    await RefreshRenderQueries(ctx.User);
+    return new RunQuery().RunQuery({ QueryID: queryID }, user);
 }
 
 async function editChapterSQL(ctx: IntegrationCheckContext, sql: string): Promise<void> {
@@ -249,6 +291,117 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             const restoredParent = await new RunQuery().RunQuery({ QueryID: parent.ID, ServerParameters: { ChapterID: 2 }, RequireApproved: true }, ctx.User);
             Assert(restoredParent.Success, `composed parent must run again after restoring Qchild to D1: ${restoredParent.ErrorMessage}`);
             AssertEqual(JSON.stringify(rowNumbers(restoredParent)), JSON.stringify([2]), 'restored composed parent returns D1 rows');
+        }
+    },
+    {
+        Id: 'query-approvals.QA6',
+        Name: 'QA6: a UI user saves a draft but cannot approve (Queries: Approve); a holder approves the draft (#6746)',
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            Assert(!UserCanApproveQueries(ui, ctx.Provider), 'fixture invalid: the UI role alone must not hold Queries: Approve');
+            Assert(UserCanApproveQueries(ctx.User, ctx.Provider), 'the harness user must hold Queries: Approve (Developer or Integration role, or Owner)');
+
+            // Saving straight to Approved is refused for the UI user, and nothing is written.
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const approved = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            approved.Name = 'IT120 UI Approve Attempt';
+            approved.CategoryID = fixtures!.Category.ID;
+            approved.SQL = `SELECT N FROM ${ROWS}`;
+            approved.Status = 'Approved';
+            AssertEqual(await approved.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to save a query as Approved');
+            const refusal = approved.LatestResult?.CompleteMessage ?? '';
+            Assert(refusal.includes("'Queries: Approve'"), `the refusal must name the authorization — got: ${refusal}`);
+
+            // A draft saves; approving it as the UI user is refused; the holder then approves it.
+            const draft = await createQuery('IT120 UI Draft', `SELECT N FROM ${ROWS} WHERE N = 2`, ui);
+            AssertEqual(await storedStatus(draft.ID, ctx.User), 'Pending', 'the UI user\'s draft must be stored as Pending');
+            draft.Status = 'Approved';
+            AssertEqual(await draft.Save(FixtureQuerySaveOptions()), false, 'approving the draft as the UI user must be refused');
+            AssertEqual(await storedStatus(draft.ID, ctx.User), 'Pending', 'a refused approval must leave the draft Pending');
+
+            const asHolder = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ctx.User);
+            Assert(await asHolder.Load(draft.ID), `the draft ${draft.ID} did not load for the holder`);
+            asHolder.Status = 'Approved';
+            await saveOrThrow(asHolder, 'approving the draft as a holder', FixtureQuerySaveOptions());
+            // Teardown deletes as the holder: the UI role has no Delete on queries.
+            fixtures!.Queries.set('IT120 UI Draft', asHolder);
+            Assert(UUIDsEqual(asHolder.ApprovedByUserID, ctx.User.ID), `the approver must be the holder — got ${asHolder.ApprovedByUserID}`);
+            AssertEqual(await storedStatus(draft.ID, ctx.User), 'Approved', 'the holder\'s approval must be stored');
+        }
+    },
+    {
+        Id: 'query-approvals.QA7',
+        Name: 'QA7: a draft that reads an entity row-filtered for the running user is refused at run, a comma join included; approved, it runs (#6746)',
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const platform = PlatformOf(ctx, 'query-approvals');
+            // The UI role reads MJ: AI Agent Runs only for the user's own runs (UI: Own AI Agent Runs).
+            const agentRuns = ctx.Provider.EntityByName('MJ: AI Agent Runs');
+            Assert(!!agentRuns, "the 'MJ: AI Agent Runs' entity is required and was not found");
+            Assert(agentRuns!.GetEffectiveRowFilterWhereClause(ui, EntityPermissionType.Read, '').length > 0,
+                'fixture invalid: the UI role must read MJ: AI Agent Runs under a row filter');
+
+            // The author's own draft over a row-filtered entity saves, but does not run for them.
+            const filtered = await createQuery('IT120 UI Draft Agent Runs', ForPlatform('SELECT r.[ID] FROM __mj.[vwAIAgentRuns] r WHERE 1 = 0', platform), ui);
+            await adoptAsHolder(ctx, 'IT120 UI Draft Agent Runs', filtered.ID);
+            const refused = await runAs(ctx, filtered.ID, ui);
+            AssertEqual(refused.Success, false, 'a draft reading a row-filtered entity must be refused for the UI user');
+
+            // Review bypass form 1: the filtered view after a comma that follows a JOIN … ON.
+            const commaJoin = await createQuery('IT120 UI Draft Comma Join',
+                ForPlatform('SELECT r.[ID] FROM __mj.[vwUsers] u JOIN __mj.[vwRoles] ro ON 1 = 1, __mj.[vwAIAgentRuns] r WHERE 1 = 0', platform), ui);
+            await adoptAsHolder(ctx, 'IT120 UI Draft Comma Join', commaJoin.ID);
+            const commaRefused = await runAs(ctx, commaJoin.ID, ui);
+            AssertEqual(commaRefused.Success, false, 'a draft reading the row-filtered view through a comma join after JOIN … ON must be refused for the UI user');
+
+            // A draft that reads no row-filtered entity still runs: drafts are not blocked as such.
+            const plain = await createQuery('IT120 UI Draft Rows', `SELECT N FROM ${ROWS}`, ui);
+            await adoptAsHolder(ctx, 'IT120 UI Draft Rows', plain.ID);
+            const ran = await runAs(ctx, plain.ID, ui);
+            Assert(ran.Success, `a draft over no row-filtered entity must run for the UI user: ${ran.ErrorMessage}`);
+
+            // Once a holder approves it, the same SQL runs with the approver's trust.
+            const approved = fixtures!.Queries.get('IT120 UI Draft Agent Runs')!;
+            approved.Status = 'Approved';
+            await saveOrThrow(approved, 'approving the agent-runs draft as a holder', FixtureQuerySaveOptions());
+            const afterApproval = await runAs(ctx, approved.ID, ui);
+            Assert(afterApproval.Success, `the approved query must run for the UI user: ${afterApproval.ErrorMessage}`);
+        }
+    },
+    {
+        Id: 'query-approvals.QA8',
+        Name: "QA8: a UI user cannot set a query's CacheValidationSQL, and a draft's is never run by a cache check (#6746)",
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            // Never reached: the save is refused, and a draft's validation SQL is never run. If it
+            // were, the zero-row result would still read as a status, so the route is what's checked.
+            const validationSQL = `SELECT N AS TotalRows FROM ${ROWS} WHERE N = 0`;
+
+            const refused = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            refused.Name = 'IT120 UI Validation SQL Attempt';
+            refused.CategoryID = fixtures!.Category.ID;
+            refused.SQL = `SELECT N FROM ${ROWS}`;
+            refused.Status = 'Pending';
+            refused.CacheValidationSQL = validationSQL;
+            AssertEqual(await refused.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to save CacheValidationSQL');
+            const refusal = refused.LatestResult?.CompleteMessage ?? '';
+            Assert(refusal.includes('cache validation SQL') && refusal.includes("'Queries: Approve'"),
+                `the refusal must name the field and the authorization — got: ${refusal}`);
+
+            // A holder's draft may carry it; a cache check by the UI user ignores it while it's a draft.
+            const draft = await createQuery('IT120 Draft Validation SQL', `SELECT N FROM ${ROWS}`, ctx.User);
+            draft.CacheValidationSQL = validationSQL;
+            await saveOrThrow(draft, 'adding validation SQL to the draft as a holder', FixtureQuerySaveOptions());
+            await RefreshRenderQueries(ctx.User);
+            const provider = Metadata.Provider as unknown as IRunQueryProvider; // global-provider-ok: integration test script — single-provider process by design
+            Assert(typeof provider.RunQueriesWithCacheCheck === 'function', 'provider must implement RunQueriesWithCacheCheck');
+            const checked = await provider.RunQueriesWithCacheCheck!([
+                { params: { QueryID: draft.ID }, cacheStatus: { maxUpdatedAt: '', rowCount: 3 } },
+            ], ui);
+            Assert(checked.success, `the cache check must succeed: ${checked.errorMessage}`);
+            AssertEqual(checked.results[0]?.status, 'no_validation', "a draft's validation SQL must not be used by a cache check");
+            AssertEqual(checked.results[0]?.results?.length, 3, 'the draft must return its rows from the normal run');
         }
     }
 ];

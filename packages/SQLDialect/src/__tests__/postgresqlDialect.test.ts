@@ -400,6 +400,18 @@ describe('PostgreSQLDialect', () => {
             const longDesc = 'Z'.repeat(5000);
             expect(dialect.CommentOnColumn('__mj', 'User', 'Bio', longDesc)).toContain(`IS '${longDesc}';`);
             expect(dialect.CommentOnObject('TABLE', '__mj', 'User', 'hello\0world')).toContain("IS 'helloworld'");
+            expect(dialect.CommentOnColumn('__mj', 'User', 'Bio', "hello\0world's")).toBe(
+                'COMMENT ON COLUMN "__mj"."User"."Bio" IS \'helloworld\'\'s\';'
+            );
+        });
+
+        it('should double embedded double-quotes in CommentOnColumn and CommentOnObject identifiers', () => {
+            expect(dialect.CommentOnColumn('My"S', 'T"', 'C"', 'd')).toBe(
+                'COMMENT ON COLUMN "My""S"."T"""."C""" IS \'d\';'
+            );
+            expect(dialect.CommentOnObject('TABLE', 'My"S', 'T"', 'd')).toBe(
+                'COMMENT ON TABLE "My""S"."T""" IS \'d\''
+            );
         });
     });
 
