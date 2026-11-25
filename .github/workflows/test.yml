@@ -924,9 +924,10 @@ jobs:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
           # Fallback for "Re-run failed jobs": when build passed in attempt 1, attempt 2 runs only
-          # the failed shards and never creates `turbo-run-${run_id}-2`. Fall back to attempt 1's
-          # handoff cache (still scoped to this PR), and finally to next's build seed so a shard
-          # never compiles ~387 packages from scratch on a re-run.
+          # the failed shards and never creates `turbo-run-${run_id}-2`. Attempt 1's cleanup job
+          # always deletes attempt 1's handoff entry, so `turbo-run-${run_id}-` only hits if that
+          # cleanup failed; normally the re-run is served by `turbo-v1-<os>-` (next's build seed),
+          # so a shard rebuilds only the PR's changed subtree, never ~387 packages from scratch.
           restore-keys: |
             turbo-run-${{ github.run_id }}-
             turbo-v1-${{ runner.os }}-
