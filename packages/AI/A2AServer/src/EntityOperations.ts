@@ -5,6 +5,7 @@ import {
     EntityInfo,
     FieldSecurityError,
     IMetadataProvider,
+    LoadRecordPassingReadHooks,
     LogError,
     ProjectEntityValueRowsForUser,
     ProjectEntityValuesForUser,
@@ -184,7 +185,7 @@ export class EntityOperations {
             const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
-            const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
+            const loaded = await LoadRecordPassingReadHooks(record, new CompositeKey(keyPairs), contextUser);
             if (loaded) {
                 const result = await this.ConvertEntityObjectToJSON(record);
                 return { success: true, result };
@@ -274,7 +275,7 @@ export class EntityOperations {
             const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
-            const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
+            const loaded = await LoadRecordPassingReadHooks(record, new CompositeKey(keyPairs), contextUser);
             if (loaded) {
                 // Remove primary keys from update parameters
                 const updateParams = { ...parameters };
@@ -334,7 +335,7 @@ export class EntityOperations {
             const record = await this.provider.GetEntityObject(entity.Name, contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
-            const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
+            const loaded = await LoadRecordPassingReadHooks(record, new CompositeKey(keyPairs), contextUser);
             if (loaded) {
                 const success = await record.Delete();
                 

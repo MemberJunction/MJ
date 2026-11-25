@@ -26,9 +26,27 @@
  *
  * @module @memberjunction/storage
  */
-import { IMetadataProvider, LogError, Metadata, RunView, RunViewResult, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import {
+    CompositeKey,
+    IMetadataProvider,
+    LogError,
+    Metadata,
+    ParseStoredRecordKey,
+    ReadableRecordKeyTexts,
+    RecordKeyText,
+    RunView,
+    RunViewResult,
+    UserInfo,
+    UserReadsEveryRecord,
+    WellKnownUserSource
+} from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, IsValidUUID, NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
-import type { MJFileEntity, MJFileStorageAccountEntity, MJFileStorageAccountPermissionEntity } from '@memberjunction/core-entities';
+import type {
+    MJFileEntity,
+    MJFileEntityRecordLinkEntity,
+    MJFileStorageAccountEntity,
+    MJFileStorageAccountPermissionEntity
+} from '@memberjunction/core-entities';
 import { DEFAULT_OBJECT_KEY_NORMALIZER, IsSafeStorageObjectKey, StorageObjectKeyNormalizer, StorageObjectKeyOf } from './generic/ObjectKeys';
 
 /** What a caller wants to do with a storage account: list/download/search (`Read`) or upload/delete/move/copy into it (`Write`). */
@@ -39,6 +57,9 @@ export type StorageAccountPermissionRow = Pick<
     MJFileStorageAccountPermissionEntity,
     'FileStorageAccountID' | 'Type' | 'UserID' | 'RoleID' | 'CanRead' | 'CanWrite'
 >;
+
+/** The columns of an `MJ: File Entity Record Links` row the record-link check reads. */
+type RecordLinkRow = Pick<MJFileEntityRecordLinkEntity, 'ID' | 'FileID' | 'EntityID' | 'RecordID'>;
 
 /** The permission state of a set of accounts, as read by {@link StorageAccessEvaluator.LoadAccountPermissionState}. */
 export interface StorageAccountPermissionState {
@@ -257,7 +278,9 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
      * on the account's storage provider resolves to it the way the server resolves every row to an object — `ProviderKey`,
      * or `Name` when `ProviderKey` is empty. The mapping is read with the elevated reader (so a row the user cannot see
      * still counts as tracked); whether the user may read each row is then asked as the user, through `RunView` (entity
-     * permission and row-level security both apply, as they do for `Load`). Reads are batched and never truncated.
+     * permission and row-level security both apply, as they do for `Load`). A row linked to records through
+     * `MJ: File Entity Record Links` is readable only when the user can also read at least one linked record. Reads are
+     * batched and never truncated.
      *
      * **Matching.** The key a caller sends and the key a row stores are both put through `keyNormalizer` — pass the
      * account's driver, whose `NormalizeObjectKey` knows how that driver spells one object several ways (S3's key prefix;
@@ -506,8 +529,21 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
         return keyNormalizer.NormalizeObjectKey(StorageObjectKeyOf(file)).toLowerCase();
     }
 
-    /** Which of `fileIDs` `user` may read, asked as the user (batched, never truncated); `null` when a read fails. */
+    /**
+     * Which of `fileIDs` `user` may read (batched, never truncated); `null` when a read fails. The `MJ: Files` row must be
+     * readable as the user, and a file linked to records through `MJ: File Entity Record Links` also needs at least one
+     * linked record the user can read.
+     */
     private async readableFileIDs(fileIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<Set<string> | null> {
+        const rowReadable = await this.fileRowsReadableByUser(fileIDs, user, provider);
+        if (!rowReadable || rowReadable.size === 0) {
+            return rowReadable;
+        }
+        return this.dropFilesWithUnreadableLinks(rowReadable, user, provider);
+    }
+
+    /** Which of `fileIDs` have an `MJ: Files` row `user` may read, asked as the user; `null` when a read fails. */
+    private async fileRowsReadableByUser(fileIDs: string[], user: UserInfo, provider: IMetadataProvider): Promise<Set<string> | null> {
         const views = this.batches(fileIDs).map(batch => ({
             EntityName: 'MJ: Files',
             ExtraFilter: `ID IN (${batch.map(id => `'${EscapeSQLString(id)}'`).join(', ')})`,
@@ -522,5 +558,90 @@ export class StorageAccessEvaluator extends BaseSingleton<StorageAccessEvaluator
             return null;
         }
         return new Set(results.flatMap(r => r.Results).map(r => NormalizeUUID(r.ID)));
+    }
+
+    /**
+     * Removes from `fileIDs` (normalized) each file that has record links but no linked record `user` can read. A file
+     * with no links is kept. Links are read with the elevated reader; each linked record is read as the user. Returns
+     * `null` when a read fails.
+     */
+    private async dropFilesWithUnreadableLinks(fileIDs: Set<string>, user: UserInfo, provider: IMetadataProvider): Promise<Set<string> | null> {
+        const links = await this.loadRecordLinks(Array.from(fileIDs), provider);
+        if (!links) {
+            return null;
+        }
+        const readableLinkIDs = await this.readableLinkIDs(links, user, provider);
+        if (!readableLinkIDs) {
+            return null;
+        }
+        const kept = new Set(fileIDs);
+        const linkedFiles = new Set(links.map(l => NormalizeUUID(l.FileID)));
+        const filesWithReadableLink = new Set(links.filter(l => readableLinkIDs.has(l.ID)).map(l => NormalizeUUID(l.FileID)));
+        for (const fileID of linkedFiles) {
+            if (!filesWithReadableLink.has(fileID)) {
+                kept.delete(fileID);
+            }
+        }
+        return kept;
+    }
+
+    /** The record links of `fileIDs`, read with the elevated reader; `null` when the read fails. */
+    private async loadRecordLinks(fileIDs: string[], provider: IMetadataProvider): Promise<RecordLinkRow[] | null> {
+        const reader = await this.ResolveElevatedReader(provider);
+        if (!reader) {
+            LogError('StorageAccessEvaluator: no elevated reader (MJ system user) could be resolved — record-link check denied');
+            return null;
+        }
+        const views = this.batches(fileIDs).map(batch => ({
+            EntityName: 'MJ: File Entity Record Links',
+            ExtraFilter: `FileID IN (${batch.map(id => `'${EscapeSQLString(id)}'`).join(', ')})`,
+            Fields: ['ID', 'FileID', 'EntityID', 'RecordID'],
+            ResultType: 'simple' as const,
+            IgnoreMaxRows: true
+        }));
+        const results = await RunView.FromMetadataProvider(provider).RunViews<RecordLinkRow>(views, reader);
+        const failed = results.find(r => !r?.Success);
+        if (failed || results.length !== views.length) {
+            LogError(`StorageAccessEvaluator: reading file record links failed: ${failed?.ErrorMessage ?? 'no result'}`);
+            return null;
+        }
+        return results.flatMap(r => r.Results);
+    }
+
+    /** The IDs of `links` whose linked record `user` can read; `null` when a read fails. */
+    private async readableLinkIDs(links: RecordLinkRow[], user: UserInfo, provider: IMetadataProvider): Promise<Set<string> | null> {
+        const byEntity = new Map<string, RecordLinkRow[]>();
+        for (const link of links) {
+            const key = NormalizeUUID(link.EntityID);
+            byEntity.set(key, [...(byEntity.get(key) ?? []), link]);
+        }
+        const readable = new Set<string>();
+        for (const group of byEntity.values()) {
+            const ids = await this.readableLinkIDsForEntity(group, user, provider);
+            if (!ids) {
+                return null;
+            }
+            ids.forEach(id => readable.add(id));
+        }
+        return readable;
+    }
+
+    /** For links that all point at one entity: the link IDs whose record `user` can read; `null` when a read fails. */
+    private async readableLinkIDsForEntity(links: RecordLinkRow[], user: UserInfo, provider: IMetadataProvider): Promise<string[] | null> {
+        const entity = provider.EntityByID(links[0].EntityID);
+        if (!entity) {
+            return [];
+        }
+        if (UserReadsEveryRecord(entity, user)) {
+            return links.map(l => l.ID);
+        }
+        const keyed = links
+            .map(l => ({ Link: l, Key: ParseStoredRecordKey(entity, l.RecordID) }))
+            .filter((x): x is { Link: RecordLinkRow; Key: CompositeKey } => x.Key !== null);
+        const readable = await ReadableRecordKeyTexts(provider, user, entity, keyed.map(x => x.Key));
+        if (!readable) {
+            return null;
+        }
+        return keyed.filter(x => readable.has(RecordKeyText(entity, x.Key))).map(x => x.Link.ID);
     }
 }

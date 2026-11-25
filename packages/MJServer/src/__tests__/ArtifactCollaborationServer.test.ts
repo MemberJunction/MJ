@@ -3493,7 +3493,8 @@ describe('ArtifactCollaborationServer (WebSocket Yjs CRDT Sync, Permissions, Che
 
         const mappingProvider: Partial<IMetadataProvider> = {
             ...createMockProvider(),
-            EntityByName: () => fakeEntityInfo
+            ProviderType: 'Database',
+            EntityByName: (name: string) => (name.trim().toLowerCase() === 'mj: artifact versions' ? fakeEntityInfo : undefined)
         };
 
         const resolverBase = new TestableResolverBase();

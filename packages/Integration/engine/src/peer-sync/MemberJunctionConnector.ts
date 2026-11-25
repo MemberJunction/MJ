@@ -33,6 +33,7 @@ import type {
     SyncResult,
 } from '../types.js';
 import {
+    AssertSyncUserSeesEveryChange,
     BuildCompositeWatermarkWhereClause,
     CoalesceRecordChanges,
     PlanPeerEntityOrder,
@@ -363,6 +364,7 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
             updates: PeerDeferredFKUpdate[];
         }> = [];
         const pushedMapResults: EntityMapSyncResult[] = [];
+        const entityErrorMessages: string[] = [];
 
         for (const entityMap of orderedMaps) {
             if (context.AbortSignal?.aborted) break;
@@ -423,7 +425,12 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
                 }
             }
 
-            if (shouldPush) {
+            const pushRefusal = shouldPush ? this.pushRefusal(entityMap, context.ContextUser, md) : null;
+            if (pushRefusal) {
+                mapResult.RecordsErrored += 1;
+                mapResult.Success = false;
+                entityErrorMessages.push(pushRefusal);
+            } else if (shouldPush) {
                 pushedMapResults.push(mapResult);
                 const pushOutcome = await this.pushEntityChanges(
                     entityMap,
@@ -523,9 +530,10 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
             }
         }
 
+        const errorMessages = [...entityErrorMessages, ...deferredErrorMessages];
         return {
             Success: totalErrored === 0,
-            ErrorMessage: deferredErrorMessages.length > 0 ? deferredErrorMessages.join('; ') : undefined,
+            ErrorMessage: errorMessages.length > 0 ? errorMessages.join('; ') : undefined,
             RunID: context.Run.ID,
             RecordsProcessed: totalProcessed,
             RecordsCreated: totalCreated,
@@ -640,6 +648,23 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         return { processed, created, updated, deleted, errored, skipped, deferredFKs };
     }
 
+    /**
+     * The reason the run cannot push `entityMap`'s changes, or null when it can. The sync user must
+     * see every change row of the entity, so its change history can be paged.
+     */
+    private pushRefusal(entityMap: ICompanyIntegrationEntityMap, contextUser: UserInfo, md: IMetadataProvider): string | null {
+        const localEntity = md.EntityByID(entityMap.EntityID);
+        if (!localEntity) {
+            return null;
+        }
+        try {
+            AssertSyncUserSeesEveryChange(localEntity, contextUser);
+            return null;
+        } catch (err) {
+            return err instanceof Error ? err.message : String(err);
+        }
+    }
+
     private async pushEntityChanges(
         entityMap: ICompanyIntegrationEntityMap,
         pairingID: string,
@@ -658,6 +683,11 @@ export class MemberJunctionConnector extends BaseIntegrationConnector {
         errored: number;
         skipped: number;
     }> {
+        const localEntity = md.EntityByID(entityMap.EntityID);
+        if (!localEntity) {
+            throw new Error(`Entity '${entityMap.Entity}' not found in local metadata.`);
+        }
+        AssertSyncUserSeesEveryChange(localEntity, contextUser);
         let cursor = fullSync
             ? null
             : await this.loadCompositeWatermark(entityMap.ID, 'Push', contextUser);

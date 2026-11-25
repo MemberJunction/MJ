@@ -30,7 +30,9 @@ import {
     PlanPeerEntityOrder,
     SchemaPlanner,
 } from '../index.js';
+import { UUIDsEqual } from '@memberjunction/global';
 import type { ICompanyIntegrationEntityMap, ICompanyIntegrationFieldMap } from '../entity-types.js';
+import type { SyncResult } from '../types.js';
 import type {
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationRunEntity,
@@ -422,6 +424,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                         },
                     ],
                     ParentEntityInfo: null,
+                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                    GetEffectiveRowFilterWhereClause: () => '',
                 } as unknown as EntityInfo,
                 {
                     ID: ENTITY_CONTACTS_ID,
@@ -439,6 +443,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                         },
                     ],
                     ParentEntityInfo: null,
+                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                    GetEffectiveRowFilterWhereClause: () => '',
                 } as unknown as EntityInfo,
             ];
 
@@ -723,6 +729,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PrimaryKeys: [{ Name: 'ID' }],
                 FirstPrimaryKey: { Name: 'ID' },
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
                 Fields: [
                     {
                         Name: 'ID',
@@ -833,6 +841,7 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     Entities: [contactEntityInfo],
                     EntityByName: (name: string) =>
                         name.toLowerCase() === 'contacts' ? contactEntityInfo : undefined,
+                    EntityByID: (id: string) => (UUIDsEqual(id, contactEntityInfo.ID) ? contactEntityInfo : undefined),
                     GetEntityObject: vi.fn(async (entityName: string) => {
                         if (entityName === 'MJ: Company Integration Record Maps') {
                             const rm = {
@@ -1177,6 +1186,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     { Name: 'PrimaryContactID', IsPrimaryKey: false, RelatedEntityID: ENTITY_CONTACTS_ID, AllowsNull: true },
                 ],
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const contactEntityInfo = {
@@ -1189,6 +1200,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                     { Name: 'CompanyID', IsPrimaryKey: false, RelatedEntityID: ENTITY_COMPANIES_ID, AllowsNull: false },
                 ],
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
             } as unknown as EntityInfo;
 
             const emptyRunView: IRunViewProvider = {
@@ -1460,6 +1473,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PrimaryKeys: [{ Name: 'ID' }],
                 FirstPrimaryKey: { Name: 'ID' },
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
                 Fields: [
                     {
                         Name: 'ID',
@@ -1510,6 +1525,8 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 PrimaryKeys: [{ Name: 'ID' }],
                 FirstPrimaryKey: { Name: 'ID' },
                 ParentEntityInfo: null,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                GetEffectiveRowFilterWhereClause: () => '',
                 Fields: [
                     {
                         Name: 'ID',
@@ -1851,149 +1868,156 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
             expect(deleteCtxEntry?.context?.OriginUserEmail).toBe('deleter@peer-b.com');
         });
 
+        /** A peer over the cyclic pair: an endpoint plus providers that serve `localChanges` as its change rows. */
+        const createCyclicPeerFor = (
+            pair: { companyEntity: EntityInfo; contactEntity: EntityInfo },
+            instanceID: string,
+            localChanges: PeerRecordChangeEntry[],
+            failPass2CompanySave = false
+        ) => {
+            const { companyEntity, contactEntity } = pair;
+            const storedRows = new Map<string, Record<string, string | number | boolean | null>>();
+            const recordMaps: Array<{ EntityID: string; ExternalSystemRecordID: string; EntityRecordID: string }> = [];
+            let companySaveCount = 0;
+
+            const rvProvider: IRunViewProvider = {
+                RunView: vi.fn(async (params) => {
+                    if (params.EntityName === 'MJ: Record Changes') {
+                        const forEntity = localChanges.filter(c =>
+                            params.ExtraFilter?.includes(c.EntityID)
+                        );
+                        return {
+                            Success: true,
+                            Results: forEntity,
+                            RowCount: forEntity.length,
+                            TotalRowCount: forEntity.length,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        } as RunViewResult;
+                    }
+                    if (params.EntityName === 'MJ: Company Integration Record Maps') {
+                        const filtered = recordMaps.filter(rm =>
+                            params.ExtraFilter?.includes(rm.EntityID) ?? true
+                        );
+                        return {
+                            Success: true,
+                            Results: filtered,
+                            RowCount: filtered.length,
+                            TotalRowCount: filtered.length,
+                            ExecutionTime: 1,
+                            ErrorMessage: '',
+                        } as RunViewResult;
+                    }
+                    return {
+                        Success: true,
+                        Results: [],
+                        RowCount: 0,
+                        TotalRowCount: 0,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                    } as RunViewResult;
+                }),
+                RunViews: vi.fn(async () => []),
+            };
+
+            const mdProvider = {
+                Entities: [companyEntity, contactEntity],
+                EntityByID: (id: string) => [companyEntity, contactEntity].find(e => UUIDsEqual(e.ID, id)),
+                EntityByName: (name: string) =>
+                    name.toLowerCase() === 'companies'
+                        ? companyEntity
+                        : name.toLowerCase() === 'contacts'
+                            ? contactEntity
+                            : undefined,
+                GetEntityObject: vi.fn(async (entityName: string) => {
+                    if (entityName === 'MJ: Company Integration Record Maps') {
+                        const rm = {
+                            CompanyIntegrationID: '',
+                            EntityID: '',
+                            ExternalSystemRecordID: '',
+                            EntityRecordID: '',
+                            NewRecord: vi.fn(),
+                            InnerLoad: vi.fn().mockResolvedValue(true),
+                            Save: vi.fn(async () => {
+                                recordMaps.push({
+                                    EntityID: rm.EntityID,
+                                    ExternalSystemRecordID: rm.ExternalSystemRecordID,
+                                    EntityRecordID: rm.EntityRecordID,
+                                });
+                                return true;
+                            }),
+                        };
+                        return rm;
+                    }
+                    if (entityName === 'MJ: Company Integration Sync Watermarks') {
+                        return {
+                            NewRecord: vi.fn(),
+                            InnerLoad: vi.fn().mockResolvedValue(true),
+                            Save: vi.fn().mockResolvedValue(true),
+                        };
+                    }
+
+                    const meta = entityName === 'Companies' ? companyEntity : contactEntity;
+                    const fields = meta.Fields.map(f => ({
+                        Name: f.Name,
+                        Value: null as string | number | boolean | null,
+                    }));
+                    return {
+                        EntityInfo: meta,
+                        Fields: fields,
+                        LatestResult: { CompleteMessage: 'Endpoint Pass 2 FK rejected' },
+                        SetSyncContext: vi.fn(),
+                        ClearSyncContext: vi.fn(),
+                        NewRecord: vi.fn(),
+                        InnerLoad: vi.fn(async (key: { KeyValuePairs: Array<{ Value: unknown }> }) => {
+                            const id = String(key.KeyValuePairs[0]?.Value ?? '');
+                            const existing = storedRows.get(`${entityName}::${id}`);
+                            if (!existing) return false;
+                            for (const f of fields) {
+                                f.Value = existing[f.Name] ?? null;
+                            }
+                            return true;
+                        }),
+                        Save: vi.fn(async () => {
+                            if (entityName === 'Companies') {
+                                companySaveCount++;
+                                if (failPass2CompanySave && companySaveCount >= 2) {
+                                    return false;
+                                }
+                            }
+                            const snap: Record<string, string | number | boolean | null> = {};
+                            for (const f of fields) {
+                                snap[f.Name] = f.Value;
+                            }
+                            storedRows.set(`${entityName}::${String(snap['ID'])}`, snap);
+                            return true;
+                        }),
+                    };
+                }),
+            } as unknown as IMetadataProvider;
+
+            const endpoint = new PeerSyncEndpointService({
+                InstanceID: instanceID,
+                InstanceName: `Peer-${instanceID.slice(0, 4)}`,
+                MJCoreVersion: '6.3.0-edge.0',
+                DatabaseEngine: 'SQLServer',
+                CompanyIntegrationID: `ci-${instanceID.slice(0, 4)}`,
+                IntegrationID: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
+                AllowedEntityNames: ['Companies', 'Contacts'],
+                PreservePrimaryKeys: true,
+                MetadataProvider: mdProvider,
+                RunViewProvider: rvProvider,
+            });
+
+            return { endpoint, mdProvider, rvProvider, storedRows };
+        };
+
         it('flushes Push Pass 2 deferred FKs on the remote endpoint, isolates queues per RunID, and attributes Push Pass 2 errors', async () => {
             const { companyEntity, contactEntity } = buildCyclicEntityPair();
             const user = createContextUser();
 
-            const createCyclicPeer = (
-                instanceID: string,
-                localChanges: PeerRecordChangeEntry[],
-                failPass2CompanySave = false
-            ) => {
-                const storedRows = new Map<string, Record<string, string | number | boolean | null>>();
-                const recordMaps: Array<{ EntityID: string; ExternalSystemRecordID: string; EntityRecordID: string }> = [];
-                let companySaveCount = 0;
-
-                const rvProvider: IRunViewProvider = {
-                    RunView: vi.fn(async (params) => {
-                        if (params.EntityName === 'MJ: Record Changes') {
-                            const forEntity = localChanges.filter(c =>
-                                params.ExtraFilter?.includes(c.EntityID)
-                            );
-                            return {
-                                Success: true,
-                                Results: forEntity,
-                                RowCount: forEntity.length,
-                                TotalRowCount: forEntity.length,
-                                ExecutionTime: 1,
-                                ErrorMessage: '',
-                            } as RunViewResult;
-                        }
-                        if (params.EntityName === 'MJ: Company Integration Record Maps') {
-                            const filtered = recordMaps.filter(rm =>
-                                params.ExtraFilter?.includes(rm.EntityID) ?? true
-                            );
-                            return {
-                                Success: true,
-                                Results: filtered,
-                                RowCount: filtered.length,
-                                TotalRowCount: filtered.length,
-                                ExecutionTime: 1,
-                                ErrorMessage: '',
-                            } as RunViewResult;
-                        }
-                        return {
-                            Success: true,
-                            Results: [],
-                            RowCount: 0,
-                            TotalRowCount: 0,
-                            ExecutionTime: 1,
-                            ErrorMessage: '',
-                        } as RunViewResult;
-                    }),
-                    RunViews: vi.fn(async () => []),
-                };
-
-                const mdProvider = {
-                    Entities: [companyEntity, contactEntity],
-                    EntityByName: (name: string) =>
-                        name.toLowerCase() === 'companies'
-                            ? companyEntity
-                            : name.toLowerCase() === 'contacts'
-                                ? contactEntity
-                                : undefined,
-                    GetEntityObject: vi.fn(async (entityName: string) => {
-                        if (entityName === 'MJ: Company Integration Record Maps') {
-                            const rm = {
-                                CompanyIntegrationID: '',
-                                EntityID: '',
-                                ExternalSystemRecordID: '',
-                                EntityRecordID: '',
-                                NewRecord: vi.fn(),
-                                InnerLoad: vi.fn().mockResolvedValue(true),
-                                Save: vi.fn(async () => {
-                                    recordMaps.push({
-                                        EntityID: rm.EntityID,
-                                        ExternalSystemRecordID: rm.ExternalSystemRecordID,
-                                        EntityRecordID: rm.EntityRecordID,
-                                    });
-                                    return true;
-                                }),
-                            };
-                            return rm;
-                        }
-                        if (entityName === 'MJ: Company Integration Sync Watermarks') {
-                            return {
-                                NewRecord: vi.fn(),
-                                InnerLoad: vi.fn().mockResolvedValue(true),
-                                Save: vi.fn().mockResolvedValue(true),
-                            };
-                        }
-
-                        const meta = entityName === 'Companies' ? companyEntity : contactEntity;
-                        const fields = meta.Fields.map(f => ({
-                            Name: f.Name,
-                            Value: null as string | number | boolean | null,
-                        }));
-                        return {
-                            EntityInfo: meta,
-                            Fields: fields,
-                            LatestResult: { CompleteMessage: 'Endpoint Pass 2 FK rejected' },
-                            SetSyncContext: vi.fn(),
-                            ClearSyncContext: vi.fn(),
-                            NewRecord: vi.fn(),
-                            InnerLoad: vi.fn(async (key: { KeyValuePairs: Array<{ Value: unknown }> }) => {
-                                const id = String(key.KeyValuePairs[0]?.Value ?? '');
-                                const existing = storedRows.get(`${entityName}::${id}`);
-                                if (!existing) return false;
-                                for (const f of fields) {
-                                    f.Value = existing[f.Name] ?? null;
-                                }
-                                return true;
-                            }),
-                            Save: vi.fn(async () => {
-                                if (entityName === 'Companies') {
-                                    companySaveCount++;
-                                    if (failPass2CompanySave && companySaveCount >= 2) {
-                                        return false;
-                                    }
-                                }
-                                const snap: Record<string, string | number | boolean | null> = {};
-                                for (const f of fields) {
-                                    snap[f.Name] = f.Value;
-                                }
-                                storedRows.set(`${entityName}::${String(snap['ID'])}`, snap);
-                                return true;
-                            }),
-                        };
-                    }),
-                } as unknown as IMetadataProvider;
-
-                const endpoint = new PeerSyncEndpointService({
-                    InstanceID: instanceID,
-                    InstanceName: `Peer-${instanceID.slice(0, 4)}`,
-                    MJCoreVersion: '6.3.0-edge.0',
-                    DatabaseEngine: 'SQLServer',
-                    CompanyIntegrationID: `ci-${instanceID.slice(0, 4)}`,
-                    IntegrationID: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
-                    AllowedEntityNames: ['Companies', 'Contacts'],
-                    PreservePrimaryKeys: true,
-                    MetadataProvider: mdProvider,
-                    RunViewProvider: rvProvider,
-                });
-
-                return { endpoint, mdProvider, rvProvider, storedRows };
-            };
+            const createCyclicPeer = (instanceID: string, localChanges: PeerRecordChangeEntry[], failPass2CompanySave = false) =>
+                createCyclicPeerFor({ companyEntity, contactEntity }, instanceID, localChanges, failPass2CompanySave);
 
             const hubChanges: PeerRecordChangeEntry[] = [
                 {
@@ -2142,6 +2166,79 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
             expect(compMapRes?.RecordsErrored).toBe(1);
         });
 
+        it('records a push refused for one entity as that entity\'s failure and pushes the other entities', async () => {
+            const user = createContextUser();
+            const hubPair = buildCyclicEntityPair();
+            const partlyReadContacts = {
+                ...hubPair.contactEntity,
+                GetUserPermisions: () => ({ CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false }),
+                GetEffectiveRowFilterWhereClause: () => `OwnerID = '${user.ID}'`,
+            } as unknown as EntityInfo;
+            const hub = createCyclicPeerFor({ companyEntity: hubPair.companyEntity, contactEntity: partlyReadContacts }, INSTANCE_A, [
+                {
+                    ID: 'one-refused-chg-comp-1',
+                    EntityID: ENTITY_COMPANIES_ID,
+                    EntityName: 'Companies',
+                    RecordID: 'comp-one-refused-1',
+                    Type: 'Create',
+                    Source: 'Internal',
+                    ChangedAt: '2026-04-20T14:00:00.000Z',
+                    ChangesJSON: null,
+                    FullRecordJSON: JSON.stringify({ ID: 'comp-one-refused-1', PrimaryContactID: null }),
+                },
+            ]);
+            const remote = createCyclicPeerFor(buildCyclicEntityPair(), INSTANCE_B, []);
+            const connector = new MemberJunctionConnector({
+                Transport: new InProcessPeerSyncTransport(remote.endpoint, user),
+                LocalInstanceID: INSTANCE_A,
+                LocalMJCoreVersion: '6.3.0-edge.0',
+                MetadataProvider: hub.mdProvider,
+                RunViewProvider: hub.rvProvider,
+            });
+            const pushMap = (id: string, entityID: string, name: string): ICompanyIntegrationEntityMap => ({
+                ID: id,
+                CompanyIntegrationID: 'ci-hub',
+                ExternalObjectName: name,
+                ExternalObjectLabel: name,
+                EntityID: entityID,
+                SyncDirection: 'Push',
+                SyncEnabled: true,
+                MatchStrategy: null,
+                ConflictResolution: 'SourceWins',
+                Priority: 1,
+                DeleteBehavior: 'DoNothing',
+                Status: 'Active',
+                Configuration: null,
+                Entity: name,
+                Get: () => null,
+            });
+
+            const outcome = await connector.RunPipeline({
+                CompanyIntegration: {
+                    ID: 'ci-hub',
+                    IntegrationID: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+                    Configuration: JSON.stringify({ PreservePrimaryKeys: true }),
+                    ExternalSystemID: '',
+                } as unknown as MJCompanyIntegrationEntity,
+                Run: { ID: 'run-one-refused' } as unknown as MJCompanyIntegrationRunEntity,
+                EntityMaps: [pushMap('em-comp', ENTITY_COMPANIES_ID, 'Companies'), pushMap('em-cont', ENTITY_CONTACTS_ID, 'Contacts')],
+                FieldMapsByEntityMapID: new Map(),
+                FullSync: false,
+                ContextUser: user,
+            }).catch((e: Error) => e);
+
+            expect(outcome).not.toBeInstanceOf(Error);
+            const result = outcome as SyncResult;
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('every record');
+            const contacts = result.EntityMapResults.find((m) => m.EntityName === 'Contacts');
+            expect(contacts?.Success).toBe(false);
+            expect(contacts?.RecordsErrored).toBe(1);
+            const companies = result.EntityMapResults.find((m) => m.EntityName === 'Companies');
+            expect(companies?.Success).toBe(true);
+            expect(remote.storedRows.has('Companies::comp-one-refused-1')).toBe(true);
+        });
+
         it('caches PlanPeerEntityOrder across multiple ApplyChangeBatch calls when AllowedEntityNames is empty', async () => {
             const { companyEntity, contactEntity } = buildCyclicEntityPair();
             const user = createContextUser();
@@ -2248,5 +2345,39 @@ describe('MJ Peer Sync — Phase 1–4 Suite', () => {
                 }
             }
         });
+    });
+});
+
+describe('Peer sync change paging for a user who reads only part of an entity', () => {
+    it('refuses to page the change rows of an entity the sync user reads through a row filter', async () => {
+        const filtered = new EntityInfo({
+            ID: ENTITY_CONTACTS_ID,
+            Name: 'Contacts',
+            SchemaName: 'crm',
+            BaseTable: 'Contact',
+            BaseView: 'vwContacts',
+            Fields: [{ ID: 'c-f1', EntityID: ENTITY_CONTACTS_ID, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Sequence: 1 }],
+        });
+        vi.spyOn(filtered, 'GetUserPermisions').mockReturnValue({ CanRead: true, CanCreate: false, CanUpdate: false, CanDelete: false });
+        vi.spyOn(filtered, 'GetEffectiveRowFilterWhereClause').mockReturnValue(`OwnerID = '${createContextUser().ID}'`);
+        const runView = vi.fn(async (): Promise<RunViewResult> => ({
+            Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '',
+        }));
+        const endpoint = new PeerSyncEndpointService({
+            InstanceID: INSTANCE_A,
+            InstanceName: 'Peer-A',
+            MJCoreVersion: '5.27.0',
+            DatabaseEngine: 'SQLServer',
+            CompanyIntegrationID: 'ci-a',
+            AllowedEntityNames: ['Contacts'],
+            MetadataProvider: { Entities: [filtered], EntityByName: () => filtered } as unknown as IMetadataProvider,
+            RunViewProvider: { RunView: runView, RunViews: vi.fn() } as unknown as IRunViewProvider,
+        });
+
+        await expect(endpoint.FetchChangeBatch(
+            { PairingID: 'p', RequesterInstanceID: INSTANCE_B, EntityName: 'Contacts', SinceCursor: null, BatchSize: 10 },
+            createContextUser(),
+        )).rejects.toThrow(/every record/);
+        expect(runView).not.toHaveBeenCalled();
     });
 });

@@ -186,7 +186,11 @@ export class TransactionResolver extends ResolverBase {
                     case "Update":
                     case "Create":
                         if (item.OperationType === "Update") {
-                            await entity.InnerLoad(pkey);
+                            if (await this.LoadRecordForWrite(entity, pkey, user, 'update') === 'refused') {
+                                objectValues.push(itemValues);
+                                refusals.push(describeRefusedItem(index, item, entity));
+                                break;
+                            }
                             if (typeof entity.GetDataObject === 'function') {
                                 // fls-guard: pre-update snapshot; projected before the delta is built
                                 preUpdateValues.set(index, await entity.GetDataObject());
@@ -207,7 +211,12 @@ export class TransactionResolver extends ResolverBase {
                         }
                         break;
                     case "Delete":
-                        await entity.InnerLoad(pkey);
+                        if (await this.LoadRecordForWrite(entity, pkey, user, 'delete') === 'refused') {
+                            // fls-guard: the entity was reset to a new record and holds no stored value
+                            objectValues.push(await entity.GetDataObject());
+                            refusals.push(describeRefusedItem(index, item, entity));
+                            break;
+                        }
                         // AWAITED: GetDataObject() is async, and pushing the un-awaited Promise put
                         // one into `objectValues` — which is `any[]`, so neither tsc nor a
                         // floating-promise lint could see it. PrepareReturnValue's Delete branch

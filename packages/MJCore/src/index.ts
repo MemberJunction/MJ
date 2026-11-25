@@ -31,6 +31,7 @@ export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
 export * from "./generic/entityRecordNameCache";
 export * from "./generic/recordChangeFieldSecurity";
+export * from "./generic/recordReadability";
 export * from "./generic/entityValueFieldSecurity";
 export * from "./generic/indexRestrictedFields";
 export * from "./generic/constraintErrorRedaction";

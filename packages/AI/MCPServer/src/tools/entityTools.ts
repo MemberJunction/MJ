@@ -12,6 +12,7 @@ import {
     EntityFieldInfo,
     EntityInfo,
     FieldSecurityError,
+    LoadRecordPassingReadHooks,
     Metadata,
     ProjectEntityValueRowsForUser,
     ProjectEntityValuesForUser,
@@ -146,15 +147,7 @@ export function AddEntityUpdateTool(addToolWithFilter: AddToolFn, entity: Entity
             const sessionUser = sessionContext.user;
             const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const record = await md.GetEntityObject(entity.Name, sessionUser);
-            const loaded = await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
-            ));
+            const loaded = await LoadRecordPassingReadHooks(record, primaryKeyOf(entity, props), sessionUser);
             if (loaded) {
                 // remove the primary keys from the props so we don't try to update them
                 const newProps = { ...props };
@@ -195,15 +188,7 @@ export function AddEntityDeleteTool(addToolWithFilter: AddToolFn, entity: Entity
             const sessionUser = sessionContext.user;
             const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const record = await md.GetEntityObject(entity.Name, sessionUser);
-            const loaded = await record.InnerLoad(new CompositeKey(
-                // use the primary keys to load the record
-                entity.PrimaryKeys.map((pk) => {
-                    return {
-                        FieldName: pk.Name,
-                        Value: props[pk.Name]
-                    };
-                })
-            ));
+            const loaded = await LoadRecordPassingReadHooks(record, primaryKeyOf(entity, props), sessionUser);
             if (loaded) {
                 const savedRecordJSON = await convertEntityObjectToJSON(record, sessionUser, md);
                 const success = await record.Delete();
@@ -430,6 +415,11 @@ function addSingleParamToObject(
     }
 }
 
+/** The primary key of `entity` from the key values in a tool's input. */
+function primaryKeyOf(entity: EntityInfo, props: Record<string, unknown>): CompositeKey {
+    return new CompositeKey(entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: props[pk.Name] })));
+}
+
 /**
  * Builds a Zod parameter object containing only the primary key fields for an entity.
  * Used for Get and Delete operations that only need to identify the record.
@@ -463,13 +453,11 @@ export function AddEntityGetTool(addToolWithFilter: AddToolFn, entity: EntityInf
             const sessionUser = sessionContext.user;
             const md = new Metadata(); // global-provider-ok: MCP server bootstrap
             const record = await md.GetEntityObject(entity.Name, sessionUser);
-            await record.InnerLoad(new CompositeKey(
-                entity.PrimaryKeys.map((pk) => ({
-                    FieldName: pk.Name,
-                    Value: props[pk.Name]
-                }))
-            ));
-            return await convertEntityObjectToJSON(record, sessionUser, md);
+            if (await LoadRecordPassingReadHooks(record, primaryKeyOf(entity, props), sessionUser)) {
+                return await convertEntityObjectToJSON(record, sessionUser, md);
+            }
+            // A record that is not found or that the read hooks remove: an unloaded record, so no value is returned.
+            return await convertEntityObjectToJSON(await md.GetEntityObject(entity.Name, sessionUser), sessionUser, md);
         }
     });
 }

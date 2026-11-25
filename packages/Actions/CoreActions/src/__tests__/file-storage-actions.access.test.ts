@@ -103,6 +103,8 @@ function answerView(params: RunViewParams, user: UserInfo | undefined): RunViewR
                 return ok(FILES.filter(f => namedIn(params, f.ProviderID) && namedIn(params, `'${f.ProviderKey}'`)));
             }
             return ok(FILES.filter(f => namedIn(params, f.ID) && (READABLE_FILES[user?.ID ?? ''] ?? []).includes(f.ID)));
+        case 'MJ: File Entity Record Links':
+            return ok([]); // no file is linked to records
         default:
             return { Success: false, Results: [], ErrorMessage: 'unknown entity' } as RunViewResult<object>;
     }

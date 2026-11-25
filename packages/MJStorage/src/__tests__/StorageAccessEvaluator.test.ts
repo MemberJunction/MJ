@@ -85,6 +85,8 @@ function runFakeView(db: FakeDb, params: RunViewParams, user: UserInfo | undefin
             return db.FailPermissionRead ? fail : ok(db.Permissions.filter(p => filterNames(params, p.FileStorageAccountID)));
         case 'MJ: Files':
             return runFakeFilesView(db, params, user, ok, fail);
+        case 'MJ: File Entity Record Links':
+            return ok([]); // no file here is linked to a record
         default:
             return fail;
     }
