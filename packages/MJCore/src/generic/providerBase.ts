@@ -193,6 +193,7 @@ export type EntityMetadataRow = BaseMetadataRow & {
     EntityOrganicKeys?: unknown[];
     EntityAlternateBaseViews?: unknown[];
     EntityUniqueKeys?: unknown[];
+    EntityIndexes?: unknown[];
 };
 export type EntityFieldMetadataRow = BaseMetadataRow & {
     ID: string;
@@ -212,6 +213,12 @@ export type OrganicKeyMetadataRow = BaseMetadataRow & {
     EntityOrganicKeyRelatedEntities?: unknown[];
 };
 export type OrganicKeyRelatedEntityMetadataRow = BaseMetadataRow & { EntityOrganicKeyID: string };
+export type EntityIndexMetadataRow = BaseMetadataRow & {
+    ID: string;
+    EntityID: string;
+    EntityIndexFields?: unknown[];
+};
+export type EntityIndexFieldMetadataRow = BaseMetadataRow & { EntityIndexID: string };
 
 /**
  * Options controlling mutability vs. frozen-reference preservation in {@link ProjectRowsToFields}.
@@ -978,6 +985,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     private static readonly _metadataFoldedItemCodes: ReadonlyArray<string> = [
         'EntityFields', 'EntityFieldValues', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys',
         'EntityOrganicKeyRelatedEntities', 'EntityFieldPermissions', 'EntityAlternateBaseViews', 'EntityUniqueKeys',
+        'EntityIndexes', 'EntityIndexFields',
         'ApplicationEntities', 'ApplicationSettings',
     ];
     private static readonly _metadataBuildItemCodes: ReadonlySet<string> =
@@ -7394,6 +7402,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     simpleMetadata.EntityFieldPermissions,
                     simpleMetadata.EntityAlternateBaseViews,
                     simpleMetadata.EntityUniqueKeys,
+                    simpleMetadata.EntityIndexes,
+                    simpleMetadata.EntityIndexFields,
                 );
 
                 // Post Process the Applications, because we want to handle the sub-objects properly.
@@ -7431,7 +7441,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * applications their entities and settings. The entity array is also sorted.
      */
     private static readonly _assemblyWrittenItemCodes: ReadonlySet<string> =
-        new Set(['Entities', 'EntityFields', 'EntityOrganicKeys', 'Applications']);
+        new Set(['Entities', 'EntityFields', 'EntityOrganicKeys', 'EntityIndexes', 'Applications']);
 
     /**
      * The MJ_Metadata rows keyed by item code, as {@link GetAllMetadata} assembles them: the items
@@ -7540,6 +7550,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         fieldPermissions?: EntityFieldPermissionMetadataRow[],
         alternateBaseViews?: EntityChildMetadataRow[],
         uniqueKeys?: EntityChildMetadataRow[],
+        entityIndexes?: EntityIndexMetadataRow[],
+        entityIndexFields?: EntityIndexFieldMetadataRow[],
     ): EntityInfo[] {
         const result: EntityInfo[] = [];
 
@@ -7576,6 +7588,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
+        // Link index field rows to their parent indexes (skipped when absent to keep payloads compact)
+        if (entityIndexes && entityIndexes.length > 0 && entityIndexFields && entityIndexFields.length > 0) {
+            const fieldsByIndexId = this.groupByNormalizedUUID(entityIndexFields, f => f.EntityIndexID);
+            for (const idx of entityIndexes) {
+                idx.EntityIndexFields = fieldsByIndexId.get(NormalizeUUID(idx.ID)) || [];
+            }
+        }
+
         const fieldsByEntityId = this.groupByNormalizedUUID(fields, f => f.EntityID);
         const permissionsByEntityId = this.groupByNormalizedUUID(permissions, p => p.EntityID);
         const relationshipsByEntityId = this.groupByNormalizedUUID(relationships, r => r.EntityID);
@@ -7589,6 +7609,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const uniqueKeysByEntityId = uniqueKeys && uniqueKeys.length > 0
             ? this.groupByNormalizedUUID(uniqueKeys, uk => uk.EntityID)
             : new Map<string, EntityChildMetadataRow[]>();
+        const indexesByEntityId = entityIndexes && entityIndexes.length > 0
+            ? this.groupByNormalizedUUID(entityIndexes, idx => idx.EntityID)
+            : new Map<string, EntityIndexMetadataRow[]>();
 
         for (const e of sortedEntities) {
             const entityIdKey = NormalizeUUID(e.ID);
@@ -7608,6 +7631,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
             if (uniqueKeys) {
                 e.EntityUniqueKeys = uniqueKeysByEntityId.get(entityIdKey) || [];
+            }
+            if (entityIndexes) {
+                e.EntityIndexes = indexesByEntityId.get(entityIdKey) || [];
             }
             result.push(new EntityInfo(e, this));
         }

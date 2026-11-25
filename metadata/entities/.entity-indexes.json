@@ -1,0 +1,27 @@
+[
+  {
+    "_comments": [
+      "Entity Indexes and Entity Index Fields are synced from the database catalog on every CodeGen run.",
+      "Record-change tracking is disabled on both entities (#6801) to avoid noisy record-change logs.",
+      "Sets ONLY TrackRecordChanges so caching and other CodeGen-managed attributes stay at their defaults."
+    ],
+    "fields": {
+      "Name": "MJ: Entity Indices",
+      "BaseView": "vwEntityIndices",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Indices"
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ: Entity Index Fields",
+      "BaseView": "vwEntityIndexFields",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Index Fields"
+    }
+  }
+]

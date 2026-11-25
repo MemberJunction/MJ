@@ -251,6 +251,8 @@ import type {
   MJEntityFieldEntityType,
   MJEntityFormContributionEntityType,
   MJEntityFormOverrideEntityType,
+  MJEntityIndexFieldEntityType,
+  MJEntityIndexEntityType,
   MJEntityOrganicKeyRelatedEntityEntityType,
   MJEntityOrganicKeyEntityType,
   MJEntityPermissionEntityType,
@@ -72044,6 +72046,439 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
     */
     get Role(): string | null {
         return this.Get('Role');
+    }
+}
+
+
+/**
+ * MJ: Entity Index Fields - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityIndexField
+ * * Base View: vwEntityIndexFields
+ * * @description Ordered key and INCLUDE column (or expression) entries belonging to an EntityIndex.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Index Fields')
+export class MJEntityIndexFieldEntity extends BaseEntity<MJEntityIndexFieldEntityType> {
+    /**
+    * Loads the MJ: Entity Index Fields record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Index Fields record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityIndexFieldEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityIndexID
+    * * Display Name: Entity Index ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Indices (vwEntityIndices.ID)
+    * * Description: The parent EntityIndex row.
+    */
+    get EntityIndexID(): string {
+        return this.Get('EntityIndexID');
+    }
+    set EntityIndexID(value: string) {
+        this.Set('EntityIndexID', value);
+    }
+
+    /**
+    * * Field Name: EntityFieldID
+    * * Display Name: Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    * * Description: The indexed entity field, or NULL when this key position is an expression.
+    */
+    get EntityFieldID(): string | null {
+        return this.Get('EntityFieldID');
+    }
+    set EntityFieldID(value: string | null) {
+        this.Set('EntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: Expression
+    * * Display Name: Expression
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Expression text for an expression key part when EntityFieldID is NULL (for example lower(email)).
+    */
+    get Expression(): string | null {
+        return this.Get('Expression');
+    }
+    set Expression(value: string | null) {
+        this.Set('Expression', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: 1-based ordinal position within the index (key parts first, followed by INCLUDE columns).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Key
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Include
+    *   * Key
+    * * Description: Whether this entry is a Key column/expression or a non-key Include column.
+    */
+    get Role(): 'Include' | 'Key' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Include' | 'Key') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: SortDirection
+    * * Display Name: Sort Direction
+    * * SQL Data Type: nvarchar(10)
+    * * Default Value: ASC
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ASC
+    *   * DESC
+    * * Description: Sort direction of a Key column (ASC or DESC). INCLUDE columns default to ASC.
+    */
+    get SortDirection(): 'ASC' | 'DESC' {
+        return this.Get('SortDirection');
+    }
+    set SortDirection(value: 'ASC' | 'DESC') {
+        this.Set('SortDirection', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityIndex
+    * * Display Name: Entity Index
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityIndex(): string | null {
+        return this.Get('EntityIndex');
+    }
+
+    /**
+    * * Field Name: EntityField
+    * * Display Name: Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityField(): string | null {
+        return this.Get('EntityField');
+    }
+}
+
+
+/**
+ * MJ: Entity Indices - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityIndex
+ * * Base View: vwEntityIndices
+ * * @description Database indexes on each entity's base table (Status = Active) and index proposals from advisors such as DBAutoDoc (Status = Proposed or Rejected). Kept in sync with the database catalog by CodeGen.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Indices')
+export class MJEntityIndexEntity extends BaseEntity<MJEntityIndexEntityType> {
+    /**
+    * Loads the MJ: Entity Indices record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Indices record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityIndexEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: The entity whose base table owns this index.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The index name in the database (or proposed index name when Status is Proposed/Rejected).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: IndexType
+    * * Display Name: Index Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: BTree
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BRIN
+    *   * BTree
+    *   * Columnstore
+    *   * FullText
+    *   * GIN
+    *   * GiST
+    *   * Hash
+    *   * Other
+    *   * Spatial
+    *   * XML
+    * * Description: Normalized cross-database index type: BTree, Hash, FullText, Columnstore, GIN, GiST, BRIN, Spatial, XML, or Other.
+    */
+    get IndexType(): 'BRIN' | 'BTree' | 'Columnstore' | 'FullText' | 'GIN' | 'GiST' | 'Hash' | 'Other' | 'Spatial' | 'XML' {
+        return this.Get('IndexType');
+    }
+    set IndexType(value: 'BRIN' | 'BTree' | 'Columnstore' | 'FullText' | 'GIN' | 'GiST' | 'Hash' | 'Other' | 'Spatial' | 'XML') {
+        this.Set('IndexType', value);
+    }
+
+    /**
+    * * Field Name: NativeType
+    * * Display Name: Native Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Database-native index type or access method name (for example CLUSTERED, NONCLUSTERED, btree, gin).
+    */
+    get NativeType(): string {
+        return this.Get('NativeType');
+    }
+    set NativeType(value: string) {
+        this.Set('NativeType', value);
+    }
+
+    /**
+    * * Field Name: IsUnique
+    * * Display Name: Is Unique
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the index enforces uniqueness across its key columns.
+    */
+    get IsUnique(): boolean {
+        return this.Get('IsUnique');
+    }
+    set IsUnique(value: boolean) {
+        this.Set('IsUnique', value);
+    }
+
+    /**
+    * * Field Name: IsPrimaryKey
+    * * Display Name: Is Primary Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when this index backs the table's primary key constraint.
+    */
+    get IsPrimaryKey(): boolean {
+        return this.Get('IsPrimaryKey');
+    }
+    set IsPrimaryKey(value: boolean) {
+        this.Set('IsPrimaryKey', value);
+    }
+
+    /**
+    * * Field Name: IsClustered
+    * * Display Name: Is Clustered
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when the index is clustered (SQL Server CLUSTERED / CLUSTERED COLUMNSTORE or PostgreSQL indisclustered).
+    */
+    get IsClustered(): boolean {
+        return this.Get('IsClustered');
+    }
+    set IsClustered(value: boolean) {
+        this.Set('IsClustered', value);
+    }
+
+    /**
+    * * Field Name: FilterDefinition
+    * * Display Name: Filter Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Predicate expression for a filtered (SQL Server) or partial (PostgreSQL) index; NULL when unfiltered.
+    */
+    get FilterDefinition(): string | null {
+        return this.Get('FilterDefinition');
+    }
+    set FilterDefinition(value: string | null) {
+        this.Set('FilterDefinition', value);
+    }
+
+    /**
+    * * Field Name: HasExpressions
+    * * Display Name: Has Expressions
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when one or more key parts are expressions rather than plain base-table columns.
+    */
+    get HasExpressions(): boolean {
+        return this.Get('HasExpressions');
+    }
+    set HasExpressions(value: boolean) {
+        this.Set('HasExpressions', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Database
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CodeGen
+    *   * DBAutoDoc
+    *   * Database
+    * * Description: Origin of the index record: Database (discovered in catalog), CodeGen (auto-generated IDX_AUTO_MJ_FKEY_* index), or DBAutoDoc (proposed by DBAutoDoc Index Advisor).
+    */
+    get Source(): 'CodeGen' | 'DBAutoDoc' | 'Database' {
+        return this.Get('Source');
+    }
+    set Source(value: 'CodeGen' | 'DBAutoDoc' | 'Database') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Proposed
+    *   * Rejected
+    * * Description: Lifecycle status of the index: Active (exists in database), Proposed (recommended but not yet created), or Rejected (proposal dismissed).
+    */
+    get Status(): 'Active' | 'Proposed' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Proposed' | 'Rejected') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional human-readable description or advisor rationale for why this index exists or is proposed.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
     }
 }
 

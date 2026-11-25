@@ -24903,6 +24903,196 @@ export const MJEntityFormOverrideSchema = z.object({
 export type MJEntityFormOverrideEntityType = z.infer<typeof MJEntityFormOverrideSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Entity Index Fields
+ */
+export const MJEntityIndexFieldSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityIndexID: z.string().describe(`
+        * * Field Name: EntityIndexID
+        * * Display Name: Entity Index ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Indices (vwEntityIndices.ID)
+        * * Description: The parent EntityIndex row.`),
+    EntityFieldID: z.string().nullable().describe(`
+        * * Field Name: EntityFieldID
+        * * Display Name: Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+        * * Description: The indexed entity field, or NULL when this key position is an expression.`),
+    Expression: z.string().nullable().describe(`
+        * * Field Name: Expression
+        * * Display Name: Expression
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Expression text for an expression key part when EntityFieldID is NULL (for example lower(email)).`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: 1-based ordinal position within the index (key parts first, followed by INCLUDE columns).`),
+    Role: z.union([z.literal('Include'), z.literal('Key')]).describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Key
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Include
+    *   * Key
+        * * Description: Whether this entry is a Key column/expression or a non-key Include column.`),
+    SortDirection: z.union([z.literal('ASC'), z.literal('DESC')]).describe(`
+        * * Field Name: SortDirection
+        * * Display Name: Sort Direction
+        * * SQL Data Type: nvarchar(10)
+        * * Default Value: ASC
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ASC
+    *   * DESC
+        * * Description: Sort direction of a Key column (ASC or DESC). INCLUDE columns default to ASC.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityIndex: z.string().nullable().describe(`
+        * * Field Name: EntityIndex
+        * * Display Name: Entity Index
+        * * SQL Data Type: nvarchar(255)`),
+    EntityField: z.string().nullable().describe(`
+        * * Field Name: EntityField
+        * * Display Name: Entity Field
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityIndexFieldEntityType = z.infer<typeof MJEntityIndexFieldSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Indices
+ */
+export const MJEntityIndexSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: The entity whose base table owns this index.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The index name in the database (or proposed index name when Status is Proposed/Rejected).`),
+    IndexType: z.union([z.literal('BRIN'), z.literal('BTree'), z.literal('Columnstore'), z.literal('FullText'), z.literal('GIN'), z.literal('GiST'), z.literal('Hash'), z.literal('Other'), z.literal('Spatial'), z.literal('XML')]).describe(`
+        * * Field Name: IndexType
+        * * Display Name: Index Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: BTree
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BRIN
+    *   * BTree
+    *   * Columnstore
+    *   * FullText
+    *   * GIN
+    *   * GiST
+    *   * Hash
+    *   * Other
+    *   * Spatial
+    *   * XML
+        * * Description: Normalized cross-database index type: BTree, Hash, FullText, Columnstore, GIN, GiST, BRIN, Spatial, XML, or Other.`),
+    NativeType: z.string().describe(`
+        * * Field Name: NativeType
+        * * Display Name: Native Type
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Database-native index type or access method name (for example CLUSTERED, NONCLUSTERED, btree, gin).`),
+    IsUnique: z.boolean().describe(`
+        * * Field Name: IsUnique
+        * * Display Name: Is Unique
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the index enforces uniqueness across its key columns.`),
+    IsPrimaryKey: z.boolean().describe(`
+        * * Field Name: IsPrimaryKey
+        * * Display Name: Is Primary Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when this index backs the table's primary key constraint.`),
+    IsClustered: z.boolean().describe(`
+        * * Field Name: IsClustered
+        * * Display Name: Is Clustered
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when the index is clustered (SQL Server CLUSTERED / CLUSTERED COLUMNSTORE or PostgreSQL indisclustered).`),
+    FilterDefinition: z.string().nullable().describe(`
+        * * Field Name: FilterDefinition
+        * * Display Name: Filter Definition
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Predicate expression for a filtered (SQL Server) or partial (PostgreSQL) index; NULL when unfiltered.`),
+    HasExpressions: z.boolean().describe(`
+        * * Field Name: HasExpressions
+        * * Display Name: Has Expressions
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True when one or more key parts are expressions rather than plain base-table columns.`),
+    Source: z.union([z.literal('CodeGen'), z.literal('DBAutoDoc'), z.literal('Database')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Database
+    * * Value List Type: List
+    * * Possible Values 
+    *   * CodeGen
+    *   * DBAutoDoc
+    *   * Database
+        * * Description: Origin of the index record: Database (discovered in catalog), CodeGen (auto-generated IDX_AUTO_MJ_FKEY_* index), or DBAutoDoc (proposed by DBAutoDoc Index Advisor).`),
+    Status: z.union([z.literal('Active'), z.literal('Proposed'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Proposed
+    *   * Rejected
+        * * Description: Lifecycle status of the index: Active (exists in database), Proposed (recommended but not yet created), or Rejected (proposal dismissed).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional human-readable description or advisor rationale for why this index exists or is proposed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJEntityIndexEntityType = z.infer<typeof MJEntityIndexSchema>;
+
+/**
  * zod schema definition for the entity MJ: Entity Organic Key Related Entities
  */
 export const MJEntityOrganicKeyRelatedEntitySchema = z.object({

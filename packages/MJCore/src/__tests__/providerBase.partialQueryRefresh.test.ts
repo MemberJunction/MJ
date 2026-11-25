@@ -922,7 +922,7 @@ describe('ProviderBase — a snapshot saved with query metadata, restored withou
  * children a second time, nested inside the entity rows, with every response.
  */
 describe('ProviderBase — the metadata assembly leaves the dataset rows as read', () => {
-    const NESTED_ENTITY_KEYS = ['EntityFields', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys', 'EntityAlternateBaseViews', 'EntityUniqueKeys'];
+    const NESTED_ENTITY_KEYS = ['EntityFields', 'EntityPermissions', 'EntityRelationships', 'EntitySettings', 'EntityOrganicKeys', 'EntityAlternateBaseViews', 'EntityUniqueKeys', 'EntityIndexes'];
 
     function providerWithApplications(): PartialRefreshProvider {
         const provider = new PartialRefreshProvider(new InProcessStore());

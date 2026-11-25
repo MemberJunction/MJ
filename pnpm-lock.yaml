@@ -11725,6 +11725,9 @@ importers:
       '@memberjunction/server-bootstrap-lite':
         specifier: 6.3.0-edge.2
         version: link:../ServerBootstrapLite
+      '@memberjunction/sql-dialect':
+        specifier: 6.3.0-edge.2
+        version: link:../SQLDialect
       '@oclif/core':
         specifier: ^3.27.0
         version: 3.27.0

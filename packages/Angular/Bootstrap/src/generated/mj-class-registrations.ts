@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (534 classes)
+// @memberjunction/core-entities (536 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -318,6 +318,8 @@ import {
     MJEntityFieldValueEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    MJEntityIndexEntity,
+    MJEntityIndexFieldEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -1261,6 +1263,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldValueEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    MJEntityIndexEntity,
+    MJEntityIndexFieldEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -1366,12 +1370,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
-    MJPermissionDomainEntity,
-    MJPhoneNumberEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJPermissionDomainEntity,
+    MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
     MJProcessRunEntity,
     MJProjectEntity,
@@ -1570,12 +1574,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
-    ArtifactWorkspaceChannel,
-    ClientContextChannel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ArtifactWorkspaceChannel,
+    ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
     RealtimeAvatarChannel,
@@ -1774,12 +1778,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SchedulingDashboardComponent,
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
-    SecurityPermissionsComponent,
-    SettingsExplorerComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SecurityPermissionsComponent,
+    SettingsExplorerComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TabStripLabComponent,
@@ -1839,7 +1843,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 844;
+export const CLASS_REGISTRATIONS_COUNT = 846;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

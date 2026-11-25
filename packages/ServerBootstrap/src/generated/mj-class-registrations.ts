@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (534 classes)
+// @memberjunction/core-entities (536 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -529,6 +529,8 @@ import {
     MJEntityFieldValueEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    MJEntityIndexEntity,
+    MJEntityIndexFieldEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -2402,6 +2404,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldValueEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    MJEntityIndexEntity,
+    MJEntityIndexFieldEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -2444,12 +2448,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
-    MJInstanceConfigurationEntity,
-    MJIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJInstanceConfigurationEntity,
+    MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
@@ -2648,12 +2652,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueDeliveryEntity,
     MJWorkQueueMessageEntity,
     MJWorkQueueSubscriptionEntity,
-    MJWorkQueueTopicEntity,
-    MJWorkQueueTransportEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJWorkQueueTopicEntity,
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     MJvwLatestFeatureValuesEntity,
@@ -2852,12 +2856,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MySQLExternalDataSourceDriver,
     OracleExternalDataSourceDriver,
     PostgresExternalDataSourceDriver,
-    SnowflakeExternalDataSourceDriver,
-    SQLServerExternalDataSourceDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SnowflakeExternalDataSourceDriver,
+    SQLServerExternalDataSourceDriver,
     MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
@@ -3056,12 +3060,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DatabaseDesignerSchemaValidator,
     CreateEntityAction,
     DescribeEntityAction,
-    ListMyEntitiesAction,
-    ModifyEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ListMyEntitiesAction,
+    ModifyEntityAction,
     ValidateEntitySchemaAction,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
@@ -3260,12 +3264,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AgentEvalDriver,
     DecisionEvalDriver,
     PromptEvalDriver,
-    RubricCalibrationTestDriver,
-    ComputerUseAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RubricCalibrationTestDriver,
+    ComputerUseAction,
     ComputerUseTestDriver,
     DecisionFeaturePipelineDriver,
     FeaturePipelineGoldenSetDriver,
@@ -3464,12 +3468,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
-    ScopedSearchAction,
-    SearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    ScopedSearchAction,
+    SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -3570,7 +3574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1482;
+export const CLASS_REGISTRATIONS_COUNT = 1484;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

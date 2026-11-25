@@ -264,6 +264,8 @@ import { MJEntityFieldValueFormComponent } from "./Entities/MJEntityFieldValue/m
 import { MJEntityFormComponent } from "./Entities/MJEntity/mjentity.form.component";
 import { MJEntityFormContributionFormComponent } from "./Entities/MJEntityFormContribution/mjentityformcontribution.form.component";
 import { MJEntityFormOverrideFormComponent } from "./Entities/MJEntityFormOverride/mjentityformoverride.form.component";
+import { MJEntityIndexFieldFormComponent } from "./Entities/MJEntityIndexField/mjentityindexfield.form.component";
+import { MJEntityIndexFormComponent } from "./Entities/MJEntityIndex/mjentityindex.form.component";
 import { MJEntityOrganicKeyFormComponent } from "./Entities/MJEntityOrganicKey/mjentityorganickey.form.component";
 import { MJEntityOrganicKeyRelatedEntityFormComponent } from "./Entities/MJEntityOrganicKeyRelatedEntity/mjentityorganickeyrelatedentity.form.component";
 import { MJEntityPermissionFormComponent } from "./Entities/MJEntityPermission/mjentitypermission.form.component";
@@ -1084,6 +1086,7 @@ declarations: [
     MJCompanyIntegrationFormComponent,
     MJConversationTypeFormComponent,
     MJEntityActionInvocationFormComponent,
+    MJEntityIndexFieldFormComponent,
     MJMCPServerFormComponent,
     MJPermissionDomainFormComponent,
     MJRecordChangeReplayRunFormComponent,
@@ -1149,6 +1152,7 @@ declarations: [
     MJCommunicationActivityFormComponent,
     MJCompanyIntegrationRunDetailFormComponent,
     MJConversationArtifactFormComponent,
+    MJEntityIndexFormComponent,
     MJEntityOrganicKeyRelatedEntityFormComponent,
     MJEntitySettingFormComponent,
     MJMagicLinkInviteAllowedPathFormComponent,

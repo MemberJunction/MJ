@@ -57,6 +57,8 @@ export interface IndexAdvisorOptions {
   MaxLLMTables: number;
   /** PostgreSQL: emit CREATE INDEX CONCURRENTLY (no write lock while building; runs outside a transaction). Default true. */
   Concurrently: boolean;
+  /** Persist proposals to MJ EntityIndex metadata when an MJ provider is configured. Default true. */
+  PersistToMJMetadata?: boolean;
 }
 
 /** The plugin's section of the state file (`state.plugins.IndexAdvisor.Data`). */
