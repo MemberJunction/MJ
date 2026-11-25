@@ -11,6 +11,7 @@ import {
   OnInit,
   Output,
   SimpleChanges,
+  TemplateRef,
   ViewChild,
   ViewContainerRef,
   ViewEncapsulation,
@@ -43,6 +44,7 @@ import { AnchorRegistry } from '../anchors/anchor-registry';
 import { DomTourAnchorBridge } from '../anchors/dom-tour-anchor-bridge';
 import { TourGlobalStylesComponent } from '../overlay/tour-global-styles.component';
 import { BaseTourPresenter } from '../presenters/base-tour-presenter';
+import type { TourVoiceBarContext } from '../presenters/tour-voice-dock.component';
 import { EnsureStandardTourPresentersRegistered } from '../presenters/register-standard-presenters';
 import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
 import {
@@ -102,9 +104,17 @@ export class MJTourHostComponent
   @Input() public OnRecordEvents: ((events: Parameters<ITourProgressStore['RecordEvents']>[0]) => void | Promise<void>) | null = null;
   /** Automatically starts a tour key once mounted when set. */
   @Input() public AutoStartTourKey: string | null = null;
+  /** Optional host-provided embedded Sage bar template rendered inside `.mjt-voice-dock`. */
+  @Input() public VoiceBarTemplate: TemplateRef<TourVoiceBarContext> | null = null;
+  /** Whether Sage Voice Guide is available on the host. */
+  @Input() public VoiceGuideAvailable = false;
+  /** Whether Sage Voice Guide is currently active for the session. */
+  @Input() public VoiceGuideActive = false;
 
   @Output() public TourEvent = new EventEmitter<TourSessionEventArgs>();
   @Output() public SessionChanged = new EventEmitter<TourSessionView | null>();
+  @Output() public VoiceGuideRequested = new EventEmitter<boolean>();
+  @Output() public DemonstrateRequested = new EventEmitter<{ ConfirmedMutation?: boolean }>();
 
   protected readonly currentView = signal<TourSessionView | null>(null);
 
@@ -147,6 +157,9 @@ export class MJTourHostComponent
       if (this.AutoStartTourKey && !this.activeSession) {
         void this.Start(this.AutoStartTourKey);
       }
+    }
+    if ('VoiceBarTemplate' in changes || 'VoiceGuideAvailable' in changes || 'VoiceGuideActive' in changes) {
+      this.syncPresenterInputs();
     }
   }
 
@@ -378,6 +391,45 @@ export class MJTourHostComponent
         void this.Start(nextTourKey);
       }),
     );
+    this.presenterSubs.add(
+      ref.instance.StepSelected.subscribe((targetStepKey) => {
+        if (this.activeSession && this.activeDirectorToken) {
+          void this.activeSession.GoToStep(this.activeDirectorToken, targetStepKey);
+        }
+      }),
+    );
+    this.presenterSubs.add(
+      ref.instance.VoiceGuideRequested.subscribe((enabled) => {
+        this.VoiceGuideRequested.emit(enabled);
+      }),
+    );
+    this.presenterSubs.add(
+      ref.instance.DemonstrateRequested.subscribe((evt) => {
+        if (this.activeSession) {
+          void this.activeSession.DemonstrateCurrentStep({
+            ConfirmedMutation: evt.ConfirmedMutation,
+            UserInitiated: true,
+          });
+        }
+        this.DemonstrateRequested.emit(evt);
+      }),
+    );
+    this.presenterSubs.add(
+      ref.instance.ConfirmDemonstration.subscribe(() => {
+        if (this.activeSession) {
+          void this.activeSession.DemonstrateCurrentStep({
+            ConfirmedMutation: true,
+            UserInitiated: true,
+          });
+        }
+        this.DemonstrateRequested.emit({ ConfirmedMutation: true });
+      }),
+    );
+    this.presenterSubs.add(
+      ref.instance.CancelDemonstration.subscribe(() => {
+        this.activeSession?.CancelPendingDemonstration();
+      }),
+    );
 
     this.syncPresenterInputs();
   }
@@ -390,6 +442,10 @@ export class MJTourHostComponent
     this.presenterRef.setInput('Session', this.currentView());
     this.presenterRef.setInput('AnchorElement', this.resolvedAnchorEl);
     this.presenterRef.setInput('ExtraAnchorElements', this.resolvedExtraAnchorEls);
+    this.presenterRef.setInput('VoiceBarTemplate', this.VoiceBarTemplate);
+    this.presenterRef.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
+    this.presenterRef.setInput('VoiceGuideActive', this.VoiceGuideActive);
+    this.presenterRef.setInput('EstimatedMinutes', this.activeSession?.Tour.EstimatedMinutes);
     this.presenterRef.changeDetectorRef.detectChanges();
   }
 
@@ -509,7 +565,10 @@ export class MJTourHostComponent
         };
       },
       GetVisibleAnchors: () => AnchorRegistry.Instance.GetVisibleAnchors(),
-      Highlight: async (anchorKey: string, caption?: string) => {
+      Highlight: async (anchorKey: string, caption?: string, durationMs?: number) => {
+        if (this.activeSession) {
+          return this.activeSession.SetPointerHighlight(anchorKey, caption, durationMs);
+        }
         if (!this.anchorBridge) {
           return { Success: false, ErrorMessage: 'Anchor bridge not ready.' };
         }
@@ -532,6 +591,42 @@ export class MJTourHostComponent
         }
         return { Success: Boolean(this.activeSession) };
       },
+      SelectChoice: async (choiceKey: string) => {
+        if (!this.activeSession) {
+          return { Success: false, ErrorMessage: 'No active tour session.' };
+        }
+        const ok = await this.activeSession.SelectChoice(choiceKey, this.activeDirectorToken ?? undefined);
+        return ok
+          ? { Success: true }
+          : { Success: false, ErrorMessage: `Could not select choice '${choiceKey}'.` };
+      },
+      AdvanceStep: async () => {
+        if (!this.activeSession) {
+          return { Success: false, ErrorMessage: 'No active tour session.' };
+        }
+        const ok = await this.activeSession.Next();
+        return ok
+          ? { Success: true }
+          : { Success: false, ErrorMessage: 'Could not advance from the current step.' };
+      },
+      GoBack: async () => {
+        if (!this.activeSession) {
+          return { Success: false, ErrorMessage: 'No active tour session.' };
+        }
+        const ok = await this.activeSession.Back();
+        return ok
+          ? { Success: true }
+          : { Success: false, ErrorMessage: 'No previous step to revisit.' };
+      },
+      DemonstrateStep: async (confirmedMutation?: boolean) => {
+        if (!this.activeSession) {
+          return { Success: false, ErrorMessage: 'No active tour session.' };
+        }
+        return this.activeSession.DemonstrateCurrentStep({
+          ConfirmedMutation: confirmedMutation,
+          UserInitiated: false,
+        });
+      },
       SubscribeEvents: (listener: (event: { Kind: string; TourKey: string; StepKey?: string; StepTitle?: string; VoiceScript?: string; Outcome?: string }) => void) =>
         this.On('*', (evt) => {
           if (evt.EventName === 'AfterTourStart') {
@@ -542,6 +637,7 @@ export class MJTourHostComponent
               TourKey: evt.TourKey,
               StepKey: evt.Step.StepKey,
               StepTitle: evt.Step.Title,
+              VoiceScript: this.activeSession?.SessionView.CurrentStep?.VoiceScript,
             });
           } else if (evt.EventName === 'AfterTourStepComplete') {
             listener({

@@ -1,18 +1,19 @@
-import { ChangeDetectionStrategy, Component, ViewEncapsulation, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, HostListener, ViewEncapsulation, signal } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { IChoiceOption, IChoiceStepConfig } from '@memberjunction/tours-runtime';
 import { BaseTourStepRenderer } from './base-step-renderer';
+import { TourProgressRailComponent, TourStepHeaderComponent } from './tour-step-chrome.component';
 
 /**
- * `Choice` step renderer supporting 2–4 branching options and optional `KnowledgeCheck`
- * feedback before advancing (§5.3).
+ * `Choice` step renderer supporting 2–4+ branching cards with `1`–`9` keyboard selection
+ * and optional `KnowledgeCheck` feedback before advancing (§5.3).
  */
 @RegisterClass(BaseTourStepRenderer, 'Choice')
 @Component({
   selector: 'mj-tour-choice-step',
   standalone: true,
-  imports: [MJButtonDirective],
+  imports: [MJButtonDirective, TourStepHeaderComponent, TourProgressRailComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -21,22 +22,13 @@ import { BaseTourStepRenderer } from './base-step-renderer';
       role="dialog"
       aria-modal="true"
       [attr.aria-labelledby]="StepHeadingId"
-      [attr.aria-describedby]="Step.Body ? StepBodyId : null"
+      [attr.aria-describedby]="QuestionText ? StepBodyId : null"
     >
-      <div class="mjt-header">
-        <div>
-          <div class="mjt-progress">{{ ProgressLabel }}</div>
-          <h2 class="mjt-title" [id]="StepHeadingId">{{ Step.Title }}</h2>
-        </div>
-        <button
-          type="button"
-          class="mjt-close-btn"
-          aria-label="Close tour"
-          (click)="OnDismiss()"
-        >
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
+      <mj-tour-step-header
+        [Step]="Step"
+        [HeadingId]="StepHeadingId"
+        (Dismiss)="OnDismiss()"
+      />
 
       @if (QuestionText) {
         <div class="mjt-body" [id]="StepBodyId" [innerHTML]="FormatBodyHtml(QuestionText)"></div>
@@ -48,11 +40,26 @@ import { BaseTourStepRenderer } from './base-step-renderer';
             type="button"
             class="mjt-choice-option"
             [class.mjt-choice-option--selected]="selectedOption()?.Key === option.Key"
+            [attr.aria-checked]="selectedOption()?.Key === option.Key"
+            role="radio"
             (click)="OnSelectOption(option)"
           >
-            <strong>{{ option.Label }}</strong>
-            @if (option.Description) {
-              <span class="mjt-hint">{{ option.Description }}</span>
+            <span class="mjt-choice-icon" aria-hidden="true">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="6" x2="6" y1="3" y2="15" />
+                <circle cx="18" cy="6" r="3" />
+                <circle cx="6" cy="18" r="3" />
+                <path d="M18 9a9 9 0 0 1-9 9" />
+              </svg>
+            </span>
+            <span class="mjt-choice-copy">
+              <strong>{{ option.Label }}</strong>
+              @if (option.Description) {
+                <span class="mjt-hint">{{ option.Description }}</span>
+              }
+            </span>
+            @if ($index < 9) {
+              <kbd class="mjt-kbd" aria-hidden="true">{{ $index + 1 }}</kbd>
             }
           </button>
         }
@@ -74,17 +81,13 @@ import { BaseTourStepRenderer } from './base-step-renderer';
       }
 
       <div class="mjt-footer">
+        <div class="mjt-footer-meta">
+          <mj-tour-progress-rail
+            [Session]="Session"
+            (StepSelected)="StepSelected.emit($event)"
+          />
+        </div>
         <div class="mjt-footer-actions">
-          @if (ShowContinueButton) {
-            <button
-              type="button"
-              mjButton
-              variant="primary"
-              (click)="OnConfirmChoice()"
-            >
-              Continue
-            </button>
-          }
           @if (Session.CanGoBack) {
             <button
               type="button"
@@ -95,15 +98,25 @@ import { BaseTourStepRenderer } from './base-step-renderer';
               Back
             </button>
           }
+          @if (ShowContinueButton) {
+            <button
+              type="button"
+              mjButton
+              variant="primary"
+              (click)="OnConfirmChoice()"
+            >
+              Continue
+            </button>
+          }
+          <button
+            type="button"
+            mjButton
+            variant="flat"
+            (click)="OnDismiss()"
+          >
+            Dismiss
+          </button>
         </div>
-        <button
-          type="button"
-          mjButton
-          variant="flat"
-          (click)="OnDismiss()"
-        >
-          Dismiss
-        </button>
       </div>
     </div>
   `,
@@ -128,6 +141,31 @@ export class ChoiceStepRenderer extends BaseTourStepRenderer<IChoiceStepConfig> 
       this.selectedOption() &&
         (this.IsKnowledgeCheck || this.Step?.Configuration?.ShowFeedbackBeforeAdvance),
     );
+  }
+
+  @HostListener('document:keydown', ['$event'])
+  public OnDocumentKeyDown(event: KeyboardEvent): void {
+    const target = event.target;
+    if (
+      target instanceof HTMLElement &&
+      (target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable)
+    ) {
+      return;
+    }
+    if (event.ctrlKey || event.metaKey || event.altKey) {
+      return;
+    }
+    const num = Number(event.key);
+    if (Number.isInteger(num) && num >= 1 && num <= 9) {
+      const option = this.Options[num - 1];
+      if (option) {
+        event.preventDefault();
+        this.OnSelectOption(option);
+      }
+    }
   }
 
   public OnSelectOption(option: IChoiceOption): void {

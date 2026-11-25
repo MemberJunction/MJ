@@ -428,4 +428,192 @@ describe('TourSession', () => {
         expect(session.Status).toBe('Snoozed');
         expect(session.GetRunRecord().SnoozedUntil).toBe(snoozeDate);
     });
+
+    it('manages secondary PointerHighlight with auto-expiry and clears on step change / Stop / Dispose', async () => {
+        vi.useFakeTimers();
+        try {
+            const host = new MockTourHost();
+            const store = new MemoryProgressStore();
+            const session = new TourSession({ Tour: makeTwoStepTour(), Host: host, ProgressStore: store });
+            const token = session.AttachDirector('Visual');
+            await session.Start();
+
+            session.SetPointerHighlight('sales.deals.amount', 'Check Amount here', 4500);
+            expect(session.SessionView.PointerHighlight).toEqual(
+                expect.objectContaining({
+                    AnchorKey: 'sales.deals.amount',
+                    Caption: 'Check Amount here',
+                }),
+            );
+            expect(session.SessionView.PointerHighlight?.ExpiresAt).toBeTypeOf('number');
+
+            // Auto-clears after durationMs
+            vi.advanceTimersByTime(4501);
+            expect(session.SessionView.PointerHighlight).toBeNull();
+
+            // Cleared on step change
+            session.SetPointerHighlight('sales.deals.stage', 'Pick stage', 10000);
+            expect(session.SessionView.PointerHighlight?.AnchorKey).toBe('sales.deals.stage');
+            await session.Advance(token);
+            expect(session.SessionView.PointerHighlight).toBeNull();
+
+            // Cleared on Dispose
+            session.SetPointerHighlight('sales.deals.close', 'Close date', 10000);
+            expect(session.SessionView.PointerHighlight?.AnchorKey).toBe('sales.deals.close');
+            session.Dispose();
+            expect(session.SessionView.PointerHighlight).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('supports SelectChoice(choiceKey) convenience branching without passing directorToken', async () => {
+        const host = new MockTourHost();
+        const store = new MemoryProgressStore();
+        const tour: TourDefinition = {
+            TourKey: 'core.convenience-choice',
+            Name: 'Convenience Choice',
+            Status: 'Active',
+            Steps: [
+                { StepKey: 'pick', Sequence: 10, StepType: 'Choice', Title: 'Choose' },
+                { StepKey: 'branch-a', Sequence: 20, StepType: 'Modal', Title: 'Branch A' },
+                { StepKey: 'branch-b', Sequence: 30, StepType: 'Modal', Title: 'Branch B' },
+            ],
+            Paths: [
+                { FromStepKey: 'pick', ToStepKey: 'branch-a', Condition: 'a', Priority: 100 },
+                { FromStepKey: 'pick', ToStepKey: 'branch-b', Condition: 'b', Priority: 100 },
+            ],
+        };
+
+        const session = new TourSession({ Tour: tour, Host: host, ProgressStore: store });
+        await session.Start();
+        const ok = await session.SelectChoice('a');
+        expect(ok).toBe(true);
+        expect(session.CurrentStepKey).toBe('branch-a');
+    });
+
+    it('enforces all 3 safety gate tiers on DemonstrateCurrentStep', async () => {
+        // Tier 1: Verify Mode Lockout
+        const verifyHost = new MockTourHost();
+        const verifyStore = new MemoryProgressStore();
+        const verifySession = new TourSession({
+            Tour: makeTwoStepTour({ AllowAgentActions: true }),
+            Host: verifyHost,
+            ProgressStore: verifyStore,
+        });
+        verifySession.AttachDirector('Verify');
+        await verifySession.Start();
+        const verifyRes = await verifySession.DemonstrateCurrentStep({ UserInitiated: true, ConfirmedMutation: true });
+        expect(verifyRes).toEqual({
+            Success: false,
+            ErrorCode: 'verify_mode_locked',
+            ErrorMessage: 'Step demonstrations are disabled during Verify assessments.',
+        });
+
+        // Tier 2: Permission Check when !AllowAgentActions && Mode !== 'Show' && !UserInitiated
+        const host2 = new MockTourHost();
+        const bridge2 = new MockAnchorBridge();
+        const store2 = new MemoryProgressStore();
+        const restrictedTour: TourDefinition = {
+            TourKey: 'demo.tiers',
+            Name: 'Demo Tiers',
+            Status: 'Active',
+            AllowAgentActions: false,
+            Steps: [
+                {
+                    StepKey: 'guide-step',
+                    Sequence: 10,
+                    StepType: 'Action',
+                    Title: 'Guide Step',
+                    Mode: 'Guide',
+                    Anchor: { Strategy: 'Registered', Key: 'sales.deals.board' },
+                    Configuration: {
+                        RequiresMutationConfirmation: true,
+                        ConfirmationPrompt: 'Save this sample deal?',
+                    },
+                },
+                {
+                    StepKey: 'host-confirm-step',
+                    Sequence: 20,
+                    StepType: 'Spotlight',
+                    Title: 'Show Step',
+                    Mode: 'Show',
+                    Anchor: { Strategy: 'Registered', Key: 'sales.deals.stage' },
+                },
+            ],
+        };
+
+        const session2 = new TourSession({
+            Tour: restrictedTour,
+            Host: host2,
+            ProgressStore: store2,
+            AnchorBridge: bridge2,
+        });
+        session2.AttachDirector('Chat');
+        await session2.Start();
+
+        const deniedRes = await session2.DemonstrateCurrentStep();
+        expect(deniedRes).toEqual({
+            Success: false,
+            ErrorCode: 'agent_actions_disabled',
+            ErrorMessage: 'Agent actions are not enabled for this tour unless requested by the user.',
+        });
+
+        // Tier 3 (step config): UserInitiated passes Tier 2, hits Tier 3 confirmation gate
+        const confirmPromptRes = await session2.DemonstrateCurrentStep({ UserInitiated: true });
+        expect(confirmPromptRes).toEqual({
+            Success: false,
+            ErrorCode: 'confirmation_required',
+            RequiresConfirmation: true,
+            ConfirmationPrompt: 'Save this sample deal?',
+        });
+        expect(session2.SessionView.PendingDemonstrationConfirmation).toEqual({
+            StepKey: 'guide-step',
+            Prompt: 'Save this sample deal?',
+        });
+
+        // CancelPendingDemonstration clears pending state
+        session2.CancelPendingDemonstration();
+        expect(session2.SessionView.PendingDemonstrationConfirmation).toBeNull();
+
+        // Confirming mutation executes Prepare + Host.DemonstrateStep + anchor pulse + advances
+        const okRes = await session2.DemonstrateCurrentStep({
+            UserInitiated: true,
+            ConfirmedMutation: true,
+        });
+        expect(okRes).toEqual({ Success: true });
+        expect(host2.DemonstrateStepCalls).toEqual([{ StepKey: 'guide-step', ConfirmedMutation: true }]);
+        expect(bridge2.HighlightedCalls.some((c) => c.AnchorKey === 'sales.deals.board')).toBe(true);
+        expect(session2.CurrentStepKey).toBe('host-confirm-step');
+        expect(session2.SessionView.PendingDemonstrationConfirmation).toBeNull();
+
+        // Tier 3 (host-driven dynamic RequiresConfirmation on Show step)
+        host2.DemonstrateStepHandler = async (_step, ctx) => {
+            if (!ctx.ConfirmedMutation) {
+                return {
+                    Success: false,
+                    RequiresConfirmation: true,
+                    ConfirmationPrompt: 'Host asks: proceed with update?',
+                    MutatesData: true,
+                };
+            }
+            return { Success: true };
+        };
+
+        const hostConfirmRes = await session2.DemonstrateCurrentStep();
+        expect(hostConfirmRes).toEqual({
+            Success: false,
+            ErrorCode: 'confirmation_required',
+            RequiresConfirmation: true,
+            ConfirmationPrompt: 'Host asks: proceed with update?',
+        });
+        expect(session2.SessionView.PendingDemonstrationConfirmation).toEqual({
+            StepKey: 'host-confirm-step',
+            Prompt: 'Host asks: proceed with update?',
+        });
+
+        const hostConfirmedOk = await session2.DemonstrateCurrentStep({ ConfirmedMutation: true });
+        expect(hostConfirmedOk).toEqual({ Success: true });
+        expect(session2.Status).toBe('Completed');
+    });
 });

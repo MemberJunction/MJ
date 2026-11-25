@@ -27,6 +27,9 @@ export interface TourStepSignalEventArgs {
 export abstract class BaseTourStepRenderer<TConfig extends object = object> extends BaseAngularComponent {
   @Input() public Step!: TourStepView<TConfig>;
   @Input() public Session!: TourSessionView;
+  @Input() public VoiceGuideAvailable = false;
+  @Input() public VoiceGuideActive = false;
+  @Input() public EstimatedMinutes?: number;
 
   @Output() public NextRequested = new EventEmitter<TourStepIntentEventArgs>();
   @Output() public BackRequested = new EventEmitter<TourStepIntentEventArgs>();
@@ -34,6 +37,9 @@ export abstract class BaseTourStepRenderer<TConfig extends object = object> exte
   @Output() public ChoiceMade = new EventEmitter<TourChoiceEventArgs>();
   @Output() public SignalEmitted = new EventEmitter<TourStepSignalEventArgs>();
   @Output() public NextTourRequested = new EventEmitter<string>();
+  @Output() public StepSelected = new EventEmitter<string>();
+  @Output() public VoiceGuideToggled = new EventEmitter<boolean>();
+  @Output() public DemonstrateRequested = new EventEmitter<{ ConfirmedMutation?: boolean }>();
 
   public get StepHeadingId(): string {
     return `mjt-heading-${sanitizeIdSegment(this.Step?.StepKey ?? 'step')}`;

@@ -399,6 +399,8 @@ export interface IAskAgentStepConfig {
 
 export interface ITourStepConfiguration extends Record<string, unknown> {
     localizations?: Record<string, ITourStepLocalizationEntry>;
+    RequiresMutationConfirmation?: boolean;
+    ConfirmationPrompt?: string;
 }
 
 export interface ITourStepPathLocalizationEntry {
@@ -445,6 +447,8 @@ export interface TourStepDefinition<TConfig extends object = ITourStepConfigurat
     IsOptional?: boolean;
     GuideNotes?: string;
     VoiceScript?: string;
+    RequiresMutationConfirmation?: boolean;
+    ConfirmationPrompt?: string;
     /** Optional Do-mode action metadata when `Mode === 'Do'`. */
     DoAction?: {
         Category: string;
@@ -711,6 +715,17 @@ export interface TourStepView<TConfig extends object = ITourStepConfiguration> {
     StatusMessage?: string;
 }
 
+export interface TourPointerHighlight {
+    AnchorKey: string;
+    Caption?: string;
+    ExpiresAt?: number;
+}
+
+export interface TourPendingDemonstrationConfirmation {
+    StepKey: string;
+    Prompt: string;
+}
+
 export interface TourSessionView {
     RunID: string;
     TourKey: string;
@@ -730,4 +745,6 @@ export interface TourSessionView {
     IsPaused: boolean;
     GoalMet: boolean;
     LastError?: string;
+    PointerHighlight?: TourPointerHighlight | null;
+    PendingDemonstrationConfirmation?: TourPendingDemonstrationConfirmation | null;
 }

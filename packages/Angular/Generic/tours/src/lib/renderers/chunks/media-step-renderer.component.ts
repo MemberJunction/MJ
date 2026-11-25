@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { TourSignals, type IMediaStepConfig } from '@memberjunction/tours-runtime';
 import { BaseTourStepRenderer } from '../base-step-renderer';
+import { TourProgressRailComponent, TourStepHeaderComponent } from '../tour-step-chrome.component';
 
 /**
  * Lazy-chunked `Media` step renderer (§5.3 & §18 Phase 3):
@@ -12,7 +13,7 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
 @Component({
   selector: 'mj-tour-media-step',
   standalone: true,
-  imports: [MJButtonDirective],
+  imports: [MJButtonDirective, TourStepHeaderComponent, TourProgressRailComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -23,20 +24,11 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
       [attr.aria-labelledby]="StepHeadingId"
       [attr.aria-describedby]="Step.Body ? StepBodyId : null"
     >
-      <div class="mjt-header">
-        <div>
-          <div class="mjt-progress">{{ ProgressLabel }}</div>
-          <h2 class="mjt-title" [id]="StepHeadingId">{{ Step.Title }}</h2>
-        </div>
-        <button
-          type="button"
-          class="mjt-close-btn"
-          aria-label="Close tour"
-          (click)="OnDismiss()"
-        >
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
+      <mj-tour-step-header
+        [Step]="Step"
+        [HeadingId]="StepHeadingId"
+        (Dismiss)="OnDismiss()"
+      />
 
       @if (Step.Body) {
         <div class="mjt-body" [id]="StepBodyId" [innerHTML]="FormatBodyHtml(Step.Body)"></div>
@@ -72,15 +64,13 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
       }
 
       <div class="mjt-footer">
+        <div class="mjt-footer-meta">
+          <mj-tour-progress-rail
+            [Session]="Session"
+            (StepSelected)="StepSelected.emit($event)"
+          />
+        </div>
         <div class="mjt-footer-actions">
-          <button
-            type="button"
-            mjButton
-            variant="primary"
-            (click)="OnNext()"
-          >
-            {{ NextLabel }}
-          </button>
           @if (Session.CanGoBack) {
             <button
               type="button"
@@ -91,15 +81,23 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
               Back
             </button>
           }
+          <button
+            type="button"
+            mjButton
+            variant="primary"
+            (click)="OnNext()"
+          >
+            {{ NextLabel }}
+          </button>
+          <button
+            type="button"
+            mjButton
+            variant="flat"
+            (click)="OnDismiss()"
+          >
+            Dismiss
+          </button>
         </div>
-        <button
-          type="button"
-          mjButton
-          variant="flat"
-          (click)="OnDismiss()"
-        >
-          Dismiss
-        </button>
       </div>
     </div>
   `,

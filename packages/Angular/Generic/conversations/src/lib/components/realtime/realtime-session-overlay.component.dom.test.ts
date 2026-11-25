@@ -2550,4 +2550,73 @@ describe('RealtimeSessionOverlayComponent: the stage (DOM)', () => {
       }
     });
   });
+
+  describe('Chrome="bar" (compact horizontal bar)', () => {
+    it('renders .call-overlay--bar with mini orb, agent name, audio meter, caption/status, mute, expand, and end controls', async () => {
+      const session = fakeSession();
+      session.active$.next(true);
+      session.state$.next('listening');
+
+      const f = renderComponentFixture(RealtimeSessionOverlayComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        inputs: { Chrome: 'bar', AgentName: 'Sage', ShowExpandButton: true },
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, '.call-overlay--bar')).not.toBeNull();
+      expect(query(f, '.call-main')).toBeNull();
+      expect(query(f, '.call-bar__orb')).not.toBeNull();
+      expect(query(f, '.call-bar__agent')?.textContent?.trim()).toBe('Sage');
+      expect(query(f, 'mj-audio-meter.call-bar__meter')).not.toBeNull();
+      expect(query(f, '.call-bar__caption')?.textContent?.trim()).toBe('Listening');
+
+      session.captions$.next([{ Role: 'Assistant', Text: 'Click the applications switcher in the top left.' }]);
+      await settle();
+      expect(query(f, '.call-bar__caption')?.textContent?.trim()).toBe('Click the applications switcher in the top left.');
+
+      const expanded = vi.fn();
+      const ended = vi.fn();
+      f.componentInstance.ExpandRequested.subscribe(expanded);
+      f.componentInstance.Ended.subscribe(ended);
+
+      click(f, 'button[title="Open full Sage view"]');
+      expect(expanded).toHaveBeenCalledTimes(1);
+
+      click(f, 'button[title="Stop voice guide"]');
+      await settle();
+      expect(ended).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides the expand button unless ShowExpandButton is true and projects [mjRealtimeBarActions]', async () => {
+      const session = fakeSession();
+      session.active$.next(true);
+
+      @Component({
+        standalone: true,
+        imports: [RealtimeSessionOverlayComponent],
+        template: `
+          <mj-realtime-session-overlay Chrome="bar" AgentName="Sage">
+            <button mjRealtimeBarActions type="button" class="projected-show-me">Show me</button>
+          </mj-realtime-session-overlay>
+        `,
+      })
+      class BarHostComponent {}
+
+      const f = renderComponentFixture(BarHostComponent, {
+        providers: [
+          { provide: RealtimeSessionService, useValue: session.service },
+          { provide: ErrorHandler, useValue: { handleError: (error: Error) => reported.push(error) } },
+        ],
+        autoDetect: true,
+      });
+      await settle();
+
+      expect(query(f, 'button[title="Open full Sage view"]')).toBeNull();
+      expect(query(f, '.projected-show-me')?.textContent?.trim()).toBe('Show me');
+    });
+  });
 });

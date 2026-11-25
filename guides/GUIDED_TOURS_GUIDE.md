@@ -152,18 +152,32 @@ When deploying `<mj-tour-host>` or `mj-tours.js` under strict CSP:
 
 ---
 
-## 7. Agents, Remote Operations, Predicates, and Actions
+## 7. Sage Realtime Voice Guide, Driving Verbs, Remote Operations & Actions
 
-### 7.1 Client Tools & Safety Rails
+### 7.1 Direct Reuse of MJ Realtime Widgets (`Chrome="bar"`)
 
-Global client tools are registered in `metadata/client-tool-definitions/.tour-client-tools.json` and surfaced by `TourAgentToolkit`:
+Guided Tours embeds MemberJunction's existing realtime widget suite directly rather than maintaining a separate voice component:
+
+- **`<mj-realtime-session-overlay Chrome="bar">`** (`@memberjunction/ng-conversations`) and **`<mj-realtime-widget chrome="bar">`** (`@memberjunction/ng-realtime-widget`) render a compact horizontal bar composing `<mj-realtime-agent-orb>` (`--mj-realtime-orb-size: 26px`), `<mj-audio-meter>` (60fps outside-Angular 7-bar smoother), and `<mj-media-controls>` (circular mute button + device picker) over the shared root `RealtimeSessionService`.
+- `<mj-tour-host>` exposes `[VoiceBarTemplate]` (with `TourVoiceBarContext`) so MJ Explorer projects `<mj-realtime-session-overlay Chrome="bar" [AgentName]="'Sage'">` directly into the Precision Tour Card footer and Side-Panel presenter while keeping `@memberjunction/ng-tours` and `mj-tours.js` completely decoupled from `ng-conversations`.
+- **Live Session Handoff**: When a user starts a tour with **Walk through with Sage** (or asks Sage during an active voice call to start a tour), `ExplorerTourHost` sets `RealtimeSessionService.SetMinimized(true)` so the full-screen call overlay steps aside and the same live Sage session renders inside the tour card's `Chrome="bar"` footer with zero re-mint or duplicate audio tracks.
+
+### 7.2 `TourChannel`, Client Tools & 3-Tier Driving Safety Gate
+
+Global client tools are registered in `metadata/client-tool-definitions/.tour-client-tools.json` and surfaced by `TourAgentToolkit`, paired with the headless `TourChannel` (`ServerPluginClass: "ClientOnlyChannelServer"`, `ClientPluginClass: "TourChannel"`):
 
 - **Global tools**: `StartTour`, `ListTours`, `GetActiveTour`, `PauseTour`, `ResumeTour`, `StopTour`.
-- **Active-session tools**: `TourGetState`, `TourGetVisibleAnchors`, `TourHighlight`, `TourGoToStep`, `TourPrepareStep`, `TourPerformStep`, `TourMarkKnown`, `TourSuggest`.
+- **Active-session tools & `TourChannel` verbs**:
+  - `TourGetState` / `TourGetVisibleAnchors`
+  - `TourHighlight` / `highlight({ anchorKey, caption, durationMs })` — projects a secondary **Sage Pointer Ring + mini caption** (`Session.SetPointerHighlight`) onto any visible anchor without moving the step's primary spotlight.
+  - `TourSelectChoice` / `selectChoice({ choiceKey })` — selects a branch option on `Choice` steps by voice and advances along matching `MJ: Tour Step Paths`.
+  - `TourAdvanceStep` / `advanceStep`, `TourGoBack` / `goBack`, `TourGoToStep` / `goToStep`, `TourPrepareStep` / `prepareStep`.
+  - `TourDemonstrateStep` / `demonstrateStep({ confirmedMutation })` — executes `Session.DemonstrateCurrentStep(...)` under a **3-tier safety gate**:
+    1. **Verify Mode Lockout**: Always refused (`verify_mode_locked`) when `DirectorType === 'Verify'` so competency assessments remain genuine.
+    2. **Tier 1 & Tier 2 (Navigation & Surface Actions)**: Safe navigation/focus (`Prepare`) runs immediately; host surface actions (`Host.DemonstrateStep` / `ContextTool`) run when `AllowAgentActions = true` or when the user explicitly clicks **Show me**.
+    3. **Tier 3 (Mutating Writes)**: Steps or actions declaring `RequiresMutationConfirmation: true` (such as `Save`, `Delete`, or `Publish`) pause and surface an inline `[Confirm]` / `[Cancel]` bar (`Session.PendingDemonstrationConfirmation`) on the tour card before executing.
 
-Agents running Guided Tours must use hybrid mode (`NativeOnly: false`) so conversation skills (`ActivationScope = 'Conversation'`) and client tools remain active. `TourGoToStep` permits only authored edges or prior completed steps, `TourHighlight` rejects anchors not confirmed visible by `TourGetVisibleAnchors`, and `TourPerformStep` (`Do` mode) requires `AllowAgentActions = true`, per-mutation confirmation, and hard-bans deletes, permission grants, financial postings, and outbound messages.
-
-### 7.2 Server Remote Operations & Predicates
+### 7.3 Server Remote Operations & Predicates
 
 | Remote Operation | Purpose | Guest-Accessible |
 |---|---|---|
@@ -173,7 +187,7 @@ Agents running Guided Tours must use hybrid mode (`NativeOnly: false`) so conver
 | `Tours.ClaimGuestRuns` | Re-attributes guest `VisitorKey` runs (`UserID IS NULL`) to the authenticated user | No |
 | `Tours.PublishTour` | Validates pathway via `ValidateTourGraph`, snapshots `MJ: Tour Versions`, sets `CurrentVersionID` / `Status` | No |
 
-### 7.3 Server Actions (`@memberjunction/tours-server`)
+### 7.4 Server Actions (`@memberjunction/tours-server`)
 
 Declared in `metadata/actions/.tour-actions.json`:
 
@@ -184,16 +198,32 @@ Declared in `metadata/actions/.tour-actions.json`:
 
 ---
 
-## 8. CI Verification
+## 8. Authoring Guided Tours in Downstream OpenApps & BizApps
+
+Downstream OpenApps (`mj-bizapps-common`, `mj-bizapps-sales`, `mj-bizapps-contracts`, `more-cheese-demo`, etc.) ship Guided Tours with zero changes to OpenApp Engine:
+
+1. **Migrations-Only Delivery + Teardown Cleanup**:
+   - Author JSON files in `metadata/tours/`, `metadata/tour-publications/`, and `metadata/learning-paths/`, push with `sqlLogging` enabled during release prep, and ship the consolidated `V...__Metadata_Sync.sql` migration.
+   - If the OpenApp declares `migrations.teardownDirectory` in `mj-app.json`, include inverse `DELETE` statements for its seeded `__mj.LearningPath` and `__mj.Tour` rows (`WHERE TourKey LIKE '<prefix>.%'`), since dropping the app's own schema does not remove rows in `__mj`.
+2. **Per-App `allowedPrefixes` in `.mj-standards.json`**:
+   - Configure `tour-anchors` at the repo root with the app's prefix (e.g. `["common."]`, `["sales."]`, `["contracts."]`, `["cheese."]`). Downstream tours can still reference core MJ shell anchors exported in `@memberjunction/ng-tours/core-anchor-manifest.json` (such as `core.shell.app-switcher`, `core.shell.omnibar`, `core.shell.chat`).
+3. **Cross-App `LearningPath` & `TourPrerequisite` Composability**:
+   - Only use hard `TourID` foreign keys (`@lookup:MJ: Tours.TourKey=...` in `LearningPathTour` or `TourPrerequisite`) for tours inside the same repo or in apps listed in `mj-app.json` `dependencies`.
+   - For optional peer apps, gate via `TourPrerequisite` with `PrerequisiteType: "Application"` (`Condition: { "RequiredApplicationName": "Sales" }`) or ship cross-suite tracks (such as `suite.lead-to-ledger`) in a thin metadata-only OpenApp declaring the participating BizApps as dependencies.
+
+---
+
+## 9. CI Verification
 
 1. **`tour-anchors` standards check** (`.mj-standards.json`, severity `error`): validates `allowedPrefixes` (`core.`, `admin.`, `builder.` in core MJ), verifies every literal `Registered` anchor key against HTML templates or `core-anchor-manifest.json`, validates semantic `FormField`/`FormSection` entity/field names against generated entities, and flags raw `Selector` usage.
    ```bash
    npx mj standards check --check tour-anchors
    ```
 2. **`ui-layers` standards check**: ensures `@memberjunction/tours-runtime` and `@memberjunction/graph` never import Angular/Router/Explorer, and `@memberjunction/ng-tours` never imports Router or Explorer.
-3. **Server & Runtime Unit Tests**:
+3. **Server, Runtime & UI Unit/DOM Tests**:
    ```bash
    cd packages/Tours/Runtime && npm test
    cd packages/Tours/Server && npm test
+   cd packages/Angular/Generic/tours && npm test
    cd packages/MJServer && npx vitest run src/__tests__/tourSurfaceSession.test.ts src/__tests__/visitorIdentity.tourRuns.test.ts src/__tests__/WidgetSessionService.test.ts src/__tests__/widget.test.ts
    ```

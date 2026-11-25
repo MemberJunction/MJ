@@ -20,6 +20,7 @@ export * from './lib/overlay/tour-global-styles.component';
 
 // Step Renderers (Base + Core Eager + Lazy Loader)
 export * from './lib/renderers/base-step-renderer';
+export * from './lib/renderers/tour-step-chrome.component';
 export * from './lib/renderers/spotlight-step-renderer.component';
 export * from './lib/renderers/action-step-renderer.component';
 export * from './lib/renderers/beacon-step-renderer.component';
@@ -31,6 +32,7 @@ export * from './lib/renderers/register-standard-renderers';
 
 // Presenters
 export * from './lib/presenters/base-tour-presenter';
+export * from './lib/presenters/tour-voice-dock.component';
 export * from './lib/presenters/overlay-tour-presenter.component';
 export * from './lib/presenters/side-panel-tour-presenter.component';
 export * from './lib/presenters/embedded-tour-presenter.component';

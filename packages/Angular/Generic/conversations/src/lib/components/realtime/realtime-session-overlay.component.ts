@@ -19,7 +19,7 @@ import {
   type RealtimeConnectionState,
   type RealtimeMicrophoneState,
 } from '@memberjunction/realtime-runtime';
-import { MJAlertComponent } from '@memberjunction/ng-ui-components';
+import { MJAlertComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { RealtimeSessionService } from '../../services/realtime-session.service';
 import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTurn } from '../../services/realtime-session-review.service';
@@ -65,9 +65,10 @@ import {
   type SerializedRemoteBrowserState,
 } from './remote-browser/remote-browser-surface.component';
 import {
-  AvatarNoticeText, MediaMoveMenuComponent, MediaStageComponent, MediaStagePipActionsDirective, MediaStageSurfaceDirective,
-  SharePanelDirective, SharePanelRegistry,
-  type AvatarNoticeOverrides, type MediaMoveRequest, type MediaSharePanel, type MediaShareRequest, type MediaStagePipRectChange
+  AvatarNoticeText, MediaAudioMeterComponent, MediaControlsComponent, MediaMoveMenuComponent, MediaStageComponent,
+  MediaStagePipActionsDirective, MediaStageSurfaceDirective, SharePanelDirective, SharePanelRegistry,
+  type AvatarNoticeOverrides, type MediaAudioMeterSettings, type MediaMoveRequest, type MediaSharePanel,
+  type MediaShareRequest, type MediaStagePipRectChange
 } from '@memberjunction/ng-realtime-media';
 import { MediaLayoutPrefs, RecordPipRect, type MediaDevice, type MediaDeviceSelection, type MediaPipRect } from '@memberjunction/ai-realtime-client/media';
 
@@ -187,6 +188,8 @@ export interface RealtimeAvatarCaption {
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
     RealtimeChannelPaneComponent,
+    MediaAudioMeterComponent,
+    MediaControlsComponent,
     MediaMoveMenuComponent,
     MediaStageComponent,
     MediaStageSurfaceDirective,
@@ -197,7 +200,8 @@ export interface RealtimeAvatarCaption {
     RealtimeMediaSurfaceComponent,
     RemoteBrowserSurfaceComponent,
     MJStorageMediaPlayerComponent,
-    MJAlertComponent
+    MJAlertComponent,
+    MJButtonDirective
   ],
   templateUrl: './realtime-session-overlay.component.html',
   styleUrl: './realtime-session-overlay.component.css'
@@ -265,9 +269,9 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   // See {@link RealtimeUiInputs} / the package README for the full contract + recipes.
 
   /**
-   * The chrome the widget renders: the ambient `'orb'`, the structured `'console'`, or
-   * `'auto'` (default) which starts as an orb and graduates to a console once the
-   * container is wide enough AND the user has revealed text. Mirrors
+   * The chrome the widget renders: the ambient `'orb'`, the structured `'console'`, the compact
+   * horizontal `'bar'`, or `'auto'` (default) which starts as an orb and graduates to a console
+   * once the container is wide enough AND the user has revealed text. Mirrors
    * {@link RealtimeUiInputs.chrome}.
    *
    * @example Force the rich console for a full-screen route:
@@ -415,11 +419,16 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     return this._reviewData;
   }
 
-  /**
-   * Review mode: whether the "Start live session" action is offered. A host turns it off where
+  /** Whether to show the expand button in bar chrome (`Chrome="bar"`), letting a host offer a jump to full view. */
+  @Input() public ShowExpandButton = false;
+
+  /** Review mode: whether the "Start live session" action is offered. A host turns it off where
    * a voice session cannot start (the chat area does so while a draft fork is open).
    */
   @Input() AllowStartLive = true;
+
+  /** Emitted when the user clicks the expand button in bar chrome (`Chrome="bar"`). */
+  @Output() public ExpandRequested = new EventEmitter<void>();
 
   /** Emitted after the call ends so the host can react (visibility is driven by Active$). */
   @Output() Ended = new EventEmitter<void>();
@@ -449,8 +458,8 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Emitted when the user reveals the transcript (opens text from the orb). */
   @Output() TextRevealed = new EventEmitter<void>();
 
-  /** Emitted whenever the EFFECTIVE chrome flips between `'orb'` and `'console'`. */
-  @Output() ChromeChanged = new EventEmitter<'orb' | 'console'>();
+  /** Emitted whenever the EFFECTIVE chrome flips between `'orb'`, `'console'`, and `'bar'`. */
+  @Output() ChromeChanged = new EventEmitter<'orb' | 'console' | 'bar'>();
 
   /** Emitted when the connection lifecycle state changes (e.g. connecting → listening). */
   @Output() ConnectionStateChanged = new EventEmitter<RealtimeUiConnectionState>();
@@ -1809,6 +1818,35 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     });
   }
 
+  /** Audio meter configuration for compact bar chrome: 7 bars (matches MediaAudioMeterComponent default). */
+  public readonly BarMeterSettings: MediaAudioMeterSettings = { BarCount: 7 };
+
+  /** Live smoothed output/input audio level (`0..1`) polled at 60fps by `<mj-audio-meter>` in bar chrome. */
+  private lastAudioLevel = 0;
+
+  /** Callback passed to `<mj-audio-meter [Level]>` in bar chrome; returns the latest smoothed level `0..1`. */
+  public readonly BarAudioLevel = (): number => this.lastAudioLevel;
+
+  /** Returns the latest active caption text from `State` if non-empty, otherwise `HeroStateLabel(state)`. */
+  public BarCaptionOrStatus(state: RealtimeConnectionState): string {
+    const items = this.State.Items;
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      if (item.Kind === 'caption') {
+        const text = item.Text.trim();
+        if (text.length > 0) {
+          return text;
+        }
+      }
+    }
+    return this.HeroStateLabel(state);
+  }
+
+  /** Bar-chrome microphone toggle: syncs mute state with `MediaControlsComponent`'s `MicrophoneOn` output. */
+  public OnBarMicrophoneToggled(microphoneOn: boolean): void {
+    this.SetMuted(!microphoneOn);
+  }
+
   /** Stops the loop and returns the overlay to turn-state-driven animation. */
   private stopAudioVisualLoop(): void {
     if (this.audioRafHandle !== null) {
@@ -1818,6 +1856,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
     this.audioSmoother.Reset();
     this.lastAudioLive = null;
     this.lastDirection = null;
+    this.lastAudioLevel = 0;
     this.overlayElement()?.setAttribute('data-audio-live', 'false');
   }
 
@@ -1839,8 +1878,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
       el.setAttribute('data-audio-live', String(live));
     }
     if (!frame) {
+      this.lastAudioLevel = 0;
       return;
     }
+    this.lastAudioLevel = Math.max(frame.OutputLevel, frame.InputLevel);
     el.style.setProperty('--voice-out', frame.OutputLevel.toFixed(3));
     el.style.setProperty('--voice-in', frame.InputLevel.toFixed(3));
     for (let i = 0; i < frame.Bins.length; i++) {
@@ -1947,7 +1988,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
    */
   @HostListener('document:keydown', ['$event'])
   public OnDocumentKeydown(event: KeyboardEvent): void {
-    if (this.Hidden || this.IsReviewing || !this.realtime.IsActive || !this._ui.allowTyping) {
+    if (this.Hidden || this.IsReviewing || this._ui.chrome === 'bar' || !this.realtime.IsActive || !this._ui.allowTyping) {
       return;
     }
     if (event.metaKey || event.ctrlKey || event.altKey) {

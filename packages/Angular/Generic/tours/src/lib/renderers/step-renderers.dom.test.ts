@@ -1,3 +1,4 @@
+import { Component, TemplateRef, ViewChild } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import type {
   IMediaStepConfig,
@@ -8,8 +9,10 @@ import type {
 } from '@memberjunction/tours-runtime';
 import axe from 'axe-core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { OverlayTourPresenterComponent } from '../presenters/overlay-tour-presenter.component';
+import { AnchorRegistry } from '../anchors/anchor-registry';
 import { TourSpotlightOverlayComponent } from '../overlay/tour-spotlight-overlay.component';
+import { OverlayTourPresenterComponent } from '../presenters/overlay-tour-presenter.component';
+import { TourVoiceDockComponent, type TourVoiceBarContext } from '../presenters/tour-voice-dock.component';
 import { ActionStepRenderer } from './action-step-renderer.component';
 import { BeaconStepRenderer } from './beacon-step-renderer.component';
 import { ChoiceStepRenderer } from './choice-step-renderer.component';
@@ -18,6 +21,46 @@ import { EmbeddedComponentStepRenderer } from './chunks/embedded-component-step-
 import { ModalStepRenderer } from './modal-step-renderer.component';
 import { SpotlightStepRenderer } from './spotlight-step-renderer.component';
 import { CreateTourShellElementClass } from '../../shell/shell-element';
+
+@Component({
+  standalone: true,
+  imports: [TourVoiceDockComponent],
+  template: `
+    <ng-template #voiceBar let-session let-onDemo="OnDemonstrate">
+      <div class="test-sage-bar">
+        <span class="test-sage-tour">{{ session.TourName }}</span>
+        <button type="button" class="test-show-me-btn" (click)="onDemo()">Show me</button>
+      </div>
+    </ng-template>
+    <mj-tour-voice-dock
+      [Session]="Session"
+      [VoiceBarTemplate]="voiceBarTpl"
+      [VoiceGuideAvailable]="true"
+      [VoiceGuideActive]="VoiceActive"
+      (DemonstrateRequested)="OnDemonstrate($event)"
+      (ConfirmMutation)="OnConfirm()"
+      (CancelMutation)="OnCancel()"
+    />
+  `,
+})
+class VoiceDockHostTestComponent {
+  @ViewChild('voiceBar', { static: true }) public voiceBarTpl!: TemplateRef<TourVoiceBarContext>;
+  public Session!: TourSessionView;
+  public VoiceActive = true;
+  public Demonstrated = vi.fn();
+  public Confirmed = vi.fn();
+  public Cancelled = vi.fn();
+
+  public OnDemonstrate(evt: { ConfirmedMutation?: boolean }): void {
+    this.Demonstrated(evt);
+  }
+  public OnConfirm(): void {
+    this.Confirmed();
+  }
+  public OnCancel(): void {
+    this.Cancelled();
+  }
+}
 
 function makeSessionView(step: TourStepView): TourSessionView {
   return {
@@ -235,12 +278,166 @@ describe('Guided Tour Step Renderers & OverlayPresenter (WCAG 2.2 AA)', () => {
     fixture.componentInstance.Session = makeSessionView(step);
     fixture.detectChanges();
 
+    // Verify close button never steals initial focus on open
+    const closeBtn = fixture.nativeElement.querySelector('.mjt-close-btn') as HTMLButtonElement;
+    expect(document.activeElement).not.toBe(closeBtn);
+
     const results = await axe.run(fixture.nativeElement, {
       rules: {
         'color-contrast': { enabled: false },
       },
     });
     expect(results.violations).toEqual([]);
+  });
+
+  it('renders segmented progress rail and jumps back to completed steps when clicked', () => {
+    const step = makeStepView('Spotlight', { ShowProgress: true }, { StepKey: 'step-2', StepIndex: 1, TotalSteps: 3 });
+    const session: TourSessionView = {
+      ...makeSessionView(step),
+      CompletedStepKeys: ['step-1'],
+      PathTaken: ['step-1', 'step-2'],
+      StepIndex: 1,
+      StepCount: 3,
+    };
+
+    const fixture = TestBed.createComponent(SpotlightStepRenderer);
+    fixture.componentInstance.Step = step;
+    fixture.componentInstance.Session = session;
+    fixture.detectChanges();
+
+    const segments = fixture.nativeElement.querySelectorAll('.mjt-progress-segment') as NodeListOf<HTMLButtonElement>;
+    expect(segments.length).toBe(3);
+    expect(segments[0].classList.contains('mjt-progress-segment--done')).toBe(true);
+    expect(segments[1].classList.contains('mjt-progress-segment--active')).toBe(true);
+    expect(segments[0].disabled).toBe(false);
+
+    const stepSelectedSpy = vi.fn();
+    fixture.componentInstance.StepSelected.subscribe(stepSelectedSpy);
+    segments[0].click();
+    expect(stepSelectedSpy).toHaveBeenCalledWith('step-1');
+  });
+
+  it('ChoiceStepRenderer selects branching card on keyboard 1-9 keydown', () => {
+    const step = makeStepView('Choice', {
+      Options: [
+        { Key: 'grids', Label: 'Explore Data', Description: 'Saved views & exports' },
+        { Key: 'sage', Label: 'Collaborate with Sage', Description: 'Ask natural questions' },
+      ],
+    });
+    const fixture = TestBed.createComponent(ChoiceStepRenderer);
+    fixture.componentInstance.Step = step;
+    fixture.componentInstance.Session = makeSessionView(step);
+    fixture.detectChanges();
+
+    const choiceSpy = vi.fn();
+    fixture.componentInstance.ChoiceMade.subscribe(choiceSpy);
+
+    const kbdBadges = fixture.nativeElement.querySelectorAll('.mjt-choice-option .mjt-kbd');
+    expect(kbdBadges.length).toBe(2);
+    expect(kbdBadges[1].textContent?.trim()).toBe('2');
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: '2', bubbles: true }));
+    expect(choiceSpy).toHaveBeenCalledWith({ StepKey: 'step-1', ChoiceKey: 'sage', IsCorrect: undefined });
+  });
+
+  it('ModalStepRenderer shows welcome mode selector when VoiceGuideAvailable and toggles Sage mode on start', () => {
+    const step = makeStepView<IModalStepConfig & ITourStepConfiguration>('Modal', {
+      Variant: 'welcome',
+      PrimaryButtonText: 'Start Tour',
+    });
+    const fixture = TestBed.createComponent(ModalStepRenderer);
+    fixture.componentInstance.Step = step;
+    fixture.componentInstance.Session = makeSessionView(step);
+    fixture.componentInstance.VoiceGuideAvailable = true;
+    fixture.componentInstance.EstimatedMinutes = 2;
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('~2 min');
+    expect(fixture.nativeElement.textContent).toContain('Walk through with');
+    expect(fixture.nativeElement.textContent).toContain('Sage');
+    expect(fixture.nativeElement.textContent.toLowerCase()).not.toContain('co-pilot');
+
+    const modeCards = fixture.nativeElement.querySelectorAll('.mjt-mode-card') as NodeListOf<HTMLButtonElement>;
+    expect(modeCards.length).toBe(2);
+    modeCards[1].click();
+    fixture.detectChanges();
+
+    const voiceToggledSpy = vi.fn();
+    const nextSpy = vi.fn();
+    fixture.componentInstance.VoiceGuideToggled.subscribe(voiceToggledSpy);
+    fixture.componentInstance.NextRequested.subscribe(nextSpy);
+
+    const startBtn = fixture.nativeElement.querySelector('button[variant="primary"]') as HTMLButtonElement;
+    startBtn.click();
+    expect(voiceToggledSpy).toHaveBeenCalledWith(true);
+    expect(nextSpy).toHaveBeenCalledWith({ StepKey: 'step-1' });
+  });
+
+  it('TourVoiceDockComponent renders projected VoiceBarTemplate and PendingDemonstrationConfirmation Confirm/Cancel flow', () => {
+    const step = makeStepView('Spotlight', { ShowProgress: true });
+    const fixture = TestBed.createComponent(VoiceDockHostTestComponent);
+    fixture.componentInstance.Session = {
+      ...makeSessionView(step),
+      PendingDemonstrationConfirmation: {
+        StepKey: 'step-1',
+        Prompt: 'Allow Sage to click Filter for you?',
+      },
+    };
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.test-sage-bar')).not.toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('Allow Sage to click Filter for you?');
+
+    const showMeBtn = fixture.nativeElement.querySelector('.test-show-me-btn') as HTMLButtonElement;
+    showMeBtn.click();
+    expect(fixture.componentInstance.Demonstrated).toHaveBeenCalled();
+
+    const confirmBtn = fixture.nativeElement.querySelector('.mjt-confirm-actions button') as HTMLButtonElement;
+    confirmBtn.click();
+    expect(fixture.componentInstance.Confirmed).toHaveBeenCalled();
+
+    const cancelBtn = fixture.nativeElement.querySelectorAll('.mjt-confirm-actions button')[1] as HTMLButtonElement;
+    cancelBtn.click();
+    expect(fixture.componentInstance.Cancelled).toHaveBeenCalled();
+  });
+
+  it('OverlayTourPresenterComponent renders secondary Sage PointerHighlight ring + caption and double-halo spotlight', async () => {
+    const primaryTarget = document.createElement('button');
+    primaryTarget.textContent = 'Filter';
+    const pointerTarget = document.createElement('button');
+    pointerTarget.setAttribute('data-mj-tour-anchor', 'core.export');
+    pointerTarget.textContent = 'Export';
+    document.body.append(primaryTarget, pointerTarget);
+
+    const step = makeStepView(
+      'Spotlight',
+      { ShowProgress: true },
+      { Anchor: { Strategy: 'Registered', Key: 'core.filter' } },
+    );
+    const session: TourSessionView = {
+      ...makeSessionView(step),
+      PointerHighlight: {
+        AnchorKey: 'core.export',
+        Caption: 'You can also export any view here.',
+      },
+    };
+
+    const fixture = TestBed.createComponent(OverlayTourPresenterComponent);
+    fixture.componentRef.setInput('Session', session);
+    fixture.componentRef.setInput('AnchorElement', primaryTarget);
+    fixture.detectChanges();
+
+    await new Promise((r) => setTimeout(r, 20));
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.mjt-spotlight-halo')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.mjt-spotlight-ring')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.mjt-pointer-ring')).not.toBeNull();
+    const caption = fixture.nativeElement.querySelector('.mjt-pointer-caption') as HTMLElement;
+    expect(caption?.textContent).toContain('You can also export any view here.');
+
+    AnchorRegistry.Instance.UnregisterAnchor('core.export', pointerTarget);
+    fixture.destroy();
   });
 
   it('EmbeddedComponentStepRenderer wires inline ComponentSpec events (completeStep, chooseBranch, emitSignal)', () => {

@@ -200,7 +200,7 @@ export class RealtimeWidgetComponent implements AfterViewInit, OnDestroy {
   @Input() set channelInputs(value: unknown) { this.patch({ channelInputs: ReadChannelInputs(value) }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
   get channelInputs(): Record<string, JSONObject> { return this.config.channelInputs; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
 
-  /** `orb`, `console` or `auto` — `chrome`. */
+  /** `orb`, `console`, `bar` or `auto` — `chrome`. */
   @Input() set chrome(value: unknown) { this.patch({ chrome: ReadChrome(value) }); } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
   get chrome(): WidgetChrome { return this.config.chrome; } // case-violation-ok-legacy-back-compat: camelCase is the DOM attribute/property contract (api-url <-> apiUrl)
 

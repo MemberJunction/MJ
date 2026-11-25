@@ -12,6 +12,7 @@
 "@memberjunction/ng-shared-generic": minor
 "@memberjunction/ng-base-forms": minor
 "@memberjunction/ng-conversations": minor
+"@memberjunction/ng-realtime-widget": minor
 "@memberjunction/ng-task-graph-editor": minor
 "@memberjunction/ng-base-application": minor
 "@memberjunction/ng-shared": minor
@@ -31,4 +32,4 @@ Add the Guided Tours framework primitive (Phases 0–3) and extract `@memberjunc
 - **`@memberjunction/tours-runtime` & `TourEngine`**: Add the pure TypeScript `TourSession` runtime with pluggable step logic (`Spotlight`, `Coachmark`, `Modal`, `Banner`, `Hotspot`, `Checklist`, `Choice`, `AskAgent`, `EmbeddedComponent`), 13 anchor strategies, 10 completion checks, 7 smart triggers, eligibility & interruption-budget chain, `Visual` / `Verify` / `Recorder` directors, `TourAgentToolkit`, and `TourEngine` client metadata/progress cache.
 - **`@memberjunction/ng-tours` & `<mj-tour-host>` web element**: Add Light DOM tour overlays isolated via `@layer mj-tours-defaults` + `mjt-` classes + `--mj-z-tour-*` tokens, SVG `evenodd` spotlight cutout, `SiblingInertManager` / `TourFocusManager`, runtime `ComponentSpec` interactive steps (`<mj-react-component>`), and a two-stage standalone `<mj-tour-host>` custom element (`mj-tours.js` shell + lazy `mj-tours-session.js` + split step chunks).
 - **`@memberjunction/tours-server` & shared embed sessions**: Add `MJTourEntityServer` / `MJTourStepEntityServer` / `MJTourVersionEntityServer` immutability & canonical SHA-256 snapshotting, server predicates, Remote Operations, Actions, `TourSurface` (`ts_*`) guest session support in `WidgetSessionService` with RV4 guest-to-user claim and RV5 erasure, 6 core shipped tours, 2 interactive `ComponentSpec` tour widgets, and 3 learning paths.
-- **MJ Explorer, Tour Studio, Voice Channel & `tour-anchors` check**: Integrate `ExplorerTourHost`, shell Help/Tours launcher, Omnibar tour search & `"how do I"` signal, Home learning-path strip, 4-tab `TourStudioDashboard` (Catalog, Graph & Step Builder, Learning Paths & Overrides, Analytics & Broken-Step Queue), headless `TourChannel` realtime voice plugin, `FormAnchorNavigator`, and the `tour-anchors` static standards check.
+- **MJ Explorer, Tour Studio, Embedded Sage (`Chrome="bar"`) & `tour-anchors` check**: Integrate `ExplorerTourHost`, shell Help/Tours launcher, Omnibar tour search & `"how do I"` signal, Home learning-path strip, 4-tab `TourStudioDashboard`, compact `Chrome="bar"` mode on `<mj-realtime-session-overlay>` & `<mj-realtime-widget>` for embedding Sage directly inside tour cards, headless `TourChannel` driving verbs (`highlight`, `selectChoice`, `advanceStep`, `goBack`, `demonstrateStep`) with a 3-tier safety gate, `FormAnchorNavigator`, and the `tour-anchors` static standards check.

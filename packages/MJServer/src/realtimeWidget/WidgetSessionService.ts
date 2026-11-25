@@ -106,7 +106,7 @@ export interface MintGuestSessionInput {
   /** The widget's public embed key (pk_live_…), or optional when `surfaceKey` is supplied. */
   widgetKey?: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
   /** Optional `MJ: Tour Surfaces.PublicKey` (`ts_…`) for embed-surface or shared widget+tour sessions. */
-  surfaceKey?: string;
+  surfaceKey?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The request's Origin header — enforced against the instance allowlist. */
   origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /**
@@ -148,11 +148,11 @@ export interface MintGuestSessionResult {
   /** The widget instance id (also carried as the `mj_widget_id` claim). */
   widgetId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Tour surface ID when minted from or linked to an `MJ: Tour Surfaces` record. */
-  surfaceId?: string;
+  surfaceId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Tour surface key (`SurfaceKey`) when minted from a tour surface. */
-  surfaceKey?: string;
+  surfaceKey?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Linked `MJ: Conversation Widget Instances.ID` when a tour surface shares a widget session. */
-  conversationWidgetInstanceId?: string;
+  conversationWidgetInstanceId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The Application the session is scoped to. */
   applicationId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The pinned support agent the widget passes as explicitAgentId for every turn (D5). */
@@ -217,7 +217,7 @@ export interface ResolveVisitorIdentityResult {
   /** How many conversations were stamped with the resolved identity. */
   mergedConversations?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** How many guest `MJ: Tour Runs` rows were claimed onto the resolved MJ user. */
-  claimedTourRuns?: number;
+  claimedTourRuns?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
@@ -256,9 +256,9 @@ export interface ForgetVisitorResult {
   /** Count of conversations whose VisitorKey linkage was cleared. */
   conversationsCleared?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Count of claimed `MJ: Tour Runs` whose `VisitorKey` was cleared. */
-  tourRunsCleared?: number;
+  tourRunsCleared?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Count of guest-only `MJ: Tour Runs` deleted. */
-  tourRunsDeleted?: number;
+  tourRunsDeleted?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }

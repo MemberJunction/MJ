@@ -3,12 +3,13 @@ import { RegisterClass } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { ISpotlightStepConfig } from '@memberjunction/tours-runtime';
 import { BaseTourStepRenderer } from './base-step-renderer';
+import { TourProgressRailComponent, TourStepHeaderComponent } from './tour-step-chrome.component';
 
 @RegisterClass(BaseTourStepRenderer, 'Spotlight')
 @Component({
   selector: 'mj-tour-spotlight-step',
   standalone: true,
-  imports: [MJButtonDirective],
+  imports: [MJButtonDirective, TourStepHeaderComponent, TourProgressRailComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -19,37 +20,39 @@ import { BaseTourStepRenderer } from './base-step-renderer';
       [attr.aria-labelledby]="StepHeadingId"
       [attr.aria-describedby]="Step.Body ? StepBodyId : null"
     >
-      <div class="mjt-header">
-        <div>
-          @if (ShowProgress) {
-            <div class="mjt-progress">{{ ProgressLabel }}</div>
-          }
-          <h2 class="mjt-title" [id]="StepHeadingId">{{ Step.Title }}</h2>
+      <mj-tour-step-header
+        [Step]="Step"
+        [HeadingId]="StepHeadingId"
+        [ShowProgress]="ShowProgress"
+        (Dismiss)="OnDismiss()"
+      />
+
+      @if (ShowGuideStatus) {
+        <div class="mjt-awaiting-pill" role="status">
+          <span class="mjt-awaiting-dot" aria-hidden="true"></span>
+          <span>{{ GuideStatusText }}</span>
         </div>
-        <button
-          type="button"
-          class="mjt-close-btn"
-          aria-label="Close tour"
-          (click)="OnDismiss()"
-        >
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
+      }
 
       @if (Step.Body) {
         <div class="mjt-body" [id]="StepBodyId" [innerHTML]="FormatBodyHtml(Step.Body)"></div>
       }
 
       <div class="mjt-footer">
+        <div class="mjt-footer-meta">
+          @if (ShowProgress) {
+            <mj-tour-progress-rail
+              [Session]="Session"
+              (StepSelected)="StepSelected.emit($event)"
+            />
+          }
+          <span class="mjt-kbd-row" aria-hidden="true">
+            <kbd class="mjt-kbd">&larr;</kbd>
+            <kbd class="mjt-kbd">&rarr;</kbd>
+            <kbd class="mjt-kbd">Esc</kbd>
+          </span>
+        </div>
         <div class="mjt-footer-actions">
-          <button
-            type="button"
-            mjButton
-            variant="primary"
-            (click)="OnNext()"
-          >
-            {{ NextLabel }}
-          </button>
           @if (Session.CanGoBack) {
             <button
               type="button"
@@ -60,15 +63,23 @@ import { BaseTourStepRenderer } from './base-step-renderer';
               {{ BackLabel }}
             </button>
           }
+          <button
+            type="button"
+            mjButton
+            variant="primary"
+            (click)="OnNext()"
+          >
+            {{ NextLabel }}
+          </button>
+          <button
+            type="button"
+            mjButton
+            variant="flat"
+            (click)="OnDismiss()"
+          >
+            {{ DismissLabel }}
+          </button>
         </div>
-        <button
-          type="button"
-          mjButton
-          variant="flat"
-          (click)="OnDismiss()"
-        >
-          {{ DismissLabel }}
-        </button>
       </div>
     </div>
   `,
@@ -76,6 +87,14 @@ import { BaseTourStepRenderer } from './base-step-renderer';
 export class SpotlightStepRenderer extends BaseTourStepRenderer<ISpotlightStepConfig> {
   public get ShowProgress(): boolean {
     return this.Step?.Configuration?.ShowProgress !== false;
+  }
+
+  public get ShowGuideStatus(): boolean {
+    return this.Step?.Mode === 'Guide';
+  }
+
+  public get GuideStatusText(): string {
+    return 'Interactive highlight active';
   }
 
   public get NextLabel(): string {

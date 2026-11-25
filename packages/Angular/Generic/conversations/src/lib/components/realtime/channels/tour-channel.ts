@@ -5,8 +5,9 @@
  * Paired with the generic `ClientOnlyChannelServer` (`MJ: AI Agent Channels.ServerPluginClass = 'ClientOnlyChannelServer'`).
  * Never renders a tab surface (`DisplayPolicy: 'headless'`). Streams active-step and visible-anchor
  * state into the live realtime session via {@link RecordChange}, forwards step-completion updates via
- * {@link RealtimeChannelContext.RequestSpokenResponse}, and exposes `highlight`, `goToStep`, and
- * `prepareStep` verbs routed to the active tour session.
+ * {@link RealtimeChannelContext.RequestSpokenResponse}, and exposes `highlight`, `goToStep`,
+ * `prepareStep`, `selectChoice`, `advanceStep`, `goBack`, and `demonstrateStep` verbs routed to the
+ * active tour session.
  *
  * @module @memberjunction/ng-conversations
  */
@@ -68,9 +69,18 @@ export interface TourChannelBridgeEvent {
 export interface TourRealtimeBridge {
   GetActiveStep(): TourChannelActiveStepState | null;
   GetVisibleAnchors(): TourChannelVisibleAnchor[];
-  Highlight(anchorKey: string, caption?: string): Promise<{ Success: boolean; ErrorMessage?: string }>;
+  Highlight(anchorKey: string, caption?: string, durationMs?: number): Promise<{ Success: boolean; ErrorMessage?: string }>;
   GoToStep(stepKey: string): Promise<{ Success: boolean; ErrorMessage?: string }>;
   PrepareStep(consentGranted?: boolean): Promise<{ Success: boolean; ErrorMessage?: string }>;
+  SelectChoice?(choiceKey: string): Promise<{ Success: boolean; ErrorMessage?: string }>;
+  AdvanceStep?(): Promise<{ Success: boolean; ErrorMessage?: string }>;
+  GoBack?(): Promise<{ Success: boolean; ErrorMessage?: string }>;
+  DemonstrateStep?(confirmedMutation?: boolean): Promise<{
+    Success: boolean;
+    RequiresConfirmation?: boolean;
+    ConfirmationPrompt?: string;
+    ErrorMessage?: string;
+  }>;
   SubscribeEvents(listener: (event: TourChannelBridgeEvent) => void): () => void;
 }
 
@@ -101,10 +111,13 @@ const TOUR_CHANNEL_DESCRIPTOR: RealtimeChannelDescriptor = {
   Version: REALTIME_CHANNEL_CONTRACT_VERSION,
   DisplayName: 'Guided Tour',
   Instructions:
-    'Headless voice-director channel for Guided Tours. Only cite anchors currently present in `visibleAnchors`. ' +
-    'Use `highlight` to spotlight a visible anchor with a short caption, `prepareStep` to reveal or navigate to the ' +
-    'next step target, and `goToStep` to move strictly along authored edges or back to completed steps. Keep spoken ' +
-    'turns short and wait silently while the user performs an action.',
+    'Headless Guided Tour voice-guide channel for Sage. When `step_entered` fires, speak naturally in 1–2 ' +
+    'conversational sentences using `VoiceScript` and `GuideNotes` rather than reading `Body` verbatim, then pause ' +
+    'for user questions or action. Only cite anchors currently present in `visibleAnchors`. Use `highlight` to ' +
+    'point at a visible anchor with a short caption, `prepareStep` to reveal or navigate to the step target, ' +
+    '`selectChoice` when the user picks a branch by voice, `advanceStep` or `goBack` for pacing, `goToStep` to ' +
+    'move strictly along authored edges or back to completed steps, and `demonstrateStep` when the user asks to ' +
+    'be shown.',
   Nouns: [
     {
       Name: 'activeStep',
@@ -152,6 +165,7 @@ const TOUR_CHANNEL_DESCRIPTOR: RealtimeChannelDescriptor = {
         properties: {
           anchorKey: { type: 'string', description: 'AnchorKey from visibleAnchors.' },
           caption: { type: 'string', description: 'Optional concise caption to display.' },
+          durationMs: { type: 'number', description: 'Optional spotlight duration in milliseconds.' },
         },
         required: ['anchorKey'],
       },
@@ -176,6 +190,52 @@ const TOUR_CHANNEL_DESCRIPTOR: RealtimeChannelDescriptor = {
         type: 'object',
         properties: {
           consentGranted: { type: 'boolean', description: 'Whether the user consented to cross-screen navigation.' },
+        },
+      },
+      InvokableBy: 'agent',
+    },
+    {
+      Name: 'selectChoice',
+      Description: 'Select an authored choice branch on the current step when the user picks an option by voice.',
+      ParametersSchema: {
+        type: 'object',
+        properties: {
+          choiceKey: { type: 'string', description: 'Authored ChoiceKey to select.' },
+        },
+        required: ['choiceKey'],
+      },
+      InvokableBy: 'agent',
+    },
+    {
+      Name: 'advanceStep',
+      Description: 'Advance the active tour along the next outgoing step transition when the user is ready to proceed.',
+      ParametersSchema: {
+        type: 'object',
+        properties: {},
+      },
+      InvokableBy: 'agent',
+    },
+    {
+      Name: 'goBack',
+      Description: 'Move the active tour back to the previous step when the user asks to revisit it.',
+      ParametersSchema: {
+        type: 'object',
+        properties: {},
+      },
+      InvokableBy: 'agent',
+    },
+    {
+      Name: 'demonstrateStep',
+      Description:
+        'Execute the current step demonstration when the user asks Sage to show them. Pass confirmedMutation=true ' +
+        'only after the user explicitly confirms a mutating action.',
+      ParametersSchema: {
+        type: 'object',
+        properties: {
+          confirmedMutation: {
+            type: 'boolean',
+            description: 'Whether the user explicitly confirmed running a mutating demonstration.',
+          },
         },
       },
       InvokableBy: 'agent',
@@ -279,16 +339,17 @@ export class TourChannel extends BaseRealtimeChannelClient<object> {
     if (normalized === 'highlight') {
       const anchorKey = typeof args['anchorKey'] === 'string' ? args['anchorKey'] : '';
       const caption = typeof args['caption'] === 'string' ? args['caption'] : undefined;
+      const durationMs = typeof args['durationMs'] === 'number' ? args['durationMs'] : undefined;
       if (!anchorKey) {
         return { Success: false, ErrorCode: 'invalid_params', Error: 'highlight requires anchorKey.' };
       }
       if (bridge) {
-        const res = await bridge.Highlight(anchorKey, caption);
+        const res = await bridge.Highlight(anchorKey, caption, durationMs);
         return res.Success
           ? { Success: true, Result: { highlighted: true, anchorKey } }
           : { Success: false, ErrorCode: 'anchor_not_visible', Error: res.ErrorMessage ?? 'Anchor is not visible.' };
       }
-      return this.forwardToClientTool('TourHighlight', { AnchorKey: anchorKey, Caption: caption });
+      return this.forwardToClientTool('TourHighlight', { AnchorKey: anchorKey, Caption: caption, DurationMs: durationMs });
     }
 
     if (normalized === 'gotostep') {
@@ -317,6 +378,81 @@ export class TourChannel extends BaseRealtimeChannelClient<object> {
           : { Success: false, ErrorCode: 'prepare_failed', Error: res.ErrorMessage ?? 'Could not prepare step.' };
       }
       return this.forwardToClientTool('TourPrepareStep', { ConsentGranted: consentGranted });
+    }
+
+    if (normalized === 'selectchoice') {
+      const choiceKey = typeof args['choiceKey'] === 'string' ? args['choiceKey'].trim() : '';
+      if (!choiceKey) {
+        return { Success: false, ErrorCode: 'invalid_params', Error: 'selectChoice requires choiceKey.' };
+      }
+      if (bridge?.SelectChoice) {
+        const res = await bridge.SelectChoice(choiceKey);
+        if (res.Success) {
+          this.RecordChange({ Author: 'agent' });
+          return { Success: true, Result: { selectedChoiceKey: choiceKey } };
+        }
+        return { Success: false, ErrorCode: 'select_choice_failed', Error: res.ErrorMessage ?? 'Could not select choice.' };
+      }
+      return this.forwardToClientTool('TourSelectChoice', { ChoiceKey: choiceKey });
+    }
+
+    if (normalized === 'advancestep') {
+      if (bridge?.AdvanceStep) {
+        const res = await bridge.AdvanceStep();
+        if (res.Success) {
+          this.RecordChange({ Author: 'agent' });
+          return { Success: true, Result: { advanced: true } };
+        }
+        return { Success: false, ErrorCode: 'advance_failed', Error: res.ErrorMessage ?? 'Could not advance step.' };
+      }
+      return this.forwardToClientTool('TourAdvanceStep', {});
+    }
+
+    if (normalized === 'goback') {
+      if (bridge?.GoBack) {
+        const res = await bridge.GoBack();
+        if (res.Success) {
+          this.RecordChange({ Author: 'agent' });
+          return { Success: true, Result: { movedBack: true } };
+        }
+        return { Success: false, ErrorCode: 'go_back_failed', Error: res.ErrorMessage ?? 'Could not go back.' };
+      }
+      return this.forwardToClientTool('TourGoBack', {});
+    }
+
+    if (normalized === 'demonstratestep') {
+      const confirmedMutation = typeof args['confirmedMutation'] === 'boolean' ? args['confirmedMutation'] : undefined;
+      if (bridge?.DemonstrateStep) {
+        const res = await bridge.DemonstrateStep(confirmedMutation);
+        if (res.Success) {
+          this.RecordChange({ Author: 'agent' });
+          return {
+            Success: true,
+            Result: {
+              demonstrated: true,
+              ...(res.RequiresConfirmation !== undefined ? { requiresConfirmation: res.RequiresConfirmation } : {}),
+              ...(res.ConfirmationPrompt !== undefined ? { confirmationPrompt: res.ConfirmationPrompt } : {}),
+            },
+          };
+        }
+        if (res.RequiresConfirmation) {
+          return {
+            Success: false,
+            ErrorCode: 'confirmation_required',
+            Error: res.ConfirmationPrompt ?? res.ErrorMessage ?? 'User confirmation is required to demonstrate this step.',
+            Result: {
+              requiresConfirmation: true,
+              ...(res.ConfirmationPrompt !== undefined ? { confirmationPrompt: res.ConfirmationPrompt } : {}),
+            },
+          };
+        }
+        return {
+          Success: false,
+          ErrorCode: 'demonstrate_failed',
+          Error: res.ErrorMessage ?? 'Could not demonstrate step.',
+        };
+      }
+      return this.forwardToClientTool('TourDemonstrateStep', { ConfirmedMutation: confirmedMutation });
     }
 
     return {

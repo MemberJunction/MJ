@@ -1,5 +1,4 @@
 import { CSP_NONCE, createComponent, provideZoneChangeDetection, type Injector } from '@angular/core';
-import { createCustomElement } from '@angular/elements';
 import { createApplication } from '@angular/platform-browser';
 import {
   TourSignals,
@@ -38,7 +37,11 @@ export interface MountedToursHandle {
  * Registers `<mj-tour-host>` as a browser custom element using Angular Elements (idempotent).
  */
 export async function RegisterTourElements(injector?: Injector): Promise<void> {
-  if (typeof customElements === 'undefined' || customElements.get(TOUR_HOST_TAG) !== undefined) {
+  if (
+    typeof customElements === 'undefined' ||
+    typeof HTMLElement === 'undefined' ||
+    customElements.get(TOUR_HOST_TAG) !== undefined
+  ) {
     return;
   }
 
@@ -50,6 +53,11 @@ export async function RegisterTourElements(injector?: Injector): Promise<void> {
     resolvedInjector = app.injector;
   }
 
+  // Deferred load (AGENTS.md Rule #8 Category 3 — bundle/Node-test deferral): `@angular/elements`
+  // evaluates `class NgElement extends HTMLElement` at module import time, which throws ReferenceError
+  // in plain-Node test runners importing `@memberjunction/ng-tours` outside a DOM environment.
+  // `@angular/elements` is explicitly declared in `@memberjunction/ng-tours/package.json`.
+  const { createCustomElement } = await import('@angular/elements');
   const elementCtor = createCustomElement(MJTourHostComponent, { injector: resolvedInjector });
   customElements.define(TOUR_HOST_TAG, elementCtor);
 }

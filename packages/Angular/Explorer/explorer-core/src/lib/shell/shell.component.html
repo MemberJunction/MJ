@@ -625,4 +625,32 @@
 </mj-diagnostic-report-problem-dialog>
 
 <!-- Guided Tours Host Overlay -->
-<mj-tour-host [Provider]="ProviderToUse" (SessionChanged)="OnTourHostSessionChanged()"></mj-tour-host>
+<ng-template #tourSageBar let-session let-onDemonstrate="OnDemonstrate">
+  <mj-realtime-session-overlay
+    Chrome="bar"
+    [AgentName]="TourVoiceAgentName"
+    [ShowExpandButton]="true"
+    (ExpandRequested)="OnExpandTourVoiceOverlay()">
+    @if (session.DirectorType !== 'Verify') {
+      <button
+        mjRealtimeBarActions
+        type="button"
+        mjButton
+        Variant="secondary"
+        Size="sm"
+        (click)="onDemonstrate()">
+        Show me
+      </button>
+    }
+  </mj-realtime-session-overlay>
+</ng-template>
+
+<mj-tour-host
+  #tourHostCmp
+  [Provider]="ProviderToUse"
+  [VoiceBarTemplate]="tourSageBar"
+  [VoiceGuideAvailable]="TourVoiceGuideAvailable"
+  [VoiceGuideActive]="TourVoiceGuideActive"
+  (VoiceGuideRequested)="OnTourVoiceGuideRequested($event)"
+  (SessionChanged)="OnTourHostSessionChanged()">
+</mj-tour-host>

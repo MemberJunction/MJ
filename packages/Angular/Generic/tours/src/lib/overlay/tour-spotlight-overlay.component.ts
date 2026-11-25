@@ -10,8 +10,8 @@ export interface SpotlightCutoutRect {
 
 /**
  * Renders the Light DOM full-viewport SVG `evenodd` backdrop mask around 1 or more
- * rounded spotlight cutouts. Strictly `aria-hidden="true"` so screen readers never see
- * the decorative mask.
+ * rounded spotlight cutouts, plus a magnetic double-halo ring (`inner` + outer soft halo).
+ * Strictly `aria-hidden="true"` so screen readers never see the decorative mask.
  */
 @Component({
   selector: 'mj-tour-spotlight-overlay',
@@ -30,13 +30,24 @@ export interface SpotlightCutoutRect {
           <path class="mjt-spotlight-path" [attr.d]="MaskPath" />
           @for (hole of Cutouts; track $index) {
             <rect
+              class="mjt-spotlight-halo"
+              [class.mjt-spotlight-halo--guide]="GuideTone"
+              [attr.x]="hole.X - 2"
+              [attr.y]="hole.Y - 2"
+              [attr.width]="hole.Width + 4"
+              [attr.height]="hole.Height + 4"
+              [attr.rx]="(hole.Radius ?? 10) + 2"
+              [attr.ry]="(hole.Radius ?? 10) + 2"
+            />
+            <rect
               class="mjt-spotlight-ring"
+              [class.mjt-spotlight-ring--guide]="GuideTone"
               [attr.x]="hole.X"
               [attr.y]="hole.Y"
               [attr.width]="hole.Width"
               [attr.height]="hole.Height"
-              [attr.rx]="hole.Radius ?? 8"
-              [attr.ry]="hole.Radius ?? 8"
+              [attr.rx]="hole.Radius ?? 10"
+              [attr.ry]="hole.Radius ?? 10"
             />
           }
         </svg>
@@ -46,6 +57,7 @@ export interface SpotlightCutoutRect {
 })
 export class TourSpotlightOverlayComponent {
   @Input() public Visible = false;
+  @Input() public GuideTone = false;
   @Input() public Cutouts: ReadonlyArray<SpotlightCutoutRect> = [];
   @Input() public ViewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
   @Input() public ViewportHeight = typeof window !== 'undefined' ? window.innerHeight : 720;
@@ -74,7 +86,7 @@ export function BuildSpotlightEvenOddPath(
     const y = Math.max(0, c.Y);
     const w = Math.max(0, c.Width);
     const h = Math.max(0, c.Height);
-    const r = Math.min(c.Radius ?? 8, w / 2, h / 2);
+    const r = Math.min(c.Radius ?? 10, w / 2, h / 2);
     return (
       `M${x + r},${y} ` +
       `H${x + w - r} A${r},${r} 0 0 1 ${x + w},${y + r} ` +

@@ -85,6 +85,39 @@ describe('resolveRealtimeUi — chrome (the orb ↔ console rule)', () => {
     expect(r.showThread).toBe(true);
   });
 
+  it('forced bar resolves chrome to bar and suppresses hero, thread, surface panel, activity tab, channel strip, gear, and density picker', () => {
+    const r = ResolveRealtimeUi(
+      { chrome: 'bar' },
+      signals({
+        ContainerWidthPx: 1400,
+        TextRevealed: true,
+        DisclosureShowThread: true,
+        DisclosureShowPanel: true,
+        DisclosureShowGear: true,
+        SurfacePanelEarned: true,
+        hasChannels: true,
+        HasActivity: true,
+      }),
+    );
+    expect(r.chrome).toBe('bar');
+    expect(r.compact).toBe(true);
+    expect(r.showHero).toBe(false);
+    expect(r.showThread).toBe(false);
+    expect(r.showSurfacePanel).toBe(false);
+    expect(r.SurfacePanelWaitsForRoom).toBe(false);
+    expect(r.showActivityTab).toBe(false);
+    expect(r.showChannelStrip).toBe(false);
+    expect(r.showGear).toBe(false);
+    expect(r.showDensityPicker).toBe(false);
+    expect(r.showEnd).toBe(true);
+  });
+
+  it('bar chrome falls back to console when reviewing a past session', () => {
+    const r = ResolveRealtimeUi({ chrome: 'bar' }, signals({ ContainerWidthPx: 400, IsReviewing: true }));
+    expect(r.chrome).toBe('console');
+    expect(r.showThread).toBe(true);
+  });
+
   it('allowTextReveal:false pins the orb and blocks console graduation', () => {
     const r = ResolveRealtimeUi({ chrome: 'auto', allowTextReveal: false }, signals({ ContainerWidthPx: 1400, TextRevealed: true }));
     expect(r.chrome).toBe('orb');

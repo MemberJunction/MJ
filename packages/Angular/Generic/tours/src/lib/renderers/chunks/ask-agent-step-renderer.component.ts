@@ -12,6 +12,7 @@ import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { TourSignals, type IAskAgentStepConfig } from '@memberjunction/tours-runtime';
 import { MJ_TOUR_AGENT_DISPATCHER } from '../../host/tour-host-tokens';
 import { BaseTourStepRenderer } from '../base-step-renderer';
+import { TourProgressRailComponent, TourStepHeaderComponent } from '../tour-step-chrome.component';
 
 /**
  * Lazy-chunked `AskAgent` step renderer (§5.3 & §18 Phase 3).
@@ -21,7 +22,7 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
 @Component({
   selector: 'mj-tour-ask-agent-step',
   standalone: true,
-  imports: [FormsModule, MJButtonDirective],
+  imports: [FormsModule, MJButtonDirective, TourStepHeaderComponent, TourProgressRailComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -32,26 +33,17 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
       [attr.aria-labelledby]="StepHeadingId"
       [attr.aria-describedby]="Step.Body ? StepBodyId : null"
     >
-      <div class="mjt-header">
-        <div>
-          <div class="mjt-progress">{{ ProgressLabel }}</div>
-          <h2 class="mjt-title" [id]="StepHeadingId">{{ Step.Title }}</h2>
-        </div>
-        <button
-          type="button"
-          class="mjt-close-btn"
-          aria-label="Close tour"
-          (click)="OnDismiss()"
-        >
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
+      <mj-tour-step-header
+        [Step]="Step"
+        [HeadingId]="StepHeadingId"
+        (Dismiss)="OnDismiss()"
+      />
 
       @if (Step.Body) {
         <div class="mjt-body" [id]="StepBodyId" [innerHTML]="FormatBodyHtml(Step.Body)"></div>
       }
 
-      <label class="mjt-hint" [attr.for]="PromptInputId">Prompt for assistant</label>
+      <label class="mjt-hint" [attr.for]="PromptInputId">Prompt for Sage</label>
       <textarea
         [id]="PromptInputId"
         class="mjt-agent-input"
@@ -62,13 +54,28 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
 
       @if (dispatched()) {
         <div class="mjt-waiting" role="status" aria-live="polite">
-          <i class="fa-solid fa-check-circle" aria-hidden="true"></i>
-          <span>Prompt sent to assistant.</span>
+          <span>Prompt sent to Sage.</span>
         </div>
       }
 
       <div class="mjt-footer">
+        <div class="mjt-footer-meta">
+          <mj-tour-progress-rail
+            [Session]="Session"
+            (StepSelected)="StepSelected.emit($event)"
+          />
+        </div>
         <div class="mjt-footer-actions">
+          @if (Session.CanGoBack) {
+            <button
+              type="button"
+              mjButton
+              variant="secondary"
+              (click)="OnBack()"
+            >
+              Back
+            </button>
+          }
           <button
             type="button"
             mjButton
@@ -76,8 +83,7 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
             [disabled]="!promptText().trim()"
             (click)="OnAsk()"
           >
-            <i class="fa-solid fa-sparkles" aria-hidden="true"></i>
-            <span>{{ PreferVoice ? 'Ask with Voice' : 'Ask Assistant' }}</span>
+            <span>{{ PreferVoice ? 'Ask Sage with Voice' : 'Ask Sage' }}</span>
           </button>
           @if (AllowNextButtonFallback) {
             <button
@@ -89,25 +95,15 @@ import { BaseTourStepRenderer } from '../base-step-renderer';
               {{ NextLabel }}
             </button>
           }
-          @if (Session.CanGoBack) {
-            <button
-              type="button"
-              mjButton
-              variant="secondary"
-              (click)="OnBack()"
-            >
-              Back
-            </button>
-          }
+          <button
+            type="button"
+            mjButton
+            variant="flat"
+            (click)="OnDismiss()"
+          >
+            Dismiss
+          </button>
         </div>
-        <button
-          type="button"
-          mjButton
-          variant="flat"
-          (click)="OnDismiss()"
-        >
-          Dismiss
-        </button>
       </div>
     </div>
   `,

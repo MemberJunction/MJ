@@ -1,13 +1,15 @@
-import { Injectable, OnDestroy, inject } from '@angular/core';
+import { Injectable, InjectionToken, OnDestroy, inject } from '@angular/core';
 import {
   BaseEntityEvent,
   CompositeKey,
   EntityInfo,
   IMetadataProvider,
   LogError,
+  LogStatus,
   Metadata,
   RunView,
 } from '@memberjunction/core';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import {
   MJLearningPathEntity,
   MJLearningPathTourEntity,
@@ -18,6 +20,7 @@ import {
 } from '@memberjunction/core-entities';
 import { GroupByUUID, MJEventType, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ApplicationManager, BaseApplication, NavItem, WorkspaceStateManager } from '@memberjunction/ng-base-application';
+import { LoadTourChannel, RealtimeSessionService } from '@memberjunction/ng-conversations';
 import { NavigationService, ResourceLoadedEvent } from '@memberjunction/ng-shared';
 import type { MJTourHostComponent } from '@memberjunction/ng-tours';
 import {
@@ -43,8 +46,18 @@ import {
   TourSessionGuideMode,
   TourSessionView,
   TourSignals,
+  TourStepDefinition,
   TourVisibleAnchorInfo,
 } from '@memberjunction/tours-runtime';
+
+// Preserve TourChannel's @RegisterClass registration under Angular tree-shaking.
+LoadTourChannel();
+
+/** Maximum ms to wait for NavigationService.ResourceLoaded$ before resolving Navigate(). */
+const TOUR_NAVIGATION_SETTLE_TIMEOUT_MS = 4500;
+
+/** Maximum ms to wait for a step's target anchor element during DemonstrateStep(). */
+const DEMONSTRATE_ANCHOR_TIMEOUT_MS = 2500;
 import {
   BehaviorSubject,
   Observable,
@@ -57,6 +70,9 @@ import {
   timer,
 } from 'rxjs';
 import { distinctUntilChanged, filter, map, take } from 'rxjs/operators';
+
+/** Injection token supplying the browser DOM anchor bridge (`DomTourAnchorBridge`) from `ShellModule`. */
+export const EXPLORER_TOUR_ANCHOR_BRIDGE = new InjectionToken<ITourAnchorDomBridge>('EXPLORER_TOUR_ANCHOR_BRIDGE');
 
 /** User setting key for Guided Tour preferences stored via `UserInfoEngine`. */
 export const TOUR_PREFERENCES_SETTING_KEY = 'mj.tours.preferences.v1';
@@ -123,16 +139,21 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   private readonly appManager = inject(ApplicationManager, { optional: true });
   private readonly workspaceManager = inject(WorkspaceStateManager, { optional: true });
   private readonly navigationService = inject(NavigationService, { optional: true });
+  private readonly realtimeSession = inject(RealtimeSessionService, { optional: true });
 
   private provider: IMetadataProvider | null = null;
   private toolkit: TourAgentToolkit | null = null;
   private agentBridge: ITourHostAgentBridge | null = null;
   private tourHostComponent: MJTourHostComponent | null = null;
-  private attachedAnchorBridge: ITourAnchorDomBridge | null = null;
+  private attachedAnchorBridge: ITourAnchorDomBridge | null = inject(EXPLORER_TOUR_ANCHOR_BRIDGE, { optional: true });
   private simulatedRolesOverride: string[] | null = null;
   private currentLocationSnapshot: TourLocation = {};
+  private isRealtimeActive = false;
+  private pendingVoiceGuideMinimize = false;
   private sessionViewSub: Subscription | null = null;
   private locationSub: Subscription | null = null;
+  private realtimeActiveSub: Subscription | null = null;
+  private realtimeStartedSub: Subscription | null = null;
   private entityEventSub: { unsubscribe: () => void } | null = null;
   private signalSub: Subscription | null = null;
 
@@ -153,6 +174,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
   public readonly Location$: Observable<TourLocation>;
   public readonly ActiveSession$: Observable<TourSession | null> = this.activeSessionSubject.asObservable();
   public readonly ActiveSessionView$: Observable<TourSessionView | null> = this.activeSessionViewSubject.asObservable();
+  public readonly VoiceGuideActive$: Observable<boolean>;
 
   constructor() {
     const activeApp$ = this.appManager?.ActiveApp ?? of(null);
@@ -161,6 +183,27 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       map(([activeApp, config]) => this.buildLocation(activeApp, config?.tabs ?? [], config?.activeTabId ?? null)),
       distinctUntilChanged((a, b) => locationsEqual(a, b)),
     );
+
+    const realtimeActive$ = this.realtimeSession?.Active$ ?? of(false);
+    this.VoiceGuideActive$ = combineLatest([realtimeActive$, this.ActiveSessionView$]).pipe(
+      map(([realtimeActive, view]) => realtimeActive && view !== null && view.Status === 'In Progress'),
+      distinctUntilChanged(),
+    );
+
+    if (this.realtimeSession) {
+      this.realtimeActiveSub = this.realtimeSession.Active$.subscribe((active) => {
+        const becameActive = active && !this.isRealtimeActive;
+        this.isRealtimeActive = active;
+        if (becameActive && (this.pendingVoiceGuideMinimize || this.isTourInProgress())) {
+          this.realtimeSession?.SetMinimized(true);
+        }
+      });
+      this.realtimeStartedSub = this.realtimeSession.SessionStarted$.subscribe(() => {
+        if (this.pendingVoiceGuideMinimize || this.isTourInProgress()) {
+          this.realtimeSession?.SetMinimized(true);
+        }
+      });
+    }
 
     this.locationSub = this.Location$.subscribe((loc) => {
       this.currentLocationSnapshot = loc;
@@ -194,9 +237,24 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
 
   public ngOnDestroy(): void {
     this.locationSub?.unsubscribe();
+    this.realtimeActiveSub?.unsubscribe();
+    this.realtimeStartedSub?.unsubscribe();
     this.sessionViewSub?.unsubscribe();
     this.signalSub?.unsubscribe();
     this.entityEventSub?.unsubscribe();
+  }
+
+  public get IsVoiceGuideAvailable(): boolean {
+    return this.realtimeSession !== null;
+  }
+
+  public get TourVoiceAgentName(): string {
+    return this.realtimeSession?.CurrentAgentName || 'Sage';
+  }
+
+  private isTourInProgress(): boolean {
+    const view = this.activeSessionViewSubject.getValue();
+    return view !== null && view.Status === 'In Progress';
   }
 
   /**
@@ -277,7 +335,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
         const compositeKey = CompositeKey.FromURLSegment(entityInfo, intent.RecordId);
         const waitForLoad = this.awaitResourceLoaded(
           (evt) => evt.ResourceType.toLowerCase() === 'records' && (!evt.RecordId || evt.RecordId === intent.RecordId),
-          4500,
+          TOUR_NAVIGATION_SETTLE_TIMEOUT_MS,
         );
         navService.OpenEntityRecord(intent.EntityName, compositeKey);
         await waitForLoad;
@@ -309,7 +367,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
           (evt) =>
             UUIDsEqual(evt.AppId, targetApp?.ID) &&
             (!intent.DriverClass || evt.DriverClass === intent.DriverClass),
-          4500,
+          TOUR_NAVIGATION_SETTLE_TIMEOUT_MS,
         );
         await navService.SwitchToApp(targetApp.ID, navItem?.Label, intent.QueryParams);
         await waitForLoad;
@@ -331,6 +389,126 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       LogError(`ExplorerTourHost.Navigate failed: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
+  }
+
+  /**
+   * Demonstrates a tour step on the Explorer UI by navigating (when requested),
+   * verifying the target anchor is visible, and triggering Sage's pointer highlight.
+   */
+  public async DemonstrateStep(
+    step: TourStepDefinition,
+    _context?: { ConfirmedMutation?: boolean },
+  ): Promise<{ Success: boolean; ErrorMessage?: string }> {
+    const prep = step.Prepare;
+    if (
+      prep &&
+      (prep.ApplicationID ||
+        prep.ApplicationName ||
+        prep.NavItemKey ||
+        prep.DriverClass ||
+        prep.EntityName ||
+        prep.Url)
+    ) {
+      await this.Navigate({
+        ApplicationID: prep.ApplicationID,
+        ApplicationName: prep.ApplicationName,
+        NavItemKey: prep.NavItemKey,
+        DriverClass: prep.DriverClass,
+        EntityName: prep.EntityName,
+        RailKey: prep.RailKey,
+        SectionKey: prep.SectionKey,
+        Url: prep.Url,
+      });
+    }
+
+    if (step.Anchor) {
+      const resolved = await this.anchorBridgeDelegate.ResolveAnchor(step.Anchor, DEMONSTRATE_ANCHOR_TIMEOUT_MS);
+      if (!resolved.Found) {
+        return {
+          Success: false,
+          ErrorMessage: resolved.FailureReason ?? 'Target element is not visible on screen.',
+        };
+      }
+
+      const highlightKey = resolved.AnchorKey ?? step.Anchor.Key ?? step.Anchor.Selector;
+      if (highlightKey) {
+        const activeSession = this.activeSessionSubject.getValue();
+        if (activeSession) {
+          activeSession.SetPointerHighlight(highlightKey, step.Title);
+        } else if (this.anchorBridgeDelegate.HighlightAnchor) {
+          await this.anchorBridgeDelegate.HighlightAnchor(highlightKey, step.Title);
+        }
+      }
+    }
+
+    return { Success: true };
+  }
+
+  /**
+   * Starts, attaches, or ends the embedded Sage Voice Guide realtime session for
+   * the active tour. Minimizes any full-screen overlay so Sage docks into the tour card bar.
+   */
+  public async RequestVoiceGuide(enabled: boolean): Promise<boolean> {
+    if (!this.realtimeSession) {
+      return false;
+    }
+    if (!enabled) {
+      if (this.isRealtimeActive) {
+        await this.realtimeSession.EndRealtimeSession('explicit');
+      }
+      return true;
+    }
+    if (this.isRealtimeActive) {
+      this.realtimeSession.SetMinimized(true);
+      return true;
+    }
+
+    this.pendingVoiceGuideMinimize = true;
+    try {
+      await AIEngineBase.Instance.Config(false, this.providerToUse.CurrentUser, this.providerToUse).catch(() => undefined);
+      const agents = AIEngineBase.Instance.Agents ?? [];
+      const sageAgent =
+        agents.find((a) => a.Name?.trim().toLowerCase() === 'sage' && a.Status !== 'Disabled') ??
+        agents.find((a) => a.Status !== 'Disabled');
+      if (!sageAgent) {
+        LogStatus('ExplorerTourHost.RequestVoiceGuide: No active AI agent found to start Sage Voice Guide.');
+        return false;
+      }
+
+      this.realtimeSession.Provider = this.providerToUse;
+      await this.realtimeSession.StartRealtimeSession(
+        sageAgent.ID,
+        null,
+        null,
+        sageAgent.Name || 'Sage',
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        this.currentLocationSnapshot.ApplicationID ?? null,
+        null,
+        {
+          HostChannels: [
+            { ClientPluginClass: 'ClientContextChannel' },
+            { ClientPluginClass: 'TourChannel' },
+          ],
+        },
+      );
+      this.realtimeSession.SetMinimized(true);
+      return true;
+    } catch (error) {
+      LogError(`ExplorerTourHost.RequestVoiceGuide failed: ${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    } finally {
+      this.pendingVoiceGuideMinimize = false;
+    }
+  }
+
+  /** Expands the embedded Sage voice bar back into the full realtime session overlay. */
+  public ExpandVoiceOverlay(): void {
+    this.realtimeSession?.SetMinimized(false);
   }
 
   /** Attaches the root `<mj-tour-host>` component and DOM anchor bridge from the browser shell. */
@@ -432,6 +610,9 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     }
 
     this.activeSessionViewSubject.next(session.SessionView);
+    if (session.SessionView.Status === 'In Progress' && this.realtimeSession && this.isRealtimeActive) {
+      this.realtimeSession.SetMinimized(true);
+    }
     this.sessionViewSub = session.SessionView$.subscribe((view) => {
       this.activeSessionViewSubject.next(view);
       if (
@@ -513,6 +694,7 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
       }
       toolkit.SetActiveSession(session);
       this.handleSessionChanged(session);
+      this.syncRealtimeSessionOnTourStart(preferredMode);
       return session;
     }
 
@@ -539,7 +721,19 @@ export class ExplorerTourHost implements ITourHost, OnDestroy {
     }
 
     toolkit.SetActiveSession(session, directorToken);
+    this.syncRealtimeSessionOnTourStart(preferredMode);
     return session;
+  }
+
+  private syncRealtimeSessionOnTourStart(preferredMode: TourSessionGuideMode): void {
+    if (!this.realtimeSession) {
+      return;
+    }
+    if (this.isRealtimeActive) {
+      this.realtimeSession.SetMinimized(true);
+    } else if (preferredMode === 'Voice') {
+      void this.RequestVoiceGuide(true);
+    }
   }
 
   public async PauseActiveTour(): Promise<void> {

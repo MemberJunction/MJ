@@ -3,6 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import type { IActionStepConfig } from '@memberjunction/tours-runtime';
 import { BaseTourStepRenderer } from './base-step-renderer';
+import { TourProgressRailComponent, TourStepHeaderComponent } from './tour-step-chrome.component';
 
 /**
  * Non-modal `Action` step renderer (absorbs `FieldEntry` and `WaitForSignal`, §5.3).
@@ -12,7 +13,7 @@ import { BaseTourStepRenderer } from './base-step-renderer';
 @Component({
   selector: 'mj-tour-action-step',
   standalone: true,
-  imports: [MJButtonDirective],
+  imports: [MJButtonDirective, TourStepHeaderComponent, TourProgressRailComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -23,48 +24,42 @@ import { BaseTourStepRenderer } from './base-step-renderer';
       [attr.aria-labelledby]="StepHeadingId"
       [attr.aria-describedby]="Step.Body ? StepBodyId : null"
     >
-      <div class="mjt-header">
-        <div>
-          <div class="mjt-progress">{{ ProgressLabel }}</div>
-          <h2 class="mjt-title" [id]="StepHeadingId">{{ Step.Title }}</h2>
+      <mj-tour-step-header
+        [Step]="Step"
+        [HeadingId]="StepHeadingId"
+        (Dismiss)="OnDismiss()"
+      />
+
+      @if (ShowWaitingIndicator) {
+        <div class="mjt-awaiting-pill" role="status" aria-live="polite">
+          <span class="mjt-awaiting-dot" aria-hidden="true"></span>
+          <span>{{ WaitingMessage }}</span>
         </div>
-        <button
-          type="button"
-          class="mjt-close-btn"
-          aria-label="Close tour"
-          (click)="OnDismiss()"
-        >
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
+      }
 
       @if (Step.Body) {
         <div class="mjt-body" [id]="StepBodyId" [innerHTML]="FormatBodyHtml(Step.Body)"></div>
       }
 
-      @if (ShowWaitingIndicator) {
-        <div class="mjt-waiting" role="status" aria-live="polite">
-          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
-          <span>{{ WaitingMessage }}</span>
+      @if (Step.Anchor) {
+        <div class="mjt-hint">
+          Press <kbd class="mjt-kbd">F6</kbd> to switch focus between this instruction and the target control.
         </div>
       }
 
-      @if (Step.Anchor) {
-        <div class="mjt-hint">Press F6 to switch focus between this instruction and the target control.</div>
-      }
-
       <div class="mjt-footer">
+        <div class="mjt-footer-meta">
+          <mj-tour-progress-rail
+            [Session]="Session"
+            (StepSelected)="StepSelected.emit($event)"
+          />
+          <span class="mjt-kbd-row" aria-hidden="true">
+            <kbd class="mjt-kbd">&larr;</kbd>
+            <kbd class="mjt-kbd">&rarr;</kbd>
+            <kbd class="mjt-kbd">Esc</kbd>
+          </span>
+        </div>
         <div class="mjt-footer-actions">
-          @if (AllowManualSkip) {
-            <button
-              type="button"
-              mjButton
-              variant="primary"
-              (click)="OnSkip()"
-            >
-              {{ SkipLabel }}
-            </button>
-          }
           @if (Session.CanGoBack) {
             <button
               type="button"
@@ -75,15 +70,25 @@ import { BaseTourStepRenderer } from './base-step-renderer';
               Back
             </button>
           }
+          @if (AllowManualSkip) {
+            <button
+              type="button"
+              mjButton
+              variant="primary"
+              (click)="OnSkip()"
+            >
+              {{ SkipLabel }}
+            </button>
+          }
+          <button
+            type="button"
+            mjButton
+            variant="flat"
+            (click)="OnDismiss()"
+          >
+            Dismiss
+          </button>
         </div>
-        <button
-          type="button"
-          mjButton
-          variant="flat"
-          (click)="OnDismiss()"
-        >
-          Dismiss
-        </button>
       </div>
     </div>
   `,

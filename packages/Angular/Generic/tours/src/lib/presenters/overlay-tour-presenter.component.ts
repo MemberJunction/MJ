@@ -8,6 +8,7 @@ import {
   OnChanges,
   OnDestroy,
   SimpleChanges,
+  TemplateRef,
   ViewChild,
   ViewContainerRef,
   ViewEncapsulation,
@@ -16,6 +17,7 @@ import {
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import type { ISpotlightStepConfig, TourSessionView, TourStepView } from '@memberjunction/tours-runtime';
 import { Subscription } from 'rxjs';
+import { AnchorRegistry } from '../anchors/anchor-registry';
 import { TourFocusManager } from '../overlay/focus-manager';
 import {
   AutoUpdateOverlayPosition,
@@ -30,9 +32,21 @@ import {
 import { BaseTourStepRenderer } from '../renderers/base-step-renderer';
 import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
 import { EnsureStandardTourRenderersRegistered } from '../renderers/register-standard-renderers';
+import { TourCardHairlineComponent } from '../renderers/tour-step-chrome.component';
 import { BaseTourPresenter } from './base-tour-presenter';
+import { TourVoiceDockComponent, type TourVoiceBarContext } from './tour-voice-dock.component';
 
 EnsureStandardTourRenderersRegistered();
+
+export interface PointerHighlightRect {
+  Left: number;
+  Top: number;
+  Width: number;
+  Height: number;
+  CaptionTop: number;
+  CaptionLeft: number;
+  Caption?: string;
+}
 
 const MODAL_STEP_TYPES = new Set([
   'Spotlight',
@@ -46,17 +60,18 @@ const MODAL_STEP_TYPES = new Set([
 
 /**
  * Default `'Overlay'` presenter (§5.1 & §15):
- * - Renders SVG `evenodd` spotlight mask (`aria-hidden="true"`) around target(s)
+ * - Renders Precision Glass card with magnetic double-halo SVG `evenodd` spotlight mask (`aria-hidden="true"`)
+ * - Renders secondary Sage Pointer Highlight ring (`Session.PointerHighlight`) without disturbing primary spotlight
+ * - Hosts embedded Sage voice dock (`VoiceBarTemplate` + inline `PendingDemonstrationConfirmation` gate)
  * - Applies sibling-subtree `inert` ONLY on modal steps (keeping spotlighted target + live region active!)
  * - Positions anchored popovers via `PositionAnchoredOverlay` + `AutoUpdateOverlayPosition`
  * - Manages `Esc`, `F6` (non-modal target toggle), `Tab` cycling, and focus restoration
- * - Hosts a single polite `aria-live="polite"` region outside any `inert` subtree
  */
 @RegisterClass(BaseTourPresenter, 'Overlay')
 @Component({
   selector: 'mj-tour-overlay-presenter',
   standalone: true,
-  imports: [TourSpotlightOverlayComponent],
+  imports: [TourSpotlightOverlayComponent, TourCardHairlineComponent, TourVoiceDockComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -68,22 +83,69 @@ const MODAL_STEP_TYPES = new Set([
       @if (showSpotlightMask()) {
         <mj-tour-spotlight-overlay
           [Visible]="true"
+          [GuideTone]="step.Mode === 'Guide' || step.WaitingForCompletion"
           [Cutouts]="cutouts()"
           [ViewportWidth]="viewportWidth()"
           [ViewportHeight]="viewportHeight()"
         />
       }
 
+      @if (pointerHighlight(); as ptr) {
+        <div
+          class="mjt-pointer-ring"
+          aria-hidden="true"
+          [style.left.px]="ptr.Left"
+          [style.top.px]="ptr.Top"
+          [style.width.px]="ptr.Width"
+          [style.height.px]="ptr.Height"
+        ></div>
+        @if (ptr.Caption) {
+          <div
+            class="mjt-pointer-caption"
+            role="status"
+            [style.left.px]="ptr.CaptionLeft"
+            [style.top.px]="ptr.CaptionTop"
+          >
+            <div class="mjt-pointer-caption-eyebrow">
+              <span class="mjt-pointer-dot" aria-hidden="true"></span>
+              <span>Sage Highlight</span>
+            </div>
+            <div>{{ ptr.Caption }}</div>
+          </div>
+        }
+      }
+
       @if (isCenteredModal(step)) {
         <div #overlayRoot class="mjt-modal-backdrop">
           <div #floatingDialog class="mjt-dialog mjt-dialog--modal mjt-dialog--centered">
+            <mj-tour-card-hairline [StepIndex]="step.StepIndex" [StepCount]="Session.StepCount" />
             <ng-container #stepHost></ng-container>
+            <mj-tour-voice-dock
+              [Session]="Session"
+              [VoiceBarTemplate]="VoiceBarTemplate"
+              [VoiceGuideAvailable]="VoiceGuideAvailable"
+              [VoiceGuideActive]="VoiceGuideActive"
+              (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
+              (DemonstrateRequested)="DemonstrateRequested.emit($event)"
+              (ConfirmMutation)="ConfirmDemonstration.emit()"
+              (CancelMutation)="CancelDemonstration.emit()"
+            />
           </div>
         </div>
       } @else if (step.StepType === 'Banner') {
         <div #overlayRoot class="mjt-banner--floating">
           <div #floatingDialog>
             <ng-container #stepHost></ng-container>
+            <mj-tour-voice-dock
+              [Session]="Session"
+              [VoiceBarTemplate]="VoiceBarTemplate"
+              [VoiceGuideAvailable]="VoiceGuideAvailable"
+              [VoiceGuideActive]="VoiceGuideActive"
+              (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
+              (DemonstrateRequested)="DemonstrateRequested.emit($event)"
+              (ConfirmMutation)="ConfirmDemonstration.emit()"
+              (CancelMutation)="CancelDemonstration.emit()"
+            />
           </div>
         </div>
       } @else if (step.StepType === 'Beacon') {
@@ -106,6 +168,7 @@ const MODAL_STEP_TYPES = new Set([
           [style.left.px]="posX()"
           [style.top.px]="posY()"
         >
+          <mj-tour-card-hairline [StepIndex]="step.StepIndex" [StepCount]="Session.StepCount" />
           @if (arrowSide() !== 'center') {
             <div
               class="mjt-arrow"
@@ -119,6 +182,16 @@ const MODAL_STEP_TYPES = new Set([
             ></div>
           }
           <ng-container #stepHost></ng-container>
+          <mj-tour-voice-dock
+            [Session]="Session"
+            [VoiceBarTemplate]="VoiceBarTemplate"
+            [VoiceGuideAvailable]="VoiceGuideAvailable"
+            [VoiceGuideActive]="VoiceGuideActive"
+            (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
+            (DemonstrateRequested)="DemonstrateRequested.emit($event)"
+            (ConfirmMutation)="ConfirmDemonstration.emit()"
+            (CancelMutation)="CancelDemonstration.emit()"
+          />
         </div>
       }
     }
@@ -132,6 +205,10 @@ export class OverlayTourPresenterComponent
   @Input() public override AnchorElement: HTMLElement | null = null;
   @Input() public override ExtraAnchorElements: ReadonlyArray<HTMLElement> = [];
   @Input() public override LiveAnnouncement = '';
+  @Input() public override VoiceBarTemplate: TemplateRef<TourVoiceBarContext> | null = null;
+  @Input() public override VoiceGuideAvailable = false;
+  @Input() public override VoiceGuideActive = false;
+  @Input() public override EstimatedMinutes: number | undefined = undefined;
 
   @ViewChild('stepHost', { read: ViewContainerRef }) private stepHost?: ViewContainerRef;
   @ViewChild('floatingDialog', { read: ElementRef }) private floatingDialogRef?: ElementRef<HTMLElement>;
@@ -144,6 +221,7 @@ export class OverlayTourPresenterComponent
   protected readonly arrowX = signal<number | null>(null);
   protected readonly arrowY = signal<number | null>(null);
   protected readonly cutouts = signal<ReadonlyArray<SpotlightCutoutRect>>([]);
+  protected readonly pointerHighlight = signal<PointerHighlightRect | null>(null);
   protected readonly viewportWidth = signal(typeof window !== 'undefined' ? window.innerWidth : 1280);
   protected readonly viewportHeight = signal(typeof window !== 'undefined' ? window.innerHeight : 720);
   protected readonly effectiveAnnouncement = signal('');
@@ -153,6 +231,7 @@ export class OverlayTourPresenterComponent
   private activeRendererRef: ComponentRef<BaseTourStepRenderer> | null = null;
   private rendererSubs = new Subscription();
   private stopAutoUpdate: (() => void) | null = null;
+  private stopPointerAutoUpdate: (() => void) | null = null;
   private pendingMount = false;
   private readonly inertManager = new SiblingInertManager();
   private readonly focusManager = new TourFocusManager();
@@ -179,13 +258,12 @@ export class OverlayTourPresenterComponent
     if (step.StepKey !== this.mountedStepKey || step.StepType !== this.mountedStepType) {
       this.pendingMount = true;
     } else if (this.activeRendererRef && this.Session) {
-      this.activeRendererRef.setInput('Step', step);
-      this.activeRendererRef.setInput('Session', this.Session);
-      this.activeRendererRef.setInput('Provider', this.Provider);
+      this.syncRendererInputs(this.activeRendererRef, step, this.Session);
     }
 
     if ('AnchorElement' in changes || 'ExtraAnchorElements' in changes || 'Session' in changes) {
       this.refreshPositioningAndInert();
+      this.refreshPointerHighlight();
     }
   }
 
@@ -265,9 +343,7 @@ export class OverlayTourPresenterComponent
     }
 
     const ref = this.stepHost.createComponent(rendererClass);
-    ref.setInput('Step', step);
-    ref.setInput('Session', session);
-    ref.setInput('Provider', this.Provider);
+    this.syncRendererInputs(ref, step, session);
 
     this.rendererSubs = new Subscription();
     this.rendererSubs.add(ref.instance.NextRequested.subscribe((e) => this.NextRequested.emit(e)));
@@ -276,11 +352,15 @@ export class OverlayTourPresenterComponent
     this.rendererSubs.add(ref.instance.ChoiceMade.subscribe((e) => this.ChoiceMade.emit(e)));
     this.rendererSubs.add(ref.instance.SignalEmitted.subscribe((e) => this.SignalEmitted.emit(e)));
     this.rendererSubs.add(ref.instance.NextTourRequested.subscribe((k) => this.NextTourRequested.emit(k)));
+    this.rendererSubs.add(ref.instance.StepSelected.subscribe((k) => this.StepSelected.emit(k)));
+    this.rendererSubs.add(ref.instance.VoiceGuideToggled.subscribe((v) => this.VoiceGuideRequested.emit(v)));
+    this.rendererSubs.add(ref.instance.DemonstrateRequested.subscribe((d) => this.DemonstrateRequested.emit(d)));
 
     this.activeRendererRef = ref;
     ref.changeDetectorRef.detectChanges();
 
     this.refreshPositioningAndInert();
+    this.refreshPointerHighlight();
     this.focusManager.Attach({
       OnDismiss: () => this.DismissRequested.emit({ StepKey: step.StepKey }),
       IsModal: () => this.isModalStep(step),
@@ -288,6 +368,19 @@ export class OverlayTourPresenterComponent
       GetAnchorElement: () => this.AnchorElement,
     });
     this.focusManager.FocusStepDialog();
+  }
+
+  private syncRendererInputs(
+    ref: ComponentRef<BaseTourStepRenderer>,
+    step: TourStepView,
+    session: TourSessionView,
+  ): void {
+    ref.setInput('Step', step);
+    ref.setInput('Session', session);
+    ref.setInput('Provider', this.Provider);
+    ref.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
+    ref.setInput('VoiceGuideActive', this.VoiceGuideActive);
+    ref.setInput('EstimatedMinutes', this.EstimatedMinutes);
   }
 
   private refreshPositioningAndInert(): void {
@@ -335,6 +428,51 @@ export class OverlayTourPresenterComponent
     });
   }
 
+  private refreshPointerHighlight(): void {
+    this.stopPointerAutoUpdate?.();
+    this.stopPointerAutoUpdate = null;
+
+    const highlight = this.Session?.PointerHighlight;
+    if (!highlight?.AnchorKey) {
+      this.pointerHighlight.set(null);
+      return;
+    }
+
+    const target = AnchorRegistry.Instance.GetElement(highlight.AnchorKey);
+    if (!target || typeof target.getBoundingClientRect !== 'function') {
+      this.pointerHighlight.set(null);
+      return;
+    }
+
+    const compute = (): void => {
+      const r = target.getBoundingClientRect();
+      const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+      const vh = typeof window !== 'undefined' ? window.innerHeight : 720;
+      const pad = 5;
+      const left = Math.max(4, r.left - pad);
+      const top = Math.max(4, r.top - pad);
+      const width = Math.max(16, r.width + pad * 2);
+      const height = Math.max(16, r.height + pad * 2);
+      const fitsBelow = top + height + 64 < vh;
+      const captionTop = fitsBelow ? top + height + 10 : Math.max(8, top - 58);
+      const captionLeft = Math.max(12, Math.min(vw - 270, left));
+
+      this.pointerHighlight.set({
+        Left: left,
+        Top: top,
+        Width: width,
+        Height: height,
+        CaptionTop: captionTop,
+        CaptionLeft: captionLeft,
+        Caption: highlight.Caption,
+      });
+    };
+
+    compute();
+    const floatingEl = this.floatingDialogRef?.nativeElement ?? target;
+    this.stopPointerAutoUpdate = AutoUpdateOverlayPosition(target, floatingEl, compute);
+  }
+
   private updateCutouts(step: TourStepView): void {
     if (step.StepType !== 'Spotlight') {
       this.cutouts.set([]);
@@ -359,7 +497,7 @@ export class OverlayTourPresenterComponent
           Y: Math.max(0, r.top - padding),
           Width: Math.max(0, r.width + padding * 2),
           Height: Math.max(0, r.height + padding * 2),
-          Radius: 8,
+          Radius: 10,
         };
       });
     this.cutouts.set(rects);
@@ -378,9 +516,12 @@ export class OverlayTourPresenterComponent
   private teardownStep(): void {
     this.stopAutoUpdate?.();
     this.stopAutoUpdate = null;
+    this.stopPointerAutoUpdate?.();
+    this.stopPointerAutoUpdate = null;
     this.mountedStepKey = null;
     this.mountedStepType = null;
     this.cutouts.set([]);
+    this.pointerHighlight.set(null);
     this.destroyRenderer();
     this.inertManager.Restore();
     this.focusManager.DetachAndRestore();

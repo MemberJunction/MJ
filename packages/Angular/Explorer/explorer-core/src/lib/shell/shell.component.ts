@@ -62,7 +62,7 @@ import {
   TourSessionGuideMode,
   TourSessionView,
 } from '@memberjunction/tours-runtime';
-import { AnchorRegistry, DomTourAnchorBridge, MJTourHostComponent } from '@memberjunction/ng-tours';
+import type { MJTourHostComponent } from '@memberjunction/ng-tours';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -851,7 +851,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
   private readonly shellChromePolicyService = inject(ShellChromePolicyService, { optional: true });
   private readonly tourHost = inject(ExplorerTourHost, { optional: true });
-  @ViewChild(MJTourHostComponent) private tourHostComponent?: MJTourHostComponent;
+  @ViewChild('tourHostCmp') private tourHostComponent?: MJTourHostComponent;
   public DiagnosticDialogOpen = false;
 
   // Guided Tours & Help launcher state
@@ -862,6 +862,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   public LauncherLearningPaths: ExplorerLearningPathSummary[] = [];
   public TourPrefs: TourPreferences = { ...DEFAULT_TOUR_PREFERENCES };
   public readonly TourGuideModeOptions: TourSessionGuideMode[] = ['Visual', 'Chat', 'Voice'];
+  public TourVoiceGuideAvailable = false;
+  public TourVoiceGuideActive = false;
+
+  public get TourVoiceAgentName(): string {
+    return this.tourHost?.TourVoiceAgentName ?? 'Sage';
+  }
 
   constructor(
     private appManager: ApplicationManager,
@@ -1038,24 +1044,29 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       throw new Error('No current user found');
     }
 
+    // Diagnostics capture runs in memory until this status arrives; a status with capture off stops it
+    void this.diagnosticsService?.LoadServerStatus();
+
     if (this.tourHost) {
       this.tourHost.SetProvider(md);
       this.TourPrefs = this.tourHost.GetPreferences();
+      this.TourVoiceGuideAvailable = this.tourHost.IsVoiceGuideAvailable;
       this.subscriptions.push(
         this.tourHost.ActiveSessionView$.pipe(takeUntil(this.destroy$)).subscribe((view) => {
           this.ActiveTourView = view;
           this.cdr.markForCheck();
         }),
+        this.tourHost.VoiceGuideActive$.pipe(takeUntil(this.destroy$)).subscribe((active) => {
+          this.TourVoiceGuideActive = active;
+          this.cdr.markForCheck();
+        }),
         this.tourHost.Location$.pipe(takeUntil(this.destroy$)).subscribe(() => {
           if (this.ToursMenuOpen) {
-            void this.refreshToursLauncher();
+            void this.RefreshToursLauncher();
           }
         }),
       );
     }
-
-    // Diagnostics capture runs in memory until this status arrives; a status with capture off stops it
-    void this.diagnosticsService?.LoadServerStatus();
 
     // Check the current URL to determine if we're loading from a URL-based navigation
     const currentUrl = this.router.url;
@@ -2657,10 +2668,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   ngAfterViewInit(): void {
     // Layout initialization happens in TabContainerComponent
-    this.tourHost?.AttachTourHostComponent(
-      this.tourHostComponent,
-      new DomTourAnchorBridge({ Registry: AnchorRegistry.Instance }),
-    );
+    this.tourHost?.AttachTourHostComponent(this.tourHostComponent);
   }
 
   public OnTourHostSessionChanged(): void {
@@ -4233,7 +4241,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.UserMenuVisible = false;
     this.ToursMenuOpen = !this.ToursMenuOpen;
     if (this.ToursMenuOpen) {
-      void this.refreshToursLauncher();
+      void this.RefreshToursLauncher();
     }
     this.cdr.markForCheck();
   }
@@ -4245,7 +4253,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     }
   }
 
-  public async refreshToursLauncher(): Promise<void> {
+  public async RefreshToursLauncher(): Promise<void> {
     if (!this.tourHost) {
       return;
     }
@@ -4314,6 +4322,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (this.UseOmnibar) {
       this.OpenOmnibar('?');
     }
+  }
+
+  public OnTourVoiceGuideRequested(enabled: boolean): void {
+    void this.tourHost?.RequestVoiceGuide(enabled);
+  }
+
+  public OnExpandTourVoiceOverlay(): void {
+    this.tourHost?.ExpandVoiceOverlay();
   }
 
   showNotifications(): void {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

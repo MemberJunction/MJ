@@ -49,19 +49,18 @@ export class TourFocusManager {
   }
 
   /**
-   * Moves programmatic focus into the step dialog (preferring the dialog container or first heading/button).
+   * Moves programmatic focus into the step dialog container (never the close button, so `:focus-visible`
+   * ring only appears when the user navigates via keyboard).
    */
   public FocusStepDialog(): void {
     const dialog = this._callbacks?.GetDialogElement();
     if (!dialog) {
       return;
     }
-    const focusables = getFocusableElements(dialog);
-    const target = dialog.hasAttribute('tabindex') ? dialog : focusables[0] ?? dialog;
-    if (!target.hasAttribute('tabindex')) {
-      target.setAttribute('tabindex', '-1');
+    if (!dialog.hasAttribute('tabindex')) {
+      dialog.setAttribute('tabindex', '-1');
     }
-    target.focus({ preventScroll: true });
+    dialog.focus({ preventScroll: true });
   }
 
   /**

@@ -149,4 +149,114 @@ describe('TourAgentToolkit', () => {
         expect(backRes['Success']).toBe(true);
         expect(backRes['CurrentStepKey']).toBe('pick-stage');
     });
+
+    it('supports TourHighlight pointer state, TourSelectChoice, TourAdvanceStep, TourGoBack, and TourDemonstrateStep', async () => {
+        const host = new MockTourHost({
+            InitialLocation: { ApplicationName: 'Sales', NavItemKey: 'deals' },
+        });
+        const anchorBridge = new MockAnchorBridge();
+        anchorBridge.VisibleAnchors = [
+            {
+                AnchorKey: 'sales.deals.stage',
+                Strategy: 'FormField',
+                AccessibleName: 'Stage',
+                IsVisible: true,
+            },
+        ];
+        const store = new MemoryProgressStore();
+        const tour: TourDefinition = {
+            TourKey: 'sales.sage-tools',
+            Name: 'Sage Tools Tour',
+            Status: 'Active',
+            AllowAgentActions: true,
+            Steps: [
+                {
+                    StepKey: 'choice-1',
+                    Sequence: 10,
+                    StepType: 'Choice',
+                    Title: 'Choose focus',
+                    Configuration: {
+                        Options: [
+                            { Key: 'stage', Label: 'Stage' },
+                            { Key: 'close', Label: 'Close' },
+                        ],
+                    },
+                },
+                {
+                    StepKey: 'demo-stage',
+                    Sequence: 20,
+                    StepType: 'Action',
+                    Title: 'Set Stage',
+                    Mode: 'Do',
+                    Anchor: { Strategy: 'Registered', Key: 'sales.deals.stage' },
+                    RequiresMutationConfirmation: true,
+                    ConfirmationPrompt: 'Update stage to Closed Won?',
+                },
+                {
+                    StepKey: 'done-step',
+                    Sequence: 30,
+                    StepType: 'Modal',
+                    Title: 'Done',
+                },
+            ],
+            Paths: [
+                { FromStepKey: 'choice-1', ToStepKey: 'demo-stage', Condition: 'stage', Priority: 100 },
+                { FromStepKey: 'demo-stage', ToStepKey: 'done-step' },
+            ],
+        };
+
+        const toolkit = new TourAgentToolkit({
+            Host: host,
+            DefinitionSource: new InlineTourSource([tour]),
+            ProgressStore: store,
+            AnchorBridge: anchorBridge,
+        });
+
+        await toolkit.GetGlobalTools().find((t) => t.Name === 'StartTour')!.Handler({
+            TourKey: 'sales.sage-tools',
+            Mode: 'Chat',
+        });
+
+        const tools = toolkit.GetSessionTools();
+        // Deduplicated: only one TourSelectChoice tool
+        expect(tools.filter((t) => t.Name === 'TourSelectChoice')).toHaveLength(1);
+
+        const byName = new Map(tools.map((t) => [t.Name, t]));
+
+        // TourHighlight sets session PointerHighlight
+        const hlRes = await byName.get('TourHighlight')!.Handler({
+            AnchorKey: 'sales.deals.stage',
+            Caption: 'Look here',
+            DurationMs: 3000,
+        });
+        expect(hlRes['Success']).toBe(true);
+        expect(toolkit.ActiveSession?.SessionView.PointerHighlight?.AnchorKey).toBe('sales.deals.stage');
+
+        // TourSelectChoice branches to demo-stage
+        const choiceRes = await byName.get('TourSelectChoice')!.Handler({ ChoiceKey: 'stage' });
+        expect(choiceRes['Success']).toBe(true);
+        expect(choiceRes['CurrentStepKey']).toBe('demo-stage');
+
+        // TourGoBack steps back to choice-1, then TourSelectChoice returns to demo-stage
+        const backRes = await byName.get('TourGoBack')!.Handler({});
+        expect(backRes['Success']).toBe(true);
+        expect(backRes['CurrentStepKey']).toBe('choice-1');
+        await byName.get('TourSelectChoice')!.Handler({ ChoiceKey: 'stage' });
+
+        // TourDemonstrateStep requires confirmation first
+        const needConfirm = await byName.get('TourDemonstrateStep')!.Handler({});
+        expect(needConfirm['Success']).toBe(false);
+        expect(needConfirm['RequiresConfirmation']).toBe(true);
+        expect(needConfirm['ConfirmationPrompt']).toBe('Update stage to Closed Won?');
+
+        // Confirmed demonstration succeeds and advances to done-step
+        const confirmed = await byName.get('TourDemonstrateStep')!.Handler({ ConfirmedMutation: true });
+        expect(confirmed['Success']).toBe(true);
+        expect(confirmed['CurrentStepKey']).toBe('done-step');
+
+        // TourAdvanceStep finishes the tour
+        const adv = await byName.get('TourAdvanceStep')!.Handler({});
+        expect(adv['Success']).toBe(true);
+        expect(adv['Status']).toBe('Completed');
+    });
 });

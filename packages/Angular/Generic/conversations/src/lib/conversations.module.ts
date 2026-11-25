@@ -118,6 +118,7 @@ import { LoadRealtimeRemoteBrowserChannel } from './components/realtime/remote-b
 import { RemoteBrowserSurfaceComponent } from './components/realtime/remote-browser/remote-browser-surface.component';
 import { LoadRealtimeMediaChannel } from './components/realtime/media/media-channel';
 import { LoadClientContextChannel } from './components/realtime/channels/client-context-channel';
+import { LoadTourChannel } from './components/realtime/channels/tour-channel';
 import { LoadIdentityVerificationChannel } from './components/realtime/identity-verification/identity-verification-channel';
 import { LoadRealtimeCaptureChannels } from './components/realtime/capture/realtime-capture-channel';
 import { LoadRealtimeAvatarChannel } from './components/realtime/avatar/realtime-avatar-channel';
@@ -157,6 +158,7 @@ LoadRealtimeInteractiveComponentChannel();
 // Artifact Workspace channel plugin — ClientPluginClass 'RealtimeArtifactWorkspaceChannel'.
 LoadRealtimeArtifactWorkspaceChannel();
 LoadClientContextChannel();
+LoadTourChannel();
 LoadIdentityVerificationChannel();
 // The Camera and Screen Share channel plugins (ClientPluginClass 'RealtimeCameraChannel' / 'RealtimeScreenShareChannel').
 LoadRealtimeCaptureChannels();

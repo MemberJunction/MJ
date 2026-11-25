@@ -11,8 +11,8 @@ import type { IRealtimeSessionLauncher } from '@memberjunction/realtime-runtime'
  */
 export type WidgetAuthMode = 'widget-key' | 'invite-token' | 'token' | 'launcher' | 'host';
 
-/** The chrome the live call renders: the ambient orb, the structured console, or orb-first (`auto`). */
-export type WidgetChrome = 'orb' | 'console' | 'auto';
+/** The chrome the live call renders: the ambient orb, the structured console, a compact horizontal bar, or orb-first (`auto`). */
+export type WidgetChrome = 'orb' | 'console' | 'bar' | 'auto';
 
 /** `auto` follows the page's own light/dark choice, falling back to the visitor's OS preference. */
 export type WidgetThemeMode = 'light' | 'dark' | 'auto';

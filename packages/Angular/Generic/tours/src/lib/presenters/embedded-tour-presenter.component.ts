@@ -7,6 +7,7 @@ import {
   OnChanges,
   OnDestroy,
   SimpleChanges,
+  TemplateRef,
   ViewChild,
   ViewContainerRef,
   ViewEncapsulation,
@@ -17,7 +18,9 @@ import { Subscription } from 'rxjs';
 import { BaseTourStepRenderer } from '../renderers/base-step-renderer';
 import { EnsureStepRendererLoaded } from '../renderers/lazy-step-renderers';
 import { EnsureStandardTourRenderersRegistered } from '../renderers/register-standard-renderers';
+import { TourCardHairlineComponent } from '../renderers/tour-step-chrome.component';
 import { BaseTourPresenter } from './base-tour-presenter';
+import { TourVoiceDockComponent, type TourVoiceBarContext } from './tour-voice-dock.component';
 
 EnsureStandardTourRenderersRegistered();
 
@@ -29,6 +32,7 @@ EnsureStandardTourRenderersRegistered();
 @Component({
   selector: 'mj-tour-embedded-presenter',
   standalone: true,
+  imports: [TourCardHairlineComponent, TourVoiceDockComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -36,9 +40,20 @@ EnsureStandardTourRenderersRegistered();
       {{ LiveAnnouncement }}
     </div>
 
-    @if (Session && Session.CurrentStep) {
+    @if (Session && Session.CurrentStep; as step) {
       <div class="mjt-embedded-card">
+        <mj-tour-card-hairline [StepIndex]="step.StepIndex" [StepCount]="Session.StepCount" />
         <ng-container #stepHost></ng-container>
+        <mj-tour-voice-dock
+          [Session]="Session"
+          [VoiceBarTemplate]="VoiceBarTemplate"
+          [VoiceGuideAvailable]="VoiceGuideAvailable"
+          [VoiceGuideActive]="VoiceGuideActive"
+          (VoiceGuideRequested)="VoiceGuideRequested.emit($event)"
+          (DemonstrateRequested)="DemonstrateRequested.emit($event)"
+          (ConfirmMutation)="ConfirmDemonstration.emit()"
+          (CancelMutation)="CancelDemonstration.emit()"
+        />
       </div>
     }
   `,
@@ -51,6 +66,10 @@ export class EmbeddedTourPresenterComponent
   @Input() public override AnchorElement: HTMLElement | null = null;
   @Input() public override ExtraAnchorElements: ReadonlyArray<HTMLElement> = [];
   @Input() public override LiveAnnouncement = '';
+  @Input() public override VoiceBarTemplate: TemplateRef<TourVoiceBarContext> | null = null;
+  @Input() public override VoiceGuideAvailable = false;
+  @Input() public override VoiceGuideActive = false;
+  @Input() public override EstimatedMinutes: number | undefined = undefined;
 
   @ViewChild('stepHost', { read: ViewContainerRef }) private stepHost?: ViewContainerRef;
 
@@ -71,6 +90,9 @@ export class EmbeddedTourPresenterComponent
       this.activeRendererRef.setInput('Step', step);
       this.activeRendererRef.setInput('Session', this.Session);
       this.activeRendererRef.setInput('Provider', this.Provider);
+      this.activeRendererRef.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
+      this.activeRendererRef.setInput('VoiceGuideActive', this.VoiceGuideActive);
+      this.activeRendererRef.setInput('EstimatedMinutes', this.EstimatedMinutes);
     }
   }
 
@@ -108,6 +130,9 @@ export class EmbeddedTourPresenterComponent
     ref.setInput('Step', step);
     ref.setInput('Session', session);
     ref.setInput('Provider', this.Provider);
+    ref.setInput('VoiceGuideAvailable', this.VoiceGuideAvailable);
+    ref.setInput('VoiceGuideActive', this.VoiceGuideActive);
+    ref.setInput('EstimatedMinutes', this.EstimatedMinutes);
 
     this.subs = new Subscription();
     this.subs.add(ref.instance.NextRequested.subscribe((e) => this.NextRequested.emit(e)));
@@ -116,6 +141,9 @@ export class EmbeddedTourPresenterComponent
     this.subs.add(ref.instance.ChoiceMade.subscribe((e) => this.ChoiceMade.emit(e)));
     this.subs.add(ref.instance.SignalEmitted.subscribe((e) => this.SignalEmitted.emit(e)));
     this.subs.add(ref.instance.NextTourRequested.subscribe((k) => this.NextTourRequested.emit(k)));
+    this.subs.add(ref.instance.StepSelected.subscribe((k) => this.StepSelected.emit(k)));
+    this.subs.add(ref.instance.VoiceGuideToggled.subscribe((v) => this.VoiceGuideRequested.emit(v)));
+    this.subs.add(ref.instance.DemonstrateRequested.subscribe((d) => this.DemonstrateRequested.emit(d)));
 
     this.activeRendererRef = ref;
     ref.changeDetectorRef.detectChanges();

@@ -56,11 +56,14 @@ import { RealtimeUxDensity } from './realtime-disclosure';
  *   unless the user reveals them. Best for narrow/overlay/mobile contexts.
  * - `'console'` — the structured command console: header, transcript, composer
  *   dock, and (when room allows) the surface panel. Best for full-screen.
+ * - `'bar'` — a compact horizontal voice bar (mini orb, agent name + meter,
+ *   latest caption/status, and inline controls). Best for embedded cards such as
+ *   Guided Tours where the page underneath stays visible.
  * - `'auto'` — *(default)* start as an orb; graduate to a console when the
  *   container is wide enough **and** the user has revealed text. See the module
  *   docs for the exact rule.
  */
-export type RealtimeChromeMode = 'orb' | 'console' | 'auto';
+export type RealtimeChromeMode = 'orb' | 'console' | 'bar' | 'auto';
 
 /**
  * Identifies a control the user invoked. Emitted by the widget's `ControlInvoked`
@@ -245,7 +248,7 @@ export interface RealtimeUiSignals {
  */
 export interface ResolvedRealtimeUi {
   /** The effective chrome after resolving `'auto'`. */
-  chrome: 'orb' | 'console';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  chrome: 'orb' | 'console' | 'bar';  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Whether compact spacing/typography applies. */
   compact: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
 
@@ -370,17 +373,18 @@ export function ResolveRealtimeUi(
 
   const allowTextReveal = cfg.allowTextReveal;
   const chrome = resolveChrome(cfg, signals, allowTextReveal);
+  const isBar = chrome === 'bar';
   const isConsole = chrome === 'console';
-  const compact = cfg.compact || signals.ContainerWidthPx < cfg.consoleBreakpointPx;
+  const compact = isBar || cfg.compact || signals.ContainerWidthPx < cfg.consoleBreakpointPx;
 
   // Review always carries the thread. Live, the thread shows when the user has EXPLICITLY revealed text this session
   // (`TextRevealed`) or we're in a console (consoles carry the thread) — both only if text is allowed at all. We
   // deliberately do NOT consult the disclosure ratchet: a power user with a high base level still opens to the calm
-  // orb ("keep the orb until the user asks for text").
-  const showThread = signals.IsReviewing || (allowTextReveal && (signals.TextRevealed || isConsole));
+  // orb ("keep the orb until the user asks for text"). Bar mode suppresses the thread in favor of the single-line bar.
+  const showThread = !isBar && (signals.IsReviewing || (allowTextReveal && (signals.TextRevealed || isConsole)));
 
-  // The hero is the surface whenever there is no thread (a forced console with text disallowed included).
-  const showHero = !showThread;
+  // The hero is the surface whenever there is no thread (except in bar mode, which renders its own compact bar).
+  const showHero = !isBar && !showThread;
 
   const allowTyping = cfg.allowTyping && allowTextReveal;
 
@@ -401,16 +405,16 @@ export function ResolveRealtimeUi(
   // wide as the console breakpoint — never in a cramped narrow overlay, and never dependent on text.
   const roomForSurfacePanel = isConsole || signals.ContainerWidthPx >= cfg.consoleBreakpointPx;
   // Everything the panel needs but room. Kept apart so the overlay can tell a panel that waits for room from one that
-  // was hidden on purpose (SurfacePanelWaitsForRoom).
-  const surfacePanelWanted = cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus;
-  const showSurfacePanel = surfacePanelWanted && roomForSurfacePanel;
+  // was hidden on purpose (SurfacePanelWaitsForRoom). Bar mode never renders the surface panel.
+  const surfacePanelWanted = !isBar && cfg.showSurfacePanel && signals.SurfacePanelEarned && !signals.channelFocus;
+  const showSurfacePanel = !isBar && surfacePanelWanted && roomForSurfacePanel;
 
-  const showActivityTab = cfg.showActivityRail && (signals.HasActivity || signals.IsReviewing) && isConsole;
+  const showActivityTab = !isBar && cfg.showActivityRail && (signals.HasActivity || signals.IsReviewing) && isConsole;
 
-  const showChannelStrip = cfg.showChannels && signals.hasChannels && isConsole && !signals.channelFocus;
+  const showChannelStrip = !isBar && cfg.showChannels && signals.hasChannels && isConsole && !signals.channelFocus;
 
   // An empty gear menu is not worth an affordance: it needs at least one entry (density picker or dev links).
-  const showGear = (signals.DisclosureShowGear || isConsole) && (cfg.showDensityPicker || cfg.showDevLinks);
+  const showGear = !isBar && (signals.DisclosureShowGear || isConsole) && (cfg.showDensityPicker || cfg.showDevLinks);
 
   return {
     chrome,
@@ -418,11 +422,11 @@ export function ResolveRealtimeUi(
     showHero,
     showThread,
     showSurfacePanel,
-    SurfacePanelWaitsForRoom: surfacePanelWanted && !roomForSurfacePanel,
+    SurfacePanelWaitsForRoom: !isBar && surfacePanelWanted && !roomForSurfacePanel,
     showActivityTab,
     showChannelStrip,
     showCaptionsControl: cfg.showCaptionsControl && allowTextReveal,
-    showDensityPicker: cfg.showDensityPicker && showGear,
+    showDensityPicker: !isBar && cfg.showDensityPicker && showGear,
     showGear,
     showDevLinks: cfg.showDevLinks && signals.DevMode,
     showMinimize: cfg.showMinimize && !signals.IsReviewing,
@@ -451,12 +455,15 @@ function resolveChrome(
   cfg: Required<RealtimeUiInputs>,
   signals: RealtimeUiSignals,
   allowTextReveal: boolean,
-): 'orb' | 'console' {
+): 'orb' | 'console' | 'bar' {
   if (cfg.chrome === 'orb') {
     return 'orb';
   }
   if (cfg.chrome === 'console') {
     return 'console';
+  }
+  if (cfg.chrome === 'bar') {
+    return signals.IsReviewing ? 'console' : 'bar';
   }
   // auto
   if (signals.IsReviewing) {

@@ -9,7 +9,7 @@ import type {
     TourResolvedAnchorInfo,
     TourVisibleAnchorInfo,
 } from '../host-contracts';
-import type { ITourAnchor } from '../types';
+import type { ITourAnchor, TourStepDefinition } from '../types';
 
 export class MockTourHost implements ITourHost {
     public readonly Capabilities: TourHostCapabilities;
@@ -19,6 +19,17 @@ export class MockTourHost implements ITourHost {
     public readonly NavigateCalls: TourNavigationIntent[] = [];
     public NavigateResult = true;
     public InstalledApps: string[] = ['Sales', 'Data Explorer'];
+    public DemonstrateStepCalls: Array<{ StepKey: string; ConfirmedMutation?: boolean }> = [];
+    public DemonstrateStepHandler?: (
+        step: TourStepDefinition,
+        context: { ConfirmedMutation?: boolean },
+    ) => Promise<{
+        Success: boolean;
+        RequiresConfirmation?: boolean;
+        ConfirmationPrompt?: string;
+        MutatesData?: boolean;
+        ErrorMessage?: string;
+    }>;
 
     constructor(options?: {
         Capabilities?: Partial<TourHostCapabilities>;
@@ -73,6 +84,26 @@ export class MockTourHost implements ITourHost {
             Url: intent.Url ?? current.Url,
         });
         return true;
+    }
+
+    public async DemonstrateStep(
+        step: TourStepDefinition,
+        context: { ConfirmedMutation?: boolean },
+    ): Promise<{
+        Success: boolean;
+        RequiresConfirmation?: boolean;
+        ConfirmationPrompt?: string;
+        MutatesData?: boolean;
+        ErrorMessage?: string;
+    }> {
+        this.DemonstrateStepCalls.push({
+            StepKey: step.StepKey,
+            ConfirmedMutation: context.ConfirmedMutation,
+        });
+        if (this.DemonstrateStepHandler) {
+            return this.DemonstrateStepHandler(step, context);
+        }
+        return { Success: true };
     }
 }
 

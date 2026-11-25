@@ -16,6 +16,7 @@ import { MJReactModule, type ReactComponentEvent } from '@memberjunction/ng-reac
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { TourSignals, type IEmbeddedComponentStepConfig } from '@memberjunction/tours-runtime';
 import { BaseTourStepRenderer } from '../base-step-renderer';
+import { TourProgressRailComponent, TourStepHeaderComponent } from '../tour-step-chrome.component';
 
 type TourInteractiveConfig = IEmbeddedComponentStepConfig & {
   componentSpec?: ComponentSpec;
@@ -42,7 +43,7 @@ interface InteractiveCallbacksProp {
 @Component({
   selector: 'mj-tour-embedded-component-step',
   standalone: true,
-  imports: [MJReactModule, MJButtonDirective],
+  imports: [MJReactModule, MJButtonDirective, TourStepHeaderComponent, TourProgressRailComponent],
   encapsulation: ViewEncapsulation.None,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
@@ -53,20 +54,11 @@ interface InteractiveCallbacksProp {
       [attr.aria-labelledby]="StepHeadingId"
       [attr.aria-describedby]="Step.Body ? StepBodyId : null"
     >
-      <div class="mjt-header">
-        <div>
-          <div class="mjt-progress">{{ ProgressLabel }}</div>
-          <h2 class="mjt-title" [id]="StepHeadingId">{{ Step.Title }}</h2>
-        </div>
-        <button
-          type="button"
-          class="mjt-close-btn"
-          aria-label="Close tour"
-          (click)="OnDismiss()"
-        >
-          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-        </button>
-      </div>
+      <mj-tour-step-header
+        [Step]="Step"
+        [HeadingId]="StepHeadingId"
+        (Dismiss)="OnDismiss()"
+      />
 
       @if (Step.Body) {
         <div class="mjt-body" [id]="StepBodyId" [innerHTML]="FormatBodyHtml(Step.Body)"></div>
@@ -74,7 +66,6 @@ interface InteractiveCallbacksProp {
 
       @if (loadingSpec()) {
         <div class="mjt-waiting" role="status" aria-live="polite">
-          <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
           <span>Loading interactive widget...</span>
         </div>
       } @else if (specError()) {
@@ -93,17 +84,18 @@ interface InteractiveCallbacksProp {
       }
 
       <div class="mjt-footer">
+        <div class="mjt-footer-meta">
+          <mj-tour-progress-rail
+            [Session]="Session"
+            (StepSelected)="StepSelected.emit($event)"
+          />
+          <span class="mjt-kbd-row" aria-hidden="true">
+            <kbd class="mjt-kbd">&larr;</kbd>
+            <kbd class="mjt-kbd">&rarr;</kbd>
+            <kbd class="mjt-kbd">Esc</kbd>
+          </span>
+        </div>
         <div class="mjt-footer-actions">
-          @if (AllowNextButtonFallback) {
-            <button
-              type="button"
-              mjButton
-              variant="primary"
-              (click)="OnNext()"
-            >
-              Continue
-            </button>
-          }
           @if (Session.CanGoBack) {
             <button
               type="button"
@@ -114,15 +106,25 @@ interface InteractiveCallbacksProp {
               Back
             </button>
           }
+          @if (AllowNextButtonFallback) {
+            <button
+              type="button"
+              mjButton
+              variant="primary"
+              (click)="OnNext()"
+            >
+              Continue
+            </button>
+          }
+          <button
+            type="button"
+            mjButton
+            variant="flat"
+            (click)="OnDismiss()"
+          >
+            Dismiss
+          </button>
         </div>
-        <button
-          type="button"
-          mjButton
-          variant="flat"
-          (click)="OnDismiss()"
-        >
-          Dismiss
-        </button>
       </div>
     </div>
   `,

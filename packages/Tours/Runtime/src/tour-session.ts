@@ -62,9 +62,12 @@ import {
 import type {
     ITourAnchor,
     ITourCompletion,
+    ITourStepConfiguration,
     TourAnchorResolution,
     TourDefinition,
     TourLaunchSource,
+    TourPendingDemonstrationConfirmation,
+    TourPointerHighlight,
     TourRunEvent,
     TourRunOutcome,
     TourRunRecord,
@@ -77,6 +80,9 @@ import type {
     TourStepRef,
     TourStepView,
 } from './types';
+
+/** Default auto-clear duration (ms) for secondary Sage pointer highlights so transient UI rings fade without disturbing the primary spotlight. */
+const DEFAULT_POINTER_HIGHLIGHT_DURATION_MS = 4500;
 
 export const BANNED_DO_ACTION_CATEGORIES: ReadonlySet<string> = new Set<TourBannedDoActionCategory>([
     'Delete',
@@ -129,6 +135,14 @@ export interface TourPerformStepResult {
     Data?: Record<string, unknown>;
 }
 
+export interface TourDemonstrateStepResult {
+    Success: boolean;
+    ErrorCode?: string;
+    RequiresConfirmation?: boolean;
+    ConfirmationPrompt?: string;
+    ErrorMessage?: string;
+}
+
 export class TourSession {
     private readonly _runId: string;
     private readonly _tour: TourDefinition;
@@ -168,6 +182,9 @@ export class TourSession {
     private _lastError?: string;
     private _activeStepAbort: AbortController | null = null;
     private _prepareNavConsentGranted = false;
+    private _pointerHighlight: TourPointerHighlight | null = null;
+    private _pointerHighlightTimer: ReturnType<typeof setTimeout> | null = null;
+    private _pendingDemonstrationConfirmation: TourPendingDemonstrationConfirmation | null = null;
 
     private readonly _eventsSubject = new Subject<TourSessionEventArgs>();
     private readonly _nextRequestedSubject = new Subject<void>();
@@ -234,6 +251,10 @@ export class TourSession {
     }
 
     public get Tour(): TourDefinition {
+        return this._tour;
+    }
+
+    public get Definition(): TourDefinition {
         return this._tour;
     }
 
@@ -471,6 +492,21 @@ export class TourSession {
         return this.endSession('Dismissed', 'RunDismissed', reason);
     }
 
+    public async Stop(reason?: string): Promise<boolean> {
+        this.clearPointerHighlightTimer();
+        this._pointerHighlight = null;
+        this._pendingDemonstrationConfirmation = null;
+        return this.Dismiss(reason);
+    }
+
+    public Dispose(): void {
+        this.clearPointerHighlightTimer();
+        this._pointerHighlight = null;
+        this._pendingDemonstrationConfirmation = null;
+        this.abortActiveStepWait();
+        this.publishView();
+    }
+
     public async Snooze(until: Date | string): Promise<boolean> {
         const iso = typeof until === 'string' ? until : until.toISOString();
         this._snoozedUntil = iso;
@@ -499,6 +535,237 @@ export class TourSession {
     public NotifyEntityEvent(event: TourEntityEventPayload): void {
         this._entityEventsSubject.next(event);
         void this.checkGoalOnEntityEvent(event);
+    }
+
+    // ========================================================================
+    // Secondary Sage Pointer Highlight & Convenience Navigation
+    // ========================================================================
+
+    /**
+     * Displays a secondary Sage Pointer Ring + mini caption on an anchor without disturbing
+     * the primary step spotlight. Auto-clears after `durationMs` (default 4500ms).
+     */
+    public SetPointerHighlight(
+        anchorKey: string,
+        caption?: string,
+        durationMs: number = DEFAULT_POINTER_HIGHLIGHT_DURATION_MS,
+    ): void {
+        this.clearPointerHighlightTimer();
+        const expiresAt = durationMs > 0 ? Date.now() + durationMs : undefined;
+        this._pointerHighlight = {
+            AnchorKey: anchorKey,
+            Caption: caption,
+            ExpiresAt: expiresAt,
+        };
+        this.publishView();
+
+        if (durationMs > 0) {
+            this._pointerHighlightTimer = setTimeout(() => {
+                this.ClearPointerHighlight();
+            }, durationMs);
+        }
+    }
+
+    /** Clears any active secondary Sage Pointer Highlight and cancels its expiry timer. */
+    public ClearPointerHighlight(): void {
+        this.clearPointerHighlightTimer();
+        if (this._pointerHighlight !== null) {
+            this._pointerHighlight = null;
+            this.publishView();
+        }
+    }
+
+    /** Clears any pending Tier-3 demonstration confirmation prompt. */
+    public CancelPendingDemonstration(): void {
+        if (this._pendingDemonstrationConfirmation !== null) {
+            this._pendingDemonstrationConfirmation = null;
+            this.publishView();
+        }
+    }
+
+    /** Convenience method to advance the current step (completing it and moving along outgoing edges). */
+    public async Next(): Promise<boolean> {
+        if (this._status !== 'In Progress' || !this._currentStepKey) {
+            return false;
+        }
+        const step = this._compiled.StepByKey.get(this._currentStepKey);
+        if (!step) {
+            return false;
+        }
+        this.abortActiveStepWait();
+        const outcome: TourStepOutcome = {
+            Outcome: 'Completed',
+            AnchorResolution: this._currentStepView?.AnchorResolution ?? 'Registered',
+        };
+        await this.finishCurrentStep(step, outcome);
+        await this.moveToNextFrom(step, outcome);
+        return true;
+    }
+
+    /** Convenience method to step back to the previous step in `PathTaken`. */
+    public async Back(): Promise<boolean> {
+        if (this._status !== 'In Progress' || this._pathTaken.length < 2) {
+            return false;
+        }
+        this.abortActiveStepWait();
+        this._pathTaken.pop();
+        const prevKey = this._pathTaken[this._pathTaken.length - 1];
+        if (!prevKey) {
+            return false;
+        }
+        await this.enterStep(prevKey, false);
+        return true;
+    }
+
+    /**
+     * Executes a step demonstration gated by the 3-Tier Safety Gate:
+     * 1. Verify mode lockout (`verify_mode_locked`)
+     * 2. Permission check (`agent_actions_disabled` unless `UserInitiated`, `AllowAgentActions`, or `Mode === 'Show'`)
+     * 3. Mutation confirmation gate (`confirmation_required` when step or host requires confirmation and `ConfirmedMutation !== true`)
+     * 4. Prepare -> `Host.DemonstrateStep` -> pulse/highlight anchor -> advance step
+     */
+    public async DemonstrateCurrentStep(options?: {
+        ConfirmedMutation?: boolean;
+        UserInitiated?: boolean;
+    }): Promise<TourDemonstrateStepResult> {
+        if (this._status !== 'In Progress' || !this._currentStepKey) {
+            return {
+                Success: false,
+                ErrorCode: 'no_active_step',
+                ErrorMessage: 'No active step to demonstrate.',
+            };
+        }
+
+        const currentStep = this._compiled.StepByKey.get(this._currentStepKey);
+        if (!currentStep) {
+            return {
+                Success: false,
+                ErrorCode: 'no_active_step',
+                ErrorMessage: 'Current step definition not found.',
+            };
+        }
+
+        // Tier 1: Verify Mode Lockout
+        if (this.DirectorType === 'Verify') {
+            return {
+                Success: false,
+                ErrorCode: 'verify_mode_locked',
+                ErrorMessage: 'Step demonstrations are disabled during Verify assessments.',
+            };
+        }
+
+        // Tier 2: Permission Check
+        if (
+            !options?.UserInitiated &&
+            !this._tour.AllowAgentActions &&
+            currentStep.Mode !== 'Show'
+        ) {
+            return {
+                Success: false,
+                ErrorCode: 'agent_actions_disabled',
+                ErrorMessage: 'Agent actions are not enabled for this tour unless requested by the user.',
+            };
+        }
+
+        // Tier 3: Mutation Confirmation Gate
+        const stepConfig = currentStep.Configuration as ITourStepConfiguration | undefined;
+        const stepRequiresConfirmation =
+            currentStep.RequiresMutationConfirmation === true ||
+            stepConfig?.RequiresMutationConfirmation === true;
+
+        if (stepRequiresConfirmation && options?.ConfirmedMutation !== true) {
+            const prompt =
+                currentStep.ConfirmationPrompt ??
+                stepConfig?.ConfirmationPrompt ??
+                currentStep.DoAction?.Description ??
+                `Confirm demonstrating step "${currentStep.Title}"?`;
+            this._pendingDemonstrationConfirmation = {
+                StepKey: currentStep.StepKey,
+                Prompt: prompt,
+            };
+            this.publishView();
+            return {
+                Success: false,
+                ErrorCode: 'confirmation_required',
+                RequiresConfirmation: true,
+                ConfirmationPrompt: prompt,
+            };
+        }
+
+        // Prepare navigation / make-visible
+        const stepType = this.resolveStepType(currentStep);
+        const stepCtx = this.buildStepContext(currentStep);
+        const prepareResult = await stepType.Prepare(stepCtx);
+        if (!prepareResult.Success) {
+            return {
+                Success: false,
+                ErrorCode: 'prepare_failed',
+                ErrorMessage: prepareResult.ErrorMessage ?? 'Step preparation failed.',
+            };
+        }
+
+        // Host-level demonstration execution (and dynamic confirmation check)
+        if (this._host.DemonstrateStep) {
+            const hostRes = await this._host.DemonstrateStep(currentStep, {
+                ConfirmedMutation: options?.ConfirmedMutation,
+            });
+            if (hostRes.RequiresConfirmation && options?.ConfirmedMutation !== true) {
+                const prompt =
+                    hostRes.ConfirmationPrompt ??
+                    `Confirm demonstrating step "${currentStep.Title}"?`;
+                this._pendingDemonstrationConfirmation = {
+                    StepKey: currentStep.StepKey,
+                    Prompt: prompt,
+                };
+                this.publishView();
+                return {
+                    Success: false,
+                    ErrorCode: 'confirmation_required',
+                    RequiresConfirmation: true,
+                    ConfirmationPrompt: prompt,
+                };
+            }
+            if (!hostRes.Success) {
+                this._pendingDemonstrationConfirmation = null;
+                this.publishView();
+                return {
+                    Success: false,
+                    ErrorCode: 'demonstration_failed',
+                    ErrorMessage: hostRes.ErrorMessage ?? 'Step demonstration failed.',
+                };
+            }
+        }
+
+        this._pendingDemonstrationConfirmation = null;
+
+        // Pulse/highlight the step's anchor if present
+        if (currentStep.Anchor) {
+            const interpolated = InterpolateAnchorTemplate(
+                currentStep.Anchor,
+                this._conditionContext,
+            );
+            const anchorKey = extractAnchorKey(interpolated);
+            if (anchorKey) {
+                this.SetPointerHighlight(anchorKey, currentStep.Title);
+                if (this._anchorBridge?.HighlightAnchor) {
+                    await this._anchorBridge.HighlightAnchor(anchorKey, currentStep.Title);
+                }
+            }
+        }
+
+        // Advance/confirm the step cleanly
+        this.abortActiveStepWait();
+        const outcome: TourStepOutcome = {
+            Outcome:
+                options?.ConfirmedMutation || currentStep.Mode === 'Do'
+                    ? 'Done By Agent'
+                    : 'Completed',
+            AnchorResolution: this._currentStepView?.AnchorResolution ?? 'Registered',
+        };
+        await this.finishCurrentStep(currentStep, outcome);
+        await this.moveToNextFrom(currentStep, outcome);
+
+        return { Success: true };
     }
 
     // ========================================================================
@@ -601,8 +868,10 @@ export class TourSession {
     }
 
     /** Records a user/director choice selection on a `Choice` step and advances along the matching branch. */
-    public async SelectChoice(choiceKey: string, directorToken: string): Promise<boolean> {
-        this.assertDirectorToken(directorToken, 'SelectChoice');
+    public async SelectChoice(choiceKey: string, directorToken?: string): Promise<boolean> {
+        if (directorToken !== undefined) {
+            this.assertDirectorToken(directorToken, 'SelectChoice');
+        }
         if (!this._currentStepKey) {
             return false;
         }
@@ -612,12 +881,20 @@ export class TourSession {
             lastChoiceKey: choiceKey,
             choices: { ...this._choices },
         };
-        return this.Advance(directorToken, {
+        const step = this._compiled.StepByKey.get(this._currentStepKey);
+        if (!step || this._status !== 'In Progress') {
+            return false;
+        }
+        this.abortActiveStepWait();
+        const outcome: TourStepOutcome = {
             Outcome: 'Completed',
             AnchorResolution: this._currentStepView?.AnchorResolution ?? 'Registered',
             ChoiceKey: choiceKey,
             Data: { ChoiceKey: choiceKey },
-        });
+        };
+        await this.finishCurrentStep(step, outcome);
+        await this.moveToNextFrom(step, outcome);
+        return true;
     }
 
     /** Marks the current step as `'Already Known'` and advances. Director-only. */
@@ -749,6 +1026,10 @@ export class TourSession {
     // ========================================================================
 
     private async enterStep(stepKey: string, appendToPath = true): Promise<void> {
+        this.clearPointerHighlightTimer();
+        this._pointerHighlight = null;
+        this._pendingDemonstrationConfirmation = null;
+
         if (this._status !== 'In Progress' || this._isPaused) {
             return;
         }
@@ -1077,6 +1358,9 @@ export class TourSession {
         }
 
         this.abortActiveStepWait();
+        this.clearPointerHighlightTimer();
+        this._pointerHighlight = null;
+        this._pendingDemonstrationConfirmation = null;
         this._status = targetStatus;
         this._isPaused = false;
         this._completedAt = new Date().toISOString();
@@ -1330,6 +1614,8 @@ export class TourSession {
             IsPaused: this._isPaused,
             GoalMet: this._goalMet,
             LastError: this._lastError,
+            PointerHighlight: this._pointerHighlight,
+            PendingDemonstrationConfirmation: this._pendingDemonstrationConfirmation,
         };
     }
 
@@ -1396,6 +1682,13 @@ export class TourSession {
         }
     }
 
+    private clearPointerHighlightTimer(): void {
+        if (this._pointerHighlightTimer !== null) {
+            clearTimeout(this._pointerHighlightTimer);
+            this._pointerHighlightTimer = null;
+        }
+    }
+
     private assertDirectorToken(token: string, methodName: string): void {
         if (!this.IsValidDirectorToken(token)) {
             throw new Error(
@@ -1442,4 +1735,20 @@ function toStepRef(step: TourStepDefinition): TourStepRef {
 function isBannedDoActionCategory(category: string): boolean {
     const normalized = category.replace(/[^a-zA-Z]/g, '').toLowerCase();
     return BANNED_DO_ACTION_NORMALIZED.has(normalized);
+}
+
+function extractAnchorKey(anchor: ITourAnchor): string | undefined {
+    return (
+        anchor.Key ??
+        anchor.Field ??
+        anchor.SectionKey ??
+        anchor.RailKey ??
+        anchor.ActionKey ??
+        anchor.NavItemKey ??
+        anchor.DriverClass ??
+        anchor.PageId ??
+        anchor.ColumnKey ??
+        anchor.AppName ??
+        anchor.Selector
+    );
 }

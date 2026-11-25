@@ -195,17 +195,61 @@ export class TourAgentToolkit {
             {
                 Name: 'TourHighlight',
                 Description:
-                    'Spotlight a visible anchor on screen with an optional caption. Fails loudly if the anchor is not currently visible.',
+                    'Spotlight a visible anchor on screen with a secondary Sage pointer ring and optional caption. Fails loudly if the anchor is not currently visible.',
                 Category: 'tours',
                 InputSchema: {
                     type: 'object',
                     properties: {
                         AnchorKey: { type: 'string' },
                         Caption: { type: 'string' },
+                        DurationMs: { type: 'number', description: 'Optional auto-clear duration in milliseconds.' },
                     },
                     required: ['AnchorKey'],
                 },
                 Handler: async (params) => this.handleTourHighlight(params),
+            },
+            {
+                Name: 'TourSelectChoice',
+                Description: 'Select a choice option by ChoiceKey on the current Choice step and branch along matching outgoing edges.',
+                Category: 'tours',
+                InputSchema: {
+                    type: 'object',
+                    properties: {
+                        ChoiceKey: { type: 'string', description: 'The key of the selected choice option.' },
+                    },
+                    required: ['ChoiceKey'],
+                },
+                Handler: async (params) => this.handleTourSelectChoice(params),
+            },
+            {
+                Name: 'TourAdvanceStep',
+                Description: 'Advance the active Guided Tour to the next step along its pathway.',
+                Category: 'tours',
+                InputSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleTourAdvanceStep(),
+            },
+            {
+                Name: 'TourGoBack',
+                Description: 'Step back to the previous step in the active Guided Tour.',
+                Category: 'tours',
+                InputSchema: { type: 'object', properties: {} },
+                Handler: async () => this.handleTourGoBack(),
+            },
+            {
+                Name: 'TourDemonstrateStep',
+                Description:
+                    'Ask Sage to demonstrate the current tour step through the 3-tier safety gate (locked in Verify mode, permission-checked, and mutation-confirmed when required).',
+                Category: 'tours',
+                InputSchema: {
+                    type: 'object',
+                    properties: {
+                        ConfirmedMutation: {
+                            type: 'boolean',
+                            description: 'True only after the user has explicitly confirmed the mutation prompt.',
+                        },
+                    },
+                },
+                Handler: async (params) => this.handleTourDemonstrateStep(params),
             },
             {
                 Name: 'TourGoToStep',
@@ -309,6 +353,9 @@ export class TourAgentToolkit {
                         TotalSteps: ordered.length,
                     });
                     for (const stepTool of brief.StepTools) {
+                        if (tools.some((t) => t.Name === stepTool.Name)) {
+                            continue;
+                        }
                         tools.push({
                             Name: stepTool.Name,
                             Description: stepTool.Description,
@@ -552,6 +599,7 @@ export class TourAgentToolkit {
     private async handleTourHighlight(params: Record<string, unknown>): Promise<Record<string, unknown>> {
         const anchorKey = typeof params['AnchorKey'] === 'string' ? params['AnchorKey'].trim() : '';
         const caption = typeof params['Caption'] === 'string' ? params['Caption'] : undefined;
+        const durationMs = typeof params['DurationMs'] === 'number' ? params['DurationMs'] : undefined;
 
         if (!anchorKey) {
             return { Success: false, Error: 'TourHighlight failed: AnchorKey is required.' };
@@ -582,11 +630,76 @@ export class TourAgentToolkit {
             }
         }
 
+        if (this._activeSession) {
+            this._activeSession.SetPointerHighlight(anchorKey, caption, durationMs);
+        }
+
         return {
             Success: true,
             AnchorKey: anchorKey,
             AccessibleName: found.AccessibleName,
             Caption: caption ?? null,
+        };
+    }
+
+    private async handleTourSelectChoice(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const session = this._activeSession;
+        if (!session) {
+            return { Success: false, Error: 'No active tour session.' };
+        }
+        const choiceKey = typeof params['ChoiceKey'] === 'string' ? params['ChoiceKey'].trim() : '';
+        if (!choiceKey) {
+            return { Success: false, Error: 'ChoiceKey is required.' };
+        }
+        const advanced = await session.SelectChoice(choiceKey);
+        return {
+            Success: advanced,
+            ChoiceKey: choiceKey,
+            CurrentStepKey: session.CurrentStepKey,
+        };
+    }
+
+    private async handleTourAdvanceStep(): Promise<Record<string, unknown>> {
+        const session = this._activeSession;
+        if (!session) {
+            return { Success: false, Error: 'No active tour session.' };
+        }
+        const moved = await session.Next();
+        return {
+            Success: moved,
+            CurrentStepKey: session.CurrentStepKey,
+            Status: session.Status,
+        };
+    }
+
+    private async handleTourGoBack(): Promise<Record<string, unknown>> {
+        const session = this._activeSession;
+        if (!session) {
+            return { Success: false, Error: 'No active tour session.' };
+        }
+        const moved = await session.Back();
+        return {
+            Success: moved,
+            CurrentStepKey: session.CurrentStepKey,
+        };
+    }
+
+    private async handleTourDemonstrateStep(params: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const session = this._activeSession;
+        if (!session) {
+            return { Success: false, Error: 'No active tour session.' };
+        }
+        const confirmedMutation = params['ConfirmedMutation'] === true;
+        const result = await session.DemonstrateCurrentStep({
+            ConfirmedMutation: confirmedMutation,
+        });
+        return {
+            Success: result.Success,
+            ErrorCode: result.ErrorCode ?? null,
+            RequiresConfirmation: result.RequiresConfirmation ?? false,
+            ConfirmationPrompt: result.ConfirmationPrompt ?? null,
+            ErrorMessage: result.ErrorMessage ?? null,
+            CurrentStepKey: session.CurrentStepKey,
         };
     }
 

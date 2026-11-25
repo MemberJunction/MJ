@@ -104,6 +104,17 @@ export interface ITourHost {
     GetInstalledApplications?(): string[];
     /** Optional: register the tour agent toolkit with whatever agent surface this host has. */
     AttachAgentBridge?(bridge: ITourHostAgentBridge): void;
+    /** Optional: host-side demonstration of a step's UI action (with Tier-3 confirmation gate). */
+    DemonstrateStep?(
+        step: TourStepDefinition,
+        context: { ConfirmedMutation?: boolean },
+    ): Promise<{
+        Success: boolean;
+        RequiresConfirmation?: boolean;
+        ConfirmationPrompt?: string;
+        MutatesData?: boolean;
+        ErrorMessage?: string;
+    }>;
 }
 
 // ============================================================================
