@@ -400,7 +400,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
                 typeName: 'Credential',
                 action: this.extractAction(log.Description || '') as ActivityItem['action'],
                 date: new Date(log.__mj_CreatedAt),
-                user: log.User
+                user: log.User ?? undefined
             }));
 
         // Build usage trend data (group by day)

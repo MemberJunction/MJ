@@ -6,6 +6,7 @@ import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { ConversationUtility, MentionContent, SpecialContentToken } from '@memberjunction/ai-core-plus';
 
 /**
  * Radio button filter options for notification read status
@@ -13,7 +14,22 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 type ReadFilterOption = 'All' | 'Unread' | 'Read';
 
 /** How a notification's Message should be rendered. */
-type MessageKind = 'html' | 'markdown' | 'text';
+export type NotificationMessageKind = 'html' | 'markdown' | 'text';
+type MessageKind = NotificationMessageKind;
+
+/** Result of classifying and normalizing a notification message for preview and expanded rendering. */
+export interface ClassifiedNotificationMessage {
+  Kind: NotificationMessageKind;
+  Body: string;
+  Preview: string;
+  Expandable: boolean;
+}
+
+interface MarkdownSegment {
+  text: string;
+  isCode: boolean;
+  fenced: boolean;
+}
 
 /**
  * Render-ready view model for one notification. Built once per data/filter change
@@ -25,7 +41,7 @@ type MessageKind = 'html' | 'markdown' | 'text';
 interface NotificationVM {
   N: MJUserNotificationEntity;
   Kind: MessageKind;
-  /** Rich body: extracted+stripped HTML fragment (html) or the raw message (markdown). Empty for plain text. */
+  /** Rich body: extracted+stripped HTML fragment (html), normalized markdown (markdown), or normalized plain text (text). */
   Body: string;
   /** Plain-text excerpt for the collapsed card. */
   Preview: string;
@@ -89,11 +105,411 @@ interface NotificationUrlInfo {
   queryString: string;
 }
 
+/**
+ * Type-filter value for notifications with no NotificationTypeID. Not a UUID, so it cannot
+ * collide with a real type ID.
+ */
+export const NO_NOTIFICATION_TYPE_FILTER = '__no-type__';
+
+/**
+ * Whether a notification's type matches the Type dropdown's selection: `null` (All Types)
+ * matches everything, {@link NO_NOTIFICATION_TYPE_FILTER} matches untyped notifications,
+ * and any other value matches that type ID.
+ */
+export function MatchesNotificationTypeFilter(notificationTypeId: string | null | undefined, filter: string | null): boolean {
+  if (filter == null) {
+    return true;
+  }
+  if (filter === NO_NOTIFICATION_TYPE_FILTER) {
+    return !notificationTypeId;
+  }
+  return UUIDsEqual(notificationTypeId, filter);
+}
+
 /** Collapsed-preview cap (characters of plain text). */
 const PREVIEW_MAX_CHARS = 240;
 
 /** How often the snapshot relative-time labels refresh. */
 const RELATIVE_REFRESH_MS = 60_000;
+
+function collapseWhitespaceValue(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function excerptValue(text: string): string {
+  return text.length > PREVIEW_MAX_CHARS ? `${text.substring(0, PREVIEW_MAX_CHARS - 1)}…` : text;
+}
+
+/**
+ * Single-pass decoder for legacy Nunjucks-escaped HTML entities in non-HTML notification text.
+ * Decoding in one regex pass ensures `&amp;quot;` becomes `&quot;` rather than double-decoding to `"`.
+ */
+function decodeSafeHtmlEntities(text: string): string {
+  return text.replace(/&(amp|quot|#39|#x27);/gi, (match, entity: string) => {
+    switch (entity.toLowerCase()) {
+      case 'amp':
+        return '&';
+      case 'quot':
+        return '"';
+      case '#39':
+      case '#x27':
+        return "'";
+      default:
+        return match;
+    }
+  });
+}
+
+function findFencedBlockEnd(text: string, start: number): number | null {
+  const lineEndIdx = text.indexOf('\n', start);
+  const firstLine = lineEndIdx === -1 ? text.slice(start) : text.slice(start, lineEndIdx);
+  const openMatch = /^[ \t]{0,3}(`{3,}|~{3,})(.*)$/.exec(firstLine.replace(/\r$/, ''));
+  if (!openMatch) {
+    return null;
+  }
+  const fence = openMatch[1];
+  const fenceChar = fence[0];
+  const infoString = openMatch[2];
+  if (fenceChar === '`' && infoString.includes('`')) {
+    return null;
+  }
+  if (lineEndIdx === -1) {
+    return text.length;
+  }
+  const closePattern = new RegExp(`^[ \\t]{0,3}${fenceChar}{${fence.length},}[ \\t]*$`);
+  let cursor = lineEndIdx + 1;
+  while (cursor < text.length) {
+    const nextNewline = text.indexOf('\n', cursor);
+    const rawLine = nextNewline === -1 ? text.slice(cursor) : text.slice(cursor, nextNewline);
+    if (closePattern.test(rawLine.replace(/\r$/, ''))) {
+      return nextNewline === -1 ? text.length : nextNewline + 1;
+    }
+    if (nextNewline === -1) {
+      return text.length;
+    }
+    cursor = nextNewline + 1;
+  }
+  return text.length;
+}
+
+function findInlineCodeEnd(text: string, start: number, tickCount: number): number | null {
+  let j = start + tickCount;
+  while (j < text.length) {
+    if (text[j] === '\n') {
+      const blankMatch = /^\n[ \t]*\r?\n/.exec(text.slice(j));
+      if (blankMatch) {
+        return null;
+      }
+    }
+    if (text[j] === '`') {
+      let run = 0;
+      while (j + run < text.length && text[j + run] === '`') {
+        run++;
+      }
+      if (run === tickCount) {
+        return j + run;
+      }
+      j += run;
+      continue;
+    }
+    j++;
+  }
+  return null;
+}
+
+function splitMarkdownCodeSegments(text: string): MarkdownSegment[] {
+  const segments: MarkdownSegment[] = [];
+  let proseStart = 0;
+  let i = 0;
+
+  const flushProse = (end: number): void => {
+    if (end > proseStart) {
+      segments.push({ text: text.slice(proseStart, end), isCode: false, fenced: false });
+    }
+  };
+
+  while (i < text.length) {
+    const atLineStart = i === 0 || text[i - 1] === '\n';
+    if (atLineStart) {
+      const fenceEnd = findFencedBlockEnd(text, i);
+      if (fenceEnd !== null) {
+        flushProse(i);
+        segments.push({ text: text.slice(i, fenceEnd), isCode: true, fenced: true });
+        i = fenceEnd;
+        proseStart = i;
+        continue;
+      }
+    }
+    if (text[i] === '`') {
+      let tickCount = 0;
+      while (i + tickCount < text.length && text[i + tickCount] === '`') {
+        tickCount++;
+      }
+      const inlineEnd = findInlineCodeEnd(text, i, tickCount);
+      if (inlineEnd !== null) {
+        flushProse(i);
+        segments.push({ text: text.slice(i, inlineEnd), isCode: true, fenced: false });
+        i = inlineEnd;
+        proseStart = i;
+        continue;
+      }
+      i += tickCount;
+      continue;
+    }
+    i++;
+  }
+
+  flushProse(text.length);
+  return segments;
+}
+
+function isRecordMentionToken(token: SpecialContentToken): token is SpecialContentToken & { content: MentionContent } {
+  return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
+}
+
+function resolveRecordLinkLabel(content: MentionContent): string {
+  const explicitName = (content.name ?? '').trim();
+  return explicitName || content.entityName || 'record';
+}
+
+function endsWithRecordTitle(prefix: string, label: string): boolean {
+  if (!label) {
+    return false;
+  }
+  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const trailingTitlePattern = new RegExp(`(?:^|[\\s(\\[\\"'*_\`>:])${escapedLabel}[*_\`"'\\]]*[ \\t]*$`, 'i');
+  return trailingTitlePattern.test(prefix);
+}
+
+/**
+ * Converts `@{"_mode":...}` tokens into readable plain text via `ConversationUtility.ToPlainText`,
+ * omitting duplicate `record` mention pills that immediately follow the same record title.
+ */
+function replaceMentionTokens(text: string): string {
+  if (!text) {
+    return '';
+  }
+  const tokens = ConversationUtility.ParseSpecialContent(text);
+  if (tokens.length === 0) {
+    return text;
+  }
+
+  let deduplicated = '';
+  let cursor = 0;
+  for (const token of tokens) {
+    deduplicated += text.slice(cursor, token.startIndex);
+    cursor = token.endIndex;
+
+    if (isRecordMentionToken(token)) {
+      const label = resolveRecordLinkLabel(token.content);
+      if (endsWithRecordTitle(deduplicated, label)) {
+        const nextChar = text[token.endIndex] ?? '';
+        if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
+          deduplicated = deduplicated.replace(/[ \t]+$/, '');
+        }
+        continue;
+      }
+    }
+    deduplicated += token.originalText;
+  }
+  deduplicated += text.slice(cursor);
+
+  return ConversationUtility.ToPlainText(deduplicated);
+}
+
+function cleanNonHtmlMessage(text: string): string {
+  const segments = splitMarkdownCodeSegments(text);
+  return segments
+    .map(seg => (seg.isCode ? seg.text : replaceMentionTokens(decodeSafeHtmlEntities(seg.text))))
+    .join('');
+}
+
+function unwrapInlineCode(segment: string): string {
+  const match = /^(`+)([\s\S]*?)\1$/.exec(segment);
+  if (!match) {
+    return segment;
+  }
+  let inner = match[2];
+  if (inner.length >= 2 && inner.startsWith(' ') && inner.endsWith(' ') && inner.trim().length > 0) {
+    inner = inner.slice(1, -1);
+  }
+  return inner;
+}
+
+function findLinkLabelEnd(text: string, openBracket: number, lineEnd: number): { start: number; closeBracket: number } {
+  let start = openBracket;
+  for (let k = openBracket + 1; k < lineEnd; k++) {
+    const ch = text[k];
+    if (ch === '[') {
+      // Outer '[' cannot form a single-bracket link label; jump directly to the inner '['.
+      start = k;
+    } else if (ch === ']') {
+      return { start, closeBracket: k };
+    }
+  }
+  return { start, closeBracket: -1 };
+}
+
+function findBalancedParenEnd(text: string, openParen: number, lineEnd: number): number {
+  let depth = 1;
+  for (let k = openParen + 1; k < lineEnd; k++) {
+    const ch = text[k];
+    if (ch === '(') {
+      depth++;
+    } else if (ch === ')') {
+      depth--;
+      if (depth === 0) {
+        return k;
+      }
+    }
+  }
+  return -1;
+}
+
+/**
+ * Linear-time O(n) single-pass scanner/replacer for Markdown links `[label](url)` —
+ * caches `lineEnd` per line and advances a strictly monotonic cursor so pathological
+ * `[` or `[a](` sequences never rescan overlapping suffixes.
+ */
+function processMarkdownLinks(text: string, mode: 'detect'): boolean;
+function processMarkdownLinks(text: string, mode: 'strip'): string;
+function processMarkdownLinks(text: string, mode: 'detect' | 'strip'): boolean | string {
+  let out = '';
+  let cursor = 0;
+  let lineEnd = -1;
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] !== '[') {
+      i++;
+      continue;
+    }
+    if (i > lineEnd) {
+      const nl = text.indexOf('\n', i + 1);
+      lineEnd = nl === -1 ? text.length : nl;
+    }
+    const { start, closeBracket } = findLinkLabelEnd(text, i, lineEnd);
+    if (closeBracket === -1) {
+      i = lineEnd;
+      continue;
+    }
+    if (closeBracket <= start + 1 || text[closeBracket + 1] !== '(') {
+      i = closeBracket + 1;
+      continue;
+    }
+    const closeParen = findBalancedParenEnd(text, closeBracket + 1, lineEnd);
+    if (closeParen === -1) {
+      // No closing ')' before lineEnd; advance past the scanned suffix so it is never rescanned.
+      i = lineEnd;
+      continue;
+    }
+    if (mode === 'detect') {
+      if (closeParen > closeBracket + 2) {
+        return true;
+      }
+      i = closeParen + 1;
+      continue;
+    }
+    out += text.slice(cursor, start);
+    out += text.slice(start + 1, closeBracket);
+    cursor = closeParen + 1;
+    i = cursor;
+  }
+  return mode === 'detect' ? false : out + text.slice(cursor);
+}
+
+function stripMarkdownSyntaxOutsideTokens(text: string): string {
+  const stripChunk = (chunk: string): string =>
+    processMarkdownLinks(chunk, 'strip')
+      .replace(/(^|\s)#{1,6}(?=\s|$)/g, '$1')
+      .replace(/(^|\s)>+(?=\s|$)/g, '$1')
+      .replace(/\*+/g, '')
+      .replace(/(^|[^\w])_+|_+(?=[^\w]|$)/g, '$1');
+
+  const tokens = ConversationUtility.ParseSpecialContent(text);
+  if (tokens.length === 0) {
+    return stripChunk(text);
+  }
+  let out = '';
+  let cursor = 0;
+  for (const token of tokens) {
+    out += stripChunk(text.slice(cursor, token.startIndex));
+    out += token.originalText;
+    cursor = token.endIndex;
+  }
+  out += stripChunk(text.slice(cursor));
+  return out;
+}
+
+/**
+ * Strips Markdown formatting for collapsed notification previews while:
+ *  - Decoding legacy `&amp;`, `&#39;`, `&#x27;`, `&quot;` entities once in prose
+ *  - Preserving inline code content without decoding/double-decoding and dropping fenced code blocks
+ *  - Converting `@{"_mode":"mention",...}` tokens into readable text with adjacent record title deduplication
+ */
+export function StripNotificationMarkdown(text: string): string {
+  if (!text) {
+    return '';
+  }
+  const segments = splitMarkdownCodeSegments(text);
+  const rendered = segments
+    .map(seg => {
+      if (seg.fenced) {
+        return ' ';
+      }
+      if (seg.isCode) {
+        return unwrapInlineCode(seg.text);
+      }
+      const decoded = decodeSafeHtmlEntities(seg.text);
+      const stripped = stripMarkdownSyntaxOutsideTokens(decoded);
+      return replaceMentionTokens(stripped);
+    })
+    .join('');
+  return collapseWhitespaceValue(rendered);
+}
+
+/**
+ * Classifies a notification `Message` for rendering and normalizes non-HTML previews and
+ * Markdown bodies (`&amp;`/`&#39;`/`&#x27;`/`&quot;` single-pass decode outside code blocks
+ * and `@{"_mode":"mention",...}` conversion with adjacent record title deduplication).
+ */
+export function ClassifyNotificationMessage(message: string): ClassifiedNotificationMessage {
+  const trimmed = (message ?? '').trim();
+  const nonCodeText = splitMarkdownCodeSegments(trimmed)
+    .filter(seg => !seg.isCode)
+    .map(seg => seg.text)
+    .join(' ');
+  const looksHtml = /^<!doctype\s|^<html[\s>]/i.test(trimmed) || /<\/?[a-z][^<>]*>/i.test(nonCodeText);
+  if (looksHtml) {
+    const doc = new DOMParser().parseFromString(trimmed, 'text/html');
+    for (const el of Array.from(doc.querySelectorAll('style, script, link, meta, title'))) {
+      el.remove();
+    }
+    const body = doc.body?.innerHTML?.trim() ?? '';
+    const text = collapseWhitespaceValue(replaceMentionTokens(doc.body?.textContent ?? ''));
+    return { Kind: 'html', Body: body, Preview: excerptValue(text), Expandable: true };
+  }
+
+  const looksMarkdown =
+    /^#{1,6}\s/m.test(trimmed) ||
+    /\*\*[^*]+\*\*/.test(trimmed) ||
+    /^[ \t]*[-*][ \t]+/m.test(trimmed) ||
+    trimmed.includes('```') ||
+    /^[ \t]*~~~/m.test(trimmed) ||
+    processMarkdownLinks(trimmed, 'detect');
+  if (looksMarkdown) {
+    const body = cleanNonHtmlMessage(trimmed);
+    const preview = excerptValue(StripNotificationMarkdown(trimmed));
+    return { Kind: 'markdown', Body: body, Preview: preview, Expandable: true };
+  }
+
+  const cleanedText = collapseWhitespaceValue(cleanNonHtmlMessage(trimmed));
+  return {
+    Kind: 'text',
+    Body: cleanedText,
+    Preview: cleanedText,
+    Expandable: cleanedText.length > PREVIEW_MAX_CHARS,
+  };
+}
 
 @Component({
   standalone: false,
@@ -136,6 +552,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     this.NotificationTypes = value;
   }
   public SelectedTypeFilter: string | null = null;
+
+  /** Dropdown value for the "Other (no type)" option. */
+  public readonly NoTypeFilter = NO_NOTIFICATION_TYPE_FILTER;
 
   /** @deprecated Use {@link SelectedTypeFilter}. */
   public get selectedTypeFilter(): string | null {
@@ -278,8 +697,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     }
 
     // Apply type filter if selected
-    if (this.SelectedTypeFilter) {
-      temp = temp.filter(n => UUIDsEqual(n.NotificationTypeID, this.SelectedTypeFilter));
+    if (this.SelectedTypeFilter != null) {
+      const typeFilter = this.SelectedTypeFilter;
+      temp = temp.filter(n => MatchesNotificationTypeFilter(n.NotificationTypeID, typeFilter));
     }
 
     // Apply text filter if it is not empty
@@ -327,7 +747,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   private vmFor(n: MJUserNotificationEntity): NotificationVM {
     const cached = this.vmCache.get(n.ID);
-    if (cached) {
+    if (cached && cached.N.Message === n.Message) {
       cached.N = n;
       cached.Clickable = this.IsNotificationClickable(n);
       return cached;
@@ -352,45 +772,23 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
    *    parsed with DOMParser, chrome elements (style/script/link/meta/title) removed,
    *    and the body markup kept for a SANITIZED [innerHTML] binding (Angular's
    *    default sanitizer strips scripts/event handlers on bind).
-   *  - Markdown-looking text → rendered through mj-markdown when expanded.
-   *  - Everything else → plain text.
+   *  - Markdown-looking text → rendered through mj-markdown when expanded, with
+   *    legacy entities decoded and `@{"_mode":"mention",...}` tokens normalized.
+   *  - Everything else → plain text with entities decoded and mentions converted.
    */
   private classifyMessage(message: string): { kind: MessageKind; body: string; preview: string; expandable: boolean } {
-    const trimmed = (message ?? '').trim();
-    const looksHtml = /^<!doctype\s|^<html[\s>]/i.test(trimmed) || /<\/?[a-z][^>]*>/i.test(trimmed);
-    if (looksHtml) {
-      const doc = new DOMParser().parseFromString(trimmed, 'text/html');
-      for (const el of Array.from(doc.querySelectorAll('style, script, link, meta, title'))) {
-        el.remove();
-      }
-      const body = doc.body?.innerHTML?.trim() ?? '';
-      const text = this.collapseWhitespace(doc.body?.textContent ?? '');
-      return { kind: 'html', body, preview: this.excerpt(text), expandable: true };
-    }
-    const looksMarkdown = /(^|\n)#{1,6}\s|\*\*[^*]+\*\*|(^|\n)\s*[-*]\s+|\[[^\]]+\]\([^)]+\)|```/m.test(trimmed);
-    const text = this.collapseWhitespace(trimmed);
-    if (looksMarkdown) {
-      return { kind: 'markdown', body: trimmed, preview: this.excerpt(this.stripMarkdown(text)), expandable: true };
-    }
-    return { kind: 'text', body: '', preview: text, expandable: text.length > PREVIEW_MAX_CHARS };
-  }
-
-  private collapseWhitespace(value: string): string {
-    return value.replace(/\s+/g, ' ').trim();
-  }
-
-  private excerpt(text: string): string {
-    return text.length > PREVIEW_MAX_CHARS ? `${text.substring(0, PREVIEW_MAX_CHARS - 1)}…` : text;
+    const classified = ClassifyNotificationMessage(message);
+    return {
+      kind: classified.Kind,
+      body: classified.Body,
+      preview: classified.Preview,
+      expandable: classified.Expandable,
+    };
   }
 
   /** Light de-noising of markdown syntax for the plain-text preview. */
   private stripMarkdown(text: string): string {
-    return text
-      .replace(/```[\s\S]*?```/g, ' ')
-      .replace(/[#*_`>]+/g, '')
-      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-      .replace(/\s+/g, ' ')
-      .trim();
+    return StripNotificationMarkdown(text);
   }
 
   /** Compact "just now / 5m ago / 3h ago / 2d ago" label. NEVER call from templates (NG0100) — snapshot only. */
@@ -632,13 +1030,16 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
-    // Queue all saves - no need to await individual saves since transaction group queues them
+    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+    // group, so wait for every one to be queued; submitting earlier sends an empty group that
+    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+    const queued: Promise<boolean>[] = [];
     for (const notification of this.AllNotifications) {
       if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        // Don't await - Save() with transaction group queues the operation immediately
-        this.MarkAsRead(notification, bRead, transGroup);
+        queued.push(this.MarkAsRead(notification, bRead, transGroup));
       }
     }
+    await Promise.all(queued);
 
     // Submit transaction group - this is where the actual network call happens
     if (!await transGroup.Submit())

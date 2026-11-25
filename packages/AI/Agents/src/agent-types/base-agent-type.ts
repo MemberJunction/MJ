@@ -17,7 +17,8 @@ import type { NativeToolBinding } from '../native-tools/control-tools';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
-import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { StripUnsafeObjectKeys } from '../unsafe-object-keys';
 import { ActionResult } from '@memberjunction/actions-base';
 
 /**
@@ -382,6 +383,82 @@ export abstract class BaseAgentType {
         }
     }
 
+    private isDecisionEnvelopeCandidate(value: object | null): value is { taskComplete?: boolean; nextStep?: object | null } {
+        if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+            return false;
+        }
+        return 'taskComplete' in value || 'nextStep' in value;
+    }
+
+    /**
+     * Scans raw text for balanced top-level JSON objects and returns the last valid decision
+     * envelope containing `taskComplete` or `nextStep`.
+     *
+     * Used exclusively as a fallback when direct `JSON.parse` fails (for example, when a CLI
+     * harness or model emits an intermediate JSON block or trailing non-whitespace text/newlines
+     * after the final decision JSON, producing `Unexpected non-whitespace character after JSON`).
+     */
+    protected extractLastDecisionEnvelope<T>(raw: string): T | null {
+        const candidates: T[] = [];
+        let searchFrom = 0;
+
+        while (searchFrom < raw.length) {
+            const start = raw.indexOf('{', searchFrom);
+            if (start === -1) {
+                break;
+            }
+
+            let depth = 0;
+            let inString = false;
+            let escaped = false;
+            let end = -1;
+
+            for (let i = start; i < raw.length; i++) {
+                const ch = raw[i];
+                if (inString) {
+                    if (escaped) {
+                        escaped = false;
+                    } else if (ch === '\\') {
+                        escaped = true;
+                    } else if (ch === '"') {
+                        inString = false;
+                    }
+                    continue;
+                }
+
+                if (ch === '"') {
+                    inString = true;
+                } else if (ch === '{') {
+                    depth++;
+                } else if (ch === '}') {
+                    depth--;
+                    if (depth === 0) {
+                        end = i;
+                        break;
+                    }
+                }
+            }
+
+            if (end === -1) {
+                searchFrom = start + 1;
+                continue;
+            }
+
+            const slice = raw.slice(start, end + 1);
+            try {
+                const parsed: object | null = JSON.parse(slice);
+                if (this.isDecisionEnvelopeCandidate(parsed)) {
+                    candidates.push(parsed as T);
+                }
+                searchFrom = end + 1;
+            } catch {
+                searchFrom = start + 1;
+            }
+        }
+
+        return candidates.length > 0 ? candidates[candidates.length - 1] : null;
+    }
+
     protected parseJSONResponse<T>(promptResult: AIPromptRunResult): T | null {
         if (!promptResult.success || !promptResult.result) {
             return null;
@@ -390,11 +467,27 @@ export abstract class BaseAgentType {
         try {
             let response: T;
             if (typeof promptResult.result === 'string') {
-                response = JSON.parse(this.stripWrappingCodeFence(promptResult.result));
+                const cleaned = this.stripWrappingCodeFence(promptResult.result);
+                try {
+                    response = JSON.parse(cleaned);
+                } catch (parseError) {
+                    const extracted = this.extractLastDecisionEnvelope<T>(cleaned);
+                    if (!extracted) {
+                        throw parseError;
+                    }
+                    response = extracted;
+                }
             } else {
                 response = promptResult.result as T;
             }
             
+            // Model output can carry injected text. Drop keys such as `__proto__` so no later walk of
+            // this object can follow them onto Object.prototype.
+            const removedKeys = StripUnsafeObjectKeys(response);
+            if (removedKeys.length > 0) {
+                LogStatus(`${this.constructor.name}: ignored unsafe keys in response: ${removedKeys.join(", ")}`);
+            }
+
             // Clean validation syntax from the response
             response = this._jsonValidator.cleanValidationSyntax<T>(response);
             

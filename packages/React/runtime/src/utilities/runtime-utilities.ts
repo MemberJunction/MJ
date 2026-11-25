@@ -59,7 +59,9 @@ import {
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
   SimpleEmbedTextParams,
-  SimpleEmbedTextResult
+  SimpleEmbedTextResult,
+  SimpleDecideParams,
+  SimpleDecideResult
 } from '@memberjunction/interactive-component-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
@@ -194,8 +196,44 @@ export class RuntimeUtilities {
         }
       },
       
+      Decide: (params: SimpleDecideParams): Promise<SimpleDecideResult> => this.runDecide(graphQLProvider, params),
+
       VectorService: new SimpleVectorService()
     };
+  }
+
+  /**
+   * Runs a typed decision through the `RunDecision` mutation. Never throws: a failure, including a
+   * transport error, comes back as `Success: false` with empty answers, so a component never acts on
+   * a partial result.
+   */
+  private async runDecide(graphQLProvider: GraphQLDataProvider, params: SimpleDecideParams): Promise<SimpleDecideResult> {
+    try {
+      const result = await graphQLProvider.AI.RunDecision({
+        State: params.State,
+        Questions: params.Questions,
+        PromptName: params.PromptName,
+        TimeoutMS: params.TimeoutMS
+      });
+      if (this.debug) {
+        console.log('🤖  Decide', { params, result });
+      }
+      return {
+        Success: result.Success,
+        ErrorMessage: result.ErrorMessage,
+        Answers: result.Success ? result.Answers : {},
+        ModelName: result.ModelName,
+        ResolvedModel: result.ResolvedModel,
+        ExecutionTimeMs: result.ExecutionTimeMs
+      };
+    } catch (error) {
+      LogError(error);
+      return {
+        Success: false,
+        ErrorMessage: 'Failed to run decision: ' + (error instanceof Error ? error.message : String(error)),
+        Answers: {}
+      };
+    }
   }
 
   /**
@@ -271,7 +309,7 @@ export class RuntimeUtilities {
   private mapMLModel(m: MJMLModelEntity): SimpleMLModelInfo {
     return {
       id: m.ID,
-      pipeline: m.Pipeline,
+      pipeline: m.Pipeline ?? '',
       version: m.Version,
       targetVariable: m.TargetVariable,
       problemType: m.ProblemType,
@@ -296,9 +334,10 @@ export class RuntimeUtilities {
 
   /**
    * Scores records with a trained model by invoking the `PredictiveStudio.ScoreRecordSet` Remote
-   * Operation. Normalizes `records` to primary-key strings, requests ephemeral predictions (no
-   * write-back), and maps the result. Resilient — logs and returns a zeroed result with the input
-   * records counted as failed on any error.
+   * Operation. Normalizes `records` to primary-key strings, scores them with no binding (the model
+   * predicts and nothing is written), and maps the completed run: every record in its scope scored.
+   * Resilient — logs and returns a zeroed result with the input records counted as failed on a
+   * refused or failed run (its code and message name the refusal and the scoring run) or any error.
    */
   private async scoreMLRecords(
     provider: GraphQLDataProvider,
@@ -311,19 +350,19 @@ export class RuntimeUtilities {
       const input: PredictiveStudioScoreRecordSetInput = {
         modelId,
         scope: { records: keys }
-        // No writeBack → predictions are returned ephemerally.
+        // No bindingId → the model predicts; the predictions are returned and nothing is written.
       };
       const op = new PredictiveStudioScoreRecordSetOperation();
       const result = await op.Execute(input, { provider, user: options?.contextUser });
       if (!result.Success || !result.Output) {
-        console.error(`❌ score failed for model ${modelId}: ${result.ErrorMessage}`);
+        console.error(`❌ score failed for model ${modelId} (${result.ResultCode}): ${result.ErrorMessage}`);
         return { scoredCount: 0, failedCount: keys.length, skippedCount: 0, predictions: [] };
       }
       const out = result.Output;
       return {
-        scoredCount: out.scored,
-        failedCount: out.failed,
-        skippedCount: out.skipped,
+        scoredCount: out.total,
+        failedCount: 0,
+        skippedCount: 0,
         predictions: (out.predictions ?? []).map((p) => ({
           recordId: p.recordId,
           score: p.score,

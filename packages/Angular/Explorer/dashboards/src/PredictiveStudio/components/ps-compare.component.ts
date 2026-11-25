@@ -1,29 +1,34 @@
 import { Component, Input, OnInit, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { UUIDsEqual } from '@memberjunction/global';
 import { PredictiveStudioEngine } from '../engine/predictive-studio.engine';
 import {
   PSCompareColumn,
   PSCompareMetricRow,
   BuildCompareMetricRows,
   DeriveCompareColumns,
+  ParseSessionLeaderboard,
+  SessionSuccessMetric,
 } from '../predictive-studio.view-models';
 
 /** A selectable session option for the compare picker. */
 interface SessionOption {
   id: string;
   name: string;
-  scoredCount: number;
+  /** The session's iterations its stored ranking holds: the runs the panel can line up. */
+  rankedCount: number;
 }
 
 /**
  * Compare Runs panel — a live side-by-side comparison of the top scored iterations (training runs)
  * within a selected experiment session. Fully live:
  *
- * - A session picker lists every session that has ≥2 scored iterations (only those are comparable).
- * - The top runs of the selected session are derived via {@link deriveCompareColumns} and rendered as
+ * - A session picker lists every session whose stored ranking holds ≥2 of its iterations (only those are comparable;
+ *   a raw iteration `Score` says nothing about which metric it is on, so it never makes a session comparable).
+ * - The top runs of the selected session are derived via {@link DeriveCompareColumns} and rendered as
  *   side-by-side columns; the real metric rows (holdout score, compute cost) come from
- *   {@link buildCompareMetricRows}, with the best column per row highlighted.
+ *   {@link BuildCompareMetricRows}, with the best column per row highlighted.
  *
  * Empty/prompt state when nothing is comparable. 100% entity-agnostic.
  */
@@ -39,7 +44,7 @@ interface SessionOption {
         <div class="ps-empty" data-testid="ps-compare-empty">
           <span class="ps-empty-ico"><i class="fa-solid fa-chart-column"></i></span>
           <h3>Nothing to compare yet</h3>
-          <p>Run an experiment with at least two scored iterations and you'll be able to line up their metrics side-by-side here to pick a winner.</p>
+          <p>Run an experiment with at least two scored iterations and you'll be able to line up their metrics side-by-side here to see which leads on the holdout score.</p>
         </div>
       } @else {
         <!-- toolbar: session picker -->
@@ -48,7 +53,7 @@ interface SessionOption {
             <label>Session to compare</label>
             <select class="ps-input" data-testid="ps-compare-session" [(ngModel)]="selectedSessionId" (ngModelChange)="rebuild()">
               @for (s of sessionOptions; track s.id) {
-                <option [value]="s.id">{{ s.name }} · {{ s.scoredCount }} scored</option>
+                <option [value]="s.id">{{ s.name }} · {{ s.rankedCount }} ranked</option>
               }
             </select>
           </div>
@@ -59,11 +64,11 @@ interface SessionOption {
         @if (runs.length < 2) {
           <div class="ps-callout info">
             <i class="fa-solid fa-circle-info"></i>
-            <div class="ps-small">This session has fewer than two scored iterations — pick another session to compare.</div>
+            <div class="ps-small">This session's ranking holds fewer than two iterations — pick another session to compare.</div>
           </div>
         } @else {
           <div class="ps-card" data-testid="ps-compare-layout-side">
-            <div class="ps-card-head"><h3>Side-by-side comparison</h3><span class="ps-muted ps-small">Best value in each row highlighted</span></div>
+            <div class="ps-card-head"><h3>Side-by-side comparison</h3><span class="ps-muted ps-small">The leading value in each row is highlighted</span></div>
             <div class="ps-card-body" style="overflow-x:auto">
               <div class="cmp-grid" [style.grid-template-columns]="gridTemplate">
                 <div class="stub">Run / Metric</div>
@@ -79,7 +84,7 @@ interface SessionOption {
                   @for (v of row.Values; track $index) {
                     <div class="cell" [class.best]="$index === row.BestIndex">
                       <span class="v">{{ v }}</span>
-                      @if ($index === row.BestIndex) { <span class="best-pill">BEST</span> }
+                      @if ($index === row.BestIndex) { <span class="best-pill">{{ row.LeadLabel }}</span> }
                     </div>
                   }
                 }
@@ -100,7 +105,7 @@ interface SessionOption {
 export class PSCompareComponent implements OnInit {
   @Input() engine!: PredictiveStudioEngine;
 
-  /** Sessions with ≥2 scored iterations — the comparable set. */
+  /** Sessions whose stored ranking holds ≥2 of their iterations — the comparable set. */
   public SessionOptions: SessionOption[] = [];
 
   /** @deprecated Use {@link SessionOptions}. */
@@ -148,15 +153,16 @@ export class PSCompareComponent implements OnInit {
     this.Rebuild();
   }
 
-  /** List sessions that have at least two scored iterations (the only ones worth comparing). */
+  /** List sessions whose stored ranking holds at least two of their iterations — exactly the columns Rebuild can draw. */
   private buildSessionOptions(): void {
     const sessions = this.engine?.Sessions ?? [];
     this.SessionOptions = sessions
       .map((s) => {
-        const scoredCount = this.engine.IterationRowsForSession(s.ID).filter((it) => it.Score != null).length;
-        return { id: s.ID, name: s.Name, scoredCount };
+        const ranked = ParseSessionLeaderboard(s.Leaderboard, SessionSuccessMetric(s.PlanSpec));
+        const rankedCount = DeriveCompareColumns(this.engine.IterationRowsForSession(s.ID), ranked, Number.POSITIVE_INFINITY).length;
+        return { id: s.ID, name: s.Name, rankedCount };
       })
-      .filter((o) => o.scoredCount >= 2);
+      .filter((o) => o.rankedCount >= 2);
   }
 
   /** Derive the compare columns + metric rows for the selected session. */
@@ -166,8 +172,10 @@ export class PSCompareComponent implements OnInit {
       this.MetricRows = [];
       return;
     }
+    const session = this.engine.Sessions.find((s) => UUIDsEqual(s.ID, this.SelectedSessionId));
+    const ranked = session ? ParseSessionLeaderboard(session.Leaderboard, SessionSuccessMetric(session.PlanSpec)) : [];
     const rows = this.engine.IterationRowsForSession(this.SelectedSessionId);
-    this.Runs = DeriveCompareColumns(rows, 3);
+    this.Runs = DeriveCompareColumns(rows, ranked, 3);
     this.MetricRows = BuildCompareMetricRows(this.Runs);
   }
 
@@ -189,8 +197,8 @@ export class PSCompareComponent implements OnInit {
   /** A plain-language verdict naming the best run by holdout score. */
   public get Verdict(): string {
     const best = this.Runs.find((r) => r.isBest);
-    if (!best || best.holdoutAuc == null) return 'Pick the run that wins on the holdout score — the honest out-of-sample number.';
-    return `${best.label} (${best.algorithm}) leads on the holdout score at ${best.holdoutAuc.toFixed(3)} — prefer the holdout number over training metrics when promoting.`;
+    if (!best || best.holdoutAuc == null) return 'Compare the runs on the holdout score — the honest out-of-sample number.';
+    return `${best.label} (${best.algorithm}) leads on ${best.ScoreMetric} at ${best.holdoutAuc.toFixed(3)} — prefer the holdout number over training metrics when promoting.`;
   }
 
   /** @deprecated Use {@link Verdict}. */

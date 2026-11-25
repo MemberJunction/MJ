@@ -149,7 +149,16 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentUserPolicies', sectionName: 'AI Agent User Policies', isExpanded: false },
             { sectionKey: 'mJDiagnosticSessions', sectionName: 'Diagnostic Sessions', isExpanded: false },
             { sectionKey: 'mJDiagnosticBundlesCreatedByUserID', sectionName: 'Diagnostic Bundles (Created By User ID)', isExpanded: false },
-            { sectionKey: 'mJDiagnosticBundlesApprovedByUserID', sectionName: 'Diagnostic Bundles (Approved By User ID)', isExpanded: false }
+            { sectionKey: 'mJDiagnosticBundlesApprovedByUserID', sectionName: 'Diagnostic Bundles (Approved By User ID)', isExpanded: false },
+            { sectionKey: 'mJAgentChannelParticipants', sectionName: 'Agent Channel Participants', isExpanded: false },
+            { sectionKey: 'mJMLModelPublishRecords', sectionName: 'ML Model Publish Records', isExpanded: false },
+            { sectionKey: 'mJAIAgentSuggestions', sectionName: 'AI Agent Suggestions', isExpanded: false },
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false },
+            { sectionKey: 'mJCommunicationSenderPermissions', sectionName: 'Communication Sender Permissions', isExpanded: false },
+            { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
+            { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
+            { sectionKey: 'mJCommunicationSuppressionsRevokedByUserID', sectionName: 'Communication Suppressions (Revoked By User ID)', isExpanded: false },
+            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false }
         ]);
     }
 }

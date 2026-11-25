@@ -75,7 +75,18 @@ export async function BootstrapIntegrationClient(): Promise<IntegrationClientCon
         undefined,
         client.MJAPIKey     // mjAPIKey → sent as x-mj-api-key on every request
     );
-    await setupGraphQLClient(config);
+    const deadline = Date.now() + 180_000;
+    for (;;) {
+        try {
+            await setupGraphQLClient(config);
+            break;
+        } catch (e) {
+            if (Date.now() > deadline) {
+                throw e;
+            }
+            await new Promise(resolve => setTimeout(resolve, 3_000));
+        }
+    }
 
     const ctx: IntegrationClientContext = { Storage: storage, Client: client };
     SetCurrentClientBootstrap(ctx);

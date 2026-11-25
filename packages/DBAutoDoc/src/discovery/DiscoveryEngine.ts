@@ -4,6 +4,7 @@
  */
 
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
+import { ApplyBestPrimaryKeys } from './ApplyPrimaryKeys.js';
 import { PKDetector } from './PKDetector.js';
 import { FKDetector } from './FKDetector.js';
 import { LLMDiscoveryValidator } from './LLMDiscoveryValidator.js';
@@ -61,6 +62,12 @@ export class DiscoveryEngine {
 
     // Create stats cache and detectors
     this.statsCache = new ColumnStatsCache();
+    // The cache starts from what the sampling pass already measured, so discovery queries the
+    // database only for columns sampling did not cover.
+    const seededColumns = this.statsCache.SeedFromSchemas(this.schemas);
+    if (seededColumns > 0) {
+      this.onProgress('Seeded discovery statistics from sampling', { columns: seededColumns });
+    }
     this.pkDetector = new PKDetector(this.driver, this.config, this.statsCache);
     this.fkDetector = new FKDetector(this.driver, this.config, this.statsCache);
 
@@ -1114,23 +1121,8 @@ export class DiscoveryEngine {
     state: DatabaseDocumentation,
     phase: RelationshipDiscoveryPhase
   ): void {
-    // Apply high-confidence PKs
-    for (const pk of phase.discovered.primaryKeys) {
-      if (pk.confidence >= this.config.confidence.primaryKeyMinimum * 100) {
-        const schema = state.schemas.find(s => s.name === pk.schemaName);
-        if (!schema) continue;
-
-        const table = schema.tables.find(t => t.name === pk.tableName);
-        if (!table) continue;
-
-        for (const columnName of pk.columnNames) {
-          const column = table.columns.find(c => c.name === columnName);
-          if (column) {
-            column.isPrimaryKey = true;
-          }
-        }
-      }
-    }
+    // Apply ONE primary key per table: the best surviving candidate.
+    ApplyBestPrimaryKeys(state, phase.discovered.primaryKeys, this.config.confidence.primaryKeyMinimum * 100);
 
     // Apply high-confidence FKs and build table-level dependency graph
     for (const fk of phase.discovered.foreignKeys) {

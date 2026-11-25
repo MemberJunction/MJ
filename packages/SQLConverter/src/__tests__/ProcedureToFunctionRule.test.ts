@@ -185,7 +185,7 @@ END`;
       expect(result).toContain('p_Name VARCHAR(100) DEFAULT NULL');
     });
 
-    it('should convert OUTPUT params to IN', () => {
+    it('keeps OUTPUT params as IN when the procedure returns rows', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
     @ID uniqueidentifier OUTPUT
 AS
@@ -197,6 +197,36 @@ END`;
       const result = convert(input);
       expect(result).toContain('IN p_ID UUID');
       expect(result).not.toContain('INOUT');
+    });
+
+    it('parses tab-separated params, defaults with OUTPUT, and a default that ends in OUT', () => {
+      const input = `CREATE PROCEDURE [__mj].[spTest]
+    @Count\t\tint\t=\t5 OUTPUT,
+    @Mode nvarchar(20) = 'TIMEOUT',
+    @Amount decimal(18, 2) OUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SELECT 1
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('p_Count INTEGER DEFAULT 5');
+      expect(result).toContain("p_Mode VARCHAR(20) DEFAULT 'TIMEOUT'");
+      expect(result).toMatch(/p_Amount NUMERIC\(18,\s?2\)/);
+    });
+
+    it('parses a long whitespace run in a param quickly', () => {
+      const input = `CREATE PROCEDURE [__mj].[spTest]
+    @A ${'\t'.repeat(50000)}int
+AS
+BEGIN
+    SELECT 1
+END`;
+
+      const started = Date.now();
+      convert(input);
+      expect(Date.now() - started).toBeLessThan(2000);
     });
 
     it('should convert BIT default 0 to FALSE', () => {
@@ -446,6 +476,60 @@ END`;
       expect(result).toContain('_v_row_count');
       expect(result).toContain('_v_row_count INTEGER;');
       expect(result).not.toContain('@@ROWCOUNT');
+    });
+
+    it('should convert uncommented spUpdate IF @@ROWCOUNT = 0 SELECT TOP 0 ... ELSE SELECT ... to IF NOT FOUND THEN ... END IF;', () => {
+      const input = `CREATE PROCEDURE [__mj].[spUpdateUser]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[User]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [__mj_UpdatedAt] = GETUTCDATE()
+    WHERE
+        [ID] = @ID
+
+    IF @@ROWCOUNT = 0
+        SELECT TOP 0 * FROM [__mj].[vwUsers] WHERE 1=0
+    ELSE
+        SELECT * FROM [__mj].[vwUsers] WHERE [ID] = @ID
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('IF NOT FOUND THEN');
+      expect(result).toContain('RETURN;');
+      expect(result).toContain('RETURN QUERY SELECT * FROM __mj."vwUsers" WHERE "ID" = p_ID;');
+      expect(result).toContain('END IF;');
+      expect(result).not.toContain('LIMIT 0');
+      expect(result).not.toContain('WHERE 1=0');
+      expect(result).not.toContain('_v_row_count');
+      expect(result).toMatch(/WHERE\s+"ID"\s*=\s*p_ID;\s*\n\s*IF NOT FOUND THEN/);
+    });
+
+    it('should convert uncommented spDelete IF @@ROWCOUNT = 0 SELECT NULL AS [ID] ELSE SELECT @ID AS [ID] to IF NOT FOUND THEN ... END IF;', () => {
+      const input = `CREATE PROCEDURE [__mj].[spDeleteUser]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DELETE FROM [__mj].[User] WHERE [ID] = @ID
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID]
+    ELSE
+        SELECT @ID AS [ID]
+END`;
+
+      const result = convert(input);
+      expect(result).toContain('WHERE "ID" = p_ID;');
+      expect(result).toContain('IF NOT FOUND THEN');
+      expect(result).toContain('RETURN QUERY SELECT NULL::UUID AS "_result_id";');
+      expect(result).toContain('RETURN QUERY SELECT p_ID::UUID AS "_result_id";');
+      expect(result).toContain('END IF;');
+      expect(result).not.toContain('_v_row_count');
     });
 
     it('should convert PRINT to RAISE NOTICE', () => {
@@ -734,7 +818,8 @@ END`;
       const result = convert(input);
       // Named-arg PERFORM (`p_X => value`) — NOT positional
       expect(result).toContain('p_ID => p_ID');
-      expect(result).toContain('p_IsActive => 0');
+      // User.IsActive is BOOLEAN, so the BIT literal becomes FALSE
+      expect(result).toContain('p_IsActive => FALSE');
       // The bug pattern would have been positional `(p_ID, 0)` — verify
       // we don't emit that.
       expect(result).not.toMatch(/PERFORM\s+__mj\."spUpdateUser"\(p_ID,\s*0\)/);
@@ -762,5 +847,222 @@ END`;
       const result = convert(input);
       expect(result).toContain(`PERFORM __mj."spCleanupOrphans"()`);
     });
+  });
+
+  // ─── Cascade EXEC calls into CRUD sprocs ────
+  //
+  // CodeGen's spDelete cascades call the child's spUpdate with `@FK_Clear = 1`.
+  // On PostgreSQL the `_Clear` param is BOOLEAN and a wide child's spUpdate takes
+  // a single `p_data JSONB` argument, so the call must fit either shape.
+  describe('cascade EXEC calls into CRUD sprocs', () => {
+    const cascadeInput = `CREATE PROCEDURE [__mj].[spDeleteConversationDetail]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on AIAgentNote using cursor to call spUpdateAIAgentNote
+    DECLARE @Notes_ID uniqueidentifier
+    DECLARE @Notes_Note nvarchar(MAX)
+    DECLARE @Notes_SourceConversationDetailID uniqueidentifier
+    DECLARE cascade_update_Notes_cursor CURSOR FOR
+        SELECT [ID], [Note], [SourceConversationDetailID]
+        FROM [__mj].[AIAgentNote]
+        WHERE [SourceConversationDetailID] = @ID
+
+    OPEN cascade_update_Notes_cursor
+    FETCH NEXT FROM cascade_update_Notes_cursor INTO @Notes_ID, @Notes_Note, @Notes_SourceConversationDetailID
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @Notes_SourceConversationDetailID = NULL
+
+        -- Call the update SP for the related entity
+        EXEC [__mj].[spUpdateAIAgentNote] @ID = @Notes_ID, @Note = @Notes_Note, @SourceConversationDetailID_Clear = 1, @SourceConversationDetailID = @Notes_SourceConversationDetailID
+
+        FETCH NEXT FROM cascade_update_Notes_cursor INTO @Notes_ID, @Notes_Note, @Notes_SourceConversationDetailID
+    END
+
+    CLOSE cascade_update_Notes_cursor
+    DEALLOCATE cascade_update_Notes_cursor
+
+    DELETE FROM [__mj].[ConversationDetail] WHERE [ID] = @ID
+END`;
+
+    it('passes a _Clear flag literal as BOOLEAN', () => {
+      const result = convert(cascadeInput);
+      expect(result).toContain('p_SourceConversationDetailID_Clear => TRUE');
+      expect(result).not.toMatch(/_Clear\s*=>\s*1\b/);
+    });
+
+    it('calls the single-JSONB shape when the callee has it', () => {
+      const result = convert(cascadeInput);
+      expect(result).toContain(
+        `IF EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace ` +
+        `WHERE n.nspname = '__mj' AND p.proname = 'spUpdateAIAgentNote' ` +
+        `AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype) THEN`,
+      );
+      const jsonArg = result.match(/PERFORM __mj\."spUpdateAIAgentNote"\(p_data := (jsonb_build_object\([\s\S]*?\))\);/);
+      expect(jsonArg).not.toBeNull();
+      expect(jsonArg![1]).toContain(`'SourceConversationDetailID', p_Notes_SourceConversationDetailID`);
+      expect(jsonArg![1]).not.toContain('_Clear');
+    });
+  });
+
+  describe('OUTPUT parameters set by SELECT assignment', () => {
+    const outputInput = `CREATE PROC [__mj].[spGetAuthenticationDataByExternalSystemID]
+	@IntegrationName NVARCHAR(100),
+	@ExternalSystemID NVARCHAR(100),
+	@AccessToken NVARCHAR(255)=NULL OUTPUT,
+	@RefreshToken NVARCHAR(255)=NULL OUTPUT,
+	@TokenExpirationDate DATETIME=NULL OUTPUT,
+	@APIKey NVARCHAR(255)=NULL OUTPUT
+AS
+
+SET @IntegrationName = TRIM(@IntegrationName)
+SET @ExternalSystemID = TRIM(@ExternalSystemID)
+
+SELECT
+	@AccessToken = ci.AccessToken,
+	@RefreshToken = ci.RefreshToken,
+	@TokenExpirationDate = ci.TokenExpirationDate,
+	@APIKey = ci.APIKey
+FROM
+	__mj.CompanyIntegration ci
+JOIN __mj.Integration i
+	ON i.ID = ci.IntegrationID
+WHERE
+	i.Name = @IntegrationName
+	AND ci.ExternalSystemID = @ExternalSystemID
+	AND ci.IsActive = 1`;
+
+    it('returns OUTPUT params as INOUT when the procedure returns no rows', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('INOUT p_AccessToken VARCHAR(255) DEFAULT NULL');
+      expect(result).toContain('INOUT p_APIKey VARCHAR(255) DEFAULT NULL');
+      expect(result).not.toContain('RETURNS VOID');
+    });
+
+    it('assigns the selected values with SELECT ... INTO', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('INTO p_AccessToken, p_RefreshToken, p_TokenExpirationDate, p_APIKey');
+      expect(result).not.toMatch(/p_AccessToken\s*=\s*ci\./);
+    });
+
+    it('compares a known boolean column with TRUE, not 1', () => {
+      const result = convert(outputInput);
+      expect(result).toContain('ci."IsActive" = TRUE');
+    });
+
+    it('assigns a single variable on one line with SELECT ... INTO', () => {
+      const result = convert(`CREATE PROCEDURE [__mj].[spCountOpenTasks]
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @Count INT;
+    SELECT @Count = COUNT(*) FROM [__mj].[Task] WHERE [UserID] = @UserID;
+    UPDATE [__mj].[User] SET [Title] = CAST(@Count AS NVARCHAR(10)) WHERE [ID] = @UserID;
+END`);
+      expect(result).toContain('SELECT COUNT(*) INTO p_Count FROM __mj."Task"');
+    });
+  });
+});
+
+// Regression: V202611111351 — MJ 6.3's single-write spUpdate returns named columns from the BASE
+// TABLE through an unbraced IF/ELSE with comment lines. The legacy path emitted `IF _v_row_count = 0`
+// with no THEN, bare SELECTs and RETURNS SETOF RECORD, and PG refused to create the function.
+describe('ProcedureToFunctionRule — single-write spUpdate', () => {
+  const input = `CREATE PROCEDURE [__mj].[spUpdateWidget]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL,
+    @Notes_Clear bit = 0,
+    @Notes nvarchar(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[Widget]
+    SET
+        [Name] = ISNULL(@Name, [Name]),
+        [Notes] = CASE WHEN @Notes_Clear = 1 THEN NULL ELSE ISNULL(@Notes, [Notes]) END
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE [ID] = @ID
+END`;
+
+  it('declares a typed RETURNS TABLE matching native PG CodeGen', () => {
+    const result = convert(input);
+    expect(result).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ) AS');
+    expect(result).not.toContain('SETOF RECORD');
+  });
+
+  it('lets column references win over the RETURNS TABLE OUT variables', () => {
+    const result = convert(input);
+    expect(result).toMatch(/\$\$\n#variable_conflict use_column\n/);
+  });
+
+  it('emits a well-formed IF ... THEN ... END IF and a RETURN QUERY', () => {
+    const result = convert(input);
+    expect(result).toContain('IF _v_row_count = 0 THEN\n        RETURN;\n    END IF;');
+    expect(result).toContain('RETURN QUERY SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM __mj."Widget" WHERE "ID" = p_ID;');
+    expect(result).not.toMatch(/IF _v_row_count = 0\s*\n\s*--/);
+    expect(result).not.toContain('LIMIT 0');
+    expect(result).not.toContain('WHERE 1=0');
+  });
+
+  it('leaves a hand-written procedure that selects table columns on its old path', () => {
+    const handWritten = `CREATE PROCEDURE [__mj].[spUpdateThing]
+    @ID uniqueidentifier
+AS
+BEGIN
+    UPDATE [__mj].[Thing] SET [Name] = 'x' WHERE [ID] = @ID
+    IF @@ROWCOUNT = 0
+        SELECT [ID] FROM [__mj].[Thing] WHERE [ID] = @ID
+END`;
+    const result = convert(handWritten);
+    expect(result).not.toContain('#variable_conflict');
+    expect(result).not.toContain('RETURNS TABLE("ID"');
+  });
+});
+
+// Regression: V202611140845 — the single-write spUpdate written by hand, without CodeGen's
+// `-- Check if the update was successful` marker, reached PG as `IF _v_row_count = 0` with no THEN,
+// a bare SELECT and a stray `LIMIT 0`. (The view-returning shape of the unmarked block is covered by
+// the `body conversion` test that expects IF NOT FOUND THEN.)
+describe('ProcedureToFunctionRule — hand-written rowcount IF/ELSE', () => {
+  it('converts an unmarked base-table IF @@ROWCOUNT = 0 ... ELSE ... block', () => {
+    const input = `CREATE PROCEDURE [__mj].[spUpdateWidget]
+    @ID uniqueidentifier,
+    @Name nvarchar(100) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [__mj].[Widget]
+    SET
+        [Name] = ISNULL(@Name, [Name])
+    WHERE
+        [ID] = @ID
+
+    IF @@ROWCOUNT = 0
+        SELECT TOP 0 [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE 1=0
+    ELSE
+        SELECT [ID], [__mj_CreatedAt], [__mj_UpdatedAt] FROM [__mj].[Widget] WHERE [ID] = @ID
+END`;
+    const result = convert(input);
+    expect(result).toContain('GET DIAGNOSTICS _v_row_count = ROW_COUNT;');
+    expect(result).toContain('IF _v_row_count = 0 THEN\n        RETURN;\n    END IF;');
+    expect(result).toContain('RETURN QUERY SELECT "ID", "__mj_CreatedAt", "__mj_UpdatedAt" FROM __mj."Widget" WHERE "ID" = p_ID;');
+    expect(result).toContain('RETURNS TABLE("ID" UUID, "__mj_CreatedAt" TIMESTAMPTZ, "__mj_UpdatedAt" TIMESTAMPTZ) AS');
+    expect(result).not.toContain('LIMIT 0');
+    expect(result).not.toContain('WHERE 1=0');
   });
 });

@@ -4,7 +4,7 @@ export type {
   OutputGroups, StatementType,
 } from './types.js';
 export {
-  CreateConversionContext, createConversionContext, CreateConversionStats, createConversionStats, CreateOutputGroups, createOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_UNPARSED, GAP_MARKER_BATCH_ERROR,
+  CreateConversionContext, createConversionContext, CreateConversionStats, createConversionStats, CreateOutputGroups, createOutputGroups, CONVERSION_GAP_MARKERS, GAP_MARKER_UNPARSED, GAP_MARKER_BATCH_ERROR, GAP_MARKER_NEEDS_HAND_AUTHORING, GAP_MARKER_EXEC_SKIPPED, GAP_MARKER_MISSING_SAVES,
 } from './types.js';
 
 // Statement classifier
@@ -23,7 +23,7 @@ export {
 
 // Individual conversion rules
 export { CreateTableRule } from './CreateTableRule.js';
-export { CatalogViewRule } from './CatalogViewRule.js';
+export { CatalogViewRule, GetPGCatalogViewDefinition } from './CatalogViewRule.js';
 export { ViewRule } from './ViewRule.js';
 export { ProcedureToFunctionRule } from './ProcedureToFunctionRule.js';
 export { FunctionRule } from './FunctionRule.js';
@@ -43,8 +43,17 @@ export type { DialectCombination } from './RuleRegistry.js';
 export { GetTSQLToPostgresRules, getTSQLToPostgresRules, GetRulesForDialects, getRulesForDialects } from './TSQLToPostgresRules.js';
 
 // Dialect header builders
-export { PostgreSQLHeaderBuilder, GetHeaderBuilder, getHeaderBuilder, RegisterHeaderBuilder, registerHeaderBuilder } from './DialectHeaderBuilder.js';
-export type { DialectHeaderBuilder } from './DialectHeaderBuilder.js';
+export {
+  PostgreSQLHeaderBuilder,
+  GetHeaderBuilder,
+  getHeaderBuilder,
+  RegisterHeaderBuilder,
+  registerHeaderBuilder,
+  PG_EXTENSION_REQUIREMENTS,
+  RequiredPgExtensions,
+  BuildPgExtensionStatements,
+} from './DialectHeaderBuilder.js';
+export type { DialectHeaderBuilder, PgExtensionRequirement } from './DialectHeaderBuilder.js';
 
 // Centralized type resolution
 export { ResolveType, resolveType, ResolveInlineType, resolveInlineType, ParseTypeString, parseTypeString, MJ_OVERRIDES } from './TypeResolver.js';
@@ -55,6 +64,8 @@ export { PostProcess, postProcess } from './PostProcessor.js';
 
 // Batch converter (main orchestrator)
 export { ConvertFile, convertFile, PrintReport, printReport } from './BatchConverter.js';
+export { CollectTSQLBitColumns, MergeTableColumns } from './BitColumnRegistry.js';
+export type { TableColumnRegistry } from './BitColumnRegistry.js';
 export type { BatchConverterConfig, BatchConverterResult } from './BatchConverter.js';
 
 // EntityField sequence deduplicator (post-conversion fixup for UQ_EntityField_EntityID_Sequence)

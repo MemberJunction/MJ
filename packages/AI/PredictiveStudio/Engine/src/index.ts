@@ -12,12 +12,32 @@
 
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
+import { PredictiveStudioEvidenceGuard, PredictiveStudioPublishRecordGuard, PredictiveStudioStatusGuard } from './registry';
+import { PredictiveStudioScoringBindingGuard } from './governance';
+
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
 // `@memberjunction/predictive-studio-sidecar` — import it directly from there.
 // It is intentionally NOT re-exported here (CLAUDE.md rule 5: no cross-package re-exports).
 
 // FeatureAssembly executor + as-of / leakage-guard correctness primitives (§5/§6).
 export * from './feature-assembly';
+
+// Training Snapshot — the matrix (with the header the trainer reads), row manifest and per-value provenance files,
+// their hashes and the snapshot content hash, the assembly code-version stamp, the write-once file stores, the
+// holdout carver, the snapshot builder, and training and retraining from a snapshot.
+export * from './snapshot/index';
+
+// Predictive Studio file storage — PredictiveStudioStorage: the one MJ storage provider (PS_STORAGE_PROVIDER) Training
+// Snapshot and trained model files are written to, and the providers stored files' MJ: Files rows name.
+export * from './storage/ps-storage-provider';
+
+// Evaluation Protocol version rows — EvaluationProtocolVersioning: version 1 as its own lineage root, every later
+// version under it, written the way Prediction Unit versions are.
+export * from './protocol';
+
+// Prediction Unit rows — PredictionUnitRowReader: one row per grain record (or grain record x period) with its
+// decision date, outcome window and label; censored, label-known and empty-label rows are excluded and counted.
+export * from './prediction-unit';
 
 // Feature Pipeline discovery + monitoring — FeaturePipelineEngine (BaseEngine cache
 // over the categorized MJ: Record Processes rows) + its projection types (§5.4 / SP6).
@@ -26,10 +46,31 @@ export * from './feature-pipelines';
 // Training orchestration — TrainingEngine + its injected seams (§3/§4.3/§4.4/§8.2/§11).
 export * from './training';
 
-// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10).
+// Model registry — RegistryContext (the request's user and the provider every registry, gate and scoring call runs on)
+// and ArtifactRegistry (write-once artifact storage, and a verified ArtifactLoad on every load).
+export * from './registry';
+
+// Governance — StoredEvidenceBuilder (a model's evidence from stored rows), SignOffService (a person's recorded sign-off,
+// evidence-hashed) and StoredSignOffLookup (the gate's read of the request's approving sign-off).
+export * from './governance';
+
+// The registry's PreSave guards, registered once per process by every process that loads the Engine (MJAPI among
+// them): the status guard (only the lifecycle gate changes MJ: ML Models.Status, re-derived on every publish) and the
+// evidence guard (stored evidence is write-once), and the publish-record guard (MJ: ML Model Publish Records rows are
+// created only by SignOffService and the lifecycle gate, and never changed or deleted). Each is idempotent, across
+// copies of this module too.
+PredictiveStudioStatusGuard.Register();
+PredictiveStudioEvidenceGuard.Register();
+PredictiveStudioPublishRecordGuard.Register();
+// The scoring binding guard: a binding's Status changes only through ScoringBindings.Withdraw, its ViewAuthorizationID
+// only for a caller holding the stored authorization.
+PredictiveStudioScoringBindingGuard.Register();
+
+// Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10), and the daily prediction
+// retention job's driver (PredictiveStudioPredictionRetentionJobDriver, registered with BaseScheduledJob on load).
 export * from './scoring';
 
-// Scheduling — createScheduledModelScoring: bind a trained model to write its
+// Scheduling — CreateScheduledModelScoring: bind a trained model to write its
 // prediction into a target entity column on a recurring schedule, by assembling a
 // single scheduled MJ: Record Processes row (the north-star enabler, PS2-6).
 export * from './scheduling';
@@ -42,15 +83,19 @@ export * from './experiment';
 // score / experiment / promote), so agents / UI / workflows can invoke them (§12).
 export * from './actions';
 
+// The legacy-pipeline data migration — PipelineMigration: version-1 Prediction Units and Evaluation Protocols for
+// pipelines that predate them (or an archive or hold with the reason), run by the Migrate Pipelines Action.
+export * from './migration';
+
 // Remote Operations — the six Manual-mode server bodies for the CodeGen-emitted
 // `PredictiveStudio.*` operation bases. The typed peers of the Actions (same engine
 // delegation path), invocable by stable key from client or server (§12).
 export * from './operations';
 
-// Maintenance — MaintenanceEngine (staleness detection / scheduled re-scoring /
-// retraining triggers + challenger-vs-incumbent promotion recommendation), the
-// RetrainingPolicy model, its DI seams, and the default honest drift detector (§12 / SP10).
-export * from './maintenance';
+// Monitoring — PredictiveStudioModelMonitoringJobDriver (the one monitoring job per Published model: outcome join,
+// period scores with intervals, drift by procedure M, retrain triggers, challenger, rollback, mirror divergence,
+// parity) and its steps and production seams. Importing the module registers the driver with the class factory.
+export * from './monitoring';
 
 // Agent builder — the Predictive Studio Agent's DETERMINISTIC builder: the pure
 // ModelingPlanSpec→pipeline-config mapper + PredictiveStudioPipelineBuilder (create
@@ -92,9 +137,4 @@ export const PredictiveStudioEngineVersion = '5.43.0';
  */
 export function IsModelingPlanApproved(plan: ModelingPlanSpec): boolean {
   return plan.Approved === true;
-}
-
-/** @deprecated Use {@link IsModelingPlanApproved}. */
-export function isModelingPlanApproved(plan: ModelingPlanSpec): boolean {
-  return IsModelingPlanApproved(plan);
 }

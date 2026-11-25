@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "View Model Predictions",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": false,
+      "Description": "Grants permission to see the predictions an ML model's scoring binding writes as Feature Values (Source Model). A scoring binding names the authorization its predictions are seen through; this one is the default."
+    },
+    "primaryKey": {
+      "ID": "02FFFCC1-72C2-4F95-80ED-8550F513C0A1"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T06:12:08.234Z",
+      "checksum": "5e9724af5df68ce569e3b913622644d42997a47b1c25d820bfe9019fb1657d5d"
+    }
+  }
+]

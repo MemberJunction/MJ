@@ -177,6 +177,16 @@ export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements 
 
     const descendants = await DiscoverISADescendants(this.Record, this.ProviderToUse);
     const tree = BuildDescendantTree(descendants);
+    if (this.Record.EntityInfo?.SubtypeSelectorConfig?.FoldIntoForm === true) {
+      // Direct subtype child is already rendered inline in the form body; promote any
+      // non-folded deeper descendants rather than duplicating the folded child card.
+      for (const item of tree) {
+        if (item.Children.length > 0) {
+          this.RelatedItems.push(...item.Children);
+        }
+      }
+      return;
+    }
     this.RelatedItems.push(...tree);
   }
 

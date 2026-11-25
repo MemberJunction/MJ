@@ -24,8 +24,8 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=SubtypeSelector"
           },
           "sync": {
-            "lastModified": "2026-09-29T19:22:28.645Z",
-            "checksum": "616b43133341120023b7626ee5fd75cd68f19b80f07c3baef9f9da1699a8654e"
+            "lastModified": "2026-11-10T23:41:05.778Z",
+            "checksum": "e7bfd952a780b23979e5239861e15777d0ccd9ce0a1da77a90732a5ed42d21a3"
           }
         }
       ]

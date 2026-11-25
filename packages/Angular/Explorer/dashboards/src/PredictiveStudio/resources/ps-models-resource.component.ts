@@ -1,11 +1,12 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfoEngine } from '@memberjunction/core-entities';
+import { JsonParse } from '@memberjunction/predictive-studio-core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { PSResourceBase } from './ps-resource-base';
 import { PSPanelKey } from '../predictive-studio.types';
-import { MODELS_SECTIONS, PSSection, sectionGroups, sectionsInGroup, sectionLabel, hasSection } from '../predictive-studio.nav';
-import { buildModelsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
+import { MODELS_SECTIONS, PSSection, SectionGroups, SectionsInGroup, SectionLabel, HasSection } from '../predictive-studio.nav';
+import { BuildModelsAgentContext, ResolvePSRecord, BuildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
 
 /**
@@ -21,7 +22,7 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
   standalone: false,
   selector: 'mj-ps-models-resource',
   template: `
-    <mj-page-header-interior [Title]="activeLabel" [Subtitle]="activeSubtitle">
+    <mj-page-header-interior [Title]="ActiveLabel" [Subtitle]="ActiveSubtitle">
     </mj-page-header-interior>
     <mj-page-body-interior [Flex]="true" [Padding]="false">
       @if (isLoading) {
@@ -36,31 +37,31 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
           <button mjButton variant="secondary" size="sm" (click)="retryLoad()"><i class="fa-solid fa-rotate-right"></i> Try again</button>
         </div>
       } @else {
-        <div class="ps-models-host" [class.nav-collapsed]="isNavCollapsed" data-testid="ps-models-shell">
-          @if (isNavCollapsed) {
+        <div class="ps-models-host" [class.nav-collapsed]="IsNavCollapsed" data-testid="ps-models-shell">
+          @if (IsNavCollapsed) {
             <div class="ps-nav-collapsed-strip" role="region" aria-label="Models navigation (collapsed)">
-              <button class="ps-nav-rail-collapse" type="button" (click)="toggleNav()" aria-label="Expand models navigation" title="Expand navigation">
+              <button class="ps-nav-rail-collapse" type="button" (click)="ToggleNav()" aria-label="Expand models navigation" title="Expand navigation">
                 <i class="fa-solid fa-chevron-right"></i>
               </button>
               <div class="ps-nav-collapsed-strip-label"><i class="fa-solid fa-cubes"></i> Models</div>
             </div>
           }
 
-          <as-split direction="horizontal" class="models-splitter" unit="percent" [gutterSize]="isNavCollapsed ? 0 : 6" (dragEnd)="onSplitDragEnd($event.sizes)">
-            @if (!isNavCollapsed) {
-              <as-split-area [size]="navSizePct" [minSize]="10" [maxSize]="30">
+          <as-split direction="horizontal" class="models-splitter" unit="percent" [gutterSize]="IsNavCollapsed ? 0 : 6" (dragEnd)="OnSplitDragEnd($event.sizes)">
+            @if (!IsNavCollapsed) {
+              <as-split-area [size]="NavSizePct" [minSize]="10" [maxSize]="30">
                 <aside class="ps-leftnav">
                   <div class="ps-leftnav-header">
                     <span class="ps-leftnav-title">Lifecycle</span>
-                    <button class="ps-leftnav-collapse-btn" type="button" (click)="toggleNav()" title="Collapse navigation" aria-label="Collapse navigation">
+                    <button class="ps-leftnav-collapse-btn" type="button" (click)="ToggleNav()" title="Collapse navigation" aria-label="Collapse navigation">
                       <i class="fa-solid fa-chevron-left"></i>
                     </button>
                   </div>
-                  @for (group of groups; track group) {
+                  @for (group of Groups; track group) {
                     @if (group) { <div class="ps-nav-group">{{ group }}</div> }
-                    @for (item of itemsForGroup(group); track item.key) {
-                      <button class="ps-nav-item" [class.active]="activeSection === item.key"
-                        [attr.data-testid]="'ps-nav-' + item.key" (click)="selectSection(item.key)">
+                    @for (item of ItemsForGroup(group); track item.key) {
+                      <button class="ps-nav-item" [class.active]="ActiveSection === item.key"
+                        [attr.data-testid]="'ps-nav-' + item.key" (click)="SelectSection(item.key)">
                         <i [class]="item.icon"></i> <span>{{ item.label }}</span>
                       </button>
                     }
@@ -69,11 +70,11 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
               </as-split-area>
             }
 
-            <as-split-area [size]="isNavCollapsed ? 100 : contentSizePct" [minSize]="50">
-              <section class="ps-content" [class.fill]="activeSection === 'registry' || activeSection === 'production'" [attr.data-testid]="'ps-panel-' + activeSection">
-                @switch (activeSection) {
-                  @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [currentUser]="ProviderToUse.CurrentUser" [initialModelId]="initialModelId"></ps-registry> }
-                  @case ('production') { <ps-production [engine]="engine"></ps-production> }
+            <as-split-area [size]="IsNavCollapsed ? 100 : ContentSizePct" [minSize]="50">
+              <section class="ps-content" [class.fill]="ActiveSection === 'registry' || ActiveSection === 'production'" [attr.data-testid]="'ps-panel-' + ActiveSection">
+                @switch (ActiveSection) {
+                  @case ('registry') { <ps-registry [engine]="engine" [provider]="ProviderToUse" [CurrentUser]="ProviderToUse.CurrentUser" [InitialModelId]="initialModelId"></ps-registry> }
+                  @case ('production') { <ps-production [Engine]="engine"></ps-production> }
                 }
               </section>
             </as-split-area>
@@ -90,10 +91,10 @@ import { validateStringParam } from '../../shared/agent-tool-validation';
       .models-splitter .as-split-gutter { background: transparent; transition: background-color 0.15s ease; position: relative; }
       .models-splitter .as-split-gutter:hover { background-color: var(--mj-brand-primary, #6366f1); }
       .models-splitter .as-split-gutter::after { content: ''; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 2px; height: 24px; border-radius: 1px; background: var(--mj-border-strong, #cbd5e1); }
-      .models-splitter .as-split-gutter:hover::after { background: #ffffff; }
+      .models-splitter .as-split-gutter:hover::after { background: var(--mj-text-inverse); }
 
       .ps-nav-collapsed-strip { width: 44px; min-width: 44px; max-width: 44px; flex: none; background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; align-items: center; padding: 10px 0; gap: 14px; z-index: 2; }
-      .ps-nav-rail-collapse { background: var(--mj-bg-surface-subtle); border: 1px solid var(--mj-border-default); border-radius: 6px; color: var(--mj-text-secondary); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; font-size: 11px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+      .ps-nav-rail-collapse { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-default); border-radius: 6px; color: var(--mj-text-secondary); cursor: pointer; display: grid; place-items: center; width: 28px; height: 28px; padding: 0; font-size: 11px; transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
       .ps-nav-rail-collapse:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); border-color: var(--mj-border-strong); }
       .ps-nav-collapsed-strip-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: var(--mj-text-muted); display: flex; align-items: center; gap: 8px; text-transform: uppercase; }
 
@@ -132,53 +133,29 @@ export class PSModelsResourceComponent extends PSResourceBase {
 
   public ActiveSection: PSPanelKey = 'registry';
 
-  /** @deprecated Use {@link ActiveSection}. */
-  public get activeSection(): PSPanelKey {
-    return this.ActiveSection;
-  }
-  /** @deprecated Use {@link ActiveSection}. */
-  public set activeSection(value: PSPanelKey) {
-    this.ActiveSection = value;
-  }
-  public readonly sections: readonly PSSection[] = MODELS_SECTIONS;
+  /** The Models app's sections (the registry and production), in nav order. */
+  public readonly Sections: readonly PSSection[] = MODELS_SECTIONS;
+  /** Whether the tab's query params reached {@link OnQueryParamsChanged} (then the saved ones are not re-applied). */
+  private queryParamsDelivered = false;
+
   public initialModelId?: string;  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
   public IsNavCollapsed = false;
 
-  /** @deprecated Use {@link IsNavCollapsed}. */
-  public get isNavCollapsed() {
-    return this.IsNavCollapsed;
-  }
-  /** @deprecated Use {@link IsNavCollapsed}. */
-  public set isNavCollapsed(value) {
-    this.IsNavCollapsed = value;
-  }
   public NavSizePct = 14;
 
-  /** @deprecated Use {@link NavSizePct}. */
-  public get navSizePct() {
-    return this.NavSizePct;
-  }
-  /** @deprecated Use {@link NavSizePct}. */
-  public set navSizePct(value) {
-    this.NavSizePct = value;
-  }
   public ContentSizePct = 86;
-
-  /** @deprecated Use {@link ContentSizePct}. */
-  public get contentSizePct() {
-    return this.ContentSizePct;
-  }
-  /** @deprecated Use {@link ContentSizePct}. */
-  public set contentSizePct(value) {
-    this.ContentSizePct = value;
-  }
 
   override ngOnInit(): void {
     super.ngOnInit();
-    const qp = this.GetQueryParams();
-    const initial = qp['section'] as PSPanelKey | undefined;
-    if (initial && hasSection(this.sections, initial)) this.ActiveSection = initial;
-    if (qp['modelId']) this.initialModelId = qp['modelId'];
+    // The base subscription replays the tab's current params through OnQueryParamsChanged while it subscribes; a
+    // workspace-restored tab's Data still holds the params it was saved with, so they apply only when nothing was
+    // delivered (a deep link to another model must win over the saved one, OF4-50).
+    if (!this.queryParamsDelivered) {
+      const qp = this.GetQueryParams();
+      const initial = qp['section'] as PSPanelKey | undefined;
+      if (initial && HasSection(this.Sections, initial)) this.ActiveSection = initial;
+      if (qp['modelId']) this.initialModelId = qp['modelId'];
+    }
     this.loadLayoutPrefs();
   }
 
@@ -186,11 +163,6 @@ export class PSModelsResourceComponent extends PSResourceBase {
     this.IsNavCollapsed = !this.IsNavCollapsed;
     this.saveLayoutPrefs();
     this.cdrLocal.detectChanges();
-  }
-
-  /** @deprecated Use {@link ToggleNav}. */
-  public toggleNav(): void {
-    return this.ToggleNav();
   }
 
   public OnSplitDragEnd(sizes: readonly (number | '*')[]): void {
@@ -201,25 +173,17 @@ export class PSModelsResourceComponent extends PSResourceBase {
     }
   }
 
-  /** @deprecated Use {@link OnSplitDragEnd}. */
-  public onSplitDragEnd(sizes: readonly (number | '*')[]): void {
-    return this.OnSplitDragEnd(sizes);
-  }
-
+  /** Restores the saved nav layout; an absent, malformed or non-object setting leaves the defaults. */
   private loadLayoutPrefs(): void {
-    const raw = UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.models.layout');
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (typeof parsed.navSizePct === 'number' && parsed.navSizePct >= 10 && parsed.navSizePct <= 35) {
-          this.NavSizePct = parsed.navSizePct;
-          this.ContentSizePct = 100 - parsed.navSizePct;
-        }
-        if (typeof parsed.isNavCollapsed === 'boolean') {
-          this.IsNavCollapsed = parsed.isNavCollapsed;
-        }
-      } catch {}
+    const parsed = JsonParse.ParseJsonText(UserInfoEngine.Instance.GetSetting('mj.predictiveStudio.models.layout'), 'mj.predictiveStudio.models.layout');
+    if (parsed.Ok === false || !JsonParse.IsJsonObject(parsed.Value)) return;
+    const navSizePct = JsonParse.JsonNumber(parsed.Value, 'navSizePct');
+    if (navSizePct !== null && navSizePct >= 10 && navSizePct <= 35) {
+      this.NavSizePct = navSizePct;
+      this.ContentSizePct = 100 - navSizePct;
     }
+    const isNavCollapsed = JsonParse.JsonBoolean(parsed.Value, 'isNavCollapsed');
+    if (isNavCollapsed !== null) this.IsNavCollapsed = isNavCollapsed;
   }
 
   private saveLayoutPrefs(): void {
@@ -232,14 +196,15 @@ export class PSModelsResourceComponent extends PSResourceBase {
   }
 
   protected override async OnQueryParamsChanged(params: Record<string, string>, _source: 'popstate' | 'deeplink'): Promise<void> {
+    this.queryParamsDelivered = true;
     const next = params['section'] as PSPanelKey | undefined;
-    if (next && next !== this.ActiveSection && hasSection(this.sections, next)) {
+    if (next && next !== this.ActiveSection && HasSection(this.Sections, next)) {
       this.ActiveSection = next;
     }
     if (params['modelId']) {
       this.initialModelId = params['modelId'];
       if (this.engine && !this.engine.Models.some((m) => UUIDsEqual(m.ID, params['modelId']))) {
-        await this.engine.Config(true, this.ProviderToUse.CurrentUser ?? undefined, this.ProviderToUse);
+        await this.engine.Config(true, this.ProviderToUse.CurrentUser || undefined, this.ProviderToUse);
       }
     }
     this.cdrLocal.detectChanges();
@@ -248,10 +213,10 @@ export class PSModelsResourceComponent extends PSResourceBase {
   /** Deep agent context for the Models door: active section + trained-model lifecycle counts. */
   protected override extraAgentContext(): Record<string, unknown> {
     const models = this.engine.Models;
-    return buildModelsAgentContext({
+    return BuildModelsAgentContext({
       ActiveSection: this.ActiveSection,
       ActiveSectionLabel: this.ActiveLabel,
-      SectionLabels: this.sections.map((s) => s.label),
+      SectionLabels: this.Sections.map((s) => s.label),
       TotalModelCount: models.length,
       PublishedModelCount: this.engine.PublishedModels.length,
       DraftModelCount: models.filter((m) => m.Status === 'Draft').length,
@@ -273,34 +238,21 @@ export class PSModelsResourceComponent extends PSResourceBase {
         Handler: async (params: Record<string, unknown>) => {
           const check = validateStringParam(params['section'], 'section');
           if (!check.ok) return check.result;
-          const candidates = this.sections.map((s) => ({ ID: s.key, Name: s.label }));
-          const match = resolvePSRecord(check.value, candidates);
-          if (!match) return { Success: false, ErrorMessage: buildPSNotFoundError(check.value, candidates, 'section') };
-          this.selectSection(match.ID as PSPanelKey);
+          const candidates = this.Sections.map((s) => ({ ID: s.key, Name: s.label }));
+          const match = ResolvePSRecord(check.value, candidates);
+          if (!match) return { Success: false, ErrorMessage: BuildPSNotFoundError(check.value, candidates, 'section') };
+          this.SelectSection(match.ID as PSPanelKey);
           return { Success: true, Data: { activeSection: match.Name } };
         },
       },
     ]);
   }
 
-  public get Groups(): string[] { return sectionGroups(this.sections); }
+  public get Groups(): string[] { return SectionGroups(this.Sections); }
 
-  /** @deprecated Use {@link Groups}. */
-  public get groups(): string[] {
-    return this.Groups;
-  }
-  public ItemsForGroup(group: string): PSSection[] { return sectionsInGroup(this.sections, group); }
+  public ItemsForGroup(group: string): PSSection[] { return SectionsInGroup(this.Sections, group); }
 
-  /** @deprecated Use {@link ItemsForGroup}. */
-  public itemsForGroup(group: string): PSSection[] {
-    return this.ItemsForGroup(group);
-  }
-  public get ActiveLabel(): string { return sectionLabel(this.sections, this.ActiveSection); }
-
-  /** @deprecated Use {@link ActiveLabel}. */
-  public get activeLabel(): string {
-    return this.ActiveLabel;
-  }
+  public get ActiveLabel(): string { return SectionLabel(this.Sections, this.ActiveSection); }
 
   /** Section-specific subtitle for the interior header. */
   public get ActiveSubtitle(): string {
@@ -308,15 +260,10 @@ export class PSModelsResourceComponent extends PSResourceBase {
       registry: 'Versioned trained models, their metrics, and lineage.',
       production: "What's scoring live, and its recent runs.",
     };
-    return map[this.ActiveSection] ?? '';
+    return map[this.ActiveSection] || '';
   }
 
-  /** @deprecated Use {@link ActiveSubtitle}. */
-  public get activeSubtitle(): string {
-    return this.ActiveSubtitle;
-  }
-
-  public selectSection(key: PSPanelKey): void {
+  public SelectSection(key: PSPanelKey): void {
     if (this.ActiveSection === key) return;
     this.ActiveSection = key;
     this.UpdateQueryParams({ section: key });

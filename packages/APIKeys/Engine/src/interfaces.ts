@@ -367,7 +367,10 @@ export interface APIKeyEngineConfig {
     loggingEnabled?: boolean;
     /** Default behavior when key has no scopes (default: 'allow') */
     defaultBehaviorNoScopes?: 'allow' | 'deny';
-    /** Cache TTL in milliseconds for scope rules (default: 60000) */
+    /**
+     * Cache TTL in milliseconds (default: 60000). Bounds the key and user validation caches and
+     * the timed re-read of the scope, application and key-binding tables. 0 disables both.
+     */
     scopeCacheTTLMs?: number;
     /**
      * API key generation parameters (prefix, entropy, encoding, hash algorithm).

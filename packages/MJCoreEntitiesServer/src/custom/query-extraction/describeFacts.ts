@@ -13,6 +13,8 @@ export interface DescribedOutput {
     readonly Columns: readonly DescribedColumn[];
     /** Columns only some renders produce: the render that first produced each, or one that did not return it. */
     readonly BranchOnlyColumns: readonly string[];
+    /** Lower-cased column names that were absent from at least one described branch variant. */
+    readonly BranchOnlyColumnNames?: ReadonlySet<string>;
     /** Output names a single render returns more than once (case-insensitive). */
     readonly DuplicateNames: readonly string[];
     /** Why the output could not be described (a render or the server failed); `null` on success. */
@@ -41,6 +43,7 @@ export async function DescribeQueryOutput(input: QueryExtractionInput, template:
     const renders = template.Tokens.HasTemplate ? renderAssignments(template) : [null];
     const columns: DescribedColumn[] = [];
     const branchOnly: string[] = [];
+    const branchOnlyNames = new Set<string>();
     const duplicates = new Set<string>();
     const seenSQL = new Set<string>();
     for (const [index, values] of renders.entries()) {
@@ -51,10 +54,10 @@ export async function DescribeQueryOutput(input: QueryExtractionInput, template:
         const described = await input.Describe(WithoutStatementSemicolons(rendered.SQL, input));
         if (!described.Success) return failure(`The database server could not describe the query: ${described.Diagnostics.join('; ') || 'no reason given'}`);
         for (const name of duplicateNames(described.Columns)) duplicates.add(name);
-        if (index > 0) noteMissingColumns(columns, described.Columns, index, branchOnly);
-        mergeColumns(columns, described.Columns, index, branchOnly);
+        if (index > 0) noteMissingColumns(columns, described.Columns, index, branchOnly, branchOnlyNames);
+        mergeColumns(columns, described.Columns, index, branchOnly, branchOnlyNames);
     }
-    return { Columns: columns, BranchOnlyColumns: branchOnly, DuplicateNames: [...duplicates], Failure: null };
+    return { Columns: columns, BranchOnlyColumns: branchOnly, BranchOnlyColumnNames: branchOnlyNames, DuplicateNames: [...duplicates], Failure: null };
 }
 
 /**
@@ -73,25 +76,33 @@ export function WithoutStatementSemicolons(sql: string, input: Pick<QueryExtract
 }
 
 function failure(message: string): DescribedOutput {
-    return { Columns: [], BranchOnlyColumns: [], DuplicateNames: [], Failure: message };
+    return { Columns: [], BranchOnlyColumns: [], BranchOnlyColumnNames: new Set<string>(), DuplicateNames: [], Failure: message };
 }
 
 /** Appends the columns of render `index` not yet in the union. */
-function mergeColumns(union: DescribedColumn[], columns: readonly DescribedColumn[], index: number, branchOnly: string[]): void {
+function mergeColumns(union: DescribedColumn[], columns: readonly DescribedColumn[], index: number, branchOnly: string[], branchOnlyNames: Set<string>): void {
     const known = new Set(union.map(c => c.Name.toLowerCase()));
     for (const column of columns) {
-        if (known.has(column.Name.toLowerCase())) continue;
-        known.add(column.Name.toLowerCase());
+        const lower = column.Name.toLowerCase();
+        if (known.has(lower)) continue;
+        known.add(lower);
         union.push(column);
-        if (index > 0) branchOnly.push(`${column.Name} (render ${index})`);
+        if (index > 0) {
+            branchOnly.push(`${column.Name} (render ${index})`);
+            branchOnlyNames.add(lower);
+        }
     }
 }
 
 /** Notes the columns of the union so far that render `index` does not return (a column only the base branch returns). */
-function noteMissingColumns(union: readonly DescribedColumn[], columns: readonly DescribedColumn[], index: number, branchOnly: string[]): void {
+function noteMissingColumns(union: readonly DescribedColumn[], columns: readonly DescribedColumn[], index: number, branchOnly: string[], branchOnlyNames: Set<string>): void {
     const returned = new Set(columns.map(c => c.Name.toLowerCase()));
     for (const column of union) {
-        if (!returned.has(column.Name.toLowerCase())) branchOnly.push(`${column.Name} (not in render ${index})`);
+        const lower = column.Name.toLowerCase();
+        if (!returned.has(lower)) {
+            branchOnly.push(`${column.Name} (not in render ${index})`);
+            branchOnlyNames.add(lower);
+        }
     }
 }
 

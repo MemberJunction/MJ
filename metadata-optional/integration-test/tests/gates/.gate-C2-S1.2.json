@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C2 -> S1.2",
+    "Description": "Gate G2.21 (phase 2, dataset C2, criterion S1.2): on C2 with a declared capacity of 150 reviews a year, precision among the top-scored claims is reported with its 95% interval (value inside it) beside the holdout base rate 151/7,500, 1 of 1. It fails when the trainer result omits precision at capacity (not reported).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G2.21\",\"owner:PR3\",\"phase:2\",\"dataset:C2\",\"criterion:S1.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Precision at a capacity of 150 a year is reported with its 95% interval beside the base rate 151/7,500 (1 of 1 pytest case passes)."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c2-s1-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "4302A185-FCCB-442F-BF9B-089C7A24A4CC"
+  }
+}

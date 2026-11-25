@@ -167,8 +167,48 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
     /** When true, the server only permits the system user to invoke this operation. */
     public readonly RequiresSystemUser?: boolean;
 
+    /**
+     * When true, scope-limited sessions — anonymous magic-link guests and resource-scoped
+     * magic-link sessions — may invoke this operation. The server refuses them otherwise.
+     *
+     * A session's scope is enforced by row-level security on entity reads, which does not bound
+     * what an operation does. An operation that opts in must therefore check the caller's scope
+     * itself in {@link Authorize}: compare `user.MagicLinkScope` (or the guest's identity) with
+     * the record the input names, and return false when they do not match.
+     */
+    public readonly AllowScopeLimitedPrincipals?: boolean;
+
     /** Whether this operation is a plain `Sync` request/response or a `LongRunning` run. */
     public readonly ExecutionMode: RemoteOpExecMode = 'Sync';
+
+    /**
+     * Whether executing this Remote Operation on the server establishes an authorized
+     * `ServerOperationScope` for entities configured with `WriteAuthority = 'ServerOperationOnly'`.
+     *
+     * Domain operations default to `true`. Generic client CRUD transports (such as
+     * `SaveEntityGraphOperation`) override this to `false` so clients cannot bypass
+     * `ServerOperationOnly` gates by wrapping entity writes in a generic graph mutation.
+     */
+    public get GrantsServerWriteAuthority(): boolean {
+        return true;
+    }
+
+    /**
+     * When `true`, {@link ExecuteRemoteOperationResolver} refuses scoped/anonymous Magic Link
+     * sessions (`IsMagicLinkAnonymous || MagicLinkScope`) before invoking this operation.
+     * Defaults to `false` so Open Apps visitor operations can execute over scoped Magic Links;
+     * artifact and other high-privilege operations override this to `true`.
+     */
+    public get DisallowMagicLinkScope(): boolean {
+        return false;
+    }
+
+    /**
+     * Optional allow-list of entity names (or `['*']`) that this Remote Operation is authorized
+     * to mutate when `GrantsServerWriteAuthority` is `true`. Forwarded into the active
+     * `ServerOperationScopeFrame.allowedEntities` by `DispatchRemoteOperationInProcess`.
+     */
+    public readonly AuthorizedWriteEntities?: ReadonlyArray<string>;
 
     /**
      * Optional structural contract fingerprint emitted by CodeGen (or set by a hand-authored
@@ -188,6 +228,19 @@ export abstract class BaseRemotableOperation<TInput = unknown, TOutput = unknown
 
     /** Optional JSON-Schema object describing `TInput` when exposed as an Agent or MCP tool. */
     public readonly ToolInputSchema?: Record<string, RemoteOpToolSchemaValue>;
+
+    /**
+     * Returns the resource identifiers checked against API-key scope authorization when
+     * {@link RequiredScope} is set (default: `[this.OperationKey]`). Operations that target
+     * specific resources (artifacts, collections, etc.) override this to declare all authoritative
+     * scope resource IDs from the validated input rather than relying on heuristic field guessing.
+     */
+    public GetScopeResourceIds(
+        _input: TInput,
+        _context?: { provider?: IMetadataProvider; user?: UserInfo },
+    ): string[] | Promise<string[]> {
+        return [this.OperationKey];
+    }
 
     /**
      * Discovers all ClassFactory-registered {@link BaseRemotableOperation} subclasses that opt into

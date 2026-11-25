@@ -6,10 +6,14 @@
 import { describe, it, expect } from 'vitest';
 import { AIPromptRunner } from '../AIPromptRunner';
 import { NativeToolCallingDecision } from '../nativeToolCallingGate';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
 
 class TestRunner extends AIPromptRunner {
     public Apply(data: Record<string, unknown> | undefined, decision: NativeToolCallingDecision | null): Record<string, unknown> {
         return this.ApplyNativeTemplateFlags(data, decision);
+    }
+    public Finalize(params: AIPromptParams, decision: NativeToolCallingDecision | null): Promise<void> {
+        return (this as unknown as { finalizeTemplateData(p: AIPromptParams, d: NativeToolCallingDecision | null): Promise<void> }).finalizeTemplateData(params, decision);
     }
 }
 
@@ -41,5 +45,32 @@ describe('ApplyNativeTemplateFlags', () => {
             _NATIVE_TOOL_CALLING: true,
             _NATIVE_CONTROL_FLOW: 'implicit'
         });
+    });
+});
+
+describe('OnTemplateDataFinalized — a caller that rendered from the data before a model was selected', () => {
+    const runner = new TestRunner();
+    const decision: NativeToolCallingDecision = { useNativeTools: true, mode: 'NativeImplicit', controlFlow: 'implicit', toolResults: true };
+
+    it('is called once the native flags are set, so it can render again with them', async () => {
+        const params = new AIPromptParams();
+        params.data = { agentName: 'Sage' };
+        const seen: Array<Record<string, unknown> | undefined> = [];
+        params.OnTemplateDataFinalized = async (finalParams) => {
+            seen.push({ ...finalParams.data });
+            finalParams.PreRenderedChildTemplates = { agentPrompt: 'rendered for the native path' };
+        };
+
+        await runner.Finalize(params, decision);
+
+        expect(seen).toEqual([{ agentName: 'Sage', _NATIVE_TOOL_CALLING: true, _NATIVE_CONTROL_FLOW: 'implicit' }]);
+        // The runner reads the pre-rendered children after the callback, so it sees the new render.
+        expect(params.PreRenderedChildTemplates).toEqual({ agentPrompt: 'rendered for the native path' });
+    });
+
+    it('is optional', async () => {
+        const params = new AIPromptParams();
+        await runner.Finalize(params, null);
+        expect(params.data).toEqual({ _NATIVE_TOOL_CALLING: false, _NATIVE_CONTROL_FLOW: 'envelope' });
     });
 });

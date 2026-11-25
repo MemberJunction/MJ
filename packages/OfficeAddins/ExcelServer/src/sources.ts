@@ -14,14 +14,19 @@ import {
     EntityFieldTSType,
     EntityInfo,
     IMetadataProvider,
-    QueryFieldInfo,
-    QueryInfo,
-    QueryParameterInfo,
+    RunView,
     TypeScriptTypeFromSQLType,
     UserInfo,
 } from '@memberjunction/core';
-import { MJUserViewEntityExtended, ViewColumnInfo } from '@memberjunction/core-entities';
-import { IsValidUUID, UUIDsEqual } from '@memberjunction/global';
+import {
+    MJQueryEntityExtended,
+    MJQueryFieldEntity,
+    MJQueryParameterEntity,
+    MJUserViewEntityExtended,
+    QueryEngine,
+    ViewColumnInfo,
+} from '@memberjunction/core-entities';
+import { EscapeSQLString, IsValidUUID, UUIDsEqual } from '@memberjunction/global';
 import {
     EXCEL_MAX_SOURCES_PER_WORKBOOK,
     ExcelColumnDataType,
@@ -81,6 +86,88 @@ export async function ResolveSingleWorkbookSource(
         case 'Query':
             return resolveQuery(request, provider, user);
     }
+}
+
+/**
+ * Resolves a saved view on `entity` by UUID or view `Name` (or falls back to `entity`'s default columns
+ * when `viewNameOrId` is empty or `'(Default)'`), verifying `view.EntityID` matches `entity.ID` (`A5`).
+ */
+export async function ResolveViewByNameOrId(
+    entity: EntityInfo,
+    viewNameOrId: string | undefined,
+    provider: IMetadataProvider,
+    user: UserInfo,
+): Promise<ExcelResolvedWorkbookSource> {
+    if (!entity || entity.IncludeInAPI === false || entity.Status === 'Disabled' || !entity.GetUserPermisions(user).CanRead) {
+        throw new ExcelSourceError('That entity doesn\'t exist, or you don\'t have access to read it.');
+    }
+
+    const ref = (viewNameOrId ?? '').trim();
+    if (!ref || ref.toLowerCase() === '(default)') {
+        return resolveEntity(entity.ID, provider, user);
+    }
+
+    let resolvedViewId: string;
+    if (IsValidUUID(ref)) {
+        resolvedViewId = ref;
+    } else {
+        const rv = RunView.FromMetadataProvider(provider);
+        const lookupRes = await rv.RunView<{
+            ID: string;
+            Name: string;
+            EntityID: string;
+            UserID?: string;
+            IsShared?: boolean;
+        }>(
+            {
+                EntityName: 'MJ: User Views',
+                ExtraFilter: `EntityID='${EscapeSQLString(entity.ID)}' AND Name='${EscapeSQLString(ref)}'`,
+                Fields: ['ID', 'Name', 'EntityID', 'UserID', 'IsShared'],
+                MaxRows: 20,
+                SkipTotalRowCount: true,
+                ResultType: 'simple',
+            },
+            user,
+        );
+        const candidates = lookupRes.Success ? (lookupRes.Results ?? []) : [];
+        const preferred =
+            candidates.find(c => c.UserID && UUIDsEqual(c.UserID, user.ID)) ??
+            candidates.find(c => Boolean(c.IsShared)) ??
+            candidates[0];
+        if (!preferred) {
+            throw new ExcelSourceError(`That saved view "${ref}" doesn't exist on "${entity.DisplayNameOrName}", or you don't have access to it.`);
+        }
+        resolvedViewId = preferred.ID;
+    }
+
+    const view = await provider.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', user);
+    const loaded = await view.Load(resolvedViewId);
+    if (!loaded || !view.UserCanView) {
+        throw new ExcelSourceError('That saved view doesn\'t exist, or you don\'t have access to it.');
+    }
+
+    const viewEntityId = view.EntityID || view.ViewEntityInfo?.ID || '';
+    if (viewEntityId && !UUIDsEqual(viewEntityId, entity.ID)) {
+        throw new ExcelSourceError(`The saved view "${view.Name}" does not belong to entity "${entity.DisplayNameOrName}".`);
+    }
+
+    const effectiveEntity = view.ViewEntityInfo ?? entity;
+    if (!effectiveEntity.GetUserPermisions(user).CanRead) {
+        throw new ExcelSourceError(`You don't have access to the data in the view "${view.Name}".`);
+    }
+
+    const columns = viewColumns(view.Columns, effectiveEntity.Fields);
+    if (columns.length === 0) {
+        throw new ExcelSourceError(`The view "${view.Name}" has no columns to show.`);
+    }
+
+    return {
+        Kind: 'View',
+        ID: view.ID,
+        Name: view.Name,
+        EntityName: entity.Name,
+        Columns: columns,
+    };
 }
 
 /** The data type the pane uses for an entity field's values. */
@@ -211,13 +298,16 @@ function orderOf(column: ViewColumnInfo): number {
     return typeof column.orderIndex === 'number' ? column.orderIndex : Number.MAX_SAFE_INTEGER;
 }
 
-function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): ExcelResolvedWorkbookSource {
-    // Roles-only check (QueryInfo.UserCanRun). No rows are read here; GetQueryData runs the full check on refresh.
-    const query = provider.Queries.find(q => UUIDsEqual(q.ID, request.ID));
-    if (!query || !query.UserCanRun(user)) {
+async function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataProvider, user: UserInfo): Promise<ExcelResolvedWorkbookSource> {
+    // Query roles plus read access to the entities it reads (UserCanRun). No rows are read here;
+    // GetQueryData runs the full check on refresh.
+    const engine = QueryEngine.GetProviderInstance(provider, QueryEngine) as QueryEngine;
+    await engine.Config(false, user, provider);
+    const query = engine.FindQueryByID(request.ID);
+    if (!query || !query.UserCanRun(user).canRun) {
         throw new ExcelSourceError('That saved query doesn\'t exist, or you don\'t have access to it.');
     }
-    const source: ExcelResolvedWorkbookSource = { Kind: 'Query', ID: query.ID, Name: query.Name, Columns: queryColumns(query.Fields) };
+    const source: ExcelResolvedWorkbookSource = { Kind: 'Query', ID: query.ID, Name: query.Name, Columns: queryColumns(query.QueryFields) };
     const parameters = checkParameters(query, request.Parameters);
     if (parameters) {
         source.Parameters = parameters;
@@ -225,20 +315,20 @@ function resolveQuery(request: ExcelWorkbookSourceRequest, provider: IMetadataPr
     return source;
 }
 
-function queryColumns(fields: QueryFieldInfo[]): ExcelSourceColumn[] {
+function queryColumns(fields: MJQueryFieldEntity[]): ExcelSourceColumn[] {
     return [...fields]
         .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0))
         .map(f => ({ Name: f.Name, Header: f.Name, DataType: DataTypeForSQLType(f.SQLBaseType) }));
 }
 
 /** Keeps only the query's own, caller-settable parameters, under their canonical names. */
-function checkParameters(query: QueryInfo, supplied: Record<string, ExcelParameterValue> | undefined): Record<string, ExcelParameterValue> | undefined {
+function checkParameters(query: MJQueryEntityExtended, supplied: Record<string, ExcelParameterValue> | undefined): Record<string, ExcelParameterValue> | undefined {
     if (!supplied || Object.keys(supplied).length === 0) {
         return undefined;
     }
     const result: Record<string, ExcelParameterValue> = {};
     for (const [name, value] of Object.entries(supplied)) {
-        const parameter = findParameter(query.Parameters, name);
+        const parameter = findParameter(query.QueryParameters, name);
         if (!parameter) {
             throw new ExcelSourceError(`The query "${query.Name}" has no parameter "${name}".`);
         }
@@ -253,7 +343,7 @@ function checkParameters(query: QueryInfo, supplied: Record<string, ExcelParamet
     return result;
 }
 
-function findParameter(parameters: QueryParameterInfo[], name: string): QueryParameterInfo | undefined {
+function findParameter(parameters: MJQueryParameterEntity[], name: string): MJQueryParameterEntity | undefined {
     const wanted = name.trim().toLowerCase();
     return parameters.find(p => p.Name.trim().toLowerCase() === wanted);
 }

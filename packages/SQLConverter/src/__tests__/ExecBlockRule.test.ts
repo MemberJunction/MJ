@@ -174,6 +174,87 @@ describe('ExecBlockRule — mj-sync create-or-update (IF NOT EXISTS … ELSE …
     expect(out).not.toMatch(/\[__mj\]|\bEXEC\b|\bBEGIN\s*\n\s*EXEC/);
     expect(out).not.toContain('SKIPPED');
   });
+
+  /** A create-or-update block whose guard is not the `[c] = @v` shape the rule converts. */
+  const unconvertibleGuard = upsert.replace('[ID] = @ID_af78', '[ID] = @ID_af78 OR [Name] = @Name_af78');
+
+  describe('comments after the closing END (#6337)', () => {
+    const footer = [
+      '',
+      '',
+      '-- End of SQL Logging Session',
+      '-- Session ID: d342985b-e1d0-4880-9a4c-d62a692eba26',
+      '-- Total Statements: 14',
+      '',
+    ].join('\n');
+
+    it('converts a last save followed by the session footer, and keeps the footer', () => {
+      const out = convert(`${upsert}\n${footer}`);
+      expect(out).toMatch(/THEN[\s\S]*PERFORM __mj\."spCreateAIVendor"\([\s\S]*ELSE[\s\S]*PERFORM __mj\."spUpdateAIVendor"\([\s\S]*END IF;/);
+      expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
+      expect(out).toContain('-- End of SQL Logging Session');
+    });
+
+    it('converts a save whose closing END carries a comment on the same line', () => {
+      const out = convert(`${upsert} -- last save`);
+      expect(out).toMatch(/PERFORM __mj\."spUpdateAIVendor"\(/);
+      expect(out).not.toMatch(/\bEXEC\b|SKIPPED/);
+    });
+
+    it('stays linear on a dashed comment after the END when a statement follows it', () => {
+      const started = performance.now();
+      const out = convert(`${upsert}\n-- ${'-'.repeat(46)}\nSELECT 1`);
+      expect(performance.now() - started).toBeLessThan(2000);
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+    });
+
+    it('leaves a batch of comments alone', () => {
+      expect(convert('-- End of SQL Logging Session\n-- Duration: 5833ms')).toBe('-- End of SQL Logging Session\n-- Duration: 5833ms');
+    });
+
+    it('leaves a block comment alone, with line comments around it or a save after it', () => {
+      const banner = '/*****\n* BEGIN METADATA SYNC\n*****/';
+      expect(convert(`-- before\n${banner}\n-- after`)).toBe(`-- before\n${banner}\n-- after`);
+
+      const out = convert(`${banner}\n\n${upsert}`);
+      expect(out).toContain(banner);
+      expect(out).toMatch(/PERFORM __mj\."spUpdateAIVendor"\(/);
+      expect(out).not.toContain('SKIPPED');
+    });
+
+    it('does not take an unterminated block comment for a comment', () => {
+      expect(convert('/* never closed\nSELECT 1')).toContain('-- SKIPPED: EXEC block');
+    });
+  });
+
+  describe('a block that is not convertible as a whole (#6337)', () => {
+    it('skips it instead of emitting a DO block holding raw T-SQL', () => {
+      const out = convert(unconvertibleGuard);
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+      expect(out).not.toMatch(/^DO \$/m);
+      expect(out).not.toMatch(/^\s*BEGIN\s*$/m);
+    });
+
+    it('skips a parsed create-or-update that uses an undeclared variable', () => {
+      const out = convert(upsert.replace('@ID_af78 UNIQUEIDENTIFIER,\n', ''));
+      expect(out).toContain('-- SKIPPED: EXEC block (unparseable upsert)');
+      expect(out).not.toMatch(/^DO \$/m);
+    });
+
+    it('does not mistake the guard text inside a string value for a guard', () => {
+      const out = convert([
+        'DECLARE @ID_ab12 UNIQUEIDENTIFIER,',
+        '@Notes_ab12 NVARCHAR(MAX)',
+        'SET',
+        "  @ID_ab12 = '5F935B01-EC5F-4409-AADC-8063A94936D6'",
+        'SET',
+        "  @Notes_ab12 = N'Wrap it: IF NOT EXISTS (SELECT 1 FROM t) BEGIN x END' EXEC [__mj].spUpdateWidget @ID = @ID_ab12,",
+        '  @Notes = @Notes_ab12',
+      ].join('\n'));
+      expect(out).toMatch(/PERFORM __mj\."spUpdateWidget"\(/);
+      expect(out).not.toContain('SKIPPED');
+    });
+  });
 });
 
 /**
@@ -201,5 +282,84 @@ describe('ExecBlockRule — SET value holding a subquery (#6074)', () => {
 
   it('leaves brackets inside a string literal alone', () => {
     expect(convert(SUBQUERY_BLOCK)).toContain("p_Name_ab12 := 'see [__mj].[Widget]';");
+  });
+});
+
+// The last save of an mj-sync log carries the logger's session trailer after its `END;`. The
+// upsert parser needs the block to end in `END`, so with the trailer attached the block fell to
+// the single-EXEC path and came out as half-converted T-SQL (issue #6097). The same fixture pins
+// that BIT and numeric SETs survive the upsert form (issue #5918).
+describe('ExecBlockRule — last save with the logger trailer (issues #6097, #5918)', () => {
+  const lastSave = [
+    '-- Save MJ: AI Models (core SP call only)',
+    'DECLARE @ID_a4e2b58a01b1 UNIQUEIDENTIFIER,',
+    '@Name_a4e2b58a01b1 NVARCHAR(50),',
+    '@PowerRank_a4e2b58a01b1 INT,',
+    '@IsActive_a4e2b58a01b1 BIT,',
+    '@InputCost_a4e2b58a01b1 DECIMAL(18, 6)',
+    'SET',
+    "  @ID_a4e2b58a01b1 = '7955CA7C-9599-48AB-B62F-519228ECE31E'",
+    'SET',
+    "  @Name_a4e2b58a01b1 = N'Placeholder Model'",
+    'SET',
+    '  @PowerRank_a4e2b58a01b1 = 150',
+    'SET',
+    '  @IsActive_a4e2b58a01b1 = 1',
+    'SET',
+    '  @InputCost_a4e2b58a01b1 = 0.125 IF NOT EXISTS (',
+    '    SELECT 1 FROM [__mj].[AIModel] WHERE [ID] = @ID_a4e2b58a01b1',
+    '  )',
+    'BEGIN',
+    'EXEC [__mj].spCreateAIModel @ID = @ID_a4e2b58a01b1,',
+    '  @Name = @Name_a4e2b58a01b1,',
+    '  @PowerRank = @PowerRank_a4e2b58a01b1,',
+    '  @IsActive = @IsActive_a4e2b58a01b1,',
+    '  @InputCost = @InputCost_a4e2b58a01b1',
+    'END ELSE',
+    'BEGIN',
+    'EXEC [__mj].spUpdateAIModel @ID = @ID_a4e2b58a01b1,',
+    '  @Name = @Name_a4e2b58a01b1,',
+    '  @PowerRank = @PowerRank_a4e2b58a01b1,',
+    '  @IsActive = @IsActive_a4e2b58a01b1,',
+    '  @InputCost = @InputCost_a4e2b58a01b1',
+    'END;',
+    '',
+    '',
+    '-- End of SQL Logging Session',
+    '-- Session ID: 00000000-0000-0000-0000-000000000000',
+    '-- Total Statements: 1',
+  ].join('\n');
+
+  it('converts the block as an upsert, with no T-SQL left', () => {
+    const out = convert(lastSave);
+    expect(out).toMatch(/IF NOT EXISTS \(SELECT 1 FROM __mj\."AIModel" WHERE "ID" = p_ID_a4e2b58a01b1\) THEN/);
+    expect(out).toContain('END IF;');
+    expect(out).not.toMatch(/\bBEGIN\s*\n\s*EXEC|\[__mj\]/);
+    expect(out).not.toContain('SKIPPED');
+  });
+
+  it('keeps the trailer, after the converted block', () => {
+    const out = convert(lastSave);
+    expect(out.indexOf('-- End of SQL Logging Session')).toBeGreaterThan(out.indexOf('END $mj$;'));
+    expect(out).toContain('-- Total Statements: 1');
+  });
+
+  it('keeps BIT, integer and decimal values (issue #5918)', () => {
+    const out = convert(lastSave);
+    expect(out).toContain('p_IsActive_a4e2b58a01b1 := TRUE;');
+    expect(out).toContain('p_PowerRank_a4e2b58a01b1 := 150;');
+    expect(out).toContain('p_InputCost_a4e2b58a01b1 := 0.125;');
+  });
+
+  it("leaves N''x'' inside a stored query's literal alone (issue #5838)", () => {
+    const sql = [
+      'DECLARE @SQL_ab12 NVARCHAR(MAX), @ID_ab12 UNIQUEIDENTIFIER',
+      'SET',
+      "  @SQL_ab12 = N'SELECT ISNULL(a, 0) FROM t WHERE n = N''x'''",
+      'SET',
+      "  @ID_ab12 = '7955CA7C-9599-48AB-B62F-519228ECE31E'",
+      'EXEC [__mj].spUpdateQuery @ID = @ID_ab12, @SQL = @SQL_ab12',
+    ].join('\n');
+    expect(convert(sql)).toContain("p_SQL_ab12 := 'SELECT ISNULL(a, 0) FROM t WHERE n = N''x''';");
   });
 });

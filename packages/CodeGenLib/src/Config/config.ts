@@ -386,6 +386,15 @@ const advancedGenerationSchema = z.object({
    *  — can bound spend, and so that bound is enforced in the one place every call is already
    *  counted rather than estimated after the fact. */
   maxRunCostUSD: z.number().min(0).default(0),
+  /** How Smart Field Identification is answered (`Misc/smart-field-decision.ts`):
+   *  - `Prompt` (default): only the `CodeGen: Smart Field Identification` prompt answers, as before.
+   *  - `Shadow`: the prompt answers; a decision model is asked the same closed-set questions beside
+   *    it, and its run records how far the two agreed (`RunName = 'Shadow: codegen-smart-fields'`).
+   *  - `Decision`: the decision answers, and the prompt runs only when it fails or the answering model
+   *    has no calibration for this use.
+   *  Opt-in: a decision cannot give the prompt's reasons, search predicates or full-text settings, and
+   *  CodeGen's output is committed, so a deployment chooses this deliberately. */
+  smartFieldDecisionMode: z.enum(['Prompt', 'Shadow', 'Decision']).default('Prompt'),
   // NOTE: AIVendor and AIModel have been removed. Model configuration is now per-prompt
   // in the AI Prompts table via the MJ: AI Prompt Models relationship.
   features: advancedGenerationFeatureSchema.array().default(() => CopyDefaultAdvancedGenerationFeatures()),
@@ -744,6 +753,13 @@ const configInfoSchema = z.object({
   ]),
   /** Path to JSON file containing soft PK/FK definitions for tables without database constraints */
   additionalSchemaInfo: z.string().optional(),
+  /**
+   * Remove what CodeGen created from `additionalSchemaInfo` once the file stops declaring it: soft
+   * foreign keys, value lists and organic keys (with their related entities and unused bridge views).
+   * Only tables the file still lists are touched, and only rows CodeGen wrote from the file
+   * (`Source = 'Config'`). Off by default: every run then reports what it would remove (#4535).
+   */
+  retractRemovedSoftKeys: z.boolean().default(false),
 
   /** Entity and field name normalization settings for ALL CAPS database identifiers */
   entityNaming: z.object({
@@ -1144,6 +1160,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
     callTimeoutMS: 90_000,
     stallFailureCircuitThreshold: 3,
     maxRunCostUSD: 0,
+    smartFieldDecisionMode: 'Prompt',
     features: CopyDefaultAdvancedGenerationFeatures(),
   },
   SQLOutput: {

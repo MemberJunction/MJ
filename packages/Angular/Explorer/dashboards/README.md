@@ -80,6 +80,14 @@ graph TD
 
 ### Communication Dashboard
 - Monitor, logs, providers, runs, and template management for entity communications
+- **Compliance & Admin** (`CommunicationComplianceAdminResource`, `CommunicationsAdminDashboardComponent`): administration for [Communications V2](../../../../guides/COMMUNICATIONS_V2_GUIDE.md), in six tabs:
+  - **Gate Simulator**: run the compliance gate for a sender, recipient, preference and message class without sending
+  - **Senders & Permissions**: `MJ: Communication Senders` and who may send as each
+  - **Regimes & Jurisdictions**: enable or disable compliance regimes and review their rules and jurisdictions
+  - **Endpoints & Suppressions**: look up an address, see its status and suppressions, block it, or revoke a suppression
+  - **Policies & Principals**: suppression policies, and the entities registered as message recipients
+  - **Sending Domains & DNS**: register a domain with its provider, show the DNS records to publish, verify, revoke
+- Server-side actions use the `Communications.*` Remote Operations and require Owner privileges or the `Communications: Admin` authorization; the tabs read and edit the underlying entities under normal entity permissions.
 
 ### Testing Dashboard
 - Test execution, analytics, review, and explorer views for MJ's testing framework
@@ -99,13 +107,15 @@ The Knowledge Hub application provides a suite of dashboards for managing vector
 - **Entity document selection**: Pick which entity document to search against
 - **Result cards**: Display matched records with relevance scores and metadata
 
-#### Duplicate Detection Dashboard
-- **Kanban board**: Organizes potential duplicates by status (Pending, Reviewed, Merged, Rejected)
-- **Comparison slide-in**: Side-by-side field diff showing which fields match, differ, or are empty
-- **Merge confirmation**: Dialog showing dependency counts and affected records before executing a merge
-- **Drag-and-drop**: Move duplicate pairs between kanban columns for triage
-- **Threshold controls**: Adjust potential and absolute match thresholds for the run
-- **Progress tracking**: Real-time progress reporting during detection runs
+#### Duplicate Detection Dashboard (`DuplicateDetectionResource`, Knowledge Hub → Duplicates)
+- **Run detection**: Pick an Active entity document and run detection over the whole entity. Creating the `MJ: Duplicate Runs` record starts detection on the server; progress arrives through the `PipelineProgress` GraphQL subscription, with a 15-second database poll as a fallback, and the page reconnects to a run still in progress.
+- **Threshold and reasoning controls**: Potential/Absolute Match sliders and the LLM Reasoning switch and threshold. All of them **save onto the entity document**; they are not one-run overrides.
+- **Kanban board**: One card per source record with all of its candidate matches, in **Pending Review**, **Approved** and **Rejected** columns. Approve, Reject or drag a card to set every match's `ApprovalStatus`. Filters for entity, score range and date range.
+- **Comparison slide-in**: Side-by-side view of the source record and every candidate, with differences-only mode, dependency counts per record, a survivor choice, per-field value selection, and per-candidate **Skip**. When LLM reasoning ran: the AI verdict and confidence, a "disagrees with the vector score" flag, a **Why?** popover with the model's reasoning, and the model's proposed survivor and field values pre-filled.
+- **Merge confirmation**: Dialog listing the survivor, field overrides, dependencies to transfer and records to delete, then `MergeRecords` through the component's provider. Read-only when the entity has `AllowRecordMerge = false`.
+- **Agent context and tools**: `SelectEntityDocument`, `RunDuplicateDetection`, `FilterDuplicatesByEntity`, `SetDuplicateDisplayMode`, `RefreshDuplicateDetection`. Approving, rejecting and merging are deliberately not exposed to the agent.
+
+See the [Duplicate Management Guide](../../../../guides/DUPLICATE_MANAGEMENT_GUIDE.md) for the full workflow, configuration and known limitations.
 
 #### Clustering Dashboard
 - **Scatter plot visualization**: Interactive SVG scatter plot powered by `@memberjunction/ng-clustering`
@@ -124,11 +134,13 @@ Left-navigation tabs:
 - **Pipeline**: Real-time pipeline monitor — stage counts, KPI cards, live feed, and run controls with GraphQL progress subscription
 - **Sources**: CRUD for content sources, source-detail panel, schedule dialog, full classifier config (taxonomy mode, thresholds, budgets) inline, and a dry-run disposition preview
 - **Content Types**: Content type definitions with default embedding model / vector index
-- **Tag Library**: Browse the tag taxonomy with weight visualization and word cloud
-- **Taxonomy**: Tag governance — tree, duplicates, orphans, treemap, audit, plus per-tag **Governance / Synonyms / Scope** editors
-- **Suggestions Inbox**: Human-in-the-loop review queue for ambiguous classifications (approve / merge / reject)
-- **Tag Health**: Automated taxonomy-quality signals (merge candidates, low-usage, wide-node) with triage actions
 - **Run History**: Historical process-run logs with per-source detail
+
+Tag curation lives on the separate **Tags** surface (driver class `Tags`, `src/AI/components/tags/tags-resource.component.ts`), not in Classify:
+- **Overview**: The unique tags across all content sources
+- **Taxonomy**: Tag governance — tree, duplicates, orphans, treemap, audit, plus per-tag **Governance / Synonyms / Scope** editors
+- **Suggestions**: Human-in-the-loop review queue for ambiguous classifications (create as new / merge / reject, with bulk approve / reject)
+- **Health**: Summary cards for the last health run's signals (merge candidates, low usage, wide nodes); each opens Suggestions filtered to that reason
 
 Architecture: the former 5,147-line monolith was decomposed into 6 tab components (`tabs/`) + 4 dialog components (`dialogs/`) + a shared pure layer (`shared/`: types, formatters, dry-run disposition logic). Cacheable metadata is read from existing engines (`KnowledgeHubMetadataEngine`, `TagEngineBase`, `AIEngineBase`); high-volume rows use `RunView` (never cached).
 
@@ -199,7 +211,7 @@ npm install @memberjunction/ng-dashboards
 | `@memberjunction/ng-shared`, `@memberjunction/ng-shared-generic` | Shared services, loading indicators |
 | `@memberjunction/ng-dashboard-viewer` | Dashboard rendering |
 | `@memberjunction/ng-query-viewer` | Query execution and display |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 | `d3` | Data visualization |
 | `codemirror` | Code editing |
 

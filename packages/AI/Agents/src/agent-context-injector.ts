@@ -1,6 +1,6 @@
-import { EntityInfo, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
-import { ToEpochMs, UUIDsEqual } from "@memberjunction/global";
-import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, InjectableNoteStatusSQLList } from "@memberjunction/core-entities";
+import { EntityInfo, IsVerboseLoggingEnabled, LogError, LogStatus, ProjectEntityValueRowsForUser, UserInfo } from "@memberjunction/core";
+import { ToEpochMs, UUIDsEqual, UUIDSet } from "@memberjunction/global";
+import { MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJAIAgentNoteTypeEntity, IsInjectableNoteStatus } from "@memberjunction/core-entities";
 import { AIEngine, NoteEmbeddingMetadata, ExampleEmbeddingMetadata, ExampleMatchResult } from "@memberjunction/aiengine";
 import { SecondaryScopeConfig, SecondaryDimension, SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 import type { MJAIAgentRunStepEntityExtended } from "@memberjunction/ai-core-plus";
@@ -175,7 +175,9 @@ export class AgentContextInjector {
 
         // Build scope pre-filter so FindNearest only returns scope-valid (and, under SharedOnly, shared) candidates
         const scopePreFilter = this.buildScopePreFilter<NoteEmbeddingMetadata>(params, m => m.noteEntity);
-        LogStatus(`AgentContextInjector: primaryScopeEntityId=${params.primaryScopeEntityId}, primaryScopeRecordId=${params.primaryScopeRecordId}, secondaryScopes=${JSON.stringify(params.secondaryScopes)}, secondaryScopeConfig=${JSON.stringify(params.secondaryScopeConfig)}, hasPreFilter=${!!scopePreFilter}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: primaryScopeEntityId=${params.primaryScopeEntityId}, primaryScopeRecordId=${params.primaryScopeRecordId}, secondaryScopes=${JSON.stringify(params.secondaryScopes)}, secondaryScopeConfig=${JSON.stringify(params.secondaryScopeConfig)}, hasPreFilter=${!!scopePreFilter}`);
+        }
 
         // Stage 1: Vector search (scope filtering happens inside FindNearest)
         const matches = await AIEngine.Instance.FindSimilarAgentNotes(
@@ -188,15 +190,19 @@ export class AgentContextInjector {
             scopePreFilter
         );
 
-        LogStatus(`AgentContextInjector: FindSimilarAgentNotes returned ${matches.length} matches: ${matches.map(m => m.note.SecondaryScopes || 'GLOBAL').join(', ')}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: FindSimilarAgentNotes returned ${matches.length} matches: ${matches.map(m => m.note.SecondaryScopes || 'GLOBAL').join(', ')}`);
+        }
 
-        // If no reranker config or disabled, return vector results directly
-        if (!config?.enabled) {
+        // If no reranker config, disabled, or 0-1 matches (nothing to reorder), return vector results directly
+        if (!config?.enabled || matches.length <= 1) {
             return matches.slice(0, params.maxNotes).map(m => m.note);
         }
 
         // Stage 2: Rerank candidates with fallback handling
-        LogStatus(`AgentContextInjector: Reranking ${matches.length} candidates to top ${params.maxNotes}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: Reranking ${matches.length} candidates to top ${params.maxNotes}`);
+        }
         const rerankerService = RerankerService.Instance;
 
         try {
@@ -215,7 +221,9 @@ export class AgentContextInjector {
 
             // Return top N reranked notes
             const result = rerankResult.notes.slice(0, params.maxNotes).map(m => m.note);
-            LogStatus(`AgentContextInjector: Returning ${result.length} notes after reranking`);
+            if (IsVerboseLoggingEnabled()) {
+                LogStatus(`AgentContextInjector: Returning ${result.length} notes after reranking`);
+            }
             return result;
 
         } catch (error) {
@@ -224,7 +232,9 @@ export class AgentContextInjector {
 
             if (config.fallbackOnError) {
                 // Graceful fallback to vector search results (already scope-filtered)
-                LogStatus(`AgentContextInjector: Reranking failed (${message}), falling back to vector search results`);
+                if (IsVerboseLoggingEnabled()) {
+                    LogStatus(`AgentContextInjector: Reranking failed (${message}), falling back to vector search results`);
+                }
                 return matches.slice(0, params.maxNotes).map(m => m.note);
             }
 
@@ -265,9 +275,9 @@ export class AgentContextInjector {
             scopePreFilter
         );
 
-        if (!config) {
-            // Return entities directly from vector service (no database round-trip)
-            return matches.map(m => m.example);
+        if (!config || matches.length <= 1) {
+            // Return entities directly from vector service (no database round-trip or LLM rerank needed)
+            return matches.slice(0, params.maxExamples).map(m => m.example);
         }
         return this.rerankExamples(matches, params, config);
     }
@@ -279,7 +289,9 @@ export class AgentContextInjector {
      * This is not a failure, so it does not depend on fallbackOnError.
      */
     private logEmptyRerank(kind: 'note' | 'example', config: RerankerConfiguration): void {
-        LogStatus(`AgentContextInjector: No ${kind} reached the rerank threshold (${config.minRelevanceThreshold}), keeping the vector search results`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: No ${kind} reached the rerank threshold (${config.minRelevanceThreshold}), keeping the vector search results`);
+        }
     }
 
     /** The observability options a rerank runs under, from the caller's, or none. */
@@ -311,7 +323,9 @@ export class AgentContextInjector {
         params: GetExamplesParams,
         config: RerankerConfiguration
     ): Promise<MJAIAgentExampleEntity[]> {
-        LogStatus(`AgentContextInjector: Reranking ${matches.length} example candidates to top ${params.maxExamples}`);
+        if (IsVerboseLoggingEnabled()) {
+            LogStatus(`AgentContextInjector: Reranking ${matches.length} example candidates to top ${params.maxExamples}`);
+        }
         try {
             const reranked = await RerankerService.Instance.RerankExamples(
                 matches,
@@ -328,7 +342,9 @@ export class AgentContextInjector {
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             if (config.fallbackOnError) {
-                LogStatus(`AgentContextInjector: Example reranking failed (${message}), falling back to vector search results`);
+                if (IsVerboseLoggingEnabled()) {
+                    LogStatus(`AgentContextInjector: Example reranking failed (${message}), falling back to vector search results`);
+                }
                 return matches.slice(0, params.maxExamples).map(m => m.example);
             }
             LogError(`AgentContextInjector: Example reranking failed and fallbackOnError is false: ${message}`);
@@ -380,19 +396,42 @@ export class AgentContextInjector {
     }
 
     /**
-     * In-memory equivalent of the (removed) SQL `buildNotesScopingFilter`: filters the cached AgentNotes to
-     * those matching this request's scope. Mirrors {@link filterExamplesByScoping}. Each MJ-internal
+     * Filters the cached AgentNotes to the injectable statuses (Active, Provisional) and to those matching
+     * this request's scope. Mirrors {@link filterExamplesByScoping}. Each MJ-internal
      * dimension (Agent/User/Company) matches the param value OR null when the param is provided, and MUST be
      * null when the param is absent — exactly the union of the 8 priority levels the old SQL filter built.
      * Multi-tenant secondary scoping reuses {@link matchesSecondaryScope} (the same matcher the examples path
      * already uses), so notes and examples share one in-memory scoping definition.
      */
-    private filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
+    protected filterNotesByScoping(notes: MJAIAgentNoteEntity[], params: GetNotesParams): MJAIAgentNoteEntity[] {
+        // Walk BaseAgentID prototype ancestors so org/agent-wide notes (UserID == null) authored on
+        // prototype templates flow down live to derived instances, while per-user notes
+        // (UserID != null) remain strictly isolated per instance (e.g., Pepper vs Cato).
+        const ancestorAgentIdSet = new UUIDSet(
+            params.agentId && typeof AIEngine.Instance.GetAgentInheritanceChain === 'function'
+                ? AIEngine.Instance.GetAgentInheritanceChain(params.agentId)
+                      .slice(0, -1)
+                      .map(a => a.ID)
+                : []
+        );
+
         return notes.filter(note => {
-            if (note.Status !== 'Active') {
+            // Same injectable set (Active + Provisional) the semantic path uses, so the two paths agree.
+            if (!IsInjectableNoteStatus(note.Status)) {
                 return false;
             }
-            const agentOk = params.agentId ? (note.AgentID == null || UUIDsEqual(note.AgentID, params.agentId)) : note.AgentID == null;
+            let agentOk: boolean;
+            if (params.agentId) {
+                const isGlobal = note.AgentID == null;
+                const isDirect = note.AgentID != null && UUIDsEqual(note.AgentID, params.agentId);
+                const isInheritedOrgNote =
+                    note.AgentID != null &&
+                    note.UserID == null &&
+                    ancestorAgentIdSet.Has(note.AgentID);
+                agentOk = isGlobal || isDirect || isInheritedOrgNote;
+            } else {
+                agentOk = note.AgentID == null;
+            }
             // Under SharedOnly a user's own note is left out even for that user: the run's output is for a room.
             const userOk = params.userId && !params.SharedOnly ? (note.UserID == null || UUIDsEqual(note.UserID, params.userId)) : note.UserID == null;
             const companyOk = params.companyId ? (note.CompanyID == null || UUIDsEqual(note.CompanyID, params.companyId)) : note.CompanyID == null;
@@ -415,189 +454,15 @@ export class AgentContextInjector {
 
         // Filter examples matching our scoping criteria
         const filtered = this.filterExamplesByScoping(allExamples, params);
+        if (filtered.length === 0) {
+            return [];
+        }
 
         // Sort based on strategy
         const sorted = this.sortExamples(filtered, params.strategy);
 
         // Return top N results
         return sorted.slice(0, params.maxExamples);
-    }
-
-    /**
-     * Build filter with 8-level scoping priority for notes.
-     * Combines MJ-internal scoping (AgentID, UserID, CompanyID) with
-     * multi-tenant scoping (PrimaryScopeEntityID, PrimaryScopeRecordID, SecondaryScopes).
-     */
-    private buildNotesScopingFilter(params: GetNotesParams): string {
-        const filters: string[] = [`Status IN (${InjectableNoteStatusSQLList()})`];
-
-        // Build MJ-internal scoping filter using OR conditions with priority
-        const scopeConditions: string[] = [];
-
-        // Priority 1: AgentID + UserID + CompanyID
-        if (params.agentId && params.userId && params.companyId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 2: AgentID + UserID
-        if (params.agentId && params.userId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID='${params.userId}' AND CompanyID IS NULL)`);
-        }
-
-        // Priority 3: AgentID + CompanyID
-        if (params.agentId && params.companyId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID IS NULL AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 4: UserID + CompanyID
-        if (params.userId && params.companyId) {
-            scopeConditions.push(`(AgentID IS NULL AND UserID='${params.userId}' AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 5: AgentID only
-        if (params.agentId) {
-            scopeConditions.push(`(AgentID='${params.agentId}' AND UserID IS NULL AND CompanyID IS NULL)`);
-        }
-
-        // Priority 6: UserID only
-        if (params.userId) {
-            scopeConditions.push(`(AgentID IS NULL AND UserID='${params.userId}' AND CompanyID IS NULL)`);
-        }
-
-        // Priority 7: CompanyID only
-        if (params.companyId) {
-            scopeConditions.push(`(AgentID IS NULL AND UserID IS NULL AND CompanyID='${params.companyId}')`);
-        }
-
-        // Priority 8: Global (all NULL)
-        scopeConditions.push(`(AgentID IS NULL AND UserID IS NULL AND CompanyID IS NULL)`);
-
-        if (scopeConditions.length > 0) {
-            filters.push(`(${scopeConditions.join(' OR ')})`);
-        }
-
-        // Add multi-tenant secondary scoping if primary or secondary scopes are provided
-        if (params.primaryScopeRecordId || params.secondaryScopes) {
-            const scopeFilter = this.buildSecondaryScopeFilter(params.primaryScopeEntityId, params.primaryScopeRecordId, params.secondaryScopes, params.secondaryScopeConfig);
-            filters.push(`(${scopeFilter})`);
-        }
-
-        return filters.join(' AND ');
-    }
-
-    /**
-     * Build filter for multi-tenant secondary scoping with per-dimension inheritance.
-     * Returns notes at all applicable scope levels (global -> primary -> full).
-     *
-     * Inheritance modes per dimension:
-     * - 'cascading': Notes without this dimension match queries with it (broader retrieval)
-     * - 'strict': Notes must exactly match the dimension value
-     */
-    private buildSecondaryScopeFilter(
-        primaryScopeEntityId: string | undefined,
-        primaryScopeRecordId: string | undefined,
-        secondaryScopes: Record<string, SecondaryScopeValue> | undefined,
-        scopeConfig?: SecondaryScopeConfig | null
-    ): string {
-        const conditions: string[] = [];
-
-        // Always include global notes (no scope set at all)
-        conditions.push('(PrimaryScopeRecordID IS NULL AND (SecondaryScopes IS NULL OR SecondaryScopes = \'{}\'))');
-
-        const hasSecondary = secondaryScopes && Object.keys(secondaryScopes).length > 0;
-        const allowSecondaryOnly = scopeConfig?.allowSecondaryOnly ?? false;
-
-        // Build primary scope match clause: both entity ID and record ID must match
-        const primaryMatchClause = primaryScopeEntityId
-            ? `PrimaryScopeEntityID = '${primaryScopeEntityId}' AND PrimaryScopeRecordID = '${primaryScopeRecordId}'`
-            : `PrimaryScopeRecordID = '${primaryScopeRecordId}'`;
-
-        if (primaryScopeRecordId) {
-            // Include primary-scope-only notes (matches org, no secondary scopes)
-            conditions.push(`(
-                ${primaryMatchClause}
-                AND (SecondaryScopes IS NULL OR SecondaryScopes = '{}')
-            )`);
-
-            // Include fully-scoped notes if secondary scopes are provided
-            if (hasSecondary) {
-                const secondaryCondition = this.buildPerDimensionFilter(
-                    secondaryScopes!,
-                    scopeConfig
-                );
-
-                conditions.push(`(
-                    ${primaryMatchClause}
-                    AND ${secondaryCondition}
-                )`);
-            }
-        } else if (allowSecondaryOnly && hasSecondary) {
-            // Secondary-only scoping: no primary required
-            const secondaryCondition = this.buildPerDimensionFilter(
-                secondaryScopes!,
-                scopeConfig
-            );
-
-            conditions.push(`(
-                PrimaryScopeRecordID IS NULL
-                AND SecondaryScopes IS NOT NULL
-                AND SecondaryScopes != '{}'
-                AND ${secondaryCondition}
-            )`);
-        }
-
-        return conditions.join(' OR ');
-    }
-
-    /**
-     * Build SQL filter conditions for secondary dimensions with per-dimension inheritance.
-     *
-     * For each dimension in the runtime scope:
-     * - 'cascading' mode: Match if dimension value matches OR dimension is absent in note
-     * - 'strict' mode: Match only if dimension value matches exactly
-     */
-    private buildPerDimensionFilter(
-        secondary: Record<string, SecondaryScopeValue>,
-        scopeConfig?: SecondaryScopeConfig | null
-    ): string {
-        const dimensionConditions: string[] = [];
-        const defaultMode = scopeConfig?.defaultInheritanceMode ?? 'cascading';
-
-        // Build a map of dimension configs for quick lookup
-        const dimConfigMap = new Map<string, SecondaryDimension>();
-        if (scopeConfig?.dimensions) {
-            for (const dim of scopeConfig.dimensions) {
-                dimConfigMap.set(dim.name, dim);
-            }
-        }
-
-        for (const [key, rawValue] of Object.entries(secondary)) {
-            const dimConfig = dimConfigMap.get(key);
-            const inheritanceMode = dimConfig?.inheritanceMode ?? defaultMode;
-            // Stringify all values (numbers, booleans) for SQL comparison via JSON_VALUE
-            const values = Array.isArray(rawValue) ? rawValue.map(String) : [String(rawValue)];
-
-            // Escape single quotes in values to prevent SQL injection
-            const escapedValues = values.map(v => v.replace(/'/g, "''"));
-
-            if (inheritanceMode === 'strict') {
-                const matchClause = escapedValues.length === 1
-                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
-                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
-                dimensionConditions.push(matchClause);
-            } else {
-                const matchClause = escapedValues.length === 1
-                    ? `JSON_VALUE(SecondaryScopes, '$.${key}') = '${escapedValues[0]}'`
-                    : `JSON_VALUE(SecondaryScopes, '$.${key}') IN (${escapedValues.map(v => `'${v}'`).join(', ')})`;
-                dimensionConditions.push(
-                    `(JSON_VALUE(SecondaryScopes, '$.${key}') IS NULL OR ${matchClause})`
-                );
-            }
-        }
-
-        return dimensionConditions.length > 0
-            ? `(${dimensionConditions.join(' AND ')})`
-            : '1=1';
     }
 
     /**

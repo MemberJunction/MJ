@@ -1,7 +1,7 @@
 <mj-page-layout>
     <mj-page-header
         Title="Approvals &amp; Wakes"
-        Subtitle="Decide on your Chief of Staff's requests and manage its wake routines"
+        [Subtitle]="'Decide on ' + SelectedAgentDisplayName + '\'s requests and manage its wake routines'"
         Icon="fa-solid fa-bell-concierge">
 
         <ng-container meta>
@@ -29,6 +29,28 @@
         </ng-container>
 
         <ng-container toolbar>
+            @if (AvailableAgents.length > 0) {
+                <div class="cos-agent-picker">
+                    <span class="cos-agent-picker__label">
+                        <span class="cos-agent-picker__avatar" aria-hidden="true">
+                            @if (SelectedAgentAvatarUrl) {
+                                <img [src]="SelectedAgentAvatarUrl" [alt]="SelectedAgentDisplayName" (error)="OnSelectedAgentAvatarError()" />
+                            } @else {
+                                <i [class]="SelectedAgentIconClass"></i>
+                            }
+                        </span>
+                        Agent
+                    </span>
+                    <mj-dropdown
+                        [Data]="AvailableAgents"
+                        TextField="Name"
+                        ValueField="ID"
+                        [ValuePrimitive]="true"
+                        [(ngModel)]="SelectedAgentID"
+                        (ValueChange)="OnSelectedAgentSelectionChanged()">
+                    </mj-dropdown>
+                </div>
+            }
             <mj-page-search
                 Placeholder="Filter requests or routines..."
                 [Value]="SearchText"
@@ -43,23 +65,6 @@
     </mj-page-header>
 
     <mj-page-body>
-        @if (FeedbackBanner) {
-            <div class="cos-banner"
-                 [class.cos-banner--success]="FeedbackBanner.Type === 'success'"
-                 [class.cos-banner--error]="FeedbackBanner.Type === 'error'"
-                 role="status">
-                <div class="cos-banner__content">
-                    <i class="fa-solid"
-                       [class.fa-circle-check]="FeedbackBanner.Type === 'success'"
-                       [class.fa-circle-exclamation]="FeedbackBanner.Type === 'error'"></i>
-                    <span>{{ FeedbackBanner.Message }}</span>
-                </div>
-                <button mjButton variant="flat" size="sm" (click)="DismissBanner()" aria-label="Dismiss notification">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-        }
-
         @if (IsLoading) {
             <div class="cos-loading">
                 <mj-loading text="Loading approvals and wakes..."></mj-loading>
@@ -74,7 +79,7 @@
                                 <i class="fa-solid fa-bell-concierge"></i> Pending Agent Approvals ({{ PendingRequests.length }})
                             </h3>
                             <p class="cos-panel__subtitle">
-                                Approve or reject escalations from your Chief of Staff
+                                Approve or reject escalations from {{ SelectedAgentDisplayName }}
                             </p>
                         </div>
                     </div>
@@ -200,7 +205,7 @@
                     }
 
                     @if (FilteredRoutines.length === 0) {
-                        <mj-empty-state Size="compact" Icon="fa-regular fa-clock" Message="No AgentWake routines found for your Chief of Staff." />
+                        <mj-empty-state Size="compact" Icon="fa-regular fa-clock" [Message]="'No AgentWake routines found for ' + SelectedAgentDisplayName + '.'" />
                     } @else {
                         <div class="cos-stack">
                             @for (routine of FilteredRoutines; track routine.ID) {

@@ -2,7 +2,7 @@
  * @module actions/schedule-model-scoring.action
  *
  * **Schedule Model Scoring** action — the thin Action boundary over the PS2-6
- * {@link createScheduledModelScoring} helper (plan PS2-6 / §12). It lets an agent /
+ * {@link CreateScheduledModelScoring} helper (plan PS2-6 / §12). It lets an agent /
  * workflow / UI bind a trained model to write its prediction into a target entity
  * column on a recurring schedule, conversationally: "build a model, write the
  * renewal probability back into the member record, and re-score it monthly."
@@ -27,7 +27,7 @@
 
 import type { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
 
 import { BasePredictiveStudioAction } from './base-predictive-studio.action';
@@ -46,7 +46,7 @@ import { SCHEDULE_MODEL_SCORING_DRIVER_CLASS } from './driver-classes';
 /**
  * The scheduling seam this action depends on — "create + save a scheduled scoring
  * Record Process (and its lineage binding) for these options, give me the saved
- * rows". The production implementation is {@link createScheduledModelScoring}; tests
+ * rows". The production implementation is {@link CreateScheduledModelScoring}; tests
  * inject a fake.
  */
 export type ScheduleModelScoringFn = (opts: ScheduleModelScoringOptions) => Promise<ScheduledModelScoringResult>;
@@ -56,8 +56,10 @@ export type ScheduleModelScoringFn = (opts: ScheduleModelScoringOptions) => Prom
  * entity's rows on a cadence (default monthly). The `OutputField` param is optional —
  * supply it to write the prediction into that target column (write-back mode), or omit
  * it for generic output (predictions recorded in `MJ: Process Run Details` only).
- * Outputs: `RecordProcessID` (string), `CronExpression` (string), `WroteColumn`
- * (boolean), and — write-back mode only — `ScoringBindingID` (string).
+ * Optional `FeatureName` and `ViewAuthorizationID` name the binding's prediction feature
+ * and who may see it (defaults: the model's pipeline name, the seeded "View Model
+ * Predictions" authorization). Outputs: `RecordProcessID` (string), `CronExpression`
+ * (string), `WroteColumn` (boolean) and `ScoringBindingID` (string).
  */
 @RegisterClass(BaseAction, SCHEDULE_MODEL_SCORING_DRIVER_CLASS)
 export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveStudioAction {
@@ -72,8 +74,8 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
       if (!targetEntityName) {
         return this.fail('VALIDATION_ERROR', 'TargetEntityName parameter is required');
       }
-      // OutputField is OPTIONAL: present → write-back into that column (+ lineage
-      // binding); omitted → generic output (predictions in run history only).
+      // OutputField is OPTIONAL: present → write-back into that column; omitted → generic
+      // output (predictions in run history). A scoring binding is created either way.
       const outputField = this.getStringParam(params, 'OutputField');
       const scopeFilter = this.getStringParam(params, 'ScopeFilter');
       if (!scopeFilter) {
@@ -94,8 +96,10 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
         valueKind: this.parseValueKind(params),
         name: this.getStringParam(params, 'Name'),
         timezone: this.getStringParam(params, 'Timezone'),
+        featureName: this.getStringParam(params, 'FeatureName'),
+        viewAuthorizationId: this.getStringParam(params, 'ViewAuthorizationID'),
         contextUser: params.ContextUser,
-        provider: params.Provider,
+        provider: params.Provider || Metadata.Provider, // global-provider-ok: RunActionParams.Provider is optional; the action contract falls back to the global provider (ActionEngine-Base.ts RunActionParams.Provider)
       });
 
       return this.mapResult(params, result);
@@ -106,22 +110,19 @@ export class PredictiveStudioScheduleModelScoringAction extends BasePredictiveSt
   }
 
   /**
-   * Map the saved Record Process (+ optional scoring binding) onto output params + a
-   * human-readable message. Always outputs the Record Process id + cron (the scheduled
-   * run) and `WroteColumn` (whether a write-back column was bound). In write-back mode
-   * it also outputs `ScoringBindingID` (the lineage row the model-prediction panel /
-   * "Models in Production" dashboard read); in generic mode `binding` is `null`, so no
-   * `ScoringBindingID` is emitted and the message reflects run-history-only output.
+   * Map the saved Record Process and its scoring binding onto output params + a
+   * human-readable message: the Record Process id + cron (the scheduled run),
+   * `WroteColumn` (whether the binding names a write-back column) and `ScoringBindingID`
+   * (the row the model-prediction panel / "Models in Production" dashboard read).
    */
   protected mapResult(params: RunActionParams, result: ScheduledModelScoringResult): ActionResultSimple {
     const { recordProcess: rp, binding } = result;
     this.addOutputParam(params, 'RecordProcessID', rp.ID);
     this.addOutputParam(params, 'CronExpression', rp.CronExpression);
-    this.addOutputParam(params, 'WroteColumn', binding !== null);
-    if (binding !== null) {
-      this.addOutputParam(params, 'ScoringBindingID', binding.ID);
-    }
-    const outcome = binding !== null
+    const wroteColumn = binding.TargetColumn !== null && binding.TargetColumn.length > 0;
+    this.addOutputParam(params, 'WroteColumn', wroteColumn);
+    this.addOutputParam(params, 'ScoringBindingID', binding.ID);
+    const outcome = wroteColumn
       ? 'it will score and write back on its cadence.'
       : 'it will score on its cadence, recording predictions in the process run history.';
     return this.ok(params, `Scheduled scoring Record Process '${rp.Name}' (${rp.CronExpression}); ${outcome}`);

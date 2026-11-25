@@ -84,12 +84,22 @@ export class PrepareOutboundCallBriefAction extends BaseAction {
                 };
             }
 
-            const policy = await AgentUserPolicyEngine.Instance.GetPolicyForAgentAndUser(
+            const policyLookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
                 agent.ID,
                 contextUser.ID,
-                contextUser
+                contextUser,
+                { provider: params.Provider }
             );
-            const phoneMode = policy?.PhoneChannelMode ?? 'OutboundWithApproval';
+            if (policyLookup.status === 'error') {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: `Failed to verify outbound call policy: ${policyLookup.errorMessage}`,
+                    Params: params.Params,
+                };
+            }
+            const policy = policyLookup.policy;
+            const phoneMode = policy?.PhoneChannelMode ?? 'Disabled';
             if (phoneMode === 'Disabled' || phoneMode === 'InboundOnly') {
                 return {
                     Success: false,

@@ -68,7 +68,7 @@ import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { EscapeSQLString, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, settle, SkipCheck } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
-import { BuildSystemKeyProvider, BuildUserKeyProviderWithRetry } from './fls-client.checks';
+import { AssertProviderHasMetadata, BuildSystemKeyProvider, BuildUserKeyProviderWithRetry } from './fls-client.checks';
 
 const BUNDLE = 'calendar-event-links';
 const TAG = '(mj-integration-test — safe to delete)';
@@ -501,6 +501,8 @@ async function connectUIReader(ctx: IntegrationCheckContext): Promise<GraphQLDat
     } catch (e) {
         SkipCheck(`needs MJAPI running and MJ_API_KEY set: ${e instanceof Error ? e.message : String(e)}`);
     }
+    // Outside the try: CL1 may skip when there is no MJAPI, not when MJAPI answered and failed.
+    AssertProviderHasMetadata(wire, 'the system key provider');
     const userID = await createUIReader(ctx, wire);
     const rawKey = await mintReaderKey(ctx, wire, userID);
     return (await BuildUserKeyProviderWithRetry(rawKey)) as GraphQLDataProvider;

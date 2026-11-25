@@ -228,6 +228,18 @@
   color: var(--mj-text-muted);
 }
 
+.lb-row-metric {
+  margin-left: 4px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+}
+
+.lb-optimistic {
+  margin-left: 6px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-status-warning-text);
+}
+
 .lb-table .lb-rank-col {
   width: 44px;
 }
@@ -333,6 +345,17 @@
   border-radius: 12px;
   padding: 18px;
   background: color-mix(in srgb, var(--mj-status-success) 6%, var(--mj-bg-surface));
+}
+
+.winner-card.no-model {
+  border-color: var(--mj-border-default);
+  background: var(--mj-bg-surface);
+}
+
+.gate-reason {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
 }
 
 .winner-top {

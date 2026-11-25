@@ -39,8 +39,16 @@ type IndependentProviderCapable = IMetadataProvider & {
     CreateIndependentInstance(): Promise<IMetadataProvider>;
 };
 
+type ReleasableProvider = IMetadataProvider & {
+    ReleaseIndependentInstance(): Promise<void>;
+};
+
 function hasCreateIndependentInstance(provider: IMetadataProvider): provider is IndependentProviderCapable {
     return 'CreateIndependentInstance' in provider && typeof provider.CreateIndependentInstance === 'function';
+}
+
+function hasReleaseIndependentInstance(provider: IMetadataProvider): provider is ReleasableProvider {
+    return 'ReleaseIndependentInstance' in provider && typeof provider.ReleaseIndependentInstance === 'function';
 }
 
 export const DEFAULT_WORK_QUEUE_HOST_START_DEPENDENCIES: WorkQueueHostStartDependencies = {
@@ -101,7 +109,10 @@ export function BuildWorkQueueHostConfig(config: WorkQueueConfig, instanceID: st
     };
 }
 
-/** A fresh SQL Server or PostgreSQL provider per delivery over the shared pool; the server provider otherwise. */
+/**
+ * A fresh SQL Server or PostgreSQL provider per delivery over the shared pool; the server provider otherwise. A minted
+ * provider is released when its delivery settles; the shared fallback never is.
+ */
 export class MJServerWorkQueueProviderSource implements WorkQueueProviderSource {
     private readonly factory: TaskGraphProviderFactory | null;
 
@@ -109,14 +120,30 @@ export class MJServerWorkQueueProviderSource implements WorkQueueProviderSource 
         this.factory = pool ? new TaskGraphProviderFactory(pool) : null;
     }
 
+    /** Providers minted by CreateIndependentInstance, which this source releases; the factory's own keep their lifecycle. */
+    private readonly minted = new WeakSet<IMetadataProvider>();
+
     public async CreateProvider(): Promise<IMetadataProvider> {
         if (this.factory) {
             return this.factory.CreateProvider();
         }
         if (hasCreateIndependentInstance(this.fallback)) {
-            return this.fallback.CreateIndependentInstance();
+            const provider = await this.fallback.CreateIndependentInstance();
+            this.minted.add(provider);
+            return provider;
         }
         return this.fallback;
+    }
+
+    /** Releases a provider minted by CreateIndependentInstance once its delivery settles (#6273). */
+    public async ReleaseProvider(provider: IMetadataProvider): Promise<void> {
+        if (!this.minted.has(provider)) {
+            return;
+        }
+        this.minted.delete(provider);
+        if (hasReleaseIndependentInstance(provider)) {
+            await provider.ReleaseIndependentInstance();
+        }
     }
 }
 

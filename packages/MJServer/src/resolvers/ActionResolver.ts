@@ -12,6 +12,7 @@ import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
 import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 import { EntityObjectDataBinding, ProjectActionParamsForCaller } from "../generic/actionOutputFieldSecurity.js";
 import type { EntityActionResult } from "@memberjunction/actions-base";
 
@@ -377,10 +378,23 @@ export class ActionResolver extends ResolverBase {
                            p.Type.trim().toLowerCase() === 'both');
     const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true }) ?? undefined;
     const projected = ProjectActionParamValuesForUser(outputs, user, provider, { UnreadableEntityObjects: 'keep' }) ?? outputs;
+    const receipt = result.ChatReceipt;
+    if (receipt) {
+      const safeProjected = projected.map((p) => CopyScalarsAndArrays(p));
+      return {
+        Success: result.Success,
+        Message: receipt.Summary,
+        ResultCode: result.Result?.ResultCode ?? result.ResultCode,
+        ResultData: JSON.stringify({
+          ChatReceipt: receipt,
+          Params: safeProjected,
+        }),
+      };
+    }
     return {
       Success: result.Success,
       Message: result.Message,
-      ResultCode: result.Result?.ResultCode,
+      ResultCode: result.Result?.ResultCode ?? result.ResultCode,
       ResultData: projected.length > 0 ? JSON.stringify(CopyScalarsAndArrays(projected)) : undefined
     };
   }
@@ -406,6 +420,7 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the entity action
    */
+  @RefuseScopeLimitedPrincipals()
   @Mutation(() => ActionResultOutput)
   async RunEntityAction(
     @Arg("input") input: EntityActionInput,

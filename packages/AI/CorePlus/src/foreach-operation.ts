@@ -129,4 +129,36 @@ export interface ForEachOperation {
         /** JSON mapping from the prompt's response into the payload, per iteration. */
         outputMapping?: string;
     };
+
+    /**
+     * Enqueue work items onto a WorkQueue topic for bounded parallel fan-out instead of executing
+     * inline per iteration. The loop suspends cleanly until queued items settle (or fail terminally).
+     */
+    enqueue?: ForEachEnqueueOperation;
+}
+
+/**
+ * WorkQueue fan-out configuration when a `ForEach` loop dispatches iterations via `Enqueue`.
+ */
+export interface ForEachEnqueueOperation {
+    /** Destination WorkQueue topic name (defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName`). */
+    topic?: string;
+    /** Optional registered `BaseWorkHandler` key for consumer execution. */
+    handlerKey?: string;
+    /** Optional MemberJunction Action name run by the default queue item worker per item. */
+    actionName?: string;
+    /** Optional MemberJunction Sub-Agent name run by the default queue item worker per item. */
+    subAgentName?: string;
+    /** Static or expression payload merged into each published queue item. */
+    payloadTemplate?: Record<string, unknown>;
+    /** Optional correlation key prefix/path; defaults to deterministic `<graphRunId>:<stepInvocationId>`. */
+    correlationKey?: string;
+    /** Bounded concurrent WorkQueue publish operations (clamped by `Limits.TaskGraphQueue.MaxEnqueuePublishConcurrency`). */
+    publishConcurrency?: number;
+    /** Bounded concurrent active isolated runners on the host (clamped by `Limits.TaskGraphQueue.MaxConcurrentIsolatedRunners`). */
+    maxActiveRunners?: number;
+    /** Maximum delivery/retry attempts per queued item (clamped by `Limits.TaskGraphQueue.MaxEnqueueRedeliveryAttempts`). */
+    maxRetries?: number;
+    /** Deadline in hours while waiting for fan-out items to finish. */
+    expiresInHours?: number;
 }

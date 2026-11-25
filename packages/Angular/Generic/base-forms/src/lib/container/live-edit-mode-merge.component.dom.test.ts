@@ -13,6 +13,7 @@ import {
 import { MjRecordLinksComponent } from '../links/record-links.component';
 import { FormRecordRefreshCoordinator, type FormRemoteUpdateEvent } from '../form-record-refresh.coordinator';
 import { type FormModeSwitch } from '../types/form-types';
+import { MJConfirmDialogComponent } from '@memberjunction/ng-ui-components';
 
 @Component({ standalone: true, selector: 'mj-form-toolbar', template: '' })
 class ToolbarStub {
@@ -280,6 +281,7 @@ describe('PerformLiveEditModeMerge & Toolbar Conflict/Links Integration', () => 
 
         const fixture = renderComponentFixture(MjFormToolbarComponent, {
             declarations: [MjFormToolbarComponent],
+            imports: [MJConfirmDialogComponent],
             providers: [{ provide: FormRecordRefreshCoordinator, useValue: coordinator }],
             inputs: {
                 Record: record,

@@ -1,9 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
 import { BrowserTestingModule, platformBrowserTesting } from '@angular/platform-browser/testing';
-import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
-import { ImportanceDisplay } from '@memberjunction/predictive-studio-core';
+import { CreateFakeProvider, renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
+import {
+  PredictiveStudioGetModelEvidenceOperation,
+  PredictiveStudioPromoteModelOperation,
+  type MJMLModelEntity,
+  type PredictiveStudioGetModelEvidenceOutput,
+  type PredictiveStudioPromoteModelInput,
+  type PredictiveStudioPromoteModelOutput,
+} from '@memberjunction/core-entities';
+import type { RemoteOpResult } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ImportanceDisplay, TransitionRefusalText } from '@memberjunction/predictive-studio-core';
 import { PSModelDetailComponent } from './ps-model-detail.component';
 
 try {
@@ -22,6 +31,7 @@ try {
 type ModelDouble = Pick<
   MJMLModelEntity,
   'ID' | 'Version' | 'Status' | 'Algorithm' | 'Pipeline' | 'TargetVariable' | 'Metrics' | 'HoldoutMetrics' | 'FeatureImportance' | 'Lineage'
+  | 'StatusReason' | 'ServingWhileUnevaluated' | 'EvaluationProtocolID'
 >;
 
 const TREE_LINEAGE = JSON.stringify({ evaluation: { ImportanceKind: 'split_or_impurity' } });
@@ -38,12 +48,15 @@ const makeModel = (over: Partial<ModelDouble>): ModelDouble => ({
   HoldoutMetrics: '{"AUC":0.85}',
   FeatureImportance: JSON.stringify({ MemberSinceDays: 0.72, AutoRenew: 0.2 }),
   Lineage: TREE_LINEAGE,
+  StatusReason: null,
+  ServingWhileUnevaluated: false,
+  EvaluationProtocolID: null,
   ...over,
 });
 
-// The component's input is the generated entity class; the double carries only the members it reads.
+// Inputs are set untyped (setInput), so the double carrying only the members the component reads is passed as is.
 const render = (model: ModelDouble) =>
-  renderComponentFixture(PSModelDetailComponent, { inputs: { Model: model as unknown as MJMLModelEntity } });
+  renderComponentFixture(PSModelDetailComponent, { inputs: { Model: model } });
 
 describe('PSModelDetailComponent (DOM) — importance containment', () => {
   it('a tree model shows the hidden note, no bars, no caption and no top-feature name', () => {
@@ -71,5 +84,192 @@ describe('PSModelDetailComponent (DOM) — importance containment', () => {
     expect(queryAll(fixture, '.ps-fbar').length).toBe(2);
     expect(query(fixture, '[data-testid="ps-importance-caption"]')).not.toBeNull();
     expect(query(fixture, '[data-testid="ps-leakage-gate"]')?.textContent).toContain('Member Since Days');
+  });
+});
+
+describe('PSModelDetailComponent (DOM) — the performance tiles', () => {
+  // each tile's lines (title | value | caption): Angular drops the whitespace between them, so they are read one by one
+  const tiles = (model: ModelDouble): string[] =>
+    queryAll(render(model), '.metric-pair .mtile').map((t) => Array.from(t.children).map((c) => (c.textContent || '').replace(/\s+/g, ' ').trim()).join(' | '));
+
+  it("titles a kept baseline's tiles by the metric it stores and shows its holdout score, never \"AUC\"", () => {
+    const shown = tiles(makeModel({ Metrics: '{}', HoldoutMetrics: '{"log-loss":0.3674}' }));
+    expect(shown[1]).toContain('Holdout Log Loss | 0.367');
+    expect(shown.join(' ')).not.toContain('AUC');
+  });
+
+  it("never shows another metric's number under the primary metric's title when the train metrics lack it", () => {
+    // Holdout stores only log-loss, so the tiles are titled Log Loss; the train metrics store AUC alone.
+    const shown = tiles(makeModel({ Metrics: '{"AUC":0.9}', HoldoutMetrics: '{"log-loss":0.3674}' }));
+    expect(shown[0]).toContain('Train Log Loss | —');
+    expect(shown[0]).not.toContain('0.900');
+  });
+
+  it("captions the train tile of a model trained under an Evaluation Protocol as the inner-CV estimate", () => {
+    const shown = tiles(makeModel({ Metrics: '{"mase":0.9}', HoldoutMetrics: '{"mase":0.82}', Lineage: JSON.stringify({ evaluationProtocolId: 'EP-1' }) }));
+    expect(shown[0]).toContain('inner-CV estimate');
+    expect(shown[0]).not.toContain('in-sample');
+  });
+
+  it('keeps the in-sample caption for an older model trained without a protocol', () => {
+    expect(tiles(makeModel({}))[0]).toContain('in-sample');
+  });
+
+  it('lists only holdout metrics in the stat bar beside the holdout tile, never the training metrics', () => {
+    const fixture = render(makeModel({ Metrics: '{"AUC":0.9,"Accuracy":0.95,"F1":0.93}', HoldoutMetrics: null }));
+    expect(query(fixture, '.stat-bar')).toBeNull();
+  });
+});
+
+describe('PSModelDetailComponent (DOM) — the Bindings section', () => {
+  it('hosts the scoring binding editor in a Bindings section when it has a provider', () => {
+    const provider = CreateFakeProvider({ runViewResults: [] });
+    const fixture = renderComponentFixture(PSModelDetailComponent, { inputs: { Model: makeModel({}), Provider: provider } });
+    expect(query(fixture, '[data-testid="ps-model-bindings"] ps-scoring-binding-editor')).not.toBeNull();
+  });
+
+  it('shows no Bindings section without a provider to read and write bindings through', () => {
+    expect(query(render(makeModel({})), '[data-testid="ps-model-bindings"]')).toBeNull();
+  });
+});
+
+describe('PSModelDetailComponent (DOM) — lifecycle transitions through PredictiveStudio.PromoteModel', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  /** A model double whose Load re-reads `stored` (what the lifecycle gate wrote), counting the reloads. */
+  const transitionModel = (status: MJMLModelEntity['Status'], stored: { Status: MJMLModelEntity['Status']; Loads: number }) => {
+    const model = { ...makeModel({ ID: 'C1E2D3F4-0000-4000-8000-0000000000A1', Status: status }), LatestResult: null, Load: async () => { stored.Loads += 1; model.Status = stored.Status; return true; } };
+    return model;
+  };
+
+  /** Records every PromoteModel call the component makes and answers with `output`. */
+  const recordOperations = (output: PredictiveStudioPromoteModelOutput): PredictiveStudioPromoteModelInput[] => {
+    const sentOperations: PredictiveStudioPromoteModelInput[] = [];
+    vi.spyOn(PredictiveStudioPromoteModelOperation.prototype, 'Execute').mockImplementation(async (input: PredictiveStudioPromoteModelInput): Promise<RemoteOpResult<PredictiveStudioPromoteModelOutput>> => {
+      sentOperations.push(input);
+      return { Success: true, ResultCode: 'SUCCESS', Output: output };
+    });
+    return sentOperations;
+  };
+
+  /** Lets the component's awaited operation, reload and notification finish (each is a resolved promise in these tests). */
+  const settle = async (f: ReturnType<typeof render>): Promise<void> => {
+    for (let i = 0; i < 5; i++) await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    f.detectChanges();
+  };
+  const click = async (f: ReturnType<typeof render>, selector: string): Promise<void> => {
+    (query(f, selector) as HTMLButtonElement | null)?.click();
+    await settle(f);
+  };
+  const type = async (f: ReturnType<typeof render>, selector: string, text: string): Promise<void> => {
+    const area = query(f, selector) as HTMLTextAreaElement;
+    area.value = text;
+    area.dispatchEvent(new Event('input'));
+    await settle(f);
+  };
+
+  /** Answers GetModelEvidence with no evidence (the sign-off panel's read), so a publishable model renders offline. */
+  const stubEvidence = (): void => {
+    vi.spyOn(PredictiveStudioGetModelEvidenceOperation.prototype, 'Execute').mockImplementation(async (): Promise<RemoteOpResult<PredictiveStudioGetModelEvidenceOutput>> => ({ Success: false, ResultCode: 'NOT_FOUND', ErrorMessage: 'no evidence in this test' }));
+  };
+
+  it('a Validated model is published through the sign-off panel, not the action bar', () => {
+    stubEvidence();
+    const fixture = render(transitionModel('Validated', { Status: 'Validated', Loads: 0 }));
+    expect([query(fixture, '[data-testid="ps-sign-off-panel"]') !== null, query(fixture, '[data-action="publish"]')]).toEqual([true, null]);
+  });
+
+  it('reloads the model through its provider after an applied transition and shows the status the gate wrote', async () => {
+    const stored = { Status: 'Validated' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Draft', stored);
+    const sentOperations = recordOperations({ applied: true, status: 'Validated' });
+    const notes = vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
+    stubEvidence();
+    const fixture = render(model);
+    const emitted: string[] = [];
+    fixture.componentInstance.StatusChanged.subscribe((e) => emitted.push(e.newStatus));
+    await click(fixture, '[data-action="evaluate"]');
+    await click(fixture, '[data-testid="ps-transition-confirm"]');
+    expect(sentOperations[0]).toMatchObject({ modelId: model.ID, transition: 'evaluate' });
+    expect([stored.Loads, model.Status, emitted, query(fixture, '[data-testid="ps-confirm-modal"]')]).toEqual([1, 'Validated', ['Validated'], null]);
+    expect(notes.mock.calls[0]?.[1]).toBe('success');
+  });
+
+  it('after the sign-off panel publishes, re-reads the model and emits the status the gate wrote', async () => {
+    const stored = { Status: 'Published' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Validated', stored);
+    vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
+    stubEvidence();
+    const fixture = render(model);
+    const emitted: string[] = [];
+    fixture.componentInstance.StatusChanged.subscribe((e) => emitted.push(e.newStatus));
+    await fixture.componentInstance.OnPublished('Published');
+    expect([stored.Loads, emitted]).toEqual([1, ['Published']]);
+  });
+
+  it('offers exactly the transitions the lifecycle table allows from each status', () => {
+    const offered = (status: MJMLModelEntity['Status']) =>
+      queryAll(render(transitionModel(status, { Status: status, Loads: 0 })), '[data-action]').map((b) => b.getAttribute('data-action'));
+    stubEvidence();
+    expect([offered('Draft'), offered('Validated'), offered('KeepBaseline'), offered('Published'), offered('Archived'), offered('Unevaluated')]).toEqual([
+      ['evaluate'], ['archive'], ['archive'], ['archive'], ['rollback'], ['archive'],
+    ]);
+  });
+
+  it('an archive or a rollback needs a reason before it can be confirmed, and sends it', async () => {
+    const stored = { Status: 'Archived' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Published', stored);
+    const sentOperations = recordOperations({ applied: true, status: 'Archived' });
+    vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
+    const fixture = render(model);
+    await click(fixture, '[data-action="archive"]');
+    expect((query(fixture, '[data-testid="ps-transition-confirm"]') as HTMLButtonElement).disabled).toBe(true);
+    await type(fixture, '[data-testid="ps-transition-reason"]', 'superseded');
+    await click(fixture, '[data-testid="ps-transition-confirm"]');
+    expect(sentOperations).toEqual([{ modelId: model.ID, transition: 'archive', reason: 'superseded' }]);
+  });
+
+  it("a refusal is shown in the gate's plain words; the model is not reloaded and nothing is emitted", async () => {
+    const stored = { Status: 'Draft' as MJMLModelEntity['Status'], Loads: 0 };
+    const model = transitionModel('Draft', stored);
+    const refusal = { kind: 'gate-no-signal', reason: 'no candidate beat the flat guess' } as const;
+    recordOperations({ applied: false, status: 'Draft', refusal });
+    const notes = vi.spyOn(MJNotificationService.prototype, 'CreateSimpleNotification').mockImplementation(() => undefined);
+    const fixture = render(model);
+    const emitted: string[] = [];
+    fixture.componentInstance.StatusChanged.subscribe((e) => emitted.push(e.newStatus));
+    await click(fixture, '[data-action="evaluate"]');
+    await click(fixture, '[data-testid="ps-transition-confirm"]');
+    expect([stored.Loads, model.Status, emitted]).toEqual([0, 'Draft', []]);
+    expect([notes.mock.calls[0]?.[0], notes.mock.calls[0]?.[1]]).toEqual([expect.stringContaining(TransitionRefusalText.For(refusal)), 'error']);
+  });
+});
+
+describe('PSModelDetailComponent (DOM) — lifecycle chip and tabs', () => {
+  const PRE_CHANGE_REASON =
+    'Trained before the Predictive Studio lifecycle gate and still serving; never evaluated under an Evaluation Protocol; replaced automatically when a model is published through the gate.';
+
+  it('an Unevaluated model shows its chip, the serving note and the stored reason in the header', () => {
+    const fixture = render(makeModel({ Status: 'Unevaluated', StatusReason: PRE_CHANGE_REASON, ServingWhileUnevaluated: true }));
+    expect([
+      query(fixture, '[data-testid="ps-lifecycle-chip"]')?.textContent,
+      query(fixture, '[data-testid="ps-lifecycle-serving"]')?.textContent?.trim(),
+      query(fixture, '[data-testid="ps-lifecycle-reason"]')?.textContent,
+    ]).toEqual([expect.stringContaining('retrain to publish'), expect.stringContaining('Still serving'), PRE_CHANGE_REASON]);
+  });
+
+  it('opens each tab on click and renders only the open one', async () => {
+    const fixture = render(makeModel({ Status: 'Published' }));
+    const opened = (tab: string, selector: string): boolean => {
+      (query(fixture, `[data-testid="ps-detail-tab-${tab}"]`) as HTMLButtonElement).click();
+      fixture.detectChanges();
+      return query(fixture, selector) !== null && query(fixture, '[data-testid="ps-leakage-gate"]') === null;
+    };
+    expect([
+      opened('history', '[data-testid="ps-publish-history"]'),
+      opened('scoring', '[data-testid="ps-scoring-runs"]'),
+      opened('monitoring', '[data-testid="ps-model-monitoring"]'),
+      opened('bindings', '[data-testid="ps-output-bindings-editor"]'),
+    ]).toEqual([true, true, true, true]);
   });
 });

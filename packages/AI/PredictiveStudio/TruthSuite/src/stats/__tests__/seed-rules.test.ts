@@ -18,6 +18,13 @@ describe('Wilson interval (z = 1.959963984540054)', () => {
 });
 
 describe('the seed rules', () => {
+  it('noise-publish-400 (G3.4) accepts 0–28 of 400, and 0–4 of a 40-seed subset (the same Wilson rule)', () => {
+    expect(SeedRule.AcceptanceRange('noise-publish-400', 400)).toEqual({ Min: 0, Max: 28 });
+    expect(SeedRule.Passes('noise-publish-400', 28, 400)).toBe(true);
+    expect(SeedRule.Passes('noise-publish-400', 29, 400)).toBe(false);
+    expect(SeedRule.AcceptanceRange('noise-publish-400', 40)).toEqual({ Min: 0, Max: 4 });
+  });
+
   it('noise-publish-60 (G0.2) accepts 0–6 of 60', () => {
     expect(SeedRule.AcceptanceRange('noise-publish-60', 60)).toEqual({ Min: 0, Max: 6 });
     expect(SeedRule.Passes('noise-publish-60', 6, 60)).toBe(true);
@@ -40,5 +47,17 @@ describe('Hanley–McNeil interval', () => {
     expect(() => ConfidenceInterval.HanleyMcNeil(0.7, 10, 0)).toThrow(RangeError);
     expect(() => ConfidenceInterval.HanleyMcNeil(1.2, 10, 10)).toThrow(RangeError);
     expect(() => ConfidenceInterval.HanleyMcNeil(Number.NaN, 10, 10)).toThrow(RangeError);
+  });
+});
+
+describe('SeedRule — monitor procedure M at n = 400 (M6.7)', () => {
+  it('false-alarm-400 accepts at most 28 alarming replays of 400 (G6.6)', () => {
+    expect(SeedRule.AcceptanceRange('false-alarm-400', 400)).toEqual({ Min: 0, Max: 28 });
+    expect([SeedRule.Passes('false-alarm-400', 28, 400), SeedRule.Passes('false-alarm-400', 29, 400)]).toEqual([true, false]);
+  });
+
+  it('detection-400 accepts at least 372 detecting seeds of 400 (G6.8)', () => {
+    expect(SeedRule.AcceptanceRange('detection-400', 400)).toEqual({ Min: 372, Max: 400 });
+    expect([SeedRule.Passes('detection-400', 371, 400), SeedRule.Passes('detection-400', 372, 400)]).toEqual([false, true]);
   });
 });

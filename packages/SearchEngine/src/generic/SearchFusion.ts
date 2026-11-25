@@ -16,7 +16,14 @@
  */
 
 import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
-import { SearchResultItem, SearchSource, SearchScoreBreakdown, FusionWeightsByProvider } from './search.types';
+import { UUIDsEqual } from '@memberjunction/global';
+import {
+    SearchResultItem,
+    SearchSource,
+    SearchScoreBreakdown,
+    FusionWeightsByProvider,
+    SearchResultScopeAttribution,
+} from './search.types';
 
 /** The RRF smoothing constant: a result at rank r in a list contributes weight / (RRF_K + r). */
 export const RRF_K = 60;
@@ -51,6 +58,110 @@ export interface LabeledResultList {
     Source: SearchSource;
     /** The results, sorted by descending relevance */
     Results: SearchResultItem[];
+}
+
+/**
+ * Return a shallow copy of `item` with originating scope attribution stamped onto it.
+ * If `item` already carries scope attribution, the new scope is appended to `OriginatingScopes`
+ * (deduplicated case-insensitively via `UUIDsEqual`) while keeping the existing primary scope.
+ */
+export function StampOriginatingScope(
+    item: SearchResultItem,
+    scopeID: string,
+    scopeName?: string,
+): SearchResultItem {
+    const trimmedID = scopeID.trim();
+    if (trimmedID.length === 0) return item;
+    const entry = buildScopeAttribution(trimmedID, scopeName);
+    const existing = CollectScopeAttributions(item);
+    if (existing.length === 0) {
+        return {
+            ...item,
+            OriginatingScopeID: entry.ScopeID,
+            ...(entry.ScopeName !== undefined ? { OriginatingScopeName: entry.ScopeName } : {}),
+            OriginatingScopes: [entry],
+        };
+    }
+    const merged = mergeAttributionLists(existing, [entry]);
+    return applyScopeAttribution(item, merged);
+}
+
+/**
+ * Collect the deduplicated originating scope attributions already carried on `item`
+ * (combining `OriginatingScopeID`/`OriginatingScopeName` and `OriginatingScopes`, primary first).
+ */
+export function CollectScopeAttributions(item: SearchResultItem): SearchResultScopeAttribution[] {
+    const collected: SearchResultScopeAttribution[] = [];
+    if (item.OriginatingScopeID && item.OriginatingScopeID.trim().length > 0) {
+        addUniqueAttribution(collected, buildScopeAttribution(item.OriginatingScopeID.trim(), item.OriginatingScopeName));
+    }
+    for (const entry of item.OriginatingScopes ?? []) {
+        if (entry && typeof entry.ScopeID === 'string' && entry.ScopeID.trim().length > 0) {
+            addUniqueAttribution(collected, buildScopeAttribution(entry.ScopeID.trim(), entry.ScopeName));
+        }
+    }
+    return collected;
+}
+
+/**
+ * Combine scope attributions from a `primary` item (whose primary scope wins) and a `secondary`
+ * item. Returns `{}` when neither item carries scope attribution so unscoped items stay clean.
+ */
+export function MergeScopeAttributions(
+    primary: SearchResultItem,
+    secondary: SearchResultItem,
+): Partial<Pick<SearchResultItem, 'OriginatingScopeID' | 'OriginatingScopeName' | 'OriginatingScopes'>> {
+    const primaryList = CollectScopeAttributions(primary);
+    const secondaryList = CollectScopeAttributions(secondary);
+    const combined = mergeAttributionLists(primaryList, secondaryList);
+    if (combined.length === 0) return {};
+    const head = combined[0];
+    return {
+        OriginatingScopeID: head.ScopeID,
+        ...(head.ScopeName !== undefined ? { OriginatingScopeName: head.ScopeName } : {}),
+        OriginatingScopes: combined,
+    };
+}
+
+function buildScopeAttribution(scopeID: string, scopeName?: string): SearchResultScopeAttribution {
+    const trimmedName = typeof scopeName === 'string' && scopeName.trim().length > 0 ? scopeName.trim() : undefined;
+    return trimmedName !== undefined ? { ScopeID: scopeID, ScopeName: trimmedName } : { ScopeID: scopeID };
+}
+
+function addUniqueAttribution(target: SearchResultScopeAttribution[], candidate: SearchResultScopeAttribution): void {
+    const existing = target.find(entry => UUIDsEqual(entry.ScopeID, candidate.ScopeID));
+    if (!existing) {
+        target.push(candidate);
+        return;
+    }
+    if (existing.ScopeName === undefined && candidate.ScopeName !== undefined) {
+        existing.ScopeName = candidate.ScopeName;
+    }
+}
+
+function mergeAttributionLists(
+    first: SearchResultScopeAttribution[],
+    second: SearchResultScopeAttribution[],
+): SearchResultScopeAttribution[] {
+    const merged: SearchResultScopeAttribution[] = [];
+    for (const entry of first) {
+        addUniqueAttribution(merged, { ...entry });
+    }
+    for (const entry of second) {
+        addUniqueAttribution(merged, { ...entry });
+    }
+    return merged;
+}
+
+function applyScopeAttribution(item: SearchResultItem, attributions: SearchResultScopeAttribution[]): SearchResultItem {
+    if (attributions.length === 0) return item;
+    const head = attributions[0];
+    return {
+        ...item,
+        OriginatingScopeID: head.ScopeID,
+        ...(head.ScopeName !== undefined ? { OriginatingScopeName: head.ScopeName } : {}),
+        OriginatingScopes: attributions,
+    };
 }
 
 /**
@@ -135,7 +246,10 @@ export class SearchFusion {
         // Filter empty scopes
         const entries = Array.from(scopeResults.entries()).filter(([, list]) => list.length > 0);
         if (entries.length === 0) return [];
-        if (entries.length === 1) return entries[0][1].slice(0, maxResults);
+        if (entries.length === 1) {
+            const [onlyScopeID, onlyList] = entries[0];
+            return onlyList.slice(0, maxResults).map(r => ensureScopeAttribution(r, onlyScopeID));
+        }
 
         // Build per-scope ScoredCandidate lists (by-record-identity keyed on EntityName::RecordID
         // so the same logical record across scopes merges properly). `Rank` is included as
@@ -151,18 +265,7 @@ export class SearchFusion {
         const weights = entries.map(([scopeID]) => fusionWeights?.[scopeID] ?? 1);
 
         const fused = this.computeWeightedRRF(rankedLists, weights);
-
-        // Build a lookup from compound key to full result item (prefer best score)
-        const resultMap = new Map<string, SearchResultItem>();
-        for (const [, list] of entries) {
-            for (const r of list) {
-                const key = `${r.EntityName}::${r.RecordID}`;
-                const existing = resultMap.get(key);
-                if (!existing || r.Score > existing.Score) {
-                    resultMap.set(key, r);
-                }
-            }
-        }
+        const resultMap = this.mergeCrossScopeContributors(entries, weights);
 
         const ranked = fused.slice(0, maxResults).map(candidate => {
             const item = resultMap.get(candidate.ID);
@@ -170,6 +273,43 @@ export class SearchFusion {
             return this.createFallbackItem(candidate);
         });
         return this.normalizeByRRFMax(ranked, weights);
+    }
+
+    /**
+     * Merge per-scope items for each `EntityName::RecordID`, choosing the highest-contributing
+     * scope (by RRF contribution `weight / (k + rank)`, breaking ties by item score then scope
+     * order) as the primary item & `OriginatingScopeID`, while retaining all contributing scopes
+     * in `OriginatingScopes` and combining `ScoreBreakdown` + `Tags`.
+     */
+    private mergeCrossScopeContributors(
+        entries: Array<[string, SearchResultItem[]]>,
+        weights: number[],
+    ): Map<string, SearchResultItem> {
+        const contributorsByKey = new Map<string, Array<{ Item: SearchResultItem; Contribution: number; ScopeOrder: number }>>();
+        entries.forEach(([scopeID, list], scopeIdx) => {
+            const weight = weights[scopeIdx] ?? 1;
+            list.forEach((raw, rankIdx) => {
+                const item = ensureScopeAttribution(raw, scopeID);
+                const key = `${item.EntityName}::${item.RecordID}`;
+                const contribution = weight / (RRF_K + rankIdx + 1);
+                const group = contributorsByKey.get(key) ?? [];
+                group.push({ Item: item, Contribution: contribution, ScopeOrder: scopeIdx });
+                contributorsByKey.set(key, group);
+            });
+        });
+
+        const resultMap = new Map<string, SearchResultItem>();
+        for (const [key, contributors] of contributorsByKey.entries()) {
+            contributors.sort((a, b) =>
+                b.Contribution - a.Contribution || b.Item.Score - a.Item.Score || a.ScopeOrder - b.ScopeOrder
+            );
+            let combined = contributors[0].Item;
+            for (let i = 1; i < contributors.length; i++) {
+                combined = mergeCrossScopePair(combined, contributors[i].Item);
+            }
+            resultMap.set(key, combined);
+        }
+        return resultMap;
     }
 
     /**
@@ -204,12 +344,18 @@ export class SearchFusion {
                     snippet = other.Snippet;
                 }
 
+                // Preserve scope attribution from the higher-ranked/higher-scored occurrence as primary,
+                // while combining all originating scopes across deduplicated matches.
+                const scopePrimary = existing.Score >= result.Score ? existing : result;
+                const scopeSecondary = scopePrimary === existing ? result : existing;
+
                 seen.set(key, {
                     ...preferred,
                     Snippet: snippet,
                     Score: maxScore,
                     ScoreBreakdown: mergedBreakdown,
-                    Tags: mergedTags
+                    Tags: mergedTags,
+                    ...MergeScopeAttributions(scopePrimary, scopeSecondary),
                 });
             }
         }
@@ -254,7 +400,15 @@ export class SearchFusion {
             } as ScoredCandidate))
         );
 
-        const weights = lists.map(l => fusionWeights?.[l.Source] ?? 1);
+        const weights = lists.map(l => {
+            if (l.Source === 'SemanticGraph') {
+                return fusionWeights?.['SemanticGraph'] ?? fusionWeights?.['graph'] ?? 1;
+            }
+            if (l.Source === 'graph') {
+                return fusionWeights?.['graph'] ?? fusionWeights?.['SemanticGraph'] ?? 1;
+            }
+            return fusionWeights?.[l.Source] ?? 1;
+        });
         const fused = this.computeWeightedRRF(rankedLists, weights);
 
         // Build a lookup from the result key to the full item. When the same record appears in
@@ -271,6 +425,7 @@ export class SearchFusion {
                     resultMap.set(key, {
                         ...existing,
                         ScoreBreakdown: { ...existing.ScoreBreakdown, ...r.ScoreBreakdown },
+                        ...MergeScopeAttributions(existing, r),
                     });
                 }
             }
@@ -373,4 +528,22 @@ export class SearchFusion {
             MatchedAt: new Date()
         };
     }
+}
+
+function ensureScopeAttribution(item: SearchResultItem, scopeID: string): SearchResultItem {
+    const existing = CollectScopeAttributions(item);
+    if (existing.length > 0) {
+        return item.OriginatingScopes && item.OriginatingScopeID ? item : applyScopeAttribution(item, existing);
+    }
+    return StampOriginatingScope(item, scopeID);
+}
+
+function mergeCrossScopePair(winner: SearchResultItem, loser: SearchResultItem): SearchResultItem {
+    const mergedTags = Array.from(new Set([...(winner.Tags ?? []), ...(loser.Tags ?? [])]));
+    return {
+        ...winner,
+        ScoreBreakdown: { ...loser.ScoreBreakdown, ...winner.ScoreBreakdown },
+        Tags: mergedTags,
+        ...MergeScopeAttributions(winner, loser),
+    };
 }

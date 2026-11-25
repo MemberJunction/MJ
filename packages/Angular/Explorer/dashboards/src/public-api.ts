@@ -9,6 +9,7 @@ export * from './Scheduling/scheduling-dashboard.component';
 export * from './Testing/testing-dashboard.component';
 export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
+export * from './Communications/communications-admin-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
 export * from './ThemeStudio/theme-studio-dashboard.component';
@@ -131,6 +132,9 @@ export {
 export {
   CommunicationMonitorResourceComponent
 } from './Communication/communication-monitor-resource.component';
+export {
+  CommunicationComplianceAdminResourceComponent
+} from './Communications/communication-compliance-admin-resource.component';
 export {
   CommunicationLogsResourceComponent
 } from './Communication/communication-logs-resource.component';
@@ -268,6 +272,14 @@ export * from './VideoStudio';
 export { BaseChiefOfStaffPage, type ChiefOfStaffClientTool } from './ChiefOfStaff/chief-of-staff-page-base';
 export { ChiefOfStaffOverviewComponent, LoadChiefOfStaffOverview } from './ChiefOfStaff/chief-of-staff-overview.component';
 export { ChiefOfStaffApprovalsComponent, LoadChiefOfStaffApprovals } from './ChiefOfStaff/chief-of-staff-approvals.component';
+export { ChiefOfStaffAgentChannelsComponent, LoadChiefOfStaffAgentChannels } from './ChiefOfStaff/chief-of-staff-agent-channels.component';
 export { ChiefOfStaffGovernanceComponent, LoadChiefOfStaffGovernance } from './ChiefOfStaff/chief-of-staff-governance.component';
 export * from './ChiefOfStaff/chief-of-staff-agent-context';
 export * from './ChiefOfStaff/chief-of-staff-live-refresh';
+
+// Health & Telemetry Observatory
+export * from './HealthObservatory';
+
+// Admin Limits Governance Resource
+export * from './AdminLimits';
+

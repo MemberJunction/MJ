@@ -3,11 +3,9 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 
 # MemberJunction Development Guide
 
-<!-- This file is deliberately small. Anthropic's guidance is ~200 lines per CLAUDE.md: longer
-     files consume context AND reduce adherence. Detailed guidance lives in path-scoped rules,
-     nested CLAUDE.md files, and skills — all of which load on demand. See the routing table
-     below. `npm run check:claude-md` enforces the budget and proves nothing was lost.
-     Before adding anything here, read "Where new guidance goes" at the bottom. -->
+<!-- Deliberately small (~200 lines): longer files eat context and reduce adherence. Detailed guidance
+     lives in path-scoped rules, nested CLAUDE.md files, and skills — see the routing table below.
+     `npm run check:claude-md` enforces the budget, parity with AGENTS.md, and link health. -->
 
 Everything below is either **unrecoverable if violated** (so it must survive `/compact`) or **true
 on every task regardless of what you're touching**. Everything else loads on demand — see
@@ -136,10 +134,11 @@ Guidance is **loaded on demand**, so it costs nothing until it's relevant. This 
 | Rule | Loads for | Covers |
 |---|---|---|
 | [`data-access.md`](.claude/rules/data-access.md) | `**/*.ts` | `RunView`/`RunViews` (`AlternateBaseView`), `ResultType`/`Fields`, `BaseEntity` Save/Delete error handling, entity metadata lookup (`EntityByName`), per-provider `Metadata` scoping, caching + `BaseEngine`/`BaseEngineRegistry`, keyset pagination, `UserInfoEngine` preferences |
-| [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, naming conventions, functional decomposition, OOD |
-| [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, the semantic token catalog, hex→token mappings, `color-mix()`, the CI gates |
-| [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, the scaffold script, fixing test drift, CI integration |
-| [`changesets.md`](.claude/rules/changesets.md) | `.changeset/**` | Bump levels — `minor` is reserved for migration/metadata branches, everything else `patch`; why the `fixed` group makes one stray `minor` repo-wide; which packages to list (every owner of a changed file — it decides changelogs, not semver); the `check:changeset` self-check |
+| [`typescript-style.md`](.claude/rules/typescript-style.md) | `**/*.ts` | No `any`, no `.Get()`/`.Set()`, derive field types from the entity, no cross-package re-exports, `BaseSingleton`, no dynamic `import()`, no arbitrary caps / unexplained static numeric literals, naming conventions, functional decomposition, OOD |
+| [`design-tokens.md`](.claude/rules/design-tokens.md) | `**/*.scss`, `**/*.css` | No hardcoded colors, semantic token catalog, hex→token mappings, `color-mix()`, CI gates |
+| [`field-security.md`](.claude/rules/field-security.md) | `packages/{Actions,AI,MJServer,Angular,MJCore,…}/**` | Field-level security when handing entity data onward — principal rule, `contextUser` identity, user-keyed caches |
+| [`testing.md`](.claude/rules/testing.md) | `**/*.test.ts`, `**/__tests__/**` | Vitest conventions, test structure, scaffold script, fixing test drift, CI integration |
+| [`changesets.md`](.claude/rules/changesets.md) | `.changeset/**` | Bump levels (`minor` reserved for migration/metadata branches, else `patch`), why `fixed` makes one stray `minor` repo-wide, listing every owner of a changed file, `check:changeset` |
 
 ### Nested `CLAUDE.md` — load when you read a file in that tree
 
@@ -170,11 +169,11 @@ Cross-cutting "read this before you build that" guides, categorized. **Consult t
 
 ### Skills — load only when invoked
 
-`debug-build-failures` (package won't build / Turbo / circular deps), `playwright-cli` (browser automation + the MJ dev-server loop), `scaffold-mj-dashboard` (new Explorer dashboard), `bootstrap-clean-db` (build a DB from scratch on a private name — clean-room verification, or just a database no other agent is using).
+`debug-build-failures`, `playwright-cli`, `scaffold-mj-dashboard`, `bootstrap-clean-db`, `mj-field-security`, `analyze-diagnostic-bundle`, `author-regression-test`, `regression-replay-pr` (descriptions auto-load at session start).
 
 ### Project-wide standards
 
-- **[Publish-Then-No-Breaking-Changes Policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** — within a published OpenApp major version, only additive schema changes are allowed. Consult before authoring any migration that modifies an existing schema. (Adopted 2026-04-29, prospective from each app's next published version.)
+- **[Publish-Then-No-Breaking-Changes Policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** — within a published OpenApp major version, only additive schema changes are allowed. Consult before authoring any migration that modifies an existing schema.
 - **[Full Autonomy Development](claude-full-auto.md)** — for sandboxed/air-gapped machines only. **Not for regular development machines.**
 
 ### Local CI mirrors
@@ -202,16 +201,14 @@ npm run check:codegen-tail # new-table migrations ship their generated entity (a
 
 ## Where new guidance goes
 
-Before adding anything to this file, route it:
+Keep `CLAUDE.md` and [`AGENTS.md`](AGENTS.md) routing tables in lockstep (`npm run check:claude-md` enforces routing parity and byte budgets). Route new guidance before adding it here:
 
-1. **Is it unrecoverable if violated?** (destroys work, bypasses review, ships a breaking change) → here, so it survives `/compact`.
-2. **Is it true on literally every task?** → here.
-3. **Does it apply to a file type?** (`.ts`, `.scss`) → a path-scoped rule in `.claude/rules/`.
-4. **Does it apply to a directory/subsystem?** → that subtree's `CLAUDE.md`.
-5. **Is it a multi-step procedure?** → a skill in `.claude/skills/`.
-6. **Does an enforcement script already exist?** → a hook, not prose.
-7. **Is it "read this before building X"?** → a guide, indexed in [`guides/README.md`](guides/README.md).
+1. **Unrecoverable if violated?** (destroys work, bypasses review, ships a breaking change) → both root files, so it survives `/compact`.
+2. **True on literally every task?** → both root files.
+3. **Applies to a file type?** (`.ts`, `.scss`) → `.claude/rules/` + listed in both routing tables.
+4. **Applies to a directory/subsystem?** → that subtree's `CLAUDE.md` + listed in both routing tables.
+5. **Multi-step procedure?** → `.claude/skills/` (exposed to non-Claude agents via `.agents/skills.json`).
+6. **Enforcement script exists?** → a hook, not prose.
+7. **"Read this before building X"?** → `guides/`, indexed in [`guides/README.md`](guides/README.md).
 
-Anything reaching step 3 or beyond **does not belong in this file**. The 30-second test from
-Anthropic's own guidance: *"Would removing this line cause Claude to make mistakes?"* — and then:
-*"on every task, or only when touching a particular kind of file?"* The second answer routes it out.
+Anything at step 3+ **does not belong here**. Ask: *"Would removing this cause mistakes on every task, or only when touching specific files?"* The second answer routes it out.

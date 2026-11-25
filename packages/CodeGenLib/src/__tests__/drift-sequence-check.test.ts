@@ -17,7 +17,7 @@ import { SystemIntegrityBase } from '../Misc/system_integrity';
 import { configInfo } from '../Config/config';
 import { CodeGenConnection, CodeGenQueryResult, SetBaseViewExclusionsPermitted, ResetBaseViewExclusionsPermitted } from '../Database/codeGenDatabaseProvider';
 
-type FieldRow = { ID: string; Entity: string; SchemaName: string; BaseView: string; EntityID: string; Name: string; Sequence: number };
+type FieldRow = { ID: string; Entity: string; SchemaName: string; BaseView: string; EntityID: string; Name: string; Sequence: number; IsNameField?: boolean };
 type ColumnRow = { TableSchema: string; TableName: string; ColumnName: string; Ordinal: number };
 
 function fields(entity: string, entityID: string, schema: string, view: string, names: string[], sequences?: number[]): FieldRow[] {
@@ -63,6 +63,25 @@ describe('CheckEntityFieldSequences (#4737)', () => {
       const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, columns('App', 'vwCourses', ['ID', 'Name'])));
 
       expect(result).toEqual({ Success: true, Message: '', Name: 'entityFieldsSequenceCheck' });
+   });
+
+   it('warns, without failing, when an entity has more than one name field (#6554)', async () => {
+      const f = fields('Employees', 'E1', 'App', 'vwEmployees', ['ID', 'FirstName', 'FirstLast']);
+      f[1].IsNameField = true;
+      f[2].IsNameField = true;
+      const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, columns('App', 'vwEmployees', ['ID', 'FirstName', 'FirstLast'])));
+
+      expect(result.Success).toBe(true);
+      expect(result.Warnings).toHaveLength(1);
+      expect(result.Warnings?.[0]).toContain('Entity Employees has 2 name fields (IsNameField = 1): FirstName, FirstLast');
+   });
+
+   it('does not warn for a single name field', async () => {
+      const f = fields('Employees', 'E1', 'App', 'vwEmployees', ['ID', 'FirstName']);
+      f[1].IsNameField = true;
+      const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, columns('App', 'vwEmployees', ['ID', 'FirstName'])));
+
+      expect(result.Warnings).toBeUndefined();
    });
 
    it('checks a view with no rows, using the catalog column list', async () => {
@@ -145,5 +164,55 @@ describe('CheckEntityFieldSequences (#4737)', () => {
 
       expect(result.Success).toBe(false);
       expect(result.Message).toContain('No entity fields found');
+   });
+
+   describe('base view wider than its fields (#3608)', () => {
+      it('warns, without failing, when the view has an extra trailing column, naming it', async () => {
+         const f = fields('Courses', 'E1', 'App', 'vwCourses', ['ID', 'Name']);
+         const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, columns('App', 'vwCourses', ['ID', 'Name', 'Category'])));
+
+         expect(result.Success).toBe(true);
+         expect(result.Message).toBe('');
+         expect(result.Warnings).toHaveLength(1);
+         expect(result.Warnings![0]).toContain('Entity Courses has 1 base view column(s)');
+         expect(result.Warnings![0]).toContain(': Category.');
+      });
+
+      it('passes with no warnings when the widths are equal', async () => {
+         const f = fields('Courses', 'E1', 'App', 'vwCourses', ['ID', 'Name']);
+         const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, columns('App', 'vwCourses', ['ID', 'Name'])));
+
+         expect(result).toEqual({ Success: true, Message: '', Name: 'entityFieldsSequenceCheck' });
+      });
+
+      it('does not count a configured exclusion as a missing column', async () => {
+         configInfo.baseViewExcludedFields = ['Alpha.Secret'];
+         SetBaseViewExclusionsPermitted(true);
+         const f = fields('Alpha', 'E1', 'App', 'vwAlpha', ['ID', 'Secret', 'Name']);
+
+         const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, columns('App', 'vwAlpha', ['ID', 'Name'])));
+
+         expect(result).toEqual({ Success: true, Message: '', Name: 'entityFieldsSequenceCheck' });
+      });
+
+      it('warns on every wide entity, and a position failure still fails without a duplicate warning', async () => {
+         const f = [
+            ...fields('Alpha', 'E1', 'App', 'vwAlpha', ['ID']),
+            ...fields('Beta', 'E2', 'App', 'vwBeta', ['ID', 'Code']),
+            ...fields('Gamma', 'E3', 'App', 'vwGamma', ['ID']),
+         ];
+         const cols = [
+            ...columns('App', 'vwAlpha', ['ID', 'OwnerName']),
+            ...columns('App', 'vwBeta', ['ID', 'Other', 'Extra']),
+            ...columns('App', 'vwGamma', ['ID', 'A', 'B']),
+         ];
+
+         const result = await SystemIntegrityBase.CheckEntityFieldSequences(pool(f, cols));
+
+         expect(result.Success).toBe(false);
+         expect(result.Message).toContain('Entity Beta has a mismatch');
+         expect(result.Warnings?.map(w => w.split(' has ')[0])).toEqual(['Entity Alpha', 'Entity Gamma']);
+         expect(result.Warnings?.[1]).toContain(': A, B.');
+      });
    });
 });

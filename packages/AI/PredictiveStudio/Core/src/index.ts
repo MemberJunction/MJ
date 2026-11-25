@@ -4,10 +4,12 @@
  * Type contracts for MemberJunction Predictive Studio — the sidecar
  * request/response contract, the declarative pipeline-spec JSON shapes, the
  * visual FeatureStep DAG, and the strongly-typed modeling-plan payload the
- * Model Development Agent builds — plus the browser-safe, dependency-free
- * runtime logic shared by the server engine, the UI and the agent (trust
- * verdicts, at-risk rules, evaluation lineage). The only runtime dependency
- * is `zod`, for the modeling-plan trust-boundary validators.
+ * Model Development Agent builds — plus the browser-safe
+ * runtime logic shared by the server engine, the UI and the agent (the gate
+ * and the trust verdict that renders its stored decision, at-risk rules,
+ * evaluation lineage). Its runtime dependencies are `zod`, for the
+ * trust-boundary validators, and `@memberjunction/global`, for UUID
+ * comparison, ordinal ordering and canonical JSON.
  *
  * See `plans/predictive-studio.md` for the full design.
  */
@@ -19,10 +21,45 @@ export * from './feature-steps';
 export * from './modeling-plan-spec';
 export * from './modeling-plan-schema';
 export * from './metrics-util';
+export * from './gate';
+export * from './trainer-contract';
+export * from './trainer-result-schemas';
 export * from './trust';
 export * from './outcome-config';
+export * from './json-value';
+export * from './traced-number';
+export * from './task-type';
 export * from './at-risk-rules';
 export * from './importance-display';
 export * from './evaluation-record';
 export * from './refusal-codes';
 export * from './experiment-sessions';
+export * from './prediction-unit';
+export * from './assembly-contract';
+export * from './evaluation-protocol';
+export * from './evaluation-protocol-rules';
+export * from './utc-day';
+export * from './holdout-carve';
+export * from './training-run-results';
+export * from './run-evaluation';
+export * from './snapshot-format';
+export * from './store-schemas';
+export * from './incumbent-heuristic';
+export * from './selection';
+export * from './protocol-rows';
+export * from './protocol-edit';
+export * from './unit-edit';
+export * from './legacy-pipeline';
+export * from './registry-contracts';
+export * from './registry-schemas';
+export * from './governance-contracts';
+export * from './semantics-rules';
+export * from './scoring-contracts';
+export * from './monitoring-contracts';
+export * from './monitoring-job-specs';
+export * from './lifecycle-labels';
+export * from './monitoring-rules';
+export * from './monitoring-result-schemas';
+export * from './prediction-panel-queries';
+export * from './stored-prediction';
+export * from './registry-check-details';

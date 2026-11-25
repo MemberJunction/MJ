@@ -1,0 +1,51 @@
+import { describe, it, expect } from 'vitest';
+import { ImmutableFieldDeclarations, TRUTH_IMMUTABLE_FIELDS } from '../immutable-fields';
+
+const decl = (BaseTable: string) => ({ BaseTable, Fields: ['X'] });
+
+describe('ImmutableFieldDeclarations.AppliesTo', () => {
+  it('applies a world table declaration (no dataset prefix) to the bare table and to every W<n>_ table', () => {
+    for (const table of ['MembershipYear', 'W1_MembershipYear', 'W4_MembershipYear', 'W12_MembershipYear']) {
+      expect(ImmutableFieldDeclarations.AppliesTo(decl('MembershipYear'), table)).toBe(true);
+    }
+    expect(ImmutableFieldDeclarations.AppliesTo(decl('Person'), 'W5_Person')).toBe(true);
+  });
+
+  it('does not apply a world table declaration to another dataset or a longer name', () => {
+    for (const table of ['C1MembershipYear', 'Scn_R3_MembershipYear', 'XW1_MembershipYear', 'W1_MembershipYearX', 'W_MembershipYear', 'W1_C1Person']) {
+      expect(ImmutableFieldDeclarations.AppliesTo(decl('MembershipYear'), table)).toBe(false);
+    }
+    expect(ImmutableFieldDeclarations.AppliesTo(decl('Person'), 'C1Person')).toBe(false);
+  });
+
+  it('applies a prefixed declaration to its exact table only', () => {
+    expect(ImmutableFieldDeclarations.AppliesTo(decl('C1Person'), 'C1Person')).toBe(true);
+    expect(ImmutableFieldDeclarations.AppliesTo(decl('C1Person'), 'W1_C1Person')).toBe(false);
+    expect(ImmutableFieldDeclarations.AppliesTo(decl('W4_Person'), 'W4_Person')).toBe(true);
+    expect(ImmutableFieldDeclarations.AppliesTo(decl('W4_Person'), 'W5_Person')).toBe(false);
+  });
+
+  it('covers the W4 membership year table with the declared MembershipYear fields', () => {
+    const covering = TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, 'W4_MembershipYear'));
+    expect(covering).toHaveLength(1);
+    expect(covering[0].Fields).toContain('EventsAttended');
+    expect(covering[0].Fields).not.toContain('PersonStatusNow');
+  });
+});
+
+describe('TRUTH_IMMUTABLE_FIELDS scenario tables', () => {
+  it('declares every Scn_T3, Scn_R3, Scn_C2, Scn_T2p and Scn_R1 column except the key', () => {
+    const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
+    expect(fieldsOf('Scn_T3')).toEqual(['EntityKey', 'T', 'LagTarget', 'SamePeriodTarget', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_R3')).toEqual(['EntityKey', 'T', 'PastEventsZ', 'Member', 'DistanceZ', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_C2')).toEqual(['EntityKey', 'T', 'ClaimAmountZ', 'PriorClaims', 'NewPolicy', 'ReportDelayZ', 'NoiseZ', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T2p')).toEqual(['EntityKey', 'T', 'UsageZ', 'Discount', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_R1')).toEqual(['EntityKey', 'T', 'DistanceZ', 'ItemsZ', 'TrafficZ', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T3lag')).toEqual([]);
+  });
+  it('declares every Scn_D1c, Scn_D1r, Scn_D2 and Scn_T4 column except the key (the monitoring gates train on them as of T, M6.6)', () => {
+    const fieldsOf = (table: string) => TRUTH_IMMUTABLE_FIELDS.filter((d) => ImmutableFieldDeclarations.AppliesTo(d, table)).flatMap((d) => d.Fields);
+    for (const table of ['Scn_D1c', 'Scn_D1r', 'Scn_D2']) expect(fieldsOf(table)).toEqual(['EntityKey', 'T', 'EngagementZ', 'TenureZ', 'AutoRenew', 'Target', 'TruthScore']);
+    expect(fieldsOf('Scn_T4')).toEqual(['EntityKey', 'T', 'LagTarget', 'Target', 'TruthScore']);
+  });
+});

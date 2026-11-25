@@ -6,6 +6,7 @@
  * |--------------------------------------|----------------------------------|----------------------------------------------|
  * | `requestTimeout`                     | driver request timeout           | `statement_timeout` on every backend         |
  * | `connectionPool.max` / `min`         | pool size                        | pool size                                    |
+ * | `connectionPool.readOnlyMax`         | —                                | application read-only pool size (defaults to `max`) |
  * | `connectionPool.idleTimeoutMillis`   | idle connection eviction         | idle connection eviction                     |
  * | `connectionPool.acquireTimeoutMillis`| wait for a pooled connection     | `connectionTimeoutMillis` (see below)        |
  * | `connectionTimeout`                  | time to open a connection        | not used                                     |
@@ -19,12 +20,21 @@
  * - `idle_in_transaction_session_timeout` has no SQL Server counterpart. It is derived as twice the
  *   statement timeout, so a transaction left open by an abandoned request is ended and its locks
  *   released.
- * - MJAPI opens a raw compatibility pool and a provider pool, each up to `connectionPool.max`, plus
- *   a CodeGen pool of 10 and, when a read-only login is configured, a read-only pool of at most 10,
- *   where SQL Server opens one pool (and a read-only one). PostgreSQL's default `max_connections`
- *   is 100, so the read-only and CodeGen pools are kept small.
+ * - When a read-only login is configured, MJAPI keeps two distinct pools on that login:
+ *   1. `'read-only'`: application `RunView*` reads, sized up to `connectionPool.readOnlyMax ?? apiMax`
+ *      (`MinConnections: 0`) so concurrent application reads scale with the API pool.
+ *   2. `'adhoc-read-only'`: untrusted caller-supplied SQL (`ExecuteAdhocQuery`, `TestQuerySQL`,
+ *      `GetDataContextData`), capped at `ADHOC_READ_ONLY_MAX_CONNECTIONS` (10) so ad-hoc queries
+ *      cannot starve application traffic.
  */
-import type { PGConnectionConfig } from '@memberjunction/postgresql-dataprovider';
+import {
+    BuildPgPasswordSource,
+    BuildPgSslConfig,
+    ResolvePgAuthMode,
+    type PGConnectionConfig,
+    type PgSslConfig,
+    type PgSslSettings,
+} from '@memberjunction/postgresql-dataprovider';
 import type { Pool, PoolConfig } from 'pg';
 import { BaseSingleton } from '@memberjunction/global';
 import type { DatabaseSettingsInfo } from './config.js';
@@ -35,14 +45,14 @@ export const CODEGEN_STATEMENT_TIMEOUT_MS = 600000;
 /** Pool size for the CodeGen/DDL pool. */
 const CODEGEN_MAX_CONNECTIONS = 10;
 
-/** Largest pool size for the read-only pool, which serves only caller-supplied SQL. */
-const READ_ONLY_MAX_CONNECTIONS = 10;
+/** Largest pool size for the untrusted ad-hoc read-only SQL pool (caller-supplied SQL). */
+export const ADHOC_READ_ONLY_MAX_CONNECTIONS = 10;
 
 /**
- * Which pool the settings are for: API traffic, the read-only pool for caller-supplied SQL, or
- * CodeGen and DDL work.
+ * Which pool the settings are for: API traffic, the application read-only pool (`RunView*`),
+ * the bounded ad-hoc read-only pool for caller-supplied SQL, or CodeGen and DDL work.
  */
-export type PostgreSQLPoolPurpose = 'api' | 'read-only' | 'codegen';
+export type PostgreSQLPoolPurpose = 'api' | 'read-only' | 'adhoc-read-only' | 'codegen';
 
 /** Where a PostgreSQL pool connects and as whom. */
 export interface PostgreSQLEndpoint {
@@ -69,16 +79,47 @@ export function IdleInTransactionTimeoutFor(statementTimeoutMs: number): number 
     return statementTimeoutMs > 0 ? statementTimeoutMs * 2 : 0;
 }
 
+/** The `databaseSettings.postgres.ssl` setting, in the shape `BuildPgSslConfig` takes. */
+export function PgSslSettingsFrom(settings: DatabaseSettingsInfo): PgSslSettings {
+    const ssl = settings.postgres?.ssl;
+    return { Mode: ssl?.mode, CAFile: ssl?.caFile, ServerName: ssl?.serverName };
+}
+
+/**
+ * The TLS and login half of a pool's config: `ssl` from the `PG_SSL_*` settings, and a password
+ * source when the auth mode issues tokens. BuildPgPasswordSource refuses a token login whose TLS does
+ * not verify the server.
+ */
+export function BuildPostgreSQLSecurity(
+    endpoint: PostgreSQLEndpoint,
+    settings: DatabaseSettingsInfo,
+    env: NodeJS.ProcessEnv = process.env
+): Pick<PGConnectionConfig, 'SSL' | 'PasswordSource'> {
+    const ssl: PgSslConfig = BuildPgSslConfig(endpoint.Host, PgSslSettingsFrom(settings), env);
+    const authMode = ResolvePgAuthMode(settings.postgres?.authMode, env);
+    // BuildPgPasswordSource refuses a token login whose TLS does not verify the server.
+    const passwordSource = BuildPgPasswordSource(authMode, {
+        Host: endpoint.Host,
+        Port: endpoint.Port,
+        User: endpoint.User,
+        Database: endpoint.Database,
+    }, ssl);
+    return passwordSource ? { SSL: ssl, PasswordSource: passwordSource } : { SSL: ssl };
+}
+
 /** Builds the provider connection config for one of MJAPI's PostgreSQL pools. */
 export function BuildPostgreSQLConnectionConfig(
     endpoint: PostgreSQLEndpoint,
     settings: DatabaseSettingsInfo,
-    purpose: PostgreSQLPoolPurpose
+    purpose: PostgreSQLPoolPurpose,
+    env: NodeJS.ProcessEnv = process.env
 ): PGConnectionConfig {
     const pool = settings.connectionPool;
+    const security = BuildPostgreSQLSecurity(endpoint, settings, env);
     if (purpose === 'codegen') {
         return {
             ...endpoint,
+            ...security,
             MaxConnections: CODEGEN_MAX_CONNECTIONS,
             StatementTimeoutMs: CODEGEN_STATEMENT_TIMEOUT_MS,
             IdleInTransactionSessionTimeoutMs: 0
@@ -87,11 +128,18 @@ export function BuildPostgreSQLConnectionConfig(
     const statementTimeoutMs = Math.max(0, settings.requestTimeout);
     const apiMax = pool?.max ?? 50;
     const apiMin = pool?.min ?? 5;
-    const readOnly = purpose === 'read-only';
+    let maxConnections = apiMax;
+    if (purpose === 'read-only') {
+        maxConnections = pool?.readOnlyMax ?? apiMax;
+    } else if (purpose === 'adhoc-read-only') {
+        maxConnections = Math.min(ADHOC_READ_ONLY_MAX_CONNECTIONS, apiMax);
+    }
+    const isReadOnlyPurpose = purpose === 'read-only' || purpose === 'adhoc-read-only';
     return {
         ...endpoint,
-        MaxConnections: readOnly ? Math.min(READ_ONLY_MAX_CONNECTIONS, apiMax) : apiMax,
-        MinConnections: readOnly ? 0 : apiMin,
+        ...security,
+        MaxConnections: maxConnections,
+        MinConnections: isReadOnlyPurpose ? 0 : apiMin,
         IdleTimeoutMillis: pool?.idleTimeoutMillis ?? 30000,
         ConnectionTimeoutMillis: pool?.acquireTimeoutMillis ?? 30000,
         StatementTimeoutMs: statementTimeoutMs,
@@ -109,9 +157,11 @@ export function ToPGPoolConfig(config: PGConnectionConfig): PoolConfig {
         port: config.Port,
         database: config.Database,
         user: config.User,
-        password: config.Password,
+        password: config.PasswordSource ?? config.Password,
         max: config.MaxConnections
     };
+    // Always set: an unset `ssl` lets node-postgres fall back to PGSSLMODE, which is not one of MJ's settings.
+    pool.ssl = config.SSL ?? false;
     if (config.MinConnections !== undefined) pool.min = config.MinConnections;
     if (config.IdleTimeoutMillis !== undefined) pool.idleTimeoutMillis = config.IdleTimeoutMillis;
     if (config.ConnectionTimeoutMillis !== undefined) pool.connectionTimeoutMillis = config.ConnectionTimeoutMillis;
@@ -145,12 +195,13 @@ export function ResolvePostgreSQLReadOnlyCredentials(
 }
 
 /**
- * Holds MJAPI's PostgreSQL read-only pool, opened once at startup with the read-only login.
- * Per-request read-only providers share it, so they connect as the read-only user rather than
- * through the read-write pool.
+ * Holds MJAPI's PostgreSQL read-only pools, opened once at startup with the read-only login:
+ * - {@link Pool}: application `RunView*` read-only pool, sized up to `apiMax` (or `connectionPool.readOnlyMax`)
+ * - {@link AdhocPool}: bounded pool for untrusted caller-supplied SQL, capped at {@link ADHOC_READ_ONLY_MAX_CONNECTIONS}
  */
 export class PostgreSQLReadOnlyPool extends BaseSingleton<PostgreSQLReadOnlyPool> {
     private _pool: Pool | null = null;
+    private _adhocPool: Pool | null = null;
 
     /** Use {@link PostgreSQLReadOnlyPool.Instance}. */
     public constructor() {
@@ -161,13 +212,22 @@ export class PostgreSQLReadOnlyPool extends BaseSingleton<PostgreSQLReadOnlyPool
         return PostgreSQLReadOnlyPool.getInstance<PostgreSQLReadOnlyPool>();
     }
 
-    /** The read-only pool, or `null` when no read-only login is configured. */
+    /** The application read-only pool, or `null` when no read-only login is configured. */
     public get Pool(): Pool | null {
         return this._pool;
     }
 
     public set Pool(pool: Pool | null) {
         this._pool = pool;
+    }
+
+    /** The bounded ad-hoc read-only pool for caller-supplied SQL, or `null` when no read-only login is configured. */
+    public get AdhocPool(): Pool | null {
+        return this._adhocPool;
+    }
+
+    public set AdhocPool(pool: Pool | null) {
+        this._adhocPool = pool;
     }
 }
 
@@ -210,4 +270,143 @@ export async function DescribeReadOnlyLoginOverreach(client: ReadOnlyLoginCheckC
         warnings.push('The PostgreSQL read-only login is a member of pg_read_server_files, so SQL run as it can read files on the database server. Revoke that membership.');
     }
     return warnings;
+}
+
+/** One pool's share of the connection budget. */
+export interface PostgreSQLPoolBudgetEntry {
+    Name: string;
+    MaxConnections: number;
+}
+
+/** What {@link DescribeConnectionBudget} reads from the server. */
+export interface ConnectionLimitRow {
+    MaxConnections: number;
+    ReservedConnections: number;
+}
+
+/** The one method {@link DescribeConnectionBudget} needs from a connection; a `pg` pool or client has it. */
+export interface ConnectionLimitCheckClient {
+    query(sql: string): Promise<{ rows: ConnectionLimitRow[] }>;  // case-violation-ok-legacy-back-compat: mirrors the pg client's query method, which a pg client must satisfy as-is
+}
+
+/** The share of `max_connections` past which the budget check warns. */
+export const CONNECTION_BUDGET_WARN_RATIO = 0.8;
+
+/**
+ * Compares the most connections MJAPI's PostgreSQL pools could open against the server's limit, as
+ * a startup warning. Managed PostgreSQL tiers often allow 50-200 connections, and every MJAPI
+ * instance opens its own pools, so the pools of a few instances can exhaust the server and later
+ * connections fail with `too many clients`. Pools open connections only as load needs them, so
+ * this is a worst case, not current use; the check warns and never blocks startup.
+ *
+ * @param instances - How many MJAPI instances share the server (`connectionPool.expectedInstances`).
+ * @returns A warning, or `null` when the worst case fits within {@link CONNECTION_BUDGET_WARN_RATIO} of the usable connections.
+ */
+export async function DescribeConnectionBudget(
+    client: ConnectionLimitCheckClient,
+    pools: PostgreSQLPoolBudgetEntry[],
+    instances: number = 1,
+): Promise<string | null> {
+    const result = await client.query(
+        `SELECT current_setting('max_connections')::int AS "MaxConnections",
+                current_setting('superuser_reserved_connections')::int
+                  + COALESCE(NULLIF(current_setting('reserved_connections', true), '')::int, 0) AS "ReservedConnections"`,
+    );
+    const row = result.rows[0];
+    if (!row) {
+        return null;
+    }
+    const usable = row.MaxConnections - row.ReservedConnections;
+    const perInstance = pools.reduce((sum, p) => sum + p.MaxConnections, 0);
+    const worstCase = perInstance * Math.max(1, instances);
+    if (worstCase <= usable * CONNECTION_BUDGET_WARN_RATIO) {
+        return null;
+    }
+    const breakdown = pools.map(p => `${p.Name} ${p.MaxConnections}`).join(', ');
+    return `PostgreSQL connection budget: MJAPI's pools can open up to ${perInstance} connection(s) per instance (${breakdown})` +
+        `${instances > 1 ? ` × ${instances} instances = ${worstCase}` : ''}, against ${usable} usable on the server ` +
+        `(max_connections ${row.MaxConnections} minus ${row.ReservedConnections} reserved). Lower databaseSettings.connectionPool.max ` +
+        `or readOnlyMax, raise max_connections, or put a connection pooler in front of the server.`;
+}
+
+/**
+ * The worst-case connection count of each pool MJAPI opens on PostgreSQL, from the same settings
+ * the pools are built from.
+ */
+export function PostgreSQLPoolBudget(
+    settings: DatabaseSettingsInfo,
+    hasReadOnlyLogin: boolean,
+    hasCodeGenLogin: boolean,
+): PostgreSQLPoolBudgetEntry[] {
+    const endpoint: PostgreSQLEndpoint = { Host: 'localhost', Port: 5432, Database: '', User: '', Password: '' };
+    const max = (purpose: PostgreSQLPoolPurpose): number =>
+        BuildPostgreSQLConnectionConfig(endpoint, settings, purpose, {}).MaxConnections ?? 0;
+    const pools: PostgreSQLPoolBudgetEntry[] = [{ Name: 'API', MaxConnections: max('api') }];
+    if (hasReadOnlyLogin) {
+        pools.push({ Name: 'read-only', MaxConnections: max('read-only') }, { Name: 'ad-hoc read-only', MaxConnections: max('adhoc-read-only') });
+    }
+    if (hasCodeGenLogin) {
+        pools.push({ Name: 'CodeGen', MaxConnections: max('codegen') });
+    }
+    return pools;
+}
+
+/** Logs {@link DescribeConnectionBudget}'s warning, if any. A failed check is logged, never thrown. */
+export async function WarnIfPostgreSQLConnectionBudgetExceeded(
+    client: ConnectionLimitCheckClient,
+    settings: DatabaseSettingsInfo,
+    hasReadOnlyLogin: boolean,
+    hasCodeGenLogin: boolean,
+    log: (message: string) => void,
+): Promise<void> {
+    try {
+        const pools = PostgreSQLPoolBudget(settings, hasReadOnlyLogin, hasCodeGenLogin);
+        const warning = await DescribeConnectionBudget(client, pools, settings.connectionPool?.expectedInstances ?? 1);
+        if (warning) {
+            log(`WARNING: ${warning}`);
+        }
+    } catch (err) {
+        log(`WARNING: could not check the PostgreSQL connection budget: ${err instanceof Error ? err.message : String(err)}`);
+    }
+}
+
+/** Which read-only pools a configured replica serves. */
+export type PostgreSQLReplicaPools = 'adhoc' | 'all-read-only';
+
+/** Where each read-only pool connects: the primary, or a read replica when one is configured. */
+export interface PostgreSQLReadOnlyEndpoints {
+    Application: PostgreSQLEndpoint;
+    Adhoc: PostgreSQLEndpoint;
+}
+
+/**
+ * Resolves the read-only pools' endpoints. `PG_READ_REPLICA_HOST` / `databaseSettings.postgres.readReplica.host`
+ * moves the ad-hoc pool to a replica; `pools: 'all-read-only'` (`PG_READ_REPLICA_POOLS`) moves the
+ * application read-only pool too. Without a replica both stay on the primary, as before.
+ *
+ * @param readOnly - The primary endpoint with the read-only login's credentials.
+ */
+export function ResolvePostgreSQLReadOnlyEndpoints(
+    readOnly: PostgreSQLEndpoint,
+    settings: DatabaseSettingsInfo,
+    env: NodeJS.ProcessEnv = process.env,
+): PostgreSQLReadOnlyEndpoints {
+    const configured = settings.postgres?.readReplica;
+    const host = env.PG_READ_REPLICA_HOST?.trim() || configured?.host?.trim();
+    if (!host) {
+        return { Application: readOnly, Adhoc: readOnly };
+    }
+    const envPort = env.PG_READ_REPLICA_PORT ? parseInt(env.PG_READ_REPLICA_PORT, 10) : NaN;
+    const port = Number.isFinite(envPort) ? envPort : configured?.port ?? readOnly.Port;
+    const pools = parseReplicaPools(env.PG_READ_REPLICA_POOLS ?? configured?.pools);
+    const replica: PostgreSQLEndpoint = { ...readOnly, Host: host, Port: port };
+    return { Application: pools === 'all-read-only' ? replica : readOnly, Adhoc: replica };
+}
+
+function parseReplicaPools(value: string | undefined): PostgreSQLReplicaPools {
+    const v = (value ?? 'adhoc').trim().toLowerCase();
+    if (v !== 'adhoc' && v !== 'all-read-only') {
+        throw new Error(`PG_READ_REPLICA_POOLS is "${value}"; expected adhoc or all-read-only.`);
+    }
+    return v;
 }

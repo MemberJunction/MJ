@@ -132,6 +132,10 @@ export { CUSTOM_OVERFLOW_COLUMN, ComputeUnmappedFields, computeUnmappedFields, H
 export { SYNC_DIRECTIVE_CONFIG_KEY, ReadFieldSyncDirective, WriteFieldSyncDirective, ComputeExcludedSourceNames, StripExcludedFields } from './SyncDirectives.js';
 export type { FieldSyncDirective, FieldWithConfiguration } from './SyncDirectives.js';
 export { FindUnbindableFieldMaps, DescribeUnbindableFieldMaps } from './FieldMapValidation.js';
+export { RECORD_FILTER_CONFIG_KEY, ParseRecordFilter, RecordPassesFilter, ApplyRecordFilter } from './RecordFilter.js';
+export type { RecordFilterCondition, ParsedRecordFilter, RecordFilterResult } from './RecordFilter.js';
+export { RESOLVE_REFERENCES_CONFIG_KEY, ParseReferenceFields, CollectReferenceValues, ApplyResolvedReferences, DescribeUnresolvedReference, LoadReferenceLookups } from './ReferenceResolver.js';
+export type { ReferenceField, ReferenceLookups, UnresolvedReference, ReferenceResolution } from './ReferenceResolver.js';
 export type { ValidatableFieldMap, UnbindableFieldMap } from './FieldMapValidation.js';
 export { DescribePersistCounts } from './SchemaPersistCounts.js';
 export type { PersistCountsLike } from './SchemaPersistCounts.js';
@@ -158,7 +162,7 @@ export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult
 export type { FetchWarning } from './BaseIntegrationConnector.js';
 export type { ConnectorSettingDescriptor } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
-export { DecideSchemaLimitViolations, decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+export { DecideSchemaLimitViolations, decideSchemaLimitViolations, DecideTypeOverlay, decideTypeOverlay } from './IntegrationSchemaSync.js';
 // MJ-RUN-37 — the persist layer's watermark-invalidation signal, consumed by the schema evolution.
 export { ObjectsWithWatermarkFieldChange, WATERMARK_INVALIDATING_ATTRIBUTES } from './IntegrationSchemaSync.js';
 export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
@@ -192,3 +196,18 @@ export type { CatalogSource } from './CatalogSource.js';
 export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
 export type { CatalogWriter } from './CatalogWriter.js';
 export * from './ResourcePressure.js';
+
+// ── Three-Way Field Merge & Match Strategy (spec §10 / §11 / §19) ──
+export { ComputeThreeWayFieldMerge, ValuesEqual } from './ThreeWayMerge.js';
+export type {
+    ThreeWayFieldMapping,
+    ThreeWayMergeOptions,
+    ThreeWayMergeResult,
+} from './ThreeWayMerge.js';
+export { ParseMatchStrategy } from './MatchEngine.js';
+export type { MatchStrategyConfig } from './MatchEngine.js';
+export type { ConnectorPipelineContext } from './BaseIntegrationConnector.js';
+
+// ── MJ Peer Sync Connector & Protocol Modules ──
+export * from './peer-sync/index.js';
+

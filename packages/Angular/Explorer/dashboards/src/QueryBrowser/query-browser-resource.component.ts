@@ -2,10 +2,10 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrateg
 import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { GroupByUUID, IndexByUUID, RegisterClass , UUIDSet, UUIDsEqual } from '@memberjunction/global';
-import { BaseResourceComponent } from '@memberjunction/ng-shared';
+import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
-import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage } from '@memberjunction/core-entities';
+import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
 import {
     QueryEntityLinkClickEvent,
@@ -15,6 +15,13 @@ import { CompositionTokenClickEvent } from '@memberjunction/ng-code-editor';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import type { QueryRefreshScope } from '@memberjunction/ng-query-viewer';
 import { ValidateStringParam, BoundNameList } from '../shared/agent-tool-validation';
+import {
+    CreateLiveSheetHelperForProvider,
+    LiveSheetClientToolHelper,
+    type LiveSheetJsonObject,
+    type LiveSheetJsonValue,
+    type LiveSheetToolResult,
+} from '@memberjunction/ng-artifacts';
 import {
     DEFAULT_QUERY_MAX_ROWS,
     QUERY_MAX_ROWS_HARD_CAP,
@@ -235,9 +242,28 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Why the drawer's last save was refused, one finding per rule the SQL broke. */
     public DrawerSaveDiagnostics: QueryDiagnosticLine[] = [];
 
-    /** Ordered status options for the drawer dropdown — all valid Query statuses */
-    public readonly DrawerStatuses: Array<'Pending' | 'Approved' | 'Rejected' | 'Expired'> =
+    /** Every Query status, in the order the drawer dropdown lists them. */
+    private static readonly allDrawerStatuses: Array<MJQueryEntityExtended['Status']> =
         ['Pending', 'Approved', 'Rejected', 'Expired'];
+
+    /**
+     * The statuses the drawer dropdown offers. `Approved` is left out for a user who can't approve
+     * queries (the server would refuse the save), unless the query was Approved when the drawer
+     * opened, so moving it to another status can be undone before saving.
+     */
+    public get DrawerStatuses(): Array<MJQueryEntityExtended['Status']> {
+        const all = QueryBrowserResourceComponent.allDrawerStatuses;
+        if (this.CanApproveQueries || this.drawerLoadedStatus === 'Approved') return all;
+        return all.filter(s => s !== 'Approved');
+    }
+
+    /** The status of the query the drawer opened on; null when it is creating one. */
+    private drawerLoadedStatus: MJQueryEntityExtended['Status'] | null = null;
+
+    /** Whether the current user may approve queries (the `Queries: Approve` authorization). */
+    public get CanApproveQueries(): boolean {
+        return UserCanApproveQueries(this.metadata.CurrentUser, this.metadata);
+    }
 
     private initialDrawerSnapshot = '';
 
@@ -479,6 +505,46 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
                 },
                 Handler: async (params: Record<string, unknown>) => this.handlePageQueryResultsTool(params),
             },
+            {
+                Name: 'CreateLiveSheetFromQuery',
+                Description: 'Create a new collaborative Excel Spreadsheet artifact populated with a live-linked SavedQuery table backed by an Approved stored query (by NAME or ID). Returns ArtifactID, VersionID, SheetName, BoundingRange, and RowCount so it can be opened directly in the ArtifactWorkspace.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        query: { type: 'string', description: 'Stored query name or ID' },
+                        title: { type: 'string', description: 'Optional spreadsheet artifact title' },
+                        sheetName: { type: 'string', description: 'Optional worksheet tab name (defaults to Query Data)' },
+                        tableTitle: { type: 'string', description: 'Optional live table title' },
+                        Parameters: { type: 'object', description: 'Optional query parameter values' },
+                        MaxRows: { type: 'number', description: 'Optional max rows cap' },
+                        anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                        existingArtifactId: {
+                            type: 'string',
+                            description: 'Optional existing Excel Spreadsheet artifact ID to populate instead of creating a new artifact',
+                        },
+                    },
+                    required: ['query'],
+                },
+                Handler: async (params) => this.handleCreateLiveSheetFromQueryTool(params),
+            },
+            {
+                Name: 'AppendQueryToLiveSheet',
+                Description: 'Append a live-linked SavedQuery table backed by an Approved stored query onto an existing collaborative Excel Spreadsheet artifact (creating the target worksheet tab if it does not exist yet). Returns updated VersionID, VersionNumber, SheetName, BoundingRange, and RowCount.',
+                ParameterSchema: {
+                    type: 'object',
+                    properties: {
+                        artifactId: { type: 'string', description: 'Target Excel Spreadsheet artifact ID' },
+                        query: { type: 'string', description: 'Stored query name or ID' },
+                        sheetName: { type: 'string', description: 'Target worksheet tab name (created if missing)' },
+                        tableTitle: { type: 'string', description: 'Optional live table title' },
+                        Parameters: { type: 'object', description: 'Optional query parameter values' },
+                        MaxRows: { type: 'number', description: 'Optional max rows cap' },
+                        anchorCell: { type: 'string', description: 'Optional top-left cell (defaults to A1)' },
+                    },
+                    required: ['artifactId', 'query'],
+                },
+                Handler: async (params) => this.handleAppendQueryToLiveSheetTool(params),
+            },
         ]);
     }
 
@@ -713,6 +779,154 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             this.publishAgentContext();
         }
         return { ...exec, PageNumber: pageNumber, PageSize: pageSize };
+    }
+
+    private toLiveSheetJsonValue(
+        value: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0][string],
+    ): LiveSheetJsonValue {
+        if (
+            value === null ||
+            value === undefined ||
+            typeof value === 'string' ||
+            typeof value === 'number' ||
+            typeof value === 'boolean'
+        ) {
+            return value;
+        }
+        if (Array.isArray(value)) {
+            return value.map((item) => this.toLiveSheetJsonValue(item));
+        }
+        if (typeof value === 'object') {
+            const out: LiveSheetJsonObject = {};
+            for (const [k, v] of Object.entries(value)) {
+                out[k] = this.toLiveSheetJsonValue(v);
+            }
+            return out;
+        }
+        return String(value);
+    }
+
+    private toLiveSheetParameters(
+        raw: ReturnType<typeof NormalizeQueryParameters>,
+    ): LiveSheetJsonObject | undefined {
+        if (!raw) {
+            return undefined;
+        }
+        const out: LiveSheetJsonObject = {};
+        for (const [k, v] of Object.entries(raw)) {
+            out[k] = this.toLiveSheetJsonValue(v);
+        }
+        return out;
+    }
+
+    private prepareApprovedQuerySheetContext(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ):
+        | {
+            ok: true;
+            query: MJQueryEntityExtended;
+            helper: LiveSheetClientToolHelper;
+            title?: string;
+            sheetName?: string;
+            tableTitle?: string;
+            anchorCell?: string;
+            existingArtifactId?: string;
+            maxRows?: number;
+            parameters?: LiveSheetJsonObject;
+          }
+        | { ok: false; result: LiveSheetToolResult } {
+        const raw = String(params?.['query'] ?? params?.['queryId'] ?? params?.['QueryId'] ?? '');
+        const resolved = this.resolveRunnableQuery(raw);
+        if (!resolved.ok) {
+            return { ok: false, result: { Success: false, ErrorMessage: resolved.result.ErrorMessage } };
+        }
+        if (resolved.query.Status !== 'Approved') {
+            return {
+                ok: false,
+                result: {
+                    Success: false,
+                    ErrorMessage: `Query "${resolved.query.Name}" has Status="${resolved.query.Status}". Only Approved queries can populate a live sheet.`,
+                },
+            };
+        }
+        const helper = CreateLiveSheetHelperForProvider(this.ProviderToUse, this.metadata.CurrentUser);
+        if (!helper) {
+            return {
+                ok: false,
+                result: { Success: false, ErrorMessage: 'GraphQL provider or signed-in user context is unavailable.' },
+            };
+        }
+        const opt = (key: string): string | undefined => {
+            const v = params?.[key];
+            return typeof v === 'string' && v.trim().length > 0 ? v.trim() : undefined;
+        };
+        return {
+            ok: true,
+            query: resolved.query,
+            helper,
+            title: opt('title'),
+            sheetName: opt('sheetName'),
+            tableTitle: opt('tableTitle'),
+            anchorCell: opt('anchorCell'),
+            existingArtifactId: opt('existingArtifactId'),
+            maxRows: typeof params?.['MaxRows'] === 'number'
+                ? NormalizeMaxRows(params['MaxRows'], DEFAULT_QUERY_MAX_ROWS)
+                : undefined,
+            parameters: this.toLiveSheetParameters(NormalizeQueryParameters(params?.['Parameters'])),
+        };
+    }
+
+    private async handleCreateLiveSheetFromQueryTool(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ): Promise<LiveSheetToolResult> {
+        const ctx = this.prepareApprovedQuerySheetContext(params);
+        if (!ctx.ok) return ctx.result;
+
+        const res = await ctx.helper.CreateLiveSheetFromQuery({
+            QueryID: ctx.query.ID,
+            QueryName: ctx.query.Name,
+            Title: ctx.title,
+            SheetName: ctx.sheetName,
+            TableTitle: ctx.tableTitle,
+            Parameters: ctx.parameters,
+            MaxRows: ctx.maxRows,
+            AnchorCell: ctx.anchorCell,
+            ExistingArtifactID: ctx.existingArtifactId,
+        });
+        if (res.Success) {
+            this.lastExecutedQueryId = ctx.query.ID;
+            this.lastExecutedQueryName = ctx.query.Name;
+            this.publishAgentContext();
+        }
+        return res;
+    }
+
+    private async handleAppendQueryToLiveSheetTool(
+        params: Parameters<Parameters<NavigationService['SetAgentClientTools']>[1][number]['Handler']>[0],
+    ): Promise<LiveSheetToolResult> {
+        const artifactVal = ValidateStringParam(params?.['artifactId'], 'artifactId');
+        if (!artifactVal.ok) {
+            return { Success: false, ErrorMessage: artifactVal.result.ErrorMessage };
+        }
+        const ctx = this.prepareApprovedQuerySheetContext(params);
+        if (!ctx.ok) return ctx.result;
+
+        const res = await ctx.helper.AppendQueryToLiveSheet({
+            ArtifactID: artifactVal.value,
+            QueryID: ctx.query.ID,
+            QueryName: ctx.query.Name,
+            SheetName: ctx.sheetName,
+            TableTitle: ctx.tableTitle,
+            Parameters: ctx.parameters,
+            MaxRows: ctx.maxRows,
+            AnchorCell: ctx.anchorCell,
+        });
+        if (res.Success) {
+            this.lastExecutedQueryId = ctx.query.ID;
+            this.lastExecutedQueryName = ctx.query.Name;
+            this.publishAgentContext();
+        }
+        return res;
     }
 
     /**
@@ -1413,6 +1627,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         // Default to the explicit category, or the most recently active category
         this.DrawerCategoryID = categoryID ?? this.activeCategoryID ?? '';
         this.DrawerStatus = 'Pending';
+        this.drawerLoadedStatus = null;
         this.DrawerReusable = false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;
@@ -1436,6 +1651,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
         this.DrawerDescription = query.Description ?? '';
         this.DrawerCategoryID = query.CategoryID ?? '';
         this.DrawerStatus = query.Status ?? 'Pending';
+        this.drawerLoadedStatus = query.Status ?? null;
         this.DrawerReusable = query.Reusable ?? false;
         this.DrawerNameError = false;
         this.DrawerSaveError = null;

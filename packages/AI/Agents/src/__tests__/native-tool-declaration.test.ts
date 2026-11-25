@@ -86,6 +86,12 @@ describe('recordToolCallingInstrumentation — NativeDualChannel', () => {
         const b = step(); new Probe().Record(b, result('Envelope', undefined, '{"taskComplete":true}'));
         expect(b.NativeDualChannel).toBeUndefined();
     });
+    it('counts the calls on a NativeRecovered turn, which is native (#5847)', () => {
+        const s = step(); new Probe().Record(s, result('NativeRecovered', [{ name: 'create_svg_chart' }], ''));
+        expect(s.ToolCallingMode).toBe('NativeRecovered');
+        expect(s.NativeToolCallCount).toBe(1);
+        expect(s.NativeDualChannel).toBe(false);
+    });
     it('carries the flag into the queued save', () => {
         const p = new Probe(); const s = step();
         p.Record(s, result('Native', [{ name: 'x' }], '{"taskComplete":true}'));

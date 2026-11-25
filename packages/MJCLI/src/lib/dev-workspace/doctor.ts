@@ -28,6 +28,7 @@ import { CollectBuildOutputCensus } from './build-output.js';
 import { LOCKFILE_NAME, NODE_MODULES_NAME } from './clean.js';
 import { DetectCandidates } from './detect.js';
 import { DescribeDirSource } from './dir-flag.js';
+import { DescribePrebundleRecords, FindPrebundleDrift, PrebundleRecordsOf } from './prebundle.js';
 import { CollectWorkspaceStatus } from './status.js';
 import { SENTINEL_FILE_NAME } from './write.js';
 import type { BuildOutputEntry, ClientPackageCensus, DirSource, WorkspaceStatus } from './types.js';
@@ -278,6 +279,29 @@ function checkSentinel(status: WorkspaceStatus): DoctorCheck {
     Name: 'sentinel',
     Severity: 'warn',
     Detail: `no ${SENTINEL_FILE_NAME} — hand-made or pre-sentinel workspace; clean needs --force`,
+  };
+}
+
+/**
+ * The `angular.json` prebundle-exclude entries the join added (#3875) must still be there: without
+ * them the dev server serves rebuilt linked packages from its prebundle cache. A missing entry means
+ * the file was reset (often by git) after the join.
+ */
+function checkPrebundleExcludes(parentDir: string, status: WorkspaceStatus): DoctorCheck {
+  const name = 'prebundle exclude';
+  const records = PrebundleRecordsOf(status.Sentinel);
+  if (records.length === 0) {
+    return { Name: name, Severity: 'skip', Detail: 'the sentinel records no angular.json prebundle entries' };
+  }
+  const drift = FindPrebundleDrift(parentDir, records);
+  if (drift.length === 0) {
+    return { Name: name, Severity: 'pass', Detail: `present: ${DescribePrebundleRecords(records).join('; ')}` };
+  }
+  const missing = drift.map((d) => `${d.Missing.join(', ')} from ${d.File} (project ${d.Project})`).join('; ');
+  return {
+    Name: name,
+    Severity: 'warn',
+    Detail: `missing ${missing} — rebuilt linked packages may be served stale. Re-run \`dev workspace --force\` to add them back`,
   };
 }
 
@@ -586,6 +610,7 @@ export function CollectDoctorReport(
       checkGeneratedFiles(status),
       checkInstallArtifacts(status),
       checkSentinel(status),
+      checkPrebundleExcludes(parentDir, status),
       checkPnpmVersion(status),
       checkMemberDirs(status),
       checkCandidates(status),

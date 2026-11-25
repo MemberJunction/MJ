@@ -435,6 +435,24 @@ export interface WorkspaceSentinel {
   files: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Member repo directory names the workspace was generated for, sorted. */
   members: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /**
+   * Entries the generator added to app shells' `angular.json` prebundle exclude lists (#3875).
+   * `clean` removes exactly these. Absent in sentinels written before the generator managed the list.
+   */
+  prebundleExcludes?: PrebundleExcludeRecord[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+}
+
+/**
+ * One `angular.json` project whose `serve.options.prebundle.exclude` list the generator added
+ * entries to. Lowercase keys: part of the sentinel's on-disk shape.
+ */
+export interface PrebundleExcludeRecord {
+  /** Path of the `angular.json`, relative to the workspace parent, `/`-separated (e.g. `MJ/packages/MJExplorer/angular.json`). */
+  file: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Key under the file's `projects` object. */
+  project: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** The globs the generator added, e.g. `@mj-biz-apps/*`. */
+  entries: string[];  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Outcome of reading the sentinel: ours, not there, or there but not ours. */

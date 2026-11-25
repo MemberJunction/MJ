@@ -193,6 +193,13 @@ export type FileSearchOptions = {
   searchContent?: boolean;
 
   /**
+   * The `nextPageToken` of a previous search, to fetch the page after it. The other options are
+   * ignored by providers whose continuation carries the original query (Dropbox). Providers that do
+   * not page their search ignore it.
+   */
+  pageToken?: string;
+
+  /**
    * Additional provider-specific search parameters.
    * This allows providers to expose advanced features not covered by common options.
    * Example: { 'trashed': false } for Google Drive, { 'scope': 'personal' } for SharePoint

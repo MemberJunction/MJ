@@ -25,8 +25,8 @@
  *
  * Deterministic — no model calls. TG2 creates one task and the bundle Teardown removes it.
  */
-import { BaseRemotableOperation, RunView } from '@memberjunction/core';
-import type { TaskGraphSpec, WorkflowSpec } from '@memberjunction/ai-core-plus';
+import { BaseRemotableOperation, RunView, ServerOperationScopeManager } from '@memberjunction/core';
+import { TASK_GRAPH_RUNTIME_SECURITY_OPERATION, TASK_GRAPH_WORKFLOW_TYPE_NAME, type TaskGraphSpec, type WorkflowSpec } from '@memberjunction/ai-core-plus';
 import { MJScheduledJobEntity, MJTaskEntity, MJTaskTypeEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { EXECUTE_AGENT_ACTION, LoadTaskGraphOperations, LoadWorkflowOperations, RUN_WORKFLOW_JOB_TYPE, TaskGraphService, WorkflowSpecSync, type WorkflowAgentWriter } from '@memberjunction/task-graph';
@@ -100,7 +100,8 @@ class IntegrationAgentWriter implements WorkflowAgentWriter {
 /** Resolves a TaskType, creating a disposable one if the install has none. */
 async function resolveTaskTypeID(ctx: IntegrationCheckContext): Promise<string> {
     const existing = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string }>(
-        { EntityName: 'MJ: Task Types', Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
+        // Not the workflow type: a task filed under it is a workflow, which only the task-graph service creates.
+        { EntityName: 'MJ: Task Types', ExtraFilter: `Name <> '${TASK_GRAPH_WORKFLOW_TYPE_NAME}'`, Fields: ['ID'], ResultType: 'simple', MaxRows: 1 }, ctx.User,
     );
     const found = existing.Results?.[0]?.ID;
     if (found) return found;
@@ -659,7 +660,9 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
                 ctx.User,
             );
             AssertEqual(eaRes.Results?.length ?? 0, 1, 'the EntityAction binding was written exactly once');
-            AssertEqual(eaRes.Results![0].Status, 'Active', 'the EntityAction binding is Active');
+            // The workflow is a Draft, so its binding is written but must not fire: a record change
+            // must not start a workflow nobody has turned on. Activation is asserted below.
+            AssertEqual(eaRes.Results![0].Status, 'Disabled', 'a Draft workflow\'s binding is written Disabled');
             const entityActionID = eaRes.Results![0].ID;
             CREATED_ENTITY_ACTION_IDS.push(entityActionID);
 
@@ -719,7 +722,30 @@ export const TaskGraphOrchestrationChecks: NamedCheck[] = [
             );
             AssertEqual(eaAfter.Results?.length ?? 0, 1, 're-saving a workflow must not duplicate its binding');
 
-            console.log('      → entity-change trigger bound: EntityAction + invocation + AgentID/Static + Data/Entity Object Data');
+            // 5. The binding follows the workflow's status: activating the workflow activates the
+            //    SAME binding (no second row), and pausing it disables it again.
+            const statusAfter = async (status: WorkflowSpec['status']): Promise<string | undefined> => {
+                const saved = await new WorkflowSpecSync(new IntegrationAgentWriter(result.AgentID)).Persist({ ...spec, status }, {
+                    ContextUser: ctx.User,
+                    Provider: ctx.Provider,
+                });
+                Assert(saved.Success, `saving the workflow as ${status} failed: ${saved.ErrorMessage}`);
+                const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ ID: string; Status: string }>(
+                    {
+                        EntityName: 'MJ: Entity Actions',
+                        ExtraFilter: `EntityID='${entity!.ID}' AND ActionID='${actionID}' AND ScopeEntityID IS NULL AND ScopeRecordID IS NULL`,
+                        Fields: ['ID', 'Status'],
+                        ResultType: 'simple',
+                    },
+                    ctx.User,
+                );
+                AssertEqual(rows.Results?.length ?? 0, 1, `saving as ${status} must reuse the one binding`);
+                return rows.Results![0].Status;
+            };
+            AssertEqual(await statusAfter('Active'), 'Active', 'activating the workflow activates its binding');
+            AssertEqual(await statusAfter('Paused'), 'Disabled', 'pausing the workflow disables its binding');
+
+            console.log('      → entity-change trigger bound: EntityAction + invocation + AgentID/Static + Data/Entity Object Data; follows Draft/Active/Paused');
         }
     },
 
@@ -975,8 +1001,12 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('task-graph-orchestration', 
                 const depRes = await RunView.FromMetadataProvider(ctx.Provider).RunView(
                     { EntityName: 'MJ: Task Dependencies', ExtraFilter: `TaskID IN (${ids})`, ResultType: 'entity_object' }, ctx.User,
                 );
+                // A workflow's edges are the task-graph service's (`MJTaskDependencyEntityServer`): removed as it would.
                 for (const dep of (depRes.Results ?? []) as Array<{ Delete: () => Promise<boolean> }>) {
-                    await dep.Delete();
+                    await ServerOperationScopeManager.Instance.RunWithAuthority(
+                        { operationKey: TASK_GRAPH_RUNTIME_SECURITY_OPERATION, source: 'ServerEngine', allowedEntities: ['MJ: Task Dependencies'], userId: ctx.User.ID },
+                        () => dep.Delete(),
+                    );
                 }
             }
             for (const child of children) await child.Delete();

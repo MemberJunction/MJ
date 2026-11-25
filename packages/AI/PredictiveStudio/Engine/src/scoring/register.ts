@@ -21,6 +21,7 @@
  */
 
 import { MJGlobal, RegisterClass, SafeJSONParse } from '@memberjunction/global';
+import type { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
   RecordProcessorRegistry,
   type IRecordProcessor,
@@ -83,10 +84,10 @@ export function ResolveMLInferenceProcessor(
   // factory has no registration (defensive — the decorator registers it at import).
   const instance = MJGlobal.Instance.ClassFactory.CreateInstance<MLModelInferenceProcessor>(
     MLModelInferenceProcessor,
-    workType ?? ML_INFERENCE_WORK_TYPE,
+    workType || ML_INFERENCE_WORK_TYPE,
     options,
   );
-  return instance ?? new MLModelInferenceProcessor(options);
+  return instance || new MLModelInferenceProcessor(options);
 }
 
 /** @deprecated Use {@link ResolveMLInferenceProcessor}. */
@@ -124,12 +125,14 @@ export interface MLScoringConfiguration {
  * so `RecordProcessExecutor.buildProcessor()` resolves it automatically — WITHOUT the substrate
  * depending on Predictive Studio. The registered factory closes over the injected {@link MLInferenceDeps}
  * (model loader / artifact loader / sidecar) and reads the per-run {@link MLScoringConfiguration}
- * (the `modelId` etc.) off the Record Process's `Configuration`.
+ * (the `modelId` etc.) off the Record Process's `Configuration`. The Record Process's
+ * `ChallengerConfiguration` is not read here: a bound process's challenger is `ScoringService`'s live mirror (D-069).
  *
  * Idempotent — calling more than once simply re-registers (last-wins). Call from the engine's
  * startup/bootstrap with the production deps.
  *
  * @param deps the injected runtime seams the ML scorer needs (model loader, artifact loader, sidecar)
+ * @param autoTrainer optional auto-trainer for train-if-untrained processes
  */
 export function RegisterMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: IModelAutoTrainer): void {
   const factory = (context: RecordProcessorBuildContext): IRecordProcessor => {
@@ -137,19 +140,21 @@ export function RegisterMLScoringProcessor(deps: MLInferenceDeps, autoTrainer?: 
     const autoTrain = config?.autoTrain?.pipelineId ? config.autoTrain : undefined;
     if (!config || (!config.modelId && !autoTrain)) {
       throw new Error(
-        `Record Process '${context.RecordProcessName ?? context.RecordProcessID ?? ''}': WorkType=${context.WorkType} requires a Configuration with a 'modelId' (or an 'autoTrain.pipelineId')`,
+        `Record Process '${context.RecordProcessName || context.RecordProcessID || ''}': WorkType=${context.WorkType} requires a Configuration with a 'modelId' (or an 'autoTrain.pipelineId')`,
       );
     }
+    const rpEntity = context.RecordProcess as Partial<MJRecordProcessEntity> | undefined;
     const options: MLModelInferenceProcessorOptions = {
-      modelId: config.modelId ?? '',
+      modelId: config.modelId || '',
       deps,
       primaryKeyField: config.primaryKeyField,
       datedSources: config.datedSources,
       autoTrain,
       autoTrainer: autoTrain ? autoTrainer : undefined,
+      recordProcessId: context.RecordProcessID || rpEntity?.ID,
     };
     // Resolve through the ClassFactory so a higher-priority subclass registration (if any) wins.
-    return ResolveMLInferenceProcessor(context.WorkType, options) ?? new MLModelInferenceProcessor(options);
+    return ResolveMLInferenceProcessor(context.WorkType, options) || new MLModelInferenceProcessor(options);
   };
 
   const registry = RecordProcessorRegistry.Instance;

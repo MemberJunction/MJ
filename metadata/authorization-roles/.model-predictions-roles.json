@@ -1,0 +1,30 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=View Model Predictions",
+      "RoleID": "@lookup:MJ: Roles.Name=Developer",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "EE0A76EC-06E9-409D-A724-CC9B88C23681"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T06:12:08.829Z",
+      "checksum": "ab33a46bc2ec7f285cbbcfd1fc64e58d23a13a0775183a7c272834296ac84dcc"
+    }
+  },
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=View Model Predictions",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "41149CCF-5CA5-43D0-A379-54E5895FBC62"
+    },
+    "sync": {
+      "lastModified": "2026-11-18T06:12:08.847Z",
+      "checksum": "bab5e50bbe827c240d612ddbdd504b6dc501bddc56173cf69238b2614db15297"
+    }
+  }
+]

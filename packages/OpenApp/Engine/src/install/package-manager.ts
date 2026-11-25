@@ -82,11 +82,27 @@ export interface PackageManagerOptions {
   AdditionalTargets?: WorkspaceTarget[];
   /**
    * Package names that must SURVIVE a removal because another installed app still declares
-   * them (shared npm deps). Only honored by {@link RemoveAppPackages}: any package whose
-   * name is in this list is skipped, so removing one app cannot strip a dependency a
-   * surviving app needs to boot.
+   * them (shared npm deps). Honored by {@link RemoveAppPackages} and by the
+   * {@link PackageManagerOptions.PreviousPackages} pruning in {@link AddAppPackages}: any package
+   * whose name is in this list is never removed, so changing one app cannot strip a dependency
+   * another installed app needs to boot.
    */
   RetainPackages?: string[];
+  /**
+   * Upgrade only: the packages the version being replaced declared, by group. {@link AddAppPackages}
+   * then removes, from each workspace, every one of them the new manifest does not place there — a
+   * package moved between groups (shared → server leaves a client pin) or dropped. Without this an
+   * upgrade only ever adds, and the old pin installs a second copy of the app's packages (#6789).
+   * Dependencies the previous version did not declare are never touched.
+   */
+  PreviousPackages?: AppPackageGroups;
+}
+
+/** An app's packages by manifest group. */
+export interface AppPackageGroups {
+  Server: ManifestPackageEntry[];
+  Client: ManifestPackageEntry[];
+  Shared: ManifestPackageEntry[];
 }
 
 /**
@@ -97,7 +113,7 @@ export interface PackageOperationResult {
   Success: boolean;
   /** Packages that were added */
   Added: string[];
-  /** Packages that were removed */
+  /** Packages that were removed (from AddAppPackages: stale pins removed from at least one workspace) */
   Removed: string[];
   /** Error message if the operation failed */
   ErrorMessage?: string;
@@ -116,11 +132,16 @@ export interface PackageOperationResult {
  * - Shared packages -> all workspaces (dependency DECLARATION only — see `SharedPackages` on
  *   {@link PackageManagerOptions}; this is intentional, not a missed platform-routing call site)
  *
+ * With `PreviousPackages` (an upgrade), each workspace first loses the previous version's pins
+ * that the new manifest does not place there. Both edits share the snapshot below, so a failure
+ * puts every workspace back as it was, stale pins included.
+ *
  * @param options - Package manager configuration
  * @returns Operation result
  */
 export function AddAppPackages(options: PackageManagerOptions): PackageOperationResult {
   const added: string[] = [];
+  const removed: string[] = [];
   const versionStr = resolveVersionString(options);
   // Original text of each package.json, taken before its first write, so a failure on a later
   // target puts the earlier ones back instead of leaving a half-written workspace (#3796).
@@ -128,24 +149,55 @@ export function AddAppPackages(options: PackageManagerOptions): PackageOperation
 
   try {
     const targets = buildTargetList(options);
-    const serverPkgs = [...options.ServerPackages, ...options.SharedPackages];
-    const clientPkgs = [...options.ClientPackages, ...options.SharedPackages];
+    const wanted = PackagesByRole({ Server: options.ServerPackages, Client: options.ClientPackages, Shared: options.SharedPackages });
+    const stale = FindStalePins(wanted, options.PreviousPackages, options.RetainPackages);
 
     for (const target of targets) {
-      const pkgs = target.Role === 'server' ? serverPkgs : clientPkgs;
+      const pkgs = wanted[target.Role];
+      const stalePkgs = stale[target.Role];
+      if (pkgs.length === 0 && stalePkgs.length === 0) continue;
+      const pkgJsonPath = resolve(options.RepoRoot, target.Path, 'package.json');
+      SnapshotPackageJson(snapshots, pkgJsonPath);
+      if (stalePkgs.length > 0) {
+        RemoveDependenciesFromPackageJson(pkgJsonPath, stalePkgs);
+        removed.push(...stalePkgs.map((p) => p.name));
+      }
       if (pkgs.length > 0) {
-        const pkgJsonPath = resolve(options.RepoRoot, target.Path, 'package.json');
-        SnapshotPackageJson(snapshots, pkgJsonPath);
         AddDependenciesToPackageJson(pkgJsonPath, pkgs, versionStr);
         added.push(...pkgs.map((p) => p.name));
       }
     }
 
-    return { Success: true, Added: [...new Set(added)], Removed: [] };
+    return { Success: true, Added: [...new Set(added)], Removed: [...new Set(removed)] };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     return { Success: false, Added: [], Removed: [], ErrorMessage: `${message}${RestorePackageJsonSnapshots(snapshots)}` };
   }
+}
+
+/** What each workspace role declares: its own group plus shared. */
+function PackagesByRole(groups: AppPackageGroups): Record<WorkspaceTarget['Role'], ManifestPackageEntry[]> {
+  return { server: [...groups.Server, ...groups.Shared], client: [...groups.Client, ...groups.Shared] };
+}
+
+/**
+ * Per role, the previous version's packages the new manifest no longer places there, minus any
+ * package another installed app still declares. Empty for both roles when there is no previous
+ * version (an install).
+ */
+function FindStalePins(
+  wanted: Record<WorkspaceTarget['Role'], ManifestPackageEntry[]>,
+  previous: AppPackageGroups | undefined,
+  retainPackages: string[] | undefined,
+): Record<WorkspaceTarget['Role'], ManifestPackageEntry[]> {
+  if (!previous) return { server: [], client: [] };
+  const retained = new Set(retainPackages ?? []);
+  const was = PackagesByRole(previous);
+  const staleFor = (role: WorkspaceTarget['Role']): ManifestPackageEntry[] => {
+    const keep = new Set(wanted[role].map((p) => p.name));
+    return was[role].filter((p) => !keep.has(p.name) && !retained.has(p.name));
+  };
+  return { server: staleFor('server'), client: staleFor('client') };
 }
 
 /** Records a package.json's current text the first time it is about to be written. An unreadable file is left to the write to report. */
@@ -693,7 +745,7 @@ function ScopeOf(spec: string): string | undefined {
  * Builds the full list of workspace targets from options.
  * Combines the primary server/client paths with any additional targets.
  */
-function buildTargetList(options: PackageManagerOptions): WorkspaceTarget[] {
+function buildTargetList(options: PackageStepFileOptions): WorkspaceTarget[] {
   const targets: WorkspaceTarget[] = [
     { Path: ResolveServerPackagePath(options.RepoRoot, options.ServerPackagePath), Role: 'server' },
     { Path: ResolveClientPackagePath(options.RepoRoot, options.ClientPackagePath), Role: 'client' },
@@ -836,6 +888,40 @@ export function BumpPrefixedDependencies(repoRoot: string, prefix: string, bareV
   }
 
   return updatedCount;
+}
+
+/** Where the package step of an install or upgrade writes: the workspace layout and package manager. */
+export type PackageStepFileOptions = Pick<
+  PackageManagerOptions,
+  'RepoRoot' | 'ServerPackagePath' | 'ClientPackagePath' | 'AdditionalTargets' | 'PackageManager'
+>;
+
+/** Lockfiles a package install can rewrite at its install root. */
+const LOCKFILE_NAMES = ['pnpm-lock.yaml', 'package-lock.json'] as const;
+
+/**
+ * Every file the package step can write, as absolute paths: the server/client (and additional)
+ * workspace `package.json` files {@link AddAppPackages} edits, every workspace `package.json`
+ * {@link BumpPrefixedDependencies} may edit, and the lockfiles at the repo root and at the root
+ * {@link RunPackageInstallAsync} installs from (an `mj dev workspace` parent, when the repo is a
+ * member of one). A lockfile that does not exist yet is listed too, so a caller can tell one the
+ * install created. Read-only. `node_modules` is not listed: it cannot be snapshotted.
+ */
+export function ListPackageStepFiles(options: PackageStepFileOptions): string[] {
+  const files = new Set<string>();
+  for (const target of buildTargetList(options)) {
+    files.add(resolve(options.RepoRoot, target.Path, 'package.json'));
+  }
+  for (const pkgJson of findWorkspacePackageJsonFiles(options.RepoRoot)) {
+    files.add(pkgJson);
+  }
+  const installRoot = ResolveInstallRoot(options.RepoRoot, options.PackageManager).Root;
+  for (const root of new Set([resolve(options.RepoRoot), resolve(installRoot)])) {
+    for (const lockfile of LOCKFILE_NAMES) {
+      files.add(join(root, lockfile));
+    }
+  }
+  return [...files];
 }
 
 /**

@@ -271,6 +271,23 @@ Response:
 When `communicationProvider` is configured, the link is emailed and `rawToken` is
 omitted. Otherwise you get the raw link back to deliver out of band.
 
+### In-process callers: anonymous and resource-scoped invites
+
+Server-side code (a server extension or an Open App's server package) can call
+`MagicLinkService.CreateInvite` directly. Beyond the HTTP fields it accepts:
+
+| Field | Values | Rule |
+|---|---|---|
+| `IdentityMode` | `'email'` (default), `'anonymous'` | An anonymous invite may carry an `email` as a delivery address only: it is stored on the invite and used to send the link, but never binds identity. Every redemption resolves to the shared Anonymous principal. |
+| `Kind` | `'app-session'` (default), `'resource-share'` | `resource-share` requires both `ResourceTypeID` and `ResourceID`; other kinds refuse them. `anonymous-embed` is not minted by the service. |
+| `ResourceTypeID`, `ResourceID` | IDs | Written to the invite; the session carries the resource ID as its scope. |
+
+The issuer check (`Owner` or `magicLink.inviteIssuerRoleNames`), the grantable-role
+allow-list and the redirect check apply unchanged. An anonymous invite is emailed
+only when it carries a delivery `email` and `SendEmail` is not `false`; otherwise the
+caller gets `rawToken` and `redemptionUrl` and delivers the link. The
+`POST /magic-link/create` route does not take these fields.
+
 ---
 
 ## 6. Redeeming
@@ -314,6 +331,11 @@ On redemption (`MagicLinkService`):
   request authenticates.
 - **Existing email** → the role + app assignment are added idempotently; no
   duplicate user.
+- **Application access** → if the invite's application has **no** `Application
+  Roles` rows it is open to every user, and redemption leaves it that way: it never
+  writes the application's first row (doing so would make the app an allowlist of the
+  invited role and remove it from everyone else). If the application already has rows,
+  the invited role's row is added once.
 
 ---
 
@@ -360,6 +382,23 @@ No new mechanism — it's reads over existing data:
   for Owner callers — broadening it is an explicit, per-deployment opt-in.
 - **The restricted role is the real boundary** — entity permissions are enforced
   server-side. UI confinement is cosmetic.
+- **Execution entry points refuse scope-limited sessions** — an anonymous guest or a
+  resource-scoped session is confined by RLS tokens, which exist only on paths that go
+  through entity permissions. Entry points that run server work instead — actions,
+  AI prompts and agents, templates, stored and ad-hoc queries, MCP tools, integrations,
+  entity communications, API-key creation, duplicate checks, knowledge search, remote browser
+  control, meetings and most component-registry calls — refuse these sessions, mostly through
+  `@RefuseScopeLimitedPrincipals()` in `MJServer/src/auth/scopeLimitedAccess.ts`
+  (`RunAction`, `ExecuteAdhocQuery` and `RunDecision` refuse inline with
+  `IsScopeLimitedPrincipal`). Two
+  paths serve guests on purpose: the public web widget's agent dispatch (the agent is
+  pinned by the widget instance and runs under a server principal) and Remote Operations
+  that set `AllowScopeLimitedPrincipals` and check the scope in `Authorize`
+  ([Remote Operations Guide](REMOTE_OPERATIONS_GUIDE.md#serving-magic-link-guests)).
+  `GetRegistryComponent` also stays open: rendering a shared interactive artifact fetches
+  external-registry component specs through it, and a spec is public component code.
+  A custom resolver that does server work on a guest's request should carry the same
+  decorator.
 - **Revocation** — set an invite's `Status` to `Revoked` to kill an unredeemed
   link. To cut off already-issued sessions, rotate the RS256 key (invalidates all
   outstanding magic-link sessions; internal SSO is unaffected).

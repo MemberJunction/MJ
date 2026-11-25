@@ -47,7 +47,11 @@ export {
     type StartRealtimeClientSessionResult,
     type RealtimeSessionRunOptions,
     type RecordingTerminalOptions,
+    type PageHideSignalOptions,
 } from './session/RealtimeSessionRuntime';
+
+// The keepalive CloseAgentSession a terminal `pagehide` sends (`RealtimeSessionRuntime.SendPageHideSignals`).
+export { type ISessionCloseBeacon } from './session/SessionCloseBeacon';
 
 // Why a connected call shows no avatar its agent asked for (`RealtimeSessionRuntime.AvatarNotice$`).
 export { ResolveAvatarNotice, type RealtimeAvatarNotice } from './session/avatar-notice';
@@ -144,7 +148,7 @@ export { SynthesizeChannelDescriptor, BuildToolBackedVerbs, VerbNameForTool } fr
 export { ChannelActionDispatcher, CHANNEL_OPEN_ACTION, type ChannelDispatchHost, type DispatchableChannel } from './channels/channel-action-dispatcher';
 export { ComputeStateDelta, FormatChannelNote, ListChangedPaths, type StateDelta } from './channels/channel-state-delta';
 export { FormatParameterList } from './channels/channel-schema-format';
-export { BuildChannelCatalogNote, type ChannelCatalogEntry } from './channels/channel-catalog-note';
+export { BuildChannelCatalogNote, type ChannelCatalogEntry, type UnavailableChannelEntry } from './channels/channel-catalog-note';
 export {
     VisualPerceptionPump,
     type VisualFrameReason,

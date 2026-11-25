@@ -18,7 +18,19 @@ import {
     DidFieldChange,
     DidFieldChangeToValue,
     ActionAudienceReaders,
-    AUDIENCE_UNSUPPORTED_RESULT_CODE
+    AUDIENCE_UNSUPPORTED_RESULT_CODE,
+    CreateContractGovernedNamedPersonRequest,
+    EnforceServerBoundHiddenScopeParams,
+    RequiresReceiptOnlyChatReturn,
+    ShapeActionReturnForChat,
+    SubmitContractGovernedWorkflow,
+    type HostGrantedWorkflowSubmissionPayload,
+    type HostGrantedWorkflowSubmissionResult,
+    type NamedPersonAgentRequestPayload,
+    type NamedPersonAgentRequestReceipt,
+    type ReceiptOnlyReturnShapingPolicy,
+    type ServerBoundHiddenScopeParamDeclaration,
+    type SupportsAudienceContract
 } from "@memberjunction/actions-base";
 import { RuntimeActionExecutor } from "@memberjunction/action-runtime";
 import type { BridgeHandlerMap } from "@memberjunction/code-execution";
@@ -34,6 +46,22 @@ import type { BridgeHandlerMap } from "@memberjunction/code-execution";
  */
 export const ACTION_PREVENTED_BY_FILTER_MESSAGE =
    'Filters were run and the result indicated this action should not be executed. This is a Success condition as filters returning false is not considered an error.';
+
+/**
+ * Result codes for outcomes the engine decides itself, before or around the action's own code (#4690). They are
+ * plain text on `ActionExecutionLog.ResultCode`, not `MJ: Action Result Codes` rows: no action declares them, and a
+ * NULL code would hide why an action did not run.
+ */
+export const ENGINE_RESULT_CODES = {
+   /** `ValidateInputs` refused the parameters; the action did not run. */
+   InputValidationFailed: 'INPUT_VALIDATION_FAILED',
+   /** A filter returned false; the action did not run (a success condition). */
+   PreventedByFilter: 'PREVENTED_BY_FILTER',
+   /** The action exceeded its wall-clock limit (`MaxExecutionTimeMS` or the engine default). */
+   Timeout: 'TIMEOUT',
+   /** The caller's signal aborted the run. */
+   Aborted: 'ABORTED',
+} as const;
 
 /** Why `CheckAudience` refuses every action under a malformed audience (the refusal message's closing clause). */
 const MALFORMED_AUDIENCE_REASON = 'the audience naming them is malformed, so who they are cannot be checked';
@@ -151,12 +179,19 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
    /**
     * Ensures the single ActionEngineBase metadata cache is loaded. Delegates entirely to the base —
     * ActionEngineServer holds no metadata of its own.
+    *
+    * Delegates to `this.base.Config()` first so `BaseEngine.ResolveContextUser()` resolves and locks
+    * the server's system user on database providers; a subsequent per-request `Config(false, uiUser)`
+    * (for example from `BaseAgent` running an action for a non-Owner UI caller) must never downgrade
+    * `this._contextUser` and break `StartActionLog` writes to `MJ: Action Execution Logs`.
     */
    public async Config(forceRefresh: boolean = false, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-      if (contextUser) {
+      await this.base.Config(forceRefresh, contextUser, provider);
+      if (this.base.ContextUser) {
+         this._contextUser = this.base.ContextUser;
+      } else if (contextUser && !this._contextUser) {
          this._contextUser = contextUser;
       }
-      await this.base.Config(forceRefresh, contextUser, provider);
    }
 
    /** True once the underlying ActionEngineBase cache has loaded. */
@@ -255,8 +290,19 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
     * race the INSERT's reload (the "stuck at EndedAt=NULL / shows Running forever" bug is structurally
     * impossible). The queue is self-bounding (in-flight tasks only), so it needs no flush on this
     * long-lived singleton.
+    *
+    * `detachFromTransaction`: nothing awaits these saves inside a transaction today, so a log row written
+    * from inside a save's transaction (a durable submission) would otherwise reach SQL behind its COMMIT
+    * and be lost (#6251 EA6). Detaching is safe here because every FK on the row points at metadata
+    * (Action, User, Entity Action, Entity Action Invocation Type, Entity), never at a row the open
+    * transaction created.
+    *
+    * The one way to wait on these saves is `result.LogEntryPersisted`, which RecordSetProcessor awaits
+    * outside any transaction. Awaiting it inside a transaction that changed one of those metadata rows
+    * would wait on itself: the detached INSERT blocks on that row's lock until the COMMIT, and the COMMIT
+    * waits for the INSERT.
     */
-   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only' });
+   private readonly _logQueue = new BaseEntitySaveQueue({ saveReturnMode: 'datestamps_only', detachFromTransaction: true });
    /** Per-run cache of resolved BaseAction instances so CheckAudience, ValidateInputs, and RunClassBasedAction share one instance. */
    private readonly _actionInstanceCache = new WeakMap<RunActionParams, BaseAction | null>();
 
@@ -279,6 +325,10 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          if (audienceRefusal) {
             return audienceRefusal;
          }
+         const scopeRefusal = this.EnforceServerBoundScope(params);
+         if (scopeRefusal) {
+            return scopeRefusal;
+         }
          // Snapshot the inputs BEFORE anything can run — see SnapshotInputParams. Threaded down every
          // path (validation failure, filter refusal, timeout, normal run) so all four write the same
          // as-called values into ActionExecutionLog.Params.
@@ -288,6 +338,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             const result: ActionResult = {
                Success: false,
                Message: "Input validation failed. This is a failure condition.",
+               ResultCode: ENGINE_RESULT_CODES.InputValidationFailed,
                LogEntry: null,
                Params: params.Params,
                RunParams: params
@@ -306,6 +357,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             const result: ActionResult = {
                Success: true,
                Message: ACTION_PREVENTED_BY_FILTER_MESSAGE,
+               ResultCode: ENGINE_RESULT_CODES.PreventedByFilter,
                LogEntry: null, // initially null
                Params: params.Params,
                RunParams: params
@@ -360,9 +412,11 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          }
       }
 
-      // Wall-clock timeout.
+      // Wall-clock timeout. Remembered so the result can say TIMEOUT rather than ABORTED.
+      let timedOut = false;
       const timeoutId = setTimeout(() => {
          if (!controller.signal.aborted) {
+            timedOut = true;
             controller.abort(`Action '${params.Action.Name}' exceeded MaxExecutionTimeMS (${actionTimeoutMS}ms)`);
          }
       }, actionTimeoutMS);
@@ -385,10 +439,8 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          try {
             return await Promise.race([this.InternalRunAction(params, inputSnapshot), timeoutPromise]);
          } catch (err) {
-            // Timeout or upstream abort — return a standard TIMEOUT result.
-            // Result is left undefined (we don't guarantee a 'TIMEOUT' ActionResultCode
-            // exists on every action; the Success flag + Message are the canonical
-            // failure signal for timeouts).
+            // Timeout or upstream abort. `Result` is left undefined (no action declares these codes as
+            // metadata rows); `ResultCode` carries TIMEOUT or ABORTED as text so the log row says why (#4690).
             if (controller.signal.aborted) {
                const message =
                   typeof controller.signal.reason === 'string'
@@ -397,6 +449,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
                const timeoutResult: ActionResult = {
                   Success: false,
                   Message: message,
+                  ResultCode: timedOut ? ENGINE_RESULT_CODES.Timeout : ENGINE_RESULT_CODES.Aborted,
                   LogEntry: null,
                   Params: params.Params,
                   RunParams: params,
@@ -576,11 +629,12 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
          const deferred: ActionResultSimple | null = params.DeferExecution
             ? await params.DeferExecution(params)
             : null;
-         const simpleResult: ActionResultSimple = deferred ?? (
+         const rawSimpleResult: ActionResultSimple = deferred ?? (
             params.Action.Type === 'Runtime'
                ? await this.RunRuntimeAction(params)
                : await this.RunClassBasedAction(params)
          );
+         const simpleResult = this.ApplyReceiptOnlyChatReturnShaping(params, rawSimpleResult);
 
          const resultCodeEntity: MJActionResultCodeEntity | undefined =
             typeof this.base?.GetResultCode === 'function' && this.ActionResultCodes === this.base.ActionResultCodes
@@ -594,6 +648,7 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
             Message: simpleResult.Message,
             AIDirectives: simpleResult.AIDirectives,
             ErrorRecovery: simpleResult.ErrorRecovery,
+            ...(simpleResult.ChatReceipt ? { ChatReceipt: simpleResult.ChatReceipt } : {}),
             LogEntry: logEntry,
             Params: simpleResult.Params || params.Params,
             Result: resultCodeEntity
@@ -692,11 +747,15 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       const readers = ActionAudienceReaders(params.Audience, params.ContextUser);
       if (readers !== null && readers.length === 0) {
          params.Audience = undefined;
-         return null;
+         if (params.IsStructuralAudience !== true) {
+            return null;
+         }
       }
       const reason = readers === null ? MALFORMED_AUDIENCE_REASON : this.audienceUnsupportedReason(params);
-      if (!reason && readers) {
-         params.Audience = { Readers: readers };
+      if (!reason && (readers || params.IsStructuralAudience === true)) {
+         if (readers && readers.length > 0) {
+            params.Audience = { Readers: readers };
+         }
          return null;
       }
       LogStatus(`ActionEngine: action '${params.Action.Name}' refused under an audience — ${reason}.`);
@@ -719,10 +778,153 @@ export class ActionEngineServer extends BaseSingleton<ActionEngineServer> {
       if (params.Action.Type === 'Runtime') {
          return 'a runtime-defined action cannot declare that it honours an audience';
       }
-      if (this.GetOrCreateActionInstance(params)?.SupportsAudience === true) {
+      const actionInstance = this.GetOrCreateActionInstance(params);
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      const supportsAudience = actionInstance?.SupportsAudience === true || contract?.SupportsAudience === true;
+      if (!supportsAudience) {
+         return 'it has not declared that it can limit what it returns to what every one of them may see';
+      }
+      if (contract?.SupportedModes && contract.SupportedModes.length > 0) {
+         const activeMode = params.IsStructuralAudience === true ? 'ScopeCommonReach' : 'Intersection';
+         if (!contract.SupportedModes.includes(activeMode)) {
+            return `its SupportsAudience contract does not support audience mode '${activeMode}'`;
+         }
+      }
+      return null;
+   }
+
+   /**
+    * Enforces server-bound hidden scope parameter declarations and explicit server bindings on `params`.
+    * Untrusted client/LLM parameters matching a server-bound scope name are rejected (or stripped and
+    * overwritten when `OverridePolicy === 'StripAndInject'`), and authoritative server values are
+    * injected with `Bound: true`.
+    */
+   protected EnforceServerBoundScope(params: RunActionParams): ActionResult | null {
+      const actionInstance =
+         params.Action && params.Action.Type !== 'Runtime'
+            ? this.GetOrCreateActionInstance(params)
+            : null;
+      const declarations = this.collectHiddenScopeDeclarations(params, actionInstance);
+      if (declarations.length === 0 && !params.ServerBoundScopeParams) {
          return null;
       }
-      return 'it has not declared that it can limit what it returns to what every one of them may see';
+
+      const enforcement = EnforceServerBoundHiddenScopeParams(params, declarations);
+      params.Params = enforcement.EnforcedParams;
+      if (enforcement.Allowed) {
+         return null;
+      }
+
+      LogStatus(`ActionEngine: action '${params.Action.Name}' refused hidden scope override — ${enforcement.RefusalMessage ?? 'invalid server-bound scope'}.`);
+      return {
+         RunParams: params,
+         Success: false,
+         ResultCode: enforcement.ResultCode,
+         Message: enforcement.RefusalMessage ?? 'Server-bound hidden scope validation failed.',
+         LogEntry: undefined,
+         Params: enforcement.EnforcedParams,
+         Result: undefined,
+      };
+   }
+
+   /**
+    * Shapes the action result into a sanitized confirmation receipt when receipt-only chat return
+    * shaping is active for this action or dispatch.
+    */
+   protected ApplyReceiptOnlyChatReturnShaping(
+      params: RunActionParams,
+      simpleResult: ActionResultSimple
+   ): ActionResultSimple {
+      const actionInstance =
+         params.Action && params.Action.Type !== 'Runtime'
+            ? this.GetOrCreateActionInstance(params)
+            : null;
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      const isAudienceScoped = params.Audience !== undefined || params.IsStructuralAudience === true;
+      if (!RequiresReceiptOnlyChatReturn(contract, params.ChatReturnShaping, isAudienceScoped)) {
+         return simpleResult;
+      }
+
+      const policy: ReceiptOnlyReturnShapingPolicy | undefined = params.ChatReturnShaping ?? contract?.ReturnShaping;
+      if (!policy) {
+         return simpleResult;
+      }
+
+      const hiddenParamNames = this.collectHiddenScopeDeclarations(params, actionInstance).map((d) => d.ParamName);
+      if (params.ServerBoundScopeParams) {
+         hiddenParamNames.push(...Object.keys(params.ServerBoundScopeParams));
+      }
+
+      const shaped = ShapeActionReturnForChat(
+         params.Action?.Name ?? 'Action',
+         params.Action?.ID,
+         simpleResult,
+         policy,
+         hiddenParamNames
+      );
+      return shaped.Result;
+   }
+
+   private resolveAudienceContract(
+      params: RunActionParams,
+      actionInstance: BaseAction | null
+   ): SupportsAudienceContract | undefined {
+      const instanceContract = actionInstance?.AudienceContract;
+      const paramContract = params.AudienceContract;
+      if (!instanceContract) {
+         return paramContract;
+      }
+      if (!paramContract) {
+         return instanceContract;
+      }
+      return {
+         ...instanceContract,
+         ...paramContract,
+         HiddenScopeParams: [
+            ...(instanceContract.HiddenScopeParams ?? []),
+            ...(paramContract.HiddenScopeParams ?? []),
+         ],
+      };
+   }
+
+   private collectHiddenScopeDeclarations(
+      params: RunActionParams,
+      actionInstance: BaseAction | null
+   ): ServerBoundHiddenScopeParamDeclaration[] {
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      return [...(contract?.HiddenScopeParams ?? [])];
+   }
+
+   /**
+    * Submits a host-granted workflow for `params`, failing closed unless the action's resolved
+    * {@link SupportsAudienceContract.AllowsHostGrantedWorkflowSubmission} is explicitly `true`.
+    */
+   public async SubmitHostGrantedWorkflowForAction(
+      params: RunActionParams,
+      payload: HostGrantedWorkflowSubmissionPayload
+   ): Promise<HostGrantedWorkflowSubmissionResult> {
+      const actionInstance =
+         params.Action && params.Action.Type !== 'Runtime'
+            ? this.GetOrCreateActionInstance(params)
+            : null;
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      return SubmitContractGovernedWorkflow(contract, payload, params.Action?.Name);
+   }
+
+   /**
+    * Dispatches a named-person agent request for `params`, failing closed unless the action's resolved
+    * {@link SupportsAudienceContract.AllowsNamedPersonAgentRequests} is explicitly `true`.
+    */
+   public async CreateNamedPersonRequestForAction(
+      params: RunActionParams,
+      payload: NamedPersonAgentRequestPayload
+   ): Promise<NamedPersonAgentRequestReceipt> {
+      const actionInstance =
+         params.Action && params.Action.Type !== 'Runtime'
+            ? this.GetOrCreateActionInstance(params)
+            : null;
+      const contract = this.resolveAudienceContract(params, actionInstance);
+      return CreateContractGovernedNamedPersonRequest(contract, payload, params.Action?.Name);
    }
 
    /**

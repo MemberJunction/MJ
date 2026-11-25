@@ -105,7 +105,7 @@ Each provider implements one or more capability interfaces from `@memberjunction
 |----------|-------------|:---:|:----------:|:---------:|:-----:|:-----:|:---------:|:--------:|
 | **OpenAI** | `@memberjunction/ai-openai` | x | x | x | x | | | |
 | **Anthropic** | `@memberjunction/ai-anthropic` | x | | | | | | |
-| **Google Gemini** | `@memberjunction/ai-gemini` | x | x | x | | | | |
+| **Google Gemini** | `@memberjunction/ai-gemini` | x | x | x | | | | x |
 | **Mistral** | `@memberjunction/ai-mistral` | x | x | | | | | |
 | **Groq** | `@memberjunction/ai-groq` | x | | | | | | |
 | **xAI (Grok)** | `@memberjunction/ai-xai` | x | | | | | | |
@@ -321,7 +321,7 @@ AI_VENDOR_API_KEY__<DRIVER_CLASS>
 For example:
 - `AI_VENDOR_API_KEY__OPENAILLM` for OpenAI
 - `AI_VENDOR_API_KEY__ANTHROPICLLM` for Anthropic
-- `AI_VENDOR_API_KEY__GEMINILLM` for Google Gemini
+- `AI_VENDOR_API_KEY__GEMINILLM` for Google Gemini (`AI_VENDOR_API_KEY__GEMINIDECISION` for the Gemini Decisions API)
 
 You can also pass keys directly to provider constructors or supply runtime overrides via `GetAIAPIKey()`.
 

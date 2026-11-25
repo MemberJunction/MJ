@@ -1,5 +1,6 @@
 import type { UserInfo } from '@memberjunction/core';
-import type { MJCompanyIntegrationEntity } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationEntity, MJCompanyIntegrationRunEntity } from '@memberjunction/core-entities';
+import type { ICompanyIntegrationEntityMap, ICompanyIntegrationFieldMap } from './entity-types.js';
 import type {
     IntegrationObjectInfo,
     ActionGeneratorConfig,
@@ -20,6 +21,9 @@ import type {
     SearchResult,
     ListContext,
     ListResult,
+    SyncDirection,
+    SyncResult,
+    OnProgressCallback,
 } from './types.js';
 import { ClassifyError } from './types.js';
 import { ExtractRetryAfterFromError } from './RetryAfter.js';
@@ -466,6 +470,12 @@ const FRAMEWORK_SETTINGS: ReadonlyArray<ConnectorSettingDescriptor> = [
       Description: 'Compare rolled-up fingerprints per partition and deep-apply only the parts that moved. Only helps on sources that return stable, well-distributed keys.' },
     { Key: 'fetchTimeoutMs', Label: 'Fetch timeout', Group: 'Sync', Type: 'number', Default: null, Min: 1000, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
       Description: 'How long one fetch may take before it is abandoned. Unset means the connector\'s own declared timeout, then the framework default.' },
+    { Key: 'batchSize', Label: 'Page size', Group: 'Sync', Type: 'number', Default: null, Min: 1, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Records asked of the source per page. Unset means the engine default. Raise it, or the page cap below, for objects with more than a million rows.' },
+    { Key: 'maxBatchesPerMap', Label: 'Page cap per object', Group: 'Sync', Type: 'number', Default: 5000, Min: 1, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Most pages one object may fetch in a run. Reaching it fails the run instead of stopping quietly, so an object larger than page size times this cap is never reported as synced.' },
+    { Key: 'watermarkLookbackSeconds', Label: 'Watermark overlap (seconds)', Group: 'Sync', Type: 'number', Default: null, Min: 0, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'For sources that report a timestamp high-water mark, how far before it the next incremental starts, so rows that commit late are still picked up. Unset means the connector\'s own default.' },
     { Key: 'writeMode', Label: 'Write mode', Group: 'Sync', Type: 'enum', Options: ['batched', 'individual'], Default: 'batched', Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
       Description: 'Whether records are written in batches or one at a time. Individual is slower and only useful when diagnosing a specific row failure.' },
     { Key: 'discoveryMaxRecords', Label: 'Records sampled per table', Group: 'Discovery', Type: 'number', Default: DEFAULT_DISCOVERY_SAMPLE_TARGET, Min: 10, Max: 5000, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
@@ -644,6 +654,16 @@ export abstract class BaseIntegrationConnector {
      * a stale watermark. Override to `true` ONLY when the source guarantees monotonic ordering.
      */
     public get MonotonicWatermark(): boolean { return false; }
+
+    /**
+     * Seconds the engine moves the FETCH filter back from the saved watermark when
+     * {@link MonotonicWatermark} is true and the watermark is a timestamp (#3085). A row that
+     * commits late carries a timestamp BELOW the max already seen, so with no overlap it is never
+     * fetched. The saved watermark is unchanged; only the filter of the next fetch reaches back.
+     *
+     * Default 0 (no overlap). A connection's Configuration `watermarkLookbackSeconds` overrides it.
+     */
+    public get WatermarkLookbackSeconds(): number { return 0; }
 
     /**
      * Parse a Retry-After / rate-limit signal out of a failed response or thrown error into
@@ -1379,4 +1399,32 @@ export abstract class BaseIntegrationConnector {
         return result;
     }
 
+    /**
+     * Optional whole-run pipeline hook (spec §4.2 / §19.7).
+     *
+     * Most SaaS connectors operate entity-map-by-entity-map via `FetchChanges` / `CreateRecord` /
+     * `UpdateRecord` / `DeleteRecord`. Connectors that coordinate multi-entity graph ordering,
+     * schema evolution, and bidirectional change sets as a unified pipeline (such as
+     * `MemberJunctionConnector` for MJ Peer Sync) implement `RunPipeline` to execute the
+     * data plane while `IntegrationEngine` manages run records, lease heartbeats, cancellation,
+     * and telemetry.
+     */
+    public RunPipeline?(context: ConnectorPipelineContext): Promise<SyncResult>;
+
+}
+
+/**
+ * Context passed to {@link BaseIntegrationConnector.RunPipeline} when a connector
+ * overrides whole-run execution.
+ */
+export interface ConnectorPipelineContext {
+    CompanyIntegration: MJCompanyIntegrationEntity;
+    Run: MJCompanyIntegrationRunEntity;
+    EntityMaps: ICompanyIntegrationEntityMap[];
+    FieldMapsByEntityMapID: Map<string, ICompanyIntegrationFieldMap[]>;
+    SyncDirection?: SyncDirection;
+    FullSync: boolean;
+    ContextUser: UserInfo;
+    OnProgress?: OnProgressCallback;
+    AbortSignal?: AbortSignal;
 }

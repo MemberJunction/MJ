@@ -46,6 +46,189 @@ export interface AISkillImportMarkdownOutput {
     warnings: string[];
 }
 
+/** Input payload for `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional specific `MJ: Artifact Versions.ID` (defaults to latest version when omitted). */
+    VersionID?: string | null;
+    /** Lifetime in hours (`1` to `720`). */
+    ExpiresInHours: number;
+    /** Optional label identifying the external recipient or review purpose. */
+    Label?: string | null;
+}
+
+/** Output payload returned by `Artifact.CreateGuestShareLink`. */
+export interface CreateGuestShareLinkOutput {
+    /** Unique share link ID (`MJ: Artifact Guest Share Links.ID`). */
+    LinkID: string;
+    /** Backing `MJ: Magic Link Invites.ID` that governs redemption, expiration, revocation, and audit. */
+    MagicLinkInviteID?: string;
+    /** Raw opaque Magic Link token (high-entropy secret redeemed once at `/magic-link/redeem?token=...`). */
+    Token: string;
+    /** Full or relative Magic Link redemption URL (e.g. `'/magic-link/redeem?token=...'` or `'https://api.../magic-link/redeem?token=...'`). */
+    ShareUrlPath: string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** Target `MJ: Artifact Versions.VersionNumber`. */
+    VersionNumber: number;
+    /** Always `'Frozen'` — live data queries never execute externally. */
+    ShareMode: 'Frozen';
+    /** ISO 8601 UTC expiration timestamp. */
+    ExpiresAt: string;
+    /** Optional recipient label. */
+    Label?: string;
+}
+
+/** Single `=MJ.AI(...)` cell evaluation request entry. */
+export interface ArtifactAiFormulaCellRequest {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 cell coordinate (e.g. `'C4'`). */
+    Address: string;
+    /** Prompt string extracted from `=MJ.AI(prompt, ...)`. */
+    Prompt: string;
+    /** Serialized resolved values of referenced cells/ranges. */
+    ContextValuesJSON: string;
+    /** Deterministic SHA/FNV input hash for cache deduplication. */
+    InputHash: string;
+}
+
+/** Input payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaInput {
+    /** Hosting `MJ: Artifacts` ID for mandatory permission & audit attribution. */
+    ArtifactID: string;
+    /** Batch of up to 50 `=MJ.AI(...)` cells explicitly triggered for evaluation. */
+    Cells: ArtifactAiFormulaCellRequest[];
+    /** Optional explicit AI model override name. */
+    ModelOverride?: string | null;
+}
+
+/** Result for a single evaluated `=MJ.AI(...)` cell. */
+export interface ArtifactAiFormulaCellResult {
+    /** Worksheet identifier. */
+    SheetID: string;
+    /** Canonical A1 coordinate. */
+    Address: string;
+    /** Input hash corresponding to this evaluated output. */
+    InputHash: string;
+    /** Evaluated text/scalar value from the LLM. */
+    Value: string;
+    /** Non-fatal cell-level error message if evaluation failed. */
+    ErrorMessage?: string | null;
+    /** True when permission or quota check refused execution. */
+    AccessDenied?: boolean;
+}
+
+/** Output payload for `Artifact.EvaluateAiFormula`. */
+export interface ArtifactEvaluateAiFormulaOutput {
+    /** Evaluated cell results matching requested `Cells`. */
+    Results: ArtifactAiFormulaCellResult[];
+}
+
+export type ArtifactComplianceAuditDetailPrimitive = string | number | boolean | null | undefined;
+
+export type ArtifactComplianceAuditDetails = Record<
+    string,
+    ArtifactComplianceAuditDetailPrimitive | ArtifactComplianceAuditDetailPrimitive[] | Record<string, ArtifactComplianceAuditDetailPrimitive>
+>;
+
+/** Canonical artifact compliance audit event names aligned with `metadata/audit-log-types/`. */
+export type ArtifactComplianceAuditEventName =
+    | 'Artifact Block Frozen'
+    | 'Artifact Connected Drive Sync'
+    | 'Artifact Exported'
+    | 'Artifact Permission Changed'
+    | 'Artifact Guest Share Link';
+
+/** Input payload for `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditInput {
+    /** Canonical audit log type name (`MJ: Audit Log Types.Name`). */
+    AuditLogTypeName: ArtifactComplianceAuditEventName | string;
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Optional `MJ: Artifact Versions.ID`. */
+    ArtifactVersionID?: string | null;
+    /** Concise human-readable description stored in `Description`. */
+    Summary: string;
+    /** Optional structured details serialized to `Details` JSON. */
+    Details?: ArtifactComplianceAuditDetails;
+}
+
+/** Output payload returned by `Artifact.LogComplianceAudit`. */
+export interface ArtifactComplianceAuditOutput {
+    /** True when the audit row persisted (false only if DB/metadata is unavailable). */
+    Recorded: boolean;
+    /** Persisted `MJ: Audit Logs.ID` when recorded. */
+    AuditLogID?: string | null;
+}
+
+/** Input payload for `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkInput {
+    /** Target `MJ: Artifacts.ID`. */
+    ArtifactID: string;
+    /** Target `MJ: Artifact Versions.ID`. */
+    VersionID: string;
+    /** `LinkID` (`jti`) to revoke. */
+    LinkID: string;
+}
+
+/** Output payload returned by `Artifact.RevokeGuestShareLink`. */
+export interface RevokeGuestShareLinkOutput {
+    /** True when the link was found and marked revoked. */
+    Revoked: boolean;
+    /** Revoked link ID. */
+    LinkID: string;
+    /** ISO 8601 revocation timestamp. */
+    RevokedAt?: string;
+}
+
+/** Input payload for `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesInput {
+    /** Output artifact format (`'presentation'`, `'document'`, `'spreadsheet'`). */
+    TargetKind: 'presentation' | 'document' | 'spreadsheet' | (string & {});
+    /** Synthesis prompt / goal describing how sources should be combined. */
+    Goal: string;
+    /** Explicit source artifact IDs to read (`CanRead` required on each). */
+    SourceArtifactIds?: string[];
+    /** Optional collection to save the synthesized artifact into (`CanEdit` required). */
+    CollectionId?: string | null;
+    /** Optional title override for the newly created artifact. */
+    Title?: string | null;
+    /** Optional `@handle` of an active MJ AI Agent to author the synthesis. */
+    AgentHandle?: string | null;
+    /** When true (default), preserves live `Artifact` chart/range embeds from Spreadsheet sources. */
+    LinkChartsAndRanges?: boolean;
+}
+
+/** Output payload returned on successful execution of `Artifact.SynthesizeFromSources`. */
+export interface SynthesizeArtifactFromSourcesOutput {
+    /** Created `MJ: Artifacts` ID. */
+    ArtifactID: string;
+    /** Created initial `MJ: Artifact Versions` ID (`v1`). */
+    VersionID: string;
+    /** Version number created (`1`). */
+    VersionNumber: number;
+    /** Final resolved artifact title. */
+    Title: string;
+    /** Resolved `MJ: Artifact Types` name (`Presentation`, `Markdown Document`, or `Excel Spreadsheet`). */
+    ArtifactTypeName: string;
+    /** Count of verified live chart/range embeds included in the synthesized artifact. */
+    LinkedChartCount: number;
+    /** Number of source artifacts combined. */
+    SourceCount: number;
+    /** Non-fatal synthesis/sanitization warnings. */
+    Warnings: string[];
+    /** True when deterministic fallback synthesis was used instead of a structured LLM response. */
+    UsedFallback: boolean;
+    /** `MJ: AIAgentRuns` ID when authored via a named agent handle. */
+    AgentRunID?: string | null;
+    /** Agent name when authored via a named agent handle. */
+    AgentName?: string | null;
+}
+
 /** Input for `Authorization.Check`. */
 export interface AuthorizationCheckInput {
     /**
@@ -72,6 +255,65 @@ export interface AuthorizationCheckResultRow {
 /** Output of `Authorization.Check`. */
 export interface AuthorizationCheckOutput {
     Results: AuthorizationCheckResultRow[];
+}
+
+/** Input for `Communications.BlockEndpoint`. */
+export interface CommsBlockEndpointInput {
+  EndpointID: string;
+}
+
+/** Output of `Communications.BlockEndpoint`. */
+export interface CommsBlockEndpointOutput {
+  Success: boolean;
+  SuppressionID?: string;
+  ErrorMessage?: string;
+}
+
+/** Input for `Communications.CreateSendingDomain` / `VerifySendingDomain` / `DeleteSendingDomain`. */
+export interface CommsSendingDomainInput {
+  DomainID: string;
+}
+
+/** Output of `Communications.CreateSendingDomain` and `Communications.VerifySendingDomain`. */
+export interface CommsSendingDomainAuthOutput {
+  Success: boolean;
+  Verified?: boolean;
+  Status?: string;
+  ProviderDomainID?: string;
+  DNSRecordsJSON?: string;
+  ErrorMessage?: string;
+}
+
+/** Output of `Communications.DeleteSendingDomain` and `Communications.RevokeSuppression`. */
+export interface CommsAdminMutationOutput {
+  Success: boolean;
+  ErrorMessage?: string;
+  WarningMessage?: string;
+}
+
+/** Input for `Communications.RevokeSuppression`. */
+export interface CommsRevokeSuppressionInput {
+  SuppressionID: string;
+}
+
+/** Input for `Communications.SimulateComplianceGate`. */
+export interface CommsSimulateComplianceGateInput {
+  SenderID: string;
+  PrincipalID?: string;
+  RecordID?: string;
+  PreferenceID?: string;
+  MessageClass: string;
+  RecipientJurisdictionID?: string;
+}
+
+/** Output of `Communications.SimulateComplianceGate`. */
+export interface CommsSimulateComplianceGateOutput {
+  Success: boolean;
+  Decision?: string;
+  Reason?: string;
+  Detail?: string;
+  ResultJSON?: string;
+  ErrorMessage?: string;
 }
 
 export interface DiagnosticsStartSessionInput {
@@ -249,6 +491,97 @@ export interface DiagnosticsReactivateSenderOutput {
     Status: 'Active';
 }
 
+/**
+ * One end of a `Graph.FindPath` request: a record (`EntityName` + `RecordID`), or a concept
+ * (`Concept` = its name, a synonym, or its ID). A record reference wins when both are given.
+ */
+export interface GraphFindPathEndpoint {
+    /** Registered entity name of the record, e.g. "MJ: Queries" or "Invoices". */
+    EntityName?: string;
+    /** The record's key, in compact URL-segment form (the bare value for a single-column key). */
+    RecordID?: string;
+    /** A concept's name, synonym or ID in the graph. */
+    Concept?: string;
+}
+
+/** Input for `Graph.FindPath`. */
+export interface GraphFindPathInput {
+    /** Name or ID of an active graph. Default: "MJ Canon". */
+    GraphName?: string;
+    /** Start of the path. */
+    From: GraphFindPathEndpoint;
+    /** End of the path. */
+    To: GraphFindPathEndpoint;
+    /** Maximum hops, 1 to 4. Default: 4. */
+    Depth?: number;
+    /** Maximum nodes the search may visit, 1 to 200. Default: 200. */
+    MaxNodes?: number;
+    /** Optional allow-list of edge type names to follow. */
+    EdgeTypes?: string[];
+    /** Optional minimum edge weight to follow, 0 to 1. */
+    MinWeight?: number;
+    /** When true, also follow edges and match concepts still awaiting review. Default: false. */
+    IncludeProposed?: boolean;
+}
+
+/** A node on a `Graph.FindPath` path. */
+export interface GraphFindPathNode {
+    /** Canonical node key. */
+    Key: string;
+    EntityName: string;
+    RecordID: string;
+    Label: string;
+    Icon: string | null;
+    Description: string | null;
+}
+
+/** An edge on a `Graph.FindPath` path, in its own direction (a hop may run against it). */
+export interface GraphFindPathEdge {
+    /** Stored edge ID, or `derived:<provider>:<type>:<sourceKey>:<targetKey>`. */
+    ID: string;
+    TypeName: string;
+    SourceEntityName: string;
+    SourceRecordID: string;
+    TargetEntityName: string;
+    TargetRecordID: string;
+    IsDirected: boolean;
+    Weight: number;
+    Description: string | null;
+    Origin: 'Derived' | 'Declared' | 'Inferred';
+    Status: 'Proposed' | 'Approved' | 'Rejected';
+}
+
+/** A concept an ambiguous endpoint fits, for the caller to choose from. */
+export interface GraphFindPathCandidate {
+    Name: string;
+    RecordID: string;
+    Description: string | null;
+    Score: number;
+}
+
+/**
+ * Output of `Graph.FindPath`. `Status` says what kind of answer this is:
+ * - `Found`: `Nodes` run from From to To, and `Edges[i]` joins `Nodes[i]` and `Nodes[i + 1]`.
+ * - `NoPath`: the endpoints are not connected within the limits by anything the caller may see.
+ *   A record the caller cannot see gives this same answer.
+ * - `AmbiguousEndpoint`: `Endpoint` names the side and `Candidates` lists the concepts it fits.
+ * - `EndpointNotFound`: `Endpoint` names the side whose concept could not be found or seen by the caller.
+ * - `GraphNotFound`: the graph is unknown or not active.
+ */
+export interface GraphFindPathOutput {
+    Status: 'Found' | 'NoPath' | 'AmbiguousEndpoint' | 'EndpointNotFound' | 'GraphNotFound';
+    Nodes: GraphFindPathNode[];
+    Edges: GraphFindPathEdge[];
+    /** Product of the path's edge weights, decayed per hop (0 when none was found). */
+    PathWeight: number;
+    /** The path as compact Markdown, one line per hop. */
+    PromptText: string;
+    /** Which endpoint was ambiguous or not found, when that is the status. */
+    Endpoint?: 'From' | 'To';
+    Candidates: GraphFindPathCandidate[];
+    Message?: string;
+}
+
 /** The control action to apply to a running/paused experiment session. */
 export type PredictiveStudioExperimentSessionAction = 'pause' | 'resume' | 'cancel';
 
@@ -290,23 +623,27 @@ export interface PredictiveStudioCreateScoringProcessInput {
     };
     /**
      * Optional. The target-entity column to write the prediction into (e.g.
-     * `RenewalScore`). **When supplied → write-back mode**: each run writes the
-     * prediction into that column AND a `MJ: ML Model Scoring Bindings` lineage row
-     * (`Mode='OnDemand'`) is created. **When omitted → generic output, no binding**:
-     * predictions are recorded in the process run history (`MJ: Process Run Details`)
-     * only, with no write-back column and no scoring binding.
+     * `RenewalScore`). **When supplied → write-back mode**: the binding names that column
+     * and each run copies the newest score into it. **When omitted → generic output**: each
+     * run writes the binding's Feature Values only. Either way a `MJ: ML Model Scoring
+     * Bindings` row (`Mode='OnDemand'`) is created for the model's training pipeline; it
+     * names the column only in write-back mode.
      */
     outputField?: string;
     /**
-     * Which prediction value the write-back lands in `outputField` — the numeric
-     * `'score'` (probability / regression value — the default) or the predicted
-     * `'class'` label (classification). Ignored in generic mode (no `outputField`).
+     * Which prediction value the binding copies into `outputField` — the numeric
+     * `'score'` (the adverse probability of a classification, a regression's value — the
+     * default) or the predicted `'class'` label. Ignored in generic mode (no `outputField`).
      */
     valueKind?: 'score' | 'class';
     /** Primary-key field on the target entity the model joins on (defaults to `ID`). */
     primaryKeyField?: string;
     /** Optional Record Process name; a descriptive default is generated when omitted. */
     name?: string;
+    /** Optional. The binding's feature name on the target entity; defaults to the model's training pipeline name. */
+    featureName?: string;
+    /** Optional. The `MJ: Authorizations` id a user must hold to see the predictions; defaults to "View Model Predictions". */
+    viewAuthorizationId?: string;
 }
 
 /** Output of `PredictiveStudio.CreateScoringProcess` — the created on-demand scoring Record Process + write-back lineage. */
@@ -318,39 +655,190 @@ export interface PredictiveStudioCreateScoringProcessOutput {
      */
     recordProcessId: string;
     /**
-     * Whether write-back was configured — `true` when an `outputField` was supplied
-     * (the Record Process carries an `OutputMapping` and a scoring binding was
-     * created), `false` in generic mode (predictions recorded in run history only).
+     * Whether the binding names a column — `true` when an `outputField` was supplied
+     * (each run copies the newest score into it through the binding; the Record Process
+     * carries no `OutputMapping`), `false` in generic mode (Feature Values only).
      */
     wroteColumn: boolean;
     /**
-     * Id of the created `MJ: ML Model Scoring Bindings` lineage row (`Mode='OnDemand'`)
-     * in write-back mode. Omitted in generic mode (no `outputField`, no binding).
+     * Id of the created (or updated) `MJ: ML Model Scoring Bindings` row (`Mode='OnDemand'`),
+     * in both modes: a run of the process scores through it.
      */
     scoringBindingId?: string;
 }
 
-/** The lifecycle status to transition an ML Model to. */
-export type PredictiveStudioModelTargetStatus = 'Validated' | 'Published' | 'Archived';
+/** Input for `PredictiveStudio.GetModelEvidence`. */
+export interface PredictiveStudioGetModelEvidenceInput {
+    /** Id of the `MJ: ML Models` row whose evidence to build. */
+    modelId: string;
+}
+
+/**
+ * The evidence of an ML Model as the server builds it from stored rows: what a sign-off approver is shown and what a
+ * publish freezes on its `MJ: ML Model Publish Records` row (`Evidence`).
+ *
+ * **Lockstep contract**: `PredictiveStudioEvidenceSnapshot` equals `EvidenceSnapshot` in
+ * `@memberjunction/predictive-studio-core` (`governance-contracts.ts`), member for member; the referenced types are
+ * written inline because a Remote Operation type file cannot import another. Core's
+ * `src/__tests__/fixtures/jsontype-mirrors.ts` pins the two as exactly equal (`MirrorGetModelEvidence`), so a member
+ * added, dropped or changed on either side fails Core's `jsontype-mirrors.compile.test.ts`.
+ */
+export type PredictiveStudioEvidenceSnapshot = {
+    /** The holdout primary score of what ships, with its interval. */
+    readonly holdoutPrimary: {
+        readonly metric:
+            | 'log-loss' | 'brier' | 'multiclass-log-loss' | 'rmse' | 'mae' | 'poisson-deviance' | 'tweedie-deviance' | 'mase'
+            | 'auc' | 'accuracy' | 'f1' | 'precision' | 'recall' | 'r2' | 'calibration-slope';
+        readonly value: number;
+        readonly interval: { readonly level: number; readonly lower: number; readonly upper: number };
+        readonly n: number;
+    };
+    /** The run's paired comparisons, by name. */
+    readonly comparisons: Readonly<Record<string, { readonly value: number; readonly ci: readonly [number, number]; readonly beats: boolean }>>;
+    /** The run's stored gate decision. */
+    readonly gate:
+        | {
+            readonly outcome: 'model';
+            readonly branch: 'a:beats-best-simple' | 'a:Q15-only-model-beats-dummy';
+            readonly shipped: string;
+            readonly shippedRole: 'model';
+            readonly note: 'no simple baseline carries demonstrable signal' | null;
+        }
+        | { readonly outcome: 'keep-simple-baseline'; readonly branch: 'b:keep-simple-baseline'; readonly shipped: string; readonly shippedRole: 'simpleBaseline'; readonly note: null }
+        | { readonly outcome: 'no-signal'; readonly branch: 'c:no-signal'; readonly shipped: null; readonly shippedRole: null; readonly note: null };
+    /** The run's stored leakage-audit findings. */
+    readonly leakageFlags: readonly (
+        | { readonly kind: 'single-feature-auc'; readonly sourceColumn: string; readonly heldOutAuc: number }
+        | { readonly kind: 'time-shifted-label'; readonly scoreWithShiftedLabel: number }
+        | { readonly kind: 'drop-column'; readonly sourceColumn: string; readonly scoreDrop: number }
+        | { readonly kind: 'high-cardinality-id'; readonly sourceColumn: string; readonly distinctRatio: number }
+    )[];
+    /** The training data window, as ISO dates (yyyy-mm-dd). */
+    readonly dataWindow: { readonly from: string; readonly to: string };
+    /** The `ContentHash` of the Training Snapshot the model was trained on. */
+    readonly snapshotHash: string;
+};
+
+/** Output of `PredictiveStudio.GetModelEvidence`: the evidence and the SHA-256 a sign-off over it records. */
+export interface PredictiveStudioGetModelEvidenceOutput {
+    /** The evidence, built from stored rows only. */
+    evidence: PredictiveStudioEvidenceSnapshot;
+    /** Lower-case hex SHA-256 of the canonical JSON of `evidence`; a sign-off records it as `EvidenceSha256`. */
+    evidenceSha256: string;
+}
+
+/** Input for `PredictiveStudio.MigratePreGateModels`. */
+export interface PredictiveStudioMigratePreGateModelsInput {
+    /**
+     * True (the default) reports what the pre-change model migration would visit and writes nothing. False runs one
+     * pass of its steps, which only a run of a Predictive Studio Registry Check job may do (`scheduledJobRunId`).
+     */
+    dryRun?: boolean;
+    /**
+     * The `MJ: Scheduled Job Runs` row of the Predictive Studio Registry Check job run this pass belongs to; required
+     * when `dryRun` is false (every lifecycle change it makes is initiated by that run).
+     */
+    scheduledJobRunId?: string;
+    /** Models visited per step in this pass (default 50). */
+    batchSize?: number;
+    /** Pipelines retrained in this pass (default 3). */
+    retrainPerRun?: number;
+}
+
+/**
+ * Output of `PredictiveStudio.MigratePreGateModels`: the counts of pre-change work remaining before the pass (a dry run
+ * reports only these), and for a pass that ran, what each step did.
+ */
+export interface PredictiveStudioMigratePreGateModelsOutput {
+    /** True when nothing was written. */
+    dryRun: boolean;
+    /** Published or Draft models with a stored gate record still to re-verify. */
+    evidenceBearing: number;
+    /** Other pre-change models whose artifact is still unverified. */
+    unverifiedArtifacts: number;
+    /** Record Processes whose schedule the pass would disable. */
+    schedulesToDisable: number;
+    /** Pipelines without a Published model that hold an Unevaluated one. */
+    pipelinesToReEvaluate: number;
+    /** Models kept Published with an adopt record by this pass. */
+    adopted?: number;
+    /** Models whose stored record did not re-verify, demoted by this pass. */
+    demoted?: number;
+    /** Artifacts whose state this pass recorded. */
+    artifactsChanged?: number;
+    /** Record Processes whose schedule this pass disabled. */
+    schedulesDisabled?: number;
+    /** Training runs this pass started. */
+    retrained?: number;
+}
+
+/**
+ * A lifecycle transition the gate applies to an ML Model: `evaluate` (Draft → Validated or KeepBaseline from the
+ * training run's stored gate decision), `publish` (Validated or KeepBaseline → Published), `archive` (→ Archived, with a
+ * reason) or `rollback` (Archived → Published for a model published before, with a reason).
+ */
+export type PredictiveStudioModelTransition = 'evaluate' | 'publish' | 'archive' | 'rollback';
 
 /** Input for `PredictiveStudio.PromoteModel`. */
 export interface PredictiveStudioPromoteModelInput {
     /** Id of the `MJ: ML Models` row to transition. */
     modelId: string;
-    /** The lifecycle status to move the model to. */
-    targetStatus: PredictiveStudioModelTargetStatus;
-    /** Human/agent sign-off that overrides the leakage gate. Required (true) to promote a leakage-flagged model; ignored for clean models. */
-    signOff?: boolean;
-    /** Optional human-readable reason recorded with the promotion. */
+    /** The lifecycle transition to apply. */
+    transition: PredictiveStudioModelTransition;
+    /** The approving sign-off record (`MJ: ML Model Publish Records`, Kind `sign-off`) a publish consumes, when one is required. */
+    signOffId?: string;
+    /** Why: required for `archive` and `rollback`, recorded with a `publish`. */
     reason?: string;
 }
 
-/** Output of `PredictiveStudio.PromoteModel` — whether the transition was applied + the new status. */
+/**
+ * Why the lifecycle gate did not apply a transition: the `TransitionRefusal` JSON the gate records on
+ * `MJ: ML Model Publish Records.Refusal` (`kind` and the kind's own fields).
+ *
+ * **Lockstep contract**: this type equals `TransitionRefusal` in `@memberjunction/predictive-studio-core`
+ * (`registry-contracts.ts`), member for member; the referenced unions are written inline because a Remote Operation
+ * type file cannot import another. Core's `src/__tests__/jsontype-mirrors.compile.test.ts` fails when they drift.
+ */
+export type PredictiveStudioTransitionRefusal =
+    | { readonly kind: 'illegal-transition'; readonly from: 'draft' | 'validated' | 'published' | 'archived' | 'unevaluated' | 'keep-baseline'; readonly to: 'draft' | 'validated' | 'published' | 'archived' | 'unevaluated' | 'keep-baseline' }
+    | { readonly kind: 'no-sign-off' }
+    | { readonly kind: 'gate-no-signal'; readonly reason: string }
+    | { readonly kind: 'unacknowledged-leakage-flags'; readonly flags: readonly ('single-feature-auc' | 'time-shifted-label' | 'drop-column' | 'high-cardinality-id')[] }
+    | { readonly kind: 'semantics-check-failed'; readonly mismatches: readonly string[] }
+    | { readonly kind: 'actor-not-permitted'; readonly actor: 'human' | 'agent' | 'scheduled-job' | 'system' }
+    | { readonly kind: 'does-not-beat-incumbent'; readonly incumbentModelId: string; readonly comparison: { readonly value: number; readonly ci: readonly [number, number]; readonly beats: boolean } }
+    | {
+        readonly kind: 'status-written-outside-gate';
+        readonly guard: {
+            readonly Allow: false;
+            readonly Reason:
+                | 'create-not-draft'
+                | 'stored-row-unreadable'
+                | 'deferred-in-transaction-group'
+                | 'status-changed-outside-gate'
+                | 'gate-transition-mismatch'
+                | 'serving-flag-set-outside-migration';
+        };
+    }
+    | { readonly kind: 'artifact-unverifiable'; readonly detail: string }
+    | { readonly kind: 'publish-in-progress' }
+    | { readonly kind: 'keep-baseline-not-auto-published' }
+    | { readonly kind: 'sign-off-wait-closed'; readonly closedBy: 'newer-run-evaluated' | 'expired' }
+    | { readonly kind: 'kept-existing-rule'; readonly rule: string }
+    | { readonly kind: 'calibration-held'; readonly slope: number | null }
+    | { readonly kind: 'not-servable'; readonly reason: string }
+    | { readonly kind: 'model-not-found'; readonly modelId: string }
+    | { readonly kind: 'reason-required' }
+    | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+
+/** Output of `PredictiveStudio.PromoteModel`: whether the gate applied the transition, the model's status, and why not. */
 export interface PredictiveStudioPromoteModelOutput {
-    /** True when the model was transitioned to the target status. */
-    promoted: boolean;
-    /** The model's new lifecycle status on success (the target status); the unchanged current status when not promoted. */
+    /** True when the lifecycle gate applied the transition (an idempotent retry of an applied publish included). */
+    applied: boolean;
+    /** The model's lifecycle status after the call; empty when no model has the id. */
     status: string;
+    /** Why the gate refused; absent when `applied` is true. */
+    refusal?: PredictiveStudioTransitionRefusal;
 }
 
 /**
@@ -399,6 +887,52 @@ export interface PredictiveStudioRunFeaturePipelineOutput {
     wouldRefuse?: string;
 }
 
+/** Input for `PredictiveStudio.RunModelMonitoring`. */
+export interface PredictiveStudioRunModelMonitoringInput {
+    /** Id of the Published `MJ: ML Models` row to monitor; its open monitoring job's spec is used. */
+    modelId: string;
+    /** First day (`YYYY-MM-DD`) of the period to monitor, of the job's grain; omitted: the last complete period. */
+    periodStart?: string;
+}
+
+/** One monitored period of `PredictiveStudio.RunModelMonitoring`: its `MJ: ML Monitoring Results` row as written. */
+export interface PredictiveStudioMonitoredPeriod {
+    /** First day of the period (`YYYY-MM-DD`). */
+    period: string;
+    /** Id of the period's `MJ: ML Monitoring Results` row (a re-run updates it). */
+    monitoringResultId: string;
+    /** `window-open` (outcomes not yet known), `evaluated`, `insufficient-rows` (fewer scored rows than the job's minimum: recorded, not judged) or `failed`. */
+    state: 'window-open' | 'evaluated' | 'insufficient-rows' | 'failed';
+    /** Predictions joined to a realised outcome. */
+    joinedRows: number;
+    /** The primary score's value and its 95% bounds; absent unless evaluated. */
+    primaryValue?: number;
+    primaryLower?: number;
+    primaryUpper?: number;
+    /** Inputs whose drift alarm fired at the period's look. */
+    driftAlarms: number;
+    /** Kinds of the retrain triggers that fired. */
+    triggersFired: ('outcome-degradation' | 'calibration-drift')[];
+    /** What a fired trigger's challenger came to. */
+    challengerOutcome?: 'none' | 'waiting' | 'published' | 'withheld' | 'stopped' | 'failed';
+    /** The challenger's `MJ: ML Training Runs` row, when one was started. */
+    challengerRunId?: string;
+    /** The rollback check in words. */
+    rollback?: string;
+    /** Why the period failed. */
+    errorMessage?: string;
+}
+
+/**
+ * Output of `PredictiveStudio.RunModelMonitoring`: the monitored periods; `skipped` names why nothing ran (the model is
+ * no longer Published).
+ */
+export interface PredictiveStudioRunModelMonitoringOutput {
+    modelId: string;
+    skipped?: string;
+    periods: PredictiveStudioMonitoredPeriod[];
+}
+
 /**
  * The scope of records to score. Mirrors the Record Set Processing scope shapes
  * (records / view / list / filter / single). Exactly one shape should be populated;
@@ -417,47 +951,91 @@ export interface PredictiveStudioScoringScope {
     single?: { entityName: string; primaryKey: Record<string, unknown> };
 }
 
-/**
- * Optional write-back directive. `true` enables write-back with the model's default
- * mapping; an object supplies an explicit `OutputMapping` (target column / child
- * record). When omitted, predictions are returned ephemerally.
- */
-export type PredictiveStudioWriteBackDirective = boolean | { OutputMapping: Record<string, unknown> };
-
 /** Input for `PredictiveStudio.ScoreRecordSet`. */
 export interface PredictiveStudioScoreRecordSetInput {
-    /** Id of the `MJ: ML Models` row to score with. */
+    /** Id of the `MJ: ML Models` row to score with; with a `bindingId` it must be a model of the binding's pipeline. */
     modelId: string;
+    /**
+     * The `MJ: ML Model Scoring Bindings` row to score through. With it, the binding's pipeline's Published model scores
+     * the scope and the scores are written as the binding's Feature Values (and its column copy, when it names one);
+     * without it, the predictions are returned and nothing is written.
+     */
+    bindingId?: string;
     /** The records to score — populate exactly one selector on the scope. */
     scope: PredictiveStudioScoringScope;
-    /** Compute the predictions WITHOUT writing them back (preview) when true/omitted with no write-back. */
+    /** The date the scope is scored as of (ISO); the run date when omitted. Only a model trained on a Prediction Unit scores an earlier date. */
+    asOfDate?: string;
+    /** Score and record the run, but write no Feature Value and no column. */
     dryRun?: boolean;
-    /** Optional write-back directive; when omitted (or false) predictions are returned ephemerally. */
-    writeBack?: PredictiveStudioWriteBackDirective;
 }
 
-/** A single ephemeral prediction surfaced when write-back is NOT requested. */
-export interface PredictiveStudioEphemeralPrediction {
-    /** The scored record's id (when known). */
-    recordId?: string;
-    /** Numeric model output (probability or value). */
+/** One record's prediction, returned when nothing was written (no binding, or a dry run). */
+export interface PredictiveStudioScoredPrediction {
+    /** The scored record's bare key value. */
+    recordId: string;
+    /** A classification's probability of its class 1 (a binary model) or of its predicted class; a regression's predicted value. */
     score: number;
-    /** Predicted class (classification only). */
+    /** The predicted class (classification only). */
     class?: string;
+    /** The probability of the adverse outcome (classification only). */
+    adverseProbability?: number;
+    /** True when the record was in the model's training snapshot. */
+    inTraining: boolean;
 }
 
-/** Output of `PredictiveStudio.ScoreRecordSet` — the run summary. */
+/**
+ * Output of `PredictiveStudio.ScoreRecordSet`: the completed scoring run. A refused or failed run is returned as
+ * `Success = false` with the refusal's `ResultCode`, and its message names the refusal and the scoring run.
+ */
 export interface PredictiveStudioScoreRecordSetOutput {
-    /** Number of records successfully scored. */
-    scored: number;
-    /** Number of records that failed to score. */
-    failed: number;
-    /** Number of records skipped (no selector matched / nothing to score). */
-    skipped: number;
-    /** True when the runner wrote scores back to the target (predictions are then NOT returned ephemerally). */
-    wroteBack: boolean;
-    /** Ephemeral predictions, present only when `wroteBack` is false. */
-    predictions?: PredictiveStudioEphemeralPrediction[];
+    /** The run completed. */
+    status: 'completed';
+    /** The `MJ: ML Scoring Runs` row of the call. */
+    scoringRunId: string;
+    /** The model that scored. */
+    modelId: string;
+    /** The model's version. */
+    modelVersion: number;
+    /** The SHA-256 of the artifact that scored. */
+    artifactSha256: string;
+    /** Records in the scope. */
+    total: number;
+    /** Feature Values written (0 without a binding and on a dry run). */
+    written: number;
+    /** The run wrote nothing by request. */
+    dryRun: boolean;
+    /** The predictions, when nothing was written (no binding, or a dry run). */
+    predictions?: PredictiveStudioScoredPrediction[];
+}
+
+/** A leakage-audit flag kind a sign-off overrides (the stored `LeakageFlag['kind']` values). */
+export type PredictiveStudioLeakageFlagKind = 'single-feature-auc' | 'time-shifted-label' | 'drop-column' | 'high-cardinality-id';
+
+/** Input for `PredictiveStudio.SignOffModel`. */
+export interface PredictiveStudioSignOffModelInput {
+    /** Id of the `MJ: ML Models` row signed off. */
+    modelId: string;
+    /** What the sign-off approves or rejects: a `publish` (Validated or KeepBaseline → Published) or a `rollback` (Archived → Published). */
+    purpose: 'publish' | 'rollback';
+    /** The approver's decision. */
+    decision: 'approve' | 'reject';
+    /** Why; required (non-blank) when `overridesFlags` names any flag. */
+    reason: string;
+    /** The model's leakage flag kinds this sign-off overrides; empty for none. */
+    overridesFlags: PredictiveStudioLeakageFlagKind[];
+}
+
+/**
+ * Output of `PredictiveStudio.SignOffModel`: the recorded sign-off (`MJ: ML Model Publish Records`, Kind `sign-off`) and
+ * the SHA-256 of the evidence it was made over. A `Success: true` result always carries both fields. A refused sign-off
+ * carries no output: it arrives as the operation's `ResultCode` (`NOT_HUMAN`, `INVALID_INPUT`, `OVERRIDES_WITHOUT_REASON`,
+ * `MODEL_ARCHIVED`) with `Success: false` and the reason in `ErrorMessage`, and writes no row.
+ */
+export interface PredictiveStudioSignOffModelOutput {
+    /** Id of the recorded sign-off; pass it as `signOffId` to `PredictiveStudio.PromoteModel`. */
+    signOffRecordId: string;
+    /** The `EvidenceSha256` the sign-off recorded. */
+    evidenceSha256: string;
 }
 
 /**
@@ -511,7 +1089,7 @@ export interface PredictiveStudioModelingPlanSpec {
         Priority: number;
     }>;
     /** Validation strategy for the search. */
-    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction: number };
+    ValidationStrategy: { Strategy: 'train_test_split' | 'kfold' | 'holdout'; TestSize?: number; K?: number; LockedHoldoutFraction?: number };
     /** Proposed resource budget for the experiment session. */
     ProposedBudget: PredictiveStudioBudget;
     /** User approval gate — execution does not begin until this is true. */
@@ -540,7 +1118,7 @@ export interface PredictiveStudioStartExperimentSessionOutput {
     status: string;
 }
 
-/** Optional point-in-time assembly strategy for the train (mirrors the pipeline's stored AsOfStrategy). */
+/** A point-in-time assembly strategy, as `PredictiveStudio.TrainModel` accepted it before Prediction Units (see {@link RetiredTrainModelInputs}). */
 export interface PredictiveStudioTrainAsOf {
     /** How to anchor feature assembly in time: no anchoring, a column on the row, or an offset before the label event. */
     Mode: 'none' | 'column' | 'offset';
@@ -550,38 +1128,85 @@ export interface PredictiveStudioTrainAsOf {
     OffsetDays?: number;
 }
 
-/** Input for `PredictiveStudio.TrainModel`. */
+/** Input for `PredictiveStudio.TrainModel`. The pipeline's Prediction Unit and Evaluation Protocol decide everything else. */
 export interface PredictiveStudioTrainModelInput {
     /** Id of the `MJ: ML Training Pipelines` row to train. */
     pipelineId: string;
     /** Optional `MJ: Experiment Session Iterations` id this run belongs to (NULL for a one-off standalone train). */
     experimentSessionIterationId?: string;
-    /** Optional cap on the number of training rows pulled from the target entity. */
-    maxRows?: number;
-    /** Optional primary-key field on the target entity (defaults to `ID`). */
-    primaryKeyField?: string;
-    /** Optional per-record label-event dates (keyed by record primary key), required when `asOf.Mode` is `offset`. */
-    labelEventDates?: Record<string, string>;
-    /** Optional as-of strategy override; when omitted the pipeline's stored `AsOfStrategy` is used. */
-    asOf?: PredictiveStudioTrainAsOf;
     /** Sidecar version string recorded in the model lineage for provenance. */
     sidecarVersion?: string;
 }
 
-/** Output of `PredictiveStudio.TrainModel` — the produced (Draft) model + its honest metrics. */
+/**
+ * Inputs `PredictiveStudio.TrainModel` accepted before Prediction Units. They are refused by name when present, even
+ * when empty or `asOf.Mode` is `none`: the Prediction Unit declares the decision date and the row key, and every
+ * eligible row is read (a capped read is not a complete read). Kept only so a caller (or a test probe) can type a
+ * payload that still sends them.
+ */
+export interface RetiredTrainModelInputs {
+    /** Refused: the Prediction Unit declares each row's decision date. */
+    asOf?: PredictiveStudioTrainAsOf;
+    /** Refused: the Prediction Unit declares each row's decision date. */
+    labelEventDates?: Record<string, string>;
+    /** Refused: every eligible row is read. */
+    maxRows?: number;
+    /** Refused: the Prediction Unit reads its rows keyed by the row entity's own primary key. */
+    primaryKeyField?: string;
+}
+
+/**
+ * Output of `PredictiveStudio.TrainModel`: the run's stored gate decision, its Training Snapshot and Evaluation
+ * Protocol, and the produced model when the decision ships one.
+ */
 export interface PredictiveStudioTrainModelOutput {
-    /** Id of the produced (Draft) `MJ: ML Models` row. */
-    modelId: string;
+    /** Id of the produced (Draft) `MJ: ML Models` row; absent when the gate decision ships no model (no-signal, or the existing rule kept). */
+    modelId?: string;
     /** Id of the `MJ: ML Training Runs` row recording this attempt. */
     trainingRunId: string;
-    /** Monotonic model version under the pipeline (`max(Version)+1`). */
-    version: number;
-    /** JSON of the metrics scored exactly once on the locked holdout the search never saw (the honest performance number). */
+    /** Monotonic model version under the pipeline; absent when no model is produced. */
+    version?: number;
+    /**
+     * JSON of the test-set scores measured once on the locked holdout (`{ "<metric>": value, … }`): the produced
+     * model's stored scores when a model exists (the member the gate ships), otherwise the trainer's finalist scores.
+     */
     holdoutMetrics?: string;
-    /** True when one feature dominates the model's predictions (possible target leakage). A flagged model stays Draft and needs human sign-off before promotion. */
+    /** True when one feature dominates the finalist's predictions (possible target leakage); a flagged model stays Draft and needs human sign-off. */
     leakageFlagged: boolean;
-    /** Lifecycle status of the produced model (always `Draft` immediately after training). */
+    /** Lifecycle status of the produced model (`Draft`), `NoSignal` when the gate stored no-signal, or `KeptExistingRule` when it kept the existing rule. */
     status: string;
+    /** The `MJ: ML Training Snapshots` row the run trained on. */
+    trainingSnapshotId?: string;
+    /** The `MJ: ML Evaluation Protocols` row (exact version) the run was evaluated under. */
+    evaluationProtocolId?: string;
+    /** That protocol row's Version. */
+    evaluationProtocolVersion?: number;
+    /** The stored gate outcome. */
+    gateOutcome?: 'model' | 'keep-simple-baseline' | 'no-signal';
+    /** The decision-table branch the stored outcome came from (for example `b:keep-simple-baseline` or `c:no-signal`). */
+    gateBranch?: string;
+    /** The stored reason for the outcome, in words generated from the stored comparisons. */
+    gateReason?: string;
+    /** The member the gate ships (the model, a simple baseline or the existing rule); absent under no-signal. */
+    shipped?: string;
+}
+
+/** Input for `PredictiveStudio.WithdrawScoringBinding`. */
+export interface PredictiveStudioWithdrawScoringBindingInput {
+    /** Id of the `MJ: ML Model Scoring Bindings` row to withdraw. */
+    bindingId: string;
+}
+
+/**
+ * Output of `PredictiveStudio.WithdrawScoringBinding`: what withdrawal did to the binding's column copies. The binding is
+ * `Withdrawn` whenever the operation succeeds; a failure arrives as `Success: false` with the reason in `ErrorMessage`
+ * and changes nothing.
+ */
+export interface PredictiveStudioWithdrawScoringBindingOutput {
+    /** Records whose target column held the value the binding copied, now cleared. */
+    cleared: number;
+    /** Records whose target column holds a value a person entered since, kept. */
+    keptHuman: number;
 }
 
 /** Input for `Query.RefreshExtraction`. Selectors combine as a union; give at least one. */
@@ -1137,6 +1762,24 @@ export interface TaskGraphControlOutput {
     errorMessage?: string;
 }
 
+/** Input for TaskGraph.CompleteWaitingStep. Exactly one of taskID / correlationKey. */
+export interface TaskGraphCompleteWaitingStepInput {
+    taskID?: string;
+    correlationKey?: string;
+    status?: 'Complete' | 'Failed';
+    payload?: Record<string, unknown> | null;
+    errorMessage?: string | null;
+}
+
+/** Output of TaskGraph.CompleteWaitingStep. */
+export interface TaskGraphCompleteWaitingStepOutput {
+    success: boolean;
+    completed: string[];
+    buffered: string[];
+    refused: Array<{ taskID: string; reason: string }>;
+    errorMessage?: string;
+}
+
 /** Input for the step-scoped intervention verbs. */
 export interface TaskGraphTaskInterventionInput {
     taskID: string;
@@ -1226,15 +1869,17 @@ export interface TaskGraphSubmitInput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1636,15 +2281,17 @@ export interface WorkflowDraftOutput {
             tempId: string;
             name: string;
             description: string;
-            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+            kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
             configuration:
                 | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                 | { actionName: string; inputMapping?: string; outputMapping?: string }
-                | { assignToUserID?: string; instructions?: string }
+                | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                 | { promptName: string; templateParameters?: Record<string, string> }
                 | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                 | { condition: string; itemVariable?: string; maxIterations?: number }
-                | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
             dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
             policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
             /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1655,6 +2302,8 @@ export interface WorkflowDraftOutput {
         durable?: boolean;
         /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
         failureSemantics?: 'block' | 'edges';
+        /** Per-graph execution isolation level ('Worker' default for newly drafted workflows). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
     };
     /** Why drafting failed, or why the model's output was rejected. */
     errorMessage?: string;
@@ -1667,6 +2316,8 @@ export interface WorkflowSaveInput {
         name: string;
         description?: string;
         status: 'Active' | 'Paused' | 'Draft';
+        /** Optional workflow-level execution isolation override (`'InProcess' | 'Worker' | 'Process' | 'Container'`). */
+        isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         graph: {
             workflowName: string;
             reasoning?: string;
@@ -1675,15 +2326,17 @@ export interface WorkflowSaveInput {
                 tempId: string;
                 name: string;
                 description: string;
-                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
                 configuration:
                     | { agentName: string; message?: string; templateParameters?: Record<string, string> }
                     | { actionName: string; inputMapping?: string; outputMapping?: string }
-                    | { assignToUserID?: string; instructions?: string }
+                    | { assignToUserID?: string; instructions?: string; expiresInHours?: number; provider?: string; providerConfiguration?: Record<string, unknown> }
                     | { promptName: string; templateParameters?: Record<string, string> }
                     | { collectionPath: string; itemVariable?: string; maxIterations?: number; executionMode?: 'sequential' | 'parallel' }
                     | { condition: string; itemVariable?: string; maxIterations?: number }
-                    | { domain: string; ref?: string } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
+                    | { domain: string; ref?: string; correlationKey?: string; expiresInHours?: number }
+                    | { topic?: string; domain?: string; handlerKey?: string; actionName?: string; payload?: Record<string, unknown>; correlationKey?: string; expiresInHours?: number; maxRetries?: number }
+                | { until?: string; durationSeconds?: number } | { promptName?: string; state?: string; questions: Record<string, { kind: 'Likelihood'; instructions: string; minConfidence?: number } | { kind: 'Choice'; instructions: string; options: Array<{ value: string; description: string }>; minConfidence?: number } | { kind: 'Score'; instructions: string; levels: string[]; minConfidence?: number }> };
                 dependsOn: Array<string | { tempId: string; condition?: string; dependencyType?: 'Prerequisite' | 'Corequisite' | 'Optional'; priority?: number; sequence?: number; exclusiveGroup?: string; pathPoints?: string }>;
                 policy?: { timeoutSeconds?: number; retryCount?: number; onError?: 'fail' | 'continue' };
                 /** Canvas geometry. Presentation only: the dispatcher ignores it, the validator never requires it. */
@@ -1694,6 +2347,8 @@ export interface WorkflowSaveInput {
             durable?: boolean;
             /** 'edges' (flow-compiled) evaluates a failed step's outgoing edges; 'block' (default) is terminal for dependents. */
             failureSemantics?: 'block' | 'edges';
+            /** Per-graph execution isolation level override. */
+            isolation?: 'Container' | 'InProcess' | 'Process' | 'Worker';
         };
         triggers: Array<
             | { type: 'EntityEvent'; entityName: string; invocationType: string; filter?: string; scopeEntityName?: string; scopeRecordID?: string }
@@ -1759,6 +2414,91 @@ export class AISkillImportMarkdownOperation extends BaseRemotableOperation<AISki
 }
 
 // ============================================================
+// Artifact.CreateGuestShareLink — Create Artifact Guest Share Link
+// ============================================================
+/**
+ * Create Artifact Guest Share Link
+ * Issues a Frozen-only expiring read-only external guest share link for a governed artifact version and persists its hashed token record. Implemented by CreateGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.CreateGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactCreateGuestShareLinkOperation extends BaseRemotableOperation<CreateGuestShareLinkInput, CreateGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.CreateGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_01caf3b2c1223715";
+}
+
+// ============================================================
+// Artifact.EvaluateAiFormula — Evaluate Spreadsheet AI Formulas
+// ============================================================
+/**
+ * Evaluate Spreadsheet AI Formulas
+ * Explicitly evaluates a bounded batch (up to 50 cells) of opt-in =MJ.AI(...) spreadsheet formulas for an authorized editable artifact. Implemented by ArtifactEvaluateAiFormulaServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.EvaluateAiFormula'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactEvaluateAiFormulaOperation extends BaseRemotableOperation<ArtifactEvaluateAiFormulaInput, ArtifactEvaluateAiFormulaOutput> {
+    public readonly OperationKey = "Artifact.EvaluateAiFormula";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_cfa9c74da80db2e2";
+}
+
+// ============================================================
+// Artifact.LogComplianceAudit — Log Artifact Compliance Audit
+// ============================================================
+/**
+ * Log Artifact Compliance Audit
+ * Writes a structured compliance audit log entry (MJ: Audit Logs) for block freeze, connected drive sync, export, permission changes, and guest share link events. Implemented by ArtifactComplianceAuditServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.LogComplianceAudit'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactLogComplianceAuditOperation extends BaseRemotableOperation<ArtifactComplianceAuditInput, ArtifactComplianceAuditOutput> {
+    public readonly OperationKey = "Artifact.LogComplianceAudit";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:read";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_c53ebfd4d44baffa";
+}
+
+// ============================================================
+// Artifact.RevokeGuestShareLink — Revoke Artifact Guest Share Link
+// ============================================================
+/**
+ * Revoke Artifact Guest Share Link
+ * Revokes an active Frozen-only external guest share link by LinkID so subsequent resolution requests are rejected immediately. Implemented by RevokeGuestShareLinkServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.RevokeGuestShareLink'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactRevokeGuestShareLinkOperation extends BaseRemotableOperation<RevokeGuestShareLinkInput, RevokeGuestShareLinkOutput> {
+    public readonly OperationKey = "Artifact.RevokeGuestShareLink";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "artifact:share";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_5b54645435f81738";
+}
+
+// ============================================================
+// Artifact.SynthesizeFromSources — Synthesize Artifact From Sources
+// ============================================================
+/**
+ * Synthesize Artifact From Sources
+ * Synthesizes a new governed collaborative artifact (Presentation, Markdown Document, or Excel Spreadsheet) from one or more authorized source artifacts, preserving live chart and range embeds. Implemented by SynthesizeArtifactFromSourcesServerOperation in @memberjunction/server.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Artifact.SynthesizeFromSources'. This generated base provides the typed contract only (client-safe).
+ */
+export class ArtifactSynthesizeFromSourcesOperation extends BaseRemotableOperation<SynthesizeArtifactFromSourcesInput, SynthesizeArtifactFromSourcesOutput> {
+    public readonly OperationKey = "Artifact.SynthesizeFromSources";
+    public readonly ExecutionMode = 'LongRunning' as const;
+    public readonly RequiredScope = "artifact:edit";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_f742777b8e08370e";
+}
+
+// ============================================================
 // Authorization.Check — Check Authorization
 // ============================================================
 /**
@@ -1773,6 +2513,102 @@ export class AuthorizationCheckOperation extends BaseRemotableOperation<Authoriz
     public readonly RequiredScope = "authorization:check";
     public readonly RequiresSystemUser = false;
     public readonly ContractFingerprint = "ro_fp_5938f2b945c46737";
+}
+
+// ============================================================
+// Communications.BlockEndpoint — Block Communications Endpoint
+// ============================================================
+/**
+ * Block Communications Endpoint
+ * Creates an active Admin Block CommunicationSuppression for an endpoint and writes the corresponding CommunicationConsentAuditLog entry server-side.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.BlockEndpoint'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsBlockEndpointOperation extends BaseRemotableOperation<CommsBlockEndpointInput, CommsBlockEndpointOutput> {
+    public readonly OperationKey = "Communications.BlockEndpoint";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_cfc473f3744109cb";
+}
+
+// ============================================================
+// Communications.CreateSendingDomain — Create Communications Sending Domain
+// ============================================================
+/**
+ * Create Communications Sending Domain
+ * Registers a CommunicationSendingDomain with the downstream communication provider and stores returned DNS verification records.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.CreateSendingDomain'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsCreateSendingDomainOperation extends BaseRemotableOperation<CommsSendingDomainInput, CommsSendingDomainAuthOutput> {
+    public readonly OperationKey = "Communications.CreateSendingDomain";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_c340bffa4c5d9203";
+}
+
+// ============================================================
+// Communications.DeleteSendingDomain — Delete Communications Sending Domain
+// ============================================================
+/**
+ * Delete Communications Sending Domain
+ * Removes a CommunicationSendingDomain from the downstream provider and deletes the MJ record.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.DeleteSendingDomain'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsDeleteSendingDomainOperation extends BaseRemotableOperation<CommsSendingDomainInput, CommsAdminMutationOutput> {
+    public readonly OperationKey = "Communications.DeleteSendingDomain";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_e07405023031b24e";
+}
+
+// ============================================================
+// Communications.RevokeSuppression — Revoke Communications Suppression
+// ============================================================
+/**
+ * Revoke Communications Suppression
+ * Revokes an active CommunicationSuppression, writes an append-only CommunicationConsentAuditLog entry, and clears any downstream provider suppression.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.RevokeSuppression'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsRevokeSuppressionOperation extends BaseRemotableOperation<CommsRevokeSuppressionInput, CommsAdminMutationOutput> {
+    public readonly OperationKey = "Communications.RevokeSuppression";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_7353284a3a917358";
+}
+
+// ============================================================
+// Communications.SimulateComplianceGate — Simulate Communications Compliance Gate
+// ============================================================
+/**
+ * Simulate Communications Compliance Gate
+ * Runs the Communications V2 ComplianceGate in dry-run simulation mode for a sender, optional principal, preference, message class, and jurisdiction.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.SimulateComplianceGate'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsSimulateComplianceGateOperation extends BaseRemotableOperation<CommsSimulateComplianceGateInput, CommsSimulateComplianceGateOutput> {
+    public readonly OperationKey = "Communications.SimulateComplianceGate";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_8dce789f9745b4a6";
+}
+
+// ============================================================
+// Communications.VerifySendingDomain — Verify Communications Sending Domain
+// ============================================================
+/**
+ * Verify Communications Sending Domain
+ * Verifies DNS records for a CommunicationSendingDomain with the downstream provider and merges validation results into the stored DNS records.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Communications.VerifySendingDomain'. This generated base provides the typed contract only (client-safe).
+ */
+export class CommunicationsVerifySendingDomainOperation extends BaseRemotableOperation<CommsSendingDomainInput, CommsSendingDomainAuthOutput> {
+    public readonly OperationKey = "Communications.VerifySendingDomain";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ef30f58d04120ea0";
 }
 
 // ============================================================
@@ -1961,6 +2797,22 @@ export class DiagnosticsUploadClientCaptureOperation extends BaseRemotableOperat
 }
 
 // ============================================================
+// Graph.FindPath — Find Graph Path
+// ============================================================
+/**
+ * Find Graph Path
+ * Find the fewest-hop path between two nodes of a semantic graph (default MJ Canon) that the caller may see. Each endpoint is a record or a concept name, synonym or ID; an endpoint that fits several concepts comes back AmbiguousEndpoint with the candidates. Read-only. Implemented by GraphFindPathServerOperation in @memberjunction/core-entities-server over GraphEngine.FindPath.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'Graph.FindPath'. This generated base provides the typed contract only (client-safe).
+ */
+export class GraphFindPathOperation extends BaseRemotableOperation<GraphFindPathInput, GraphFindPathOutput> {
+    public readonly OperationKey = "Graph.FindPath";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_75cf012a87110c1f";
+}
+
+// ============================================================
 // PredictiveStudio.ControlExperimentSession — Control Experiment Session
 // ============================================================
 /**
@@ -1991,7 +2843,41 @@ export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotable
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_0a4217c595837dc0";
+    public readonly ContractFingerprint = "ro_fp_e4f631d6f8c2926a";
+}
+
+// ============================================================
+// PredictiveStudio.GetModelEvidence — Get ML Model Evidence
+// ============================================================
+/**
+ * Get ML Model Evidence
+ * Build the evidence of an MJ: ML Models row from stored rows only, the way a sign-off records it and a publish freezes it: the holdout primary score of what ships (the kept simple member's for keep-simple-baseline) with its interval, the training run's paired comparisons, its stored gate decision and leakage flags, the Training Snapshot's data window and ContentHash. Returns the evidence and its SHA-256 (the EvidenceSha256 a sign-off over it records). Read-only: writes no row. Delegates to SignOffService in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.GetModelEvidence'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioGetModelEvidenceOperation extends BaseRemotableOperation<PredictiveStudioGetModelEvidenceInput, PredictiveStudioGetModelEvidenceOutput> {
+    public readonly OperationKey = "PredictiveStudio.GetModelEvidence";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_58ae71e740bbf717";
+}
+
+// ============================================================
+// PredictiveStudio.MigratePreGateModels — Migrate Pre-Gate ML Models
+// ============================================================
+/**
+ * Migrate Pre-Gate ML Models
+ * The pre-change model migration that the Predictive Studio Registry Check job runs on every run while work remains: models registered before the lifecycle gate with a stored gate record are back-filled and re-verified (kept Published with an adopt record, or demoted with the refusal), every other pre-change artifact is checked once (verified, legacy-local or missing), the scoring Actions and schedules of non-serving Unevaluated models are disabled, and each pipeline left without a Published model is retrained once under its protocol through the lifecycle gate (no Prediction Unit is invented for a legacy pipeline). A dry run (the default) reports the remaining work and writes nothing; a pass that writes needs the Registry Check job run it belongs to. Delegates to PreGateModelMigration in @memberjunction/predictive-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.MigratePreGateModels'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioMigratePreGateModelsOperation extends BaseRemotableOperation<PredictiveStudioMigratePreGateModelsInput, PredictiveStudioMigratePreGateModelsOutput> {
+    public readonly OperationKey = "PredictiveStudio.MigratePreGateModels";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_0380dffee16d0779";
 }
 
 // ============================================================
@@ -1999,7 +2885,7 @@ export class PredictiveStudioCreateScoringProcessOperation extends BaseRemotable
 // ============================================================
 /**
  * Promote ML Model
- * Transition an MJ: ML Models row through its lifecycle (Validated / Published / Archived). Enforces the leakage sign-off gate — a model flagged for possible target leakage cannot be promoted unless signOff=true. Lifecycle-only: never edits metrics or artifact, only Status. Returns whether the model was promoted and its new status. Delegates to the ProductionModelPromotionGate in @memberjunction/predictive-studio-engine.
+ * Apply one lifecycle transition to an MJ: ML Models row through the Predictive Studio lifecycle gate: evaluate (Draft to Validated or KeepBaseline from the training run's stored gate decision), publish (Validated or KeepBaseline to Published, re-verified from the stored rows, with the publish record written), archive (to Archived, reason required) or rollback (Archived to Published for a model published before, reason required). A leakage-flagged model is published only with an approving sign-off record (signOffId). The caller is the initiator; an interactive user is recorded as the approver. Returns whether the transition was applied, the model's status, and the gate's refusal when it was not. Delegates to LifecycleGate in @memberjunction/predictive-studio-engine.
  * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
  * under 'PredictiveStudio.PromoteModel'. This generated base provides the typed contract only (client-safe).
  */
@@ -2008,7 +2894,7 @@ export class PredictiveStudioPromoteModelOperation extends BaseRemotableOperatio
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_4e292361ad1e1c4d";
+    public readonly ContractFingerprint = "ro_fp_707dcd50e5ccc5f2";
 }
 
 // ============================================================
@@ -2029,6 +2915,23 @@ export class PredictiveStudioRunFeaturePipelineOperation extends BaseRemotableOp
 }
 
 // ============================================================
+// PredictiveStudio.RunModelMonitoring — Run ML Model Monitoring
+// ============================================================
+/**
+ * Run ML Model Monitoring
+ * Run one Published MJ: ML Models row's monitoring now, for one period (periodStart, the first day of a period of its monitoring job's grain) or the last complete one: the period's predictions (its binding's Champion Model Feature Values, or a shadow Predict of the period's unit rows when no binding is Active) joined to realised outcomes once the label window has closed, the primary score and tracked metrics with 95% intervals, drift by monitor procedure M, the retrain triggers (a fired one starts a challenger through the automated publisher), the rollback check against the predecessor on the same rows, the live mirror's divergence and parity. Writes or updates the period's MJ: ML Monitoring Results row and returns it. Uses the spec of the model's open monitoring job. Delegates to PredictiveStudioModelMonitoringJobDriver in @memberjunction/predictive-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.RunModelMonitoring'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioRunModelMonitoringOperation extends BaseRemotableOperation<PredictiveStudioRunModelMonitoringInput, PredictiveStudioRunModelMonitoringOutput> {
+    public readonly OperationKey = "PredictiveStudio.RunModelMonitoring";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_b000910fbd8bc41b";
+}
+
+// ============================================================
 // PredictiveStudio.ScoreRecordSet — Score Record Set
 // ============================================================
 /**
@@ -2042,7 +2945,24 @@ export class PredictiveStudioScoreRecordSetOperation extends BaseRemotableOperat
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_30d16c7f220f7b3a";
+    public readonly ContractFingerprint = "ro_fp_34bc7e11dc9d8b9f";
+}
+
+// ============================================================
+// PredictiveStudio.SignOffModel — Sign Off ML Model
+// ============================================================
+/**
+ * Sign Off ML Model
+ * Record a person's sign-off of an MJ: ML Models row for a publish or a rollback: an MJ: ML Model Publish Records row of Kind sign-off with the approver, the decision (approve or reject), the reason, the leakage flag kinds it overrides, and the evidence built from stored rows with its SHA-256. The lifecycle gate consumes an approving sign-off (PromoteModel's signOffId) only while its EvidenceSha256 equals a fresh recomputation. Refused with NOT_HUMAN for an API-key caller or the system user, INVALID_INPUT (naming the field) for an input outside its contract (a missing field, an unknown purpose, decision or leakage flag kind), OVERRIDES_WITHOUT_REASON when flags are overridden without a reason, and MODEL_ARCHIVED for an Archived model. Delegates to SignOffService in @memberjunction/predictive-studio-engine.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.SignOffModel'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioSignOffModelOperation extends BaseRemotableOperation<PredictiveStudioSignOffModelInput, PredictiveStudioSignOffModelOutput> {
+    public readonly OperationKey = "PredictiveStudio.SignOffModel";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_0d274cfb21ed2782";
 }
 
 // ============================================================
@@ -2059,7 +2979,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_6a24af7901f8dd8b";
+    public readonly ContractFingerprint = "ro_fp_869cb01adf6b0bbd";
 }
 
 // ============================================================
@@ -2067,7 +2987,7 @@ export class PredictiveStudioStartExperimentSessionOperation extends BaseRemotab
 // ============================================================
 /**
  * Train ML Model
- * Train a predictive model from an MJ: ML Training Pipelines definition. Carves a locked holdout (point-in-time/as-of aware), trains via the sidecar, persists an immutable Draft MJ: ML Models row, and flags single-feature dominance (possible target leakage). Returns the new model id, its honest holdout metrics, the leakage flag, and the model version. Delegates to TrainingEngine.trainModel in @memberjunction/predictive-studio-engine.
+ * Trains a predictive model from an ML Training Pipeline under the pipeline's Prediction Unit and Evaluation Protocol: freezes a Training Snapshot, carves the locked holdout by date, selects on inner folds, fits the baselines and stores the three-outcome gate decision with its reason on the training run. Outputs the run's gate outcome and reason, the snapshot and protocol, the model id (none under no-signal), the test-set scores and whether one feature dominates the predictions (possible target leakage).
  * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
  * under 'PredictiveStudio.TrainModel'. This generated base provides the typed contract only (client-safe).
  */
@@ -2076,7 +2996,24 @@ export class PredictiveStudioTrainModelOperation extends BaseRemotableOperation<
     public readonly ExecutionMode = 'LongRunning' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_470d23334fcd4964";
+    public readonly ContractFingerprint = "ro_fp_2b7f9d9a95e772b6";
+}
+
+// ============================================================
+// PredictiveStudio.WithdrawScoringBinding — Withdraw ML Model Scoring Binding
+// ============================================================
+/**
+ * Withdraw ML Model Scoring Binding
+ * Withdraw an MJ: ML Model Scoring Bindings row: its Status becomes Withdrawn, so it scores no more, and in the same transaction every record whose TargetColumn still holds the value the binding last copied (its newest Champion Model Feature Value, resolved through TargetColumnSource) is saved with the column cleared, so Record Changes keeps the history. A value a person entered since, or a record holding a Human Feature Value of the binding's feature, is kept. The binding's Feature Values stay and follow its retention. Returns the counts of cleared and kept values. Delegates to ScoringBindings.Withdraw in @memberjunction/predictive-studio.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'PredictiveStudio.WithdrawScoringBinding'. This generated base provides the typed contract only (client-safe).
+ */
+export class PredictiveStudioWithdrawScoringBindingOperation extends BaseRemotableOperation<PredictiveStudioWithdrawScoringBindingInput, PredictiveStudioWithdrawScoringBindingOutput> {
+    public readonly OperationKey = "PredictiveStudio.WithdrawScoringBinding";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "predictive:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_134951a81a51789b";
 }
 
 // ============================================================
@@ -2283,6 +3220,23 @@ export class TaskGraphCancelOperation extends BaseRemotableOperation<TaskGraphCo
 }
 
 // ============================================================
+// TaskGraph.CompleteWaitingStep — Complete Waiting Workflow Step
+// ============================================================
+/**
+ * Complete Waiting Workflow Step
+ * Complete (or fail) a waiting External or provider-Human workflow step, by task ID or by correlation key. The supplied payload is merged into the workflow payload, so downstream paths can branch on it. A signal for a step that has not been reached yet is held on the step and applied when it is. Wait steps (they complete on their own clock) and built-in inbox Human steps (they complete through their request) are refused. The caller must own the workflow run or be an Owner-type user; matched steps the caller may not complete are reported, not skipped. Implemented by TaskGraphCompleteWaitingStepServerOperation in @memberjunction/task-graph.
+ * GenerationType=Manual — the server body is supplied by a hand-authored subclass registered
+ * under 'TaskGraph.CompleteWaitingStep'. This generated base provides the typed contract only (client-safe).
+ */
+export class TaskGraphCompleteWaitingStepOperation extends BaseRemotableOperation<TaskGraphCompleteWaitingStepInput, TaskGraphCompleteWaitingStepOutput> {
+    public readonly OperationKey = "TaskGraph.CompleteWaitingStep";
+    public readonly ExecutionMode = 'Sync' as const;
+    public readonly RequiredScope = "taskgraph:execute";
+    public readonly RequiresSystemUser = false;
+    public readonly ContractFingerprint = "ro_fp_ce2fbcd9c8ab5e26";
+}
+
+// ============================================================
 // TaskGraph.ForceCompleteTask — Force Complete Workflow Step
 // ============================================================
 /**
@@ -2449,7 +3403,7 @@ export class TaskGraphSubmitOperation extends BaseRemotableOperation<TaskGraphSu
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "taskgraph:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_08cd68d5cfacf880";
+    public readonly ContractFingerprint = "ro_fp_8f1f452387b6790a";
 }
 
 // ============================================================
@@ -2652,7 +3606,7 @@ export class WorkflowDraftOperation extends BaseRemotableOperation<WorkflowDraft
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_7a54f25b89c43fef";
+    public readonly ContractFingerprint = "ro_fp_1453e143e70e1bae";
 }
 
 // ============================================================
@@ -2669,7 +3623,7 @@ export class WorkflowSaveOperation extends BaseRemotableOperation<WorkflowSaveIn
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:write";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_f8c19b5a79876f33";
+    public readonly ContractFingerprint = "ro_fp_4649d0191277725e";
 }
 
 // ============================================================
@@ -2686,6 +3640,6 @@ export class WorkflowValidateOperation extends BaseRemotableOperation<WorkflowSa
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "workflow:read";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_2ebd29835c1d8b0c";
+    public readonly ContractFingerprint = "ro_fp_06d97b8424f9ad49";
 }
 

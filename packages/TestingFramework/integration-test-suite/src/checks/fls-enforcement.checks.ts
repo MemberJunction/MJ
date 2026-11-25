@@ -36,7 +36,7 @@
  * If the entity is ALREADY FLS-enabled (a real administrator configured it), the fixture
  * refuses to mutate and every check records a SKIP.
  */
-import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage, CompositeKey } from '@memberjunction/core';
+import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage, CompositeKey, BaseEntity } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams, EntityFieldInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry, SkipCheck } from '@memberjunction/testing-integration';
@@ -1178,6 +1178,115 @@ export async function CheckFls21_RefreshCostVisibility(ctx: IntegrationCheckCont
     return CheckFls21RefreshCostVisibility(ctx);
 }
 
+/**
+ * FLS25 — related rows loaded with a record get the same column narrowing as the record. The
+ * reader (denied Email) loads a Company with its Employees relationship; every related Employee
+ * row must come back without Email, and an unrestricted load of the same relationship keeps it.
+ * The provider Load is called directly: the reader has no read on Companies, and the parent row's
+ * own entity check is not what this check is about.
+ */
+export async function CheckFls25RelatedRowsNarrowed(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS25')) return;
+    const fx = ctx.FlsFixture!;
+    const company = await ctx.Provider.GetEntityObject<BaseEntity>('MJ: Companies', ctx.User);
+    const relationship = company.EntityInfo.RelatedEntities.find(r =>
+        r.RelatedEntity === SEEDED_FLS_ENTITY && r.RelatedEntityJoinField.trim().toLowerCase() === 'companyid');
+    if (!relationship) {
+        SkipCheck(`'MJ: Companies' has no relationship to '${SEEDED_FLS_ENTITY}' on CompanyID in this database`);
+    }
+    const key = new CompositeKey([{ FieldName: company.EntityInfo.FirstPrimaryKey.Name, Value: fx.CompanyID! }]);
+
+    const load = async (user: UserInfo): Promise<Record<string, unknown>[]> => {
+        const row = await company.ProviderToUse.Load(company, key, [relationship!.RelatedEntity], user) as Record<string, unknown> | null;
+        Assert(row != null, 'the fixture company must load');
+        const related = row![relationship!.RelatedEntity];
+        return Array.isArray(related) ? related as Record<string, unknown>[] : [];
+    };
+
+    const asReader = await load(fx.Reader!);
+    Assert(asReader.some(r => UUIDsEqual(String(r['ID']), fx.FixtureEmployeeID!)), 'the reader must get the fixture employee among the related rows');
+    for (const row of asReader) {
+        Assert(!(FLS_READER_DENIED_FIELD in row), `a related row loaded for the reader must not carry ${FLS_READER_DENIED_FIELD}`);
+    }
+    const asSystem = await load(ctx.User);
+    Assert(asSystem.length > 0 && FLS_READER_DENIED_FIELD in asSystem[0], `an unrestricted load must still return ${FLS_READER_DENIED_FIELD} on related rows`);
+}
+
+/**
+ * FLS26 — a duplicate-key error does not return a denied value. A unique index over
+ * (FirstName, Title), filtered to two probe rows that share a Title: multi (read-denied on Title)
+ * changes one row's FirstName to the other's, the database reports the duplicate key, and the
+ * message multi gets names the index but not the stored Title.
+ */
+export async function CheckFls26ConstraintErrorRedacted(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS26')) return;
+    const fx = ctx.FlsFixture!;
+    const schema = SchemaOf(ctx);
+    const stamp = Date.now();
+    const secretTitle = `UQ-Probe-Title-${stamp}`;
+    const indexName = `IX_IT_FLS_UQProbe_${stamp}`;
+    const probeLastName = 'UQ probe (mj-integration-test)';
+
+    const seed = async (firstName: string): Promise<string> => {
+        const rows = await Q<{ ID: string }>(ctx,
+            `INSERT INTO [${schema}].Employee (FirstName, LastName, CompanyID, Email, Title) OUTPUT INSERTED.ID ` +
+            `VALUES ('${firstName}', '${probeLastName}', '${fx.CompanyID}', 'uq-${firstName.toLowerCase()}-${stamp}@integration.test', '${secretTitle}')`);
+        fx.CreatedEmployeeIds.push(rows[0].ID);
+        return rows[0].ID;
+    };
+    const idA = await seed('UQProbeA');
+    await seed('UQProbeB');
+    await Q(ctx, `CREATE UNIQUE INDEX [${indexName}] ON [${schema}].Employee (FirstName, Title) WHERE LastName = '${probeLastName}'`);
+    try {
+        const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Multi!);
+        Assert(await emp.Load(idA), 'multi must be able to load the probe employee');
+        emp.FirstName = 'UQProbeB';
+        Assert(!(await emp.Save()), 'the save must fail on the unique index');
+        const message = emp.LatestResult?.Message ?? '';
+        Assert(message.includes(indexName), `the failure must come from the probe index (got: ${message})`);
+        Assert(!message.includes(secretTitle), `the error returned to a caller denied ${FLS_DENY_READ_FIELD} must not contain its stored value (got: ${message})`);
+    } finally {
+        await Q(ctx, `DROP INDEX [${indexName}] ON [${schema}].Employee`).catch(() => undefined);
+    }
+}
+
+/**
+ * FLS27 — turning field security on after rows were deleted out of band recreates them. Field
+ * security is turned off through the entity path, one permission row is deleted with raw SQL
+ * (this process's metadata still lists it), and turning it back on must write that row again
+ * instead of trusting metadata and leaving the field with no row. A tightened row survives.
+ */
+export async function CheckFls27ReEnableAfterOutOfBandDelete(ctx: IntegrationCheckContext): Promise<void> {
+    if (!SkipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS27')) return;
+    const fx = ctx.FlsFixture!;
+    const schema = SchemaOf(ctx);
+    const entity = FlsEntity(ctx);
+    const fieldId = FieldOf(entity, 'FirstName').ID;
+    const writerRole = fx.RoleIDs!.Writer;
+
+    const setFlag = async (on: boolean): Promise<void> => {
+        const ent = await ctx.Provider.GetEntityObject<MJEntityEntity>('MJ: Entities', ctx.User);
+        Assert(await ent.Load(entity.ID), `failed to load '${SEEDED_FLS_ENTITY}' entity record`);
+        ent.EnableFieldLevelSecurity = on;
+        Assert(await ent.Save(), `turning field security ${on ? 'on' : 'off'} must save: ${ent.LatestResult?.CompleteMessage ?? ''}`);
+    };
+    const rowCount = async (roleId: string, fId: string): Promise<number> => (await Q<{ n: number }>(ctx,
+        `SELECT COUNT(*) AS n FROM [${schema}].EntityFieldPermission WHERE EntityFieldID = '${fId}' AND RoleID = '${roleId}'`))[0].n;
+
+    await setFlag(false);
+    await ctx.Provider.Refresh();
+    Assert(FlsEntity(ctx).FieldByName('FirstName')!.FieldPermissions.some(p => UUIDsEqual(p.RoleID, writerRole)),
+        'precondition: metadata lists the Writer row for FirstName');
+    await Q(ctx, `DELETE FROM [${schema}].EntityFieldPermission WHERE EntityFieldID = '${fieldId}' AND RoleID = '${writerRole}'`);
+
+    await setFlag(true);
+    AssertEqual(await rowCount(writerRole, fieldId), 1, 'enabling must recreate the row deleted out of band');
+    const titleRule = await Q<{ ReadAccess: string }>(ctx,
+        `SELECT ReadAccess FROM [${schema}].EntityFieldPermission WHERE EntityFieldID = '${FieldOf(entity, FLS_DENY_READ_FIELD).ID}' AND RoleID = '${fx.RoleIDs!.Denier}'`);
+    AssertEqual(titleRule[0]?.ReadAccess, 'Deny', 'a tightened rule must survive re-enabling');
+    await ctx.Provider.Refresh();
+}
+
 /** The 'fls-enforcement' bundle (server transport). Order is load-bearing: FLS3 applies the tightenings. */
 export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS1', Name: 'FLS1: enabling field security via the real entity path succeeds; the snapshot covers (restrictable fields × read-holding roles) and never targets PKs or __mj_ columns', Fn: CheckFls1EnableSnapshotShape },
@@ -1203,6 +1312,9 @@ export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS22', Name: 'FLS22: the Record Changes payload is projected against the entity each row is ABOUT — denied keys dropped from ChangesJSON/FullRecordJSON, ChangesDescription withheld, and an unrestricted caller still gets everything', Fn: CheckFls22RecordChangePayloadProjected },
     { Id: 'fls-enforcement.FLS23', Name: 'FLS23: Record Changes are never server-cached (no slot to share across permission classes), and the reader\'s read right after the writer\'s identical one still gets a narrowed payload', Fn: CheckFls23RecordChangeCacheSlotStillProjects },
     { Id: 'fls-enforcement.FLS24', Name: 'FLS24: a read-denied name field withholds the record name from the provider lookups and search enrichment, including after an unrestricted user looked it up', Fn: CheckFls24RecordNameWithheldFromEveryLookup },
+    { Id: 'fls-enforcement.FLS25', Name: 'FLS25: related rows loaded with a record omit the columns the user may not read', Fn: CheckFls25RelatedRowsNarrowed },
+    { Id: 'fls-enforcement.FLS26', Name: 'FLS26: a duplicate-key error returned to a caller denied a column of the unique index does not contain its stored value', Fn: CheckFls26ConstraintErrorRedacted },
+    { Id: 'fls-enforcement.FLS27', Name: 'FLS27: turning field security on after an out-of-band delete recreates the deleted rule and keeps tightened ones', Fn: CheckFls27ReEnableAfterOutOfBandDelete },
     { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21RefreshCostVisibility }
 ];
 

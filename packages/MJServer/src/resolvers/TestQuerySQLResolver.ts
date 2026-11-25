@@ -6,6 +6,7 @@ import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
@@ -104,6 +105,7 @@ export class TestQuerySQLResult {
  *
  * @see https://github.com/MemberJunction/MJ/issues/2172
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class TestQuerySQLResolver extends ResolverBase {
     @Query(() => TestQuerySQLResult, {
@@ -124,7 +126,7 @@ export class TestQuerySQLResolver extends ResolverBase {
                 return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
             }
             // Use read-only provider for security — no mutation possible
-            const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
+            const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
             if (!provider) {
                 return this.buildErrorResult('Read-only data source is not available. TestQuerySQL requires a read-only connection for security.');
             }

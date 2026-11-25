@@ -1657,11 +1657,11 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             CompletedAt: dbLog.EndedAt,
             DurationMs: dbLog.DurationMs,
             UserID: dbLog.UserID,
-            UserName: dbLog.User,
+            UserName: dbLog.User ?? undefined,
             ErrorMessage: dbLog.ErrorMessage,
             InputArgs: dbLog.InputParameters,
             Result: dbLog.OutputContent,
-            ConnectionName: dbLog.MCPServerConnection,
+            ConnectionName: dbLog.MCPServerConnection ?? undefined,
             ServerName: undefined // Will be enriched later
         };
     }

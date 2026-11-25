@@ -14,6 +14,7 @@ import {
     WorkingRecordIdentity,
 } from '@memberjunction/content-pipeline-base';
 import { GetEntityFieldMap, GetEntityName } from './EntityFieldMap.js';
+import { ItemEntityResolver } from './ItemEntityResolver.js';
 
 /**
  * Columns republished into the `Pipeline` extension space. Gates and stages read them; nothing competes for
@@ -28,6 +29,21 @@ const PIPELINE_COLUMN_EXTENSIONS: readonly (readonly [string, string])[] = [
     ['ExtractorKey', 'extractorKey'],
     ['ExtractorKeyOverride', 'extractorKeyOverride'],
     ['VectorRecordID', 'vectorRecordID'], // the receipt Delete and a re-embed need
+    ['DiscoverState', 'discoverState'], // where an unfinished walk of a source stopped
+    ['SegmentTitle', 'segmentTitle'],
+    ['Transcript', 'transcript'],
+    ['Description', 'description'],
+    ['SegmenterKey', 'segmenterKey'],
+    ['ParentChunkID', 'parentChunkID'],
+];
+
+const PIPELINE_NUMERIC_COLUMN_EXTENSIONS: readonly (readonly [string, string])[] = [
+    ['Sequence', 'sequence'],
+    ['StartMs', 'startMs'],
+    ['EndMs', 'endMs'],
+    ['StartOffset', 'startOffset'],
+    ['EndOffset', 'endOffset'],
+    ['PageNumber', 'pageNumber'],
 ];
 
 /** Builds working records from persisted rows. */
@@ -42,7 +58,35 @@ export class WorkingRecordHydrator {
         if (!(await entityObject.InnerLoad(CompositeKey.FromID(recordID)))) { // first-pk-ok: MJ core content entity, single-column ID
             throw new Error(`${GetEntityName(entity)} record '${recordID}' could not be loaded for hydration`);
         }
-        return this.FromEntity(entity, entityObject);
+        if (entity !== 'Content Item') {
+            return this.FromEntity(entity, entityObject);
+        }
+        return this.hydrateItem(entityObject, recordID);
+    }
+
+    /**
+     * A Content Item, read as the entity its source's items are ({@link ItemEntityResolver}) so stages see an
+     * IS-A extension's fields. Loading the core row already finds and loads the item's extension row (MJ's
+     * IS-A discovery links it as `ISAChild`), so that is used rather than loading it again. An item with no
+     * extension row yet is read from the core row; the committer adds the extension row when it saves.
+     */
+    private async hydrateItem(core: BaseEntity, recordID: string): Promise<WorkingRecord> {
+        const resolved = await new ItemEntityResolver(this.provider, this.contextUser).Resolve(this.readString(core, 'ContentSourceID'));
+        const extension = resolved.IsExtension ? await this.extensionOf(core, resolved.EntityName, recordID) : null;
+        const record = this.FromEntity('Content Item', extension ?? core);
+        record.SetExtension('Pipeline', 'itemEntity', resolved.EntityName);
+        return record;
+    }
+
+    /** The item's row as `entityName`: the linked IS-A child when it is that entity, else a load; null when there is none. */
+    private async extensionOf(core: BaseEntity, entityName: string, recordID: string): Promise<BaseEntity | null> {
+        for (let child = core.ISAChild; child; child = child.ISAChild) {
+            if (child.EntityInfo?.Name === entityName) {
+                return child;
+            }
+        }
+        const extension = await this.provider.GetEntityObject<BaseEntity>(entityName, this.contextUser);
+        return (await extension.InnerLoad(CompositeKey.FromID(recordID))) ? extension : null; // first-pk-ok: shares the core item's single-column ID
     }
 
     /** Build a working record from an already-loaded row. */
@@ -67,9 +111,11 @@ export class WorkingRecordHydrator {
         if (lastSyncedAt !== null) {
             record.SetExtension('Pipeline', 'lastSyncedAt', lastSyncedAt);
         }
-        const sequence = this.hasField(entityObject, 'Sequence') ? this.readColumn(entityObject, 'Sequence') : null;
-        if (typeof sequence === 'number') {
-            record.SetExtension('Pipeline', 'sequence', sequence);
+        for (const [column, key] of PIPELINE_NUMERIC_COLUMN_EXTENSIONS) {
+            const num = this.hasField(entityObject, column) ? this.readColumn(entityObject, column) : null;
+            if (typeof num === 'number') {
+                record.SetExtension('Pipeline', key, num);
+            }
         }
         this.restoreFields(record, entity, entityObject);
         return record;

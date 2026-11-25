@@ -17,27 +17,149 @@
  * a non-Owner-type user may create a request only for themselves and may update only a request
  * that was already theirs (the PRE-save `RequestForUserID`). Owner-type users, the scheduler's
  * system user among them, are exempt, which is what cross-user paths such as Send Inter-Agent
- * Request run under.
+ * Request run under. `AgentFeedbackCoordinator.CreateFeedbackRequest` saves a feedback request
+ * as the system user only when its assignee came from metadata (agent type, category, request
+ * type); an assignee the caller chose is held to this rule.
+ *
+ * Responder: `ResponseByUserID` is the server's record of who answered. A save that answers the request
+ * (moves it into a responded status, a create included) sets it to the user the save runs as. On a workflow
+ * step's request it does so only when the save is that user's own client request
+ * (`ServerOperationScopeManager.IsInDirectClientCrud`), and sets nobody when server code answers, such as
+ * an agent run calling Update Record as that user. No other save may change it.
+ *
+ * Workflow requests: a request naming a task-graph step (`OriginatingTaskID`) is how a person releases
+ * that step, and the dispatcher settles the step from it. So only the dispatcher raises one (inside its
+ * runtime-security scope), no request's `OriginatingTaskID` ever changes, a workflow request's question
+ * (`Request`, `ResponseSchema`) is the dispatcher's, only a person's own request reassigns it, its answer
+ * is written only by the save that gives it, and it cannot change once given. Server
+ * code acting as the step's assignee could otherwise point an answer the person gave elsewhere at the
+ * step, pre-create the request the dispatcher then adopts, or rewrite the question the person answers.
+ *
+ * Human-task providers: a request raised through the install's default provider (`HumanTaskProvider`) can be
+ * answered there or here. The provider answers through `AnswerAgentRequestFromProvider`, which marks the save
+ * ({@link MJAIAgentRequestEntityServer.MarkAnsweredByProvider}) so the person who decided in the provider is
+ * recorded as the responder. Any other answer withdraws the provider's copy, so nobody is left looking at an
+ * ask that has already been answered.
  */
 
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider, ServerOperationScopeManager, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJAIAgentRunStepEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams, ResolveHumanTaskProvider, SameHumanTaskProvider, TASK_GRAPH_RUNTIME_SECURITY_OPERATION } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AgentRunner } from './AgentRunner';
 import { AgentWakeTriggerService } from './AgentWakeTriggerService';
 
 /** Statuses that indicate a human has responded */
 const RESPONDED_STATUSES = ['Approved', 'Rejected', 'Responded'];
+/** A workflow request's question: written by the task-graph dispatcher that raises it, and by nothing else. */
+const WORKFLOW_QUESTION_FIELDS = ['Request', 'ResponseSchema'];
+/** A request's answer: fixed for a workflow request once it is given. */
+const ANSWER_FIELDS = ['Status', 'Response', 'ResponseData'];
+/** What an answer says: written to an open workflow request only by the save that answers it. */
+const ANSWER_DATA_FIELDS = ['Response', 'ResponseData'];
+
+/** A provider's answer to this request, set for the one save that records it. */
+type ProviderAnswerMark = { ProviderKey: string; RespondingUserID: string | null };
 
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
 export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
+    private providerAnswer: ProviderAnswerMark | null = null;
+
+    /**
+     * Marks the next save as the answer the request's human-task provider reported, made by
+     * `respondingUserID` (an MJ user) when the provider knows who decided. Server-side only; used by
+     * `AnswerAgentRequestFromProvider`, which checks the provider first. Cleared after the save.
+     */
+    public MarkAnsweredByProvider(providerKey: string, respondingUserID: string | null): void {
+        this.providerAnswer = { ProviderKey: providerKey, RespondingUserID: respondingUserID };
+    }
+
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.validateOwnership(result);
+        this.validateResponderUnchanged(result);
+        this.validateWorkflowRequest(result);
         result.Success = result.Success && result.Errors.length === 0;
         return result;
+    }
+
+    /** Whether this save answers the request: moves it into a responded status, a create included. */
+    private answersRequest(): boolean {
+        if (!RESPONDED_STATUSES.includes(this.Status)) {
+            return false;
+        }
+        return !this.IsSaved || this.GetFieldByName('Status')?.OldValue !== this.Status;
+    }
+
+    /**
+     * `ResponseByUserID` is the server's record of who answered ({@link Save} sets it when a save answers
+     * the request), so no other save may change it, an Owner-type user's included.
+     */
+    private validateResponderUnchanged(result: ValidationResult): void {
+        if (this.IsSaved && !this.answersRequest() && this.GetFieldByName('ResponseByUserID')?.Dirty) {
+            result.Errors.push(new ValidationErrorInfo(
+                'ResponseByUserID',
+                'ResponseByUserID records who answered the request: the server sets it when the request is answered, and it cannot be changed.',
+                this.ResponseByUserID,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+     * The workflow-request rules (see the file header): `OriginatingTaskID` never changes; outside the
+     * dispatcher's scope, a workflow request cannot be created, its question cannot change, and once
+     * answered its answer cannot change.
+     */
+    private validateWorkflowRequest(result: ValidationResult): void {
+        const refuse = (field: string, message: string): void => {
+            result.Errors.push(new ValidationErrorInfo(field, message, this.GetFieldByName(field)?.Value, ValidationErrorType.Failure));
+        };
+        if (this.IsSaved && this.GetFieldByName('OriginatingTaskID')?.Dirty) {
+            refuse('OriginatingTaskID', 'OriginatingTaskID cannot change after a request is created: a workflow step settles from the requests that name it.');
+            return;
+        }
+        if (this.OriginatingTaskID == null || this.inDispatcherScope()) {
+            return;
+        }
+        if (!this.IsSaved) {
+            refuse('OriginatingTaskID', 'Only the task-graph dispatcher raises a request for a workflow step.');
+            return;
+        }
+        for (const field of WORKFLOW_QUESTION_FIELDS) {
+            if (this.GetFieldByName(field)?.Dirty) {
+                refuse(field, `${field} of a workflow step's request is the dispatcher's question and cannot be changed.`);
+            }
+        }
+        // Who answers: a person may hand it to someone else (Reassign), but code acting as them cannot.
+        if (this.GetFieldByName('RequestForUserID')?.Dirty && !ServerOperationScopeManager.Instance.IsInDirectClientCrud()) {
+            refuse('RequestForUserID', "A workflow step's request is reassigned only by a person's own request.");
+        }
+        const storedStatus = this.GetFieldByName('Status')?.OldValue as string | null | undefined;
+        if (storedStatus && RESPONDED_STATUSES.includes(storedStatus)) {
+            for (const field of ANSWER_FIELDS) {
+                if (this.GetFieldByName(field)?.Dirty) {
+                    refuse(field, `A workflow step's request cannot change ${field} once it has been answered.`);
+                }
+            }
+        } else if (!this.answersRequest()) {
+            // Open: the answer is written by the save that gives it. Filled in beforehand, it would ride on the
+            // person's approval (an approve button leaves it as it is) into the step's output as reviewed data.
+            for (const field of ANSWER_DATA_FIELDS) {
+                if (this.GetFieldByName(field)?.Dirty) {
+                    refuse(field, `A workflow step's request takes ${field} only from the save that answers it.`);
+                }
+            }
+        }
+    }
+
+    /** Whether this save runs inside the task-graph dispatcher's runtime-security scope, bound to its user. */
+    private inDispatcherScope(): boolean {
+        // No user, no scope: without one, IsOperationActive would match a frame bound to anybody.
+        return this.ContextCurrentUser != null && ServerOperationScopeManager.Instance.IsOperationActive(
+            [TASK_GRAPH_RUNTIME_SECURITY_OPERATION], 'MJ: AI Agent Requests', this.ContextCurrentUser,
+        );
     }
 
     /**
@@ -67,9 +189,29 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         const wasNewRecord = !this.IsSaved;
         const wasRequested = statusField?.OldValue === 'Requested' || (!this.IsSaved && statusField?.Value === 'Requested');
         const isNowResponded = RESPONDED_STATUSES.includes(this.Status);
+        if (this.answersRequest()) {
+            // The responder is the user this save runs as, whatever the caller wrote. On a workflow step's request it
+            // is recorded only when the save is that user's own client request, and nobody when server code answers:
+            // a task-graph Human step clears taint only when its assignee answered (`HumanReviewClearsTaint` in
+            // @memberjunction/task-graph), the assignee is the graph's submitter, and that user's agent runs answer as
+            // the same user, so only where the save came from tells a person from code. Any other request (an agent
+            // answering an inter-agent request, say) keeps its responder: its OriginatingTaskID can never be set later.
+            const person = ServerOperationScopeManager.Instance.IsInDirectClientCrud();
+            this.ResponseByUserID = person || this.OriginatingTaskID == null ? (this.ContextCurrentUser?.ID ?? null) : null;
+            // A provider's answer names who decided in the provider's system, when it knows.
+            if (this.providerAnswer?.RespondingUserID && this.OriginatingTaskID == null) {
+                this.ResponseByUserID = this.providerAnswer.RespondingUserID;
+            }
+        }
+        const answeredByProvider = this.providerAnswer != null && SameHumanTaskProvider(this.providerAnswer.ProviderKey, this.HumanTaskProvider);
+        this.providerAnswer = null;
 
         const saved = await super.Save(options);
         if (!saved) return false;
+
+        if (wasRequested && isNowResponded && this.HumanTaskProvider && !answeredByProvider) {
+            this.withdrawProviderTask();
+        }
 
         // Only trigger resumption when:
         // 1. Status transitioned from 'Requested' to a responded status
@@ -124,6 +266,29 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         }
 
         return true;
+    }
+
+    /**
+     * The request was answered here (the inbox, the conversation, an API save), so the copy its human-task
+     * provider raised is no longer needed. Best-effort and not awaited: the answer is already saved.
+     */
+    private withdrawProviderTask(): void {
+        const key = this.HumanTaskProvider;
+        const contextUser = this.ContextCurrentUser;
+        const humanProvider = key ? ResolveHumanTaskProvider(key) : null;
+        if (!humanProvider || !contextUser) {
+            LogError(`Agent request ${this.ID} was answered, but its human-task provider "${key}" could not be told to withdraw its copy (${humanProvider ? 'no context user' : 'not registered'})`);
+            return;
+        }
+        humanProvider.WithdrawTask({
+            Subject: { Kind: 'AgentRequest', AgentRequestID: this.ID, AgentRunID: this.OriginatingAgentRunID ?? null },
+            Reason: 'completed-elsewhere',
+            ExternalReference: this.HumanTaskExternalReference,
+            ContextUser: contextUser,
+            Provider: this.ProviderToUse as unknown as IMetadataProvider,
+        }).catch(error => {
+            LogError(`Human-task provider "${key}" failed to withdraw its copy of agent request ${this.ID}: ${(error as Error).message}`, undefined, error);
+        });
     }
 
     /**

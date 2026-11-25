@@ -115,6 +115,27 @@ describe('ExportModalComponent (DOM)', () => {
     expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith('c1', TRUNK, 'markdown', currentUser, expect.objectContaining({ includeMessages: true }));
   });
 
+  it('disables the Export button when there is no conversation to export', () => {
+    const f = render({ conversation: undefined });
+    expect((queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('disables the Export button when no format is chosen', () => {
+    const f = render({}, (c) => {
+      c.SelectedFormat = null;
+    });
+    expect((queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('passes the host artifact link builder to the export service', async () => {
+    exportServiceStub.ExportConversation.mockClear();
+    const artifactLink = (): string => 'https://mj.example.com/chat';
+    const f = render({ ArtifactLink: artifactLink });
+    (queryAll(f, 'mj-dialog-actions button')[1] as HTMLButtonElement).click();
+    await settle();
+    expect(exportServiceStub.ExportConversation).toHaveBeenCalledWith('c1', TRUNK, 'markdown', currentUser, expect.objectContaining({ artifactLink }));
+  });
+
   describe('conversation scope', () => {
     const branch: ConversationBranchRow = { ID: 'BRANCH-B', ConversationID: 'c1', ParentBranchID: null, ForkFromSequence: 2, Name: 'Shorter answers' };
     const branchScope: ConversationScope = { ConversationID: 'c1', BranchID: 'BRANCH-B', Branches: [branch] };

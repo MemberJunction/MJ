@@ -18,6 +18,7 @@
     "@memberjunction/graphql-dataprovider",
     "@memberjunction/ng-artifacts",
     "@memberjunction/ng-auth-services",
+    "@memberjunction/ng-base-forms",
     "@memberjunction/ng-clustering",
     "@memberjunction/ng-conversations",
     "@memberjunction/ng-core-entity-forms",

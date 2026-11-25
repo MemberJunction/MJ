@@ -71,6 +71,11 @@ export interface RecordProcessorContext {
     TriggeredBy?: TriggeredByValue;
     /** Skip Dedup Cache lookups (golden-set and consistency evaluations measure the model, not the cache). */
     BypassCache?: boolean;
+    /**
+     * The run's stop signal ({@link RecordSetProcessOptions.Signal}), when the caller gave one. A processor doing
+     * long work on a record should pass it on, so that work stops too.
+     */
+    Signal?: AbortSignal;
 }
 
 /** Run-level summary context passed to {@link IRecordProcessor.BuildRunSummary} when a run completes. */
@@ -129,6 +134,14 @@ export interface IRecordProcessor {
 
     /** When true, a run that completed with one or more failed records ends with status `Failed`. */
     FailRunOnRecordError?: boolean;
+
+    /**
+     * Batch path only (`ProcessBatch`): how many batches the engine processes at once (default 1). The engine reads up to
+     * this many consecutive batches from the source, processes them concurrently, and only then checkpoints, runs the
+     * budget gate and the error-rate breaker for all of them (a "wave"), so a resumed run restarts at the first batch of
+     * the wave it stopped in. The batches are disjoint; the processor must keep their work independent.
+     */
+    MaxConcurrentBatches?: number;
 
     /** Optional hook to enrich output mapping configuration and report whether the processor has unmapped writes. */
     PrepareOutputMapping?(mapping: Record<string, unknown> | undefined): { OutputMapping?: Record<string, unknown>; HasUnmappedWrites?: boolean };
@@ -252,6 +265,14 @@ export interface RecordSetProcessOptions {
     LastRunAt?: Date | null;
     /** Overwrite values a person entered (default false); such a run skips no record on its watermark. */
     OverwriteHumanValues?: boolean;
+    /**
+     * Stops the run from the calling code: a worker that lost its lease, a cancelled job, a process shutting down.
+     * The run starts no record after the signal fires and ends `Paused`, without advancing its resume cursor past
+     * the page it was on, so the records it did not reach are processed by the next run. Records already started
+     * see the signal through {@link RecordProcessorContext.Signal}. The `CancellationRequested` flag on the run
+     * row still works as before; this is a second way to stop, for a caller that holds the run in memory.
+     */
+    Signal?: AbortSignal;
 }
 
 /** Strategy used to detect unchanged records when SkipUnchanged is enabled. */

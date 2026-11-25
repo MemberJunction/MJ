@@ -225,6 +225,14 @@ describe('CustomColumnPromotion', () => {
         it('never returns an empty name', () => {
             expect(SanitizeColumnName('***')).toBe('Custom');
         });
+        it('trims edge underscores and keeps inner ones', () => {
+            expect(SanitizeColumnName('__a__b__')).toBe('a_b');
+        });
+        it('sanitizes a long crafted key in linear time', () => {
+            const started = performance.now();
+            expect(SanitizeColumnName('a' + '_'.repeat(100_000) + 'a')).toBe('a_a');
+            expect(performance.now() - started).toBeLessThan(2500);
+        });
     });
 });
 

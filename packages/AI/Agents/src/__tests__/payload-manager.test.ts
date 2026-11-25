@@ -96,6 +96,15 @@ describe('PayloadManager', () => {
             const result = pm.deepMerge(dest, src);
             expect(result.x).toEqual({ now: 'object' });
         });
+
+        it('should skip __proto__, constructor and prototype keys from parsed JSON', () => {
+            const src = JSON.parse('{"__proto__":{"polluted":1},"a":{"__proto__":{"polluted":1},"constructor":{"prototype":{"polluted":1}},"ok":true}}');
+            const result = pm.DeepMerge<Record<string, unknown>>({ a: { b: 1 } }, src);
+            expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+            expect(Object.getPrototypeOf(result.a)).toBe(Object.prototype);
+            expect(result).toEqual({ a: { b: 1, ok: true } });
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+        });
     });
 
     // ════════════════════════════════════════════════════════════════════
@@ -754,6 +763,490 @@ describe('PayloadManager', () => {
             expect(second.result.metrics.revenue).toBe(110);
             expect(second.result.notes).toBe('Q2');
             expect(second.blockedOperations?.some((b) => b.path === 'metrics.revenue' && b.operation === 'delete')).toBe(true);
+        });
+    });
+
+    // ════════════════════════════════════════════════════════════════════
+    // Keys containing '.' or '[' (WS2-A) and Empty Arrays in MergeUpstreamPayload (WS2-C)
+    // ════════════════════════════════════════════════════════════════════
+
+    describe('keys containing dots or brackets (WS2-A)', () => {
+        interface BundlePayload {
+            bundle: {
+                targets: Record<string, {
+                    files: Record<string, string>;
+                    tags?: string[];
+                }>;
+            };
+        }
+
+        it('ApplyAgentChangeRequest preserves keys containing dots and colons in newElements, updateElements, and removeElements', () => {
+            const initial: BundlePayload = {
+                bundle: {
+                    targets: {},
+                },
+            };
+
+            const added = pm.ApplyAgentChangeRequest<BundlePayload>(
+                initial,
+                {
+                    updateElements: {
+                        bundle: {
+                            targets: {
+                                'web:desktop': {
+                                    files: {
+                                        'index.html': '<!doctype html><html><body>v1</body></html>',
+                                        'styles/main.min.css': 'body{margin:0}',
+                                        'chunk[0].js': 'console.log(1);',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                { allowedPaths: ['bundle.*'] }
+            );
+
+            expect(added.result.bundle.targets['web:desktop'].files).toEqual({
+                'index.html': '<!doctype html><html><body>v1</body></html>',
+                'styles/main.min.css': 'body{margin:0}',
+                'chunk[0].js': 'console.log(1);',
+            });
+
+            const updated = pm.ApplyAgentChangeRequest<BundlePayload>(
+                added.result,
+                {
+                    updateElements: {
+                        bundle: {
+                            targets: {
+                                'web:desktop': {
+                                    files: {
+                                        'index.html': '<!doctype html><html><body>v2</body></html>',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                    removeElements: {
+                        bundle: {
+                            targets: {
+                                'web:desktop': {
+                                    files: {
+                                        'chunk[0].js': '__DELETE__',
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                { allowedPaths: ['bundle.*'] }
+            );
+
+            expect(updated.result.bundle.targets['web:desktop'].files).toEqual({
+                'index.html': '<!doctype html><html><body>v2</body></html>',
+                'styles/main.min.css': 'body{margin:0}',
+            });
+        });
+
+        it('MergeUpstreamPayload preserves literal keys containing dots without splitting them into nested objects', () => {
+            const parent: BundlePayload = {
+                bundle: {
+                    targets: {},
+                },
+            };
+            const subAgent: BundlePayload = {
+                bundle: {
+                    targets: {
+                        '16:9': {
+                            files: {
+                                'index.html': '<!doctype html><html></html>',
+                                'app.bundle.js': 'export default 1;',
+                            },
+                        },
+                    },
+                },
+            };
+
+            const merged = pm.MergeUpstreamPayload<BundlePayload>(
+                'BuilderSubAgent',
+                parent,
+                subAgent,
+                ['bundle.targets.*']
+            );
+
+            expect(merged.result.bundle.targets['16:9'].files).toEqual({
+                'index.html': '<!doctype html><html></html>',
+                'app.bundle.js': 'export default 1;',
+            });
+            expect(merged.result.bundle.targets['16:9'].files['index']).toBeUndefined();
+        });
+    });
+
+    describe('empty arrays in MergeUpstreamPayload (WS2-C)', () => {
+        interface PipelinePayload {
+            config: {
+                tracks?: string[];
+                captions?: string[];
+                filters: string[];
+            };
+        }
+
+        it('copies newly added empty arrays [] from sub-agent payload on allowed paths', () => {
+            const parent: PipelinePayload = {
+                config: {
+                    filters: ['normalize'],
+                },
+            };
+            const subAgent: PipelinePayload = {
+                config: {
+                    tracks: [],
+                    captions: [],
+                    filters: ['normalize'],
+                },
+            };
+
+            const merged = pm.MergeUpstreamPayload<PipelinePayload>(
+                'AudioSubAgent',
+                parent,
+                subAgent,
+                ['config.*']
+            );
+
+            expect(merged.result.config.tracks).toEqual([]);
+            expect(merged.result.config.captions).toEqual([]);
+            expect(merged.applied.additions).toBe(2);
+        });
+
+        it('clears a non-empty array to [] when element deletes are allowed (config.* and config.filters.*)', () => {
+            const parent: PipelinePayload = {
+                config: {
+                    filters: ['eq', 'limiter'],
+                },
+            };
+            const subAgent: PipelinePayload = {
+                config: {
+                    filters: [],
+                },
+            };
+
+            const wildcardMerged = pm.MergeUpstreamPayload<PipelinePayload>(
+                'AudioSubAgent',
+                parent,
+                subAgent,
+                ['config.*']
+            );
+            expect(wildcardMerged.result.config.filters).toEqual([]);
+            expect(wildcardMerged.applied.deletions).toBe(2);
+            expect(wildcardMerged.applied.updates).toBe(0);
+
+            const fieldWildcardMerged = pm.MergeUpstreamPayload<PipelinePayload>(
+                'AudioSubAgent',
+                parent,
+                subAgent,
+                ['config.filters.*']
+            );
+            expect(fieldWildcardMerged.result.config.filters).toEqual([]);
+            expect(fieldWildcardMerged.applied.deletions).toBe(2);
+            expect(fieldWildcardMerged.applied.updates).toBe(0);
+        });
+
+        it('adds a brand-new [] under an exact allowed path when parent lacked the key', () => {
+            const parent: PipelinePayload = { config: {} };
+            const subAgent: PipelinePayload = { config: { tracks: [] } };
+
+            const exactAdded = pm.MergeUpstreamPayload<PipelinePayload>(
+                'AudioSubAgent',
+                parent,
+                subAgent,
+                ['config.tracks']
+            );
+            expect(exactAdded.result.config.tracks).toEqual([]);
+            expect(exactAdded.applied.additions).toBe(1);
+        });
+    });
+
+    describe('Adversarial edge cases: prototype pollution, dotted keys, and container traversal', () => {
+        it('rejects __proto__, constructor, and prototype in MergeUpstreamPayload', () => {
+            const parent: Record<string, unknown> = { data: { safe: 1 } };
+            const maliciousSubAgent = JSON.parse(
+                '{"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},"data":{"safe":2,"__proto__":{"polluted":true}}}'
+            );
+
+            const merged = pm.MergeUpstreamPayload(
+                'AttackerSubAgent',
+                parent,
+                maliciousSubAgent,
+                ['*']
+            );
+
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+            expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
+            expect((merged.result as { data: { safe: number } }).data.safe).toBe(2);
+        });
+
+        it('rejects __proto__, constructor, and prototype in ApplyAgentChangeRequest', () => {
+            const original = { data: { safe: 1 } };
+            const maliciousChangeRequest = JSON.parse(
+                '{"updateElements":{"__proto__":{"polluted":true},"data":{"safe":3}},"newElements":{"constructor":{"prototype":{"polluted":true}}}}'
+            );
+
+            const result = pm.ApplyAgentChangeRequest(original, maliciousChangeRequest, {
+                allowedPaths: ['*'],
+            });
+
+            expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+            expect(Object.prototype.hasOwnProperty('polluted')).toBe(false);
+            expect(result.result.data.safe).toBe(3);
+            expect(result.warnings.length).toBeGreaterThan(0);
+        });
+
+        it('merges dotted file names under wildcard paths (Output.Source.*)', () => {
+            const parent = {
+                Output: {
+                    Source: {
+                        '16:9': {
+                            Files: {
+                                'index.html': '<html>v1</html>',
+                            },
+                        },
+                    },
+                },
+            };
+
+            const subAgent = {
+                Output: {
+                    Source: {
+                        '16:9': {
+                            Files: {
+                                'index.html': '<html>v2</html>',
+                                'styles.v2.css': 'body { margin: 0; }',
+                                'bundle[0].chunk.js': 'console.log(0);',
+                            },
+                        },
+                        '9:16': {
+                            Files: {
+                                'index.html': '<html>vertical</html>',
+                            },
+                        },
+                    },
+                    Forbidden: 'should not be copied',
+                },
+            };
+
+            const merged = pm.MergeUpstreamPayload(
+                'MotionEngineer',
+                parent,
+                subAgent,
+                ['Output.Source.*']
+            );
+
+            expect(merged.result.Output.Source['16:9'].Files).toEqual({
+                'index.html': '<html>v2</html>',
+                'styles.v2.css': 'body { margin: 0; }',
+                'bundle[0].chunk.js': 'console.log(0);',
+            });
+            expect(merged.result.Output.Source['9:16'].Files).toEqual({
+                'index.html': '<html>vertical</html>',
+            });
+            expect((merged.result.Output as Record<string, unknown>).Forbidden).toBeUndefined();
+            expect(merged.blockedOperations.some(b => b.path.includes('Forbidden'))).toBe(true);
+        });
+
+        it('handles new objects containing empty arrays without pruning them', () => {
+            const parent = {
+                Status: 'Draft',
+            };
+
+            const subAgent = {
+                Status: 'Storyboarded',
+                Assets: {
+                    Approved: [],
+                    Required: [],
+                    NeverInvent: [],
+                },
+                DataBindings: [],
+            };
+
+            const merged = pm.MergeUpstreamPayload(
+                'Storyboard',
+                parent,
+                subAgent,
+                ['*']
+            );
+
+            expect(merged.result.Status).toBe('Storyboarded');
+            expect(merged.result.Assets).toEqual({
+                Approved: [],
+                Required: [],
+                NeverInvent: [],
+            });
+            expect(merged.result.DataBindings).toEqual([]);
+        });
+
+        it('handles nested arrays of objects where an inner array is emptied', () => {
+            const parent = {
+                Beats: [
+                    {
+                        Id: 'b1',
+                        Layers: [
+                            { Name: 'L1', Filters: ['blur', 'fade'] },
+                        ],
+                    },
+                ],
+            };
+
+            const subAgent = {
+                Beats: [
+                    {
+                        Id: 'b1',
+                        Layers: [
+                            { Name: 'L1', Filters: [] },
+                        ],
+                    },
+                ],
+            };
+
+            const merged = pm.MergeUpstreamPayload(
+                'MotionEngineer',
+                parent,
+                subAgent,
+                ['Beats.*']
+            );
+
+            expect(merged.result.Beats[0].Layers[0].Filters).toEqual([]);
+            expect(merged.result.Beats[0].Layers[0].Name).toBe('L1');
+        });
+
+        it.each([
+            ['items.*:add,update'],
+            ['items:add,update'],
+            ['items:update'],
+            ['items.*:update'],
+            ['items'],
+        ])('blocks emptying a non-empty array when element delete is not permitted (%s)', (upstreamRule) => {
+            const parent = { items: ['a', 'b'] };
+            const subAgent = { items: [] };
+
+            const merged = pm.MergeUpstreamPayload(
+                'RestrictedSubAgent',
+                parent,
+                subAgent,
+                [upstreamRule]
+            );
+
+            expect(merged.result.items).toEqual(['a', 'b']);
+            expect(merged.applied.updates).toBe(0);
+            expect(merged.applied.deletions).toBe(0);
+            expect(merged.blockedOperations).toHaveLength(2);
+            expect(merged.blockedOperations.every((op) => op.operation === 'delete')).toBe(true);
+        });
+
+        it('counts only deletions when emptying a non-empty array with full permissions (*)', () => {
+            const merged = pm.MergeUpstreamPayload(
+                'FullSubAgent',
+                { items: ['a', 'b'] },
+                { items: [] },
+                ['*']
+            );
+
+            expect(merged.result.items).toEqual([]);
+            expect(merged.applied.updates).toBe(0);
+            expect(merged.applied.deletions).toBe(2);
+            expect(merged.blockedOperations).toEqual([]);
+        });
+
+        it('ApplyAgentChangeRequest updates, adds, and removes dotted keys in nested objects under deep allowedPaths', () => {
+            const original = {
+                Output: {
+                    Source: {
+                        '16:9': {
+                            Files: {
+                                'index.html': '<html>v1</html>',
+                                'old.css': 'body{}',
+                            },
+                        },
+                    },
+                },
+            };
+
+            const changeReq = {
+                updateElements: {
+                    Output: {
+                        Source: {
+                            '16:9': {
+                                Files: {
+                                    'index.html': '<html>v2</html>',
+                                    'styles.v2.css': 'h1{}',
+                                },
+                            },
+                        },
+                    },
+                },
+                removeElements: {
+                    Output: {
+                        Source: {
+                            '16:9': {
+                                Files: {
+                                    'old.css': '__DELETE__',
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+
+            const res = pm.ApplyAgentChangeRequest(original, changeReq, {
+                allowedPaths: ['Output.Source.*'],
+            });
+
+            expect(res.result.Output.Source['16:9'].Files).toEqual({
+                'index.html': '<html>v2</html>',
+                'styles.v2.css': 'h1{}',
+            });
+            expect(res.result.Output.Source['16:9'].Files['old.css']).toBeUndefined();
+            expect(res.result.Output.Source['16:9'].Files['index']).toBeUndefined();
+            expect(res.applied.updates).toBe(1);
+            expect(res.applied.additions).toBe(1);
+            expect(res.applied.deletions).toBe(1);
+        });
+
+        it('blocks modifications outside allowedPaths when dotted keys are present', () => {
+            const original = {
+                Output: {
+                    Source: {
+                        '16:9': {
+                            Files: {
+                                'index.html': '<html>v1</html>',
+                            },
+                        },
+                    },
+                    Forbidden: 'original',
+                },
+            };
+
+            const subAgent = {
+                Output: {
+                    Source: {
+                        '16:9': {
+                            Files: {
+                                'index.html': '<html>v2</html>',
+                            },
+                        },
+                    },
+                    Forbidden: 'hacked',
+                },
+            };
+
+            const merged = pm.MergeUpstreamPayload(
+                'SubAgent',
+                original,
+                subAgent,
+                ['Output.Source.*']
+            );
+
+            expect(merged.result.Output.Source['16:9'].Files['index.html']).toBe('<html>v2</html>');
+            expect(merged.result.Output.Forbidden).toBe('original');
+            expect(merged.blockedOperations.length).toBeGreaterThan(0);
         });
     });
 });

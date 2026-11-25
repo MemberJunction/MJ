@@ -275,7 +275,7 @@ export function BuildHandoffsByDetailId(params: {
 
     const sourceDetail = messagesById.Get(detailId);
     const sourceAgentId = sourceDetail?.AgentID || agentRun.AgentID || null;
-    const sourceFallbackName = sourceDetail?.Agent || agentRun.Agent || 'Sage';
+    const sourceFallbackName = sourceDetail?.Agent || agentRun.Agent || 'Assistant';
     const sourceParticipant = resolveParticipant(sourceAgentId, sourceFallbackName, agents);
 
     const targetAgentId =

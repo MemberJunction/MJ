@@ -1,0 +1,45 @@
+[
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Mixed Filtered",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=Integration Test: Own Rows by UserID"
+    },
+    "primaryKey": {
+      "ID": "AE4DF363-61D6-4C36-A928-AE3F4351E97C"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Mixed Unfiltered",
+      "Type": "Allow",
+      "CanRead": false,
+      "CanCreate": true,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "5B392162-9B89-41CF-96D9-7AA51AF078F4"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: User Roles",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: RLS Mixed Unfiltered",
+      "Type": "Deny",
+      "CanRead": false,
+      "CanCreate": true,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "449260DA-A2C7-469F-AC44-7938BEF8A32D"
+    }
+  }
+]

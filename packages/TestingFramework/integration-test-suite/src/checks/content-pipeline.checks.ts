@@ -44,6 +44,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEmbeddingRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunParams, EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import { BaseContentCleaner, type ContentCleaningParams } from '@memberjunction/ai-segmentation';
 import {
     BaseResponse,
     IndexList,
@@ -58,6 +59,9 @@ import {
     BaseAccessDriver,
     ConfidenceScale,
     DiscoverRequest,
+    DiscoverWalkEnd,
+    LocatorBatchFetchRequest,
+    LocatorBatchFetchResult,
     DiscoveredItem,
     LocatorFetchRequest,
     LocatorFetchResponse,
@@ -78,6 +82,7 @@ import {
     type MJContentSourceEntity,
     type MJContentSourceTypeEntity,
     type MJContentTypeEntity,
+    type MJRecordProcessEntity,
     type MJVectorDatabaseEntity,
     type MJVectorIndexEntity,
 } from '@memberjunction/core-entities';
@@ -219,18 +224,28 @@ export class RecordingVectorDB extends VectorDBBase {
     }
 }
 
+/**
+ * How the test driver walks and fetches, beyond listing everything at once. Off unless a check turns it on:
+ * `PageSize` walks in parts (a resume token per page), `Gone` reports locators removed, `Batch` fetches a page
+ * of items in one call (each call's URLs recorded in `BatchCalls`).
+ */
+const DriverMode: { PageSize: number; Gone: string[]; Batch: boolean; BatchCalls: string[][] } = { PageSize: 0, Gone: [], Batch: false, BatchCalls: [] };
+
 /** A source serving {@link Documents}: the walk lists them, the fetch reads them back. */
 @RegisterClass(AutotagBase, DRIVER_KEY)
 export class InMemorySourceDriver extends AutotagBase {
     public override readonly SupportsExhaustiveWalk = true;
 
-    public async *Discover(request: DiscoverRequest): AsyncIterable<DiscoveredItem> {
+    public async *Discover(request: DiscoverRequest): AsyncGenerator<DiscoveredItem, DiscoverWalkEnd | void, undefined> {
         AccessLog.DiscoverAccess.push(request.Access ?? null);
         const confidence = request.Confidence ?? ConfidenceScale;
-        for (const [url, doc] of Documents) {
-            if (request.Since && doc.ModifiedAt <= request.Since) {
-                continue;
-            }
+        const listed = [...Documents].filter(([, doc]) => !request.Since || doc.ModifiedAt > request.Since);
+        const start = DriverMode.PageSize > 0 && request.ResumeToken ? Number(request.ResumeToken) : 0;
+        const end = DriverMode.PageSize > 0 ? start + DriverMode.PageSize : listed.length;
+        for (const url of start === 0 ? DriverMode.Gone : []) {
+            yield { URL: url, Removed: true };
+        }
+        for (const [url, doc] of listed.slice(start, end)) {
             yield {
                 URL: url,
                 Columns: doc.Columns,
@@ -244,6 +259,18 @@ export class InMemorySourceDriver extends AutotagBase {
                 ],
             };
         }
+        return end < listed.length ? { ResumeToken: String(end) } : undefined;
+    }
+    public async FetchBatch(request: LocatorBatchFetchRequest): Promise<LocatorBatchFetchResult[]> {
+        if (!DriverMode.Batch) {
+            return []; // each item is then fetched alone
+        }
+        AccessLog.FetchAccess.push(request.Access ?? null);
+        DriverMode.BatchCalls.push([...request.URLs]);
+        return request.URLs.filter((url) => Documents.has(url)).map((url) => {
+            const doc = Documents.get(url)!;
+            return { URL: url, Response: { Content: doc.Bytes ?? new TextEncoder().encode(doc.Text ?? ''), ResolvedURL: url } };
+        });
     }
     public async Fetch(request: LocatorFetchRequest): Promise<LocatorFetchResponse> {
         AccessLog.FetchAccess.push(request.Access ?? null);
@@ -277,6 +304,9 @@ const URL_B = 'it-pipeline://docs/b.txt';
 const URL_C = 'it-pipeline://docs/c.txt';
 const URL_OLD = 'it-pipeline://docs/old.txt';
 const URL_ARCHIVE = 'it-pipeline://docs/nested.txt.gz.gz';
+const URL_PAGE = 'it-pipeline://docs/page.html';
+const URL_MANIFEST = 'it-pipeline://docs/manifest.csv';
+const URL_LINKED = 'it-pipeline://docs/linked.txt';
 
 /** Skips the running check (SkipCheck) when bundle Setup could not provision its fixtures. */
 function guardSkip(): void {
@@ -401,21 +431,50 @@ async function buildFixture(ctx: IntegrationCheckContext): Promise<void> {
 
 function installEmbeddingStub(): void {
     S.OrigRunEmbedding = AIEmbeddingRunner.prototype.RunEmbedding;
-    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => ({
-        Success: true,
-        Vectors: params.Texts.map(() => [0.1, 0.2, 0.3]),
-        PromptRunID: null,
-        TokensUsed: 0,
-        Cost: 0,
-        ErrorMessage: null,
-        ExecutionTimeMs: 0,
-    });
+    AIEmbeddingRunner.prototype.RunEmbedding = async (params: EmbeddingRunParams): Promise<EmbeddingRunResult> => {
+        const count = params.Texts?.length ?? params.Contents?.length ?? 0;
+        return {
+            Success: true,
+            Vectors: Array.from({ length: count }, () => [0.1, 0.2, 0.3]),
+            PromptRunID: null,
+            TokensUsed: 0,
+            Cost: 0,
+            ErrorMessage: null,
+            ExecutionTimeMs: 0,
+        };
+    };
 }
 
 function resetStore(): void {
     Store.Upserts.length = 0;
     Store.Updates.length = 0;
     Store.Deletes.length = 0;
+}
+
+/** CP23's cleaners. Each marks what it returns, so a chunk shows which cleaner Segment chose for its item. */
+const SOURCE_FILE_TYPE_CLEANER_KEY = 'IT-SourceFileTypeCleaner';
+const SOURCE_DEFAULT_CLEANER_KEY = 'IT-SourceDefaultCleaner';
+const SOURCE_FILE_TYPE_MARK = '[source file-type cleaner]';
+const SOURCE_DEFAULT_MARK = '[source default cleaner]';
+
+@RegisterClass(BaseContentCleaner, SOURCE_FILE_TYPE_CLEANER_KEY)
+export class SourceFileTypeCleaner extends BaseContentCleaner {
+    public get Key(): string {
+        return SOURCE_FILE_TYPE_CLEANER_KEY;
+    }
+    protected CleanCore(params: ContentCleaningParams): string {
+        return `${SOURCE_FILE_TYPE_MARK} ${params.Content}`;
+    }
+}
+
+@RegisterClass(BaseContentCleaner, SOURCE_DEFAULT_CLEANER_KEY)
+export class SourceDefaultCleaner extends BaseContentCleaner {
+    public get Key(): string {
+        return SOURCE_DEFAULT_CLEANER_KEY;
+    }
+    protected CleanCore(params: ContentCleaningParams): string {
+        return `${SOURCE_DEFAULT_MARK} ${params.Content}`;
+    }
 }
 
 export const ContentPipelineChecks: NamedCheck[] = [
@@ -454,6 +513,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const chunks = await liveChunks(ctx, a.ID);
             Assert(chunks.length > 2, `a long document segments into several chunks, got ${chunks.length}`);
             S.FirstChunkIDs = chunks.map((c) => c.ID);
+            AssertEqual(a.EmbeddingStatus, 'Pending', 'the item waits for its chunks to be embedded');
             console.log(`      → CP2: item A extracted and segmented into ${chunks.length} chunks`);
         },
     },
@@ -477,6 +537,10 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const stored = (await Promise.all(S.ItemIDs.map((id) => liveChunks(ctx, id)))).flat();
             Assert(stored.every((c) => c.EmbeddingStatus === 'Complete' && UUIDsEqual(c.VectorRecordID ?? '', c.ID)),
                 'every chunk is Complete with its receipt = its own id');
+            for (const item of await items(ctx)) {
+                AssertEqual(item.EmbeddingStatus, 'Complete', `item ${item.URL} is Complete once its chunks are embedded`);
+                Assert(item.LastEmbeddedAt != null, `item ${item.URL} records when it was embedded`);
+            }
             console.log(`      → CP3: ${Store.Upserts.length} vectors, all namespaced to the source`);
         },
     },
@@ -640,6 +704,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             const cChunks = await liveChunks(ctx, c.ID);
             Assert(cChunks.length > 0, 'item C segmented into chunks');
             await run(ctx, ['Embed'], cChunks.map((ch) => ch.ID));
+            AssertEqual((await itemByURL(ctx, URL_C)).EmbeddingStatus, 'Complete', 'item C is Complete once its chunks are embedded');
             console.log(`      → CP9: incremental Since skipped older item and ingested item C (${cChunks.length} chunks)`);
         },
     },
@@ -695,6 +760,7 @@ export const ContentPipelineChecks: NamedCheck[] = [
             AssertEqual(c.Name, 'Updated C Title', 'Discover updated Title (Name)');
             AssertEqual(c.Description, 'Updated C Description via Columns', 'Discover persisted custom Columns (Description)');
             AssertEqual(c.SegmentationStatus, 'Complete', 'metadata-only change does not reset SegmentationStatus');
+            AssertEqual(c.EmbeddingStatus, 'MetadataOnly', 'the embedded item is promoted to MetadataOnly with its chunks');
 
             const chunks = await liveChunks(ctx, c.ID);
             AssertSameList(chunks.map((ch) => ch.ID).sort(), [...beforeChunkIDs].sort(), 'same chunk rows kept');
@@ -709,7 +775,36 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 AssertEqual(u.metadata['Title'], 'Updated C Title', 'updated Title rides in vector metadata');
                 AssertEqual(u.metadata['Description'], 'Updated C Description via Columns', 'updated Description from Columns rides in vector metadata');
             }
+            AssertEqual((await itemByURL(ctx, URL_C)).EmbeddingStatus, 'Complete', 'the item is Complete again once its chunks are refreshed');
             console.log(`      → CP11: Title + Columns updated ${Store.Updates.length} vectors in place`);
+        },
+    },
+    {
+        Id: 'content-pipeline.CP16',
+        Name: 'CP16: the Settle Item Embedding process selects an item whose settle was missed (and not one still embedding), and its stage settles it',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const c = await itemByURL(ctx, URL_C);
+            AssertEqual(c.EmbeddingStatus, 'Complete', 'precondition: item C is settled');
+            // What a process stopped between committing the last chunks and settling the item leaves behind.
+            c.EmbeddingStatus = 'Pending';
+            await save(c, 'item');
+
+            const [process] = await rows<MJRecordProcessEntity>(ctx, 'MJ: Record Processes', `Name LIKE '%Settle Item Embedding'`);
+            Assert(!!process?.ScopeFilter, 'the Settle Item Embedding Record Process is installed');
+            const selected = async () =>
+                (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `(${process.ScopeFilter}) AND ContentSourceID='${S.SourceID}'`)).map((i) => i.ID);
+            const before = await selected();
+            Assert(before.some((id) => UUIDsEqual(id, c.ID)), 'its filter selects the unsettled item');
+            const a = await itemByURL(ctx, URL_A);
+            Assert((await liveChunks(ctx, a.ID)).some((ch) => ch.EmbeddingStatus === 'Pending'), 'precondition: item A has chunks still to embed');
+            Assert(!before.some((id) => UUIDsEqual(id, a.ID)), 'its filter leaves an item whose chunks are still to embed');
+
+            await run(ctx, ['SettleItemEmbedding'], before);
+            AssertEqual((await itemByURL(ctx, URL_C)).EmbeddingStatus, 'Complete', 'the stage settles the item from its chunks');
+            Assert(!(await selected()).some((id) => UUIDsEqual(id, c.ID)), 'and the filter no longer selects it');
+            console.log(`      → CP16: the sweep selected ${before.length} item(s) and settled item C`);
         },
     },
     {
@@ -774,6 +869,113 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 }
             }
             console.log('      → CP13: nested archive exceeding MaxArchiveDepth refused');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP19',
+        Name: 'CP19: a manifest expands into child items with ParentID: text rows are complete, a link row is fetched by its own Extract, and a row dropped from the manifest is retired',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const manifest = (rows: string[]) => ['Link,Body,Title', ...rows].join('\n');
+            const linkRow = `${URL_LINKED},,Linked document`;
+            const textRow = `,"${SENTENCE.trim()}",Inline policy`;
+            const extract = {
+                ExtractorKey: 'Manifest',
+                ExtractorOptions: { Manifest: { LinkColumn: 'Link', TextColumn: 'Body', TitleColumn: 'Title' } },
+                Tuning: { MaxArchiveMembers: 100 },
+            };
+            Documents.set(URL_MANIFEST, { Text: manifest([linkRow, textRow]), ModifiedAt: new Date() });
+
+            let manifestID: string | undefined;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                manifestID = (await itemByURL(ctx, URL_MANIFEST)).ID;
+                // The linked document is reachable at its link, but is not one of the source's own listings.
+                Documents.set(URL_LINKED, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                await run(ctx, ['Extract'], [manifestID], extract);
+
+                const children = await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ParentID='${manifestID}' AND DeleteStatus IS NULL`, 'URL');
+                AssertEqual(children.length, 2, 'one child item per manifest row');
+                const linked = children.find((c) => c.URL === URL_LINKED);
+                const inline = children.find((c) => c.URL === `${URL_MANIFEST}#row-2`);
+                Assert(!!linked && !!inline, `children are at the row's link, or the manifest's URL for a text row (got ${children.map((c) => c.URL).join(', ')})`);
+                AssertEqual(inline!.ExtractionStatus, 'Complete', 'a row with text is complete as listed');
+                AssertEqual(inline!.Name, 'Inline policy', "the row's title column");
+                AssertEqual(linked!.ExtractionStatus, 'Pending', 'a link row waits for its own Extract');
+
+                await run(ctx, ['Extract'], [linked!.ID]);
+                const fetched = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${linked!.ID}'`))[0];
+                AssertEqual(fetched.ExtractionStatus, 'Complete', 'the link row is fetched and read by its own Extract');
+                Assert((fetched.Text ?? '').startsWith(SENTENCE.trim().split(' ')[0]), 'with the text served at its link');
+                AssertEqual(fetched.Name, 'Linked document', "keeping the manifest's title");
+
+                Documents.set(URL_MANIFEST, { Text: manifest([textRow]), ModifiedAt: new Date() });
+                await run(ctx, ['Extract'], [manifestID], extract);
+                const retired = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${linked!.ID}'`))[0];
+                AssertEqual(retired.DeleteStatus, 'Pending', 'a row dropped from the manifest is marked for deletion');
+                console.log('      → CP19: manifest expanded into 2 children, link row fetched, dropped row retired');
+            } finally {
+                Documents.delete(URL_MANIFEST);
+                Documents.delete(URL_LINKED);
+                if (manifestID) {
+                    for (const child of await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ParentID='${manifestID}'`)) {
+                        for (const chunk of await chunksOf(ctx, child.ID)) {
+                            await chunk.Delete();
+                        }
+                        await child.Delete();
+                    }
+                    const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${manifestID}'`))[0];
+                    if (reloaded) {
+                        await reloaded.Delete();
+                    }
+                }
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP17',
+        Name: "CP17: Extract stores an HTML page as served, and Segment cleans it with the configured selectors before splitting, so chunks hold the article and none of the page's chrome",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const page =
+                '<!doctype html><html><head><title>Quarterly report</title></head><body>' +
+                '<nav>Home | Members | Events</nav><div class="promo">Join today and save</div>' +
+                `<div class="article-body"><p>${SENTENCE.trim()}</p><p>Revenue rose this quarter.</p></div>` +
+                '<footer>Copyright Example Association</footer></body></html>';
+            Documents.set(URL_PAGE, { Text: page, ModifiedAt: new Date() });
+
+            let pageItemID: string | undefined;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                pageItemID = (await itemByURL(ctx, URL_PAGE)).ID;
+                await run(ctx, ['Extract'], [pageItemID]);
+                const extracted = await itemByURL(ctx, URL_PAGE);
+                AssertEqual(extracted.ExtractorKey, 'Html', 'the page was read by the Html extractor');
+                Assert((extracted.Text ?? '').includes('<div class="article-body">'), 'Extract stores the page with its markup');
+
+                await run(ctx, ['Segment'], [pageItemID], { CleaningOptions: { IncludeSelectors: ['.article-body'] } });
+                const text = (await liveChunks(ctx, pageItemID)).map((c) => c.Text ?? '').join(' ');
+                Assert(text.includes('Revenue rose this quarter.'), 'the article reaches the chunks');
+                Assert(!text.includes('<'), 'no markup reaches the chunks');
+                for (const chrome of ['Home | Members', 'Join today', 'Copyright']) {
+                    Assert(!text.includes(chrome), `'${chrome}' (outside the article) is cleaned away`);
+                }
+                AssertEqual((await itemByURL(ctx, URL_PAGE)).Text, extracted.Text, 'cleaning does not change what Extract stored');
+                console.log('      → CP17: page stored with markup, chunks hold only the article');
+            } finally {
+                Documents.delete(URL_PAGE);
+                if (pageItemID) {
+                    for (const chunk of await chunksOf(ctx, pageItemID)) {
+                        await chunk.Delete();
+                    }
+                    const reloaded = (await rows<MJContentItemEntity>(ctx, 'MJ: Content Items', `ID='${pageItemID}'`))[0];
+                    if (reloaded) {
+                        await reloaded.Delete();
+                    }
+                }
+            }
         },
     },
     {
@@ -902,6 +1104,215 @@ export const ContentPipelineChecks: NamedCheck[] = [
                 'SessionApplies strips session headers on cross-origin requests',
             );
             console.log('      → CP15: Access session reached Discover + Extract and stripped on cross-origin URLs');
+        },
+    },
+    {
+        Id: 'content-pipeline.CP20',
+        Name: "CP20: a Discover walk in parts keeps its state on the source and stays due until it finishes, then stamps the first part's start; a locator the driver reports gone is marked for deletion",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const urls = ['it-pipeline://docs/part-1.txt', 'it-pipeline://docs/part-2.txt', 'it-pipeline://docs/part-3.txt'];
+            await new Promise((r) => setTimeout(r, 5));
+            for (const url of urls) {
+                Documents.set(url, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+            }
+            const source = async () => (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            const before = await source();
+            DriverMode.PageSize = 1;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const afterFirst = await source();
+                const state = afterFirst.DiscoverStateObject;
+                Assert(!!state?.ResumeToken, 'an unfinished walk keeps its resume token on the source');
+                AssertEqual(state!.Mode, 'Discover', 'and the mode it runs in');
+                AssertEqual(String(afterFirst.LastDiscoveredAt), String(before.LastDiscoveredAt), 'LastDiscoveredAt waits for the walk to finish');
+
+                let parts = 1;
+                while ((await source()).DiscoverState && parts < 10) {
+                    await run(ctx, ['Discover'], [S.SourceID]);
+                    parts++;
+                }
+                const finished = await source();
+                AssertEqual(finished.DiscoverState, null, 'a finished walk clears its state');
+                Assert(parts >= 3, `the walk took one part per page (${parts})`);
+                AssertEqual(new Date(finished.LastDiscoveredAt!).toISOString(), state!.WalkStartedAt, "LastDiscoveredAt takes the first part's start");
+                const found = (await items(ctx)).filter((i) => urls.includes(i.URL ?? ''));
+                AssertEqual(found.length, 3, 'every page of the walk was found across its parts');
+
+                DriverMode.PageSize = 0;
+                DriverMode.Gone = [urls[0]];
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const gone = (await items(ctx)).find((i) => i.URL === urls[0]);
+                AssertEqual(gone?.DeleteStatus, 'Pending', 'the item the driver reported gone is marked for deletion');
+                console.log(`      → CP20: walk in ${parts} parts, state cleared, LastDiscoveredAt = first part's start, reported removal marked`);
+            } finally {
+                DriverMode.PageSize = 0;
+                DriverMode.Gone = [];
+                urls.forEach((u) => Documents.delete(u));
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP21',
+        Name: "CP21: Extract fetches a page of a source's items in one driver call when the driver can",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const urls = ['it-pipeline://docs/batch-1.txt', 'it-pipeline://docs/batch-2.txt'];
+            await new Promise((r) => setTimeout(r, 5));
+            urls.forEach((u, i) => Documents.set(u, { Text: `${SENTENCE.repeat(2)} batch ${i}`, ModifiedAt: new Date() }));
+            DriverMode.Batch = true;
+            DriverMode.BatchCalls.length = 0;
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const ids = (await items(ctx)).filter((i) => urls.includes(i.URL ?? '')).map((i) => i.ID);
+                AssertEqual(ids.length, 2, 'precondition: both items discovered');
+                await run(ctx, ['Extract'], ids);
+                AssertEqual(DriverMode.BatchCalls.length, 1, 'one batch call for the page');
+                AssertSameList([...DriverMode.BatchCalls[0]].sort(), [...urls].sort(), 'with both items in it');
+                for (const url of urls) {
+                    const item = await itemByURL(ctx, url);
+                    AssertEqual(item.ExtractionStatus, 'Complete', `${url} was read from the batch`);
+                    Assert((item.Text ?? '').includes('batch'), 'with the text the batch returned');
+                }
+                console.log('      → CP21: 2 items fetched in 1 driver call');
+            } finally {
+                DriverMode.Batch = false;
+                urls.forEach((u) => Documents.delete(u));
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP22',
+        Name: 'CP22: a vector metadata field can be written under its own key and added to the curated default (Date as ContentDate, epoch seconds)',
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const url = 'it-pipeline://docs/dated.txt';
+            const published = new Date('2026-03-01T00:00:00.000Z');
+            await new Promise((r) => setTimeout(r, 5));
+            Documents.set(url, { Text: SENTENCE.repeat(3), ModifiedAt: new Date() });
+            const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            const original = source.Configuration;
+            source.Configuration = JSON.stringify({
+                ...(original ? JSON.parse(original) : {}),
+                VectorMetadata: { Fields: { Date: { Included: true, StoreAs: 'epochSeconds', MetadataKey: 'ContentDate' } } },
+            });
+            await save(source, 'source with a metadata key');
+            await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+            try {
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const item = await itemByURL(ctx, url);
+                item.Date = published;
+                await save(item, 'dated item');
+                await run(ctx, ['Extract'], [item.ID]);
+                await run(ctx, ['Segment'], [item.ID]);
+                const chunks = await liveChunks(ctx, item.ID);
+                resetStore();
+                await run(ctx, ['Embed'], chunks.map((c) => c.ID));
+                Assert(Store.Upserts.length > 0, 'the item was embedded');
+                for (const upsert of Store.Upserts) {
+                    AssertEqual(upsert.metadata['ContentDate'], Math.floor(published.getTime() / 1000), 'the date is written as ContentDate, in epoch seconds');
+                    AssertEqual(upsert.metadata['Date'], undefined, 'and not under its own name');
+                    Assert(typeof upsert.metadata['Title'] === 'string', 'the curated set is still there');
+                }
+                console.log(`      → CP22: ContentDate on ${Store.Upserts.length} vectors`);
+            } finally {
+                source.Configuration = original;
+                await save(source, 'restore source Configuration');
+                await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+                Documents.delete(url);
+            }
+        },
+    },
+    {
+        Id: 'content-pipeline.CP23',
+        Name: "CP23: Segment cleans each item of one source by its detected file type — the source's entry for the type, then the content type's, then the source's default",
+        RequiresMutation: true,
+        Fn: async (ctx): Promise<void> => {
+            guardSkip();
+            const urls = {
+                Page: 'it-pipeline://mixed/page.html',
+                Notes: 'it-pipeline://mixed/notes.txt',
+                Readme: 'it-pipeline://mixed/readme.md',
+            };
+            const page =
+                '<!doctype html><html><body><nav>Home | Members</nav>' +
+                `<div class="article-body"><p>${SENTENCE.trim()}</p></div><footer>Copyright</footer></body></html>`;
+            const source = (await rows<MJContentSourceEntity>(ctx, 'MJ: Content Sources', `ID='${S.SourceID}'`))[0];
+            const contentType = (await rows<MJContentTypeEntity>(ctx, 'MJ: Content Types', `ID='${source.ContentTypeID}'`))[0];
+            const original = { SourceConfiguration: source.Configuration, SourceCleanerKey: source.CleanerKey, TypeConfiguration: contentType.Configuration };
+            let failure: unknown = null;
+            try {
+                // After the source's last discovery, so these documents count as changed since it.
+                await new Promise((r) => setTimeout(r, 5));
+                Documents.set(urls.Page, { Text: page, ModifiedAt: new Date() });
+                Documents.set(urls.Notes, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                Documents.set(urls.Readme, { Text: SENTENCE.repeat(2), ModifiedAt: new Date() });
+                // The content type's standard cleaners; the source overrides txt and names its own default.
+                contentType.Configuration = JSON.stringify({
+                    ...(original.TypeConfiguration ? JSON.parse(original.TypeConfiguration) : {}),
+                    Cleaners: { html: 'Html', txt: 'PlainText' },
+                });
+                source.Configuration = JSON.stringify({
+                    ...(original.SourceConfiguration ? JSON.parse(original.SourceConfiguration) : {}),
+                    Cleaners: { txt: SOURCE_FILE_TYPE_CLEANER_KEY },
+                });
+                source.CleanerKey = SOURCE_DEFAULT_CLEANER_KEY;
+                await save(contentType, 'content type with standard cleaners');
+                await save(source, 'source with a file-type cleaner and a default');
+                await KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider);
+
+                await run(ctx, ['Discover'], [S.SourceID]);
+                const ids = { Page: (await itemByURL(ctx, urls.Page)).ID, Notes: (await itemByURL(ctx, urls.Notes)).ID, Readme: (await itemByURL(ctx, urls.Readme)).ID };
+                await run(ctx, ['Extract'], Object.values(ids));
+                // Segment runs on items loaded back from the database, whose file type is the Content File Type's NAME.
+                for (const [key, fileType] of [['Page', 'HTML'], ['Notes', 'TXT'], ['Readme', 'MD']] as const) {
+                    AssertEqual((await itemByURL(ctx, urls[key])).ContentFileType, fileType, `Extract detected ${urls[key]} as ${fileType}`);
+                }
+                await run(ctx, ['Segment'], Object.values(ids));
+
+                const textOf = async (id: string) => (await liveChunks(ctx, id)).map((c) => c.Text ?? '').join(' ');
+                const pageText = await textOf(ids.Page);
+                Assert(pageText.includes('quarterly report') && !pageText.includes('<') && !pageText.includes('Home | Members'), "html: the content type's Html cleaner ran");
+                Assert(!pageText.includes(SOURCE_DEFAULT_MARK), "html: the content type's entry for the file type beats the source's default");
+                Assert((await textOf(ids.Notes)).startsWith(SOURCE_FILE_TYPE_MARK), "txt: the source's own entry for the file type beats the content type's");
+                Assert((await textOf(ids.Readme)).startsWith(SOURCE_DEFAULT_MARK), "md: no map names it, so the source's default ran");
+                console.log('      → CP23: html → Html (content type), txt → source entry, md → source default');
+            } catch (error) {
+                failure = error;
+                throw error;
+            } finally {
+                // Each step on its own, so one failing does not leave the others dirty.
+                const problems: string[] = [];
+                const restore = async (what: string, step: () => Promise<void> | void): Promise<void> => {
+                    try {
+                        await step();
+                    } catch (error) {
+                        problems.push(`${what}: ${error instanceof Error ? error.message : String(error)}`);
+                    }
+                };
+                Object.values(urls).forEach((u) => Documents.delete(u));
+                await restore('content type Configuration', async () => {
+                    contentType.Configuration = original.TypeConfiguration;
+                    await save(contentType, 'restore content type Configuration');
+                });
+                await restore('source cleaner settings', async () => {
+                    source.Configuration = original.SourceConfiguration;
+                    source.CleanerKey = original.SourceCleanerKey;
+                    await save(source, 'restore source cleaner settings');
+                });
+                await restore('metadata cache', () => KnowledgeHubMetadataEngine.Instance.Config(true, ctx.User, ctx.Provider));
+                if (problems.length > 0) {
+                    const message = `CP23 could not restore ${problems.join('; ')}`;
+                    if (failure) {
+                        console.warn(`      ⚠ ${message}`);
+                    } else {
+                        throw new Error(message);
+                    }
+                }
+            }
         },
     },
 ];

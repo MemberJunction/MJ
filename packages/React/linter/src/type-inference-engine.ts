@@ -25,7 +25,9 @@ import {
   DescribeType,
   CarriesRowType,
   HaveSameRowTarget,
-  FunctionScopeName
+  FunctionScopeName,
+  EnclosingScopePath,
+  WidenAssignedType
 } from './type-context';
 
 /** React hooks the engine understands when called as `React.useX(...)` as well as bare. */
@@ -173,8 +175,9 @@ export class TypeInferenceEngine {
             const current = self.typeContext.getVariableType(stateVarName);
             // Only update if we inferred a meaningful type (not unknown), and never replace
             // rows with something vaguer: a later setRows([]) must not erase what setRows(result.Results) established.
-            if (argType.type !== 'unknown' && !(CarriesRowType(current) && !CarriesRowType(argType))) {
-              self.typeContext.UpdateVariableType(stateVarName, argType);
+            // A function argument is a functional updater (`setPage(p => p + 1)`), not the new state.
+            if (argType.type !== 'unknown' && argType.type !== 'function' && !(CarriesRowType(current) && !CarriesRowType(argType))) {
+              self.typeContext.UpdateVariableType(stateVarName, WidenAssignedType(current, argType));
             }
           }
         }
@@ -238,6 +241,9 @@ export class TypeInferenceEngine {
       if (node.init) {
         const type = this.InferExpressionType(node.init, path);
         this.typeContext.setVariableType(varName, type);
+      } else if (t.isForOfStatement(path.parentPath.parent) || t.isForInStatement(path.parentPath.parent)) {
+        // `for (const row of rows)`: no init, but the loop assigns it, so it is not undefined
+        this.typeContext.setVariableType(varName, StandardTypes.unknown);
       } else {
         // Declared but not initialized
         this.typeContext.setVariableType(varName, { type: 'undefined', nullable: true });
@@ -260,7 +266,12 @@ export class TypeInferenceEngine {
     if (t.isIdentifier(node.left)) {
       const varName = node.left.name;
       const type = this.InferExpressionType(node.right, path);
-      this.typeContext.setVariableType(varName, type);
+      // Record the write in the scope that declared the variable, widened against the type it
+      // already has, and never trade rows for something vaguer (see the state setter above).
+      const current = this.typeContext.GetVariableType(varName);
+      if (!(CarriesRowType(current) && !CarriesRowType(type))) {
+        this.typeContext.UpdateVariableType(varName, WidenAssignedType(current, type));
+      }
     }
   }
 
@@ -708,9 +719,14 @@ export class TypeInferenceEngine {
       return this.inferObjectType(node, path);
     }
 
-    // Identifiers (variable references)
+    // Identifiers (variable references), resolved where `path` reads them when a path is given:
+    // by name alone, a variable took the type of any same-named variable in another function
+    // (`m - 1` in `for (let m = 1; ...)` read a helper's `const m = ... || {}` as an object).
     if (t.isIdentifier(node)) {
-      return this.typeContext.getVariableType(node.name) || StandardTypes.unknown;
+      const type = path
+        ? this.typeContext.GetVariableTypeInScope(node.name, EnclosingScopePath(path))
+        : this.typeContext.getVariableType(node.name);
+      return type || StandardTypes.unknown;
     }
 
     // Function expressions

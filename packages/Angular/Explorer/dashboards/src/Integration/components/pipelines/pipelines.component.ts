@@ -292,7 +292,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
       card.IntegrationName.toLowerCase().includes(term) ||
       card.EntityMaps.some(m =>
         (m.ExternalObjectLabel ?? m.ExternalObjectName).toLowerCase().includes(term) ||
-        m.Entity.toLowerCase().includes(term)
+        (m.Entity ?? '').toLowerCase().includes(term)
       )
     );
   }
@@ -1104,7 +1104,7 @@ export class PipelinesComponent extends BaseResourceComponent implements OnInit,
     const term = card.SearchTerm.toLowerCase();
     return card.EntityMaps.filter(m =>
       (m.ExternalObjectLabel ?? m.ExternalObjectName).toLowerCase().includes(term) ||
-      m.Entity.toLowerCase().includes(term)
+      (m.Entity ?? '').toLowerCase().includes(term)
     );
   }
 

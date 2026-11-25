@@ -11,7 +11,14 @@
     "src/lib/components/list-audit-log/**/*.ts",
     "src/lib/components/list-management-dialog/**/*.ts",
     "src/lib/services/list-management.service.ts",
-    "src/lib/models/list-management.models.ts"
+    "src/lib/models/list-management.models.ts",
+    "src/lib/components/list-source-review/**/*.ts",
+    "src/lib/components/list-refresh-history/**/*.ts",
+    "src/lib/services/list-refresh.service.ts",
+    "src/lib/models/list-refresh.models.ts",
+    "src/lib/components/list-source-refresh-panel/**/*.ts",
+    "src/lib/components/list-link-source-dialog/**/*.ts",
+    "src/lib/utils/cron-description.ts"
   ],
   "exclude": [
     "node_modules",

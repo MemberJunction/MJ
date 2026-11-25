@@ -280,12 +280,27 @@ describe('Gemini 3.8 Live on Vertex AI — voices and the avatar', () => {
         }
     });
 
-    it('says on every Vertex AI binding that its name is unverified until the spike', () => {
-        const vertexBindings = seeds.PersonaVendors.filter((r) => resolveReference(r.fields['VendorID'], '') === VERTEX);
+    it('says on every Gemini 3.8 Live Vertex AI binding that its name is unverified until the spike, and maps cross-vendor aliases onto Gemini voices', () => {
+        const geminiLivePersonaIds = new Set([...GEMINI_VOICES, 'Ben'].map((p) => keyOf('MJ: AI Personas', p)));
+        const allVertexBindings = seeds.PersonaVendors.filter(
+            (r) => resolveReference(r.fields['VendorID'], '') === VERTEX,
+        );
+        const vertexBindings = allVertexBindings.filter((r) =>
+            geminiLivePersonaIds.has(String(resolveReference(r.fields['PersonaID'], ''))),
+        );
 
         expect(vertexBindings).toHaveLength(GEMINI_VOICES.length + 2);
         for (const binding of vertexBindings) {
-            expect((binding._comments ?? []).join(' '), String(binding.fields['PersonaID'])).toMatch(/unverified until the Vertex AI spike/);
+            expect((binding._comments ?? []).join(' '), String(binding.fields['PersonaID'])).toMatch(
+                /unverified until the Vertex AI spike/,
+            );
+        }
+
+        const crossVendorVertexBindings = allVertexBindings.filter(
+            (r) => !geminiLivePersonaIds.has(String(resolveReference(r.fields['PersonaID'], ''))),
+        );
+        for (const alias of crossVendorVertexBindings) {
+            expect(GEMINI_VOICES as readonly string[]).toContain(String(alias.fields['APIName']));
         }
     });
 });
@@ -380,9 +395,14 @@ describe('Gemini 3.8 Live on Vertex AI — the turn coverage a session asks for'
         expect(realtimeOn(GOOGLE).TurnDetection?.Coverage).toBe('audioActivityAndAllVideo');
     });
 
-    it("differs from Google's Realtime configuration only in the coverage and the avatar video price", () => {
-        const { TurnDetection: vertexTurns, Pricing: _pricing, ...vertex } = realtimeOn(VERTEX);
-        const { TurnDetection: googleTurns, ...google } = realtimeOn(GOOGLE);
+    it('trusts native session resumption on Vertex AI while Google leaves it unset for topology-aware resolution', () => {
+        expect(realtimeOn(VERTEX).TrustNativeResumption).toBe(true);
+        expect(realtimeOn(GOOGLE).TrustNativeResumption).toBeUndefined();
+    });
+
+    it("differs from Google's Realtime configuration only in the coverage, the avatar video price, and native resumption trust", () => {
+        const { TurnDetection: vertexTurns, Pricing: _pricing, TrustNativeResumption: _vertexTrust, ...vertex } = realtimeOn(VERTEX);
+        const { TurnDetection: googleTurns, TrustNativeResumption: _googleTrust, ...google } = realtimeOn(GOOGLE);
         expect(vertex).toEqual(google);
         expect({ ...vertexTurns, Coverage: undefined }).toEqual({ ...googleTurns, Coverage: undefined });
     });

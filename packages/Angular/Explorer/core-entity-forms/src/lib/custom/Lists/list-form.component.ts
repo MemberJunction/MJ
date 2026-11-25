@@ -8,8 +8,9 @@ import { MJListEntity, MJListDetailEntity, MJListDetailEntityExtended, MJListCat
 import { CompositeKey, Metadata, RunView, RunViewResult, EntityInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ListShareDialogConfig, ListShareDialogResult, GetRecordDisplayField, IsTextSearchableField, FormatRecordDisplayValue } from '@memberjunction/ng-list-management';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
 
-export type ListSection = 'overview' | 'items' | 'sharing' | 'activity' | 'settings';
+export type ListSection = 'overview' | 'items' | 'refresh' | 'sharing' | 'activity' | 'settings';
 
 export interface ListItemViewModel {
     detail: MJListDetailEntity;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
@@ -73,6 +74,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public NavItems = [
         { id: 'overview' as ListSection, icon: 'fa-solid fa-house', label: 'Overview' },
         { id: 'items' as ListSection, icon: 'fa-solid fa-list', label: 'Items', badge: 0 },
+        { id: 'refresh' as ListSection, icon: 'fa-solid fa-rotate', label: 'Refresh history' },
         { id: 'sharing' as ListSection, icon: 'fa-solid fa-share-nodes', label: 'Sharing', badge: 0, disabled: false },
         { id: 'activity' as ListSection, icon: 'fa-solid fa-clock-rotate-left', label: 'Activity' },
         { id: 'settings' as ListSection, icon: 'fa-solid fa-gear', label: 'Settings' }
@@ -456,6 +458,13 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
       this.ShowAuditLogDialog = value;
     }
 
+    // Source & refresh
+    /** The source-change review replaces the Source & refresh card while it is open. */
+    public ShowSourceReview = false;
+    public ShowLinkSourceDialog = false;
+    /** Bumped after anything changes the list's refresh state, so the card and history reload. */
+    public RefreshReloadToken = 0;
+
     private destroy$ = new Subject<void>();
     private get metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
@@ -710,6 +719,19 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     // === Navigation ===
+
+    /** The enabled rail items as `mj-section-picker` items: same order, the badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.NavItems
+            .filter((item) => !item.disabled)
+            .map((item) => ({ Key: item.id, Title: item.label, Icon: item.icon, Count: item.badge ?? null }));
+    }
+
+    /** A pick from the phone section sheet; a key that names no rail item is ignored. */
+    public OnSectionPicked(key: string): void {
+        const item = this.NavItems.find((i) => i.id === key);
+        if (item) this.SetActiveSection(item.id);
+    }
 
     public SetActiveSection(section: ListSection): void {
         const navItem = this.NavItems.find(n => n.id === section);
@@ -1019,6 +1041,56 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
       return this.GetOwnerName();
     }
 
+    // === Source & refresh ===
+
+    public OpenSourceReview(): void {
+        this.ShowSourceReview = true;
+        this.SetActiveSection('overview');
+        this.cdr.detectChanges();
+    }
+
+    public CloseSourceReview(): void {
+        this.ShowSourceReview = false;
+        this.cdr.detectChanges();
+    }
+
+    public async OnSourceApproved(): Promise<void> {
+        this.ShowSourceReview = false;
+        this.showNotification('Source approved. Refreshes resumed and the list was refreshed.', 'success', 3000);
+        await this.OnRefreshStateChanged();
+    }
+
+    public async OnSourceUnlinked(): Promise<void> {
+        this.ShowSourceReview = false;
+        this.showNotification('Source unlinked. The records stay in the list.', 'success', 3000);
+        await this.OnRefreshStateChanged();
+    }
+
+    public async OnSourceLinked(): Promise<void> {
+        this.ShowLinkSourceDialog = false;
+        this.showNotification('Source linked. The list was filled from it.', 'success', 3000);
+        await this.OnRefreshStateChanged();
+    }
+
+    /** The list, its records or its refresh state changed: reload them all. */
+    public async OnRefreshStateChanged(): Promise<void> {
+        if (!this.record?.IsSaved) return;
+        await this.record.Load(this.record.ID);
+        await Promise.all([this.loadItems(), this.loadStats()]);
+        this.updateNavBadges();
+        this.RefreshReloadToken++;
+        this.cdr.detectChanges();
+    }
+
+    public OnOpenRefreshRoutine(routineID: string): void {
+        SharedService.Instance.OpenEntityRecord('MJ: User Routines', CompositeKey.FromID(routineID));
+    }
+
+    public OnOpenListSource(source: { Kind: 'view' | 'query'; ID: string }): void {
+        const entityName = source.Kind === 'query' ? 'MJ: Queries' : 'MJ: User Views';
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(source.ID)); // first-pk-ok: both are MJ core entities keyed on ID
+    }
+
     public IsCurrentUserOwner(): boolean {
         return UUIDsEqual(this.record?.UserID, this.metadata.CurrentUser?.ID);
     }
@@ -1150,7 +1222,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result: RunViewResult = await rv.RunView({
-            EntityName: this.record.Entity,
+            EntityName: sourceEntityInfo.Name,
             ExtraFilter: filter,
             MaxRows: 100,
             ResultType: 'simple'

@@ -1,3 +1,4 @@
+import { EscapeSQLString } from '@memberjunction/global';
 import { DataTypeMap, MappedType } from '../dataTypeMap.js';
 import { BaseSchemaDDL } from './baseSchemaDDL.js';
 import type {
@@ -151,6 +152,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     override get MaxColumnCount(): number { return 1024; }
 
     /**
+     * SQL Server `sp_addextendedproperty` types `@value` as `sql_variant`, which caps payloads at
+     * 7,500 bytes (3,750 UTF-16 code units for `N'...'` literals; >4,000 code units also promotes
+     * the literal to `nvarchar(max)`, which SQL Server refuses to implicitly convert to `sql_variant`).
+     * Cap at 3,700 UTF-16 code units (7,400 bytes) to stay safely under both limits.
+     */
+    override get MaxCommentLength(): number { return 3700; }
+
+    /**
      * Minimum in-row byte footprint of a column. Off-row-capable variable-length / LOB types
      * (incl. `(N)VARCHAR(MAX)`) contribute only a 24-byte in-row pointer; fixed-length types
      * contribute their full size. Unknown types are treated as off-row pointers (conservative).
@@ -294,9 +303,26 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
         return `IF NOT EXISTS (SELECT 1 FROM sys.schemas WHERE name = '${schemaName}')\n    EXEC('CREATE SCHEMA [${schemaName}]');\nGO`;
     }
 
-    /** SQL Server cannot index NVARCHAR(MAX) columns — cap to NVARCHAR(450). */
+    /**
+     * SQL Server cannot index NVARCHAR(MAX) / VARCHAR(MAX) columns or keys exceeding 900 bytes
+     * (450 NVARCHAR chars / 900 VARCHAR chars) — cap to NVARCHAR(450) / VARCHAR(450).
+     */
     override CapIndexableType(rawSqlType: string): string {
-        return rawSqlType.toUpperCase() === 'NVARCHAR(MAX)' ? 'NVARCHAR(450)' : rawSqlType;
+        const trimmed = (rawSqlType ?? '').trim();
+        const upper = trimmed.toUpperCase();
+        if (upper === 'NVARCHAR(MAX)' || upper === 'NTEXT') return 'NVARCHAR(450)';
+        if (upper === 'VARCHAR(MAX)' || upper === 'TEXT') return 'VARCHAR(450)';
+        const nvarcharMatch = trimmed.match(/^NVARCHAR\s*\(\s*(\d+)\s*\)$/i);
+        if (nvarcharMatch) {
+            const len = parseInt(nvarcharMatch[1], 10);
+            if (len > this.MaxKeyStringLength) return `NVARCHAR(${this.MaxKeyStringLength})`;
+        }
+        const varcharMatch = trimmed.match(/^VARCHAR\s*\(\s*(\d+)\s*\)$/i);
+        if (varcharMatch) {
+            const len = parseInt(varcharMatch[1], 10);
+            if (len > this.MaxKeyStringLength * 2) return `VARCHAR(${this.MaxKeyStringLength * 2})`;
+        }
+        return rawSqlType;
     }
 
     CreateTableIfNotExistsDDL(schema: string, tableName: string, columnsDDL: string): string {
@@ -343,14 +369,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnColumn(schema: string, table: string, column: string, comment: string): string {
-        const escaped = comment.replace(/'/g, "''");
+        const escaped = this.EscapeComment(comment);
         return [
             `EXEC sp_addextendedproperty`,
             `    @name = N'MS_Description',`,
             `    @value = N'${escaped}',`,
-            `    @level0type = N'SCHEMA', @level0name = '${schema}',`,
-            `    @level1type = N'TABLE', @level1name = '${table}',`,
-            `    @level2type = N'COLUMN', @level2name = '${column}';`,
+            `    @level0type = N'SCHEMA', @level0name = ${this.escapeUnicodeLiteral(schema)},`,
+            `    @level1type = N'TABLE', @level1name = ${this.escapeUnicodeLiteral(table)},`,
+            `    @level2type = N'COLUMN', @level2name = ${this.escapeUnicodeLiteral(column)};`,
         ].join('\n');
     }
 
@@ -388,14 +414,14 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
     }
 
     CommentOnObject(objectType: string, schema: string, name: string, comment: string): string {
-        const escapedComment = comment.replace(/'/g, "''");
+        const escapedComment = this.EscapeComment(comment);
         const level1Type = this.objectTypeToLevel1Type(objectType);
         return [
             `EXEC sp_addextendedproperty`,
             `    @name = N'MS_Description',`,
             `    @value = N'${escapedComment}',`,
-            `    @level0type = N'SCHEMA', @level0name = N'${schema}',`,
-            `    @level1type = N'${level1Type}', @level1name = N'${name}'`,
+            `    @level0type = N'SCHEMA', @level0name = ${this.escapeUnicodeLiteral(schema)},`,
+            `    @level1type = ${this.escapeUnicodeLiteral(level1Type)}, @level1name = ${this.escapeUnicodeLiteral(name)}`,
         ].join('\n');
     }
 
@@ -405,18 +431,41 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
         return `IF OBJECT_ID(N'${fullTable}', N'U') IS NULL\nCREATE TABLE ${fullTable} (\n${columnsBody}\n);`;
     }
 
+    override CreateIndexIfAbsent(options: IndexOptions): string {
+        const fullTable = `[${options.schema}].[${options.tableName}]`;
+        const escapedIdx = options.indexName.replace(/'/g, "''");
+        const colChecks = options.columns.map((c, idx) => {
+            const escapedCol = c.replace(/'/g, "''");
+            return `EXISTS (SELECT 1 FROM sys.index_columns ic JOIN sys.columns col ON col.object_id = ic.object_id AND col.column_id = ic.column_id WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.key_ordinal = ${idx + 1} AND ic.is_included_column = 0 AND col.name = N'${escapedCol}')`;
+        });
+        const tupleGuard = colChecks.length > 0
+            ? ` OR ((SELECT COUNT(*) FROM sys.index_columns ic WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id AND ic.is_included_column = 0) = ${colChecks.length} AND ${colChecks.join(' AND ')})`
+            : '';
+        // Single-statement IF guard (no BEGIN/END) so RSU's ';\n' batch chunker keeps the guard and CREATE together.
+        // Checks both the index name AND the key-column tuple so SchemaEngine (IX_*) and CodeGenLib (IDX_AUTO_MJ_*)
+        // never create duplicate indexes over the same columns.
+        return `IF NOT EXISTS (SELECT 1 FROM sys.indexes i WHERE i.object_id = OBJECT_ID(N'${fullTable}') AND (i.name = N'${escapedIdx}'${tupleGuard}))\n${this.IndexDDL(options)};`;
+    }
+
+    override DropIndexIfExists(schema: string, tableName: string, indexName: string): string {
+        const fullTable = `[${schema}].[${tableName}]`;
+        const escapedIdx = indexName.replace(/'/g, "''");
+        const bracketEscapedIdx = indexName.replace(/]/g, ']]');
+        return `IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'${fullTable}') AND name = N'${escapedIdx}')\n    DROP INDEX [${bracketEscapedIdx}] ON ${fullTable};`;
+    }
+
     override CommentOnObjectIfAbsent(objectType: string, schema: string, name: string, comment: string): string {
         const level1Type = this.objectTypeToLevel1Type(objectType);
         // IF NOT EXISTS governs the single EXEC that follows (sp_addextendedproperty has no internal ';').
         return [
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'${level1Type}', N'${name}', NULL, NULL))`,
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', ${this.escapeUnicodeLiteral(schema)}, ${this.escapeUnicodeLiteral(level1Type)}, ${this.escapeUnicodeLiteral(name)}, NULL, NULL))`,
             `${this.CommentOnObject(objectType, schema, name, comment)};`,
         ].join('\n');
     }
 
     override CommentOnColumnIfAbsent(schema: string, table: string, column: string, comment: string): string {
         return [
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', N'${schema}', N'TABLE', N'${table}', N'COLUMN', N'${column}'))`,
+            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(N'MS_Description', N'SCHEMA', ${this.escapeUnicodeLiteral(schema)}, N'TABLE', ${this.escapeUnicodeLiteral(table)}, N'COLUMN', ${this.escapeUnicodeLiteral(column)}))`,
             this.CommentOnColumn(schema, table, column, comment),
         ].join('\n');
     }
@@ -541,6 +590,10 @@ export class SQLServerSchemaDDL extends BaseSchemaDDL {
             return `NVARCHAR(${maxLength})`;
         }
         return 'NVARCHAR(255)';
+    }
+
+    private escapeUnicodeLiteral(value: string): string {
+        return `N'${EscapeSQLString(value)}'`;
     }
 
     private objectTypeToLevel1Type(objectType: string): string {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { IncrementalBaker, StripVolatileHeaders, BakeApplyError } from '../IncrementalBaker.js';
-import type { BakerWorkingDB, CapturedEntitySQL } from '../IncrementalBaker.js';
+import { IncrementalBaker, StripVolatileHeaders, BakeApplyError, SelectBakeableEntities, DiffFieldDefaults, FieldDefaultUpdatesSQL } from '../IncrementalBaker.js';
+import type { BakerWorkingDB, CapturedEntitySQL, FieldDefaultChange } from '../IncrementalBaker.js';
 import type { TSQLToPGTranspiler } from '../MigrationConverter.js';
 
 /** Transpiler stub — echoes the kept T-SQL unchanged (the baker's orchestration is under test,
@@ -17,6 +17,8 @@ class FakeDB implements BakerWorkingDB {
   applied: string[] = [];
   /** The full entity set returned by listBakeableEntities (baseline bake path). */
   bakeable: string[] = [];
+  /** The schema each listBakeableEntities call asked for. */
+  listedSchemas: string[] = [];
   constructor(private readonly capture: (name: string) => CapturedEntitySQL) {}
   async apply(sql: string): Promise<void> {
     this.calls.push('apply');
@@ -29,8 +31,9 @@ class FakeDB implements BakerWorkingDB {
     this.calls.push(`capture:${name}`);
     return this.capture(name);
   }
-  async listBakeableEntities(): Promise<string[]> {
+  async listBakeableEntities(schema: string): Promise<string[]> {
     this.calls.push('listBakeable');
+    this.listedSchemas.push(schema);
     return this.bakeable;
   }
 }
@@ -247,6 +250,16 @@ describe('IncrementalBaker', () => {
       expect(r.affectedEntities).toEqual(['MJ: AI Agent Runs', 'MJ: AI Prompts', 'Widgets']);
     });
 
+    it('asks the working DB only for entities in the target schema (issue #5364 item 9)', async () => {
+      const db = new FakeDB(capturedFor);
+      db.bakeable = ['Widgets'];
+      const baker = new IncrementalBaker({ transpiler: echoTranspiler, db, schema: '__mj_BizAppsAccounting' });
+
+      await baker.bakeMigration(baselineSql, 'B202605281200__v0.1.x__Schema_and_Tables.sql');
+
+      expect(db.listedSchemas).toEqual(['__mj_BizAppsAccounting']);
+    });
+
     it('still assembles the transpiled hand body + baked CodeGen into a standalone .pg.sql', async () => {
       const db = new FakeDB(capturedFor);
       db.bakeable = ['Widgets'];
@@ -330,5 +343,97 @@ describe('stripVolatileHeaders', () => {
   it('removes only the `-- Generated at:` lines, leaving SQL intact', () => {
     const input = ['-- Generated at: 2026-06-18T18:30:28.355Z', 'CREATE VIEW x AS SELECT 1;', '  -- Generated at: 2026-06-18T18:30:28.368Z'].join('\n');
     expect(StripVolatileHeaders(input)).toBe('CREATE VIEW x AS SELECT 1;');
+  });
+});
+
+describe('SelectBakeableEntities (issue #5364 item 9)', () => {
+  const entities = [
+    { Name: 'MJ: Entities', SchemaName: '__mj', IncludeInAPI: true },
+    { Name: 'Common: People', SchemaName: '__mj_BizAppsCommon', IncludeInAPI: true },
+    { Name: 'Tasks: Tasks', SchemaName: '__mj_BizAppsTasks', IncludeInAPI: true },
+    { Name: 'Accounting: GL Accounts', SchemaName: '__mj_BizAppsAccounting', IncludeInAPI: true },
+    { Name: 'Accounting: Internal', SchemaName: '__mj_BizAppsAccounting', IncludeInAPI: false },
+    { Name: 'Accounting: Journal Entries', SchemaName: '__mj_BizAppsAccounting', IncludeInAPI: true },
+  ];
+
+  it('keeps only API entities in the target schema, in input order', () => {
+    expect(SelectBakeableEntities(entities, '__mj_BizAppsAccounting')).toEqual([
+      'Accounting: GL Accounts',
+      'Accounting: Journal Entries',
+    ]);
+  });
+
+  it('matches the schema case-insensitively (PostgreSQL folds the unquoted schema name)', () => {
+    expect(SelectBakeableEntities(entities, '__mj_bizappsaccounting')).toHaveLength(2);
+  });
+
+  it('still scopes MJ core to its own schema', () => {
+    expect(SelectBakeableEntities(entities, '__mj')).toEqual(['MJ: Entities']);
+  });
+
+  it('honors excludeSchemas', () => {
+    expect(SelectBakeableEntities(entities, '__mj', ['__MJ'])).toEqual([]);
+  });
+});
+
+describe('IncrementalBaker — field defaults and warnings (issues #5650, #5649)', () => {
+  class DefaultsDB extends FakeDB {
+    constructor(private readonly changes: FieldDefaultChange[]) {
+      super(capturedFor);
+    }
+    async syncFieldDefaults(entities: string[]): Promise<FieldDefaultChange[]> {
+      this.calls.push(`syncDefaults:${entities.join(',')}`);
+      return this.changes;
+    }
+  }
+  const sql = ssMigration(
+    "ALTER TABLE [${flyway:defaultSchema}].[AIModelCost] ADD CONSTRAINT DF_PriceType DEFAULT ('x') FOR [PriceTypeID];",
+    ['MJ: AI Model Costs'],
+  );
+
+  it('runs the field sync between apply and capture, and bakes each DefaultValue change as an UPDATE', async () => {
+    const db = new DefaultsDB([
+      { ID: 'F1', EntityName: 'MJ: AI Model Costs', FieldName: 'PriceTypeID', DefaultValue: "'x'", PreviousDefaultValue: null },
+    ]);
+    const r = await new IncrementalBaker({ transpiler: echoTranspiler, db }).BakeMigration(sql, 'V1__Default.sql');
+    expect(db.calls).toEqual(['apply', 'syncDefaults:MJ: AI Model Costs', 'refresh', 'capture:MJ: AI Model Costs']);
+    expect(r.mode).toBe('baked');
+    expect(r.pgSQL).toContain(`UPDATE __mj."EntityField" SET "DefaultValue" = '''x''' WHERE "ID" = 'F1';`);
+    expect(r.pgSQL.indexOf('"DefaultValue"')).toBeLessThan(r.pgSQL.indexOf('PostgreSQL Generated SQL for Entity'));
+  });
+
+  it('adds nothing when the sync changes no default', async () => {
+    const db = new DefaultsDB([]);
+    const r = await new IncrementalBaker({ transpiler: echoTranspiler, db }).BakeMigration(sql, 'V1__Default.sql');
+    expect(r.pgSQL).not.toContain('"DefaultValue"');
+  });
+
+  it('does not gate a bake on an sp_refreshview warning', async () => {
+    const db = new FakeDB(capturedFor);
+    const withRefresh = ssMigration(
+      "ALTER TABLE [${flyway:defaultSchema}].[Widget] ADD [Size] INT NULL;\nGO\nEXEC sp_refreshview '${flyway:defaultSchema}.vwWidgets';\nGO",
+      ['MJ: Widgets'],
+    );
+    const r = await new IncrementalBaker({ transpiler: echoTranspiler, db }).BakeMigration(withRefresh, 'V2__Size.sql');
+    expect(r.mode).toBe('baked');
+    expect(r.warnings).toEqual(["V2__Size.sql: sp_refreshview '${flyway:defaultSchema}.vwWidgets' has no PostgreSQL equivalent; rebuild the view with CREATE OR REPLACE VIEW so it carries the new columns"]);
+  });
+});
+
+describe('DiffFieldDefaults / FieldDefaultUpdatesSQL', () => {
+  const row = (ID: string, DefaultValue: string | null) => ({ ID, EntityName: 'E', FieldName: `F${ID}`, DefaultValue });
+
+  it('reports changed defaults only, matching IDs case-insensitively, and skips new rows', () => {
+    const changes = DiffFieldDefaults(
+      [row('aa', null), row('BB', "'1'")],
+      [row('AA', 'getdate()'), row('bb', "'1'"), row('cc', "'new'")],
+    );
+    expect(changes).toEqual([{ ...row('AA', 'getdate()'), PreviousDefaultValue: null }]);
+  });
+
+  it('writes NULL for a removed default and nothing for no changes', () => {
+    expect(FieldDefaultUpdatesSQL([{ ...row('a', null), PreviousDefaultValue: "'x'" }], 'core'))
+      .toContain(`UPDATE core."EntityField" SET "DefaultValue" = NULL WHERE "ID" = 'a';`);
+    expect(FieldDefaultUpdatesSQL([], 'core')).toBe('');
   });
 });

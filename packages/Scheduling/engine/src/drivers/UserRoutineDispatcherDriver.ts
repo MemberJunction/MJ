@@ -12,9 +12,12 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse, UUIDsEqual, NormalizeUUID, EscapeSQLString } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import {
+    BUILT_IN_CONVERSATION_TYPE_IDS,
+    CONVERSATION_TYPE_CODES,
+    ConversationEngine,
     MJConversationEntity,
     MJEnvironmentEntityExtended,
     MJScheduledJobEntity,
@@ -25,8 +28,30 @@ import {
     MJUserNotificationEntity,
     MJTemplateEntityExtended,
 } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, AIPromptParams } from '@memberjunction/ai-core-plus';
-import { AgentRunner } from '@memberjunction/ai-agents';
+import {
+    MJAIAgentEntityExtended,
+    MJAIPromptEntityExtended,
+    AIPromptParams,
+    ConversationUtility,
+    MentionContent,
+    SpecialContentToken,
+} from '@memberjunction/ai-core-plus';
+import {
+    AgentRunner,
+    AgentWakeTriggerService,
+    BuildPolicyPairKey,
+    BuildUserAppWakeKey,
+    CheckActivePoliciesForBatch,
+    CheckActivePolicyForAgentAndUser,
+    CoalescedWakeEventPayload,
+    CoalescedWakeResumeState,
+    DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
+    EventWakeCoalescer,
+    NormalizeApplicationKey,
+    PolicyPairLookupKey,
+    ResolveWakeAgentConfigurationID,
+    WakeStartupGuard,
+} from '@memberjunction/ai-agents';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { ActionParam } from '@memberjunction/actions-base';
@@ -45,10 +70,21 @@ import {
     RunWithBoundedConcurrency,
 } from '../UserRoutineProcessor';
 import { WakeGateEvaluator, WakeGateEvaluationResult } from '../WakeGateEvaluator';
+import { UserRoutineScheduleIndex } from '../UserRoutineScheduleIndex';
+import type { Observable } from 'rxjs';
 
 interface GlobalUserCacheLookup {
     Users: UserInfo[];
     FindUser(criteria: { ID?: string; Email?: string }): Promise<UserInfo | undefined>;
+}
+
+export class RoutineOwnerResolutionError extends Error {
+    public readonly Kind: 'permanent' | 'transient';
+    public constructor(message: string, kind: 'permanent' | 'transient') {
+        super(message);
+        this.name = 'RoutineOwnerResolutionError';
+        this.Kind = kind;
+    }
 }
 
 /**
@@ -91,8 +127,25 @@ const DEFAULT_MAX_CONCURRENT_ROUTINES = 3;
  * for a real `MJUserRoutineRunEntity` (`Status` is a column); it keeps this total rather than
  * throwing inside an error handler.
  */
+interface RoutineJsonObject {
+    [key: string]:
+        | string
+        | number
+        | boolean
+        | null
+        | undefined
+        | RoutineJsonObject
+        | Array<string | number | boolean | null | RoutineJsonObject>;
+}
+
+type EntityMetadataAccessor = Pick<IMetadataProvider, 'GetEntityObject' | 'EntityByName'>;
+
+function getEntityMetadataAccessor(provider?: IMetadataProvider): EntityMetadataAccessor {
+    return provider ?? new Metadata(); // global-provider-ok: server-global scheduled task
+}
+
 function persistedRunStatus(run: MJUserRoutineRunEntity): MJUserRoutineRunEntity['Status'] {
-    const persisted: unknown = run.GetFieldByName?.('Status')?.OldValue;
+    const persisted = run.GetFieldByName?.('Status')?.OldValue;
     // `OldValue` is untyped on EntityField, so this is the one narrowing boundary. The column is
     // CHECK-constrained to the same value list as the property, so a string read from it IS that
     // union — asserting anything wider here would just push the cast to every caller.
@@ -103,6 +156,68 @@ function persistedRunStatus(run: MJUserRoutineRunEntity): MJUserRoutineRunEntity
 
 /** Name of the metadata-seeded default notification template (resolved BY NAME, never hardcoded ID). */
 const DEFAULT_NOTIFICATION_TEMPLATE_NAME = 'User Routine Notification - Default';
+
+function isRecordMentionToken(token: SpecialContentToken): token is SpecialContentToken & { content: MentionContent } {
+    return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
+}
+
+/**
+ * Visible label for a `record` mention token, matching `ConversationUtility`'s fallback rules.
+ */
+export function ResolveRecordLinkLabel(content: MentionContent): string {
+    const explicitName = (content.name ?? '').trim();
+    return explicitName || content.entityName || 'record';
+}
+
+function endsWithRecordTitle(prefix: string, label: string): boolean {
+    if (!label) {
+        return false;
+    }
+    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const trailingTitlePattern = new RegExp(`(?:^|[\\s(\\[\\"'*_\`>:])${escapedLabel}[*_\`"'\\]]*[ \\t]*$`, 'i');
+    return trailingTitlePattern.test(prefix);
+}
+
+/**
+ * Converts `@{"_mode":...}` tokens in a routine result summary into clean plain text via
+ * `ConversationUtility.ToPlainText`, omitting duplicate `record` mention pills that
+ * immediately follow the same record title (e.g. `Northwind @{...}` -> `Northwind` rather
+ * than `Northwind Northwind`).
+ */
+export function FormatRoutinePlainResultSummary(
+    summary: string,
+    recordLinkLabel: (content: MentionContent) => string = ResolveRecordLinkLabel
+): string {
+    if (!summary) {
+        return '';
+    }
+    const tokens = ConversationUtility.ParseSpecialContent(summary);
+    if (tokens.length === 0) {
+        return ConversationUtility.ToPlainText(summary);
+    }
+
+    let deduplicated = '';
+    let cursor = 0;
+    for (const token of tokens) {
+        deduplicated += summary.slice(cursor, token.startIndex);
+        cursor = token.endIndex;
+
+        if (isRecordMentionToken(token)) {
+            const label = recordLinkLabel(token.content);
+            if (endsWithRecordTitle(deduplicated, label)) {
+                const nextChar = summary[token.endIndex] ?? '';
+                if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
+                    deduplicated = deduplicated.replace(/[ \t]+$/, '');
+                }
+                continue;
+            }
+        }
+        deduplicated += token.originalText;
+    }
+    deduplicated += summary.slice(cursor);
+
+    return ConversationUtility.ToPlainText(deduplicated);
+}
 
 /** Name of the metadata-seeded `MJ: User Notification Types` row used for in-app delivery. */
 const NOTIFICATION_TYPE_NAME = 'User Routine';
@@ -148,6 +263,8 @@ export interface RoutineRunContext {
     heartbeat?: ScheduledJobExecutionContext['heartbeat'];
     /** True for a run the user asked for by hand: the wake gate is not consulted. */
     BypassWakeGate?: boolean;
+    /** Pre-claim NextRunAt captured during a sweep so transient slot-entry errors can restore the claim. */
+    ClaimedPreviousNextRunAt?: Date | null;
 }
 
 /**
@@ -162,6 +279,19 @@ export interface RoutineRunContext {
 @RegisterClass(BaseScheduledJob, 'UserRoutineDispatcherDriver')
 export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     /**
+     * Maximum consecutive sweep failures resolving a routine's owner user before the
+     * routine is disabled (`Status = 'Disabled'`, `LastRunStatus = 'Failed'`) so a
+     * deleted or permanently inactive owner does not retry on every 1-minute sweep forever.
+     */
+    public static readonly MAX_OWNER_RESOLVE_RETRIES = 3;
+
+    private static readonly _ownerResolveFailures = new Map<string, number>();
+
+    public static ClearOwnerResolveFailures(): void {
+        UserRoutineDispatcherDriver._ownerResolveFailures.clear();
+    }
+
+    /**
      * The dispatcher is a by-design 1-minute sweeper: each pass claims due routines and
      * does bounded work, so the engine's high-frequency cron warning doesn't apply.
      */
@@ -169,7 +299,44 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         return true;
     }
 
+    /**
+     * Work gate (#6217): the dispatcher has work only when a routine is due or needs seeding, so
+     * the engine runs it (and wakes the database for it) only then. Answered from the in-memory
+     * {@link UserRoutineScheduleIndex}; until that is loaded the dispatcher keeps its cron.
+     */
+    public override NextWorkDueAt(_job: MJScheduledJobEntity, now: Date): Date | null | undefined {
+        const index = UserRoutineScheduleIndex.Instance;
+        return index.IsLoaded ? index.NextDueAt(now) : undefined;
+    }
+
+    public override async PrepareWorkGate(contextUser: UserInfo, provider: IMetadataProvider, maxAgeMs: number): Promise<void> {
+        await UserRoutineScheduleIndex.Instance.EnsureFresh(contextUser, provider, maxAgeMs);
+    }
+
+    public override get WorkGateChanged$(): Observable<void> | null {
+        return UserRoutineScheduleIndex.Instance.Changed$;
+    }
+
     public async Execute(context: ScheduledJobExecutionContext): Promise<ScheduledJobResult> {
+        if (WakeStartupGuard.Instance.IsStartupInProgress()) {
+            this.log(
+                'UserRoutineDispatcher sweep suppressed while WakeStartupGuard is active during AIDP deployment/startup initialization.',
+                true
+            );
+            return {
+                Success: true,
+                Details: {
+                    RoutinesEvaluated: 0,
+                    RoutinesSeeded: 0,
+                    RoutinesRun: 0,
+                    Succeeded: 0,
+                    Failed: 0,
+                    Notified: 0,
+                    StartupSuppressed: true,
+                },
+            };
+        }
+
         const config = this.parseDispatcherConfiguration(context.Schedule);
         const maxConcurrent = config.MaxConcurrentRoutines ?? DEFAULT_MAX_CONCURRENT_ROUTINES;
         const now = new Date();
@@ -184,25 +351,100 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             void context.heartbeat?.();
         }
 
-        // Claim + run the due routines with bounded concurrency and per-routine isolation.
-        const due = candidates.filter(r => IsRoutineDue(r, now));
-        const claimed: MJUserRoutineEntity[] = [];
+        // Batch-check active coordination policies (ResultType: 'simple', bypassCache: true)
+        // before claiming or executing any Agent / AgentWake routine so deactivated or missing
+        // policies yield zero agent runs without N+1 entity loads.
+        const rawDue = candidates.filter(r => IsRoutineDue(r, now));
+        const due = await this.coalesceDuplicatePendingBuckets(rawDue);
+        const policyPairs: PolicyPairLookupKey[] = due
+            .filter((r) => this.requiresAgentCoordinationPolicy(r) && Boolean(r.TargetID) && Boolean(r.UserID))
+            .map((r) => ({ AgentID: r.TargetID!, UserID: r.UserID! }));
+        const policyEvaluations = await CheckActivePoliciesForBatch(
+            policyPairs,
+            context.ContextUser,
+            { bypassCache: true }
+        );
+
+        // Resolve each due routine's owner user BEFORE claiming NextRunAt so a transient UserCache
+        // miss never burns a OneShot routine's NextRunAt=null without executing it. Cap consecutive
+        // failures at MAX_OWNER_RESOLVE_RETRIES so a permanently missing/inactive owner does not
+        // retry on every sweep forever.
+        const claimed: Array<{ routine: MJUserRoutineEntity; ownerUser: UserInfo; previousNextRunAt: Date | null }> = [];
         for (const routine of due) {
+            const routineKey = NormalizeUUID(routine.ID);
+            let ownerUser: UserInfo;
+            try {
+                ownerUser = await this.resolveRoutineOwnerUser(routine, context.ContextUser);
+                UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
+            } catch (error) {
+                const isPermanent =
+                    error instanceof RoutineOwnerResolutionError && error.Kind === 'permanent';
+                if (!isPermanent) {
+                    this.logError(
+                        `Skipping claim for routine "${routine.Name}" (${routine.ID}) due to transient owner lookup failure — backing off and preserving NextRunAt for retry`,
+                        error
+                    );
+                    continue;
+                }
+                const failures = (UserRoutineDispatcherDriver._ownerResolveFailures.get(routineKey) ?? 0) + 1;
+                UserRoutineDispatcherDriver._ownerResolveFailures.set(routineKey, failures);
+                if (failures >= UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES) {
+                    UserRoutineDispatcherDriver._ownerResolveFailures.delete(routineKey);
+                    this.logError(
+                        `Disabling routine "${routine.Name}" (${routine.ID}) because owner user is missing or inactive after ${failures} consecutive attempts`,
+                        error
+                    );
+                    routine.Status = 'Disabled';
+                    routine.LastRunStatus = 'Failed';
+                    await this.claimRoutine(routine, now);
+                } else {
+                    this.logError(
+                        `Skipping claim for routine "${routine.Name}" (${routine.ID}) because owner user could not be resolved (attempt ${failures}/${UserRoutineDispatcherDriver.MAX_OWNER_RESOLVE_RETRIES}) — NextRunAt preserved for retry`,
+                        error
+                    );
+                }
+                continue;
+            }
+
+            if (this.requiresAgentCoordinationPolicy(routine)) {
+                if (!routine.TargetID || !routine.UserID) {
+                    this.log(
+                        `Skipping wake for routine "${routine.Name}" (${routine.ID}): TargetID or UserID missing for policy verification.`,
+                        true
+                    );
+                    continue;
+                }
+                const policyEval = policyEvaluations.get(BuildPolicyPairKey(routine.TargetID, routine.UserID));
+                if (!policyEval?.Allowed) {
+                    this.log(
+                        `Skipping wake for routine "${routine.Name}" (${routine.ID}): ${policyEval?.Reason ?? 'Active coordination policy required.'}`,
+                        true
+                    );
+                    continue;
+                }
+            }
+
+            const previousNextRunAt = routine.NextRunAt ? new Date(routine.NextRunAt.getTime()) : null;
             if (await this.claimRoutine(routine, now)) {
-                claimed.push(routine);
+                claimed.push({ routine, ownerUser, previousNextRunAt });
             }
         }
 
-        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async (routine) => {
+        const summaries = await RunWithBoundedConcurrency(claimed, maxConcurrent, async ({ routine, ownerUser, previousNextRunAt }) => {
             // Per-routine error isolation: one routine failing must never kill the sweep.
             try {
-                return await this.executeRoutine(routine, context);
+                return await this.executeRoutine(
+                    routine,
+                    { ...context, ClaimedPreviousNextRunAt: previousNextRunAt },
+                    ownerUser
+                );
             } catch (error) {
                 this.logError(`Routine "${routine.Name}" (${routine.ID}) failed outside run tracking`, error);
                 return { RoutineID: routine.ID, RunStatus: 'Failed', Notified: false } satisfies RoutineExecutionSummary;
             }
         });
 
+        const routinesRun = summaries.filter(s => s.RunStatus !== 'Skipped').length;
         const succeeded = summaries.filter(s => s.RunStatus === 'Success').length;
         const failed = summaries.filter(s => s.RunStatus === 'Failed').length;
         const notified = summaries.filter(s => s.Notified).length;
@@ -212,7 +454,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             Details: {
                 RoutinesEvaluated: candidates.length,
                 RoutinesSeeded: seedable.length,
-                RoutinesRun: claimed.length,
+                RoutinesRun: routinesRun,
                 Succeeded: succeeded,
                 Failed: failed,
                 Notified: notified,
@@ -278,6 +520,9 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             EntityName: 'MJ: User Routines',
             ExtraFilter: BuildDueRoutineFilter(now.toISOString()),
             ResultType: 'entity_object',
+            // Due-ness is live state and must come from the database. The per-tick timestamp in
+            // the filter would also mint a new, never-read cache key on every tick.
+            BypassCache: true,
         }, contextUser);
 
         if (!result.Success) {
@@ -347,31 +592,95 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
     /**
      * Resolve the routine owner's `UserInfo` from `UserCache` so target execution runs under
      * the routine owner's RBAC/RLS/FLS identity rather than the scheduler's system user.
-     * Fails closed when `UserCache` is populated and the owner is missing or inactive.
+     * Always fails closed when the owner ID is missing, `UserCache` is unavailable or empty,
+     * or the owning user is missing or inactive.
      */
     protected async resolveRoutineOwnerUser(
         routine: MJUserRoutineEntity,
         fallbackContextUser: UserInfo
     ): Promise<UserInfo> {
-        const ownerUserId = routine.UserID;
-        if (!ownerUserId || (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID))) {
+        const ownerUserId = routine.UserID?.trim();
+        if (!ownerUserId) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" has no UserID — refusing to execute without a resolved owner.`,
+                'permanent'
+            );
+        }
+        if (fallbackContextUser?.ID && UUIDsEqual(ownerUserId, fallbackContextUser.ID)) {
+            if (fallbackContextUser.IsActive === false) {
+                throw new RoutineOwnerResolutionError(
+                    `Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`,
+                    'permanent'
+                );
+            }
             return fallbackContextUser;
         }
         const userCache = (globalThis as { ___SINGLETON__UserCache?: GlobalUserCacheLookup }).___SINGLETON__UserCache;
         if (!userCache || typeof userCache.FindUser !== 'function') {
-            return fallbackContextUser;
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) cannot be resolved because UserCache is unavailable — refusing to execute.`,
+                'transient'
+            );
         }
-        const found = await userCache.FindUser({ ID: ownerUserId });
-        if (found) {
-            if (found.IsActive === false) {
-                throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`);
+        let found: UserInfo | undefined;
+        try {
+            found = await userCache.FindUser({ ID: ownerUserId });
+        } catch (err) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) lookup failed transiently: ${err instanceof Error ? err.message : String(err)}`,
+                'transient'
+            );
+        }
+        if (!found) {
+            const cachePopulated = Array.isArray(userCache.Users) && userCache.Users.length > 0;
+            if (!cachePopulated) {
+                throw new RoutineOwnerResolutionError(
+                    `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
+                    'transient'
+                );
             }
-            return found;
+            // UserCache.FindUser catches and swallows DB errors during its refresh query, returning undefined.
+            // Probe MJ: Users via RunView so a transient DB error is distinguished from a deleted owner row.
+            let verifyKind: 'permanent' | 'transient' = 'transient';
+            try {
+                const rv = new RunView();
+                const verifyRes = await rv.RunView<{ ID: string; IsActive?: boolean }>(
+                    {
+                        EntityName: 'MJ: Users',
+                        ExtraFilter: `ID = '${EscapeSQLString(ownerUserId)}'`,
+                        Fields: ['ID', 'IsActive'],
+                        MaxRows: 1,
+                        SkipTotalRowCount: true,
+                        ResultType: 'simple',
+                    },
+                    fallbackContextUser
+                );
+                if (verifyRes?.Success) {
+                    const row = verifyRes.Results?.[0];
+                    if (!row || row.IsActive === false) {
+                        verifyKind = 'permanent';
+                    }
+                }
+            } catch (probeErr) {
+                LogError(
+                    `UserRoutineDispatcherDriver: MJ: Users probe failed for routine "${routine.Name}" (${ownerUserId}): ${
+                        probeErr instanceof Error ? probeErr.message : String(probeErr)
+                    }`
+                );
+                verifyKind = 'transient';
+            }
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`,
+                verifyKind
+            );
         }
-        if (Array.isArray(userCache.Users) && userCache.Users.length > 0) {
-            throw new Error(`Routine "${routine.Name}" owner (${ownerUserId}) not found in UserCache — refusing to execute.`);
+        if (found.IsActive === false) {
+            throw new RoutineOwnerResolutionError(
+                `Routine "${routine.Name}" owner (${ownerUserId}) is inactive — refusing to execute.`,
+                'permanent'
+            );
         }
-        return fallbackContextUser;
+        return found;
     }
 
     // ========================================================================
@@ -413,12 +722,307 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * sweep reports success, and the routine looks like it is still executing long after the
      * process that owned it exited. A run row that outlives its executor has to say so.
      */
+    private requiresAgentCoordinationPolicy(routine: MJUserRoutineEntity): boolean {
+        return routine.RoutineType === 'AgentWake' || routine.TargetType === 'Agent';
+    }
+
+    private isUnscheduledOneShot(routine: MJUserRoutineEntity): boolean {
+        return (
+            routine.ScheduleMode === 'OneShot' &&
+            routine.NextRunAt == null &&
+            (!routine.CronExpression || routine.CronExpression.trim().length === 0)
+        );
+    }
+
+    private parseRoutineWakeConfig(routine: MJUserRoutineEntity): Partial<MJUserRoutineEntity_IRoutineWakeConfiguration> {
+        if (routine.WakeConfigurationObject && typeof routine.WakeConfigurationObject === 'object') {
+            return routine.WakeConfigurationObject;
+        }
+        if (typeof routine.WakeConfiguration === 'string' && routine.WakeConfiguration.trim().length > 0) {
+            return SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration) ?? {};
+        }
+        return {};
+    }
+
+    private extractRoutineApplicationID(routine: MJUserRoutineEntity): string | null {
+        const parsedConfig = this.parseRoutineWakeConfig(routine);
+        const resumeState = parsedConfig.resumeState as CoalescedWakeResumeState | undefined;
+        const appID = resumeState?.applicationID;
+        return typeof appID === 'string' && appID.trim().length > 0 ? appID.trim() : null;
+    }
+
+    private buildRoutineWakeBucketKey(routine: MJUserRoutineEntity): string | null {
+        if (routine.RoutineType !== 'AgentWake' || !routine.UserID || !routine.TargetID) {
+            return null;
+        }
+        const appID = this.extractRoutineApplicationID(routine);
+        if (appID) {
+            return `${NormalizeUUID(routine.UserID)}::${NormalizeUUID(routine.TargetID)}::app:${NormalizeApplicationKey(appID)}`;
+        }
+        const cfg = this.parseRoutineWakeConfig(routine);
+        const ws = typeof cfg.workstreamKey === 'string' ? cfg.workstreamKey.trim().toLowerCase() : '';
+        if (ws.length > 0) {
+            return `${NormalizeUUID(routine.UserID)}::${NormalizeUUID(routine.TargetID)}::ws:${ws}`;
+        }
+        return null;
+    }
+
+    private readPendingEventsFromRoutine(routine: MJUserRoutineEntity): CoalescedWakeEventPayload[] {
+        const cfg = this.parseRoutineWakeConfig(routine);
+        const resumeState = cfg.resumeState as CoalescedWakeResumeState | undefined;
+        if (!resumeState) {
+            return [];
+        }
+        if (Array.isArray(resumeState.pendingEvents)) {
+            return resumeState.pendingEvents.filter((e): e is CoalescedWakeEventPayload => typeof e === 'object' && e !== null);
+        }
+        return typeof resumeState.triggerType === 'string' ? [resumeState] : [];
+    }
+
+    private compareBucketRoutines(a: MJUserRoutineEntity, b: MJUserRoutineEntity): number {
+        const aCreated = a.__mj_CreatedAt instanceof Date ? a.__mj_CreatedAt.getTime() : Number.MAX_SAFE_INTEGER;
+        const bCreated = b.__mj_CreatedAt instanceof Date ? b.__mj_CreatedAt.getTime() : Number.MAX_SAFE_INTEGER;
+        if (aCreated !== bCreated) {
+            return aCreated - bCreated;
+        }
+        return a.ID.toLowerCase().localeCompare(b.ID.toLowerCase());
+    }
+
+    /**
+     * Converges any duplicate pending `AgentWake` routines that share the same `(UserID, TargetID, ApplicationID)`
+     * or `(UserID, TargetID, WorkstreamKey)` bucket (e.g., created concurrently by independent server instances)
+     * into the earliest/lowest-ID canonical routine so only one wake executes with all pending events preserved.
+     */
+    private async coalesceDuplicatePendingBuckets(due: MJUserRoutineEntity[]): Promise<MJUserRoutineEntity[]> {
+        const groups = new Map<string, MJUserRoutineEntity[]>();
+        const ungrouped: MJUserRoutineEntity[] = [];
+
+        for (const routine of due) {
+            const bucketKey = this.buildRoutineWakeBucketKey(routine);
+            if (!bucketKey) {
+                ungrouped.push(routine);
+                continue;
+            }
+            const existing = groups.get(bucketKey) ?? [];
+            existing.push(routine);
+            groups.set(bucketKey, existing);
+        }
+
+        const result: MJUserRoutineEntity[] = [...ungrouped];
+        for (const bucketRoutines of groups.values()) {
+            if (bucketRoutines.length <= 1) {
+                result.push(...bucketRoutines);
+                continue;
+            }
+            const sorted = [...bucketRoutines].sort((a, b) => this.compareBucketRoutines(a, b));
+            const canonical = sorted[0];
+            const duplicates = sorted.slice(1);
+            const canonicalSaved = await this.mergeBucketRoutinesIntoCanonical(canonical, duplicates);
+            if (!canonicalSaved) {
+                result.push(...sorted);
+                continue;
+            }
+            await this.deactivateSupersededBucketRoutines(duplicates, canonical.ID);
+            result.push(canonical);
+        }
+
+        return result;
+    }
+
+    private async mergeBucketRoutinesIntoCanonical(
+        canonical: MJUserRoutineEntity,
+        duplicates: MJUserRoutineEntity[]
+    ): Promise<boolean> {
+        const canonicalAppID = this.extractRoutineApplicationID(canonical);
+        const coalesceKey = BuildUserAppWakeKey(canonical.UserID, canonicalAppID);
+        const canonicalConfig = this.parseRoutineWakeConfig(canonical);
+        const canonicalResume = (canonicalConfig.resumeState as CoalescedWakeResumeState | undefined) ?? {};
+        const workstreamKey = canonicalConfig.workstreamKey ?? 'default';
+
+        let mergedEvents = this.readPendingEventsFromRoutine(canonical) as CoalescedWakeResumeState[];
+        let totalCount = typeof canonicalResume.coalescedEventCount === 'number'
+            ? canonicalResume.coalescedEventCount
+            : mergedEvents.length;
+        let overflowCount = typeof canonicalResume.overflowEventCount === 'number'
+            ? canonicalResume.overflowEventCount
+            : 0;
+        let summaryText = typeof canonicalResume.coalescedSummary === 'string'
+            ? canonicalResume.coalescedSummary
+            : null;
+        let maxRevision = typeof canonicalResume.coalesceRevision === 'number'
+            ? canonicalResume.coalesceRevision
+            : 0;
+
+        for (const dup of duplicates) {
+            const dupResume = (this.parseRoutineWakeConfig(dup).resumeState as CoalescedWakeResumeState | undefined) ?? {};
+            if (typeof dupResume.coalesceRevision === 'number') {
+                maxRevision = Math.max(maxRevision, dupResume.coalesceRevision);
+            }
+            const dupEvents = this.readPendingEventsFromRoutine(dup) as CoalescedWakeResumeState[];
+            const dupTotal = typeof dupResume.coalescedEventCount === 'number'
+                ? dupResume.coalescedEventCount
+                : dupEvents.length;
+            const dupOverflow = Math.max(0, dupTotal - dupEvents.length);
+            overflowCount += dupOverflow;
+            totalCount += dupOverflow;
+
+            for (const dupEvent of dupEvents) {
+                const merged = EventWakeCoalescer.Instance.MergeCoalescedEvents({
+                    PriorEvents: mergedEvents,
+                    NewEvent: dupEvent,
+                    CoalesceKey: coalesceKey,
+                    ApplicationID: NormalizeApplicationKey(canonicalAppID),
+                    MaxRetainedEvents: DEFAULT_MAX_RETAINED_COALESCED_EVENTS,
+                    ExistingCoalescedCount: totalCount,
+                    ExistingOverflowCount: overflowCount,
+                });
+                mergedEvents = merged.PendingEvents;
+                totalCount = merged.TotalCoalescedCount;
+                overflowCount = merged.OverflowCount;
+                if (merged.SummaryText) {
+                    summaryText = merged.SummaryText;
+                }
+            }
+        }
+
+        const updatedResumeState: CoalescedWakeResumeState = {
+            ...canonicalResume,
+            coalesceKey,
+            coalescedEventCount: totalCount,
+            overflowEventCount: overflowCount,
+            coalesceRevision: maxRevision + 1,
+            batchConsumed: false,
+            ...(summaryText ? { coalescedSummary: summaryText } : {}),
+            pendingEvents: mergedEvents,
+        };
+        const updatedWakeReason =
+            summaryText ?? canonicalConfig.wakeReason ?? `Coalesced ${totalCount} events for ${workstreamKey}`;
+        canonical.WakeConfigurationObject = {
+            ...canonicalConfig,
+            workstreamKey,
+            wakeReason: updatedWakeReason,
+            resumeState: updatedResumeState,
+        };
+        canonical.StartingPayload = JSON.stringify({
+            workstreamKey,
+            wakeReason: updatedWakeReason,
+            resumeState: updatedResumeState,
+        });
+        canonical.InitialMessage = `[AgentWake:${workstreamKey}] Resume workstream "${workstreamKey}": ${updatedWakeReason}`;
+        canonical.Description = updatedWakeReason;
+
+        const canonicalSaved = typeof canonical.Save === 'function' ? await canonical.Save() : true;
+        if (!canonicalSaved) {
+            this.logError(`Failed to persist coalesced canonical wake routine "${canonical.Name}" (${canonical.ID}); skipping duplicate suppression to preserve events`);
+        }
+        return canonicalSaved;
+    }
+
+    private async deactivateSupersededBucketRoutines(
+        duplicates: MJUserRoutineEntity[],
+        canonicalID: string
+    ): Promise<void> {
+        for (const dup of duplicates) {
+            const dupConfig = this.parseRoutineWakeConfig(dup);
+            const dupResume = (dupConfig.resumeState as CoalescedWakeResumeState | undefined) ?? {};
+            dup.Status = 'Disabled';
+            dup.NextRunAt = null;
+            dup.WakeConfigurationObject = {
+                ...dupConfig,
+                resumeState: {
+                    ...dupResume,
+                    batchConsumed: true,
+                    coalescedIntoRoutineID: canonicalID,
+                    coalescedEventCount: 0,
+                    overflowEventCount: 0,
+                    pendingEvents: [],
+                },
+            };
+            if (typeof dup.Save === 'function') {
+                await dup.Save();
+            }
+        }
+    }
+
+    private async handleSlotPolicyBlocked(
+        routine: MJUserRoutineEntity,
+        context: RoutineRunContext,
+        lookupStatus: 'found' | 'not_found' | 'error',
+        reason: string
+    ): Promise<RoutineExecutionSummary> {
+        const wasClaimedInSweep = context.ClaimedPreviousNextRunAt !== undefined;
+        if (lookupStatus === 'error') {
+            if (wasClaimedInSweep) {
+                routine.NextRunAt = context.ClaimedPreviousNextRunAt ?? new Date();
+                routine.Status = 'Active';
+                if (typeof routine.Save === 'function') {
+                    const restored = await routine.Save();
+                    if (!restored) {
+                        this.logError(
+                            `Failed to restore NextRunAt claim for routine "${routine.Name}" (${routine.ID}) after transient policy lookup failure: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`
+                        );
+                    }
+                }
+            }
+            this.log(
+                `Routine "${routine.Name}" (${routine.ID}) deferred on transient policy lookup error (claim restored): ${reason}`,
+                true
+            );
+            return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+        }
+
+        if (wasClaimedInSweep && this.isUnscheduledOneShot(routine)) {
+            routine.Status = 'Disabled';
+            routine.LastRunStatus = 'Skipped';
+            routine.LastCheckedAt = new Date();
+            if (typeof routine.Save === 'function') {
+                const deactivated = await routine.Save();
+                if (!deactivated) {
+                    this.logError(
+                        `Failed to disable one-shot routine "${routine.Name}" (${routine.ID}) after policy deactivation: ${routine.LatestResult?.CompleteMessage ?? 'unknown'}`
+                    );
+                }
+            }
+        }
+        this.log(`Routine "${routine.Name}" (${routine.ID}) blocked by active policy gate: ${reason}`, true);
+        return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
+    }
+
     private async executeRoutine(
         routine: MJUserRoutineEntity,
-        context: RoutineRunContext
+        context: RoutineRunContext,
+        preResolvedOwnerUser?: UserInfo
     ): Promise<RoutineExecutionSummary> {
         const contextUser = context.ContextUser;
-        const ownerUser = await this.resolveRoutineOwnerUser(routine, contextUser);
+        // Always revalidate live active policy right when this execution slot starts (even if
+        // sweep-level batch verification passed earlier), so a policy paused/disabled while the
+        // routine waited in the concurrency queue yields zero runs.
+        if (this.requiresAgentCoordinationPolicy(routine)) {
+            if (!routine.TargetID || !routine.UserID) {
+                return this.handleSlotPolicyBlocked(
+                    routine,
+                    context,
+                    'not_found',
+                    'TargetID or UserID missing for policy gate.'
+                );
+            }
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                routine.TargetID,
+                routine.UserID,
+                contextUser,
+                { bypassCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return this.handleSlotPolicyBlocked(
+                    routine,
+                    context,
+                    policyEval.LookupStatus,
+                    policyEval.Reason
+                );
+            }
+        }
+
+        const ownerUser = preResolvedOwnerUser ?? (await this.resolveRoutineOwnerUser(routine, contextUser));
 
         let gateResult: WakeGateEvaluationResult | undefined;
         if (!context.BypassWakeGate && (routine.WakeConfiguration || routine.WakeConfigurationObject)) {
@@ -431,6 +1035,14 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 }
                 return { RoutineID: routine.ID, RunStatus: 'Skipped', Notified: false };
             }
+        }
+
+        if (routine.RoutineType === 'AgentWake') {
+            EventWakeCoalescer.Instance.RecordWakeDispatched(
+                routine.UserID,
+                this.extractRoutineApplicationID(routine),
+                new Date()
+            );
         }
 
         const run = await this.createRunRow(routine, contextUser);
@@ -531,7 +1143,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<MJUserRoutineRunEntity> {
-        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+        const md = getEntityMetadataAccessor(provider);
         const run = await md.GetEntityObject<MJUserRoutineRunEntity>('MJ: User Routine Runs', contextUser);
         run.NewRecord();
         run.RoutineID = routine.ID;
@@ -635,6 +1247,26 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         routine.LastCheckedAt = run.CompletedAt ?? new Date();
         routine.LastRunStatus = run.Status;
         routine.LastResultHash = run.ResultHash;
+        if (routine.RoutineType === 'AgentWake' && routine.NextRunAt == null) {
+            const wakeConfig =
+                routine.WakeConfigurationObject ??
+                (routine.WakeConfiguration
+                    ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration)
+                    : null);
+            const currentResume = (wakeConfig?.resumeState as CoalescedWakeResumeState | undefined) ?? {};
+            const consumedResume: CoalescedWakeResumeState = {
+                ...currentResume,
+                batchConsumed: true,
+                lastDispatchedAt: run.StartedAt.toISOString(),
+                coalescedEventCount: 0,
+                overflowEventCount: 0,
+                pendingEvents: [],
+            };
+            routine.WakeConfigurationObject = {
+                ...(wakeConfig ?? {}),
+                resumeState: consumedResume,
+            };
+        }
         if ((routine.ScheduleMode === 'OneShot') && routine.NextRunAt == null && (!routine.CronExpression || routine.CronExpression.trim().length === 0)) {
             routine.Status = 'Disabled';
         }
@@ -691,23 +1323,59 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * When no conversation can be resolved, the run falls back to standalone `RunAgent`
      * — identical outcome recording, just no conversation thread.
      */
+    /**
+     * Resolves a routine's agent `TargetID` to the user's active primary derived instance
+     * (`IsPrimaryInstance = 1`) when `TargetID` points to a root/template agent such as
+     * `Chief of Staff` (`InstantiationMode = 'Required'`). Leaves concrete derived instances
+     * and non-instantiated targets untouched.
+     */
+    private async resolveRoutineTargetAgentId(
+        targetAgentId: string,
+        userId: string | null | undefined,
+        contextUser: UserInfo
+    ): Promise<string> {
+        if (!targetAgentId || !userId) {
+            return targetAgentId;
+        }
+        try {
+            if (typeof AgentWakeTriggerService?.Instance?.ResolvePrimaryUserAgentInstance === 'function') {
+                const resolved = await AgentWakeTriggerService.Instance.ResolvePrimaryUserAgentInstance(
+                    targetAgentId,
+                    userId,
+                    contextUser
+                );
+                if (resolved?.ID) {
+                    return resolved.ID;
+                }
+            }
+        } catch {
+            // Graceful fallback to original targetAgentId when service is unavailable in isolated tests
+        }
+        return targetAgentId;
+    }
+
     private async executeAgentTarget(
         routine: MJUserRoutineEntity,
         contextUser: UserInfo,
         heartbeat?: () => Promise<void>,
         gateResult?: WakeGateEvaluationResult
     ): Promise<RoutineTargetOutcome> {
-        const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+        const md = getEntityMetadataAccessor();
+        const effectiveAgentId = await this.resolveRoutineTargetAgentId(
+            routine.TargetID,
+            routine.UserID ?? contextUser.ID,
+            contextUser
+        );
         const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
-        if (!await agent.Load(routine.TargetID)) {
-            throw new Error(`Agent ${routine.TargetID} not found for routine "${routine.Name}"`);
+        if (!await agent.Load(effectiveAgentId)) {
+            throw new Error(`Agent ${effectiveAgentId} not found for routine "${routine.Name}"`);
         }
 
         const wakeConfig = routine.WakeConfigurationObject ??
             (routine.WakeConfiguration ? SafeJSONParse<MJUserRoutineEntity_IRoutineWakeConfiguration>(routine.WakeConfiguration) : null);
         const userMessage = routine.InitialMessage ??
             (wakeConfig?.wakeReason ? `Scheduled wake: ${wakeConfig.wakeReason}` : `Run routine "${routine.Name}"`);
-        const basePayload = routine.StartingPayload ? SafeJSONParse<Record<string, unknown>>(routine.StartingPayload) ?? undefined : undefined;
+        const basePayload = routine.StartingPayload ? SafeJSONParse<RoutineJsonObject>(routine.StartingPayload) ?? undefined : undefined;
         const payload = (routine.RoutineType === 'AgentWake' || wakeConfig || gateResult)
             ? {
                 ...(basePayload ?? {}),
@@ -723,6 +1391,13 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             }
             : basePayload;
 
+        const configurationId = await ResolveWakeAgentConfigurationID({
+            routine,
+            wakeConfig,
+            contextUser,
+            metadataProvider: Metadata.Provider, // global-provider-ok: server-global scheduled task
+        });
+
         const runner = new AgentRunner();
         const baseParams = {
             agent,
@@ -731,6 +1406,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             requestedSkillIDs: this.parseRequestedSkillIDs(routine),
             contextUser,
             compactAfterRun: routine.RoutineType === 'AgentWake' ? true : undefined,
+            ...(configurationId ? { configurationId } : {}),
             // Keep the dispatcher job's lease alive while a long agent run makes progress.
             onProgress: () => { void heartbeat?.(); },
         };
@@ -776,7 +1452,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             return routine.ConversationID;
         }
         try {
-            const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+            const md = getEntityMetadataAccessor();
             const app = await this.findRoutinesApplication(owner);
             if (!app) {
                 this.log(`Routines application not found — running "${routine.Name}" standalone (no conversation)`);
@@ -785,13 +1461,19 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', owner);
             conversation.NewRecord();
             conversation.Name = routine.Name;
-            conversation.Type = 'Routine';
+            conversation.TypeID =
+                ConversationEngine.Instance.ResolveConversationTypeID(CONVERSATION_TYPE_CODES.ROUTINE) ??
+                BUILT_IN_CONVERSATION_TYPE_IDS.ROUTINE;
             conversation.UserID = owner.ID;
             conversation.EnvironmentID = routine.EnvironmentID ?? MJEnvironmentEntityExtended.DefaultEnvironmentID;
             conversation.ApplicationScope = 'Application';
             conversation.ApplicationID = app.ID;
             if (routine.TargetType === 'Agent') {
-                conversation.DefaultAgentID = routine.TargetID;
+                conversation.DefaultAgentID = await this.resolveRoutineTargetAgentId(
+                    routine.TargetID,
+                    routine.UserID ?? owner.ID,
+                    owner
+                );
             }
             const routineEntity = md.EntityByName('MJ: User Routines');
             if (routineEntity) {
@@ -830,7 +1512,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         if (!routine.RequestedSkillIDs) {
             return undefined;
         }
-        const parsed = SafeJSONParse<unknown>(routine.RequestedSkillIDs);
+        const parsed = SafeJSONParse<string[]>(routine.RequestedSkillIDs);
         if (Array.isArray(parsed) && parsed.every((v): v is string => typeof v === 'string')) {
             return parsed.length > 0 ? parsed : undefined;
         }
@@ -840,7 +1522,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
 
     /** Run a Prompt target via AIPromptRunner, passing StartingPayload as the data context. */
     private async executePromptTarget(routine: MJUserRoutineEntity, contextUser: UserInfo): Promise<RoutineTargetOutcome> {
-        const md = new Metadata() as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+        const md = getEntityMetadataAccessor();
         const prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('AI Prompts', contextUser);
         if (!await prompt.Load(routine.TargetID)) {
             throw new Error(`Prompt ${routine.TargetID} not found for routine "${routine.Name}"`);
@@ -899,7 +1581,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         if (!routine.StartingPayload) {
             return [];
         }
-        const parsed = SafeJSONParse<Record<string, unknown>>(routine.StartingPayload);
+        const parsed = SafeJSONParse<RoutineJsonObject>(routine.StartingPayload);
         if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
             this.logError(`Routine "${routine.Name}": StartingPayload for an Action target must be a JSON object of param values — ignoring`);
             return [];
@@ -996,45 +1678,54 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
      * NotificationTemplateID when set, else the metadata-seeded default template resolved
      * BY NAME. Falls back to a plain-text body when no template resolves or rendering fails.
      */
-    private async renderNotificationMessage(
+    protected async renderNotificationMessage(
         routine: MJUserRoutineEntity,
         run: MJUserRoutineRunEntity,
         contextUser: UserInfo
     ): Promise<string> {
-        const fallback = this.buildPlainTextMessage(routine, run);
         try {
             await TemplateEngineServer.Instance.Config(false, contextUser);
             const template = this.resolveNotificationTemplate(routine);
             if (!template) {
-                return fallback;
+                return this.buildPlainTextMessage(routine, run);
             }
             // In-app messages prefer the compact Text (Markdown) body when the template
             // provides one — the HTML body is email-styled and belongs to the email channel.
             const content = template.GetHighestPriorityContent('Text') ?? template.GetHighestPriorityContent();
             if (!content) {
-                return fallback;
+                return this.buildPlainTextMessage(routine, run);
             }
+            const isHtml = content.Type?.trim().toLowerCase() === 'html';
+            const rawSummary = run.ResultSummary ?? '';
+            const resultSummary = isHtml ? rawSummary : FormatRoutinePlainResultSummary(rawSummary);
             // BaseEntity getters are not spreadable — GetAll() yields plain objects for the renderer.
             const data = {
                 routine: routine.GetAll(),
                 run: run.GetAll(),
-                resultSummary: run.ResultSummary ?? '',
+                resultSummary,
                 status: run.Status,
             };
-            const rendered = await TemplateEngineServer.Instance.RenderTemplate(template, content, data, true, undefined, { ContextUser: contextUser });
+            const rendered = await TemplateEngineServer.Instance.RenderTemplate(
+                template,
+                content,
+                data,
+                true,
+                undefined,
+                { ContextUser: contextUser, autoescape: isHtml }
+            );
             if (rendered.Success && rendered.Output) {
                 return rendered.Output;
             }
             this.logError(`Template render failed for routine "${routine.Name}": ${rendered.Message ?? 'unknown'} — using plain-text fallback`);
-            return fallback;
+            return this.buildPlainTextMessage(routine, run);
         } catch (error) {
             this.logError(`Template resolution failed for routine "${routine.Name}" — using plain-text fallback`, error);
-            return fallback;
+            return this.buildPlainTextMessage(routine, run);
         }
     }
 
     /** Resolve the routine's template (by ID) or the seeded default (by name) from the template cache. */
-    private resolveNotificationTemplate(routine: MJUserRoutineEntity): MJTemplateEntityExtended | undefined {
+    protected resolveNotificationTemplate(routine: MJUserRoutineEntity): MJTemplateEntityExtended | undefined {
         if (routine.NotificationTemplateID) {
             const own = TemplateEngineServer.Instance.Templates.find(t => UUIDsEqual(t.ID, routine.NotificationTemplateID!));
             if (own) {
@@ -1051,7 +1742,8 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         const statusLine = run.Status === 'Success'
             ? `completed successfully at ${when}.`
             : `failed at ${when}.${run.ErrorMessage ? `\nError: ${run.ErrorMessage}` : ''}`;
-        const summary = run.ResultSummary ? `\n\n${run.ResultSummary}` : '';
+        const formattedSummary = run.ResultSummary ? FormatRoutinePlainResultSummary(run.ResultSummary) : '';
+        const summary = formattedSummary ? `\n\n${formattedSummary}` : '';
         return `Routine "${routine.Name}" ${statusLine}${summary}`;
     }
 
@@ -1108,7 +1800,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         provider?: IMetadataProvider
     ): Promise<boolean> {
         try {
-            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider; // global-provider-ok: server-global scheduled task
+            const md = getEntityMetadataAccessor(provider);
             const notification = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', contextUser);
             notification.NewRecord();
             notification.UserID = userId;

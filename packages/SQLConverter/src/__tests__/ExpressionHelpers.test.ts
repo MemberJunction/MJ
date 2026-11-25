@@ -13,6 +13,12 @@ import {
   RemoveNPrefix,
   RemoveCollate,
   ConvertCommonFunctions,
+  UnquoteBuiltinFunctionCalls,
+  ConvertObjectIdCalls,
+  ConvertLikeCharacterClasses,
+  ConvertTryConvert,
+  HasTryConvert,
+  AddRecursiveToSelfReferencingCtes,
 } from '../rules/ExpressionHelpers.js';
 
 // ---------------------------------------------------------------------------
@@ -154,9 +160,21 @@ describe('convertDateFunctions', () => {
 
   // --- DATEDIFF ---
   describe('DATEDIFF', () => {
-    it('converts DATEDIFF(day, start, end) to EXTRACT(DAY FROM ...)', () => {
+    it('converts DATEDIFF(day, start, end) to a date difference (issue #5920)', () => {
+      // date - date counts midnight boundaries, as T-SQL does, with no time zone involved: the
+      // old EXTRACT(DAY FROM timestamptz - timestamptz) lost a day across a DST change.
       expect(ConvertDateFunctions('DATEDIFF(day, startcol, endcol)'))
-        .toBe('EXTRACT(DAY FROM (endcol::TIMESTAMPTZ - startcol::TIMESTAMPTZ))');
+        .toBe('((endcol)::date - (startcol)::date)');
+    });
+
+    it('converts the issue #5920 weekday expression without a time zone', () => {
+      expect(ConvertDateFunctions("(DATEDIFF(day, '19000101', EffectiveDate) + 1) % 7 + 1"))
+        .toBe("(((EffectiveDate)::date - ('19000101')::date) + 1) % 7 + 1");
+    });
+
+    it('keeps the interval form for DATEDIFF(day) on TIME expressions', () => {
+      expect(ConvertDateFunctions('DATEDIFF(day, CAST(a AS TIME), CAST(b AS TIME))'))
+        .toBe('EXTRACT(DAY FROM (CAST(b AS TIME) - CAST(a AS TIME)))');
     });
 
     it('converts DATEDIFF(month, start, end) to YEAR*12+MONTH pattern', () => {
@@ -186,15 +204,15 @@ describe('convertDateFunctions', () => {
         .toBe('EXTRACT(YEAR FROM AGE(endcol::TIMESTAMPTZ, startcol::TIMESTAMPTZ))');
     });
 
-    it('falls back to DAY extraction for unknown units', () => {
+    it('falls back to a day difference for unknown units', () => {
       // An unrecognized unit hits the default case
       expect(ConvertDateFunctions('DATEDIFF(microsecond, startcol, endcol)'))
-        .toBe('EXTRACT(DAY FROM (endcol::TIMESTAMPTZ - startcol::TIMESTAMPTZ))');
+        .toBe('((endcol)::date - (startcol)::date)');
     });
 
     it('handles abbreviated unit aliases for DATEDIFF', () => {
       expect(ConvertDateFunctions('DATEDIFF(dd, s, e)'))
-        .toBe('EXTRACT(DAY FROM (e::TIMESTAMPTZ - s::TIMESTAMPTZ))');
+        .toBe('((e)::date - (s)::date)');
       expect(ConvertDateFunctions('DATEDIFF(ss, s, e)'))
         .toBe('EXTRACT(EPOCH FROM (e::TIMESTAMPTZ - s::TIMESTAMPTZ))');
     });
@@ -487,6 +505,19 @@ describe('convertTopToLimit', () => {
     expect(result).not.toContain('LIMIT');
     expect(result).toContain('SELECT TOP 10 Name FROM Users');
   });
+
+  it('stops at ELSE boundary so LIMIT does not bleed into the ELSE branch', () => {
+    const input = [
+      'IF cond THEN',
+      '    SELECT TOP 0 * FROM __mj."vwUsers" WHERE 1=0',
+      'ELSE',
+      '    SELECT * FROM __mj."vwUsers" WHERE "ID" = p_ID;',
+      'END IF;',
+    ].join('\n');
+    const result = ConvertTopToLimit(input);
+    expect(result).toContain('WHERE 1=0\nLIMIT 0\nELSE');
+    expect(result).not.toMatch(/WHERE "ID" = p_ID;\s*LIMIT 0/);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -731,6 +762,24 @@ describe('removeNPrefix', () => {
     // RETURN'something' should not be confused — the N is part of RETURN
     expect(RemoveNPrefix("RETURN 'val'")).toBe("RETURN 'val'");
   });
+
+  // Issue #5838: an escaped N-literal inside a stored query is data, not a prefix.
+  it("leaves N''x'' inside a literal alone while stripping the outer prefix", () => {
+    expect(RemoveNPrefix("VALUES (N'SELECT a FROM t WHERE n = N''x''')"))
+      .toBe("VALUES ('SELECT a FROM t WHERE n = N''x''')");
+  });
+
+  it("keeps a trailing N inside a literal (N'BD-3N')", () => {
+    expect(RemoveNPrefix("SET x = N'BD-3N'")).toBe("SET x = 'BD-3N'");
+  });
+
+  it("leaves an N directly after a string literal alone ('a'N'b')", () => {
+    expect(RemoveNPrefix("SET x = 'a'N'b'")).toBe("SET x = 'a'N'b'");
+  });
+
+  it("leaves N' inside a comment alone", () => {
+    expect(RemoveNPrefix("-- see N'x'\nSET y = N'z'")).toBe("-- see N'x'\nSET y = 'z'");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -884,4 +933,120 @@ describe('QuoteConstraintNames — DROP CONSTRAINT IF EXISTS', () => {
         expect(QuoteConstraintNames('ALTER TABLE t ADD CONSTRAINT ck_lower CHECK (x > 0);'))
             .toContain('CONSTRAINT ck_lower');
     });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #5364 items 1 and 2 — quoted built-ins, OBJECT_ID, LIKE character classes
+// ---------------------------------------------------------------------------
+describe('UnquoteBuiltinFunctionCalls', () => {
+  it('unquotes built-in calls that PascalCase quoting turned into identifiers', () => {
+    expect(UnquoteBuiltinFunctionCalls('CHECK ("Code" = "UPPER"("Code"))'))
+      .toBe('CHECK ("Code" = UPPER("Code"))');
+    expect(UnquoteBuiltinFunctionCalls('"LTRIM"("RTRIM"("Name"))'))
+      .toBe('LTRIM(RTRIM("Name"))');
+  });
+
+  it('renames T-SQL-only built-ins to their PostgreSQL names', () => {
+    expect(UnquoteBuiltinFunctionCalls('"LEN"("Code") > 0')).toBe('LENGTH("Code") > 0');
+    expect(UnquoteBuiltinFunctionCalls('"ISNULL"("A", 0)')).toBe('COALESCE("A", 0)');
+  });
+
+  it('leaves schema-qualified calls, quoted columns and string content alone', () => {
+    expect(UnquoteBuiltinFunctionCalls('app."UPPER"("x")')).toBe('app."UPPER"("x")');
+    expect(UnquoteBuiltinFunctionCalls('"Upper" = 1')).toBe('"Upper" = 1');
+    expect(UnquoteBuiltinFunctionCalls(`'"UPPER"(x)'`)).toBe(`'"UPPER"(x)'`);
+    expect(UnquoteBuiltinFunctionCalls('"fnGetRoot"("ID")')).toBe('"fnGetRoot"("ID")');
+  });
+});
+
+describe('ConvertObjectIdCalls', () => {
+  it('converts OBJECT_ID to to_regclass with a quoted object name', () => {
+    expect(ConvertObjectIdCalls(`conrelid = "OBJECT_ID"('__mj_BizAppsAccounting.Account')`))
+      .toBe(`conrelid = to_regclass('__mj_BizAppsAccounting."Account"')`);
+  });
+
+  it('handles bracketed names, N prefixes and the object-type argument', () => {
+    expect(ConvertObjectIdCalls(`OBJECT_ID(N'[app].[Widget]', 'U') IS NULL`))
+      .toBe(`to_regclass('app."Widget"') IS NULL`);
+  });
+});
+
+describe('ConvertLikeCharacterClasses', () => {
+  it('converts NOT LIKE with a negated class to !~ (a CHECK that LIKE would silently void)', () => {
+    expect(ConvertLikeCharacterClasses(`CHECK ("Code" NOT LIKE '%[^A-Z0-9_-]%')`))
+      .toBe(`CHECK ("Code" !~ '[^A-Z0-9_-]')`);
+  });
+
+  it('anchors the regex and translates % and _ outside the class', () => {
+    expect(ConvertLikeCharacterClasses(`"Code" LIKE '[A-Z]_%'`)).toBe(`"Code" ~ '^[A-Z].'`);
+    expect(ConvertLikeCharacterClasses(`"Code" LIKE 'GL.[0-9]'`)).toBe(`"Code" ~ '^GL\\.[0-9]$'`);
+  });
+
+  it('collapses a run of % into one wildcard so the anchors still trim', () => {
+    expect(ConvertLikeCharacterClasses(`"Code" NOT LIKE '%%[^A-Z]%%'`)).toBe(`"Code" !~ '[^A-Z]'`);
+  });
+
+  it('leaves LIKE patterns without a class, and LIKE ... ESCAPE, unchanged', () => {
+    expect(ConvertLikeCharacterClasses(`"Name" LIKE 'Acme%'`)).toBe(`"Name" LIKE 'Acme%'`);
+    expect(ConvertLikeCharacterClasses(`"Name" LIKE '%![x]%' ESCAPE '!'`)).toBe(`"Name" LIKE '%![x]%' ESCAPE '!'`);
+  });
+});
+
+const UUID_GUARD = "~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'";
+
+describe('ConvertTryConvert (issue #5799)', () => {
+  it('turns TRY_CONVERT(UNIQUEIDENTIFIER, x) into a guarded uuid cast', () => {
+    expect(ConvertTryConvert('u.ID = TRY_CONVERT(UNIQUEIDENTIFIER, ta.RecordID)'))
+      .toBe(`u.ID = CASE WHEN (ta.RecordID)::text ${UUID_GUARD} THEN (ta.RecordID)::uuid END`);
+  });
+
+  it('turns integer targets into a guarded integer cast and drops a style argument', () => {
+    expect(ConvertTryConvert('TRY_CONVERT(INT, x)'))
+      .toBe("CASE WHEN btrim((x)::text) ~ '^[+-]?[0-9]+$' THEN (x)::INTEGER END");
+    expect(ConvertTryConvert('TRY_CONVERT(bigint, LEFT(s, 3), 0)'))
+      .toBe("CASE WHEN btrim((LEFT(s, 3))::text) ~ '^[+-]?[0-9]+$' THEN (LEFT(s, 3))::BIGINT END");
+  });
+
+  it('leaves other targets for the caller to report', () => {
+    const sql = 'TRY_CONVERT(DATETIME, x)';
+    expect(ConvertTryConvert(sql)).toBe(sql);
+    expect(HasTryConvert(sql)).toBe(true);
+  });
+
+  it('does not touch TRY_CONVERT inside a string literal or comment', () => {
+    const sql = "SELECT 'TRY_CONVERT(UNIQUEIDENTIFIER, x)' -- TRY_CONVERT(INT, y)";
+    expect(ConvertTryConvert(sql)).toBe(sql);
+    expect(HasTryConvert(sql)).toBe(false);
+  });
+
+  it('ConvertConvertFunction converts TRY_CONVERT before CONVERT', () => {
+    expect(ConvertConvertFunction('TRY_CONVERT(UNIQUEIDENTIFIER, CONVERT(NVARCHAR(36), x))'))
+      .toBe(`CASE WHEN (CAST(x AS VARCHAR(36)))::text ${UUID_GUARD} THEN (CAST(x AS VARCHAR(36)))::uuid END`);
+  });
+});
+
+describe('AddRecursiveToSelfReferencingCtes (issue #5799)', () => {
+  it('adds RECURSIVE when a CTE joins itself', () => {
+    const sql = 'WITH "Tree" AS (SELECT 1 AS "ID" UNION ALL SELECT c."ID" FROM t c INNER JOIN "Tree" p ON c."ParentID" = p."ID") SELECT * FROM "Tree"';
+    expect(AddRecursiveToSelfReferencingCtes(sql)).toMatch(/^WITH RECURSIVE "Tree" AS \(/);
+  });
+
+  it('finds the self-reference in a later CTE of the list', () => {
+    const sql = 'WITH a AS (SELECT 1 AS x), b (x) AS (SELECT x FROM a UNION ALL SELECT x + 1 FROM b WHERE x < 3) SELECT * FROM b';
+    expect(AddRecursiveToSelfReferencingCtes(sql)).toMatch(/^WITH RECURSIVE a AS/);
+  });
+
+  it('leaves a UNION ALL that does not read itself, WITH (NOLOCK), and an existing RECURSIVE alone', () => {
+    const plain = 'WITH a AS (SELECT 1 UNION ALL SELECT 2) SELECT * FROM a';
+    expect(AddRecursiveToSelfReferencingCtes(plain)).toBe(plain);
+    const hint = 'SELECT * FROM t WITH (NOLOCK)';
+    expect(AddRecursiveToSelfReferencingCtes(hint)).toBe(hint);
+    const done = 'WITH RECURSIVE r AS (SELECT 1 UNION ALL SELECT 1 FROM r) SELECT 1';
+    expect(AddRecursiveToSelfReferencingCtes(done)).toBe(done);
+  });
+
+  it('ignores a CTE name that appears only in a string literal', () => {
+    const sql = "WITH a AS (SELECT 'FROM a' AS note) SELECT * FROM a";
+    expect(AddRecursiveToSelfReferencingCtes(sql)).toBe(sql);
+  });
 });

@@ -11,6 +11,12 @@ import { BaseArtifactViewerPluginComponent } from '../../base-artifact-viewer.co
 import { VideoProductionReviewTabComponent } from './video-production-review-tab.component';
 import { VideoProductionStoryboardTabComponent } from './video-production-storyboard-tab.component';
 import { VideoProductionViewerComponent } from './video-production-viewer.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: the viewer's media-token request against a provider double with no GraphQL client, and the invalid-JSON test's parse failure. Any other line fails its test. */
+ExpectConsoleLines({
+  error: [/^Error creating media access token: Cannot read properties of undefined \(reading 'ExecuteGQL'\)/, /^Failed to parse artifact content as JSON: SyntaxError/],
+});
 
 function stubProvider(
   byFileId: Record<string, { Success: boolean; Url?: string; MimeType?: string; ErrorMessage?: string }>,

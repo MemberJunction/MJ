@@ -7,7 +7,7 @@ import { MJTemplateParamEntity, MJAIConfigurationEntity, MJTaskEntity, UserInfoE
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { MJConfirmService } from '@memberjunction/ng-ui-components';
+import { MJConfirmService, IsPhoneViewport, WatchPhoneViewport } from '@memberjunction/ng-ui-components';
 import { ChatMessage } from '@memberjunction/ai';
 import { Subject, Subscription } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -15,6 +15,7 @@ import { ParseJSONRecursive, ParseJSONOptions, UUIDsEqual, EscapeHTML } from '@m
 import {
     ParentTaskIDFromStepOutput,
     ReadPaneSizePair,
+    RememberedBreakpointsStore,
     ToPaneSizePair,
     type PaneSizePair,
 } from '@memberjunction/ng-task-graph-editor';
@@ -228,6 +229,9 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /** The mode of operation - either 'agent' or 'prompt' */
     @Input() Mode: TestHarnessMode = 'agent';
 
+    /** When true, workflow mode initializes with Debug (Start Paused) emphasized as the primary action. */
+    @Input() InitialDebugMode: boolean = false;
+
     /** @deprecated Use {@link Mode}. */
     @Input() set mode(value: TestHarnessMode) {
       this.Mode = value;
@@ -338,6 +342,37 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     private workflowStartingData: Record<string, unknown> | null = null;
     /** Consumed by executeAgent; set only by DebugWorkflow so Pause-after-submit cannot race. */
     private startWorkflowPaused = false;
+
+    /** The person's remembered breakpoints for this workflow, as stable step IDs (#3798). */
+    public RememberedBreakpointStepIDs: string[] = [];
+
+    private readonly rememberedBreakpoints = new RememberedBreakpointsStore({
+        Get: (key) => UserInfoEngine.Instance.GetSetting(key),
+        Set: (key, value) => { void UserInfoEngine.Instance.SetSetting(key, value); },
+    });
+
+    /** Loads the remembered breakpoints for the current agent; called when the agent changes. */
+    private loadRememberedBreakpoints(): void {
+        this.RememberedBreakpointStepIDs = this.entity?.ID ? this.rememberedBreakpoints.Load(this.entity.ID) : [];
+    }
+
+    /** A step's "Remember Breakpoint for Future Runs" was toggled in the debugger. */
+    public OnRememberBreakpointToggled(event: { StepID: string; Remember: boolean }): void {
+        if (!this.entity?.ID) return;
+        this.RememberedBreakpointStepIDs = this.rememberedBreakpoints.Toggle(this.entity.ID, event.StepID, event.Remember);
+        this.cdr.detectChanges();
+    }
+
+    /**
+     * The submit-time debug request: start paused when asked, and start with the remembered breakpoints on a
+     * Debug run. A normal run carries neither, so remembered breakpoints never stop a run nobody is debugging.
+     */
+    public BuildWorkflowDebugRequest(): { paused?: boolean; breakpointStepIDs?: string[] } | undefined {
+        if (!this.startWorkflowPaused) return undefined;
+        return this.RememberedBreakpointStepIDs.length > 0
+            ? { paused: true, breakpointStepIDs: [...this.RememberedBreakpointStepIDs] }
+            : { paused: true };
+    }
     private workflowAttachTimer: ReturnType<typeof setInterval> | null = null;
 
     /** [chat, sidebar] percentages. Restored from `MJ: User Settings`. */
@@ -744,6 +779,46 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
     /** Whether the configuration sidebar is currently visible */
     public ShowSidebar = true;
 
+    /**
+     * Phone width (768px and below). There the chat and the sidebar do not share the screen: the
+     * chat shows, and the sidebar toggle swaps the whole pane to settings and back.
+     */
+    public IsPhone = false;
+
+    /** Stops following the breakpoint; set at init, called from ngOnDestroy. */
+    private stopPhoneWatch: () => void = () => undefined;
+
+    /** The chat pane of the split. Hidden on phones while the sidebar has the screen. */
+    public get ChatPaneVisible(): boolean {
+        return !this.IsPhone || !this.ShowSidebar;
+    }
+
+    /** The sidebar toggle's accessible name: what pressing it does, which differs on phones. */
+    public get SidebarToggleLabel(): string {
+        if (this.IsPhone) return this.ShowSidebar ? 'Back to chat' : 'Show settings';
+        return this.ShowSidebar ? 'Hide sidebar' : 'Show sidebar';
+    }
+
+    /** The sidebar starts open on desktop and closed on phones, where it would take the whole screen. */
+    private get defaultShowSidebar(): boolean {
+        return !this.IsPhone;
+    }
+
+    /**
+     * Records the breakpoint and resets the sidebar to that width's default, so crossing it (a
+     * rotation, a resized window) never leaves a phone on settings or a desktop without the sidebar.
+     */
+    public ApplyPhoneViewport(isPhone: boolean): void {
+        const crossed = isPhone !== this.IsPhone;
+        this.IsPhone = isPhone;
+        if (crossed) this.ShowSidebar = this.defaultShowSidebar;
+    }
+
+    private syncPhoneViewport(): void {
+        this.ApplyPhoneViewport(IsPhoneViewport());
+        this.cdr.markForCheck();
+    }
+
     /** @deprecated Use {@link ShowSidebar}. */
     public get showSidebar() {
       return this.ShowSidebar;
@@ -957,6 +1032,8 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * and initializes the harness to a clean state.
      */
     async ngOnInit() {
+        this.syncPhoneViewport();
+        this.stopPhoneWatch = WatchPhoneViewport(() => this.syncPhoneViewport());
         console.log('🚀 AITestHarnessComponent.ngOnInit');
         console.log('📌 originalPromptRunId:', this.OriginalPromptRunId);
         console.log('🎯 entity:', this.entity);
@@ -970,6 +1047,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         }
         
         this.loadSavedConversations();
+        this.loadRememberedBreakpoints();
         this.subscribeToEvents();
         this.ResetHarness();
         
@@ -1006,6 +1084,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 this.Mode = 'agent';
                 this.loadSavedConversations();
             }
+            this.loadRememberedBreakpoints();
         }
         
         if (changes['isVisible']) {
@@ -1021,6 +1100,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
      * to prevent memory leaks.
      */
     ngOnDestroy() {
+        this.stopPhoneWatch();
         this.destroy$.next();
         this.destroy$.complete();
         if (this.elapsedTimeInterval) {
@@ -1171,7 +1251,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
             }
             
-            // Set default response format from prompt with slight delay for Kendo dropdown
+            // Set default response format from prompt with slight delay for the dropdown
             setTimeout(() => {
                 const format = this.responseFormatOptions.find(f => f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase());
                 if (format) {
@@ -1596,7 +1676,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         this.AgentVariables = [{ name: '', value: '', type: 'string' }];
         this.TemplateVariables = [];
         this.CurrentConversationId = null;
-        this.ShowSidebar = true;
+        this.ShowSidebar = this.defaultShowSidebar;
         // Clear execution data and tracking when explicitly resetting
         this.CurrentAgentRun = null;
         this.lastProcessedRunId = null;
@@ -2089,7 +2169,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 lastRunId: this.lastAgentRunId || undefined,
                 autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
                 configurationId: this.AgentConfigurationId || undefined,
-                taskGraphDebug: this.startWorkflowPaused ? { paused: true } : undefined,
+                taskGraphDebug: this.BuildWorkflowDebugRequest(),
             });
 
             // Stop elapsed time counter
@@ -3587,7 +3667,20 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
         
         // Links
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="markdown-link">$1</a>');
+        // SECURITY: this HTML goes through bypassSecurityTrustHtml, so the URL must be scheme-checked
+        // here — a model response containing [x](javascript:...) would otherwise be click-to-XSS.
+        // Only http:, https: and mailto: become anchors; anything else renders as plain text.
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_fullMatch: string, text: string, url: string) => {
+            try {
+                const scheme = new URL(url, 'https://placeholder.invalid').protocol;
+                if (scheme === 'http:' || scheme === 'https:' || scheme === 'mailto:') {
+                    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="markdown-link">${text}</a>`;
+                }
+            } catch {
+                // Unparseable URL — fall through to plain text
+            }
+            return text;
+        });
         
         // Unordered lists
         html = html.replace(/^[*-+] (.+)$/gm, '<li>$1</li>');

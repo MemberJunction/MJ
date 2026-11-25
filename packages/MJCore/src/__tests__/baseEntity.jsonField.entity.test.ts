@@ -13,7 +13,8 @@
  */
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
-import { BaseEntity, BaseEntityEvent } from '../generic/baseEntity';
+import { MJGlobal } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, EntityField } from '../generic/baseEntity';
 import { EntityInfo } from '../generic/entityInfo';
 import { Metadata } from '../generic/metadata';
 import { ProviderBase } from '../generic/providerBase';
@@ -512,4 +513,96 @@ describe('randomized model check (seeded, deterministic)', () => {
             expect(ToPlainJSON(rec.ConfigObject)).toEqual(shadow);
         });
     }
+});
+
+describe('subclass property setter overrides and custom EntityField overrides', () => {
+    it('routes JSONFieldBinding proxy edits and FlushJSONFieldObjects through overridden subclass setters (including partial set-only overrides)', async () => {
+        // Multi-level subclass: overrides ONLY `set Config(value)` without repeating `get Config()`
+        class AuditingTwoFieldEntity extends TwoFieldEntity {
+            public SetterWriteLog: Array<string | null> = [];
+            override set Config(value: string | null) {
+                this.SetterWriteLog.push(value);
+                super.Config = value;
+            }
+        }
+
+        const rec = new AuditingTwoFieldEntity(productInfo, provider.Provider);
+        await rec.LoadFromData(
+            {
+                ID,
+                Name: 'Row',
+                Config: JSON.stringify(BASE_CONFIG),
+                Settings: null,
+            },
+            true,
+        );
+        expect(rec.SetterWriteLog).toEqual([]);
+
+        // 1. Live proxy mutation routes through `AuditingTwoFieldEntity.set Config` while resolving `get Config` from `TwoFieldEntity`
+        rec.ConfigObject!.Pct = 42;
+        expect(rec.SetterWriteLog).toHaveLength(1);
+        expect(JSON.parse(rec.SetterWriteLog[0]!).Pct).toBe(42);
+        expect(rec.FieldIsDirty('Config')).toBe(true);
+        expect(rec.FieldIsDirty('Name')).toBe(false);
+        expect(await rec.Save()).toBe(true);
+
+        // 2. Un-proxied adopted plain-object mutation flushed during Save() also routes through `set Config`
+        rec.SetterWriteLog = [];
+        const plain: IConfig = ToPlainJSON(rec.ConfigObject!);
+        rec.ConfigObject = plain; // equal to current value -> no write yet
+        expect(rec.SetterWriteLog).toEqual([]);
+        plain.Items.push({ Name: 'unproxied-item', Rate: 0.25 });
+        rec.Set('Name', 'Sibling Edit');
+        rec.Settings = JSON.stringify([{ Key: 'mode', Value: 'sibling' }]);
+        expect(await rec.Save()).toBe(true);
+
+        expect(rec.SetterWriteLog).toHaveLength(1);
+        expect((JSON.parse(rec.SetterWriteLog[0]!) as IConfig).Items.map((i) => i.Name)).toEqual(['a', 'unproxied-item']);
+        expect((savedConfig() as IConfig).Items.map((i) => i.Name)).toEqual(['a', 'unproxied-item']);
+        expect(provider.Saves[provider.Saves.length - 1].Settings).toBe(JSON.stringify([{ Key: 'mode', Value: 'sibling' }]));
+        expect(rec.Get('Name')).toBe('Sibling Edit');
+    });
+
+    it('invokes custom ClassFactory-registered EntityField Value setter overrides when JSONFieldBinding writes', async () => {
+        let customFieldSetterCalls = 0;
+        class CustomConfigEntityField extends EntityField {
+            public override get Value(): unknown {
+                return super.Value;
+            }
+            public override set Value(v: unknown) {
+                customFieldSetterCalls++;
+                super.Value = v;
+            }
+        }
+
+        MJGlobal.Instance.ClassFactory.Register(EntityField, CustomConfigEntityField, `${productInfo.Name}.Config`);
+        const rec = new TwoFieldEntity(productInfo, provider.Provider);
+        await rec.LoadFromData(
+            {
+                ID,
+                Name: 'Row',
+                Config: JSON.stringify(BASE_CONFIG),
+                Settings: null,
+            },
+            true,
+        );
+        // Hydrate fields and reset the counter after initial hydration
+        expect(rec.GetFieldByName('Config')).toBeInstanceOf(CustomConfigEntityField);
+        customFieldSetterCalls = 0;
+
+        // Proxy write invokes CustomConfigEntityField.set Value and marks Config dirty
+        rec.ConfigObject!.Pct = 88;
+        expect(customFieldSetterCalls).toBe(1);
+        expect(rec.FieldIsDirty('Config')).toBe(true);
+        expect(await rec.Save()).toBe(true);
+
+        // FlushJSONFieldObjects on un-proxied adopted object also invokes CustomConfigEntityField.set Value
+        const plain: IConfig = JSON.parse(rec.Config!);
+        rec.ConfigObject = plain;
+        customFieldSetterCalls = 0;
+        plain.Pct = 95;
+        expect(await rec.Save()).toBe(true);
+        expect(customFieldSetterCalls).toBeGreaterThanOrEqual(1);
+        expect((savedConfig() as IConfig).Pct).toBe(95);
+    });
 });

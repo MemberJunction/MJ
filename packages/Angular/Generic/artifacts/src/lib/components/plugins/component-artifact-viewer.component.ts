@@ -1,7 +1,8 @@
-import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnInit, Output, EventEmitter, ChangeDetectorRef, Type } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
-import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
-import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
+import { BaseArtifactViewerPluginComponent, ArtifactViewerTab, IArtifactVersionDiffViewer } from '../base-artifact-viewer.component';
+import { ComponentVersionDiffComponent } from '../version-diff/component-version-diff.component';
+import { MJReactComponent, AngularAdapterService, PdfOrientation } from '@memberjunction/ng-react';
 import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
   isFormRole, IsFormPanelRole, getDeclaredFormEntityName, GetDeclaredFormContribution, StripJoinFieldBrackets,
@@ -11,6 +12,7 @@ import {
   BuildFormPanelHostProps, ContributionSpecToRegistration, ResolveContributionKey,
 } from '@memberjunction/ng-base-forms';
 import { BaseEntity, CompositeKey, DataSnapshot, EntityInfo, LogError, RunView } from '@memberjunction/core';
+import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 import { DataRequirementsViewerComponent } from './data-requirements-viewer/data-requirements-viewer.component';
 import { EvaluateComponentPermissions, PermissionEvaluationResult } from './component-permission-evaluation';
@@ -30,7 +32,7 @@ import { EvaluateComponentPermissions, PermissionEvaluationResult } from './comp
   styleUrls: ['./component-artifact-viewer.component.css']
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
-export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
+export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit {
   @ViewChild('reactComponent') ReactComponent?: MJReactComponent;
 
   /** @deprecated Use {@link ReactComponent}. */
@@ -313,15 +315,34 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     super();
   }
 
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    // When artifactVersion input changes, reload the component spec
-    if (changes['artifactVersion']) {
-      this.loadComponentSpec();
-      // Notify parent that tabs may have changed (on subsequent changes)
-      if (!changes['artifactVersion'].firstChange) {
-        this.tabsChanged.emit();
-      }
+  protected override onArtifactVersionChanged(
+    _previous: MJArtifactVersionEntity | undefined,
+    _current: MJArtifactVersionEntity,
+    isFirstChange: boolean,
+  ): void {
+    this.loadComponentSpec();
+    if (!isFirstChange) {
+      this.tabsChanged.emit();
     }
+  }
+
+  protected override onGuestSnapshotModeChanged(guestMode: boolean): void {
+    if (guestMode) {
+      this.failClosedGuestSnapshot();
+      this.cdr.markForCheck();
+    }
+  }
+
+  private failClosedGuestSnapshot(): void {
+    this._cachedResolvedSpec = null;
+    this.Component = null;
+    this.ComponentCode = '';
+    this.ComponentName = '';
+    this.IsFormArtifact = false;
+    this.PermissionResult = null;
+    this.HasError = true;
+    this.errorMessage = 'Interactive Component Artifacts Disabled in Guest Mode';
+    this.ErrorDetails = 'Interactive Component artifacts execute dynamic client code and cannot run inside an external Frozen guest snapshot session.';
   }
 
   /**
@@ -335,6 +356,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * fires for the first time.
    */
   private loadComponentSpec(): void {
+    if (this.isGuestSnapshotMode) {
+      this.failClosedGuestSnapshot();
+      return;
+    }
     try {
       // Clear cached resolved spec from previous version so stale data doesn't persist
       this._cachedResolvedSpec = null;
@@ -372,7 +397,21 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
 
     const provider = this.ProviderToUse;
     const currentUser = provider.CurrentUser;
-    if (!currentUser) return; // No user context — skip check
+    if (!currentUser) {
+      // Fail closed when user context is unavailable so unverified React components cannot mount.
+      const missingEntities = (spec.dataRequirements?.entities ?? [])
+        .map((e) => e.name)
+        .filter((n): n is string => Boolean(n));
+      const missingQueries = (spec.dataRequirements?.queries ?? [])
+        .map((q) => q.name)
+        .filter((n): n is string => Boolean(n));
+      this.PermissionResult = {
+        canRun: false,
+        missingEntities: missingEntities.length > 0 ? missingEntities : ['(User context unavailable)'],
+        missingQueries,
+      };
+      return;
+    }
 
     this.PermissionResult = EvaluateComponentPermissions(spec, currentUser, provider);
   }
@@ -394,6 +433,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * The async adapter initialization happens here and doesn't block tab availability.
    */
   async ngOnInit(): Promise<void> {
+    if (this.isGuestSnapshotMode) {
+      this.failClosedGuestSnapshot();
+      return;
+    }
     // Initialize Angular adapter for React components (async operation)
     try {
       await this.adapter.initialize();
@@ -521,20 +564,20 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     return this.OnReactComponentInitialized();
   }
 
-  OnComponentEvent(event: unknown): void {
+  OnComponentEvent(event: { type?: string; payload?: { error?: string; source?: string } } | object | string | number | boolean | null | undefined): void {
     console.log('Component event:', event);
 
     // Handle error events from React component
     if (event && typeof event === 'object' && 'type' in event && event.type === 'error') {
-      const errorEvent = event as { type: 'error'; payload: { error: string; source: string } };
+      const errorEvent = event as { type: 'error'; payload?: { error?: string; source?: string } };
       this.HasError = true;
       this.errorMessage = 'Component Failed to Load';
-      this.ErrorDetails = errorEvent.payload.error || 'Unknown error occurred while loading the component';
+      this.ErrorDetails = errorEvent.payload?.error || 'Unknown error occurred while loading the component';
     }
   }
 
   /** @deprecated Use {@link OnComponentEvent}. */
-  onComponentEvent(event: unknown): void {
+  onComponentEvent(event: { type?: string; payload?: { error?: string; source?: string } } | object | string | number | boolean | null | undefined): void {
     return this.OnComponentEvent(event);
   }
 
@@ -598,6 +641,27 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   public override AskUserForFeedback(): void {
     this.ShowFeedbackPanel = !this.ShowFeedbackPanel;
+  }
+
+  /**
+   * Component artifacts export as a PDF once the component has rendered on the default path.
+   * Form-role components (record pickers, apply flows) are left out.
+   */
+  public override get SupportsPDFExport(): boolean {
+    return !!this.ReactComponent && !!this.ResolvedComponentSpec;
+  }
+
+  /** Download the rendered component as a PDF. Called from the artifact viewer header button. */
+  public override async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
+    await this.ReactComponent?.CapturePDF(orientation);
+  }
+
+  public override get SupportsVersionDiff(): boolean {
+    return true;
+  }
+
+  public override GetVersionDiffComponentType(): Type<IArtifactVersionDiffViewer> {
+    return ComponentVersionDiffComponent;
   }
 
   // ════════════════════════════════════════════════════════════════════
@@ -795,6 +859,12 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       LogError(`ComponentArtifactViewer: picker search failed: ${err instanceof Error ? err.message : String(err)}`);
       this.RecordSearchResults = [];
     }
+  }
+
+  /** Handle search input event from template without $any() casts. */
+  public OnPickerSearchInputEvent(event: Event): void {
+    const inputEl = event.target as HTMLInputElement | null;
+    void this.OnPickerSearchInput(inputEl?.value ?? '');
   }
 
   /** @deprecated Use {@link OnPickerSearchInput}. */

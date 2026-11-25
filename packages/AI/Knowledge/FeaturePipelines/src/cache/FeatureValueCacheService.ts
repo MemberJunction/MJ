@@ -4,7 +4,7 @@
  * @module @memberjunction/feature-pipelines
  */
 
-import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString } from '@memberjunction/global';
+import { BaseSingleton, Canonicalize, ComputeContentHashAsync, EscapeSQLString, NormalizeUUID } from '@memberjunction/global';
 import { IMetadataProvider, LogError, Metadata, RunView, type RunViewParams, UserInfo } from '@memberjunction/core';
 import type { ValueConstraint } from '../spec/value-constraint.js';
 import { FeatureValueKey, type FeatureValueSource } from '../spec/feature-value-key.js';
@@ -76,7 +76,10 @@ export interface FeatureValueOutputItem {
 
 /** Parameters for upserting a record's Feature Values, one row per Feature Value key; every key part is required. */
 export interface RecordFeatureValuesParams {
-    recordProcessID: string;
+    /** The pipeline's Record Process; null only for a Human row on a binding scored with no Record Process. */
+    recordProcessID: string | null;
+    /** The scoring binding a Human row overrides; set exactly when `recordProcessID` is null. */
+    mlModelScoringBindingID?: string | null;
     entityID: string;
     recordID: string;
     outputs: FeatureValueOutputItem[];
@@ -104,9 +107,15 @@ export interface RecordFeatureValuesParams {
     provider: IMetadataProvider;
 }
 
-/** One record's Feature Values of one feature in one pipeline, and the user and provider to read or write them with. */
+/**
+ * One record's Feature Values of one feature, and the user and provider to read or write them with. The rows are scoped
+ * by the pipeline's Record Process, or — for a Human row on a binding scored with no Record Process — by the binding.
+ */
 export interface FeatureValueRecordRef {
-    RecordProcessID: string;
+    /** The pipeline's Record Process; null only for a Human row on a binding scored with no Record Process. */
+    RecordProcessID: string | null;
+    /** The scoring binding a Human row overrides; set exactly when RecordProcessID is null. */
+    MLModelScoringBindingID?: string;
     EntityID: string;
     RecordID: string;
     FeatureName: string;
@@ -142,6 +151,52 @@ export interface RecordFeatureValuesOutcome {
     Previous: Record<string, TypedFeatureValue | null>;
 }
 
+/** One record's prediction in a {@link FeatureValueCacheService.RecordModelValues} batch. */
+export interface ModelValueRow {
+    /** The bare record id (F-L3-6). */
+    RecordID: string;
+    /** The prediction in its typed columns (§5.8.1's mapping: score, class, probabilities and drivers JSON). */
+    Value: TypedFeatureValue;
+    /** The predicted class's probability for a classification; null for a regression. */
+    Confidence: number | null;
+    /** Whether the record was in the model's training snapshot. */
+    InTraining: boolean;
+}
+
+/** A batch of one binding's predictions as of one instant, written as `Source = 'Model'` Feature Values. */
+export interface RecordModelValuesParams {
+    /** The binding that defines the prediction feature. */
+    MLModelScoringBindingID: string;
+    /** The binding's target entity. */
+    EntityID: string;
+    /** The binding's feature name. */
+    FeatureName: string;
+    /** `Champion` for the binding's model; `Challenger` for the live challenger mirror. */
+    Role: NonNullable<MJFeatureValueEntity['Role']>;
+    /** The exact model version that scored the batch. */
+    MLModelID: string;
+    /** The `MJ: ML Scoring Runs` row of the run (one per role). */
+    MLScoringRunID: string;
+    /** The scoring as-of instant (00:00 UTC of the run's as-of date): part of the row key, so a same-date re-run replaces. */
+    EffectiveAsOf: Date;
+    /** The Record Process run when that path scored the batch; null otherwise. */
+    ProcessRunID: string | null;
+    /** One prediction per record; a record appears at most once. */
+    Rows: readonly ModelValueRow[];
+    /** The user the rows are read and saved as. */
+    ContextUser: UserInfo;
+    /** The caller's provider; the rows are read and saved through it, in the caller's transaction. */
+    Provider: IMetadataProvider;
+}
+
+/** What {@link FeatureValueCacheService.RecordModelValues} did: rows new on their key, and rows replaced in place. */
+export interface RecordModelValuesOutcome {
+    /** Rows written on a key that held no row. */
+    Inserted: number;
+    /** Rows already on their key (a same as-of date re-run), replaced in place. */
+    Replaced: number;
+}
+
 /** What one output's write did. `RecordWriteOutcome` in `@memberjunction/record-set-processor-base` mirrors it. */
 export type FeatureValueWriteResult = Exclude<keyof RecordFeatureValuesOutcome, 'Previous'>;
 
@@ -154,6 +209,24 @@ export class FeatureValueSaveError extends Error {
     ) {
         super(`FeatureValueCacheService: failed saving Feature Value '${FeatureName}' on record '${RecordID}': ${ProviderMessage}`);
         this.name = 'FeatureValueSaveError';
+    }
+}
+
+/** The key field a {@link FeatureValueKeyError} names. */
+export type FeatureValueKeyField = keyof Pick<MJFeatureValueEntity, 'RecordProcessID' | 'MLModelScoringBindingID' | 'Source' | 'RecordID'>;
+
+/** A Feature Value read or write whose key is malformed, refused before any row is read or saved. */
+export class FeatureValueKeyError extends Error {
+    /**
+     * @param Field - The key field that is missing, misplaced or repeated.
+     * @param Reason - What is wrong with it.
+     */
+    constructor(
+        public readonly Field: FeatureValueKeyField,
+        public readonly Reason: string,
+    ) {
+        super(`FeatureValueCacheService: invalid Feature Value key (${Field}): ${Reason}`);
+        this.name = 'FeatureValueKeyError';
     }
 }
 
@@ -319,7 +392,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             entry.ParametersHash = params.parametersHash;
             entry.KeyHash = params.keyHash;
         }
-        entry.KeyDisplay = params.keyDisplay;
+        // Lookup goes by KeyHash, so shortening the display text is safe; an over-long value would fail the save (#4917).
+        entry.KeyDisplay = FeatureValueCacheService.ClampToLength(params.keyDisplay, FeatureValueCacheService.fieldMaxLength(entry, 'KeyDisplay'));
         entry.KeyJSON = params.keyJSON;
         entry.OutputsJSON = params.outputsJSON;
         entry.Reasoning = params.reasoning ?? null;
@@ -333,6 +407,23 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             throw new Error(`FeatureValueCacheService: failed to save cache entry for keyHash '${params.keyHash}': ${entry.LatestResult?.CompleteMessage || 'unknown error'}`);
         }
         return entry;
+    }
+
+    /**
+     * Shortens `value` to at most `maxLength` characters, ending with `…` when cut.
+     * @param value - The text to fit.
+     * @param maxLength - The column's character limit; 0 or less means unlimited.
+     */
+    public static ClampToLength(value: string, maxLength: number): string {
+        if (maxLength <= 0 || value.length <= maxLength) {
+            return value;
+        }
+        return `${value.substring(0, maxLength - 1)}…`;
+    }
+
+    /** Character limit of a field from entity metadata; 0 when unlimited or unknown. */
+    private static fieldMaxLength(entry: MJFeatureValueCacheEntity, fieldName: string): number {
+        return entry.EntityInfo?.Fields.find(f => f.Name === fieldName)?.MaxLength ?? 0;
     }
 
     /** The row on a store's key, expired or not; null when there is none. */
@@ -358,9 +449,12 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
      * that becomes Active again), its `ComputedAt` and run links are refreshed so it is the latest again (counted
      * Unchanged). A `historyOnly` row is never refreshed. A changed row is updated in place; a new one is inserted.
      * @returns How many outputs were upserted or unchanged, and each feature's latest pipeline value before the call.
-     * @throws FeatureValueSaveError when a row cannot be saved; Error when the rows cannot be read.
+     * A Human row with no Record Process is keyed by its scoring binding instead (§6.2a).
+     * @throws FeatureValueKeyError when the scope is malformed (see {@link AssertKeyedWriteScope}); FeatureValueSaveError
+     * when a row cannot be saved; Error when the rows cannot be read.
      */
     public async RecordFeatureValues(params: RecordFeatureValuesParams): Promise<RecordFeatureValuesOutcome> {
+        FeatureValueCacheService.AssertKeyedWriteScope(params);
         const provider = params.provider;
         const keyed = await Promise.all(params.outputs.map(async (out) => ({
             out,
@@ -369,6 +463,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
                 PipelineVersion: params.pipelineVersion, PromptVersionHash: params.promptVersionHash,
                 AIModelID: params.aiModelID, ParametersHash: params.parametersHash,
                 InputHash: params.inputHash, Source: params.source,
+                MLModelScoringBindingID: params.recordProcessID === null ? params.mlModelScoringBindingID || null : null,
             }),
         })));
         const previous = await this.LoadLatestPipelineValues(params, provider);
@@ -390,6 +485,161 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
+     * Writes a batch of one binding's predictions as `Source = 'Model'` Feature Values, one row per record on the key
+     * `UQ_FeatureValue_ModelRow` (binding, entity, record, as-of instant, role): a row already on its key (a same as-of
+     * date re-run) is replaced in place, value and lineage; any other is inserted. The batch's existing rows are read in
+     * one query; the rows are saved one at a time in the caller's transaction. `ValueKeyHash` stays null, `ComputedAt` is
+     * the write time. An insert that fails on `UQ_FeatureValue_ModelRow` because another run of the binding inserted the
+     * key after this batch's read (two same-day runs) replaces that row, as the later re-run it is, and counts Replaced.
+     * @returns How many rows were inserted and how many replaced.
+     * @throws FeatureValueKeyError when a record appears twice in the batch (nothing is written); FeatureValueSaveError
+     * when a row cannot be saved; Error when the existing rows cannot be read.
+     */
+    public async RecordModelValues(params: RecordModelValuesParams): Promise<RecordModelValuesOutcome> {
+        const outcome: RecordModelValuesOutcome = { Inserted: 0, Replaced: 0 };
+        if (params.Rows.length === 0) {
+            return outcome;
+        }
+        FeatureValueCacheService.AssertDistinctRecords(params.Rows);
+        const existing = await this.LoadModelRows(params);
+        // Sequential, not Promise.all: the caller's entity transaction belongs to one async scope
+        for (const row of params.Rows) {
+            const stored = existing.get(FeatureValueCacheService.recordKey(row.RecordID));
+            outcome[await this.WriteModelRow(params, row, stored)]++;
+        }
+        return outcome;
+    }
+
+    /**
+     * Refuses a model batch that names a record twice: two rows on one key would fail `UQ_FeatureValue_ModelRow`.
+     * @throws FeatureValueKeyError naming the repeated record.
+     */
+    protected static AssertDistinctRecords(rows: readonly ModelValueRow[]): void {
+        const seen = new Set<string>();
+        for (const row of rows) {
+            const key = FeatureValueCacheService.recordKey(row.RecordID);
+            if (seen.has(key)) {
+                throw new FeatureValueKeyError('RecordID', `record '${row.RecordID}' appears more than once in the batch`);
+            }
+            seen.add(key);
+        }
+    }
+
+    /**
+     * The batch's rows already on their model-row key (binding, entity, batch records, as-of instant, role), by record:
+     * one query, read fresh.
+     * @throws Error when the read fails.
+     */
+    protected async LoadModelRows(params: RecordModelValuesParams): Promise<Map<string, MJFeatureValueEntity>> {
+        const records = params.Rows.map((r) => `'${EscapeSQLString(r.RecordID)}'`).join(', ');
+        const res = await RunView.FromMetadataProvider(params.Provider).RunView<MJFeatureValueEntity>({
+            EntityName: 'MJ: Feature Values',
+            ExtraFilter: `Source = 'Model' AND MLModelScoringBindingID = '${EscapeSQLString(NormalizeUUID(params.MLModelScoringBindingID))}'`
+                + ` AND EntityID = '${EscapeSQLString(params.EntityID)}' AND RecordID IN (${records})`
+                + ` AND EffectiveAsOf = '${params.EffectiveAsOf.toISOString()}' AND Role = '${EscapeSQLString(params.Role)}'`,
+            ResultType: 'entity_object',
+            BypassCache: true,
+        }, params.ContextUser);
+        if (!res.Success) {
+            throw new Error(`FeatureValueCacheService: reading the '${params.FeatureName}' predictions of binding '${params.MLModelScoringBindingID}' failed: ${res.ErrorMessage}`);
+        }
+        const byRecord = new Map<string, MJFeatureValueEntity>();
+        for (const row of res.Results || []) {
+            byRecord.set(FeatureValueCacheService.recordKey(row.RecordID), row);
+        }
+        return byRecord;
+    }
+
+    /**
+     * Saves one prediction: replaces `stored` in place, or inserts a new row on its key. An insert that fails on
+     * `UQ_FeatureValue_ModelRow` reads the key again (fresh): a row another run inserted there since this batch's read is
+     * replaced in place, as {@link WriteOne} settles the same race on its key.
+     * @returns 'Replaced' when a row on the key was replaced, 'Inserted' when a new row was saved.
+     * @throws FeatureValueSaveError when the save fails (an insert's, when no row holds the key on the second read).
+     */
+    protected async WriteModelRow(params: RecordModelValuesParams, row: ModelValueRow, stored: MJFeatureValueEntity | undefined): Promise<keyof RecordModelValuesOutcome> {
+        if (stored) {
+            await this.SaveModelRow(params, row, stored);
+            return 'Replaced';
+        }
+        const fv = await params.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', params.ContextUser);
+        fv.NewRecord();
+        this.AssignModelKeyColumns(fv, params, row);
+        this.AssignModelValueColumns(fv, params, row);
+        const failure = await this.SaveFailure(fv);
+        if (failure === null) {
+            return 'Inserted';
+        }
+        const concurrent = failure.includes(FeatureValueCacheService.ModelRowIndexName)
+            ? (await this.LoadModelRows({ ...params, Rows: [row] })).get(FeatureValueCacheService.recordKey(row.RecordID))
+            : undefined;
+        if (!concurrent) {
+            throw new FeatureValueSaveError(params.FeatureName, row.RecordID, failure);
+        }
+        await this.SaveModelRow(params, row, concurrent);
+        return 'Replaced';
+    }
+
+    /** The unique index on a Model row's key (binding, entity, record, as-of instant, role): a second insert fails on it. */
+    protected static readonly ModelRowIndexName = 'UQ_FeatureValue_ModelRow';
+
+    /**
+     * Replaces a stored Model row's value and lineage in place.
+     * @throws FeatureValueSaveError when the save fails.
+     */
+    protected async SaveModelRow(params: RecordModelValuesParams, row: ModelValueRow, stored: MJFeatureValueEntity): Promise<void> {
+        this.AssignModelValueColumns(stored, params, row);
+        const failure = await this.SaveFailure(stored);
+        if (failure !== null) {
+            throw new FeatureValueSaveError(params.FeatureName, row.RecordID, failure);
+        }
+    }
+
+    /** Sets a new Model row's key columns (binding, entity, record, feature, as-of instant, role) and clears the pin. */
+    protected AssignModelKeyColumns(fv: MJFeatureValueEntity, params: RecordModelValuesParams, row: ModelValueRow): void {
+        fv.Source = 'Model';
+        fv.RecordProcessID = null;
+        fv.MLModelScoringBindingID = params.MLModelScoringBindingID;
+        fv.EntityID = params.EntityID;
+        fv.RecordID = row.RecordID;
+        fv.FeatureName = params.FeatureName;
+        fv.EffectiveAsOf = params.EffectiveAsOf;
+        fv.Role = params.Role;
+        fv.ValueKeyHash = null;
+        fv.PipelineVersion = null;
+        fv.PromptID = null;
+        fv.PromptVersionHash = null;
+        fv.ConstraintHash = null;
+        fv.AIModelID = null;
+        fv.ParametersHash = null;
+        fv.InputHash = null;
+    }
+
+    /** Sets a Model row's value, confidence, lineage (model, run, in-training), run link and ComputedAt. */
+    protected AssignModelValueColumns(fv: MJFeatureValueEntity, params: RecordModelValuesParams, row: ModelValueRow): void {
+        fv.ValueText = row.Value.ValueText;
+        fv.ValueNumeric = row.Value.ValueNumeric;
+        fv.ValueBoolean = row.Value.ValueBoolean;
+        fv.ValueDate = row.Value.ValueDate;
+        fv.ValueJSON = row.Value.ValueJSON;
+        fv.Reasoning = null;
+        fv.Confidence = row.Confidence;
+        fv.MLModelID = params.MLModelID;
+        fv.MLScoringRunID = params.MLScoringRunID;
+        fv.InTraining = row.InTraining;
+        fv.ProcessRunID = params.ProcessRunID;
+        fv.ProcessRunDetailID = null;
+        fv.AIPromptRunID = null;
+        fv.FeatureValueCacheID = null;
+        fv.ComputedAt = new Date();
+    }
+
+    /** A record id as the store matches it: case-insensitively, as SQL Server's default collation compares `RecordID`. */
+    private static recordKey(recordID: string): string {
+        return recordID.toLowerCase();
+    }
+
+    /**
      * Writes one output on its key: unchanged, updated in place, or inserted. An unchanged row is saved only when
      * another key holds the feature's latest value (`supersededByAnotherKey`), to make it the latest again. An insert
      * that fails on the key's unique index because a concurrent run stored the same typed value first is Unchanged.
@@ -403,7 +653,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         row: MJFeatureValueEntity | undefined,
         supersededByAnotherKey: boolean
     ): Promise<FeatureValueWriteResult> {
-        const typed = FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
+        const typed = FeatureValueCacheService.StoredValueOf(out);
         const unchanged = !!row && this.IsUnchanged(row, typed, out);
         if (unchanged && !supersededByAnotherKey) {
             return 'Unchanged';
@@ -453,9 +703,10 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             && (row.Confidence ?? null) === (out.confidence ?? null);
     }
 
-    /** Sets a new row's key columns (record, feature, pin, input, source) and its key hash. */
+    /** Sets a new row's key columns (scope, record, feature, pin, input, source, champion role) and its key hash. */
     protected AssignKeyColumns(fv: MJFeatureValueEntity, params: RecordFeatureValuesParams, out: FeatureValueOutputItem, keyHash: string): void {
         fv.RecordProcessID = params.recordProcessID;
+        fv.MLModelScoringBindingID = params.recordProcessID === null ? params.mlModelScoringBindingID || null : null;
         fv.EntityID = params.entityID;
         fv.RecordID = params.recordID;
         fv.FeatureName = out.featureName;
@@ -468,6 +719,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         fv.InputHash = params.inputHash;
         fv.ValueKeyHash = keyHash;
         fv.Source = params.source;
+        fv.Role = 'Champion';
     }
 
     /** Sets a row's value, reasoning, confidence, run links and ComputedAt. */
@@ -488,10 +740,15 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * Each output feature's latest `Source='Pipeline'` value for the record, on any key, by lower-cased feature name,
-     * with the key of the row holding it. One batched round trip, one view per feature.
+     * with the key of the row holding it. One batched round trip, one view per feature; empty for a binding-scoped
+     * write (no Record Process, so no Pipeline row).
      */
     protected async LoadLatestPipelineValues(params: RecordFeatureValuesParams, provider: IMetadataProvider): Promise<Map<string, LatestPipelineValue>> {
         const latest = new Map<string, LatestPipelineValue>();
+        if (params.recordProcessID === null) {
+            // a binding-scoped Human row: Pipeline rows always carry a Record Process, so there is none to read
+            return latest;
+        }
         const rows = await this.readLatestPipelineRows({
             RecordProcessID: params.recordProcessID, EntityID: params.entityID, RecordID: params.recordID,
             FeatureNames: params.outputs.map((o) => o.featureName), ContextUser: params.contextUser, Provider: provider,
@@ -503,9 +760,9 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * The newest `Source='Pipeline'` row of each named feature of a record, by lower-cased feature name (a feature with
-     * none is absent): one batched round trip, one view per feature bounded to its newest row. Shared by
-     * {@link LoadLatestPipelineValues} and {@link GetLatestPipelineValues}.
+     * The newest `Source='Pipeline'` and `Role='Champion'` row of each named feature of a record, by lower-cased feature
+     * name (a feature with none is absent): one batched round trip, one view per feature bounded to its newest row.
+     * Shared by {@link LoadLatestPipelineValues} and {@link GetLatestPipelineValues}.
      * @throws Error naming the feature whose read failed.
      */
     private async readLatestPipelineRows(p: Omit<FeatureValueRecordRef, 'FeatureName'> & { FeatureNames: string[]; ExcludeProcessRunID?: string | null }):
@@ -518,8 +775,8 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         const exclude = p.ExcludeProcessRunID
             ? ` AND (ProcessRunID IS NULL OR ProcessRunID <> '${EscapeSQLString(p.ExcludeProcessRunID)}')`
             : '';
-        const recordFilter = `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
-            + ` AND RecordID = '${EscapeSQLString(p.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')}${exclude}`;
+        const recordFilter = `${FeatureValueCacheService.RecordScopeFilter(p.RecordProcessID, p.MLModelScoringBindingID)} AND EntityID = '${EscapeSQLString(p.EntityID)}'`
+            + ` AND RecordID = '${EscapeSQLString(p.RecordID)}'${FeatureValueCacheService.SourceFilter('Pipeline')} AND Role = 'Champion'${exclude}`;
         const shape = FeatureValueCacheService.LatestValueViewShape();
         const results = await RunView.FromMetadataProvider(p.Provider).RunViews<LatestFeatureValueRow & Pick<MJFeatureValueEntity, 'ValueKeyHash'>>(names.map((name) => ({
             ...shape,
@@ -540,6 +797,11 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return rows;
     }
 
+    /**
+     * The Champion rows of a write's scope (its Record Process, or its binding when it has none) on the given Feature
+     * Value keys, by key; read fresh.
+     * @throws Error when the read fails.
+     */
     protected async LoadByKeyHashes(params: RecordFeatureValuesParams, provider: IMetadataProvider, keyHashes: string[]): Promise<Map<string, MJFeatureValueEntity>> {
         const map = new Map<string, MJFeatureValueEntity>();
         if (keyHashes.length === 0) {
@@ -547,7 +809,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         }
         const res = await RunView.FromMetadataProvider(provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `RecordProcessID = '${EscapeSQLString(params.recordProcessID)}' AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')})`,
+            ExtraFilter: `${FeatureValueCacheService.RecordScopeFilter(params.recordProcessID, params.mlModelScoringBindingID)} AND ValueKeyHash IN (${keyHashes.map((k) => `'${EscapeSQLString(k)}'`).join(', ')}) AND Role = 'Champion'`,
             ResultType: 'entity_object',
             BypassCache: true,
         }, params.contextUser);
@@ -563,9 +825,10 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
     }
 
     /**
-     * The most recent Feature Value of a record and feature from one source, as its typed columns; null when there is
-     * none. Read fresh: the human-value guard decides from it whether a field may be overwritten.
-     * @throws Error when the read fails (a guard that cannot read must not guess "pipeline-owned").
+     * The most recent Champion Feature Value of a record and feature from one source, as its typed columns; null when
+     * there is none. Read fresh: the human-value guard decides from it whether a field may be overwritten.
+     * @throws FeatureValueKeyError when the scope is malformed (see {@link RecordScopeFilter}); Error when the read fails
+     * (a guard that cannot read must not guess "pipeline-owned").
      */
     public async GetLatestValue(p: LatestFeatureValueParams): Promise<TypedFeatureValue | null> {
         const exclude = p.ExcludeProcessRunID
@@ -573,7 +836,7 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             : '';
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<LatestFeatureValueRow>({
             ...FeatureValueCacheService.LatestValueViewShape(),
-            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)}${FeatureValueCacheService.SourceFilter(p.Source)}${exclude}`,
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)}${FeatureValueCacheService.SourceFilter(p.Source)} AND Role = 'Champion'${exclude}`,
             MaxRows: 1,
             SkipTotalRowCount: true,
         }, p.ContextUser);
@@ -599,23 +862,28 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
 
     /**
      * Upserts the record's Human Feature Value for a feature: one per record and feature (the key carries no pin), so a
-     * later observation updates the row in place.
-     * @throws FeatureValueSaveError when the row cannot be saved.
+     * later observation updates the row in place. With no Record Process the row is keyed by, and carries, the scoring
+     * binding it overrides.
+     * @throws FeatureValueKeyError when the scope is malformed; FeatureValueSaveError when the row cannot be saved.
      */
     public async RecordHumanValue(p: RecordHumanValueParams): Promise<void> {
         await this.RecordFeatureValues({
-            recordProcessID: p.RecordProcessID, entityID: p.EntityID, recordID: p.RecordID,
+            recordProcessID: p.RecordProcessID, mlModelScoringBindingID: p.MLModelScoringBindingID || null, entityID: p.EntityID, recordID: p.RecordID,
             outputs: [{ featureName: p.FeatureName, value: p.Value }], processRunID: p.ProcessRunID || null,
             promptVersionHash: null, pipelineVersion: null, aiModelID: null, parametersHash: null, inputHash: null, source: 'Human',
             contextUser: p.ContextUser, provider: p.Provider,
         });
     }
 
-    /** Deletes the record's Human Feature Values of a feature (sequentially, in the caller's transaction); returns how many. */
+    /**
+     * Deletes the record's Champion Human Feature Values of a feature (sequentially, in the caller's transaction) in its
+     * scope — the Record Process, or the binding when there is none; returns how many.
+     * @throws FeatureValueKeyError when the scope is malformed; Error when a row cannot be read or deleted.
+     */
     public async RetireHumanValue(p: FeatureValueRecordRef): Promise<number> {
         const res = await RunView.FromMetadataProvider(p.Provider).RunView<MJFeatureValueEntity>({
             EntityName: 'MJ: Feature Values',
-            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = 'Human'`,
+            ExtraFilter: `${FeatureValueCacheService.RecordFeatureFilter(p)} AND Source = 'Human' AND Role = 'Champion'`,
             ResultType: 'entity_object',
             BypassCache: true,
         }, p.ContextUser);
@@ -649,10 +917,43 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
         return ` AND Source = '${EscapeSQLString(source)}'`;
     }
 
-    /** The SQL filter selecting one record's Feature Values of one feature in one pipeline. */
+    /** The SQL filter selecting one record's Feature Values of one feature in one scope (pipeline, or binding). */
     protected static RecordFeatureFilter(p: FeatureValueRecordRef): string {
-        return `RecordProcessID = '${EscapeSQLString(p.RecordProcessID)}' AND EntityID = '${EscapeSQLString(p.EntityID)}'`
+        return `${FeatureValueCacheService.RecordScopeFilter(p.RecordProcessID, p.MLModelScoringBindingID)} AND EntityID = '${EscapeSQLString(p.EntityID)}'`
             + ` AND RecordID = '${EscapeSQLString(p.RecordID)}' AND FeatureName = '${EscapeSQLString(p.FeatureName)}'`;
+    }
+
+    /**
+     * The SQL filter fragment selecting a scope's Feature Values: `RecordProcessID = '<id>'`, or — with no Record
+     * Process — `RecordProcessID IS NULL AND MLModelScoringBindingID = '<id>'` (never `RecordProcessID = 'null'`).
+     * @throws FeatureValueKeyError when neither or both of the two IDs is set.
+     */
+    protected static RecordScopeFilter(recordProcessID: string | null, bindingID: string | null | undefined): string {
+        if (recordProcessID !== null) {
+            if (bindingID) {
+                throw new FeatureValueKeyError('MLModelScoringBindingID', 'a scoring binding ID is set only on a row with no Record Process');
+            }
+            return `RecordProcessID = '${EscapeSQLString(recordProcessID)}'`;
+        }
+        if (!bindingID) {
+            throw new FeatureValueKeyError('MLModelScoringBindingID', 'a row with no Record Process must name the scoring binding it belongs to');
+        }
+        return `RecordProcessID IS NULL AND MLModelScoringBindingID = '${EscapeSQLString(NormalizeUUID(bindingID))}'`;
+    }
+
+    /**
+     * Refuses a keyed write (`RecordFeatureValues`) whose scope the store cannot hold: a Model row (those are written by
+     * {@link RecordModelValues}), a Pipeline row with no Record Process, or a scope {@link RecordScopeFilter} refuses.
+     * @throws FeatureValueKeyError naming the offending field.
+     */
+    protected static AssertKeyedWriteScope(params: RecordFeatureValuesParams): void {
+        if (params.source === 'Model') {
+            throw new FeatureValueKeyError('Source', "Model rows are written by RecordModelValues, keyed by binding, record, as-of instant and role");
+        }
+        if (params.recordProcessID === null && params.source !== 'Human') {
+            throw new FeatureValueKeyError('RecordProcessID', `a ${params.source} row must carry its Record Process`);
+        }
+        FeatureValueCacheService.RecordScopeFilter(params.recordProcessID, params.mlModelScoringBindingID);
     }
 
     /** A typed Feature Value as a native value: the column that holds it (JSON parsed); null when every column is empty. */
@@ -717,6 +1018,11 @@ export class FeatureValueCacheService extends BaseSingleton<FeatureValueCacheSer
             return { ...empty, ValueDate: new Date(text) };
         }
         return undefined;
+    }
+
+    /** The typed value columns an output is stored with. Unchanged and concurrent-insert checks compare against this. */
+    protected static StoredValueOf(out: FeatureValueOutputItem): TypedFeatureValue {
+        return FeatureValueCacheService.ToTypedValue(out.value, out.constraintType);
     }
 
     /** A copy of a row's typed value columns. */

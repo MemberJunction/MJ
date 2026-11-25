@@ -12,7 +12,7 @@
 import { BaseEntity, CompositeKey, LogError, RunView } from '@memberjunction/core';
 import { MJContentItemEntity, MJFileEntity } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
-import { RegisterClass } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass } from '@memberjunction/global';
 import { ContentVectorInfrastructure } from '@memberjunction/content-autotagging';
 import { IsRouteFailure, RouteVectorRecords } from '../VectorRouting.js';
 import {
@@ -28,6 +28,7 @@ import {
 import { ContentPipelineDeleteMarker } from '../ContentPipelineDeleteMarker.js';
 import { WhereEqual } from '../Filters.js';
 import { IsCallerOwnedUploadURL } from '../UploadLocator.js';
+import { GraphEvidenceRetractor } from '../GraphEvidenceRetractor.js';
 
 /** The registered name for the chunk-level stage. */
 export const DELETE_STAGE = 'Delete';
@@ -79,6 +80,11 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
             removed.push('durable copy');
         }
 
+        const retracted = await this.retractGraphEvidence(record, context);
+        if (retracted) {
+            removed.push(retracted);
+        }
+
         // An item marks its chunks and expanded items; each then runs through this same stage.
         const marked = await this.markDependents(record, context);
         if (marked > 0) {
@@ -97,6 +103,32 @@ export abstract class BaseDeleteStage extends BasePipelineStage {
             removed.push('row');
         }
         return Outcome.Complete(removed.length > 0 ? `removed ${removed.join(', ')}` : 'nothing to remove');
+    }
+
+    /**
+     * Remove the `Inferred` graph edges this record is evidence for, and any synthesized concept that
+     * lost its last source ({@link GraphEvidenceRetractor}). Runs before the record is marked deleted,
+     * so a failure leaves it pending and the next attempt repeats the (idempotent) retraction.
+     * Returns a description of what went, or `null` when there was nothing.
+     */
+    protected async retractGraphEvidence(record: WorkingRecord, context: StageContext): Promise<string | null> {
+        const recordID = record.Identity.RecordID;
+        if (!recordID || context.IsTest) {
+            return null;
+        }
+        try {
+            const retractor = new GraphEvidenceRetractor(context.Provider, context.ContextUser);
+            const result = record.Entity === 'Content Item' ? await retractor.RetractContentItems([recordID]) : await retractor.RetractChunks([recordID]);
+            if (result.EdgesRemoved === 0 && result.ConceptsRemoved === 0) {
+                return null;
+            }
+            return `${result.EdgesRemoved} graph edge(s) and ${result.ConceptsRemoved} orphaned concept(s)`;
+        } catch (error) {
+            throw new TransientStageError(
+                `Retracting graph evidence for '${record.Identity.Key}' failed: ${error instanceof Error ? error.message : String(error)}`,
+                { cause: error },
+            );
+        }
     }
 
     /** Mark whatever depends on this record for deletion. Nothing for a chunk, which is a leaf. */
@@ -297,7 +329,34 @@ export class DeleteStage extends BaseDeleteStage {
                 return true;
             }
         }
-        return false;
+        return this.hasGraphEdges(chunkEntity.ID, chunkID, context);
+    }
+
+    /**
+     * Whether a graph edge still names this chunk as an endpoint. Graph edges are polymorphic, so no
+     * foreign key shows them in `RelatedEntities`. Retraction has already removed the `Inferred` edges
+     * the Graph stage wrote; what is left was placed by a person (`Declared`), and deleting the row
+     * would leave that edge pointing at nothing, so the chunk stays as a tombstone instead.
+     */
+    private async hasGraphEdges(chunkEntityID: string, chunkID: string, context: StageContext): Promise<boolean> {
+        if (!context.Provider.EntityByName('MJ: Graph Edges')) {
+            return false; // No graph on this provider, so nothing can point at the chunk.
+        }
+        const entity = `'${EscapeSQLString(chunkEntityID)}'`;
+        const record = `'${EscapeSQLString(chunkID)}'`;
+        const result = await RunView.FromMetadataProvider(context.Provider).RunView(
+            {
+                EntityName: 'MJ: Graph Edges',
+                ExtraFilter:
+                    `([SourceEntityID] = ${entity} AND [SourceRecordID] = ${record}) OR ` +
+                    `([TargetEntityID] = ${entity} AND [TargetRecordID] = ${record})`,
+                ResultType: 'count_only',
+                BypassCache: true,
+            },
+            context.ContextUser,
+        );
+        // A failed check counts as referenced, as for foreign keys above.
+        return !result.Success || (result.TotalRowCount ?? 0) > 0;
     }
 }
 

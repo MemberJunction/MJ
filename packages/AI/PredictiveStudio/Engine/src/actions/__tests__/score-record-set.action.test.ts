@@ -6,32 +6,27 @@ import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import { PredictiveStudioScoreRecordSetAction } from '../score-record-set.action';
 import { ProductionScoreRecordSetRunner } from '../score-record-set.runner';
 import { ModelNotScorableError } from '../../scoring/model-readiness';
-import type {
-  IScoreRecordSetRunner,
-  ScoreRecordSetRequest,
-  ScoreRecordSetResult,
-} from '../score-record-set.action';
-import type { JsonObject } from '../base-predictive-studio.action';
-import type { RecordRef, RecordResult } from '@memberjunction/record-set-processor-base';
-import type { MLInferenceResultPayload } from '../../scoring/ml-model-inference-processor';
-import { LocalArtifactLoader } from '../../scoring/artifact-loader';
+import { ScoringRefusedError } from '../../scoring/scoring-refused-error';
+import type { IScoreRecordSetRunner, ScoredRecordSet, ScoreRecordSetRequest } from '../score-record-set.action';
+import { ConsoleCapture } from '../../__tests__/fakes/console-capture';
+import { ReadCapExceededError } from '../../feature-assembly/read-cap-error';
 
 /**
- * Unit tests for the Score Record Set action. NO live DB, NO live sidecar — the
- * scoring runner is mocked via the action's overridable `createRunner` seam. These
- * prove the action stays thin: param validation (ModelID + scope shape),
- * correctly-mapped delegation to the runner, and result→output-param mapping for
- * both the ephemeral-predictions path and the write-back path.
+ * Unit tests for the Score Record Set action. NO live DB, NO live sidecar — the scoring runner is mocked via the
+ * action's overridable `createRunner` seam. These prove the action stays thin: param validation (ModelID + scope
+ * shape), the request it hands the runner (model, binding, as-of date, scope, user, provider), the scoring run's output
+ * params, and a refused or failed run kept whole (its code, its run and its counts).
  */
 
 /** A captured-call mock runner. */
 class MockRunner implements IScoreRecordSetRunner {
   public LastRequest: ScoreRecordSetRequest | null = null;
   public CallCount = 0;
-  constructor(private readonly result: ScoreRecordSetResult) {}
-  public async run(request: ScoreRecordSetRequest): Promise<ScoreRecordSetResult> {
+  constructor(private readonly result: ScoredRecordSet | Error) {}
+  public async run(request: ScoreRecordSetRequest): Promise<ScoredRecordSet> {
     this.CallCount++;
     this.LastRequest = request;
+    if (this.result instanceof Error) throw this.result;
     return this.result;
   }
 }
@@ -49,110 +44,133 @@ class TestableScoreAction extends PredictiveStudioScoreRecordSetAction {
   }
 }
 
+/** A completed run with `written` Feature Values and these predictions. */
+function completed(written: number, predictions: ScoredRecordSet['Predictions'] = []): ScoredRecordSet {
+  return {
+    Result: { Status: 'completed', ScoringRunID: 'run-1', ModelID: 'model-7', ModelVersion: 2, ArtifactSha256: 'a'.repeat(64), Total: Math.max(written, predictions.length), Written: written, DryRun: false },
+    Predictions: predictions,
+  };
+}
+
 function params(list: ActionParam[]): RunActionParams {
-  // Server-side scoring is user-scoped: the action requires a ContextUser (M4).
-  // A stub user is sufficient here — the runner is mocked, so no real data access
-  // occurs; this just lets the action pass its ContextUser guard and delegate.
+  // Server-side scoring is user-scoped: the action requires a ContextUser. A stub user is enough: the runner is mocked.
   return { Params: list, ContextUser: { ID: 'test-user' } } as unknown as RunActionParams;
 }
 function out(p: RunActionParams, name: string): unknown {
   return p.Params.find((x) => x.Name === name)?.Value;
 }
+const scoreParams = (extra: ActionParam[] = []): RunActionParams => params([
+  { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
+  { Name: 'Scope', Type: 'Input', Value: { records: ['r1'] } },
+  ...extra,
+]);
 
 describe('PredictiveStudioScoreRecordSetAction — validation', () => {
   it('fails when ModelID is missing', async () => {
-    const runner = new MockRunner({ scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false });
-    const result = await new TestableScoreAction(runner).run(
-      params([{ Name: 'Scope', Type: 'Input', Value: { records: ['r1'] } }]),
-    );
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('VALIDATION_ERROR');
-    expect(runner.CallCount).toBe(0);
+    const runner = new MockRunner(completed(0));
+    const result = await new TestableScoreAction(runner).run(params([{ Name: 'Scope', Type: 'Input', Value: { records: ['r1'] } }]));
+    expect([result.Success, result.ResultCode, runner.CallCount]).toEqual([false, 'VALIDATION_ERROR', 0]);
   });
 
   it('fails when Scope is missing entirely', async () => {
-    const runner = new MockRunner({ scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false });
-    const result = await new TestableScoreAction(runner).run(
-      params([{ Name: 'ModelID', Type: 'Input', Value: 'model-1' }]),
-    );
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('VALIDATION_ERROR');
-    expect(runner.CallCount).toBe(0);
+    const runner = new MockRunner(completed(0));
+    const result = await new TestableScoreAction(runner).run(params([{ Name: 'ModelID', Type: 'Input', Value: 'm1' }]));
+    expect([result.Success, result.ResultCode, runner.CallCount]).toEqual([false, 'VALIDATION_ERROR', 0]);
   });
 
-  it('fails when Scope populates no selector', async () => {
-    const runner = new MockRunner({ scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false });
-    const result = await new TestableScoreAction(runner).run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-        { Name: 'Scope', Type: 'Input', Value: {} },
-      ]),
-    );
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('VALIDATION_ERROR');
+  it('fails when Scope populates no selector, or more than one', async () => {
+    const runner = new MockRunner(completed(0));
+    for (const scope of [{ records: [] }, { records: ['r1'], viewId: 'v1' }]) {
+      const result = await new TestableScoreAction(runner).run(params([{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'Scope', Type: 'Input', Value: scope }]));
+      expect(result.ResultCode).toBe('VALIDATION_ERROR');
+    }
     expect(runner.CallCount).toBe(0);
   });
 });
 
-describe('PredictiveStudioScoreRecordSetAction — ephemeral predictions', () => {
-  it('delegates to the runner with the mapped model + scope and returns ephemeral predictions', async () => {
-    const runner = new MockRunner({
-      scoredCount: 2,
-      failedCount: 0,
-      skippedCount: 0,
-      wroteBack: false,
-      predictions: [
-        { recordId: 'r1', score: 0.9, class: 'churn' },
-        { recordId: 'r2', score: 0.1, class: 'retain' },
-      ],
-    });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
-      { Name: 'Scope', Type: 'Input', Value: { filter: { entityName: 'Members', extraFilter: "Status='Active'" } } },
-    ]);
-
+describe('PredictiveStudioScoreRecordSetAction — a completed run', () => {
+  it('without a BindingID hands the runner the model and scope and returns the run and its predictions', async () => {
+    const runner = new MockRunner(completed(0, [{ recordId: 'r1', score: 0.9, class: 'churn', adverseProbability: 0.9, inTraining: false }]));
+    const p = scoreParams();
     const result = await new TestableScoreAction(runner).run(p);
-
-    expect(runner.CallCount).toBe(1);
-    expect(runner.LastRequest?.modelId).toBe('model-7');
-    expect(runner.LastRequest?.scope.filter?.entityName).toBe('Members');
-    expect(runner.LastRequest?.writeBack).toBeUndefined();
-
     expect(result.Success).toBe(true);
-    expect(out(p, 'ScoredCount')).toBe(2);
-    expect(out(p, 'WroteBack')).toBe(false);
-    const predictions = JSON.parse(out(p, 'Predictions') as string);
-    expect(predictions).toHaveLength(2);
-    expect(predictions[0]).toEqual({ recordId: 'r1', score: 0.9, class: 'churn' });
+    expect([runner.LastRequest?.modelId, runner.LastRequest?.bindingId, runner.LastRequest?.scope]).toEqual(['model-7', undefined, { records: ['r1'] }]);
+    expect([out(p, 'ScoringRunID'), out(p, 'Status'), out(p, 'Total'), out(p, 'Written'), out(p, 'Failed')]).toEqual(['run-1', 'completed', 1, 0, 0]);
+    expect(JSON.parse(String(out(p, 'Predictions')))).toEqual([{ recordId: 'r1', score: 0.9, class: 'churn', adverseProbability: 0.9, inTraining: false }]);
+    expect(result.Message).toContain('run-1');
+  });
+
+  it('with a BindingID and AsOfDate passes both and reports what it wrote', async () => {
+    const runner = new MockRunner(completed(3));
+    const p = scoreParams([{ Name: 'BindingID', Type: 'Input', Value: 'binding-1' }, { Name: 'AsOfDate', Type: 'Input', Value: '2026-03-01' }]);
+    const result = await new TestableScoreAction(runner).run(p);
+    expect([runner.LastRequest?.bindingId, runner.LastRequest?.asOfDate]).toEqual(['binding-1', '2026-03-01']);
+    expect([result.Success, out(p, 'Written')]).toEqual([true, 3]);
+    expect(result.Message).toContain('wrote 3 Feature Value(s)');
   });
 
   it('accepts a JSON-string Scope param', async () => {
-    const runner = new MockRunner({ scoredCount: 1, failedCount: 0, skippedCount: 0, wroteBack: false, predictions: [{ score: 0.5 }] });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'Scope', Type: 'Input', Value: JSON.stringify({ records: ['rec-1'] }) },
-    ]);
+    const runner = new MockRunner(completed(0));
+    await new TestableScoreAction(runner).run(params([{ Name: 'ModelID', Type: 'Input', Value: 'm1' }, { Name: 'Scope', Type: 'Input', Value: JSON.stringify({ records: ['rec-1'] }) }]));
+    expect(runner.LastRequest?.scope).toEqual({ records: ['rec-1'] });
+  });
+});
+
+describe('PredictiveStudioScoreRecordSetAction — the inline-predictions limit', () => {
+  it('limits a predict-only call (no BindingID) to MAX_INLINE_PREDICTIONS: its predictions return to the caller', async () => {
+    const runner = new MockRunner(completed(0));
+    await new TestableScoreAction(runner).run(scoreParams());
+    expect(runner.LastRequest?.maxInlinePredictions).toBe(PredictiveStudioScoreRecordSetAction.MAX_INLINE_PREDICTIONS);
+  });
+
+  it('sets no limit when scoring through a binding (the values are written, not returned)', async () => {
+    const runner = new MockRunner(completed(3));
+    await new TestableScoreAction(runner).run(scoreParams([{ Name: 'BindingID', Type: 'Input', Value: 'binding-1' }]));
+    expect(runner.LastRequest?.maxInlinePredictions).toBeUndefined();
+  });
+
+  it('fails a scope over the limit with READ_CAP_EXCEEDED and the runner\'s message', async () => {
+    const errors = ConsoleCapture.Errors();
+    const refusal = ReadCapExceededError.ForInlinePredictions('Memberships', 250, 16776);
+    const result = await new TestableScoreAction(new MockRunner(refusal)).run(scoreParams());
+    expect([result.Success, result.ResultCode]).toEqual([false, 'READ_CAP_EXCEEDED']);
+    expect(result.Message).toContain('16776');
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining('16776')]);
+  });
+});
+
+describe('PredictiveStudioScoreRecordSetAction — a run that does not complete keeps its result', () => {
+  it('a refused run fails with the refusal code and keeps the run as outputs', async () => {
+    const runner = new MockRunner(new ScoringRefusedError({ Status: 'refused', ScoringRunID: 'run-9', ModelID: null, Reason: { kind: 'binding-withdrawn', bindingId: 'b1' } }));
+    const p = scoreParams();
     const result = await new TestableScoreAction(runner).run(p);
-    expect(result.Success).toBe(true);
-    expect(runner.LastRequest?.scope.records).toEqual(['rec-1']);
+    expect([result.Success, result.ResultCode]).toEqual([false, 'BINDING_WITHDRAWN']);
+    expect([out(p, 'ScoringRunID'), out(p, 'Status'), out(p, 'Written')]).toEqual(['run-9', 'refused', 0]);
+    expect(result.Message).toContain('run-9');
+  });
+
+  it('a failed run fails with SCORING_RUN_FAILED and its counts', async () => {
+    const runner = new MockRunner(new ScoringRefusedError({ Status: 'failed', ScoringRunID: 'run-8', ModelID: 'm1', ModelVersion: 1, Total: 10, Failed: 4, FirstErrors: [{ recordId: 'r5', message: 'boom' }] }));
+    const p = scoreParams();
+    const result = await new TestableScoreAction(runner).run(p);
+    expect([result.Success, result.ResultCode, out(p, 'Status'), out(p, 'Total'), out(p, 'Failed')]).toEqual([false, 'SCORING_RUN_FAILED', 'failed', 10, 4]);
+  });
+
+  it('keeps any other refusal error\'s typed code instead of SCORING_FAILED', async () => {
+    const errors = ConsoleCapture.Errors();
+    const result = await new TestableScoreAction(new MockRunner(new ModelNotScorableError('model-7', 'Archived'))).run(scoreParams());
+    expect([result.Success, result.ResultCode]).toEqual([false, 'MODEL_NOT_SCORABLE']);
+    expect(ConsoleCapture.Lines(errors)).toEqual([expect.stringContaining("ML Model 'model-7' is Archived and cannot score records")]);
   });
 });
 
 describe('PredictiveStudioScoreRecordSetAction — provider', () => {
-  const scoreParams = (provider?: IMetadataProvider): RunActionParams => {
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
-      { Name: 'Scope', Type: 'Input', Value: { records: ['r1'] } },
-    ]);
-    p.Provider = provider;
-    return p;
-  };
-  const emptyResult: ScoreRecordSetResult = { scoredCount: 0, failedCount: 0, skippedCount: 0, wroteBack: false, predictions: [] };
-
   it('hands the runner the provider the caller passed', async () => {
-    const runner = new MockRunner(emptyResult);
+    const runner = new MockRunner(completed(0));
     const scoped = { Name: 'scoped' } as unknown as IMetadataProvider; // test double: the mock runner only carries it
-    await new TestableScoreAction(runner).run(scoreParams(scoped));
+    const p = scoreParams();
+    p.Provider = scoped;
+    await new TestableScoreAction(runner).run(p);
     expect(runner.LastRequest?.provider).toBe(scoped);
   });
 
@@ -161,10 +179,9 @@ describe('PredictiveStudioScoreRecordSetAction — provider', () => {
     const global = { Name: 'global' } as unknown as IMetadataProvider; // test double: the mock runner only carries it
     Metadata.Provider = global;
     try {
-      const runner = new MockRunner(emptyResult);
+      const runner = new MockRunner(completed(0));
       const result = await new TestableScoreAction(runner).run(scoreParams());
-      expect(result.Success).toBe(true);
-      expect(runner.LastRequest?.provider).toBe(global);
+      expect([result.Success, runner.LastRequest?.provider]).toEqual([true, global]);
     } finally {
       Metadata.Provider = previous;
     }
@@ -179,227 +196,7 @@ class DefaultRunnerScoreAction extends PredictiveStudioScoreRecordSetAction {
 }
 
 describe('PredictiveStudioScoreRecordSetAction — default runner', () => {
-  it('builds the production runner with a real artifact loader, not the refusing placeholder', () => {
-    const runner = new DefaultRunnerScoreAction().DefaultRunner();
-    if (!(runner instanceof ProductionScoreRecordSetRunner)) {
-      throw new Error('expected the action to build a ProductionScoreRecordSetRunner');
-    }
-    const deps = runner['resolveDeps']();
-    expect(deps.artifactLoader).toBeInstanceOf(LocalArtifactLoader);
-  });
-});
-
-describe('PredictiveStudioScoreRecordSetAction — write-back', () => {
-  it('passes the write-back directive and confirms write-back instead of returning predictions', async () => {
-    const runner = new MockRunner({ scoredCount: 5, failedCount: 0, skippedCount: 0, wroteBack: true });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'Scope', Type: 'Input', Value: { viewId: 'view-1' } },
-      { Name: 'WriteBack', Type: 'Input', Value: { OutputMapping: { column: 'ChurnScore' } } },
-    ]);
-
-    const result = await new TestableScoreAction(runner).run(p);
-
-    expect(runner.LastRequest?.writeBack).toEqual({ OutputMapping: { column: 'ChurnScore' } });
-    expect(result.Success).toBe(true);
-    expect(out(p, 'WroteBack')).toBe(true);
-    expect(out(p, 'ScoredCount')).toBe(5);
-    expect(out(p, 'Predictions')).toBeUndefined();
-    expect(result.Message).toContain('written back');
-  });
-
-  it('treats WriteBack=true as a default-mapping write-back', async () => {
-    const runner = new MockRunner({ scoredCount: 3, failedCount: 0, skippedCount: 0, wroteBack: true });
-    const p = params([
-      { Name: 'ModelID', Type: 'Input', Value: 'model-1' },
-      { Name: 'Scope', Type: 'Input', Value: { listId: '3e9b2f4a-6c1d-4b8e-a7f2-5d0c9e8b1a26' } },
-      { Name: 'WriteBack', Type: 'Input', Value: true },
-    ]);
-    await new TestableScoreAction(runner).run(p);
-    expect(runner.LastRequest?.writeBack).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// C3 — the single-record scope's primary-key FIELD NAMES are untrusted and get
-// interpolated into a SQL filter. The runner must validate each key against the
-// entity's PRIMARY-KEY fields, REJECT any other name (SQL-injection defense, and a
-// non-key field would select an arbitrary row) and require every key field. NO live
-// DB — a minimal metadata provider double supplies a known entity + key set.
-// ---------------------------------------------------------------------------
-
-/** A minimal entity-info double exposing only the members `primaryKeyFilter` reads. */
-function fakeEntity(name: string, fieldNames: string[], primaryKeyNames: string[]) {
-  return { Name: name, Fields: fieldNames.map((n) => ({ Name: n })), PrimaryKeys: primaryKeyNames.map((n) => ({ Name: n })) };
-}
-
-/** A spy provider resolving exactly one entity by (case-insensitive) name. */
-function fakeProvider(name: string, fieldNames: string[], primaryKeyNames: string[]): IMetadataProvider {
-  const entity = fakeEntity(name, fieldNames, primaryKeyNames);
-  return {
-    EntityByName(n: string) {
-      return n.trim().toLowerCase() === name.trim().toLowerCase() ? entity : undefined;
-    },
-  } as unknown as IMetadataProvider;
-}
-
-/** Subclass exposing the protected `primaryKeyFilter` + `summarize` for direct testing. */
-class TestableRunner extends ProductionScoreRecordSetRunner {
-  public buildFilter(entityName: string, pk: JsonObject, provider: IMetadataProvider): string {
-    return this.primaryKeyFilter(entityName, pk, provider);
-  }
-  public summarizeResults(
-    records: RecordRef[],
-    results: RecordResult[],
-    request: ScoreRecordSetRequest,
-    writeBack?: { wroteBack: boolean; failedIndexes: Set<number> },
-  ): ScoreRecordSetResult {
-    // The legacy 3-arg callers in this suite exercise the pure ephemeral/no-write
-    // path; default the write-back outcome to "nothing written" unless supplied.
-    const wb = writeBack ?? { wroteBack: false, failedIndexes: new Set<number>() };
-    // Reach the protected 4-arg `summarize` without widening its public surface.
-    return (this as unknown as {
-      summarize(r: RecordRef[], x: RecordResult[], req: ScoreRecordSetRequest, w: typeof wb): ScoreRecordSetResult;
-    }).summarize(records, results, request, wb);
-  }
-}
-
-describe('ProductionScoreRecordSetRunner.primaryKeyFilter — SQL-injection guard (C3)', () => {
-  const runner = new TestableRunner();
-  const provider = fakeProvider('Customers', ['ID', 'TenantID', 'Status'], ['ID', 'TenantID']);
-  const singleKey = fakeProvider('Accounts', ['ID', 'Status'], ['ID']);
-
-  it('builds a Field=value filter for valid key names (and escapes the value)', () => {
-    const filter = runner.buildFilter('Accounts', { ID: "a'b" }, singleKey);
-    expect(filter).toBe("ID='a''b'");
-  });
-
-  it('combines multiple valid keys with AND', () => {
-    const filter = runner.buildFilter('Customers', { ID: '1', TenantID: '2' }, provider);
-    expect(filter).toBe("ID='1' AND TenantID='2'");
-  });
-
-  it('matches key names case-insensitively and emits the real field name', () => {
-    expect(runner.buildFilter('Accounts', { id: '7' }, singleKey)).toBe("ID='7'");
-  });
-
-  it('REJECTS an unknown key name rather than concatenating it (injection vector)', () => {
-    expect(() =>
-      runner.buildFilter('Customers', { "ID='x' OR 1=1 --": 'y' }, provider),
-    ).toThrow(/is not a primary-key field on entity 'Customers'/);
-  });
-
-  it('REJECTS a real field that is not a primary key (it would score an arbitrary matching row)', () => {
-    expect(() => runner.buildFilter('Accounts', { Status: 'Active' }, singleKey)).toThrow(
-      /'Status' is not a primary-key field on entity 'Accounts'/,
-    );
-  });
-
-  it('REJECTS a composite key with a key field missing', () => {
-    expect(() => runner.buildFilter('Customers', { ID: '1' }, provider)).toThrow(/missing primary-key field\(s\) TenantID/);
-  });
-
-  it('throws when the entity is unknown to metadata', () => {
-    expect(() => runner.buildFilter('Ghosts', { ID: '1' }, provider)).toThrow(/not found in metadata/);
-  });
-
-  it('throws when no primary-key fields are supplied', () => {
-    expect(() => runner.buildFilter('Customers', {}, provider)).toThrow(/no primary-key fields/);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// M2 — the run summary must surface `skippedCount` AND correlate each prediction
-// to its record by the PAIRED record's RecordID (not a bare positional lookup).
-// ---------------------------------------------------------------------------
-
-/** Test double: `summarize` folds results only and never reads the provider. */
-const SUMMARY_PROVIDER = { Name: 'summary-test' } as unknown as IMetadataProvider;
-
-describe('ProductionScoreRecordSetRunner.summarize — counts + RecordID correlation (M2)', () => {
-  const runner = new TestableRunner();
-
-  function ref(id: string): RecordRef {
-    return { EntityID: 'e1', RecordID: id };
-  }
-  function payload(score: number, klass?: string): MLInferenceResultPayload {
-    return { modelId: 'm1', target: 'Churned', problemType: 'classification', score, class: klass, scoredAt: '2026-10-23T00:00:00.000Z' };
-  }
-  function baseRequest(): ScoreRecordSetRequest {
-    return { modelId: 'm1', scope: { records: [] }, provider: SUMMARY_PROVIDER };
-  }
-
-  it('tallies Succeeded / Failed / Skipped into the three count buckets', () => {
-    const records = [ref('a'), ref('b'), ref('c'), ref('d')];
-    const results: RecordResult[] = [
-      { Status: 'Succeeded', ResultPayload: payload(0.9, 'churn') },
-      { Status: 'Failed', ErrorMessage: 'boom' },
-      { Status: 'Skipped' },
-      { Status: 'Succeeded', ResultPayload: payload(0.2, 'retain') },
-    ];
-    const summary = runner.summarizeResults(records, results, baseRequest());
-    expect(summary.scoredCount).toBe(2);
-    expect(summary.failedCount).toBe(1);
-    expect(summary.skippedCount).toBe(1);
-    expect(summary.wroteBack).toBe(false);
-  });
-
-  it('keys each prediction off the PAIRED record RecordID (record-correlated, not array index)', () => {
-    const records = [ref('rec-A'), ref('rec-B')];
-    const results: RecordResult[] = [
-      { Status: 'Succeeded', ResultPayload: payload(0.7, 'yes') },
-      { Status: 'Succeeded', ResultPayload: payload(0.3, 'no') },
-    ];
-    const summary = runner.summarizeResults(records, results, baseRequest());
-    expect(summary.predictions).toEqual([
-      { recordId: 'rec-A', score: 0.7, class: 'yes' },
-      { recordId: 'rec-B', score: 0.3, class: 'no' },
-    ]);
-  });
-
-  it('omits ephemeral predictions when writing back', () => {
-    const records = [ref('a')];
-    const results: RecordResult[] = [{ Status: 'Succeeded', ResultPayload: payload(0.5) }];
-    const summary = runner.summarizeResults(records, results, baseRequest(), {
-      wroteBack: true,
-      failedIndexes: new Set<number>(),
-    });
-    expect(summary.wroteBack).toBe(true);
-    expect(summary.predictions).toBeUndefined();
-  });
-
-  it('reclassifies a scored record whose write-back Save failed (scored -> failed)', () => {
-    const records = [ref('a'), ref('b')];
-    const results: RecordResult[] = [
-      { Status: 'Succeeded', ResultPayload: payload(0.9, 'churn') },
-      { Status: 'Succeeded', ResultPayload: payload(0.1, 'retain') },
-    ];
-    // Record index 1's write-back Save failed — it should move to the failed bucket.
-    const summary = runner.summarizeResults(records, results, baseRequest(), {
-      wroteBack: true,
-      failedIndexes: new Set<number>([1]),
-    });
-    expect(summary.scoredCount).toBe(1);
-    expect(summary.failedCount).toBe(1);
-    expect(summary.wroteBack).toBe(true);
-    expect(summary.predictions).toBeUndefined();
-  });
-});
-
-describe('PredictiveStudioScoreRecordSetAction — refusal codes', () => {
-  it('keeps a refusal\'s typed code instead of SCORING_FAILED', async () => {
-    class RefusingRunner implements IScoreRecordSetRunner {
-      public async run(): Promise<ScoreRecordSetResult> {
-        throw new ModelNotScorableError('model-7', 'Archived');
-      }
-    }
-    const result = await new TestableScoreAction(new RefusingRunner()).run(
-      params([
-        { Name: 'ModelID', Type: 'Input', Value: 'model-7' },
-        { Name: 'Scope', Type: 'Input', Value: { records: [{ ID: 'r1' }] } },
-      ]),
-    );
-    expect(result.Success).toBe(false);
-    expect(result.ResultCode).toBe('MODEL_NOT_SCORABLE');
+  it('builds the production runner over ScoringService', () => {
+    expect(new DefaultRunnerScoreAction().DefaultRunner()).toBeInstanceOf(ProductionScoreRecordSetRunner);
   });
 });

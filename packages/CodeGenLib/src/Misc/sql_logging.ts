@@ -396,9 +396,11 @@ export class SQLLogging {
     * @param description - A description of the query to append to the log file.
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @param requiresOwnBatch - see {@link appendToSQLLogFile}: the unit must be alone in its batch.
+    * @param executedQuery - the text to run when it differs from what is logged (for example the same
+    * statements wrapped in a transaction for this connection only); defaults to `query`.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false): Promise<any> {
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator(), requiresOwnBatch: boolean = false, executedQuery?: string): Promise<any> {
         if (configInfo.SQLOutput?.enabled && !SQLLogging.SQLLoggingFilePath) {
             throw new Error(
                 'SQLOutput.enabled but no CodeGen_Run log file is open. Refusing to apply metadata SQL with no artifact. ' +
@@ -406,7 +408,7 @@ export class SQLLogging {
             );
         }
         SQLLogging.AppendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
-        const result = await ds.query(query);
+        const result = await ds.query(executedQuery ?? query);
         return result.recordset;
     }
 

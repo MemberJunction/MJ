@@ -29,6 +29,20 @@ class ProcTestStage extends BasePipelineStage {
     }
 }
 
+/** Like the Delete stages: a record it cannot finish stays ready rather than failing. */
+@RegisterClass(BasePipelineStage, 'ProcTestKeepsReady')
+class ProcTestKeepsReadyStage extends BasePipelineStage {
+    public readonly Name = 'ProcTestKeepsReady';
+    public readonly Entity: WorkingRecordEntity = 'Content Item';
+    public readonly StatusField = 'DeleteStatus';
+    public override StatusForOutcome(): string | null {
+        return null;
+    }
+    public async Run(record: WorkingRecord, context: StageContext): Promise<StageOutcome> {
+        return behaviour(record, context);
+    }
+}
+
 @RegisterClass(BasePipelineStage, 'ProcTestSecond')
 class ProcTestSecondStage extends BasePipelineStage {
     public readonly Name = 'ProcTestSecond';
@@ -58,6 +72,7 @@ function build(config: Partial<PipelineProcessorConfig> = {}): PipelineProcessor
 }
 
 const rsContext = { ContextUser: {}, Provider: {} } as never;
+const DEFAULT_BACKOFF = { RetryBackoffBaseMs: 60_000, RetryBackoffMaxMs: 3_600_000 };
 function ref() {
     return { EntityID: 'E1', RecordID: 'ID-1' } as never;
 }
@@ -87,14 +102,14 @@ describe('PipelineProcessor happy path', () => {
         const result = await build().ProcessRecord(ref(), rsContext);
         expect(hydrate).toHaveBeenCalledWith('Content Item', 'ID-1');
         expect(result.Status).toBe('Succeeded');
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Complete', true);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Complete', true, undefined);
     });
 
     it('commits Skipped when a stage genuinely declines a record', async () => {
         behaviour = async () => Outcome.Skipped('nothing to do');
         const result = await build().ProcessRecord(ref(), rsContext);
         expect(result.Status).toBe('Skipped');
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Skipped', false);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Skipped', false, undefined);
     });
 });
 
@@ -121,17 +136,27 @@ describe('PipelineProcessor failure finality', () => {
         behaviour = async () => Outcome.Fatal('permanent 404');
         const result = await build().ProcessRecord(ref(), rsContext);
         expect(result.Status).toBe('Failed');
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false, undefined);
     });
 
-    it('commits Failed for a transient failure — a Record Set Processing run does not retry', async () => {
+    it('leaves a Retry ready, with a wait before its next attempt, instead of committing Failed', async () => {
         behaviour = async () => Outcome.Retry('timeout');
         const result = await build().ProcessRecord(ref(), rsContext);
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', null, false, DEFAULT_BACKOFF);
         expect((result.ResultPayload as { IsTransient: boolean }).IsTransient).toBe(true);
+        expect((result.ResultPayload as { Outcome: string }).Outcome).toBe('Retry');
     });
 
-    it('classifies thrown stage errors: transient, fatal, and a bare Error as fatal', async () => {
+    it("takes the wait from the run configuration's tuning", async () => {
+        behaviour = async () => Outcome.Retry('rate limited');
+        await build({ Configuration: { Tuning: { RetryBackoffBaseMs: 5_000, RetryBackoffMaxMs: 600_000 } } }).ProcessRecord(ref(), rsContext);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', null, false, {
+            RetryBackoffBaseMs: 5_000,
+            RetryBackoffMaxMs: 600_000,
+        });
+    });
+
+    it('classifies thrown stage errors: transient retries, fatal and a bare Error fail', async () => {
         for (const [error, transient] of [
             [new TransientStageError('socket hang up'), true],
             [new FatalStageError('malformed'), false],
@@ -144,8 +169,66 @@ describe('PipelineProcessor failure finality', () => {
             const result = await build().ProcessRecord(ref(), rsContext);
             expect(result.Status).toBe('Failed');
             expect((result.ResultPayload as { IsTransient: boolean }).IsTransient).toBe(transient);
-            expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false);
+            if (transient) {
+                expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', null, false, DEFAULT_BACKOFF);
+            } else {
+                expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Failed', false, undefined);
+            }
         }
+    });
+
+    it('gives a wait to a failure that keeps the record ready, as a delete that could not finish does', async () => {
+        behaviour = async () => Outcome.Fatal('vector store unreachable');
+        await build({ Stages: ['ProcTestKeepsReady'] }).ProcessRecord(ref(), rsContext);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'DeleteStatus', null, false, DEFAULT_BACKOFF);
+    });
+});
+
+describe('PipelineProcessor stop signal', () => {
+    it("hands the run's stop signal to the stage", async () => {
+        const controller = new AbortController();
+        let stageSignal: AbortSignal | null = null;
+        behaviour = async (_r, context) => {
+            stageSignal = context.Signal;
+            controller.abort(new Error('lease lost'));
+            return Outcome.Complete();
+        };
+        await build().ProcessRecord(ref(), { ...rsContext, Signal: controller.signal });
+        expect(stageSignal!.aborted).toBe(true);
+    });
+
+    it('commits nothing for a record the run was stopped on, whatever the stage threw', async () => {
+        const controller = new AbortController();
+        behaviour = async () => {
+            controller.abort(new Error('lease lost'));
+            throw new Error('aborted mid-request');
+        };
+        const result = await build().ProcessRecord(ref(), { ...rsContext, Signal: controller.signal });
+        expect(commit).not.toHaveBeenCalled();
+        expect((result.ResultPayload as { Outcome: string }).Outcome).toBe('Retry');
+        expect(result.ErrorMessage).toContain('ProcTestStage stopped: lease lost');
+    });
+
+    it('still commits a record the stage completed before the stop', async () => {
+        const controller = new AbortController();
+        behaviour = async () => {
+            controller.abort('shutting down');
+            return Outcome.Complete();
+        };
+        const result = await build().ProcessRecord(ref(), { ...rsContext, Signal: controller.signal });
+        expect(result.Status).toBe('Succeeded');
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'ExtractionStatus', 'Complete', true, undefined);
+    });
+
+    it('starts no record of a batch once stopped, and leaves those records out of the results', async () => {
+        const controller = new AbortController();
+        controller.abort('cancelled');
+        const results = await build({ Stages: ['ProcTestBatchStage'] }).ProcessBatch!(
+            [{ EntityID: 'E1', RecordID: 'C1' } as never],
+            { ...rsContext, Signal: controller.signal },
+        );
+        expect(hydrate).not.toHaveBeenCalled();
+        expect(results.size).toBe(0);
     });
 });
 
@@ -160,13 +243,13 @@ describe('PipelineProcessor chained stages', () => {
 
     it('commits against the LAST stage status field', async () => {
         await build({ Stages: ['ProcTestStage', 'ProcTestSecond'] }).ProcessRecord(ref(), rsContext);
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'SegmentationStatus', 'Complete', true);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'SegmentationStatus', 'Complete', true, undefined);
     });
 
     it('stops at the first stage that does not complete', async () => {
         behaviour = async () => Outcome.Fatal('stop here');
         await build({ Stages: ['ProcTestStage', 'ProcTestSecond'] }).ProcessRecord(ref(), rsContext);
-        expect(commit).toHaveBeenCalledWith(expect.anything(), 'SegmentationStatus', 'Failed', false);
+        expect(commit).toHaveBeenCalledWith(expect.anything(), 'SegmentationStatus', 'Failed', false, undefined);
     });
 });
 

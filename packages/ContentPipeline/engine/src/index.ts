@@ -6,6 +6,9 @@
 export * from './EntityFieldMap.js';
 export * from './WorkingRecordHydrator.js';
 export * from './WorkingRecordCommitter.js';
+export * from './ItemEmbeddingRollup.js';
+export * from './ItemEntityResolver.js';
+export * from './HeadlessPageRenderer.js';
 export * from './PipelineProcessor.js';
 export * from './ContentSourceConfigurationResolver.js';
 export * from './AccessResolver.js';
@@ -22,4 +25,6 @@ export * from './ManagedPromptClassifier.js';
 export * from './ManagedPromptConceptSynthesizer.js';
 export * from './VectorRouting.js';
 export * from './ContentUploadIngestor.js';
+export * from './GraphEvidenceRetractor.js';
+export * from './ArtifactGraphIndexer.js';
 

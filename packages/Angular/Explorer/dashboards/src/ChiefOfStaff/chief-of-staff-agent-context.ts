@@ -21,11 +21,12 @@
  */
 
 import type {
+    MJAIAgentEntity,
     MJAIAgentUserPolicyEntity,
     MJUserRoutineEntity,
     MJAIAgentRequestEntity,
 } from '@memberjunction/core-entities';
-import { EscapeSQLString } from '@memberjunction/global';
+import { EscapeSQLString, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
     AGENT_CONTEXT_NAME_LIST_CAP,
     BoundNameList,
@@ -35,19 +36,436 @@ import {
 } from '../shared/agent-tool-validation';
 
 /**
- * The pages serve one agent, identified by its metadata name. The id is resolved at runtime
- * through `AIEngineBase.GetAgentByName`, never hardcoded.
+ * The default agent the pages open on, identified by its metadata name. An agent picker in the
+ * page toolbar lets the user switch between top-level always-on agents (e.g., Chief of Staff,
+ * Software Factory) so the same Overview, Approvals & Wakes, and Governance pages serve every
+ * governed agent.
  */
 export const CHIEF_OF_STAFF_AGENT_NAME = 'Chief of Staff';
 
-/** The name of the Chief of Staff application whose nav items open the pages. */
-export const CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
+/** Canonical user setting key (`MJ: User Settings`) storing the user's preferred default chat agent ID. */
+export const DEFAULT_CHAT_AGENT_SETTING_KEY = 'Conversations.DefaultAgentID';
 
-/** The Chief of Staff application's own pages; each is one nav item. */
-export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'governance';
+/** Legacy user setting key read as a fallback if {@link DEFAULT_CHAT_AGENT_SETTING_KEY} is unset. */
+export const LEGACY_DEFAULT_CHAT_AGENT_SETTING_KEY = 'chat.defaultAgentId';
+
+/** User setting key (`MJ: User Settings`) storing My Agents roster filter and dashboard layout preferences. */
+export const MY_AGENTS_PREFERENCES_SETTING_KEY = 'myAgents.dashboardPreferences';
+
+export type AgentWorkspaceSubTab = 'activity' | 'persona' | 'governance' | 'sharing';
+export type OverviewStripDensity = 'cards' | 'compact';
+export type OverviewCollapsiblePanel = 'approvals' | 'wakes' | 'channels';
+
+export interface MyAgentsDashboardPreferences {
+    /** Whether the "My Agents" section in the left rail is expanded (default: true). */
+    myAgentsExpanded: boolean;
+    /** Whether the "Shared" section in the left rail is expanded (default: false). */
+    sharedExpanded: boolean;
+    /** Whether System, Demo, and Restricted catalog agents are shown in "Shared" (default: false). */
+    showSystemAndDemo: boolean;
+    /** Last active sub-tab in the Agents detail workspace (default: 'activity'). */
+    activeAgentSubTab: AgentWorkspaceSubTab;
+    /** Last selected agent ID in the Agents workspace when no `?agent=` query param overrides it. */
+    selectedAgentId: string | null;
+    /** Overview "My Agents" top strip layout density ('cards' | 'compact'). */
+    overviewStripDensity: OverviewStripDensity;
+    /** Overview panels collapsed by the user. */
+    overviewCollapsedPanels: OverviewCollapsiblePanel[];
+}
+
+export const DEFAULT_MY_AGENTS_PREFERENCES: Readonly<MyAgentsDashboardPreferences> = {
+    myAgentsExpanded: true,
+    sharedExpanded: false,
+    showSystemAndDemo: false,
+    activeAgentSubTab: 'activity',
+    selectedAgentId: null,
+    overviewStripDensity: 'cards',
+    overviewCollapsedPanels: [],
+};
+
+const VALID_SUB_TABS: ReadonlySet<AgentWorkspaceSubTab> = new Set([
+    'activity',
+    'persona',
+    'governance',
+    'sharing',
+]);
+const VALID_OVERVIEW_PANELS: ReadonlySet<OverviewCollapsiblePanel> = new Set([
+    'approvals',
+    'wakes',
+    'channels',
+]);
+
+/**
+ * Parses a `MJ: User Settings` JSON string into strongly-typed {@link MyAgentsDashboardPreferences},
+ * falling back cleanly per field to {@link DEFAULT_MY_AGENTS_PREFERENCES}.
+ */
+export function ParseMyAgentsDashboardPreferences(
+    raw: string | null | undefined,
+): MyAgentsDashboardPreferences {
+    const base: MyAgentsDashboardPreferences = {
+        ...DEFAULT_MY_AGENTS_PREFERENCES,
+        overviewCollapsedPanels: [],
+    };
+    const trimmed = raw?.trim() ?? '';
+    if (!trimmed) {
+        return base;
+    }
+    try {
+        const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+        if (!parsed || typeof parsed !== 'object') {
+            return base;
+        }
+        if (typeof parsed['myAgentsExpanded'] === 'boolean') {
+            base.myAgentsExpanded = parsed['myAgentsExpanded'];
+        }
+        if (typeof parsed['sharedExpanded'] === 'boolean') {
+            base.sharedExpanded = parsed['sharedExpanded'];
+        }
+        if (typeof parsed['showSystemAndDemo'] === 'boolean') {
+            base.showSystemAndDemo = parsed['showSystemAndDemo'];
+        }
+        const rawTab = parsed['activeAgentSubTab'];
+        if (typeof rawTab === 'string' && VALID_SUB_TABS.has(rawTab as AgentWorkspaceSubTab)) {
+            base.activeAgentSubTab = rawTab as AgentWorkspaceSubTab;
+        }
+        if (typeof parsed['selectedAgentId'] === 'string' && parsed['selectedAgentId'].trim().length > 0) {
+            base.selectedAgentId = parsed['selectedAgentId'].trim();
+        } else if (parsed['selectedAgentId'] === null) {
+            base.selectedAgentId = null;
+        }
+        if (parsed['overviewStripDensity'] === 'cards' || parsed['overviewStripDensity'] === 'compact') {
+            base.overviewStripDensity = parsed['overviewStripDensity'];
+        }
+        if (Array.isArray(parsed['overviewCollapsedPanels'])) {
+            base.overviewCollapsedPanels = parsed['overviewCollapsedPanels'].filter(
+                (p): p is OverviewCollapsiblePanel =>
+                    typeof p === 'string' && VALID_OVERVIEW_PANELS.has(p as OverviewCollapsiblePanel),
+            );
+        }
+        return base;
+    } catch {
+        return base;
+    }
+}
+
+export function SerializeMyAgentsDashboardPreferences(
+    prefs: MyAgentsDashboardPreferences,
+): string {
+    return JSON.stringify(prefs);
+}
+
+export interface SelectableGovernanceAgent {
+    ID: string;
+    Name: string;
+    Description?: string | null;
+    BaseAgentID?: string | null;
+    BaseAgentName?: string | null;
+    OwnerUserID?: string | null;
+    InstantiationMode?: MJAIAgentEntity['InstantiationMode'] | null;
+    InvocationMode?: MJAIAgentEntity['InvocationMode'] | null;
+    Category?: string | null;
+    IsRestricted?: boolean;
+    IsSystemOrDemo?: boolean;
+    IsDerivedInstance?: boolean;
+    IsOwnedByCurrentUser?: boolean;
+    IsPrimaryInstance?: boolean;
+    IconClass?: string | null;
+    LogoURL?: string | null;
+}
+
+export interface GovernanceAgentCandidate {
+    ID: string;
+    Name: string | null;
+    Description?: string | null;
+    ParentID?: string | null;
+    BaseAgentID?: string | null;
+    OwnerUserID?: string | null;
+    InstantiationMode?: MJAIAgentEntity['InstantiationMode'] | string | null;
+    InvocationMode?: MJAIAgentEntity['InvocationMode'] | string | null;
+    Category?: string | null;
+    Type?: string | null;
+    IsRestricted?: boolean | null;
+    IsPrimaryInstance?: boolean | null;
+    IconClass?: string | null;
+    LogoURL?: string | null;
+    Status?: string | null;
+}
+
+/**
+ * Classifies non-derived shared catalog agents that are system plumbing, voice co-agents, or demos
+ * so the Shared roster stays focused on user-facing specialists by default while remaining viewable
+ * via the user's "Show System & Demo" filter preference.
+ */
+export function IsSystemOrDemoCatalogAgent(candidate: GovernanceAgentCandidate): boolean {
+    if (candidate.BaseAgentID) {
+        return false;
+    }
+    if (candidate.IsRestricted === true) {
+        return true;
+    }
+    const category = candidate.Category?.trim().toLowerCase() ?? '';
+    if (category === 'system' || category === 'demo' || category === 'internal') {
+        return true;
+    }
+    const agentType = candidate.Type?.trim().toLowerCase() ?? '';
+    if (agentType === 'realtime') {
+        return true;
+    }
+    const name = candidate.Name?.trim().toLowerCase() ?? '';
+    if (name.startsWith('demo ')) {
+        return true;
+    }
+    return false;
+}
+
+export interface PartitionedAgentRoster {
+    MyAgents: SelectableGovernanceAgent[];
+    SharedAgents: SelectableGovernanceAgent[];
+}
+
+/**
+ * Normalizes a Font Awesome icon class string (e.g. `fa-robot` -> `fa-solid fa-robot`),
+ * falling back to `fallback` when empty.
+ */
+export function NormalizeAgentIconClass(
+    icon: string | null | undefined,
+    fallback: string = 'fa-solid fa-robot',
+): string {
+    const trimmed = icon?.trim() ?? '';
+    if (!trimmed) {
+        return fallback;
+    }
+    if (/\bfa-(solid|regular|brands|light|thin|duotone)\b|\bfa[srbltd]\b/.test(trimmed)) {
+        return trimmed;
+    }
+    return `fa-solid ${trimmed}`;
+}
+
+/**
+ * Partitions selectable agents into:
+ * - `MyAgents`: active derived instances owned by the current user (Primary first, then A–Z)
+ * - `SharedAgents`: runnable shared/catalog agents (shared derived instances + root platform agents)
+ */
+export function PartitionAgentRoster(
+    agents: readonly SelectableGovernanceAgent[],
+): PartitionedAgentRoster {
+    const myAgents: SelectableGovernanceAgent[] = [];
+    const sharedAgents: SelectableGovernanceAgent[] = [];
+    for (const agent of agents) {
+        if (agent.IsDerivedInstance && agent.IsOwnedByCurrentUser) {
+            myAgents.push(agent);
+        } else {
+            sharedAgents.push(agent);
+        }
+    }
+    return { MyAgents: myAgents, SharedAgents: sharedAgents };
+}
+
+/**
+ * Resolves the root ancestor agent ID for a candidate by walking `BaseAgentID` up to depth 5.
+ */
+function resolveRootBaseAgent(
+    candidate: GovernanceAgentCandidate,
+    byId: ReadonlyMap<string, GovernanceAgentCandidate>,
+): GovernanceAgentCandidate {
+    let cur = candidate;
+    const visited = new Set<string>([candidate.ID.trim().toLowerCase()]);
+    for (let depth = 0; depth < 5 && cur.BaseAgentID; depth++) {
+        const nextKey = cur.BaseAgentID.trim().toLowerCase();
+        if (visited.has(nextKey)) {
+            break;
+        }
+        visited.add(nextKey);
+        const parent = byId.get(nextKey);
+        if (!parent) {
+            break;
+        }
+        cur = parent;
+    }
+    return cur;
+}
+
+/**
+ * Builds the sorted list of agents available in the Chief of Staff app's agent picker:
+ * - Active derived personal instances (e.g., *Pepper*, *Cato* under Chief of Staff), ordered
+ *   primary Chief of Staff instance first, then other Chief of Staff instances alphabetically.
+ * - Active top-level (`ParentID == null`) agents — omitting uninstantiated `InstantiationMode === 'Required'`
+ *   templates once the user has at least one active derived instance under that template (unless
+ *   explicitly referenced in `extraReferencedIds`).
+ * - Any agent explicitly referenced in `extraReferencedIds` (e.g., existing policies/routines/requests).
+ */
+export function SelectableAgentsForGovernance(
+    agents: readonly GovernanceAgentCandidate[],
+    extraReferencedIds?: ReadonlySet<string>,
+    currentUserId?: string | null,
+): SelectableGovernanceAgent[] {
+    const byId = new Map<string, GovernanceAgentCandidate>();
+    for (const a of agents) {
+        if (a.ID) {
+            byId.set(a.ID.trim().toLowerCase(), a);
+        }
+    }
+
+    // Track which Required templates already have an active derived instance visible to this user
+    const rootsWithActiveDerived = new Set<string>();
+    for (const a of agents) {
+        if (!a.ID || !a.BaseAgentID) {
+            continue;
+        }
+        const isActive = a.Status == null || a.Status === 'Active';
+        const ownerMatches =
+            !currentUserId || !a.OwnerUserID || UUIDsEqual(a.OwnerUserID, currentUserId);
+        if (isActive && ownerMatches) {
+            const root = resolveRootBaseAgent(a, byId);
+            rootsWithActiveDerived.add(root.ID.trim().toLowerCase());
+        }
+    }
+
+    const seen = new Set<string>();
+    const out: Array<SelectableGovernanceAgent & { _sortGroup: number }> = [];
+    const extraRefSet = extraReferencedIds ? new UUIDSet(extraReferencedIds) : null;
+
+    for (const a of agents) {
+        const name = a.Name?.trim() ?? '';
+        if (!a.ID || !name) {
+            continue;
+        }
+        const key = a.ID.trim().toLowerCase();
+        if (seen.has(key)) {
+            continue;
+        }
+
+        const isActive = a.Status == null || a.Status === 'Active';
+        const isReferenced = extraRefSet ? extraRefSet.Has(a.ID) : false;
+        const isDerived = Boolean(a.BaseAgentID);
+        const root = resolveRootBaseAgent(a, byId);
+        const rootIsCos =
+            (root.Name?.trim().toLowerCase() ?? '') === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+        const isCosTemplate =
+            !isDerived && name.toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase();
+
+        // Unconditionally exclude Sub-Agent delegates from standalone top-level roster unless explicitly referenced
+        if (!isDerived && a.InvocationMode === 'Sub-Agent' && !isReferenced) {
+            continue;
+        }
+
+        // Suppress a Required template once the user has derived instances under it (unless referenced)
+        const suppressRequiredTemplate =
+            !isDerived &&
+            a.InstantiationMode === 'Required' &&
+            rootsWithActiveDerived.has(key) &&
+            !isReferenced;
+        if (suppressRequiredTemplate) {
+            continue;
+        }
+
+        const isTopLevelActive = a.ParentID == null && isActive;
+        const include = isCosTemplate || isTopLevelActive || isReferenced;
+        if (!include) {
+            continue;
+        }
+
+        let sortGroup: number;
+        if (isDerived && rootIsCos && a.IsPrimaryInstance) {
+            sortGroup = 0; // User's primary Chief of Staff instance (e.g., Pepper)
+        } else if (isDerived && rootIsCos) {
+            sortGroup = 1; // Other Chief of Staff instances (e.g., Cato)
+        } else if (isCosTemplate) {
+            sortGroup = 2; // Chief of Staff template (when user hasn't onboarded yet)
+        } else if (isDerived) {
+            sortGroup = 3; // Other personal derived instances (e.g., FDA Clinical Scout)
+        } else {
+            sortGroup = 4; // General top-level agents (e.g., Software Factory)
+        }
+
+        seen.add(key);
+        const directBase = a.BaseAgentID ? byId.get(a.BaseAgentID.trim().toLowerCase()) : undefined;
+        const isOwned = Boolean(
+            isDerived && currentUserId && a.OwnerUserID && UUIDsEqual(a.OwnerUserID, currentUserId),
+        );
+        const mode =
+            a.InstantiationMode === 'Required' ||
+            a.InstantiationMode === 'Optional' ||
+            a.InstantiationMode === 'None'
+                ? a.InstantiationMode
+                : null;
+        const invocationMode =
+            a.InvocationMode === 'Any' ||
+            a.InvocationMode === 'Sub-Agent' ||
+            a.InvocationMode === 'Top-Level'
+                ? a.InvocationMode
+                : null;
+        const isSystemOrDemo = !isDerived && IsSystemOrDemoCatalogAgent(a);
+        out.push({
+            ID: a.ID,
+            Name: name,
+            ...(a.Description ? { Description: a.Description } : {}),
+            ...(isDerived ? { BaseAgentID: a.BaseAgentID, IsDerivedInstance: true } : {}),
+            ...(directBase?.Name ? { BaseAgentName: directBase.Name } : {}),
+            ...(a.OwnerUserID ? { OwnerUserID: a.OwnerUserID } : {}),
+            ...(isOwned ? { IsOwnedByCurrentUser: true } : {}),
+            ...(mode ? { InstantiationMode: mode } : {}),
+            ...(invocationMode ? { InvocationMode: invocationMode } : {}),
+            ...(a.Category ? { Category: a.Category } : {}),
+            ...(a.IsRestricted ? { IsRestricted: true } : {}),
+            ...(isSystemOrDemo ? { IsSystemOrDemo: true } : {}),
+            ...(a.IsPrimaryInstance ? { IsPrimaryInstance: true } : {}),
+            ...(a.IconClass ? { IconClass: a.IconClass } : {}),
+            ...(a.LogoURL ? { LogoURL: a.LogoURL } : {}),
+            _sortGroup: sortGroup,
+        });
+    }
+
+    return out
+        .sort((a, b) => {
+            if (a._sortGroup !== b._sortGroup) {
+                return a._sortGroup - b._sortGroup;
+            }
+            return a.Name.localeCompare(b.Name);
+        })
+        .map(({ _sortGroup: _ignored, ...agent }) => agent);
+}
+
+/**
+ * Resolves an agent from the picker list by exact ID, exact name (case-insensitive), or
+ * unambiguous partial name (case-insensitive). Returns `null` when empty or unmatched.
+ */
+export function ResolveSelectableAgent(
+    agents: readonly SelectableGovernanceAgent[],
+    rawQuery: string | null | undefined,
+): SelectableGovernanceAgent | null {
+    const query = rawQuery?.trim() ?? '';
+    if (!query) {
+        return null;
+    }
+    const byId = agents.find((a) => UUIDsEqual(a.ID, query));
+    if (byId) {
+        return byId;
+    }
+    const lower = query.toLowerCase();
+    const byExactName = agents.find((a) => a.Name.toLowerCase() === lower);
+    if (byExactName) {
+        return byExactName;
+    }
+    const partial = agents.filter((a) => a.Name.toLowerCase().includes(lower));
+    return partial.length === 1 ? partial[0] : null;
+}
+
+/** Primary name of the My Agents application (formerly "Chief of Staff"). */
+export const MY_AGENTS_APP_NAME = 'My Agents';
+
+/** Legacy application name retained as fallback when looking up the app in older metadata snapshots. */
+export const LEGACY_CHIEF_OF_STAFF_APP_NAME = 'Chief of Staff';
+
+/** Alias pointing to the current application name (`My Agents`). */
+export const CHIEF_OF_STAFF_APP_NAME = MY_AGENTS_APP_NAME;
+
+/** The My Agents application's pages; each maps to a nav item (with `approvals-wakes` kept for deep-link compat). */
+export type ChiefOfStaffPage = 'overview' | 'approvals-wakes' | 'agent-channels' | 'governance';
 export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
     'overview',
     'approvals-wakes',
+    'agent-channels',
     'governance',
 ] as const;
 
@@ -55,15 +473,45 @@ export const CHIEF_OF_STAFF_PAGES: readonly ChiefOfStaffPage[] = [
 export const CHIEF_OF_STAFF_PAGE_LABELS: Readonly<Record<ChiefOfStaffPage, string>> = {
     overview: 'Overview',
     'approvals-wakes': 'Approvals & Wakes',
-    governance: 'Governance',
+    'agent-channels': 'Agent Channels',
+    governance: 'Agents',
 };
 
 /** Each page's Font Awesome icon; matches the application's `DefaultNavItems`. */
 export const CHIEF_OF_STAFF_PAGE_ICONS: Readonly<Record<ChiefOfStaffPage, string>> = {
     overview: 'fa-solid fa-compass',
     'approvals-wakes': 'fa-solid fa-bell-concierge',
-    governance: 'fa-solid fa-shield-halved',
+    'agent-channels': 'fa-solid fa-comments',
+    governance: 'fa-solid fa-robot',
 };
+
+/** Character threshold above which `InstructionsOverride` bloat triggers a governance warning. */
+export const INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD = 4000;
+
+export interface InstructionsOverrideSizeReport {
+    Length: number;
+    Threshold: number;
+    ExceedsThreshold: boolean;
+    PercentOfThreshold: number;
+}
+
+/**
+ * Evaluates the character size of `MJAIAgentUserPolicyEntity.InstructionsOverride` against
+ * {@link INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD} so users and admins can spot prompt bloat.
+ */
+export function EvaluateInstructionsOverrideSize(
+    instructions: string | null | undefined,
+    threshold: number = INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD,
+): InstructionsOverrideSizeReport {
+    const length = instructions ? instructions.length : 0;
+    const safeThreshold = threshold > 0 ? threshold : INSTRUCTIONS_OVERRIDE_WARNING_THRESHOLD;
+    return {
+        Length: length,
+        Threshold: safeThreshold,
+        ExceedsThreshold: length > safeThreshold,
+        PercentOfThreshold: Math.round((length / safeThreshold) * 100),
+    };
+}
 
 export type PolicyStatusValue = MJAIAgentUserPolicyEntity['Status'];
 export type PolicyCoordinationModeValue = MJAIAgentUserPolicyEntity['CoordinationMode'];
@@ -239,9 +687,9 @@ export interface GovernancePolicyDraft {
 }
 
 /** The draft shown before the user has a policy record. */
-export function CreateDefaultPolicyDraft(): GovernancePolicyDraft {
+export function CreateDefaultPolicyDraft(agentName: string = CHIEF_OF_STAFF_AGENT_NAME): GovernancePolicyDraft {
     return {
-        DisplayNameOverride: 'Chief of Staff',
+        DisplayNameOverride: agentName,
         Status: 'Active',
         OnboardingStatus: 'Completed',
         CoordinationMode: 'Coordinator',
@@ -260,9 +708,12 @@ export function CreateDefaultPolicyDraft(): GovernancePolicyDraft {
 }
 
 /** A draft copied from the user's policy record, or the default draft when there is none. */
-export function BuildPolicyDraftFromEntity(entity: MJAIAgentUserPolicyEntity | null): GovernancePolicyDraft {
+export function BuildPolicyDraftFromEntity(
+    entity: MJAIAgentUserPolicyEntity | null,
+    agentName: string = CHIEF_OF_STAFF_AGENT_NAME,
+): GovernancePolicyDraft {
     if (!entity) {
-        return CreateDefaultPolicyDraft();
+        return CreateDefaultPolicyDraft(agentName);
     }
     return {
         DisplayNameOverride: entity.DisplayNameOverride ?? '',
@@ -283,17 +734,34 @@ export function BuildPolicyDraftFromEntity(entity: MJAIAgentUserPolicyEntity | n
     };
 }
 
+/** The display name for any selected agent: the draft's override, 'My Chief of Staff' for Chief of Staff, or the agent's name. */
+export function AgentDisplayName(
+    draft: Pick<GovernancePolicyDraft, 'DisplayNameOverride'>,
+    agentName: string = CHIEF_OF_STAFF_AGENT_NAME,
+): string {
+    const override = draft.DisplayNameOverride.trim();
+    if (override.length > 0) {
+        return override;
+    }
+    return agentName.trim().toLowerCase() === CHIEF_OF_STAFF_AGENT_NAME.toLowerCase()
+        ? 'My Chief of Staff'
+        : agentName.trim() || 'My Chief of Staff';
+}
+
 /** The display name: the draft's override, or 'My Chief of Staff'. */
 export function ChiefOfStaffDisplayName(draft: Pick<GovernancePolicyDraft, 'DisplayNameOverride'>): string {
-    const override = draft.DisplayNameOverride.trim();
-    return override.length > 0 ? override : 'My Chief of Staff';
+    return AgentDisplayName(draft, CHIEF_OF_STAFF_AGENT_NAME);
 }
 
 /** The governance summary published in the agent context. */
-export function BuildGovernanceSummary(draft: GovernancePolicyDraft, hasPolicyRecord: boolean): PolicyGovernanceSummary {
+export function BuildGovernanceSummary(
+    draft: GovernancePolicyDraft,
+    hasPolicyRecord: boolean,
+    agentName: string = CHIEF_OF_STAFF_AGENT_NAME,
+): PolicyGovernanceSummary {
     return {
         HasPolicyRecord: hasPolicyRecord,
-        DisplayName: ChiefOfStaffDisplayName(draft),
+        DisplayName: AgentDisplayName(draft, agentName),
         Status: draft.Status,
         OnboardingStatus: draft.OnboardingStatus,
         CoordinationMode: draft.CoordinationMode,
@@ -320,6 +788,9 @@ export interface ChiefOfStaffMetrics {
 export interface ChiefOfStaffAgentContextInput {
     Page: ChiefOfStaffPage;
     SearchText: string;
+    SelectedAgentID?: string | null;
+    SelectedAgentName?: string;
+    AvailableAgentNames?: readonly string[];
     Metrics: ChiefOfStaffMetrics;
     Governance: PolicyGovernanceSummary;
     Routines: readonly RoutineSummaryItem[];
@@ -364,12 +835,23 @@ export interface ChiefOfStaffScopeFilters {
     Requests: string;
 }
 
-export function BuildChiefOfStaffScopeFilters(currentUserId: string, chiefOfStaffAgentId: string): ChiefOfStaffScopeFilters {
+export function BuildChiefOfStaffScopeFilters(
+    currentUserId: string,
+    selectedAgentId: string | null,
+): ChiefOfStaffScopeFilters {
     const user = EscapeSQLString(currentUserId);
-    const agent = EscapeSQLString(chiefOfStaffAgentId);
+    const trimmedAgent = selectedAgentId?.trim() ?? '';
+    if (!trimmedAgent) {
+        return {
+            Policy: `UserID = '${user}'`,
+            Routines: `UserID = '${user}'`,
+            Requests: `RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
+        };
+    }
+    const agent = EscapeSQLString(trimmedAgent);
     return {
         Policy: `AgentID = '${agent}' AND UserID = '${user}'`,
-        Routines: `UserID = '${user}' AND (RoutineType = 'AgentWake' OR TargetID = '${agent}')`,
+        Routines: `UserID = '${user}' AND TargetID = '${agent}'`,
         Requests: `AgentID = '${agent}' AND RequestForUserID = '${user}' AND (RequestType IS NULL OR RequestType <> 'Information')`,
     };
 }
@@ -407,11 +889,18 @@ export function BuildChiefOfStaffAgentContext(
 ): AgentContextRecord {
     const routineNames = input.Routines.map((r) => `${r.Name} (${r.Status})`).filter((n) => !!n);
     const boundedRoutineNames = BoundNameList(routineNames, AGENT_CONTEXT_NAME_LIST_CAP);
+    const boundedAgentNames = BoundNameList(
+        [...(input.AvailableAgentNames ?? [])],
+        AGENT_CONTEXT_NAME_LIST_CAP,
+    );
 
     return {
         Surface: 'ChiefOfStaff',
         Page: input.Page,
         SearchText: input.SearchText,
+        SelectedAgentID: input.SelectedAgentID ?? null,
+        SelectedAgentName: input.SelectedAgentName ?? CHIEF_OF_STAFF_AGENT_NAME,
+        AvailableAgentNames: boundedAgentNames,
         PendingApprovalCount: input.Metrics.PendingApprovalCount,
         HighPriorityPendingCount: input.Metrics.HighPriorityPendingCount,
         ActiveWakeRoutineCount: input.Metrics.ActiveWakeRoutineCount,

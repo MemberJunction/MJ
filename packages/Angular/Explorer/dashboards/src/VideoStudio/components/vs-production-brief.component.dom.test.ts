@@ -10,6 +10,12 @@ import {
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { query, queryAll, renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { VSProductionBriefComponent, VSProductionBriefStartEvent } from './vs-production-brief.component';
+import { ExpectConsoleLines } from '@memberjunction/ng-test-utils';
+
+/** The lines these tests log on purpose: an engine load against a provider double without RunViews. Any other line fails its test. */
+ExpectConsoleLines({
+  error: [/^TypeError: (p\.GetAndCacheDatasetByName is not a function|Cannot read properties of undefined \(reading '(GetAndCacheDatasetByName|RunViews)'\))/],
+});
 
 function createGraphQLProviderStub(): IMetadataProvider {
   const provider = Object.create(GraphQLDataProvider.prototype);

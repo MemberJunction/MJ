@@ -1,19 +1,23 @@
 import { Component, ViewEncapsulation, OnDestroy, ViewChild, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata, CompositeKey } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
+import { BaseEntity, BaseEntityEvent, Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
+import { MJEvent, MJEventType, MJGlobal, RegisterClass, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { ResourceData, MJEnvironmentEntityExtended, MJConversationEntity, MJUserSettingEntity, UserInfoEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { ResolveDeepLinkParam } from './chat-deeplink-params.js';
 import { ResolveChatSearchRoute } from './chat-search-routing.js';
+import { BuildExportArtifactLink } from './chat-export-artifact-link.js';
 import { ResolveComposeEmailDraft, BuildComposeEmailFallbackNotice } from './compose-email-fallback.js';
-import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, SearchResult, ActionableCommandRequest } from '@memberjunction/ng-conversations';
+import { ConversationChatAreaComponent, ConversationListComponent, ConversationStreamingService, ActiveTasksService, UICommandHandlerService, ConversationBridgeService, ConversationAgentService, SearchResult, ActionableCommandRequest, ExportArtifactLinkTarget } from '@memberjunction/ng-conversations';
+import { DefaultAgentResolver } from '@memberjunction/conversations-runtime';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { MentionAutocompleteService } from '@memberjunction/ng-conversations';
-import { ComposeEmailCommand, OpenResourceCommand } from '@memberjunction/ai-core-plus';
+import { ComposeEmailCommand, MJAIAgentEntityExtended, OpenResourceCommand } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationRequest } from '@memberjunction/ng-artifacts';
+import type { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Subject, takeUntil } from 'rxjs';
+import { firstValueFrom, Subject, takeUntil } from 'rxjs';
+import { debounceTime, filter } from 'rxjs/operators';
 /**
  * Chat Conversations Resource - wraps the conversation chat area for tab-based display
  * Extends BaseResourceComponent to work with the resource type system
@@ -82,12 +86,15 @@ import { Subject, takeUntil } from 'rxjs';
               [currentUser]="currentUser"
               [conversationId]="selectedConversationId"
               [conversation]="selectedConversation"
+              [DefaultAgentId]="DefaultChatAgentId"
+              [AccessDeniedMessage]="ConversationAccessDeniedMessage"
               [isNewConversation]="isNewUnsavedConversation"
               [pendingMessage]="pendingMessageToSend"
               [pendingAttachments]="pendingAttachmentsToSend"
               [pendingArtifactId]="pendingArtifactId"
               [pendingArtifactConversationId]="pendingArtifactConversationId"
               [pendingArtifactVersionNumber]="pendingArtifactVersionNumber"
+              [ExportArtifactLink]="ExportArtifactLink"
               [showSidebarToggle]="isSidebarCollapsed && isSidebarSettingsLoaded"
               (sidebarToggleClicked)="expandSidebar()"
               (conversationRenamed)="onConversationRenamed($event)"
@@ -294,14 +301,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.ChatArea = value;
   }
 
-  public CurrentUser: any = null;
+  public CurrentUser: UserInfo | null = null;
 
   /** @deprecated Use {@link CurrentUser}. */
-  public get currentUser(): any {
+  public get currentUser(): UserInfo | null {
     return this.CurrentUser;
   }
   /** @deprecated Use {@link CurrentUser}. */
-  public set currentUser(value: any) {
+  public set currentUser(value: UserInfo | null) {
     this.CurrentUser = value;
   }
   private skipUrlUpdate = true; // Skip URL updates during initialization
@@ -330,6 +337,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.SelectedConversationId = value;
   }
   public SelectedConversation: MJConversationEntity | null = null;
+  /** Non-null when a conversation deep link is denied (for example after owner revocation). */
+  public ConversationAccessDeniedMessage: string | null = null;
 
   /** @deprecated Use {@link SelectedConversation}. */
   public get selectedConversation(): MJConversationEntity | null {
@@ -499,9 +508,18 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   // User Settings persistence
   private readonly USER_SETTING_SIDEBAR_KEY = 'Conversations.SidebarState';
+  private readonly USER_SETTING_DEFAULT_CHAT_AGENT_KEY = DefaultAgentResolver.SETTING_NAME;
+  private readonly LEGACY_USER_SETTING_DEFAULT_CHAT_AGENT_KEY = DefaultAgentResolver.LEGACY_USER_SETTING_NAME;
   private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
 
+  /** Per-user preferred default chat agent ID from `UserInfoEngine` (`Conversations.DefaultAgentID`), or null for org default. */
+  public DefaultChatAgentId: string | null = null;
+
   private engine = ConversationEngine.Instance;
+
+  /** Deep link written into conversation exports for each artifact; opens it in this resource. */
+  public readonly ExportArtifactLink = (target: ExportArtifactLinkTarget): string | null =>
+    typeof window === 'undefined' ? null : BuildExportArtifactLink(window.location.href, target);
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocompleteService = MentionAutocompleteService.Instance;
@@ -511,7 +529,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     private streamingService: ConversationStreamingService,
     private activeTasksService: ActiveTasksService,
     private uiCommandHandler: UICommandHandlerService,
-    private bridge: ConversationBridgeService
+    private bridge: ConversationBridgeService,
+    private agentService: ConversationAgentService
   ) {
     super();
   }
@@ -572,6 +591,9 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // Notify the bridge that the workspace is active
     this.bridge.NotifyWorkspaceActive(true);
 
+    // React live when user changes their Default Chat Agent in My Agents (or archives an agent)
+    this.subscribeToDefaultChatAgentChanges();
+
     // Enable URL updates after initialization
     this.skipUrlUpdate = false;
 
@@ -611,15 +633,24 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    */
   private async initializeEngines(): Promise<void> {
     try {
-      // Initialize AIEngine, conversations, and mention service in parallel
+      const currentUser = this.CurrentUser;
+      // Initialize AIEngine, UserInfoEngine, conversations, and mention service in parallel
       await Promise.all([
         AIEngineBase.Instance.Config(false),
-        this.engine.LoadConversations(this.EnvironmentId, this.CurrentUser, false),
-        this.mentionAutocompleteService.initialize(this.CurrentUser)
+        UserInfoEngine.Instance.Config(false),
+        ...(currentUser ? [
+          this.engine.LoadConversations(this.EnvironmentId, currentUser, false),
+          this.mentionAutocompleteService.initialize(currentUser)
+        ] : [])
       ]);
 
+      // Resolve user's preferred Default Chat Agent (falls back to null -> Sage)
+      this.refreshDefaultChatAgentId();
+
       // Restore active tasks AFTER conversations are cached (uses in-memory lookup)
-      await this.activeTasksService.restoreFromDatabase(this.CurrentUser);
+      if (currentUser) {
+        await this.activeTasksService.restoreFromDatabase(currentUser);
+      }
 
       // Mark as ready - child components can now render
       this.IsReady = true;
@@ -633,20 +664,115 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
+   * Resolves the user's preferred Default Chat Agent ID from `UserInfoEngine`
+   * (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`),
+   * validating that it points to an active, runnable top-level agent in `AIEngineBase`.
+   * Returns `null` when unset or invalid so `DefaultAgentResolver` falls back to primary instance / org default.
+   */
+  private resolveDefaultChatAgentId(explicitRawValue?: string | null): string | null {
+    const raw = (
+      explicitRawValue !== undefined
+        ? explicitRawValue
+        : (UserInfoEngine.Instance.GetSetting(this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY) ||
+            UserInfoEngine.Instance.GetSetting(this.LEGACY_USER_SETTING_DEFAULT_CHAT_AGENT_KEY))
+    )?.trim() ?? '';
+    if (!raw || !IsValidUUID(raw)) {
+      return null;
+    }
+    const aiEngine = AIEngineBase.GetProviderInstance<AIEngineBase>(this.ProviderToUse, AIEngineBase) as AIEngineBase;
+    const agent = aiEngine.GetAgentByID(raw);
+    if (!agent || agent.Status !== 'Active' || agent.ParentID != null || agent.InstantiationMode === 'Required') {
+      return null;
+    }
+    const user = this.CurrentUser ?? this.ProviderToUse.CurrentUser;
+    if (user && !aiEngine.CanUserRunAgentSync(agent, user)) {
+      return null;
+    }
+    return agent.ID;
+  }
+
+  private refreshDefaultChatAgentId(explicitRawValue?: string | null): void {
+    const nextId = this.resolveDefaultChatAgentId(explicitRawValue);
+    if (nextId !== this.DefaultChatAgentId) {
+      this.DefaultChatAgentId = nextId;
+      this.agentService.ClearConversationManagerCache();
+      this.cdr.markForCheck();
+    }
+  }
+
+  /**
+   * Listens for BaseEntity save/delete/remote-invalidate events on `MJ: User Settings`
+   * (`Conversations.DefaultAgentID` / legacy `chat.defaultAgentId`) and `MJ: AI Agents` /
+   * `MJ: AI Agent Permissions` so updating Default Chat Agent in My Agents or Chat updates open tabs live.
+   */
+  private subscribeToDefaultChatAgentChanges(): void {
+    MJGlobal.Instance.GetEventListener(false)
+      .pipe(
+        filter((event: MJEvent) => {
+          if (
+            event.event !== MJEventType.ComponentEvent ||
+            event.eventCode !== BaseEntity.BaseEventCode ||
+            !event.args
+          ) {
+            return false;
+          }
+          const args = event.args as BaseEntityEvent;
+          const entityName =
+            args.type === 'remote-invalidate'
+              ? args.entityName
+              : args.baseEntity?.EntityInfo?.Name;
+          const norm = entityName?.trim().toLowerCase() ?? '';
+          if (norm === 'mj: user settings') {
+            if (args.type === 'remote-invalidate') {
+              return true;
+            }
+            const settingEntity = args.baseEntity as MJUserSettingEntity | null | undefined;
+            return (
+              settingEntity?.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY ||
+              settingEntity?.Setting === this.LEGACY_USER_SETTING_DEFAULT_CHAT_AGENT_KEY
+            );
+          }
+          return norm === 'mj: ai agents' || norm === 'mj: ai agent permissions';
+        }),
+        debounceTime(75),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((event: MJEvent) => {
+        const args = event.args as BaseEntityEvent;
+        if (args.type === 'save' || args.type === 'delete') {
+          const entityName = args.baseEntity?.EntityInfo?.Name?.trim().toLowerCase() ?? '';
+          if (entityName === 'mj: user settings') {
+            const settingEntity = args.baseEntity as MJUserSettingEntity;
+            if (settingEntity.Setting === this.USER_SETTING_DEFAULT_CHAT_AGENT_KEY) {
+              this.refreshDefaultChatAgentId(args.type === 'delete' ? null : (settingEntity.Value ?? null));
+              return;
+            }
+          }
+        }
+        this.refreshDefaultChatAgentId();
+      });
+  }
+
+  /**
    * Load the conversation entity asynchronously (non-blocking).
    * The conversationId is already set synchronously, this just loads the full entity.
    */
   private async loadConversationEntity(conversationId: string | undefined): Promise<void> {
     if (!conversationId) return;
 
-    // Try to get from cache first
-    const conversation = this.engine.GetConversation(conversationId);
-    if (conversation) {
-      this.SelectedConversation = conversation;
+    this.ConversationAccessDeniedMessage = null;
+    const cached = this.engine.GetConversation(conversationId);
+    const isOwnedCached = Boolean(
+      cached?.UserID && this.CurrentUser?.ID && UUIDsEqual(cached.UserID, this.CurrentUser.ID),
+    );
+    if (cached && isOwnedCached) {
+      this.SelectedConversation = cached;
       this.updateTabTitle();
       this.cdr.detectChanges();
+      return;
     }
-    // If not in cache, the chat area component will handle loading it
+
+    await this.loadUnlistedConversation(conversationId, true);
   }
 
   /**
@@ -809,13 +935,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     this.PendingArtifactConversationId = artifactId ? conversationId : null;
     this.PendingArtifactVersionNumber = versionNumber;
 
-    if (conversationId && conversationId !== this.SelectedConversationId) {
+    this.ConversationAccessDeniedMessage = null;
+    if (conversationId && (conversationId !== this.SelectedConversationId || _source === 'deeplink')) {
       // The URL is already the source of truth here — suppress the echo back to it.
       // selectConversation()'s body is synchronous up to its URL-update check, so
       // toggling the flag around the call reliably gates that check.
       const prevSkip = this.skipUrlUpdate;
       this.skipUrlUpdate = true;
-      void this.selectConversation(conversationId);
+      void this.selectConversation(conversationId, true);
       this.skipUrlUpdate = prevSkip;
       this.cdr.detectChanges();
     }
@@ -828,7 +955,8 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   /**
    * Select a conversation by ID - loads the entity and updates local state
    */
-  private async selectConversation(conversationId: string): Promise<void> {
+  private async selectConversation(conversationId: string, verifyRemote = false): Promise<void> {
+    this.ConversationAccessDeniedMessage = null;
     this.SelectedConversationId = conversationId;
     this.IsNewUnsavedConversation = false;
 
@@ -836,31 +964,62 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     // which conversation the workspace is viewing
     this.bridge.SetActiveFromWorkspace(conversationId);
 
-    // Load the conversation entity from the engine's list; an unlisted one is loaded below.
+    // Load the conversation entity from the engine's list; non-owned or unlisted deep-linked
+    // conversations must remain unbound until VerifyConversationAccess resolves (fail closed).
     const conversation = this.engine.GetConversation(conversationId);
-    this.SelectedConversation = conversation ?? null;
+    const isOwnedCached = Boolean(
+      conversation?.UserID && this.CurrentUser?.ID && UUIDsEqual(conversation.UserID, this.CurrentUser.ID),
+    );
+    const hasOtherOwner = Boolean(
+      conversation?.UserID && (!this.CurrentUser?.ID || !UUIDsEqual(conversation.UserID, this.CurrentUser.ID)),
+    );
+    const needsRemoteCheck = !conversation || (verifyRemote && !isOwnedCached) || hasOtherOwner;
+    this.SelectedConversation = needsRemoteCheck ? null : (conversation ?? null);
 
     // Update URL if not skipping
     if (!this.skipUrlUpdate) {
       this.updateUrl();
     }
 
-    if (!conversation) {
-      await this.loadUnlistedConversation(conversationId);
+    if (needsRemoteCheck) {
+      await this.loadUnlistedConversation(conversationId, verifyRemote || hasOtherOwner);
     }
   }
 
   /**
-   * Loads a selected conversation the engine's list does not hold. The list carries only Global
-   * and Both scope; an application-scoped conversation (a routine's wake thread, a cockpit chat)
-   * is reachable only by deep link, and without its entity the chat shows no title and no pinned
-   * agent. Applied only while the same conversation is still selected.
+   * Loads a selected conversation the engine's list does not hold (for example, an explicitly
+   * shared `ParentID` side thread or app-scoped deep link) and verifies access on the server.
+   * If access has been revoked or denied, clears selection and sets {@link ConversationAccessDeniedMessage}.
    */
-  private async loadUnlistedConversation(conversationId: string): Promise<void> {
-    const loaded = await this.engine.EnsureConversationLoaded(conversationId, this.CurrentUser);
-    if (!loaded || !UUIDsEqual(this.SelectedConversationId, conversationId)) {
+  private async loadUnlistedConversation(conversationId: string, forceVerify = false): Promise<void> {
+    let loaded: MJConversationEntity | null = null;
+    try {
+      const currentUser = this.CurrentUser;
+      if (currentUser && forceVerify && typeof this.engine.VerifyConversationAccess === 'function') {
+        loaded = await this.engine.VerifyConversationAccess(conversationId, currentUser);
+      } else if (currentUser && typeof this.engine.EnsureConversationLoaded === 'function') {
+        loaded = await this.engine.EnsureConversationLoaded(conversationId, currentUser);
+      }
+    } catch {
+      loaded = null;
+    }
+
+    if (!loaded) {
+      if (UUIDsEqual(this.SelectedConversationId, conversationId)) {
+        this.SelectedConversationId = null;
+        this.SelectedConversation = null;
+        this.ConversationAccessDeniedMessage =
+          'You do not have permission to access this conversation. Access may have been revoked by the owner.';
+        this.updateTabTitle();
+        this.cdr.detectChanges();
+      }
       return;
     }
+
+    if (!UUIDsEqual(this.SelectedConversationId, conversationId)) {
+      return;
+    }
+    this.ConversationAccessDeniedMessage = null;
     this.SelectedConversation = loaded;
     this.updateTabTitle();
     this.cdr.detectChanges();
@@ -1271,6 +1430,111 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
   }
 
   /**
+   * Opens the user's most recent active conversation already pinned to this personal agent
+   * instance, or creates a new conversation pinned to it when none exists yet.
+   */
+  async OnStartChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const existing = this.engine.Conversations
+      .filter(
+        (c) =>
+          !c.IsArchived &&
+          c.DefaultAgentID != null &&
+          UUIDsEqual(c.DefaultAgentID, agent.ID)
+      )
+      .sort((a, b) => {
+        const tA = new Date(a.__mj_UpdatedAt ?? a.__mj_CreatedAt ?? 0).getTime();
+        const tB = new Date(b.__mj_UpdatedAt ?? b.__mj_CreatedAt ?? 0).getTime();
+        return tB - tA;
+      })[0];
+
+    if (existing) {
+      await this.OnConversationSelected(existing.ID);
+      return;
+    }
+
+    await this.OnStartNewChatWithAgent(agent);
+  }
+
+  /**
+   * Explicitly creates a brand-new conversation pinned to a personal agent instance
+   * (triggered by the hover '+' action in My Agents or when no existing thread exists).
+   */
+  async OnStartNewChatWithAgent(agent: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const conversation = await this.engine.CreateConversation(
+      `Chat with ${agent.Name}`,
+      this.EnvironmentId,
+      this.CurrentUser,
+      undefined,
+      undefined,
+      { defaultAgentId: agent.ID }
+    );
+    if (!conversation) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not start a conversation with ${agent.Name}.`,
+        'error',
+        4000
+      );
+      return;
+    }
+    this.PendingMessageToSend = null;
+    this.PendingAttachmentsToSend = null;
+    this.SelectedConversationId = conversation.ID;
+    this.SelectedConversation = conversation;
+    this.IsNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(conversation.ID);
+    this.updateUrl();
+    this.NotifyDisplayNameChanged(conversation.Name || `Chat with ${agent.Name}`);
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Starts a guided conversational onboarding chat pinned to an instantiable template agent
+   * (e.g., Chief of Staff) so the agent walks the user through minting their personal instance.
+   */
+  async OnStartOnboardingWithTemplate(template: MJAIAgentEntityExtended): Promise<void> {
+    if (!this.CurrentUser || !this.EnvironmentId) {
+      return;
+    }
+    const conversation = await this.engine.CreateConversation(
+      `Set up My ${template.Name}`,
+      this.EnvironmentId,
+      this.CurrentUser,
+      undefined,
+      undefined,
+      { defaultAgentId: template.ID }
+    );
+    if (!conversation) {
+      MJNotificationService.Instance?.CreateSimpleNotification(
+        `Could not start onboarding with ${template.Name}.`,
+        'error',
+        4000
+      );
+      return;
+    }
+    this.PendingMessageToSend = `Hi! Help me personalize and set up my own ${template.Name}.`;
+    this.PendingAttachmentsToSend = null;
+    this.SelectedConversationId = conversation.ID;
+    this.SelectedConversation = conversation;
+    this.IsNewUnsavedConversation = false;
+    this.bridge.SetActiveFromWorkspace(conversation.ID);
+    this.updateUrl();
+    this.NotifyDisplayNameChanged(conversation.Name || `Set up My ${template.Name}`);
+    if (this.IsMobileView || !this.IsSidebarPinned) {
+      this.CollapseSidebar();
+    }
+    this.cdr.detectChanges();
+  }
+
+  /**
    * Handle conversation created from chat area (after first message in new conversation).
    * The event now includes pending message and attachments for atomic state update.
    */
@@ -1381,27 +1645,36 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     artifactId?: string;
     versionNumber?: number;
   }): void {
-    // Map the link type to the nav item name
-    const navItemName = event.type === 'conversation' ? 'Conversations' : 'Collections';
-
-    // Build configuration params to pass to the target resource
-    const params: Record<string, unknown> = {};
-    if (event.type === 'conversation') {
-      params['conversationId'] = event.id;
-    } else {
-      params['collectionId'] = event.id;
+    if (event.type === 'collection') {
+      const queryParams: Record<string, string> = { collectionId: event.id };
+      if (event.artifactId) {
+        queryParams['artifactId'] = event.artifactId;
+        if (event.versionNumber) {
+          queryParams['version'] = String(event.versionNumber);
+        }
+      }
+      void this.navigateToDriverClassOrFallback(
+        ['LibraryResource', 'ChatCollectionsResource'],
+        'Library',
+        queryParams,
+        'Collections',
+      );
+      return;
     }
 
-    // Include artifact info so destination can open it
+    // Build configuration params to pass to the Conversations resource
+    const params: Record<string, string | number> = { conversationId: event.id };
+    const queryParams: Record<string, string> = { conversationId: event.id };
     if (event.artifactId) {
       params['artifactId'] = event.artifactId;
+      queryParams['artifactId'] = event.artifactId;
       if (event.versionNumber) {
         params['versionNumber'] = event.versionNumber;
+        queryParams['version'] = String(event.versionNumber);
       }
     }
 
-    // Navigate using the generic nav item method
-    this.navigationService.OpenNavItemByName(navItemName, params);
+    void this.navigationService.OpenNavItemByName('Conversations', params, undefined, { queryParams });
   }
 
   /** @deprecated Use {@link OnArtifactLinkClicked}. */
@@ -1464,15 +1737,128 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
         break;
       case 'message':
         this.openMessageResult(route.ConversationId, route.BranchId, route.Sequence)
-          .catch((error: unknown) => console.error('Failed to open the message from search:', error));
+          .catch((error: Error | string) => console.error('Failed to open the message from search:', error));
         break;
       case 'artifact':
         this.navigationService.OpenArtifact(route.ArtifactId, route.Title);
         break;
       case 'nav-item':
-        void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        if (route.NavItemName === 'Library' || route.NavItemName === 'Collections') {
+          void this.navigateToDriverClassOrFallback(
+            ['LibraryResource', 'ChatCollectionsResource'],
+            'Library',
+            route.Configuration,
+            'Collections',
+          );
+        } else if (route.NavItemName === 'Agent Activity') {
+          void this.navigateToDriverClassOrFallback(
+            ['ChatTasksResource'],
+            'Agent Activity',
+            route.Configuration,
+            'Tasks',
+          );
+        } else {
+          void this.navigationService.OpenNavItemByName(route.NavItemName, route.Configuration);
+        }
         break;
     }
+  }
+
+  /**
+   * Resolves a destination application and nav item across `appManager.Applications` (falling back
+   * to `ProviderToUse.Applications`) by `DriverClass` so `Library`, `Collections`, and
+   * `Agent Activity` navigation never depends on hardcoded application names.
+   */
+  private async navigateToDriverClassOrFallback(
+    driverClasses: readonly string[],
+    fallbackNavItemName: string,
+    queryParams: Record<string, string>,
+    legacyFallbackNavItemName?: string,
+  ): Promise<void> {
+    const resolved = await this.resolveNavTargetByDriverClass(driverClasses);
+    if (resolved) {
+      await this.navigationService.SwitchToApp(resolved.AppId, resolved.NavLabel, queryParams);
+      return;
+    }
+
+    const tabId = await this.navigationService.OpenNavItemByName(
+      fallbackNavItemName,
+      queryParams,
+      undefined,
+      { queryParams },
+    );
+    if (!tabId && legacyFallbackNavItemName) {
+      await this.navigationService.OpenNavItemByName(
+        legacyFallbackNavItemName,
+        queryParams,
+        undefined,
+        { queryParams },
+      );
+    }
+  }
+
+  private async resolveNavTargetByDriverClass(
+    driverClasses: readonly string[],
+  ): Promise<{ AppId: string; NavLabel: string } | null> {
+    const manager = this.navigationService?.AppManager;
+
+    if (manager) {
+      const activeApps: BaseApplication[] =
+        typeof manager.GetAllApps === 'function' && manager.GetAllApps().length > 0
+          ? manager.GetAllApps()
+          : manager.Applications
+            ? await firstValueFrom(manager.Applications).catch(() => [])
+            : [];
+
+      if (activeApps.length > 0) {
+        const navLists = await Promise.all(
+          activeApps.map(async (app) => ({
+            app,
+            items: await app.GetNavItems().catch(() => []),
+          })),
+        );
+
+        for (const driverClass of driverClasses) {
+          for (const entry of navLists) {
+            const match = entry.items.find(
+              (item) =>
+                item.DriverClass === driverClass && (item.Status ?? 'Active') === 'Active',
+            );
+            if (match?.Label) {
+              return { AppId: entry.app.ID, NavLabel: match.Label };
+            }
+          }
+        }
+        return null;
+      }
+    }
+
+    // Fallback when appManager is not attached in isolated harnesses
+    const apps = this.ProviderToUse?.Applications ?? [];
+    for (const driverClass of driverClasses) {
+      for (const app of apps) {
+        if ((app.Status ?? 'Active') !== 'Active' || !app.DefaultNavItems) {
+          continue;
+        }
+        try {
+          const parsed = JSON.parse(app.DefaultNavItems) as Array<{
+            Label?: string;
+            DriverClass?: string;
+            Status?: string;
+          }>;
+          const match = parsed.find(
+            (item) =>
+              item.DriverClass === driverClass && (item.Status ?? 'Active') === 'Active',
+          );
+          if (match?.Label) {
+            return { AppId: app.ID, NavLabel: match.Label };
+          }
+        } catch {
+          // Ignore malformed DefaultNavItems JSON
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -1492,9 +1878,14 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   /**
    * Handle navigation request from artifact viewer plugins or actionable commands.
-   * Opens the target nav item or application (switching apps if needed) then applies query params to the URL.
+   * Opens the requested artifact in its own tab, or the target nav item or application (switching apps
+   * if needed) then applies query params to the URL.
    */
   async OnNavigationRequest(event: NavigationRequest): Promise<void> {
+    if (event.ArtifactID) {
+      this.navigationService.OpenArtifact(event.ArtifactID, event.ArtifactName);
+      return;
+    }
     const appId = event.appName ? this.resolveAppId(event.appName) : undefined;
     if (appId && (!event.navItemName || this.normalizeNavToken(event.navItemName) === this.normalizeNavToken(event.appName))) {
       await this.navigationService.SwitchToApp(appId, undefined, event.queryParams);
@@ -1577,7 +1968,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
     }
   }
 
-  private toQueryParamsRecord(params?: Record<string, unknown>): Record<string, string> | undefined {
+  private toQueryParamsRecord(params?: OpenResourceCommand['parameters']): Record<string, string> | undefined {
     if (!params || Object.keys(params).length === 0) {
       return undefined;
     }

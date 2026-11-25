@@ -4,3 +4,15 @@ export { MJPostgresTypes, ParseInt8, parseInt8, ParseNumeric, parseNumeric, PG_I
 export { PGQueryParameterProcessor } from './queryParameterProcessor.js';
 export { PostgreSQLProviderConfigData, PostgreSQLProviderConfigOptions } from './types.js';
 export { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
+export {
+    PgSslMode, PgSslSettings, PgSslConfig, PG_SSL_MODES, IsLocalPgHost, DefaultPgSslMode, ParsePgSslMode,
+    ResolvePgSslMode, BuildPgSslConfig, PgSslVerifiesServer, DescribePgSsl
+} from './pgSsl.js';
+export {
+    PgAuthMode, PgCredentialRequest, BasePgCredentialProvider, CachingPgCredentialProvider, StaticPasswordProvider,
+    PgCredentialProviders, ResolvePgAuthMode, BuildPgPasswordSource, AssertPgTokenTransport
+} from './pgCredentials.js';
+export {
+    AZURE_POSTGRES_TOKEN_SCOPE, RDS_IAM_TOKEN_LIFETIME_MS, AzureTokenCredential, RdsTokenSigner,
+    AzureEntraPgCredentialProvider, AwsRdsIamPgCredentialProvider, LoadPgCloudCredentialProviders
+} from './pgCloudCredentials.js';

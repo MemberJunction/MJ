@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readWorkflow, readJobNames, readJobNeeds, readJobSteps } from './lib/workflow.mjs';
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 // Pins the SHAPE of the sharded Unit Tests workflow (introduced 2026-08-24, replacing one
 // ~55-minute job with build → N shards → gate).
@@ -210,16 +215,73 @@ describe('test.yml — generated host artifacts reach the shards', () => {
 });
 
 describe('test.yml — checkout cost', () => {
-    // The blobless partial clone took checkout from 3m33s to well under a minute, and every
-    // job pays it. A checkout that loses `filter: blob:none` silently re-adds minutes to every
-    // lane at once.
-    it('every checkout uses a blobless partial clone', () => {
-        const checkouts = WORKFLOW_TEXT.split(/uses: actions\/checkout@v4/).slice(1);
+    /** The `with:` block of each checkout step in a job. */
+    const checkoutsOf = (job) =>
+        WORKFLOW_TEXT.split(new RegExp(`^ {2}${job}:$`, 'm'))[1]
+            .split(/^ {2}[a-z-]+:$/m)[0]
+            .split(/uses: actions\/checkout@\S+/)
+            .slice(1)
+            .map((block) => block.split(/\n {6}- /)[0]);
+
+    // A full-history checkout downloads every version of every file unless it is blobless.
+    it('every full-history checkout uses a blobless partial clone', () => {
+        const checkouts = WORKFLOW_TEXT.split(/uses: actions\/checkout@\S+/).slice(1).map((block) => block.split(/\n {6}- /)[0]);
         expect(checkouts.length).toBeGreaterThanOrEqual(5);
-        for (const [i, block] of checkouts.entries()) {
-            const withBlock = block.split(/\n {6}- /)[0];
-            expect(withBlock, `checkout #${i + 1} must set filter: blob:none`).toMatch(/filter: blob:none/);
+        const fullHistory = checkouts.filter((c) => /fetch-depth: 0/.test(c));
+        expect(fullHistory.length).toBeGreaterThanOrEqual(4);
+        for (const [i, withBlock] of fullHistory.entries()) {
+            expect(withBlock, `full-history checkout #${i + 1} must set filter: blob:none`).toMatch(/filter: blob:none/);
         }
+    });
+
+    // A one-commit checkout needs every file of that commit. With a blobless filter the files
+    // arrive in a second, slower download during `git checkout`.
+    it('a one-commit checkout of the whole tree does not use a blobless filter', () => {
+        for (const job of ['test', 'coverage']) {
+            const checkouts = checkoutsOf(job);
+            expect(checkouts, `job "${job}"`).toHaveLength(1);
+            expect(checkouts[0], `job "${job}"`).not.toMatch(/fetch-depth: 0/);
+            expect(checkouts[0], `job "${job}"`).not.toMatch(/filter:/);
+        }
+    });
+
+    // These jobs read only files under .github/, so they do not download the rest of the tree.
+    it('the jobs that read only .github/ use a sparse checkout', () => {
+        for (const job of ['changes', 'unit-tests']) {
+            const checkouts = checkoutsOf(job);
+            expect(checkouts, `job "${job}"`).toHaveLength(1);
+            expect(checkouts[0], `job "${job}"`).toMatch(/sparse-checkout: \.github\n/);
+        }
+    });
+
+    // Rename detection reads file contents, which a sparse blobless clone must download.
+    it('the change detection diff does not detect renames', () => {
+        const filter = readJobSteps('changes').find((s) => s.name === 'Check changed paths');
+        expect(filter.body.join('\n')).toMatch(/git diff --name-only --no-renames /);
+    });
+});
+
+describe('pnpm store cache', () => {
+    const SETUP = readFileSync(join(REPO_ROOT, '.github/actions/mj-setup/action.yml'), 'utf8');
+
+    // setup-node saves its pnpm cache under a key that any job can write first. A job that
+    // does not install saved a near-empty store there, and every later job then got an exact
+    // hit and downloaded all packages again.
+    it('mj-setup does not use the setup-node pnpm cache', () => {
+        expect(SETUP).not.toMatch(/^\s*cache: '?pnpm'?\s*$/m);
+    });
+
+    it('mj-setup restores and saves the pnpm store under its own key', () => {
+        expect(SETUP).toMatch(/uses: actions\/cache\/restore@/);
+        expect(SETUP).toMatch(/uses: actions\/cache\/save@/);
+        expect(SETUP).toMatch(/key: pnpm-store-v1-/);
+    });
+
+    it('a job that resolves the lockfile without an install does not write a pnpm cache', () => {
+        const integration = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const preflight = integration.split(/^ {2}preflight:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(preflight).toMatch(/--lockfile-only/);
+        expect(preflight).not.toMatch(/cache: '?pnpm'?/);
     });
 });
 

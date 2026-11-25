@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S7.4 #2",
+    "Description": "Gate G5.6 (owner PR 4, phase 5, dataset C1, criterion S7.4; D-058, D-060): a trained model's prediction is visible on a Person with zero schema change. The check trains the C1 renewal model, publishes it through the lifecycle gate and creates its scoring binding (FeatureName, the seeded View Model Predictions authorization, no TargetColumn); one Score Record Set call scores every record of the binding's entity. Measured: the stored query Predictive Studio: Schema Column Fingerprint before the publish and after the run (sys.columns checksum, flyway_schema_history count, newest MJ: Entities change: all unchanged); every scored record's Model row carries and resolves its binding, model, run and as-of date; MJ: Latest Feature Values holds each with no refresh call; the record panel's own batch (PredictionPanelQueries) replayed on a scored record through a minted Developer identity shows the prediction, 1 of 1, and through a minted UI-only identity returns nothing, 1 of 1.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G5.6\", \"owner:PR4\", \"phase:5\", \"dataset:C1\", \"criterion:S7.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "0 columns changed, 0 migrations, 0 entity-metadata changes; 100% of scored records carry the four lineage fields and are in MJ: Latest Feature Values; the panel shows the prediction to the authorized identity 1 of 1 and nothing to the restricted one 1 of 1."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s7-4-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "B3405F89-8A61-4F70-B0BE-C83C1D9DF1C0"
+  }
+}

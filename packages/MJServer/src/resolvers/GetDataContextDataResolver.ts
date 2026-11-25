@@ -8,6 +8,7 @@ import { AppContext } from "../types.js";
 import { GetReadOnlyProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 @ObjectType()
 export class GetDataContextItemDataOutputType {
@@ -65,6 +66,7 @@ interface SQLItemGate {
  * refused on its own, and the other items still load. Items of the other types load through entity
  * permissions for the calling user.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class GetDataContextDataResolver extends ResolverBase {
     /**
@@ -174,7 +176,7 @@ export class GetDataContextDataResolver extends ResolverBase {
             return { Provider: null, Refusals: refusals };
         }
         const user: UserInfo | undefined = appCtx.userPayload?.userRecord;
-        const provider = GetReadOnlyProvider(appCtx.providers, { allowFallbackToReadWrite: false });
+        const provider = GetReadOnlyProvider(appCtx.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
         for (const item of sqlItems) {
             const refusal = this.sqlItemRefusal(item, ownerID, user, provider);
             if (refusal !== null) {

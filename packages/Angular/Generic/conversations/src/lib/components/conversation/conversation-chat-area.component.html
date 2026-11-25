@@ -40,6 +40,7 @@
       showArtifactIndicator: showArtifactIndicator
     }"></ng-container>
   } @else if (conversation || HasPreConversationHeader) {
+    @if (!AccessDeniedMessage) {
     <!-- Default header — also renders BEFORE a conversation exists when the
          embedder has pre-conversation chrome to surface (currently just the
          mode picker — agent / share / export / members / artifacts all
@@ -53,7 +54,7 @@
           <button class="sidebar-toggle-btn"
             (click)="sidebarToggleClicked.emit()"
             title="Show conversations">
-            <i class="fas fa-table-columns"></i>
+            <i class="fa-solid fa-table-columns"></i>
           </button>
         }
         @if (conversation) {
@@ -65,21 +66,31 @@
             </span>
           }
         }
+        @if (IsSideThread) {
+          <span
+            class="side-thread-privacy-badge"
+            [class.side-thread-privacy-badge--shared]="IsSideThreadExplicitlyShared"
+            data-testid="side-thread-privacy-badge"
+            [title]="IsSideThreadExplicitlyShared ? 'Explicitly shared side thread' : 'Private side conversation — only visible to you unless explicitly shared'">
+            <i class="fa-solid" [class.fa-lock]="!IsSideThreadExplicitlyShared" [class.fa-code-branch]="IsSideThreadExplicitlyShared"></i>
+            <span>{{ IsSideThreadExplicitlyShared ? 'Shared side thread' : 'Private side thread' }}</span>
+          </span>
+        }
         @if (sharedByBadge) {
           <span class="shared-by-badge" [title]="sharedByBadge.fullTooltip">
-            <i class="fas fa-share-nodes"></i>
+            <i class="fa-solid fa-share-nodes"></i>
             <span>Shared by {{ sharedByBadge.display }}</span>
           </span>
         }
         @if (conversation?.ProjectID) {
           <button class="project-tag" (click)="openProjectSelector()" [attr.title]="EffectiveReadOnly ? 'Project' : 'Assign to project'">
-            <i class="fas fa-folder"></i>
+            <i class="fa-solid fa-folder"></i>
             <span>{{ conversation!.Project || 'Project' }}</span>
           </button>
         }
         @if (conversation?.TestRunID) {
           <button class="test-indicator" (click)="viewTestRun(conversation!.TestRunID!)" title="View Test Run">
-            <i class="fas fa-flask"></i>
+            <i class="fa-solid fa-flask"></i>
             <span>Test</span>
           </button>
         }
@@ -96,13 +107,13 @@
         }
         @if (allowPinning && pinnedMessageCount > 0) {
           <button class="pin-chip" [class.active]="showPinsPanel" (click)="TogglePinsPanel()" title="View pinned messages">
-            <i class="fas fa-thumbtack"></i>
+            <i class="fa-solid fa-thumbtack"></i>
             <span class="pin-chip-count">{{ pinnedMessageCount }}</span>
           </button>
         }
         @if (showArtifactIndicator && artifactCountDisplay > 0) {
           <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts">
-            <i class="fas fa-cube"></i>
+            <i class="fa-solid fa-cube"></i>
             <span class="artifact-badge">{{ artifactCountDisplay }}</span>
           </button>
         }
@@ -118,7 +129,7 @@
         }
         @if (memberCount > 1) {
           <button class="chat-members" (click)="toggleMembersModal()" title="View members">
-            <i class="fas fa-users"></i>
+            <i class="fa-solid fa-users"></i>
             <span class="members-badge">{{ memberCount }}</span>
           </button>
         }
@@ -160,7 +171,7 @@
             [class.shared]="isShared"
             (click)="shareConversation()"
             [title]="isShared ? 'Manage sharing' : 'Share conversation'">
-            <i class="fas fa-share-nodes"></i>
+            <i class="fa-solid fa-share-nodes"></i>
             <span class="btn-label">Share</span>
           </button>
         }
@@ -177,6 +188,7 @@
         }
       </div>
     </div>
+    }
   }
 
   <!-- Header title. Main: the conversation name. A fork: the path, the conversation and each parent fork
@@ -269,6 +281,13 @@
             <mj-loading text="Loading conversation..." size="large"></mj-loading>
           </div>
         }
+      } @else if (AccessDeniedMessage) {
+        <div class="conversation-access-denied" data-testid="conversation-access-denied">
+          <mj-empty-state
+            Icon="fa-solid fa-lock"
+            Title="Access Denied"
+            [Message]="AccessDeniedMessage" />
+        </div>
       } @else if ((isNewConversation || !conversationId) && !suppressNewConversationEmptyState) {
         <!-- emptyState slot — when a consumer projects mjChatSlot="emptyState",
              they take over the entire empty-state region (including any send
@@ -280,7 +299,7 @@
              [emptyStateGreeting] string for backwards compatibility. -->
         @if (ReadOnly) {
           <div class="read-only-banner" role="status">
-            <i class="fas fa-eye"></i>
+            <i class="fa-solid fa-eye"></i>
             <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
           </div>
         } @else if (slotTemplate('emptyState'); as t) {
@@ -327,7 +346,7 @@
           <div class="chat-input-container">
             @if (ReadOnly) {
               <div class="read-only-banner" role="status">
-                <i class="fas fa-eye"></i>
+                <i class="fa-solid fa-eye"></i>
                 <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
               </div>
             } @else {
@@ -401,6 +420,7 @@
               [ReadOnly]="EffectiveReadOnly"
               [AllowStopRun]="AllowStopRun"
               [InFlightCount]="InFlightCount"
+              [StoppableDetailIds]="StoppableDetailIds"
               [OpenLinksInNewTab]="OpenLinksInNewTab"
               [assistantDisplayName]="assistantDisplayName"
               [assistantAvatarUrl]="assistantAvatarUrl"
@@ -454,7 +474,7 @@
             @if (showScrollToBottomIcon && DisplayMessages.length > 0) {
               <span class="scroll-to-bottom-icon" style="left: 50%;"
                 (click)="scrollToBottomAnimate()">
-                <i class="fas fa-arrow-down"></i>
+                <i class="fa-solid fa-arrow-down"></i>
               </span>
             }
           </div>
@@ -468,13 +488,13 @@
               </div>
             } @else if (ReadOnly) {
               <div class="read-only-banner" role="status">
-                <i class="fas fa-eye"></i>
+                <i class="fa-solid fa-eye"></i>
                 <span>{{ ReadOnlyMessage || 'You have view-only access to this conversation.' }}</span>
               </div>
             } @else {
               @if (isReadOnlyView) {
                 <div class="read-only-banner" role="status">
-                  <i class="fas fa-eye"></i>
+                  <i class="fa-solid fa-eye"></i>
                   <span>You have view-only access to this conversation.</span>
                 </div>
               }
@@ -518,6 +538,7 @@
                     [AgentTurnHandler]="AgentTurnHandler"
                     [AutoNameConversation]="AutoNameConversation"
                     [EnableDecisionRouting]="EnableDecisionRouting"
+                    [EnableEdgePreDiscovery]="EnableEdgePreDiscovery"
                     [inProgressMessageIds]="inputRef.conversationId === conversationId ? inProgressMessageIds : emptyInProgressIds"
                     [disabled]="isProcessing || isReadOnlyView"
                     [ReadOnly]="EffectiveReadOnly"
@@ -657,7 +678,7 @@
     }
 
     <!-- Remote Browser Side Pane -->
-    @if (ShowRemoteBrowserPanel) {
+    @if (AllowRemoteBrowser && ShowRemoteBrowserPanel) {
       @if (!isArtifactPaneMaximized) {
         <div class="resize-handle" (mousedown)="onResizeStart($event)" (touchstart)="onResizeTouchStart($event)"></div>
       }
@@ -794,6 +815,7 @@
   [isVisible]="showExportModal"
   [conversation]="conversation || undefined"
   [Scope]="ExportScope"
+  [ArtifactLink]="ExportArtifactLink"
   [currentUser]="currentUser"
   (cancelled)="onExportModalCancelled()"
   (exported)="onExportModalComplete()">
@@ -823,7 +845,7 @@
       <div class="modal-header">
         <h3>Assign Project</h3>
         <button class="modal-close-btn" (click)="showProjectSelector = false">
-          <i class="fas fa-times"></i>
+          <i class="fa-solid fa-times"></i>
         </button>
       </div>
       <div class="modal-body">
@@ -850,12 +872,12 @@
               [class.active]="showSystemArtifacts"
               (click)="toggleSystemArtifacts()"
               title="Toggle system artifacts visibility">
-              <i class="fas fa-cog"></i>
+              <i class="fa-solid fa-cog"></i>
               <span>{{ showSystemArtifacts ? 'Hide' : 'Show' }} System</span>
             </button>
           }
           <button class="modal-close-btn" (click)="showArtifactsModal = false">
-            <i class="fas fa-times"></i>
+            <i class="fa-solid fa-times"></i>
           </button>
         </div>
       </div>
@@ -873,7 +895,7 @@
             <!-- Main card header - click to open latest version -->
             <div class="artifact-card-header" (click)="openArtifactFromModal(artifact.artifactId)">
               <div class="artifact-modal-icon">
-                <i class="fas fa-file-code"></i>
+                <i class="fa-solid fa-file-code"></i>
               </div>
               <div class="artifact-modal-info">
                 <div class="artifact-modal-title">{{artifact.name}}</div>
@@ -887,12 +909,12 @@
               </div>
               @if (artifact.versionCount > 1) {
                 <button class="expand-btn" (click)="toggleArtifactExpansion(artifact.artifactId, $event)">
-                  <i class="fas" [class.fa-chevron-down]="expandedArtifactId !== artifact.artifactId"
+                  <i class="fa-solid" [class.fa-chevron-down]="expandedArtifactId !== artifact.artifactId"
                   [class.fa-chevron-up]="expandedArtifactId === artifact.artifactId"></i>
                 </button>
               }
               <div class="artifact-modal-action">
-                <i class="fas fa-external-link-alt"></i>
+                <i class="fa-solid fa-external-link-alt"></i>
               </div>
             </div>
 
@@ -903,7 +925,7 @@
                   <div class="artifact-version-item" (click)="openArtifactFromModal(artifact.artifactId, version.versionNumber); $event.stopPropagation()">
                     <span class="version-badge">v{{version.versionNumber}}</span>
                     <span class="version-open-text">Open this version</span>
-                    <i class="fas fa-arrow-right"></i>
+                    <i class="fa-solid fa-arrow-right"></i>
                   </div>
                 }
               </div>

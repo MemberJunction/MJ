@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } fro
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { MJQueryEntity } from '@memberjunction/core-entities';
+import { MJQueryEntity, QueryEngine } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent, QueryParameterValues, QuerySelectionChangedEvent } from '@memberjunction/ng-query-viewer';
 import { PartInputProblemMessage, PartInputResolution, ROW_SELECTED_EVENT } from '../models/dashboard-properties';
 import { LoadPartInterface } from '../models/dashboard-part-interfaces';
@@ -195,6 +195,8 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
     private queryEntity: MJQueryEntity | null = null;
     private autoRefreshTimer: ReturnType<typeof setInterval> | null = null;
+    /** Incremented on each load and in cleanup() so stale/post-destroy async continuations stop. */
+    private loadSequence = 0;
 
     constructor(cdr: ChangeDetectorRef) {
         super(cdr);
@@ -207,6 +209,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     }
 
     public async loadContent(): Promise<void> {
+        const seq = ++this.loadSequence;
         const config = this.getConfig<PanelConfig>();
         const queryId = config?.['queryId'] as string | undefined;
         const queryName = config?.['queryName'] as string | undefined;
@@ -225,25 +228,30 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
             if (queryId) {
                 // Load query by ID to verify it exists
-                this.queryEntity = await p.GetEntityObject<MJQueryEntity>('MJ: Queries', p.CurrentUser);
-                const loaded = await this.queryEntity.Load(queryId);
+                const entity = await p.GetEntityObject<MJQueryEntity>('MJ: Queries', p.CurrentUser);
+                const loaded = await entity.Load(queryId);
+                if (seq !== this.loadSequence) {
+                    return;
+                }
 
                 if (!loaded) {
                     throw new Error('Query not found');
                 }
 
+                this.queryEntity = entity;
                 this.QueryId = queryId;
             } else if (queryName) {
-                // Query by name - find the query ID from metadata
-                const queryInfo = p.Queries.find(q => q.Name === queryName);
-                if (queryInfo) {
-                    this.QueryId = queryInfo.ID;
-                } else {
-                    throw new Error(`Query "${queryName}" not found`);
+                const resolvedId = await this.findQueryIdByName(queryName);
+                if (seq !== this.loadSequence) {
+                    return;
                 }
+                this.QueryId = resolvedId;
             }
 
             if (!(await this.applyQueryInputs(config))) return;
+            if (seq !== this.loadSequence) {
+                return;
+            }
             this.HasQuery = true;
             this.ShowToolbar = (config?.['showParameterControls'] as boolean) !== false;
 
@@ -255,9 +263,25 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
 
             this.setLoading(false);
         } catch (error) {
+            if (seq !== this.loadSequence) {
+                return;
+            }
             this.showingInputProblem = false;
             this.setError(error instanceof Error ? error.message : 'Failed to load query');
         }
+    }
+
+    /**
+     * Resolves a query name to its ID through the provider's QueryEngine, loading the engine first
+     * if it has not loaded yet. Throws when no query has that name.
+     */
+    private async findQueryIdByName(queryName: string): Promise<string> {
+        const p = this.ProviderToUse;
+        const engine = QueryEngine.GetProviderInstance<QueryEngine>(p, QueryEngine) as QueryEngine;
+        await engine.Config(false, p.CurrentUser, p);
+        const query = engine.FindQueryByName(queryName);
+        if (!query) throw new Error(`Query "${queryName}" not found`);
+        return query.ID;
     }
 
     /**
@@ -374,6 +398,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
     }
 
     protected override cleanup(): void {
+        this.loadSequence++;
         this.stopAutoRefresh();
         this.queryEntity = null;
         this.QueryId = null;

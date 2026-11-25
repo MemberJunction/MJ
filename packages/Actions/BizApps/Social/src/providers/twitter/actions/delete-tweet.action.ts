@@ -41,8 +41,10 @@ export class TwitterDeleteTweetAction extends TwitterBaseAction {
                 };
             }
 
-            // Get the tweet details before deletion (for output)
-            let tweetDetails: any = null;
+            // Read the tweet and verify ownership BEFORE deleting (#3790). The ownership check used to sit
+            // inside the retrieval try/catch, so its refusal was swallowed and a non-owned tweet was deleted.
+            // When the tweet cannot be read, ownership cannot be verified, so the delete is refused too.
+            let tweet: Tweet | undefined;
             try {
                 LogStatus(`Retrieving tweet details for ID: ${tweetId}...`);
                 const response = await this.httpClient.Get<TwitterApiResponse<Tweet>>(`/tweets/${tweetId}`, {
@@ -52,25 +54,33 @@ export class TwitterDeleteTweetAction extends TwitterBaseAction {
                         'user.fields': 'id,username'
                     }
                 });
-
-                if (response.Data.data) {
-                    tweetDetails = {
-                        id: response.Data.data.id,
-                        text: response.Data.data.text,
-                        createdAt: response.Data.data.created_at,
-                        metrics: response.Data.data.public_metrics
-                    };
-
-                    // Verify ownership
-                    const currentUser = await this.getCurrentUser();
-                    if (response.Data.data.author_id !== currentUser.id) {
-                        throw new Error('You can only delete your own tweets');
-                    }
-                }
+                tweet = response.Data.data ?? undefined;
             } catch (error) {
-                // If we can't retrieve the tweet, it might already be deleted or we don't have access
-                LogStatus('Could not retrieve tweet details. It may already be deleted or inaccessible.');
+                LogStatus(`Could not retrieve tweet ${tweetId}: ${error instanceof Error ? error.message : String(error)}`);
             }
+            if (!tweet) {
+                return {
+                    Success: false,
+                    ResultCode: 'OWNERSHIP_UNVERIFIED',
+                    Message: `Tweet ${tweetId} could not be read, so its ownership cannot be verified; it was not deleted.`,
+                    Params
+                };
+            }
+            const currentUser = await this.getCurrentUser();
+            if (tweet.author_id !== currentUser.id) {
+                return {
+                    Success: false,
+                    ResultCode: 'NOT_OWNER',
+                    Message: `Tweet ${tweetId} belongs to another account; you can only delete your own tweets.`,
+                    Params
+                };
+            }
+            const tweetDetails = {
+                id: tweet.id,
+                text: tweet.text,
+                createdAt: tweet.created_at,
+                metrics: tweet.public_metrics
+            };
 
             // Delete the tweet
             LogStatus(`Deleting tweet ID: ${tweetId}...`);
@@ -79,7 +89,7 @@ export class TwitterDeleteTweetAction extends TwitterBaseAction {
             // Update output parameters
             const outputParams = [...Params];
             const deletedDetailsParam = outputParams.find(p => p.Name === 'DeletedTweetDetails');
-            if (deletedDetailsParam && tweetDetails) deletedDetailsParam.Value = tweetDetails;
+            if (deletedDetailsParam) deletedDetailsParam.Value = tweetDetails;
             const deletionTimeParam = outputParams.find(p => p.Name === 'DeletionTime');
             if (deletionTimeParam) deletionTimeParam.Value = new Date().toISOString();
 

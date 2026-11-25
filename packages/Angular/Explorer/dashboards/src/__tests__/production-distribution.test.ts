@@ -217,7 +217,6 @@ describe('runStatusVariant', () => {
 describe('modeBadgeClass', () => {
   it('maps scoring modes to badge colours', () => {
     expect(ModeBadgeClass('Scheduled')).toBe('blue');
-    expect(ModeBadgeClass('Materialized')).toBe('green');
     expect(ModeBadgeClass('OnDemand')).toBe('gray');
     expect(ModeBadgeClass(null)).toBe('gray');
   });

@@ -6,7 +6,6 @@
 import path from 'node:path';
 import { readFileSync } from 'node:fs';
 import { UUIDMap } from '@memberjunction/global';
-import type { PredictiveStudioWriteBackDirective } from '@memberjunction/core-entities';
 import type { OutcomeModelLike, RunDetailLike } from '@memberjunction/predictive-studio-core';
 import {
   DatasetCatalog,
@@ -22,11 +21,15 @@ import {
   type TruthHarness,
 } from '@memberjunction/predictive-studio-truth-suite';
 
-/** The W1 s42 record-process scoring: its details, the model as the Predictions resource reads it, and the truth file. */
+/**
+ * The W1 s42 record-process scoring: its details, the model as the Predictions resource reads it, the truth file and the
+ * loaded dataset (its cached rows give each scored record's feature values).
+ */
 export interface W1RecordProcessScoring {
   Details: RunDetailLike[];
   Model: OutcomeModelLike;
   TruthCsv: string;
+  Dataset: LoadedDataset;
 }
 
 /** Pipeline specs, dataset references and the shared W1 record-process scoring for the PS gate bundles. */
@@ -36,12 +39,6 @@ export class PsGateSpecs {
 
   /** The four classification algorithms the agent-run gates offer the builder. */
   public static readonly Algorithms: readonly AlgorithmKey[] = ['logistic_regression', 'xgboost', 'lightgbm', 'random_forest'];
-
-  /**
-   * The write-back mapping G0.7 scores with (the score lands in the dataset's `TruthScore` column), typed as the
-   * ScoreRecordSet operation's write-back input (the explicit `OutputMapping` form).
-   */
-  public static readonly WriteBack: Exclude<PredictiveStudioWriteBackDirective, boolean> = { OutputMapping: { fields: { TruthScore: '$.score' } } };
 
   /** The W1 record-process scoring of the run `RunID`, shared by G0.4 and G0.5; cleared when the scoring fails. */
   private static w1RecordProcess: { RunID: string; Scoring: Promise<W1RecordProcessScoring> } | null = null;
@@ -70,7 +67,7 @@ export class PsGateSpecs {
   }
 
   /**
-   * The W1 s42 record-process scoring of the Validated fixture model (NA, 2024), memoised per harness run (`h.RunID`):
+   * The W1 s42 record-process scoring of the published fixture model (NA, 2024), memoised per harness run (`h.RunID`):
    * G0.4 and G0.5 read the same scoring. The details and lineage are plain data, so they stay valid after a bundle's
    * teardown. A failed scoring is not memoised, so the next gate retries it instead of reporting the first one's error.
    */
@@ -110,13 +107,15 @@ export class PsGateSpecs {
 
   private static async scoreW1RecordProcess(h: TruthHarness): Promise<W1RecordProcessScoring> {
     const w1 = await h.EnsureLoaded({ Kind: 'world', ID: 'W1-signal', Seed: 42 });
-    const model = await RunFixtures.W1S42ValidatedModel(h);
+    const model = await RunFixtures.W1S42PublishedModel(h);
     const run = await h.ScoreViaRecordProcess(model.ModelID, w1, "Region = 'NA' AND [Year] = 2024");
     if (run.Status !== 'Completed') throw new Error(`record-process scoring ended ${run.Status}`);
     return {
       TruthCsv: path.join(w1.Dir, 'truth.csv'),
+      Dataset: w1,
       Details: run.Details.map((d) => ({ RecordID: d.RecordID, ResultPayload: d.ResultPayload })),
-      Model: { Lineage: model.LineageJSON, TargetVariable: 'Renewed', ProblemType: 'classification' },
+      // OutputSemantics null: the probes read no binding row (`BuildAtRiskOptions(model, null)`), so the semantics are not consulted.
+      Model: { Lineage: model.LineageJSON, TargetVariable: 'Renewed', ProblemType: 'classification', OutputSemantics: null },
     };
   }
 }

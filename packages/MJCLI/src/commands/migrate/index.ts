@@ -3,14 +3,17 @@ import { Command, Flags } from '@oclif/core';
 import { Skyway } from '@memberjunction/skyway-core';
 import type { MigrateResult, MigrationExecutionResult, MigrationStatus, ResolvedMigration, SkywayConfig } from '@memberjunction/skyway-core';
 import ora from 'ora-classic';
-import { GetValidatedConfig, GetSkywayConfig, GetRawConfig, type MJConfig } from '../../config';
+import { GetValidatedConfig, GetSkywayConfig, GetRawConfig, ResolvePostgresMigrationSecurity, type MJConfig } from '../../config';
 import { FetchMigrationSlice, ResolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
 import { VerifyDatabaseConnection } from '../../lib/db-preflight';
 import { ReadAppliedMigrationState, type AppliedMigrationState } from '../../lib/db-version';
 import { DecideOutOfOrder, FindOutOfOrderPending, ReadExplicitOutOfOrder, ShouldProbeOutOfOrder } from '../../lib/out-of-order';
 import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
 import { ClearSharedCacheAfterWrite, MigrationChangedDatabase, SKIP_CACHE_CLEAR_ENV } from '../../lib/shared-cache';
+import { FindAppManifestSchema } from '../../lib/app-manifest-schema';
 import { DEFAULT_MIGRATION_REQUEST_TIMEOUT_MS, MigrationTimeoutHint } from '../../lib/migration-timeout';
+import { RunPgPreflightForConfig } from '../../lib/pg-preflight/run-for-config';
+import { FormatPgPreflightReport, SummarizePgPreflightReport } from '../../lib/pg-preflight/render';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
@@ -30,10 +33,16 @@ export default class Migrate extends Command {
   static flags = {
     verbose: Flags.boolean({ char: 'v', description: 'Enable additional logging' }),
     tag: Flags.string({ char: 't', description: 'Version tag to use for running remote migrations' }),
-    schema: Flags.string({ char: 's', description: 'Target schema (overrides coreSchema from config)' }),
+    schema: Flags.string({
+      char: 's',
+      description: 'Target schema (overrides coreSchema from config). When omitted for local migrations, the schema declared by an mj-app.json in --dir (or its parents) or the current directory is used',
+    }),
     dir: Flags.string({ description: 'Migration source directory (overrides migrationsLocation from config)' }),
     'check-connection': Flags.boolean({
       description: 'Verify the database connection (including TLS) and exit without migrating',
+    }),
+    'skip-preflight': Flags.boolean({
+      description: 'PostgreSQL only: skip the database readiness checks (server version, group roles, extensions, privileges, TLS) that run before migrating',
     }),
     'skip-cache-clear': Flags.boolean({
       description: `Do not clear the shared Redis cache (REDIS_URL) after migrating. Also: ${SKIP_CACHE_CLEAR_ENV}=1`,
@@ -60,17 +69,42 @@ export default class Migrate extends Command {
     // override (without --tag) keeps using the local filesystem and skips fetching, so
     // monorepo developers are unaffected.
     const ref = flags.tag ?? (flags.dir ? undefined : config.mjRepoVersion);
-    const fetched = ref ? await this.fetchSliceForRef(config, ref, flags.schema) : null;
+    // A remote ref fetches core MJ migrations from mjRepoUrl, so only a local run takes its schema
+    // from an Open App manifest.
+    const schema = flags.schema ?? (ref ? undefined : this.schemaFromAppManifest(flags.dir));
+    const fetched = ref ? await this.fetchSliceForRef(config, ref, schema) : null;
 
     try {
       const sourceDir = this.resolveSourceDir(fetched, flags.dir);
-      const skywayConfig = await GetSkywayConfig(config, undefined, flags.schema, sourceDir);
+      const skywayConfig = await GetSkywayConfig(config, undefined, schema, sourceDir);
       this.logFetchSummary(flags.verbose, fetched);
-      await this.applyOutOfOrderPolicy(config, skywayConfig, flags.schema, sourceDir);
+      if (config.dbPlatform === 'postgresql' && !flags['skip-preflight']) {
+        await this.preflightPostgres(config, schema, sourceDir, flags.verbose);
+      }
+      await this.applyOutOfOrderPolicy(config, skywayConfig, schema, sourceDir);
       await this.executeMigration(config, flags, skywayConfig);
     } finally {
       if (fetched) await fetched.Cleanup();
     }
+  }
+
+  /**
+   * The schema an Open App's `mj-app.json` declares, used when `--schema` is omitted (#4771).
+   * Without it, migrating an app's migrations validates them against the core schema's history,
+   * where none of them appear, and reports every one as unapplied.
+   */
+  private schemaFromAppManifest(dir: string | undefined): string | undefined {
+    let found: ReturnType<typeof FindAppManifestSchema>;
+    try {
+      found = FindAppManifestSchema(dir, process.cwd());
+    } catch (error: unknown) {
+      this.error(error instanceof Error ? error.message : String(error));
+    }
+    if (!found?.SchemaName) {
+      return undefined;
+    }
+    this.log(`Using schema ${found.SchemaName} from ${found.ManifestPath} (pass --schema to override).`);
+    return found.SchemaName;
   }
 
   /**
@@ -183,6 +217,33 @@ export default class Migrate extends Command {
     if (checkOnly) {
       this.log(`Database connection OK (${config.dbHost}:${config.dbPort}, ${config.dbDatabase}).`);
     }
+  }
+
+  /**
+   * PostgreSQL readiness preflight: checks the server version, the `cdp_*` group roles, the
+   * extensions the pending migrations create, the login's privileges and TLS, and stops with
+   * the exact SQL an administrator must run when the database is not ready — before the first
+   * migration, rather than partway through the baseline. `--skip-preflight` bypasses it.
+   */
+  private async preflightPostgres(config: MJConfig, schema: string | undefined, sourceDir: string | undefined, verbose: boolean): Promise<void> {
+    const probe = await GetSkywayConfig(config, undefined, schema, sourceDir);
+    let report: Awaited<ReturnType<typeof RunPgPreflightForConfig>>;
+    try {
+      report = await RunPgPreflightForConfig(config, probe);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.error(`PostgreSQL readiness preflight could not run: ${message}\n→ Pass --skip-preflight to migrate without it.`, { exit: 1 });
+    }
+    const lines = FormatPgPreflightReport(report);
+    const hasWarnings = report.Checks.some((c) => c.Status === 'warn');
+    if (!report.Passed || verbose || hasWarnings) {
+      for (const line of lines) this.log(line);
+    }
+    if (!report.Passed) {
+      this.log('');
+      this.error(`The database is not ready for migrations (${SummarizePgPreflightReport(report)}). Nothing was migrated.\n→ Run the SQL above, or pass --skip-preflight to migrate anyway.`, { exit: 1 });
+    }
+    this.log(`PostgreSQL readiness preflight passed (${SummarizePgPreflightReport(report)}).`);
   }
 
   /**
@@ -365,6 +426,7 @@ export default class Migrate extends Command {
     const spinner = ora(`Refreshing metadata for ${targetSchema}...`);
     spinner.start();
     try {
+      const pgSecurity = config.dbPlatform === 'postgresql' ? await ResolvePostgresMigrationSecurity(config) : undefined;
       await executeOpenAppMetadataRefresh({
         platform: config.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver',
         coreSchema,
@@ -374,9 +436,11 @@ export default class Migrate extends Command {
           Port: config.dbPort,
           Database: config.dbDatabase,
           User: config.codeGenLogin,
-          Password: config.codeGenPassword,
+          Password: pgSecurity?.Password ?? config.codeGenPassword,
           Encrypt: config.dbEncrypt,
           TrustServerCertificate: config.dbTrustServerCertificate,
+          ...(pgSecurity?.SSL ? { SSL: pgSecurity.SSL } : {}),
+          ...(pgSecurity?.PasswordSource ? { PasswordSource: pgSecurity.PasswordSource } : {}),
         },
       });
       spinner.succeed(`Metadata refreshed for ${targetSchema}`);

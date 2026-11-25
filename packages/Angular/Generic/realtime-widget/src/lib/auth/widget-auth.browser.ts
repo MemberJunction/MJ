@@ -5,7 +5,8 @@
  * which is fully covered. Logic added here is logic that cannot be tested, so keep it out.
  */
 import { LogError } from '@memberjunction/core';
-import { GraphQLDataProvider, GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
+import { GraphQLDataProvider, GraphQLProviderConfigData } from '@memberjunction/graphql-dataprovider';
+import { SetupAngularGraphQLClient } from '@memberjunction/ng-shared-generic';
 import { WidgetAuthAdapter, type AuthProviderPort, type HttpPostPort } from './widget-auth.adapter';
 
 /** MJAPI serves GraphQL at its root over both protocols (see MJExplorer's GRAPHQL_URI / _WS_URI). */
@@ -44,7 +45,7 @@ function graphQLProvider(apiUrl: string | null): AuthProviderPort {
       }
       try {
         const config = new GraphQLProviderConfigData(jwt, apiUrl, toWebSocketUrl(apiUrl), onRefresh);
-        await setupGraphQLClient(config);
+        await SetupAngularGraphQLClient(config);
         return true;
       } catch (error) {
         LogError(`mj-realtime-widget: failed to configure the GraphQL provider: ${error instanceof Error ? error.message : String(error)}`);

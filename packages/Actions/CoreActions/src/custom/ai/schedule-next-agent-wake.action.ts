@@ -1,12 +1,24 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
-import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
-import { LogError, Metadata, RunView } from '@memberjunction/core';
+import { EscapeSQLString, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
+import { IMetadataProvider, LogError, Metadata, RunView } from '@memberjunction/core';
 import {
+    MJAIAgentRhythmTemplateEntity,
     MJUserRoutineEntity,
     MJUserRoutineEntity_IRoutineWakeConfiguration,
 } from '@memberjunction/core-entities';
+import {
+    CheckActivePolicyForAgentAndUser,
+    LookupActiveRhythmTemplateForWorkstream,
+    ResolveAgentConfigurationIDInput,
+    ResolveRoutineSeededAgentConfigurationID,
+} from '@memberjunction/ai-agents';
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
+import {
+    VerifyActiveRhythmTemplate,
+    VerifyApprovedAgentRequest,
+} from './chief-of-staff-approval-helper';
 
 /**
  * Action that allows an autonomous agent (such as the Chief of Staff agent) to self-schedule
@@ -20,6 +32,7 @@ import { AIEngine } from '@memberjunction/aiengine';
  */
 @RegisterClass(BaseAction, 'Schedule Next Agent Wake')
 export class ScheduleNextAgentWakeAction extends BaseAction {
+    public static override readonly AuthorizesCaller = true;
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
             const contextUser = params.ContextUser;
@@ -67,17 +80,42 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 };
             }
 
-            const resumeState = this.parseObjectParam<Record<string, unknown>>(params, 'ResumeState') ?? {};
-            const watchedEntities =
-                this.parseObjectParam<MJUserRoutineEntity_IRoutineWakeConfiguration['watchedEntities']>(
-                    params,
-                    'WatchedEntities'
-                );
-            const wakeGate =
-                this.parseObjectParam<MJUserRoutineEntity_IRoutineWakeConfiguration['wakeGate']>(
-                    params,
-                    'WakeGate'
-                );
+            const md: IMetadataProvider = params.Provider ?? Metadata.Provider;
+            const policyEval = await CheckActivePolicyForAgentAndUser(
+                agentId,
+                contextUser.ID,
+                contextUser,
+                { provider: md, preferCache: true }
+            );
+            if (!policyEval.Allowed) {
+                return {
+                    Success: false,
+                    ResultCode: 'POLICY_DENIED',
+                    Message: policyEval.Reason,
+                    Params: params.Params,
+                };
+            }
+
+            const fallbackWakeConfig =
+                this.parseObjectParam<Record<string, unknown>>(params, 'WakeConfigurationJSON') ?? null;
+            const resumeState =
+                this.parseObjectParam<Record<string, unknown>>(params, 'ResumeState') ??
+                (fallbackWakeConfig && typeof fallbackWakeConfig['resumeState'] === 'object' && fallbackWakeConfig['resumeState'] !== null
+                    ? (fallbackWakeConfig['resumeState'] as Record<string, unknown>)
+                    : {});
+            const rawWatchedEntities =
+                this.parseObjectParam<Array<Record<string, unknown>>>(params, 'WatchedEntities') ??
+                (fallbackWakeConfig && Array.isArray(fallbackWakeConfig['watchedEntities'])
+                    ? (fallbackWakeConfig['watchedEntities'] as Array<Record<string, unknown>>)
+                    : null);
+            const rawWakeGate =
+                this.parseObjectParam<Record<string, unknown>>(params, 'WakeGate') ??
+                (fallbackWakeConfig && typeof fallbackWakeConfig['wakeGate'] === 'object' && fallbackWakeConfig['wakeGate'] !== null
+                    ? (fallbackWakeConfig['wakeGate'] as Record<string, unknown>)
+                    : null);
+
+            const watchedEntities = rawWatchedEntities ? this.normalizeWatchedEntities(rawWatchedEntities) : null;
+            const wakeGate = rawWakeGate ? this.normalizeWakeGate(rawWakeGate) : null;
 
             const wakeConfig: MJUserRoutineEntity_IRoutineWakeConfiguration = {
                 workstreamKey,
@@ -87,16 +125,97 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 ...(wakeGate ? { wakeGate } : {}),
             };
 
+            const rhythmTemplateId = this.getStringParam(params, 'RhythmTemplateID');
+            let verifiedTemplate: MJAIAgentRhythmTemplateEntity | null = null;
+            if (rhythmTemplateId) {
+                verifiedTemplate = await VerifyActiveRhythmTemplate(
+                    rhythmTemplateId,
+                    agentId,
+                    contextUser,
+                    md
+                );
+                if (!verifiedTemplate) {
+                    return {
+                        Success: false,
+                        ResultCode: 'VALIDATION_ERROR',
+                        Message: `RhythmTemplateID "${rhythmTemplateId}" does not match an Active MJ: AI Agent Rhythm Templates row for agent "${agentName}".`,
+                        Params: params.Params,
+                    };
+                }
+                resumeState['rhythmTemplateID'] = verifiedTemplate.ID;
+            }
+
+            const hasExplicitConfigParam = params.Params.some(
+                (p) => p.Name.trim().toLowerCase() === 'agentconfigurationid'
+            );
+            const rawAgentConfigID = hasExplicitConfigParam
+                ? (this.getStringParam(params, 'AgentConfigurationID') ?? null)
+                : undefined;
+            const rawModelTier = this.getStringParam(params, 'ModelTier');
+            const configResolution = await ResolveAgentConfigurationIDInput({
+                agentConfigurationID: rawAgentConfigID,
+                modelTier: rawModelTier,
+                contextUser,
+                metadataProvider: md,
+            });
+            if (configResolution.ErrorMessage) {
+                return {
+                    Success: false,
+                    ResultCode: 'VALIDATION_ERROR',
+                    Message: configResolution.ErrorMessage,
+                    Params: params.Params,
+                };
+            }
+
             const existingRoutine = await this.findExistingWakeRoutine(
                 contextUser.ID,
                 agentId,
                 workstreamKey,
                 params
             );
-            const md = params.Provider ?? new Metadata();
+
+            // Code-enforced recurring routine gate: during an agent run, the agent may NOT
+            // unilaterally create a brand-new Recurring routine without a server-verified
+            // Approved `MJ: AI Agent Requests` record (`ConfirmedApprovalRequestID`).
+            // Self-attested `ConfirmedByUser = true` and unverified `RhythmTemplateID` strings
+            // are NEVER accepted as proof of user confirmation inside agent context.
+            // Direct human/UI calls (outside agent context) and updating existing routines or
+            // creating OneShot/Adaptive wakes remain allowed.
+            const callingAgentId =
+                (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() ||
+                AgentUserPolicyEngine.Instance.GetActiveExecutingAgentID();
+            const confirmedApprovalRequestId = this.getStringParam(params, 'ConfirmedApprovalRequestID');
+            if (scheduleMode === 'Recurring' && !existingRoutine && callingAgentId) {
+                const approved = confirmedApprovalRequestId
+                    ? await VerifyApprovedAgentRequest(
+                          confirmedApprovalRequestId,
+                          contextUser.ID,
+                          agentId,
+                          contextUser,
+                          md
+                      )
+                    : false;
+                if (!approved) {
+                    return {
+                        Success: false,
+                        ResultCode: 'APPROVAL_REQUIRED',
+                        Message:
+                            'Agents cannot create new Recurring routines without a server-verified approved MJ: AI Agent Requests record (ConfirmedApprovalRequestID). Offer the rhythm or cadence to the user and re-invoke with ConfirmedApprovalRequestID after approval.',
+                        Params: params.Params,
+                    };
+                }
+            }
+
+            const entityMd = params.Provider ?? new Metadata();
             const routine =
                 existingRoutine ??
-                (await md.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
+                (await entityMd.GetEntityObject<MJUserRoutineEntity>('MJ: User Routines', contextUser));
+
+            const effectiveCronExpression = this.resolveEffectiveCronExpression(
+                params,
+                scheduleMode,
+                cronExpression
+            );
 
             routine.UserID = contextUser.ID;
             routine.Name = `${ agentName } — Wake (${ workstreamKey })`;
@@ -107,7 +226,7 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
             routine.TargetType = 'Agent';
             routine.TargetID = agentId;
             routine.Timezone = timezone;
-            routine.CronExpression = cronExpression && cronExpression.trim().length > 0 ? cronExpression.trim() : null;
+            routine.CronExpression = effectiveCronExpression;
             routine.InitialMessage = initialMessage;
             routine.StartingPayload = JSON.stringify({
                 workstreamKey,
@@ -115,6 +234,29 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
                 resumeState,
             });
             routine.WakeConfigurationObject = wakeConfig;
+            if (!existingRoutine) {
+                let templateDefaultConfigID = verifiedTemplate?.DefaultAgentConfigurationID ?? null;
+                if (!templateDefaultConfigID && !configResolution.Provided && workstreamKey !== 'default') {
+                    const matchedTemplate = await LookupActiveRhythmTemplateForWorkstream({
+                        agentID: agentId,
+                        workstreamKey,
+                        contextUser,
+                        metadataProvider: md,
+                    });
+                    templateDefaultConfigID = matchedTemplate?.DefaultAgentConfigurationID ?? null;
+                }
+                routine.AgentConfigurationID = await ResolveRoutineSeededAgentConfigurationID({
+                    explicitAgentConfigurationID: configResolution.Provided
+                        ? configResolution.ConfigurationID
+                        : undefined,
+                    templateDefaultAgentConfigurationID: templateDefaultConfigID,
+                    workstreamKey,
+                    contextUser,
+                    metadataProvider: md,
+                });
+            } else if (configResolution.Provided) {
+                routine.AgentConfigurationID = configResolution.ConfigurationID;
+            }
             if (nextRunAt) {
                 routine.NextRunAt = nextRunAt;
             }
@@ -165,22 +307,32 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         await AIEngine.Instance.Config(false, params.ContextUser);
         const rawId = this.getStringParam(params, 'AgentID');
         const rawName = this.getStringParam(params, 'AgentName');
+        const contextAgentId = (params.Context as { AgentID?: string } | undefined)?.AgentID?.trim() || null;
 
-        const byName = rawName
-            ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === rawName.trim().toLowerCase())
-            : undefined;
-        const byId = rawId ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawId)) : undefined;
-        const defaultCos = !rawName
-            ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
-            : undefined;
-        const agent = byName ?? byId ?? defaultCos;
+        let agent: (typeof AIEngine.Instance.Agents)[number] | undefined;
+        let requestedLabel: string;
+
+        if (rawName) {
+            requestedLabel = rawName;
+            agent = AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === rawName.trim().toLowerCase());
+        } else {
+            const byId = rawId ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, rawId)) : undefined;
+            const byContext = contextAgentId
+                ? AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, contextAgentId))
+                : undefined;
+            const defaultCos = !contextAgentId
+                ? AIEngine.Instance.Agents.find((a) => a.Name.trim().toLowerCase() === 'chief of staff')
+                : undefined;
+            agent = byId ?? byContext ?? defaultCos;
+            requestedLabel = rawId ?? contextAgentId ?? 'Chief of Staff';
+        }
 
         if (!agent) {
             return {
                 errorResult: {
                     Success: false,
                     ResultCode: 'AGENT_NOT_FOUND',
-                    Message: `Target agent ${ rawId ?? rawName ?? 'Chief of Staff' } not found.`,
+                    Message: `Target agent ${ requestedLabel } not found.`,
                     Params: params.Params,
                 },
             };
@@ -200,15 +352,62 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         return { agentId: agent.ID, agentName: agent.Name };
     }
 
+    /**
+     * Normalizes watched-entity rules so legacy prompt field names (`filter`, `trackChangesOnly`)
+     * map cleanly onto `RoutineWatchedEntityRule` (`extraFilter`, `includeRecordChanges`).
+     */
+    private normalizeWatchedEntities(
+        rawRules: Array<Record<string, unknown>>
+    ): NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['watchedEntities']> {
+        return rawRules
+            .filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null)
+            .map((item) => {
+                const clone: Record<string, unknown> = { ...item };
+                const existingExtraFilter = typeof clone['extraFilter'] === 'string' ? clone['extraFilter'].trim() : '';
+                const legacyFilter = typeof clone['filter'] === 'string' ? clone['filter'].trim() : '';
+                if (!existingExtraFilter && legacyFilter) {
+                    clone['extraFilter'] = legacyFilter;
+                }
+                delete clone['filter'];
+
+                if (clone['includeRecordChanges'] === undefined && typeof clone['trackChangesOnly'] === 'boolean') {
+                    clone['includeRecordChanges'] = clone['trackChangesOnly'];
+                }
+                delete clone['trackChangesOnly'];
+
+                return clone as unknown as NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['watchedEntities']>[number];
+            });
+    }
+
+    /**
+     * Normalizes wake-gate settings so legacy prompt field names (`TotalChangedRecords` in
+     * `tier1Expression` and `tier2DecisionQuestion`) map onto `WakeGateEvaluator`'s canonical shape.
+     */
+    private normalizeWakeGate(
+        rawGate: Record<string, unknown>
+    ): NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['wakeGate']> {
+        const clone: Record<string, unknown> = { ...rawGate };
+        if (typeof clone['tier1Expression'] === 'string') {
+            clone['tier1Expression'] = clone['tier1Expression'].replace(/\bTotalChangedRecords\b/g, 'totalChangedCount');
+        }
+        const legacyQuestion =
+            typeof clone['tier2DecisionQuestion'] === 'string' ? clone['tier2DecisionQuestion'].trim() : '';
+        if (legacyQuestion && (clone['tier2Decision'] === undefined || clone['tier2Decision'] === null)) {
+            clone['tier2Decision'] = { question: legacyQuestion };
+        }
+        delete clone['tier2DecisionQuestion'];
+        return clone as unknown as NonNullable<MJUserRoutineEntity_IRoutineWakeConfiguration['wakeGate']>;
+    }
+
     private async findExistingWakeRoutine(
         userId: string,
         agentId: string,
         workstreamKey: string,
         params: RunActionParams
     ): Promise<MJUserRoutineEntity | null> {
-        const rv = new RunView();
-        const safeUser = userId.replace(/'/g, "''");
-        const safeAgent = agentId.replace(/'/g, "''");
+        const rv = params.Provider ? RunView.FromMetadataProvider(params.Provider) : new RunView();
+        const safeUser = EscapeSQLString(userId);
+        const safeAgent = EscapeSQLString(agentId);
         const res = await rv.RunView<MJUserRoutineEntity>(
             {
                 EntityName: 'MJ: User Routines',
@@ -260,6 +459,34 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         return 'Active';
     }
 
+    /**
+     * Ensures `Adaptive` routines always carry a non-null `CronExpression` so the periodic
+     * adaptive check-in loop has a valid cadence AND satisfies `CK_UserRoutine_CronOrOneShot`
+     * (`[ScheduleMode] = 'OneShot' OR [CronExpression] IS NOT NULL`).
+     */
+    private resolveEffectiveCronExpression(
+        params: RunActionParams,
+        scheduleMode: MJUserRoutineEntity['ScheduleMode'],
+        cronExpression: string | null
+    ): string | null {
+        if (cronExpression && cronExpression.trim().length > 0) {
+            return cronExpression.trim();
+        }
+        if (scheduleMode !== 'Adaptive') {
+            return null;
+        }
+        const wakeInMinutes =
+            this.getNumericParam(params, 'WakeInMinutes') ?? this.getNumericParam(params, 'DelayMinutes');
+        if (wakeInMinutes != null && wakeInMinutes >= 1 && wakeInMinutes <= 59) {
+            return `*/${ Math.max(1, Math.round(wakeInMinutes)) } * * * *`;
+        }
+        if (wakeInMinutes != null && wakeInMinutes >= 60 && wakeInMinutes < 1440) {
+            const hours = Math.min(23, Math.max(1, Math.round(wakeInMinutes / 60)));
+            return hours === 1 ? '0 * * * *' : `0 */${ hours } * * *`;
+        }
+        return '0 * * * *';
+    }
+
     private resolveNextRunAt(
         params: RunActionParams,
         scheduleMode: MJUserRoutineEntity['ScheduleMode'],
@@ -295,6 +522,14 @@ export class ScheduleNextAgentWakeAction extends BaseAction {
         if (val == null) return null;
         const str = String(val).trim();
         return str.length > 0 ? str : null;
+    }
+
+    private getBooleanParam(params: RunActionParams, name: string): boolean {
+        const val = this.getParamValue(params, name);
+        if (val == null) return false;
+        if (typeof val === 'boolean') return val;
+        const normalized = String(val).trim().toLowerCase();
+        return normalized === 'true' || normalized === '1' || normalized === 'yes';
     }
 
     private getNumericParam(params: RunActionParams, name: string): number | null {

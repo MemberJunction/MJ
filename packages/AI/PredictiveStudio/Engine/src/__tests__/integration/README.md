@@ -1,31 +1,24 @@
 # Predictive Studio — Live End-to-End Integration Test
 
-`live-train-score.integration.test.ts` is an **evergreen, opt-in** integration
-test that proves the **entire** Predictive Studio stack works for real — nothing
-about the ML is mocked:
+`live-train-score.integration.test.ts` is an **evergreen, opt-in** integration test that trains a Prediction Unit
+pipeline under its Evaluation Protocol through the **real** Python sidecar trainer — nothing about the ML is mocked:
 
 ```
-synthetic dataset (in-memory, deterministic)
-  → REAL FeatureAssemblyExecutor      (synthetic rows via the in-memory IFeatureDataAccess seam)
-  → REAL TrainingEngine
-      → REAL MLSidecar                (managed spawn of the bundled Python: xgboost / logistic / ridge)
-  → in-memory ML Model artifact       (persistence seams faked — training itself is REAL)
-  → REAL MLModelInferenceProcessor
-      → REAL MLSidecar /predict        (scores held-out rows)
+generated yearly membership rows (in-memory table data access)
+  → REAL unit row reader + as-of assembly + Training Snapshot (in-memory file store)
+  → REAL TrainingEngine → REAL MJSidecarTrainer → REAL MLSidecar /trainer (managed spawn of the bundled Python)
+  → the gate decision decided in TypeScript, the shipped artifact stored, the model row created
 ```
 
-The **only** things faked are the persistence seams (entity factory, record
-loader, artifact store/loader) so the test needs **no database**. The sidecar,
-FeatureAssembly, TrainingEngine, and the inference processor are all the real
-production code paths. Because it's self-contained (synthetic data, no demo
-schema), it can live in the repo and re-run in CI/dev forever.
+The **only** things faked are the persistence seams (entity factory, record loader, artifact and snapshot stores), so
+the test needs **no database**.
 
 ## Running it
 
-It requires the Sidecar's bundled Python venv (xgboost, scikit-learn, FastAPI):
+It requires the Sidecar's bundled Python venv:
 
 ```bash
-# 1) Build the venv once (Python 3.9+; on macOS also needs Homebrew libomp for xgboost)
+# 1) Build the venv once (on macOS also needs Homebrew libomp for xgboost)
 cd packages/AI/PredictiveStudio/Sidecar
 npm run setup:python
 
@@ -34,38 +27,18 @@ cd ../Engine
 npm run test:integration
 ```
 
-`npm run test:integration` uses a dedicated config (`vitest.integration.config.ts`)
-that scopes the run to `src/**/integration/**/*.integration.test.ts` and sets
-`PS_INTEGRATION=1`. The normal `npm run test` (fast, sidecar-free, CI-safe)
-**excludes** this folder entirely, so it is unaffected.
+`npm run test:integration` uses a dedicated config (`vitest.integration.config.ts`) that scopes the run to
+`src/**/integration/**/*.integration.test.ts` and sets `PS_INTEGRATION=1`. The normal `npm run test` excludes this
+folder entirely.
 
 ## Safety / graceful skip
 
 - The suite is gated behind `PS_INTEGRATION=1` (the integration config sets it).
-- If the venv (or Python) is missing, it **skips gracefully** with a clear console
-  note rather than hard-failing — so an environment without Python is never broken
-  by this test.
-- It is **DB-free** and uses **no secrets**. (No DB credentials are needed; if a
-  future DB-backed variant needs them, read from the repo-root `.env` via
-  `process.env` — never hardcode.)
+- If the venv (or `PREDICTIVE_STUDIO_PYTHON`) is missing, it skips with a console note rather than failing.
+- It is **DB-free** and uses **no secrets**.
 
-## What it asserts (real numbers, not canned)
+## What it asserts
 
 | Test | Assertion |
 |------|-----------|
-| xgboost classifier | Draft model produced; FittedPreprocessing + FeatureSchema + FeatureImportance populated; **holdout AUC ≥ 0.7**; strong-positive scores higher than strong-negative and gets the right class; held-out batch beats coin-flip |
-| logistic_regression classifier | **holdout AUC ≥ 0.7**; strong-positive > strong-negative |
-| ridge regressor | **holdout R² ≥ 0.4**; higher-engagement row predicts higher value; no class label (regression) |
-
-Representative metrics on a dev machine (Python 3.9, ~420 synthetic rows):
-xgboost holdout AUC ≈ 0.73, logistic holdout AUC ≈ 0.80, ridge holdout R² ≈ 0.87.
-The whole suite runs in ~2 s once the sidecar is warm.
-
-## Note on the holdout
-
-The production `MJSidecarTrainer` doesn't yet wire holdout scoring into the
-Python `/train` path (it carves the locked holdout in TS for provenance only —
-see `ISidecarTrainer`). To assert an **honest locked-holdout** metric, this test
-injects a small `LiveHoldoutSidecarTrainer` that sets `validation.holdout_size`
-on the request, so the Python sidecar carves and scores a holdout **exactly
-once** and returns genuine `holdout_metrics`.
+| unit pipeline under its protocol | the run completes; it stores a gate decision measured on the 400-row 2025 holdout; a shipping decision creates the model row from the shipped `ps-predictor/v2` artifact, and no-signal ships none |

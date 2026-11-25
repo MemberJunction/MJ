@@ -29,8 +29,13 @@ class RegisteredEcho extends LegacyEchoChannel {
 @RegisterClass(BaseRealtimeChannelClient, 'ScopedFormChannel')
 class RegisteredForm extends FormChannel {
     public Initialized = false;
+    public RestoredJson: string | null = null;
     protected override OnInitialize(): void {
         this.Initialized = true;
+    }
+    public override RestoreState(stateJson: string): boolean {
+        this.RestoredJson = stateJson;
+        return true;
     }
     public get ContextForTest(): RealtimeChannelContext | null {
         return this.Context;
@@ -85,6 +90,7 @@ class MintProvider {
     public readonly sessionId = 'transport-1';
     public Calls: MintCall[] = [];
     public Policy: RealtimeSessionClientPolicy | string | null = null;
+    public PriorChannelStatesJson: string | null = null;
     public RejectChannelScoping = false;
     constructor(public Entities: unknown[] = [{ Name: 'MJ: AI Agent Channels' }]) {}
     public async ExecuteGQL(query: string, variables: Record<string, unknown>): Promise<unknown> {
@@ -103,7 +109,7 @@ class MintProvider {
                 SessionConfigJson: '{}',
                 ModelName: 'Fake',
                 NarrationInstructionsTemplate: null,
-                PriorChannelStatesJson: null,
+                PriorChannelStatesJson: this.PriorChannelStatesJson,
             };
             if (this.Policy !== null && query.includes('ClientPolicyJson')) {
                 result.ClientPolicyJson = typeof this.Policy === 'string' ? this.Policy : JSON.stringify(this.Policy);
@@ -526,6 +532,26 @@ describe('RealtimeSessionRuntime — on-demand channels and the ContextTool prox
         await runtime.EndRealtimeSession();
     });
 
+    it('mounts and restores an advertised on-demand channel automatically when PriorChannelStatesJson carries state for it', async () => {
+        stubRegistry([ECHO_ROW, FORM_ROW]);
+        const provider = new MintProvider();
+        provider.Policy = policy([
+            { Key: 'Echo', DisplayPolicy: 'open-on-start', MaxExposure: 'state', Source: 'default' },
+            { Key: 'Form', DisplayPolicy: 'on-demand', MaxExposure: 'state', Source: 'config' },
+        ]);
+        provider.PriorChannelStatesJson = JSON.stringify({ Form: '{"draft":"hello"}' });
+        const { runtime } = build(provider);
+        await start(runtime);
+
+        const form = runtime.ActiveChannels.find((c) => c.ChannelName === 'Form') as RegisteredForm | undefined;
+        expect(form).toBeDefined();
+        expect(form?.Initialized).toBe(true);
+        expect(form?.RestoredJson).toBe('{"draft":"hello"}');
+        expect(runtime.AdvertisedChannels).toEqual([]);
+        expect(runtime.HasChannelBeenUsed('Form')).toBe(true);
+        await runtime.EndRealtimeSession();
+    });
+
     it('lets the HOST open an on-demand channel with seed inputs, the way the agent would', async () => {
         const { runtime } = await startWithOnDemandForm();
         const result = await runtime.OpenChannel('form', { title: 'From the page' }); // case-insensitive
@@ -703,6 +729,96 @@ describe('RealtimeSessionRuntime — ChannelClassLoader (on-demand channel code)
     await start(runtime, { HostChannels: [{ ClientPluginClass: 'ScopedEchoChannel' }] });
     expect(err).toHaveBeenCalledWith(expect.stringContaining('channel class loader failed'), expect.any(Error));
     expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']); // the class was registered anyway
+    await runtime.EndRealtimeSession();
+  });
+});
+
+describe('RealtimeSessionRuntime — ChannelFilter (viewport/host capability gating)', () => {
+  beforeEach(() => {
+    ScopedFakeClient.Notes = [];
+    ScopedFakeClient.ListenOnConnect = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('omits filtered-out channels from mint candidates, native tools, and mounted session channels', async () => {
+    stubRegistry([ECHO_ROW, FORM_ROW]);
+    const { runtime, provider } = build();
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Echo',
+    });
+
+    const [mint] = provider.mints();
+    const candidates = JSON.parse(String(mint.variables['channelCandidatesJson'])) as Array<{ Key: string }>;
+    expect(candidates.map((c) => c.Key)).toEqual(['Form']);
+    expect(mint.variables['clientToolsJson']).toBeNull();
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual([]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
+      ChannelFilterReason: 'Requires a wider desktop view and is not available on mobile or narrow screens right now.',
+    });
+    expect(runtime.ActiveChannels.map((c) => c.ChannelName)).toEqual(['Echo']);
+    expect(
+      ScopedFakeClient.Notes.some(
+        (n) => n.includes('Unavailable in this view') && n.includes('Form') && n.includes('Requires a wider desktop view'),
+      ),
+    ).toBe(true);
+    expect(runtime.GetSurfaceSnapshot()).toMatchObject({
+      UnavailableChannels: [
+        { ChannelKey: 'Form', Reason: 'Requires a wider desktop view and is not available on mobile or narrow screens right now.' },
+      ],
+    });
+    const echo = runtime.ActiveChannels[0] as RegisteredEcho;
+    const refusal = await echo.ContextForTest!.DispatchContextAction!({
+      Target: { Channel: 'Form' },
+      Action: 'open',
+      Params: {},
+    });
+    expect(refusal.Success).toBe(false);
+    expect(refusal.ErrorMessage).toContain('Requires a wider desktop view and is not available on mobile or narrow screens right now.');
+    await runtime.EndRealtimeSession();
+  });
+
+  it('resets hostUnavailableChannels on each start so filtered entries never accumulate across sessions', async () => {
+    stubRegistry([ECHO_ROW, FORM_ROW]);
+    const { runtime } = build();
+    const reason = 'Requires a wider desktop view.';
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Form',
+      ChannelFilterReason: reason,
+    });
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([{ ChannelKey: 'Form', Title: 'Form', Reason: reason }]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime, {
+      ChannelFilter: (plugin) => plugin.ChannelName !== 'Echo',
+      ChannelFilterReason: reason,
+    });
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([{ ChannelKey: 'Echo', Title: 'Echo', Reason: reason }]);
+    await runtime.EndRealtimeSession();
+
+    await start(runtime);
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toBeUndefined();
+    await runtime.EndRealtimeSession();
+  });
+
+  it('does not advertise kill-switched (inactive) registry rows as unavailable when rejected by ChannelFilter', async () => {
+    stubRegistry([ECHO_ROW, { ...FORM_ROW, IsActive: false }]);
+    const { runtime } = build();
+
+    await start(runtime, {
+      ChannelFilter: () => false,
+      ChannelFilterReason: 'Requires a wider desktop view.',
+    });
+
+    expect(runtime.GetSurfaceSnapshot().UnavailableChannels).toEqual([
+      { ChannelKey: 'Echo', Title: 'Echo', Reason: 'Requires a wider desktop view.' },
+    ]);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Echo'))).toBe(true);
+    expect(ScopedFakeClient.Notes.some((n) => n.includes('Form'))).toBe(false);
     await runtime.EndRealtimeSession();
   });
 });

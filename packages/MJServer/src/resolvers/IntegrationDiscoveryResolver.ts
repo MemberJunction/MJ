@@ -76,6 +76,7 @@ import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-enti
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/generic-database-provider";
+import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
 
 // ─── SQL filter guard ───────────────────────────────────────────────────────
 
@@ -1259,6 +1260,7 @@ class ListSourceObjectsOutput {
  * Provides endpoints to test connections, discover objects, and discover fields
  * on external systems via their registered connectors.
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class IntegrationDiscoveryResolver extends ResolverBase {
 
@@ -2255,6 +2257,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 .filter(f => f.IsPrimaryKey)
                 .map(f => f.Name.replace(/[^A-Za-z0-9_]/g, '_'));
 
+            const organicKeyFields = sourceObj.Fields
+                .filter(f => f.IsUniqueKey && !f.IsPrimaryKey)
+                .map(f => [f.Name.replace(/[^A-Za-z0-9_]/g, '_')]);
+
             // If no columns were discovered, skip rather than generating a broken table
             // (DDL with UNIQUE ([ID]) on a non-existent column will always fail).
             if (columns.length === 0 && primaryKeyFields.length === 0) {
@@ -2283,7 +2289,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Description: sourceObj.Description ?? objDescriptions?.objectDescription,
                 Columns: columns,
                 PrimaryKeyFields: primaryKeyFields,
-                SoftForeignKeys: []
+                SoftForeignKeys: [],
+                ...(organicKeyFields.length > 0 ? { OrganicKeyFields: organicKeyFields } : {}),
             });
         }
 

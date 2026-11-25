@@ -582,7 +582,13 @@ is default-ON per `tiers.ts`, so the pin is explicit — no token cost, no flaki
 members execute rather than skipping. Anything still gated (Predictive Studio; mutation checks
 outside the nightly lane) reports a real `Skipped` status in the summary. Scheduled lanes cover
 the rest: nightly `RUN_MUTATION_TESTS=1` + the cross-server Redis rig; weekly Live Model
-(gated on the `INTEGRATION_LIVE_MODEL_KEYS` secret).
+(gated on the `INTEGRATION_LIVE_MODEL_KEYS` secret). The cross-server rig, the only lane that runs
+MJAPI with `REDIS_URL`, also runs on pull requests that change the shared-cache stack or the server
+bootstrap (the `cachestack` filter in the workflow's `changes` job).
+
+The lanes in this workflow that boot MJAPI wait with `.github/scripts/wait-for-mjapi.sh`, which stops as soon as
+`/healthcheck` reports a failed start (including one that loaded no entity metadata) instead of
+polling until it times out, and prints that answer with the log tail.
 
 ---
 
@@ -853,7 +859,7 @@ coverage loss):
 | `scheduled-jobs` | SJ1–SJ2 (2) | server | Scheduled Job row | IT09 | Run lifecycle + distributed lease |
 | `field-rules-bulk-update` | FR1–FR3 (3) | server | 3 Action Categories | IT10 | FieldRules dry-run/apply/conditional gating |
 | `remote-operations` | RO1–RO7 (7) | server | Template + Record Process + categories | IT11 | The Remote Operations primitive, headless full-stack |
-| `ai-skills` | AS1–AS21 (21) | server | 4 skills + grants/junctions | IT12 | Skills gates, resolution, SKILL.md round-trip, activation governance — no LLM |
+| `ai-skills` | AS1–AS22 (22) | server | 4 skills + grants/junctions | IT12 | Skills gates, resolution, SKILL.md round-trip, activation governance — no LLM |
 | `api-keys` | AK1–AK3 (3) | server | key fixtures | IT13 | API Keys engine `Config` + end-to-end `Authorize` allow/deny |
 | `predictive-studio` | PS1–PS5 (5) | server | Pipeline → Model → Binding chain | IT14 | PS stack seams (entities, work-type registration, Actions) — no sidecar |
 | `feature-pipeline-core` | FP1–FP7 (7) | server | stub driver, pipeline, prompt | IT124 | Feature Value key, Dedup Cache, version gate, dry run and breaker on MJ core tables, no model calls |

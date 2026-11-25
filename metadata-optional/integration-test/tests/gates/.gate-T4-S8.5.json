@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "T4 -> S8.5",
+    "Description": "Gate G6.11 (owner PR 4, phase 6, dataset T4, criterion S8.5): on the no-shift T4 series no challenger replaces the incumbent, 0 of 1.",
+    "Status": "Active",
+    "Tags": "[\"gate\", \"G6.11\", \"owner:PR4\", \"phase:6\", \"dataset:T4\", \"criterion:S8.5\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "No replacement over 12 monitored months."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-t4-s8-5"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "33C4623C-F9B5-4440-BB31-C2866F833DFE"
+  }
+}

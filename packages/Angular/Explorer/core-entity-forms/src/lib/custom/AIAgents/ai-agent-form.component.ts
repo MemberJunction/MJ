@@ -21,6 +21,8 @@ import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
 import { CreateAgentService, CreateAgentResult, type AgentInvocationOpenRequestedEventArgs } from '@memberjunction/ng-agents';
 import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
+import { SectionPickerItem } from '@memberjunction/ng-ui-components';
+import { JoinHeroSummary } from '../../shared/phone-hero';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
@@ -111,7 +113,7 @@ export interface AgentSessionHistoryItem {
   standalone: false,
     selector: 'mj-ai-agent-form',
     templateUrl: './ai-agent-form.component.html',
-    styleUrls: ['./ai-agent-form.component.css']
+    styleUrls: ['./ai-agent-form.component.css', '../../shared/phone-hero.css']
 })
 export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent implements OnDestroy {
     /** The AI Agent entity being edited */
@@ -730,6 +732,34 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         const plan = BuildAgentFormTabs(this.formTabContext, this.ActiveFormTab);
         this.FormTabs = plan.Tabs;
         this.ActiveFormTab = plan.ActiveKey;
+    }
+
+    /** The form tabs as `mj-section-picker` items: tab order, a numeric badge as the count. */
+    public get SectionPickerItems(): SectionPickerItem[] {
+        return this.FormTabs.map((t) => ({ Key: t.key, Title: t.label, Icon: t.icon, Count: typeof t.badge === 'number' ? t.badge : null }));
+    }
+
+    /** A pick from the phone section sheet; goes through OnFormTabChange. An unknown key is ignored. */
+    public OnSectionPicked(key: string): void {
+        if (this.FormTabs.some((t) => t.key === key)) this.OnFormTabChange(key);
+    }
+
+    /** Phone hero (6A): whether the summary line is expanded to show the rest of the hero. */
+    public HeroDetailsOpen = false;
+
+    /** Toggles the phone hero between its compact identity row and the full hero. */
+    public ToggleHeroDetails(): void {
+        this.HeroDetailsOpen = !this.HeroDetailsOpen;
+        this.cdr.markForCheck();
+    }
+
+    /** The phone hero's one-line summary: agent type, parent, and who can run it. */
+    public get HeroSummary(): string {
+        return JoinHeroSummary([
+            this.record.Type ? `${this.record.Type} agent` : null,
+            this.record.Parent ? `Child of ${this.record.Parent}` : null,
+            this.IsOpenToEveryone ? 'Open to everyone' : 'Restricted',
+        ]);
     }
 
     public OnFormTabChange(key: string): void {

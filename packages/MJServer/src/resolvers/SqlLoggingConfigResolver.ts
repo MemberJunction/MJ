@@ -9,6 +9,7 @@ import { LoadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
@@ -230,6 +231,7 @@ export class SqlLoggingConfig {
  * await stopSqlLogging(session.id);
  * ```
  */
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class SqlLoggingConfigResolver extends ResolverBase {
   /** Default prefix for auto-generated SQL log filenames */
@@ -443,12 +445,20 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     const allowedDir = path.resolve(config.sqlLogging.allowedLogDirectory ?? './logs/sql');
     await this.ensureDirectoryExists(allowedDir);
 
+    // Reject client-supplied file names carrying path separators or traversal segments outright
+    if (input.fileName && (input.fileName.includes('/') || input.fileName.includes('\\') || input.fileName.includes('..'))) {
+      throw new Error('Invalid file name - path separators and parent directory references are not allowed');
+    }
+
     const fileName = input.fileName || `${SqlLoggingConfigResolver.LOG_FILE_PREFIX}${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
     const filePath = path.join(allowedDir, fileName);
 
-    // Validate file path is within allowed directory
+    // Validate file path is within allowed directory.
+    // SECURITY: a plain startsWith(allowedDir) admits sibling directories sharing the prefix
+    // (e.g. './logs/sql-evil' passes a './logs/sql' check); path.relative is the correct containment test.
     const resolvedPath = path.resolve(filePath);
-    if (!resolvedPath.startsWith(allowedDir)) {
+    const rel = path.relative(allowedDir, resolvedPath);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) {
       throw new Error('Invalid file path - must be within allowed log directory');
     }
 

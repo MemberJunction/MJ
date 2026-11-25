@@ -12,7 +12,7 @@ interface WindowInfo {
 
 /**
  * Service for managing test harness windows for AI Agents and AI Prompts.
- * Creates Kendo Window components with custom titlebar including minimize button.
+ * Creates mj-window components with a custom titlebar including a minimize button.
  */
 @Injectable({
     providedIn: 'root'
@@ -38,6 +38,7 @@ export class TestHarnessWindowManagerService {
         height?: string | number;
         initialDataContext?: Record<string, any>;
         initialTemplateData?: Record<string, any>;
+        initialDebugMode?: boolean;
         viewContainerRef?: ViewContainerRef;
     }): Observable<TestResult> {
         const data: CustomWindowData = {
@@ -48,6 +49,7 @@ export class TestHarnessWindowManagerService {
             height: options.height || '90vh',
             initialDataContext: options.initialDataContext,
             initialTemplateData: options.initialTemplateData,
+            initialDebugMode: options.initialDebugMode,
             mode: 'agent'
         };
         
@@ -63,6 +65,7 @@ export class TestHarnessWindowManagerService {
         height?: string | number;
         initialDataContext?: Record<string, any>;
         initialTemplateData?: Record<string, any>;
+        initialDebugMode?: boolean;
         viewContainerRef?: ViewContainerRef;
     }): Observable<TestResult> {
         return this.OpenAgentTestHarness(options);

@@ -705,18 +705,18 @@ export const EntityWritesChecks: NamedCheck[] = [
             // 2) Non-overlapping concurrent update on catB (Status only): catB was loaded when Description
             //    was still null. Because delta-only Save() sends ONLY primary keys + dirty fields (ID, Status),
             //    saving catB must NOT clobber catA's Description in the DB (verified against DB truth below).
-            //    What catB holds in memory afterwards depends on the transport: in-process, the save refreshes
-            //    from the full server row and catB receives catA's Description. Over GraphQL, the Update
-            //    returns only the dirty fields plus computed/virtual/read-only ones (2274f420b2, 1a7f36289b),
-            //    so catB keeps the Description it loaded — a concurrent edit is not pulled into memory.
+            //    In memory, catB then receives catA's Description on both transports: in-process, the save
+            //    refreshes from the full server row; over GraphQL, the Update input stays delta-only but its
+            //    selection set requests every loaded non-binary field (#6183, 3a29d7189e), so the merged row
+            //    the server returns — including the concurrent Description — reaches the entity.
             catB.Status = 'Pending';
             Assert(await saveDelta(catB), `EW12 catB non-overlapping update failed: ${catB.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             AssertEqual(catB.Status, 'Pending', 'EW12 catB.Status updated');
             AssertEqual(
                 catB.Description,
-                isGraphQLTransport ? null : 'EW12 Initial Description',
+                'EW12 Initial Description',
                 isGraphQLTransport
-                    ? 'EW12 catB keeps its loaded Description over GraphQL (delta-only Update return)'
+                    ? 'EW12 catB received catA Description from the full-row GraphQL Update return'
                     : 'EW12 catB received catA Description from the in-process full-row refresh'
             );
 

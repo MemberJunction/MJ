@@ -169,7 +169,9 @@ export class SkillMarkdownConverter {
                 continue;
             }
 
-            const listItemMatch = rawLine.match(/^\s*-\s+(.*)$/);
+            // Each pattern's whitespace run is followed by a class it cannot match (`\S`), so a line of
+            // spaces or tabs is read in linear time (CodeQL js/polynomial-redos).
+            const listItemMatch = rawLine.match(/^\s*-\s+((?:\S.*)?)$/);
             if (listItemMatch && currentListKey) {
                 if (currentListKey !== 'ignore') {
                     const value = this.unescapeScalar(listItemMatch[1]);
@@ -178,7 +180,7 @@ export class SkillMarkdownConverter {
                 continue;
             }
 
-            const keyValueMatch = rawLine.match(/^([A-Za-z][A-Za-z0-9_]*)\s*:\s*(.*)$/);
+            const keyValueMatch = rawLine.match(/^([A-Za-z][A-Za-z0-9_]*)\s*:\s*((?:\S.*)?)$/);
             if (!keyValueMatch) {
                 throw new Error(`Invalid SKILL.md frontmatter line: "${rawLine}"`);
             }
@@ -220,10 +222,10 @@ export class SkillMarkdownConverter {
         return LIST_KEYS.has(key);
     }
 
-    /** Quotes a scalar value if it contains a colon or leading/trailing whitespace that would otherwise break the simple parser. */
+    /** Quotes a scalar value if it contains a colon, leading/trailing whitespace or a leading quote that would otherwise break the simple parser. */
     private static escapeScalar(value: string): string {
-        if (/^\s|\s$|:/.test(value)) {
-            return `"${value.replace(/"/g, '\\"')}"`;
+        if (/^\s|\s$|:|^"/.test(value)) {
+            return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
         }
         return value;
     }
@@ -232,7 +234,7 @@ export class SkillMarkdownConverter {
     private static unescapeScalar(value: string): string {
         const trimmed = value.trim();
         if (trimmed.startsWith('"') && trimmed.endsWith('"') && trimmed.length >= 2) {
-            return trimmed.slice(1, -1).replace(/\\"/g, '"');
+            return trimmed.slice(1, -1).replace(/\\(["\\])/g, '$1');
         }
         return trimmed;
     }

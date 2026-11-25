@@ -145,7 +145,7 @@ Read-only SELECTs vs `__mj` views + `sys.*`/`information_schema`. Zero fixtures/
 | SEC12 | RemoteOperation ShouldRegenerate + approval reset: regen resets `CodeApprovalStatus=Pending` (re-review gate) | MUT | P2 | MJRemoteOperationEntityServer:84 |
 | SEC13 | SQLExpressionValidator `\bXP_\b`/`\bSP_\b` boundary: does `xp_cmdshell` slip through? | DET | P1 | SQLExpressionValidator.ts:183 |
 | SEC14 | SQLExpressionValidator full_query trailing `;--comment` allowed but mid-`;` rejected | DET | P2 | SQLExpressionValidator.ts:308 |
-| SEC15 | Magic-link single-use CAS race: N concurrent `/redeem` of 1-use link → exactly one wins | MUT | P3 | MagicLinkService.consumeInvite → spConsumeMagicLinkInvite (SS) / BuildConsumeInvitePostgresSQL (PG) |
+| SEC15 | Magic-link single-use CAS race: N concurrent `/redeem` of 1-use link → exactly one wins. **Covered** by `scoped-anon-elevation.SA7` (IT68, SQL Server): consume twice → 1 row then 0; expired and revoked invites untouched. The PG statement and the non-db_owner login are not covered | MUT | P3 | MagicLinkService.consumeInvite → spConsumeMagicLinkInvite (SS) / BuildConsumeInvitePostgresSQL (PG) |
 | SEC16 | Magic-link privilege confinement: guest can't mint invites, grant privileged role, or read outside scope | MUT | P3 | canIssueInvites:57 |
 | SEC17 | OAuth state cross-user 403: user B can't `/status`/`/exchange` A's state (no real IdP needed) | MUT | P3 | OAuthCallbackHandler:293,495 |
 
@@ -251,7 +251,7 @@ The untested majority (~30 of ~40 server subclasses). Mostly DET (pure validator
 | ID | Check | Tier | Pri | Anchor |
 |---|---|---|---|---|
 | RT1 | Realtime Loopback session-bridge persistence + janitor: idle-reap routes through stop, finalizer fires, live session NOT reaped (injected clock) | MUT | P3 | ai-bridge-engine.ts:86-110 |
-| PS6 | Leakage guard blocks promotion: dominance-flagged model refused without sign-off, saves only Status | MUT | P1 | promote-model.gate.ts:4-55 |
+| PS6 | Lifecycle gate withholds a leakage-flagged publish: the training run's stored leakage flag refuses `unacknowledged-leakage-flags` until an approving sign-off record names every flag; the model's Status is unchanged | MUT | P1 | lifecycle-gate.ts:184-195 |
 | PS7 | Experiment orchestrator wave loop persistence (injected trainer): waves/iterations/leaderboard/prune/budget-gate | MUT | P2 | experiment-orchestrator.ts:19 |
 | PS8 | FeatureAssembly fit-once/as-of: recipe emitted, never fit in TS; label-derived cols denied; vision-on-own-image allowed | MUT | P2 | feature-assembly-executor.ts:14 |
 | PS9 | MLModelInferenceProcessor scoring via InMemoryArtifactLoader (no sidecar) | MUT | P2 | ml-model-inference-processor |

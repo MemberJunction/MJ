@@ -2,11 +2,42 @@
  * DDLGenerator — produces CREATE TABLE / ALTER TABLE SQL strings.
  * File-emission only — never executes SQL.
  */
-import { EscapeSQLString } from '@memberjunction/global';
+import { GetDialect } from '@memberjunction/sql-dialect';
 import type { DatabasePlatform, TargetColumnConfig, TargetTableConfig, ColumnModification } from './interfaces.js';
 
 /** Characters allowed in identifiers (schema, table, column names). */
 const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+/** Names of the standard `__mj_integration_*` tracking columns on every integration table. */
+export type StandardIntegrationColumnName =
+    | '__mj_integration_SyncStatus'
+    | '__mj_integration_LastSyncedAt'
+    | '__mj_integration_LastSyncedSnapshot'
+    | '__mj_integration_SyncMessage'
+    | '__mj_integration_ContentHash'
+    | '__mj_integration_CustomOverflow'
+    | '__mj_integration_ExternalVersion'
+    | '__mj_integration_LastSeenModifiedValue'
+    | '__mj_integration_LastReconciledAt'
+    | '__mj_integration_LastWriterDirection'
+    | '__mj_integration_IsTombstoned'
+    | '__mj_integration_DeletedDetectedAt';
+
+/** Standard descriptions for the `__mj_integration_*` tracking columns on every integration table. */
+export const STANDARD_COLUMN_DESCRIPTIONS: Readonly<Record<StandardIntegrationColumnName, string>> = Object.freeze({
+    '__mj_integration_SyncStatus': 'Current per-record sync status: Active, Archived, Error, or Conflict (both sides changed the same field; the record awaits resolution per the entity map ConflictResolution policy).',
+    '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
+    '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
+    '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
+    '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
+    '__mj_integration_CustomOverflow': 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the "extra" keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
+    '__mj_integration_ExternalVersion': 'The external system’s version/etag/modified token for the last-synced state, used for optimistic-concurrency (OCC) detection on bidirectional push. Null when the source exposes no version token.',
+    '__mj_integration_LastSeenModifiedValue': 'The watermark / last-modified value observed for THIS record on the last sync (per-record, independent of the entity-map-level CompanyIntegrationSyncWatermark).',
+    '__mj_integration_LastReconciledAt': 'Timestamp this record was last confirmed against the source system. Lets a reconcile find records not seen recently (delete-detection candidates).',
+    '__mj_integration_LastWriterDirection': 'Which side last wrote this row: "Pull" (external→MJ) or "Push" (MJ→external). Informs conflict handling and audit.',
+    '__mj_integration_IsTombstoned': 'Explicit soft-delete flag, set when the record is detected as deleted/archived upstream. A queryable tombstone, distinct from the SyncStatus="Archived" text status.',
+    '__mj_integration_DeletedDetectedAt': 'Timestamp the upstream deletion was detected (set alongside IsTombstoned). Null while the record is live.',
+});
 
 /**
  * Generates DDL SQL for creating and altering integration tables.
@@ -36,33 +67,87 @@ export class DDLGenerator {
         ValidateIdentifier(config.TableName, 'table');
 
         const q = platform === 'sqlserver' ? QuoteSqlServer : QuotePostgres;
+        const d = GetDialect(platform);
         const fullTable = `${q(config.SchemaName)}.${q(config.TableName)}`;
 
         const lines: string[] = [];
 
-        // User-configured columns (includes PK fields as regular columns)
-        const pkFieldSet = new Set(config.PrimaryKeyFields.map(f => f.toLowerCase()));
+        // User-configured columns (includes PK, Soft FK, and Organic Key fields as regular columns)
+        const indexedColSet = new Set<string>([
+            ...(config.PrimaryKeyFields ?? []).map(f => f.toLowerCase()),
+            ...(config.SoftForeignKeys ?? []).map(fk => fk.FieldName.toLowerCase()),
+            ...(config.OrganicKeyFields ?? []).flat().map(c => c.toLowerCase()),
+        ]);
         for (const col of config.Columns) {
             ValidateIdentifier(col.TargetColumnName, 'column');
             const nullable = col.IsNullable ? 'NULL' : 'NOT NULL';
             const defaultExpr = col.DefaultValue != null ? ` DEFAULT ${col.DefaultValue}` : '';
-            // NVARCHAR(MAX) cannot be indexed — cap PK columns to NVARCHAR(450)
-            const isPkCol = pkFieldSet.has(col.TargetColumnName.toLowerCase());
-            const sqlType = isPkCol && col.TargetSqlType.toUpperCase() === 'NVARCHAR(MAX)'
-                ? 'NVARCHAR(450)'
-                : col.TargetSqlType;
+            // NVARCHAR(MAX) and NVARCHAR(>450) cannot be indexed on SQL Server — cap indexed key columns to NVARCHAR(450)
+            const isIndexedCol = indexedColSet.has(col.TargetColumnName.toLowerCase());
+            const sqlType = isIndexedCol ? d.CapIndexableType(col.TargetSqlType) : col.TargetSqlType;
             lines.push(`    ${q(col.TargetColumnName)} ${sqlType} ${nullable}${defaultExpr}`);
         }
 
         // Standard integration columns (prefixed to avoid collisions)
         lines.push(...this.standardColumns(platform));
 
-        // PK is SOFT-ONLY — declared in additionalSchemaInfo (which CodeGen reads to set the entity's
-        // metadata PK), and emitted as NO database constraint here: not a PRIMARY KEY, and not even a
-        // UNIQUE. Integration PKs are *inferred* (naming + streamed-data statistics at p<0.05), so
-        // enforcing one — even as UNIQUE — would reject valid rows the moment an inference is wrong.
-        // Dedupe is the engine's job via the record-map, not a DB key. So the table carries the PK
-        // columns as ordinary columns; their PK-ness lives only in additionalSchemaInfo.
+        // PK/FK/OrganicKey are SOFT-ONLY — declared in additionalSchemaInfo/metadata, and emitted as
+        // NO database constraint (not PRIMARY KEY, not UNIQUE, not FOREIGN KEY). Instead we emit
+        // idempotent NON-UNIQUE indexes so lookups and joins use Index Seek without blocking writes.
+        const softIndexes: string[] = [];
+        const indexedTuples = new Set<string>();
+
+        if (config.PrimaryKeyFields && config.PrimaryKeyFields.length > 0) {
+            config.PrimaryKeyFields.forEach(f => ValidateIdentifier(f, 'pk column'));
+            const tupleKey = config.PrimaryKeyFields.map(f => f.toLowerCase()).join(',');
+            if (!indexedTuples.has(tupleKey)) {
+                indexedTuples.add(tupleKey);
+                softIndexes.push(
+                    d.CreateIndexIfAbsent({
+                        schema: config.SchemaName,
+                        tableName: config.TableName,
+                        indexName: `IX_${config.SchemaName}_${config.TableName}_PK`,
+                        columns: config.PrimaryKeyFields,
+                        unique: false,
+                    })
+                );
+            }
+        }
+
+        for (const fk of config.SoftForeignKeys ?? []) {
+            ValidateIdentifier(fk.FieldName, 'soft-fk column');
+            const tupleKey = fk.FieldName.toLowerCase();
+            if (!indexedTuples.has(tupleKey)) {
+                indexedTuples.add(tupleKey);
+                softIndexes.push(
+                    d.CreateIndexIfAbsent({
+                        schema: config.SchemaName,
+                        tableName: config.TableName,
+                        indexName: `IX_${config.SchemaName}_${config.TableName}_FK_${fk.FieldName}`,
+                        columns: [fk.FieldName],
+                        unique: false,
+                    })
+                );
+            }
+        }
+
+        for (const cols of config.OrganicKeyFields ?? []) {
+            if (cols.length === 0) continue;
+            cols.forEach(c => ValidateIdentifier(c, 'organic-key column'));
+            const tupleKey = cols.map(c => c.toLowerCase()).join(',');
+            if (!indexedTuples.has(tupleKey)) {
+                indexedTuples.add(tupleKey);
+                softIndexes.push(
+                    d.CreateIndexIfAbsent({
+                        schema: config.SchemaName,
+                        tableName: config.TableName,
+                        indexName: `IX_${config.SchemaName}_${config.TableName}_OK_${cols.join('_')}`,
+                        columns: cols,
+                        unique: false,
+                    })
+                );
+            }
+        }
 
         const body = lines.join(',\n');
         // Idempotent create: skip if the physical table already exists. Makes re-running
@@ -71,12 +156,10 @@ export class DDLGenerator {
         // "There is already an object named '<table>'" collisions.
         const createTable = this.generateIdempotentCreateTableStatement(fullTable, body, platform);
 
-        // Generate extended properties for descriptions (SQL Server only)
-        if (platform === 'sqlserver') {
-            const extProps = this.GenerateExtendedProperties(config);
-            if (extProps.length > 0) {
-                return createTable + '\n\n' + extProps.join('\n\n');
-            }
+        const trailing: string[] = [...softIndexes, ...this.GenerateDescriptions(config, platform)];
+
+        if (trailing.length > 0) {
+            return createTable + '\n\n' + trailing.join('\n\n');
         }
 
         return createTable;
@@ -104,84 +187,48 @@ export class DDLGenerator {
     }
 
     /**
-     * Generate sp_addextendedproperty calls for table and column descriptions.
+     * Generate idempotent table and column description statements for the target platform
+     * via `SQLDialect` (`MS_Description` guarded by `sys.fn_listextendedproperty` on SQL Server,
+     * `COMMENT ON TABLE`/`COMMENT ON COLUMN` on PostgreSQL).
      */
-    GenerateExtendedProperties(config: TargetTableConfig): string[] {
-        const props: string[] = [];
+    GenerateDescriptions(config: TargetTableConfig, platform: DatabasePlatform): string[] {
+        ValidateIdentifier(config.SchemaName, 'schema');
+        ValidateIdentifier(config.TableName, 'table');
 
-        // Table-level description
-        if (config.Description) {
-            const escaped = EscapeSQLString(config.Description);
-            const exec =
-                `EXEC sp_addextendedproperty\n` +
-                `    @name = N'MS_Description',\n` +
-                `    @value = N'${escaped}',\n` +
-                `    @level0type = N'SCHEMA', @level0name = '${config.SchemaName}',\n` +
-                `    @level1type = N'TABLE', @level1name = '${config.TableName}';`;
-            props.push(this.guardExtendedProperty(config.SchemaName, config.TableName, null, exec));
+        const dialect = GetDialect(platform);
+        const statements: string[] = [];
+
+        if (this.hasMeaningfulDescription(config.Description)) {
+            statements.push(dialect.CommentOnObjectIfAbsent('TABLE', config.SchemaName, config.TableName, config.Description));
         }
 
-        // Standard column descriptions
-        const standardDescriptions: Record<string, string> = {
-            '__mj_integration_SyncStatus': 'Current per-record sync status: Active, Archived, Error, or Conflict (both sides changed the same field; the record awaits resolution per the entity map ConflictResolution policy).',
-            '__mj_integration_LastSyncedAt': 'Timestamp of the last successful sync for this record',
-            '__mj_integration_LastSyncedSnapshot': 'The external record values as of the last successful sync, serialized as JSON. The last-known external state, kept independent of local edits, used to detect changes without a watermark and as the common ancestor for field-level merge (combine) on bidirectional push.',
-            '__mj_integration_SyncMessage': 'Human-readable detail when SyncStatus is Error or Conflict (the conflicting fields and values, or the apply error). NULL when Active.',
-            '__mj_integration_ContentHash': 'SHA-256 (hex) of the last-synced external field values. Lets the engine detect changes and skip re-loading/re-writing unchanged records for sources that have no usable watermark.',
-            '__mj_integration_CustomOverflow': 'Backend staging (system) column: JSON of source fields a record returned that have no field map yet — the "extra" keys this table has no column for. A post-sync Runtime-Schema-Updation pass promotes pervasive keys to real columns and clears them here. Not user-facing metadata; transient until promotion.',
-        };
-
-        for (const [colName, desc] of Object.entries(standardDescriptions)) {
-            props.push(this.makeColumnExtendedProperty(config.SchemaName, config.TableName, colName, desc));
-        }
-
-        // User-configured column descriptions
-        for (const col of config.Columns) {
-            if (col.Description) {
-                props.push(this.makeColumnExtendedProperty(
-                    config.SchemaName, config.TableName, col.TargetColumnName, col.Description
-                ));
+        for (const [colName, desc] of Object.entries(STANDARD_COLUMN_DESCRIPTIONS)) {
+            if (this.hasMeaningfulDescription(desc)) {
+                statements.push(dialect.CommentOnColumnIfAbsent(config.SchemaName, config.TableName, colName, desc));
             }
         }
 
-        return props;
-    }
+        for (const col of config.Columns) {
+            ValidateIdentifier(col.TargetColumnName, 'column');
+            if (this.hasMeaningfulDescription(col.Description)) {
+                statements.push(dialect.CommentOnColumnIfAbsent(config.SchemaName, config.TableName, col.TargetColumnName, col.Description));
+            }
+        }
 
-    private makeColumnExtendedProperty(
-        schemaName: string, tableName: string, columnName: string, description: string
-    ): string {
-        const escaped = EscapeSQLString(description);
-        const exec =
-            `EXEC sp_addextendedproperty\n` +
-            `    @name = N'MS_Description',\n` +
-            `    @value = N'${escaped}',\n` +
-            `    @level0type = N'SCHEMA', @level0name = '${schemaName}',\n` +
-            `    @level1type = N'TABLE', @level1name = '${tableName}',\n` +
-            `    @level2type = N'COLUMN', @level2name = '${columnName}';`;
-        return this.guardExtendedProperty(schemaName, tableName, columnName, exec);
+        return statements;
     }
 
     /**
-     * Wrap an sp_addextendedproperty EXEC in an existence guard so re-running a migration is
-     * idempotent — without it, re-adding MS_Description to a table/column that already has it
-     * throws "Property cannot be added ... already has the property". Single-statement IF
-     * (no BEGIN/END) so RSU's batch chunking on ';\n' can't split it. SQL Server only —
-     * postgresql uses no extended properties here. Pass columnName=null for a table-level
-     * property, or the column name for a column-level one (levels must match the EXEC).
+     * Generate SQL Server `sp_addextendedproperty` calls for table and column descriptions.
+     * Delegates to {@link GenerateDescriptions} for `'sqlserver'`.
      */
-    private guardExtendedProperty(
-        schemaName: string, tableName: string, columnName: string | null, execStatement: string
-    ): string {
-        const level2 = columnName ? `N'COLUMN', N'${columnName}'` : `NULL, NULL`;
-        return (
-            `IF NOT EXISTS (SELECT 1 FROM sys.fn_listextendedproperty(` +
-            `N'MS_Description', N'SCHEMA', N'${schemaName}', N'TABLE', N'${tableName}', ${level2}))\n` +
-            execStatement
-        );
+    GenerateExtendedProperties(config: TargetTableConfig): string[] {
+        return this.GenerateDescriptions(config, 'sqlserver');
     }
 
     /**
-     * Generate ALTER TABLE ADD COLUMN statement.
+     * Generate ALTER TABLE ADD COLUMN statement (plus an idempotent column description
+     * statement when `column.Description` is non-whitespace).
      */
     GenerateAlterTableAddColumn(
         schemaName: string,
@@ -193,6 +240,23 @@ export class DDLGenerator {
         ValidateIdentifier(tableName, 'table');
         ValidateIdentifier(column.TargetColumnName, 'column');
 
+        const alterStmt = this.buildIdempotentAddColumnStatement(schemaName, tableName, column, platform);
+        if (this.hasMeaningfulDescription(column.Description)) {
+            const descStmt = GetDialect(platform).CommentOnColumnIfAbsent(
+                schemaName, tableName, column.TargetColumnName, column.Description
+            );
+            return `${alterStmt}\n\n${descStmt}`;
+        }
+
+        return alterStmt;
+    }
+
+    private buildIdempotentAddColumnStatement(
+        schemaName: string,
+        tableName: string,
+        column: TargetColumnConfig,
+        platform: DatabasePlatform
+    ): string {
         const q = platform === 'sqlserver' ? QuoteSqlServer : QuotePostgres;
         const fullTable = `${q(schemaName)}.${q(tableName)}`;
         const nullable = column.IsNullable ? 'NULL' : 'NOT NULL';
@@ -201,16 +265,27 @@ export class DDLGenerator {
         // Idempotency guard — re-applying after a partial/interrupted run (or any re-sync) must not
         // fail because the column already exists. SQL Server has no `ADD COLUMN IF NOT EXISTS`, so we
         // gate with a single-statement IF over sys.columns (no BEGIN/END, so RSU's ';\n' batch chunker
-        // can't split it — same shape as GuardExtendedProperty). Postgres has native IF NOT EXISTS.
-        if (platform === 'sqlserver') {
-            const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
-            return (
-                `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
-                `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
-                `AND name = N'${column.TargetColumnName}')\n${addStmt}`
-            );
+        // can't split it). Postgres has native IF NOT EXISTS.
+        switch (platform) {
+            case 'sqlserver': {
+                const addStmt = `ALTER TABLE ${fullTable}\n    ADD ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+                return (
+                    `IF NOT EXISTS (SELECT 1 FROM sys.columns ` +
+                    `WHERE object_id = OBJECT_ID(N'${q(schemaName)}.${q(tableName)}') ` +
+                    `AND name = N'${column.TargetColumnName}')\n${addStmt}`
+                );
+            }
+            case 'postgresql':
+                return `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+            default: {
+                const unsupported: never = platform;
+                throw new Error(`GenerateAlterTableAddColumn: unsupported database platform '${String(unsupported)}'`);
+            }
         }
-        return `ALTER TABLE ${fullTable}\n    ADD COLUMN IF NOT EXISTS ${q(column.TargetColumnName)} ${column.TargetSqlType} ${nullable}${defaultExpr};`;
+    }
+
+    private hasMeaningfulDescription(description: string | undefined | null): description is string {
+        return description != null && description.replace(/\0/g, '').trim().length > 0;
     }
 
     /**

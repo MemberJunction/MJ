@@ -26,9 +26,18 @@
  *
  * @module @memberjunction/ai-core-plus
  */
+import {
+    CODE_FALLBACK_LIMITS,
+    IsTaskGraphIsolationLevel,
+    LimitsConfigResolver,
+    TASK_GRAPH_ISOLATION_LEVELS,
+    type MJLimitsOverride,
+    type TaskGraphIsolationLevel,
+} from '@memberjunction/core';
 import type { AgentDecisionAnswerSummary, AgentDecisionQuestion } from '../agent-decisions';
 import type { ForEachOperation } from '../foreach-operation';
 import type { WhileOperation } from '../while-operation';
+import type { WorkflowBudgetCapsConfig } from '../workflow-budget';
 
 /** A conditional dependency edge. */
 export type TaskGraphDependency = {
@@ -139,7 +148,25 @@ export function NormalizeDependency(dep: string | TaskGraphDependency): TaskGrap
  * Adding a kind is one entry in {@link TaskGraphNodeConfigMap} plus one runner — the compiler then
  * forces every exhaustive `switch` over kinds to be updated, which is the point of the union.
  */
-export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Decision';
+export type TaskGraphNodeKind = 'Agent' | 'Action' | 'Human' | 'Prompt' | 'ForEach' | 'While' | 'External' | 'Enqueue' | 'Decision' | 'Wait';
+
+/** Execution dispatch mode when submitting a task graph (`'Inline'` default or `'Queue'`). */
+export type TaskGraphDispatchMode = 'Inline' | 'Queue';
+
+/**
+ * Builds a deterministic correlation key tying a queued message and `CompleteWaitingStep`
+ * back to a specific graph run, step invocation, and optional fan-out item key.
+ */
+export function BuildEnqueueCorrelationKey(
+    graphRunId: string,
+    stepInvocationId: string,
+    correlationKey?: string,
+    itemKey?: string | number,
+): string {
+    const trimmed = correlationKey?.trim();
+    const base = trimmed && trimmed.length > 0 ? trimmed : `${graphRunId}:${stepInvocationId}`;
+    return itemKey !== undefined ? `${base}:item:${String(itemKey)}` : base;
+}
 
 /**
  * One question a `Decision` node asks: the LLM-facing shape agents already use for decisions, plus
@@ -184,6 +211,51 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
 };
 
 /**
+ * Policy when a saga compensation action itself fails after retries exhaust.
+ *
+ * - `'EscalateToHumanTask'` (default) — raises an `MJ: AI Agent Requests` human escalation with the
+ *   forward execution context, record changes snapshot, and compensation failure details.
+ * - `'HaltSaga'` — stops downstream compensation steps immediately.
+ * - `'ContinueCompensation'` — logs the failure and continues running remaining upstream compensation steps.
+ */
+export type ActionCompensationFailurePolicy = 'EscalateToHumanTask' | 'HaltSaga' | 'ContinueCompensation';
+
+/**
+ * Saga compensation contract for an `Action` step.
+ */
+export interface ActionCompensationSpec {
+    /** Overrides `Action.CompensationActionID` when specified on the workflow node (UUID). */
+    readonly compensationActionId?: string;
+    /** Optional action name of the compensation action (resolved to `compensationActionId` at submit time). */
+    readonly compensationActionName?: string;
+    /**
+     * Explicit mapping from forward `{ input, output, actionLogId, recordChanges }` -> compensation params.
+     * Accepts either a parameter-name -> path dictionary or a serialized JSON mapping string.
+     */
+    readonly inputMapping?: Readonly<Record<string, string>> | string;
+    /** Alias for `inputMapping` matching `CompensationInputMapping` metadata column naming. */
+    readonly compensationInputMapping?: Readonly<Record<string, string>> | string;
+    /** Policy if compensation itself fails after maxRetries. Default `'EscalateToHumanTask'`. */
+    readonly onCompensationFailure?: ActionCompensationFailurePolicy;
+    /**
+     * `false` turns off automatic retry of this node's action. It can only narrow the action's own
+     * `IsIdempotent` column, never widen it: `true` on an action not marked idempotent changes nothing.
+     */
+    readonly isIdempotent?: boolean;
+    /** Optional automatic retry count when `isIdempotent === true` or on the compensation step. */
+    readonly retryCount?: number;
+}
+
+/**
+ * Workflow-level saga failure policy when an unhandled step fails.
+ *
+ * - `'Halt'` (default) — halts dependents without materializing compensation tasks.
+ * - `'CompensateCompleted'` — materializes and dispatches reverse-topological compensation tasks for
+ *   completed compensatable `Action` steps.
+ */
+export type TaskGraphFailurePolicy = 'Halt' | 'CompensateCompleted';
+
+/**
  * Per-kind configuration.
  *
  * `ForEach`/`While` reuse {@link ForEachOperation} / {@link WhileOperation} **verbatim**. Those types
@@ -197,19 +269,79 @@ export const DECISION_ANSWER_FIELDS: Readonly<Record<AgentDecisionQuestion['kind
  */
 export type TaskGraphNodeConfigMap = {
     Agent: { agentName: string; message?: string; templateParameters?: Record<string, string>; presetName?: string };
-    Action: { actionName: string; inputMapping?: string; outputMapping?: string };
-    Human: { assignToUserID?: string; instructions?: string; expiresInHours?: number };
+    Action: { actionName: string; inputMapping?: string; outputMapping?: string; compensation?: ActionCompensationSpec };
+    Human: {
+        assignToUserID?: string;
+        instructions?: string;
+        expiresInHours?: number;
+        /**
+         * Which human-task provider raises this step, as its ClassFactory key. Omitted (or
+         * {@link DEFAULT_HUMAN_TASK_PROVIDER}) is MJ's built-in `MJ: AI Agent Requests` inbox. Any other
+         * key is a provider an app registered with `@RegisterClass(BaseHumanTaskProvider, '<key>')` in
+         * `@memberjunction/task-graph`; core never names one.
+         */
+        provider?: string;
+        /** Provider-specific settings, handed to the provider unchanged. */
+        providerConfiguration?: Record<string, unknown>;
+    };
     Prompt: { promptName: string; templateParameters?: Record<string, string> };
     ForEach: ForEachOperation;
     While: WhileOperation;
     /**
-     * A node completed by something outside MJ (D21 / parent-plan Phase 9). The runner ships with
-     * Phase 9; until then the dispatcher parks it exactly like `Human` — never claimed, sweep-exempt.
+     * A node completed by something outside the graph: a webhook, another app, a sprint closing.
      *
-     * It is in the union NOW so the first external consumer never sees the flat shape, which is the
-     * whole reason the union exists.
+     * When the dispatcher reaches it, it is marked waiting and nothing runs. Something then calls
+     * `TaskGraph.CompleteWaitingStep` (or `TaskGraphWaitingSteps.CompleteWaitingStep` in-process)
+     * with the task's ID, or with the `correlationKey` it waits on. The payload supplied becomes the
+     * step's output, so downstream edges can branch on what the signal said. A signal that arrives
+     * before the step is reached is held on the step and applied the moment it is.
      */
-    External: { domain: string; ref?: string };
+    External: {
+        /** Which system owns this step — documentation and filtering, never routing. */
+        domain: string;
+        /** That system's own identifier for the work. */
+        ref?: string;
+        /**
+         * The key a caller can signal by instead of the task ID. A literal, or a payload path
+         * (`payload.sprintKey`) resolved when the step is reached. Not unique: one signal releases
+         * every reached step waiting on the key.
+         */
+        correlationKey?: string;
+        /** Hours to wait before the step fails. Omitted means no deadline. */
+        expiresInHours?: number;
+    };
+    /**
+     * A node that durably registers waiting state, publishes a work item onto a WorkQueue topic
+     * with a deterministic correlation key (`graphRunId`, `stepInvocationId`, `correlationKey`),
+     * and pauses as an `External` step until an external worker settles it via `CompleteWaitingStep`.
+     */
+    Enqueue: {
+        /** Destination WorkQueue topic name (defaults to `Limits.TaskGraphQueue.DefaultEnqueueTopicName`). */
+        topic?: string;
+        /** Logical domain label for filtering/diagnostics (defaults to `'work-queue'`). */
+        domain?: string;
+        /** WorkQueue `BaseWorkHandler` key or worker routing identifier. */
+        handlerKey?: string;
+        /** Optional action name executed by the default queue item worker. */
+        actionName?: string;
+        /** Optional payload merged with upstream payload and sent in the WorkQueue message. */
+        payload?: Record<string, unknown>;
+        /** Optional correlation key literal or `payload.<path>` expression; omitted derives `<graphRunId>:<stepInvocationId>`. */
+        correlationKey?: string;
+        /** Hours to wait before expiring if never completed. Omitted means no deadline. */
+        expiresInHours?: number;
+        /** Maximum redelivery/retry attempts before terminal failure propagates. */
+        maxRetries?: number;
+    };
+    /**
+     * A node that waits for a moment in time, then completes. Exactly one of the two is set.
+     *
+     * `until` is an ISO-8601 timestamp or a payload path (`payload.renewal.chargeOn`) resolved when
+     * the step is reached; a moment already past continues at once. `durationSeconds` counts from the
+     * moment the step is reached. The wait is durable — it is a `Task.DueAt`, judged on the database
+     * clock — so a restart neither loses it nor restarts it.
+     */
+    Wait: { until?: string; durationSeconds?: number };
     /**
      * A typed judgment, resolved as a STEP so that no condition ever has to make one.
      *
@@ -369,6 +501,37 @@ export type TaskGraphSpec = {
      * downstream work the producer intended to be gated on success.
      */
     failureSemantics?: 'block' | 'edges';
+
+    /**
+     * Saga rollback policy when an unhandled step fails. Default `'Halt'`.
+     *
+     * - `'Halt'` (default) — halts dependents without materializing compensation tasks.
+     * - `'CompensateCompleted'` — materializes and dispatches reverse-topological compensation tasks for
+     *   completed compensatable `Action` steps.
+     */
+    failurePolicy?: TaskGraphFailurePolicy;
+
+    /** Optional routine or scheduled workstream identifier used for `PerRoutine` budget enforcement. */
+    routineId?: string | null;
+
+    /** Optional Tier-5 limits override carried on the workflow spec. */
+    limitsOverride?: MJLimitsOverride;
+
+    /** Optional whole-workflow USD cost and wall-clock duration budget caps. */
+    workflowBudget?: WorkflowBudgetCapsConfig;
+
+    /**
+     * Per-graph execution isolation level (`'InProcess' | 'Worker' | 'Process' | 'Container'`).
+     * Derived from the owning workflow entity or `LimitsConfigResolver` (`'InProcess'` default for
+     * upgraded workflows/graphs; `'Worker'` default for newly drafted `Workflow.Draft` graphs).
+     */
+    isolation?: TaskGraphIsolationLevel;
+
+    /** Optional default dispatch mode (`'Inline'` or `'Queue'`) when submitted. */
+    dispatch?: TaskGraphDispatchMode;
+
+    /** Optional override destination WorkQueue topic when `dispatch === 'Queue'`. */
+    queueTopic?: string;
 };
 
 /**
@@ -393,9 +556,25 @@ export const TaskNode = {
         ({ ...base, kind: 'While', configuration }),
     External: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['External']): TaskGraphSpecNode<'External'> =>
         ({ ...base, kind: 'External', configuration }),
+    Enqueue: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Enqueue']): TaskGraphSpecNode<'Enqueue'> =>
+        ({ ...base, kind: 'Enqueue', configuration }),
+    Wait: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Wait']): TaskGraphSpecNode<'Wait'> =>
+        ({ ...base, kind: 'Wait', configuration }),
     Decision: (base: TaskNodeBase, configuration: TaskGraphNodeConfigMap['Decision']): TaskGraphSpecNode<'Decision'> =>
         ({ ...base, kind: 'Decision', configuration }),
 } as const;
+
+/**
+ * The built-in human-task provider: an `MJ: AI Agent Requests` row in the person's inbox. A Human
+ * step with no `provider`, or with this one, uses it.
+ */
+export const DEFAULT_HUMAN_TASK_PROVIDER = 'AgentRequest';
+
+/** True when a Human step's provider is MJ's built-in inbox rather than a plugged-in one. */
+export function IsDefaultHumanTaskProvider(provider: string | null | undefined): boolean {
+    const key = provider?.trim();
+    return !key || key.toLowerCase() === DEFAULT_HUMAN_TASK_PROVIDER.toLowerCase();
+}
 
 /** Everything a node needs that is not its kind or configuration. */
 export type TaskNodeBase = Omit<TaskGraphSpecNode, 'kind' | 'configuration'>;
@@ -440,7 +619,9 @@ export type TaskGraphValidationError = {
          * so whether `payload.x` resolves is a question about a run that has not happened yet;
          * whether `payload.x >` parses is not.
          */
-        | 'InvalidCondition';
+        | 'InvalidCondition'
+        /** `spec.isolation` was supplied with a value outside `InProcess | Worker | Process | Container`. */
+        | 'InvalidIsolation';
     Message: string;
     /** The offending node, when the error is attributable to one. */
     TempId?: string;
@@ -452,9 +633,36 @@ export type TaskGraphValidationResult = {
 };
 
 /**
- * Maximum nodes in a single submitted graph.
+ * Maximum nodes in a graph a MODEL authored — a Loop agent's `nextStep.tasks`, or a `Workflow.Draft`.
  *
- * Matches `scratchpadMaxTasks` so an agent that can hold N items in its scratchpad cannot submit
- * a graph larger than it can reason about. Also bounds the blast radius of a runaway producer.
+ * Defaults to {@link CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph} (`10_000`) and resolves dynamically
+ * via {@link GetMaxTasksPerAgentGraph} through `LimitsConfigResolver.Instance`.
  */
-export const MAX_TASKS_PER_GRAPH = 50;
+export const MAX_TASKS_PER_AGENT_GRAPH = CODE_FALLBACK_LIMITS.MaxTasksPerAgentGraph;
+
+/**
+ * The ceiling for ANY submitted graph — a blast-radius bound, not a design limit.
+ *
+ * Defaults to {@link CODE_FALLBACK_LIMITS.MaxTasksPerGraph} (`100_000`) and resolves dynamically
+ * via {@link GetMaxTasksPerGraph} through `LimitsConfigResolver.Instance`.
+ */
+export const MAX_TASKS_PER_GRAPH = CODE_FALLBACK_LIMITS.MaxTasksPerGraph;
+
+/** Resolves the effective model-authored task graph ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxTasksPerAgentGraph(): number {
+    return LimitsConfigResolver.Resolve().Limits.MaxTasksPerAgentGraph;
+}
+
+/** Resolves the effective global task graph blast-radius ceiling from `LimitsConfigResolver.Instance`. */
+export function GetMaxTasksPerGraph(): number {
+    return LimitsConfigResolver.Resolve().Limits.MaxTasksPerGraph;
+}
+
+/** Options for `ValidateTaskGraphSpec`. */
+export type TaskGraphValidationOptions = {
+    /**
+     * The most nodes this graph may have. Default {@link MAX_TASKS_PER_GRAPH}. A caller validating
+     * model output passes {@link MAX_TASKS_PER_AGENT_GRAPH}. A value above the ceiling is clamped to it.
+     */
+    MaxTasks?: number;
+};

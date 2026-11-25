@@ -283,6 +283,20 @@ describe('AlterTableRule', () => {
       expect(result).toContain('SET DEFAULT');
       expect(result).not.toContain('DF_Foo_Status');
     });
+
+    it('should convert DROP CONSTRAINT DF_* to DROP CONSTRAINT IF EXISTS', () => {
+      const sql = `ALTER TABLE [__mj].[AIAgentUserPolicy] DROP CONSTRAINT [DF_AIAgentUserPolicy_CoordinationMode];`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER TABLE __mj."AIAgentUserPolicy" DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_CoordinationMode";');
+      expect(result).not.toMatch(/DROP\s+CONSTRAINT\s+"DF_/i);
+    });
+
+    it('should not double IF EXISTS on already guarded DROP CONSTRAINT DF_*', () => {
+      const sql = `ALTER TABLE [__mj].[AIAgentUserPolicy] DROP CONSTRAINT IF EXISTS [DF_AIAgentUserPolicy_CoordinationMode];`;
+      const result = convert(sql);
+      expect(result).toContain('DROP CONSTRAINT IF EXISTS "DF_AIAgentUserPolicy_CoordinationMode"');
+      expect(result).not.toContain('IF EXISTS IF EXISTS');
+    });
   });
 
   describe('output formatting', () => {

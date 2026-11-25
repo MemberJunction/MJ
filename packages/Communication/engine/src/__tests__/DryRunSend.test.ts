@@ -143,6 +143,9 @@ vi.mock('@memberjunction/communication-types', () => {
     }
 
     return {
+        BaseCommunicationPrincipal: class {},
+        BaseCommunicationSender: class {},
+        BaseComplianceRule: class {},
         BaseCommunicationProvider: class {
             SendSingleMessage = vi.fn();
             CreateDraft = vi.fn();

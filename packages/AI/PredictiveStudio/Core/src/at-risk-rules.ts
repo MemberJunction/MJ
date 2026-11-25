@@ -7,11 +7,21 @@
  * Per-member "why": a row carries the signed per-record drivers the scoring payload stored (linear models produce them);
  * a model that stores none gets no per-member attribution rather than a fabricated one.
  *
- * Pure, dependency-free, browser-safe → unit-tested with no Angular.
+ * A surface that has its `MJ: ML Output Bindings` row renders from it: the row's `SortsBy` orders the list and its
+ * `DriverDirectionRelativeTo` signs the drivers, while the polarity comes from the model's declared `OutputSemantics`
+ * (`TaskTypeRules.ScoreSemantics`), never from the model's name. A model with no row (published before the rows existed)
+ * keeps the outcome-config rule.
+ *
+ * Pure and browser-safe (no server or database dependencies) → unit-tested with no Angular.
  */
 
+import { IsValidUUID, NormalizeUUID, OrdinalCompare } from '@memberjunction/global';
+import type { SemanticsCheckBinding } from './governance-contracts';
 import { type OutcomeConfig, type OutcomeConfigSource, ResolveOutcomeConfig } from './outcome-config';
+import { RegistrySchemas } from './registry-schemas';
+import type { SemanticsBindingSpec } from './semantics-rules';
 import { ProblemTypes } from './sidecar-contract';
+import { TaskTypeRules } from './task-type';
 
 /** The three risk bands the at-risk list colors and counts by. */
 export type RiskBand = 'high' | 'medium' | 'low';
@@ -79,16 +89,52 @@ export interface ParseAtRiskOptions {
    * High score (0.99) -> Low Risk (1%, green). Low score (0.10) -> High Risk (90%, red).
    */
   InvertedRisk?: boolean;
+  /**
+   * The list order, from the surface's binding row: `adverse-probability-desc` by risk ({@link AtRiskRules.RiskOf}, unrounded), highest first;
+   * `score-desc` / `score-asc` by the raw score; `none` keeps the stored scoring order. Absent (no binding row): by
+   * risk, highest first.
+   */
+  SortsBy?: SemanticsCheckBinding['SortsBy'];
+  /**
+   * How the per-record drivers are signed, from the binding row ({@link AtRiskRules.SignDriver}). Absent (no binding
+   * row): relative to the displayed risk.
+   */
+  DriverDirectionRelativeTo?: SemanticsCheckBinding['DriverDirectionRelativeTo'];
 }
 
 /** {@link AtRiskRules.BuildAtRiskOptions}' result: the parse options plus the resolved outcome config, for the caller's score labels and formatting. */
 export interface AtRiskModelOptions extends ParseAtRiskOptions {
   /** The model's resolved outcome config. The at-risk rows do not read it: their status, color and icon come from the risk band. */
   OutcomeConfig: OutcomeConfig;
+  /**
+   * Why the polarity could not be read when a binding row is given: the model's `OutputSemantics` do not parse (the
+   * surface shows this as a notice, and risk is not inverted — no guess). Null otherwise.
+   */
+  SemanticsProblem: string | null;
 }
 
-/** The model shape the outcome config resolves from (the same input `ResolveOutcomeConfig` takes). */
-export type OutcomeModelLike = OutcomeConfigSource | undefined;
+/** The model shape the at-risk options resolve from: what `ResolveOutcomeConfig` takes, plus the declared output semantics. */
+export type OutcomeModelLike = (OutcomeConfigSource & { OutputSemantics: string | null }) | undefined;
+
+/** A `MJ: ML Output Bindings` row as the surfaces read it: its ID and the binding's fields. */
+export type OutputBindingEntityRow = SemanticsBindingSpec & { readonly ID: string };
+
+/** The one mapping from a stored `MJ: ML Output Bindings` row to the {@link SemanticsCheckBinding} a surface renders from. */
+export class OutputBindingRows {
+  /** The `MJ: ML Output Bindings` fields a surface reads: the row's own fields and its `ModelID` (a misspelled field fails to compile). */
+  public static readonly Fields = ['ID', 'ModelID', 'Surface', 'SortsBy', 'DriverDirectionRelativeTo', 'Label'] as const satisfies readonly ('ModelID' | keyof OutputBindingEntityRow)[];
+
+  /** A stored row as the binding it is. */
+  public static FromEntityRow(row: OutputBindingEntityRow): SemanticsCheckBinding {
+    return { BindingID: row.ID, Surface: row.Surface, SortsBy: row.SortsBy, DriverDirectionRelativeTo: row.DriverDirectionRelativeTo, Label: row.Label };
+  }
+
+  /** The binding of `surface` among a model's rows; null when the model has none for it. */
+  public static ForSurface(rows: readonly OutputBindingEntityRow[], surface: SemanticsCheckBinding['Surface']): SemanticsCheckBinding | null {
+    const row = rows.find((r) => r.Surface === surface);
+    return row ? OutputBindingRows.FromEntityRow(row) : null;
+  }
+}
 
 /** The prediction fields a scored payload carries, after narrowing from parsed JSON. */
 interface ScoredPrediction {
@@ -101,14 +147,22 @@ interface ScoredPrediction {
   Drivers: unknown;
 }
 
-/** A UUID string; `LabelFromRecord` skips these (same pattern as `IsValidUUID` in `@memberjunction/global`, which Core does not depend on). */
-const UUID_FORMAT = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /** Rows below this displayed risk never go on an "At-Risk" list. */
 export const AT_RISK_LIST_MIN_RISK_PCT = 40;
 
 /** The At-Risk rules the drawer, the resource, the gate probe and the tests share. */
 export class AtRiskRules {
+  /** Why a list whose at-risk-list binding sorts by `none` cannot be sent to a list: it has no risk ranking to pick members by. */
+  public static readonly NoRankingReason = 'This list is not ranked by risk: its At-Risk list binding sorts by none.';
+
+  /**
+   * Whether the at-risk list is a risk ranking: true unless its binding row sorts by `none` (a model with no row keeps the
+   * outcome-config rule, which ranks by risk). Only a ranked list has members to pick by a risk floor.
+   */
+  public static ListIsRanked(binding: Pick<SemanticsCheckBinding, 'SortsBy'> | null): boolean {
+    return binding === null || binding.SortsBy !== 'none';
+  }
+
   /**
    * Whether a signed per-row contribution raises the risk the screen shows. Contributions are on the model's own score
    * (`value > 0` pushed the score up). When that score is the probability of the good outcome (`invertedRisk`, e.g.
@@ -118,22 +172,55 @@ export class AtRiskRules {
     return invertedRisk ? contribution < 0 : contribution > 0;
   }
 
-  /** The At-Risk options for a model: its resolved outcome config, and risk inverted when the score is the good outcome. */
-  public static BuildAtRiskOptions(model: OutcomeModelLike): AtRiskModelOptions {
-    const outcomeConfig = ResolveOutcomeConfig(model);
-    return { InvertedRisk: outcomeConfig.Polarity === 'positive' && !ProblemTypes.IsRegression(model?.ProblemType), OutcomeConfig: outcomeConfig };
+  /**
+   * Whether a signed per-row contribution points up on a surface. `adverse-class` (and no binding row): up when it raises
+   * the adverse outcome ({@link DriverRaisesRisk} — a negative contribution to the adverse class points down);
+   * `raw-contribution`: up when the contribution is positive, whatever the polarity.
+   */
+  public static SignDriver(contribution: number, direction: SemanticsCheckBinding['DriverDirectionRelativeTo'] | null, invertedRisk: boolean): boolean {
+    return direction === 'raw-contribution' ? contribution > 0 : AtRiskRules.DriverRaisesRisk(contribution, invertedRisk);
   }
 
-  /** The members of an "At-Risk" list: highest displayed risk first, at least {@link AT_RISK_LIST_MIN_RISK_PCT}, at most `limit`. */
+  /**
+   * The At-Risk options for a model and its surface's binding row. With a row, risk is inverted exactly when the
+   * declared `OutputSemantics` say a lower score is adverse (`TaskTypeRules.ScoreSemantics`), and the row's `SortsBy` and
+   * `DriverDirectionRelativeTo` order the list and sign its drivers; the model's name is not consulted. Semantics that
+   * do not parse invert nothing and set `SemanticsProblem`. Without a row (`null`): the outcome-config rule, risk
+   * inverted when the resolved polarity is positive on a classification.
+   */
+  public static BuildAtRiskOptions(model: OutcomeModelLike, binding: SemanticsCheckBinding | null): AtRiskModelOptions {
+    const outcomeConfig = ResolveOutcomeConfig(model);
+    if (binding === null) {
+      return { InvertedRisk: outcomeConfig.Polarity === 'positive' && !ProblemTypes.IsRegression(model?.ProblemType), OutcomeConfig: outcomeConfig, SemanticsProblem: null };
+    }
+    const semantics = RegistrySchemas.ParseOutputSemantics(model?.OutputSemantics || null);
+    const base = { OutcomeConfig: outcomeConfig, SortsBy: binding.SortsBy, DriverDirectionRelativeTo: binding.DriverDirectionRelativeTo };
+    if (semantics.Ok === false) return { ...base, InvertedRisk: false, SemanticsProblem: `OutputSemantics: ${semantics.Errors.join('; ')}` };
+    return { ...base, InvertedRisk: TaskTypeRules.ScoreSemantics(semantics.Value.task).AdverseDirection === 'lower-score-is-adverse', SemanticsProblem: null };
+  }
+
+  /**
+   * The members of an "At-Risk" list: highest displayed risk first, at least {@link AT_RISK_LIST_MIN_RISK_PCT}, at most
+   * `limit`. Rows of equal risk are ordered by record ID (case-insensitive, as UUIDs compare, then exactly), so when the
+   * limit falls inside a run of equal risks the same records are listed whatever order the rows were read in.
+   */
   public static SelectAtRiskListMembers(rows: ReadonlyArray<AtRiskRow>, limit: number): AtRiskRow[] {
     return [...rows]
-      .sort((a, b) => b.RiskPct - a.RiskPct)
+      .sort((a, b) => b.RiskPct - a.RiskPct || AtRiskRules.compareRecordIDs(a.RecordID, b.RecordID))
       .filter((r) => r.RiskPct >= AT_RISK_LIST_MIN_RISK_PCT)
       .slice(0, limit);
   }
 
-  /** Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s. */
-  public static ParseRowDrivers(raw: unknown, invertedRisk: boolean): RowDriver[] | null { // unknown: parsed JSON from a stored payload; narrowed below
+  /** A total order on record IDs: case-insensitive first (SQL Server and PostgreSQL case UUIDs differently), then exact. */
+  private static compareRecordIDs(a: string, b: string): number {
+    return OrdinalCompare(NormalizeUUID(a), NormalizeUUID(b)) || OrdinalCompare(a, b);
+  }
+
+  /**
+   * Parse + humanize the raw per-record `drivers` (post-preprocessing `feature`/`value`) into {@link RowDriver}s, each
+   * signed by {@link SignDriver} for the surface's binding row (`binding` null: relative to the displayed risk).
+   */
+  public static ParseRowDrivers(raw: unknown, invertedRisk: boolean, binding: Pick<SemanticsCheckBinding, 'DriverDirectionRelativeTo'> | null = null): RowDriver[] | null { // unknown: parsed JSON from a stored payload; narrowed below
     if (!Array.isArray(raw) || raw.length === 0) return null;
     const out: RowDriver[] = [];
     for (const d of raw) {
@@ -144,7 +231,7 @@ export class AtRiskRules {
       // Keep the one-hot category: for a per-record "why", the category IS the story — "Membership Type =
       // Student lowers risk" is actionable where a collapsed "Membership Type" is close to meaningless.
       // (Collapsing across categories is only right for GLOBAL importance — see TopGlobalDrivers.)
-      out.push({ Label: AtRiskRules.HumanizeFeatureName(feature), Value: value, Up: AtRiskRules.DriverRaisesRisk(value, invertedRisk) });
+      out.push({ Label: AtRiskRules.HumanizeFeatureName(feature), Value: value, Up: AtRiskRules.SignDriver(value, binding?.DriverDirectionRelativeTo || null, invertedRisk) });
     }
     return out.length > 0 ? out : null;
   }
@@ -169,20 +256,42 @@ export class AtRiskRules {
     if (email) return email;
     for (const v of Object.values(row)) {
       const s = str(v);
-      if (s && s.length <= 120 && !UUID_FORMAT.test(s)) return s;
+      if (s && s.length <= 120 && !IsValidUUID(s)) return s;
     }
     return null;
   }
 
-  /** Parse + rank the per-record predictions into the at-risk list (highest risk first). */
+  /**
+   * Parse the per-record predictions into the at-risk list, ordered by `options.SortsBy` (see {@link ParseAtRiskOptions}:
+   * highest risk first when it is absent; equal keys keep their stored order).
+   */
   public static ParseAtRiskRows(details: RunDetailLike[], options?: ParseAtRiskOptions): AtRiskRow[] {
     const rows: AtRiskRow[] = [];
     const isInverted = options?.InvertedRisk === true;
+    const direction = options?.DriverDirectionRelativeTo || null;
     for (const d of details) {
       const p = AtRiskRules.readScoredPrediction(d.ResultPayload);
-      if (p) rows.push(AtRiskRules.buildRow(d.RecordID, p, isInverted));
+      if (p) rows.push(AtRiskRules.buildRow(d.RecordID, p, isInverted, direction));
     }
-    return rows.sort((a, b) => b.RiskPct - a.RiskPct);
+    return AtRiskRules.sortRows(rows, options?.SortsBy || 'adverse-probability-desc', isInverted);
+  }
+
+  /**
+   * `rows` in a binding row's order (Array sort is stable, so equal keys and `none` keep the stored order). The adverse
+   * probability is the unrounded risk ({@link RiskOf}), so two rows that display the same `RiskPct` still list in
+   * adverse-probability order.
+   */
+  private static sortRows(rows: AtRiskRow[], sortsBy: SemanticsCheckBinding['SortsBy'], isInverted: boolean): AtRiskRow[] {
+    switch (sortsBy) {
+      case 'adverse-probability-desc':
+        return rows.sort((a, b) => AtRiskRules.RiskOf(b.Score, isInverted) - AtRiskRules.RiskOf(a.Score, isInverted));
+      case 'score-desc':
+        return rows.sort((a, b) => b.Score - a.Score);
+      case 'score-asc':
+        return rows.sort((a, b) => a.Score - b.Score);
+      case 'none':
+        return rows;
+    }
   }
 
   /**
@@ -238,7 +347,7 @@ export class AtRiskRules {
    * status, color and icon come from that band's {@link RiskBands} entry, so a row's badge and its High/Medium/Low count
    * always agree. A configured outcome band is keyed on the raw score, so it is never used here.
    */
-  private static buildRow(recordId: string, p: ScoredPrediction, isInverted: boolean): AtRiskRow {
+  private static buildRow(recordId: string, p: ScoredPrediction, isInverted: boolean, direction: SemanticsCheckBinding['DriverDirectionRelativeTo'] | null): AtRiskRow {
     const effectiveRisk = AtRiskRules.RiskOf(p.Score, isInverted);
     const band = AtRiskRules.RiskBandFor(effectiveRisk);
     const display = AtRiskRules.RiskBandDisplayFor(band);
@@ -253,7 +362,7 @@ export class AtRiskRules {
       Status: p.Status || display.Label,
       BadgeColor: p.BadgeColor || display.BadgeColor,
       Icon: p.Icon || display.Icon,
-      Drivers: AtRiskRules.ParseRowDrivers(p.Drivers, isInverted),
+      Drivers: AtRiskRules.ParseRowDrivers(p.Drivers, isInverted, direction === null ? null : { DriverDirectionRelativeTo: direction }),
     };
   }
 

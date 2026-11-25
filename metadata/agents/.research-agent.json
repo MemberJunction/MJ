@@ -180,6 +180,26 @@
             "lastModified": "2026-05-14T02:09:03.955Z",
             "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Graph Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7E8FB53D-9F7E-4214-BCFD-E7E327B88E3D"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Graph Path",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8C59879A-20E9-4118-9369-6B7FC8B01A5E"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -585,6 +605,7 @@
       "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InstantiationMode": "Optional",
       "AcceptsSkills": "All",
       "SkillActivationMode": "Auto",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
@@ -616,6 +637,27 @@
               "Scoped Search"
             ]
           }
+        },
+        "instantiation": {
+          "suggestedNames": [
+            "FDA Clinical Scout",
+            "Market Analyst",
+            "Competitor Radar",
+            "Policy Researcher"
+          ],
+          "suggestedIcons": [
+            "fa-solid fa-microscope",
+            "fa-solid fa-magnifying-glass-chart",
+            "fa-solid fa-flask",
+            "fa-solid fa-compass",
+            "fa-solid fa-globe"
+          ],
+          "suggestedPersonaNames": [
+            "Sage",
+            "Charon",
+            "Alloy",
+            "Kore"
+          ]
         }
       }
     },
@@ -650,6 +692,118 @@
           "sync": {
             "lastModified": "2026-05-14T02:09:04.184Z",
             "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Find Candidate Skills",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D41"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.321Z",
+            "checksum": "cda9942b77df5bf18543cecf844b5b0279354a7fd0ed0d42b888c67f3459f923"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Skill Details",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D42"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.365Z",
+            "checksum": "801acfdc471e1c087dddb5113e01e45dfcfdfb2f235306e2cb7bc03db6e3d61b"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Get Repository Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D43"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.387Z",
+            "checksum": "27eed7ee1038b7087d138952493af65bffbbc20e6b948a55b9e094d72db9d1ec"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - List Repository Tree",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D44"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.409Z",
+            "checksum": "7fdec842c13f3fa34c4d95fe73bf659b09f27c31d14f9b87305017545b14e94a"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Read Repository File",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D45"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.437Z",
+            "checksum": "bf41c9ddfeac74e6541ee3d43bf88748fd224ac7e61c74d27a34da25df9a8cac"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Search Code",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D46"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.462Z",
+            "checksum": "66266f81ea95d036c707b2a62967e0f02a56001f6bd82d9cd9c640ca2df9585d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Search Issues and PRs",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D47"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.507Z",
+            "checksum": "bcaa0d82bed5fa2dd4f5128e4fa6afec9ffec3ea56f995c9b8fe9ac235148cd7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=GitHub - Get Pull Request Context",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5B2E9C01-7D4A-4A31-9E12-8F0A1B2C3D48"
+          },
+          "sync": {
+            "lastModified": "2026-11-10T23:41:45.547Z",
+            "checksum": "11e35c617767f2a59198df00123670096c9df1ef5540810d3f67e77dcadbae1d"
           }
         }
       ],

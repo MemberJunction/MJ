@@ -1,5 +1,11 @@
 # @memberjunction/geo-maps
 
+## 6.3.0-edge.1
+
+## 6.3.0-edge.0
+
+## 6.2.0
+
 ## 6.2.0-edge.8
 
 ## 6.2.0-edge.7

@@ -7,7 +7,8 @@ import {
   UserInfoEngine,
   ResourcePermissionEngine,
   PROJECTS_RESOURCE_TYPE_ID,
-  IsInheritingFolderAccess
+  IsInheritingFolderAccess,
+  CONVERSATION_DELETE_REFUSED_REASON
 } from '@memberjunction/core-entities';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
 import { DialogService } from '../../services/dialog.service';
@@ -24,6 +25,7 @@ import {
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { BeforeFolderEditEventArgs, AfterFolderEditEventArgs } from '../../events/chat-events';
 
 /**
  * A node in the conversation folder tree. Each node holds its project (folder),
@@ -111,7 +113,11 @@ interface ListContextMenu {
                       aria-label="Share">
                 <i class="fas fa-user-plus"></i>
               </button>
-              <button class="selection-bar-btn danger" (click)="BarDelete()" title="Delete" aria-label="Delete">
+              <button class="selection-bar-btn danger"
+                      (click)="BarDelete()"
+                      [disabled]="!CanDeleteAny(SelectedIds)"
+                      [title]="CanDeleteAny(SelectedIds) ? 'Delete' : DeleteRefusedReason"
+                      aria-label="Delete">
                 <i class="fas fa-trash"></i>
               </button>
             </div>
@@ -401,11 +407,20 @@ interface ListContextMenu {
         <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
           <div class="conversation-name">
             {{ conversation.Name }}
+            @if (conversation.ParentID) {
+              <span class="side-thread-badge"
+                    [class.side-thread-badge--shared]="IsSideThreadShared(conversation)"
+                    [title]="SideThreadTooltip(conversation)"
+                    data-testid="conversation-list-side-thread-badge">
+                <i class="fas" [class.fa-lock]="!IsSideThreadShared(conversation)" [class.fa-code-branch]="IsSideThreadShared(conversation)"></i>
+                <span>{{ IsSideThreadShared(conversation) ? 'Shared side thread' : 'Private' }}</span>
+              </span>
+            }
             @if (IsSharedWithMe(conversation)) {
               <i class="fas fa-share-nodes shared-indicator"
                  [title]="SharedWithMeTooltip(conversation)"></i>
             }
-            @if (conversation.ProjectID && IsConversationInheritingFolderAccess(conversation)) {
+            @if (!conversation.ParentID && conversation.ProjectID && IsConversationInheritingFolderAccess(conversation)) {
               <i class="fas fa-folder-open shared-indicator inherits-indicator"
                  title="Shown to people with access to its folder: inherits folder access"></i>
             }
@@ -519,7 +534,9 @@ interface ListContextMenu {
                 </button>
               }
               <div class="menu-divider"></div>
-              <button class="menu-item danger" (click)="ContextDelete()">
+              <button class="menu-item danger" (click)="ContextDelete()"
+                      [disabled]="!CanDeleteAny(ContextMenu.targets)"
+                      [attr.title]="CanDeleteAny(ContextMenu.targets) ? null : DeleteRefusedReason">
                 <i class="fas fa-trash"></i>
                 <span>{{ ContextMenu.targets.length > 1 ? 'Delete ' + ContextMenu.targets.length : 'Delete' }}</span>
               </button>
@@ -537,15 +554,17 @@ interface ListContextMenu {
               <i class="fas fa-user-plus"></i>
               <span>Share</span>
             </button>
-            <button class="menu-item" (click)="ContextEditFolder($event)">
-              <i class="fas fa-pen"></i>
-              <span>Rename</span>
-            </button>
-            <div class="menu-divider"></div>
-            <button class="menu-item danger" (click)="ContextDeleteFolder($event)">
-              <i class="fas fa-trash"></i>
-              <span>Delete</span>
-            </button>
+            @if (CanManageFolder(ContextMenu.folder)) {
+              <button class="menu-item" (click)="ContextEditFolder($event)">
+                <i class="fas fa-pen"></i>
+                <span>{{ FolderEditLabel }}</span>
+              </button>
+              <div class="menu-divider"></div>
+              <button class="menu-item danger" (click)="ContextDeleteFolder($event)">
+                <i class="fas fa-trash"></i>
+                <span>Delete</span>
+              </button>
+            }
           }
           @default {
             <button class="menu-item" (click)="ContextNewConversation()">
@@ -813,6 +832,22 @@ interface ListContextMenu {
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
     .shared-indicator { font-size: 10px; color: color-mix(in srgb, var(--conv-list-ink) 55%, transparent); flex-shrink: 0; }
     .conversation-item.active .shared-indicator { color: color-mix(in srgb, var(--conv-list-active-ink) 85%, transparent); }
+    .side-thread-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 500;
+      background: color-mix(in srgb, var(--conv-list-ink) 8%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 75%, transparent);
+      flex-shrink: 0;
+    }
+    .side-thread-badge--shared {
+      background: color-mix(in srgb, var(--conv-list-accent) 16%, transparent);
+      color: var(--conv-list-accent);
+    }
     .conversation-preview { font-size: 12px; color: color-mix(in srgb, var(--conv-list-ink) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: color-mix(in srgb, var(--conv-list-active-ink) 80%, transparent); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
@@ -965,7 +1000,16 @@ interface ListContextMenu {
       color: var(--mj-status-error);
     }
 
-    .menu-item.danger:hover {
+    .menu-item:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .menu-item:disabled:hover {
+      background: transparent;
+    }
+
+    .menu-item.danger:hover:not(:disabled) {
       background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
       color: var(--mj-status-error);
     }
@@ -1272,7 +1316,7 @@ interface ListContextMenu {
       padding: 6px 16px;
       font-size: 11px;
       font-style: italic;
-      color: color-mix(in srgb, var(--conv-list-ink) 45%, transparent);
+      color: color-mix(in srgb, var(--conv-list-ink) 75%, transparent);
     }
     .ungrouped-section.drag-over {
       background: color-mix(in srgb, var(--conv-list-accent) 12%, transparent);
@@ -1324,6 +1368,17 @@ export class ConversationListComponent implements OnInit, OnDestroy {
    *  header, so a headerless tree would allow one-way folder nesting) — the
    *  chrome-less rendering for embedded hosts. */
   @Input() ShowSectionHeaders: boolean = true;
+  /** Label shown on the folder right-click menu's edit action (default `'Rename'`).
+   *  Hosts that open a full project/workspace editor can set this to `'Edit'`. */
+  @Input() FolderEditLabel: string = 'Rename';
+  /** @deprecated Use {@link FolderEditLabel}. */
+  @Input() set folderEditLabel(value: string) {
+    this.FolderEditLabel = value;
+  }
+  /** @deprecated Use {@link FolderEditLabel}. */
+  get folderEditLabel(): string {
+    return this.FolderEditLabel;
+  }
 
   @Output() ConversationSelected = new EventEmitter<string>();
   /**
@@ -1387,6 +1442,33 @@ export class ConversationListComponent implements OnInit, OnDestroy {
    */
   @Output() SearchEscalated = new EventEmitter<string>();
 
+  /**
+   * Cancelable — fired BEFORE the built-in folder edit modal opens. Set `event.Cancel = true`
+   * to open a host-provided project/folder editor instead; `AfterFolderEdit` then does not fire.
+   */
+  @Output() BeforeFolderEdit = new EventEmitter<BeforeFolderEditEventArgs>();
+  /**
+   * @deprecated Use {@link BeforeFolderEdit}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (beforeFolderEdit) keeps working. Must stay AFTER BeforeFolderEdit: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() beforeFolderEdit = this.BeforeFolderEdit;
+  /**
+   * Fired AFTER a folder's edits are saved through the built-in modal.
+   * Not fired when `BeforeFolderEdit` was canceled.
+   */
+  @Output() AfterFolderEdit = new EventEmitter<AfterFolderEditEventArgs>();
+  /**
+   * @deprecated Use {@link AfterFolderEdit}.
+   *
+   * The same emitter under the old binding name, so a template still binding
+   * (afterFolderEdit) keeps working. Must stay AFTER AfterFolderEdit: class fields
+   * initialise in order, and the other way round this captures undefined.
+   */
+  @Output() afterFolderEdit = this.AfterFolderEdit;
+
   public DirectMessagesExpanded: boolean = true;
   public PinnedExpanded: boolean = true;
   public FoldersExpanded: boolean = true;
@@ -1414,8 +1496,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   private selectionAnchorId: string | null = null;
 
   /** Why Share is unavailable, shown on its disabled button. */
-  public readonly ShareRefusedReason = 'Only the owner, or someone with Owner access, can share a conversation';
+  public readonly ShareRefusedReason = 'Only the owner can share a conversation';
 
+  /** Why Delete is unavailable, shown on its disabled buttons. Same rule the server enforces. */
+  public readonly DeleteRefusedReason = CONVERSATION_DELETE_REFUSED_REASON;
   /** Why Folder Share is unavailable, shown on its disabled button. */
   public readonly FolderShareRefusedReason = 'Only the folder owner, or someone with Owner access, can share a folder';
 
@@ -2317,6 +2401,28 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     return this.engine.CanShareConversation(conversation, this.CurrentUser.ID);
   }
 
+  /**
+   * True when at least one of the conversations can be deleted by the current user: they own it,
+   * hold Owner access, or are in the Developer or Integration role. The server enforces the same rule.
+   */
+  public CanDeleteAny(ids: string[]): boolean {
+    return ids.some(id => this.canDelete(this.engine.GetConversation(id)));
+  }
+
+  private canDelete(conversation: MJConversationEntity | undefined): boolean {
+    if (!conversation || !this.CurrentUser) return false;
+    return this.engine.CanDeleteConversation(conversation, this.CurrentUser);
+  }
+
+  /**
+   * True when the current user may rename or delete the folder: they own it, or their folder writes are not
+   * row-filtered. A user whose writes are filtered to their own folders (the UI role) is refused on a Public
+   * folder or someone else's, so those actions are not offered.
+   */
+  public CanManageFolder(folder: MJProjectEntity | null | undefined): boolean {
+    return this.engine.CanManageProject(folder, this.CurrentUser);
+  }
+
   /** True when the current user owns the folder or holds Owner permission on it. */
   public CanShareFolder(folder: MJProjectEntity | null | undefined): boolean {
     if (!folder || !this.CurrentUser) return false;
@@ -2487,7 +2593,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
   public EditFolder(project: MJProjectEntity, event?: Event): void {
     if (event) event.stopPropagation();
-    this.openFolderModal(project, null);
+    const beforeArgs = new BeforeFolderEditEventArgs(project);
+    this.BeforeFolderEdit.emit(beforeArgs);
+    if (beforeArgs.Cancel) {
+      return;
+    }
+    this.openFolderModal(project, null, (saved) => {
+      this.AfterFolderEdit.emit(new AfterFolderEditEventArgs(saved));
+    });
   }
 
   private openFolderModal(
@@ -2622,6 +2735,10 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   async DeleteConversation(conversation: MJConversationEntity): Promise<void> {
+    if (!this.canDelete(conversation)) {
+      await this.dialogService.alert('Cannot Delete', `${this.DeleteRefusedReason}.`);
+      return;
+    }
     try {
       const confirmed = await this.dialogService.confirm({
         title: 'Delete Conversation',
@@ -2667,6 +2784,25 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     const info = this.engine.GetSharedByInfo(conversation.ID);
     if (!info) return 'Shared with you';
     return `Shared by ${info.Email ?? info.Name ?? 'another user'}`;
+  }
+
+  /** True when a `ParentID` side conversation has been explicitly shared with the user. */
+  public IsSideThreadShared(conversation: MJConversationEntity): boolean {
+    if (!conversation.ParentID) return false;
+    return (
+      this.IsSharedWithMe(conversation) ||
+      Boolean(this.engine.IsConversationExplicitlyShared?.(conversation.ID))
+    );
+  }
+
+  /** Tooltip describing privacy/sharing status of a `ParentID` side thread. */
+  public SideThreadTooltip(conversation: MJConversationEntity): string {
+    if (this.IsSideThreadShared(conversation)) {
+      return this.IsSharedWithMe(conversation)
+        ? this.SharedWithMeTooltip(conversation)
+        : 'Explicitly shared side thread';
+    }
+    return 'Private side conversation — hidden from others unless explicitly shared';
   }
 
   ToggleSelectionMode(): void {
@@ -2890,6 +3026,11 @@ export class ConversationListComponent implements OnInit, OnDestroy {
 
     if (count === 0) return;
 
+    if (!this.CanDeleteAny(ids)) {
+      await this.dialogService.alert('Cannot Delete', `${this.DeleteRefusedReason}.`);
+      return;
+    }
+
     const confirmed = await this.dialogService.confirm({
       title: 'Delete Conversations',
       message: `Are you sure you want to delete ${count} conversation${count > 1 ? 's' : ''}? This action cannot be undone.`,
@@ -2920,14 +3061,14 @@ export class ConversationListComponent implements OnInit, OnDestroy {
     count: number
   ): Promise<void> {
     if (result.Failed.length === 0) return;
+    const failedNames = result.Failed.map(f => `"${f.Name}" (${f.Error})`).join(', ');
     if (result.Successful.length === 0) {
       await this.dialogService.alert(
         'Delete Failed',
-        `None of the ${count} conversations could be deleted. They may have already been removed.`
+        `None of the ${count} conversations could be deleted: ${failedNames}`
       );
       return;
     }
-    const failedNames = result.Failed.map(f => `"${f.Name}"`).join(', ');
     await this.dialogService.alert(
       'Partial Success',
       `Deleted ${result.Successful.length} of ${count} conversations.\n\n` +

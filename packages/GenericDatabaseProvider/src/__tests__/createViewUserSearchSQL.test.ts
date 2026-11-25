@@ -248,6 +248,33 @@ describe('createViewUserSearchSQL — escaping', () => {
         expect(sql).toBe(`(([Name]  LIKE N'50\\%%' ESCAPE '\\'))`);
     });
 
+    it('a phrase in quotes is searched without them, straight or curly', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const expected = `(([Name]  LIKE N'%Steering Review%' ESCAPE '\\'))`;
+        expect(provider.buildSQL(e, '"Steering Review"')).toBe(expected);
+        expect(provider.buildSQL(e, ' “Steering Review” ')).toBe(expected);
+    });
+
+    it('a quote inside the term, or quotes around only whitespace, stay literal', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        expect(provider.buildSQL(e, '6" pipe')).toBe(`(([Name]  LIKE N'%6" pipe%' ESCAPE '\\'))`);
+        expect(provider.buildSQL(e, '""')).toBe(`(([Name]  LIKE N'%""%' ESCAPE '\\'))`);
+        expect(provider.buildSQL(e, '" "')).toBe(`(([Name]  LIKE N'%" "%' ESCAPE '\\'))`);
+    });
+
+    it('a quoted phrase is unquoted for BeginsWith, EndsWith and Exact too, after single quotes are doubled', () => {
+        const field = (predicate: string) => makeEntity({ fields: [makeField({ name: 'Name', predicate })] });
+        expect(provider.buildSQL(field('BeginsWith'), '"Steering"')).toBe(`(([Name]  LIKE N'Steering%' ESCAPE '\\'))`);
+        expect(provider.buildSQL(field('EndsWith'), '"Review"')).toBe(`(([Name]  LIKE N'%Review' ESCAPE '\\'))`);
+        expect(provider.buildSQL(field('Exact'), '"ABC-123"')).toBe(`(([Name]  = N'ABC-123'))`);
+        expect(provider.buildSQL(field('Contains'), '"O\'Brien"')).toBe(`(([Name]  LIKE N'%O''Brien%' ESCAPE '\\'))`);
+    });
+
+    it('a custom format gets the term as typed, quotes included', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Code', paramFormat: " = '{0}'" })] });
+        expect(provider.buildSQL(e, '"ABC"')).toBe(`(([Code]  = '"ABC"'))`);
+    });
+
     it('Exact does NOT escape LIKE metacharacters (it does not use LIKE)', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Code', predicate: 'Exact' })] });
         const sql = provider.buildSQL(e, '50%');
@@ -425,6 +452,44 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fr
         expect(provider.buildSQL(e, "O'Leary")).toBe(`(([Phone]  = 'O''Leary'))`);
     });
 
+    // The denylist has no keyword to find in these: parentheses and comparison operators alone
+    // rewrite the predicate around an unquoted {0}.
+    for (const payload of ['2026 OR (1) < (2)', '(2026)', '2026 = 2026', '[Year]', '"Year"']) {
+        it(`refuses the structural characters in ${JSON.stringify(payload)} when the format splices the term unquoted`, () => {
+            expect(() => provider.buildSQL(customFormatEntity(), payload)).toThrow(/structural SQL characters/);
+        });
+    }
+
+    it('allows numbers, words and hyphens on an unquoted format', () => {
+        expect(provider.buildSQL(customFormatEntity(), '-2026.5')).toBe(`(([Year]  = -2026.5))`);
+    });
+
+    it('allows structural characters when every custom format quotes its slot', () => {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" }),
+            makeField({ name: 'Code', predicate: 'Exact', paramFormat: " LIKE '+1' + REPLACE(N'{0}', ' ', '')" }),
+        ] });
+        expect(provider.buildSQL(e, '(555) 1212 <ext>')).toBe(
+            `(([Phone]  = '(555) 1212 <ext>') OR ([Code]  LIKE '+1' + REPLACE(N'(555) 1212 <ext>', ' ', '')))`,
+        );
+    });
+
+    it('refuses structural characters when one format quotes its slot and another does not', () => {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" }),
+            makeField({ name: 'Year', type: 'int', predicate: 'Contains', paramFormat: ' = {0}' }),
+        ] });
+        expect(() => provider.buildSQL(e, '(2026)')).toThrow(/structural SQL characters/);
+    });
+
+    it('reads a quote inside a bracketed or double-quoted identifier as part of the name, not as a literal', () => {
+        // The apostrophe belongs to the identifier, so {0} is outside any string literal here.
+        for (const paramFormat of [" = [Owner's Year] + {0}", ` = "Owner's Year" + {0}`, " = 'x' + {0}"]) {
+            const e = makeEntity({ fields: [makeField({ name: 'Year', type: 'int', predicate: 'Contains', paramFormat })] });
+            expect(() => provider.buildSQL(e, '(2026)')).toThrow(/structural SQL characters/);
+        }
+    });
+
     it('does NOT screen entities without a custom format — that is the #4392 fix', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
         // "union"/"drop"/";" are ordinary words here; the term lands inside a literal.
@@ -524,6 +589,12 @@ describe('createViewUserSearchSQL — FTX path is unchanged', () => {
         ] });
         const sql = provider.buildSQL(e, 'inc');
         expect(sql).toBe(`[ID] IN (SELECT [ID] FROM [crm].[fnSearchAccount]('inc'))`);
+    });
+
+    it('FTX-enabled entity keeps a quoted phrase quoted (phrase search)', () => {
+        const e = makeEntity({ ftx: true, ftxFunction: 'fnSearchAccount', fields: [] });
+        const sql = provider.buildSQL(e, '"steering review"');
+        expect(sql).toBe(`[ID] IN (SELECT [ID] FROM [crm].[fnSearchAccount]('"steering review"'))`);
     });
 
     it('FTX-enabled entity preserves explicit boolean operators in input', () => {

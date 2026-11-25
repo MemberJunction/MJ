@@ -266,8 +266,10 @@ mj-record-form-container {
   min-width: 0;
 }
 
-/* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel) */
-.mj-forms-panels--edit-mode .mj-panel--related-entity,
+/* Hide related entity panels in edit mode (variant host class on mj-collapsible-panel).
+   A panel holding a join grid stays: the grid is edited in place and queues its changes
+   into the form's own save, so edit mode is the only time it can be changed. */
+.mj-forms-panels--edit-mode .mj-panel--related-entity:not(:has(mj-join-grid)),
 .mj-forms-panels--edit-mode .mj-forms-more-overflow {
   display: none;
 }
@@ -999,6 +1001,13 @@ mj-collapsible-panel.mj-form-role-more {
 @media (max-width: 768px) {
   .mj-forms-panels-container {
     padding: 16px 12px 32px;
+  }
+
+  /* Phones stack the panels and the ISA side panel, so the desktop gap between them only
+     narrows the form (an empty side panel still claims it). Left-nav rows keep their own
+     8px rail gap from the more specific rule above. */
+  .mj-forms-layout-row {
+    gap: 0;
   }
 }
 

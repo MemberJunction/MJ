@@ -3,6 +3,7 @@ import { UpgradeApp } from '@memberjunction/open-app-engine';
 import ora from 'ora-classic';
 import chalk from 'chalk';
 import { BuildOrchestratorContext } from '../../utils/open-app-context.js';
+import { ParseDependenciesFromHead } from '../../utils/dependencies-from-head.js';
 
 /**
  * CLI command: `mj app upgrade <name>`.
@@ -16,6 +17,8 @@ export default class AppUpgrade extends Command {
   static examples = [
     '<%= config.bin %> app upgrade acme-crm',
     '<%= config.bin %> app upgrade acme-crm --version 1.3.0',
+    '<%= config.bin %> app upgrade analytics --reapply',
+    '<%= config.bin %> app upgrade acme-crm --dependencies-from-head mj-common',
   ];
 
   static args = {
@@ -27,10 +30,22 @@ export default class AppUpgrade extends Command {
 
   static flags = {
     version: Flags.string({ description: 'Specific version to upgrade to (default: latest)' }),
+    reapply: Flags.boolean({
+      description:
+        'Run the upgrade even when the app is already at the target version. Applies new migrations, packages, config and hooks from a local app folder without a version bump. A lower version is still refused.',
+      default: false,
+    }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
     'non-interactive': Flags.boolean({
       description: 'Skip interactive prompts; post-upgrade hooks use environment variables / defaults (for CI/headless upgrades)',
       default: false,
+    }),
+    'dependencies-from-head': Flags.string({
+      description:
+        "For development: read the dependencies of this installed app from its repository's default branch, instead of those recorded for its installed version. Repeat for more apps, or give 'all'",
+      helpValue: '<app|all>',
+      multiple: true,
+      multipleNonGreedy: true,
     }),
     'dangerously-ignore-dbl-underscore-schema-rule': Flags.boolean({
       hidden: true,
@@ -50,8 +65,10 @@ export default class AppUpgrade extends Command {
         {
           AppName: args.name,
           Version: flags.version,
+          Reapply: flags.reapply,
           Verbose: flags.verbose,
           AllowDoubleUnderscoreSchema: flags['dangerously-ignore-dbl-underscore-schema-rule'],
+          DependenciesFromHead: ParseDependenciesFromHead(flags['dependencies-from-head']),
         },
         context
       );

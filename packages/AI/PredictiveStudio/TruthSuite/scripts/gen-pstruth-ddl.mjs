@@ -2,7 +2,8 @@
 // gen-pstruth-ddl.mjs — the hand-written DDL of migrations/V202610130001__pstruth_tables.sql (print; never edit by hand).
 // Column typing follows the review loader's rules (load_scenarios.py:10-20): ID UNIQUEIDENTIFIER PK, EntityKey
 // NVARCHAR(50), T DATE NULL, Target FLOAT; normal → FLOAT, int/bernoulli → INT; stateFeature → INT; target-proxy and
-// time-shifted-label traps → INT, high-cardinality-id → NVARCHAR(100); a series LagTarget/SamePeriodTarget → FLOAT.
+// time-shifted-label traps → INT, high-cardinality-id → NVARCHAR(100); a series LagTarget/SamePeriodTarget → FLOAT (T4's
+// LagTarget alone, D4-181).
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,6 +40,7 @@ function scenarioColumns(id) {
     cols.push([s.seriesLeak.lagColumn, 'FLOAT']);
     if (id !== 'T3lag') cols.push([s.seriesLeak.sameColumn, 'FLOAT']);
   }
+  if (s.seriesLag) cols.push([s.seriesLag.lagColumn, 'FLOAT']);
   if (s.traps) {
     cols.push([s.traps.proxy.column, 'INT'], [s.traps.nextPeriod.column, 'INT'], [s.traps.highCardId.column, 'NVARCHAR(100)']);
   }
@@ -60,12 +62,18 @@ for (const id of ['T1p', 'T3', 'T4']) {
 }
 emit('GO');
 
+// The C1 corpus tables: their DDL is the hand-written migrations/V202610201300__pstruth_c1_corpus.sql, so they are not
+// printed above, but their entities take the same direct-SQL opt-in in their own metadata file.
+const C1_TABLES = ['C1Person', 'C1OrderHeader', 'C1DuesPeriod', 'C1NonduesLine', 'C1EventAttendance', 'C1CourseCompletion', 'C1Certification', 'C1CommitteeMembership'];
+// The copy tables: hand-written migrations/V202611190100__pstruth_r1_copy.sql (G5.1's R1 copy with DistanceZ renamed).
+const COPY_TABLES = ['Scn_R1Copy'];
+
 if (process.argv.includes('--metadata')) {
   const entitiesDir = path.join(root, 'metadata', 'entities');
   mkdirSync(entitiesDir, { recursive: true });
   // Looked up by table, not by name: CodeGen (run at provision) picks its own display-style name ("PS Truth: Scn C2s"),
   // and this push renames each entity to the stable `PS Truth: <table>`.
-  const records = tables.map((t) => ({
+  const entityRecord = (t) => ({
     primaryKey: {
       ID: `@lookup:MJ: Entities.SchemaName=pstruth&BaseTable=${t}`,
     },
@@ -78,9 +86,12 @@ if (process.argv.includes('--metadata')) {
       AllowDirectSQLUpdate: true,
       AllowDirectSQLDelete: true,
     },
-  }));
-  writeFileSync(path.join(entitiesDir, '.pstruth-entities.json'), `${JSON.stringify(records, null, 2)}\n`);
-  console.log(`wrote ${records.length} entity records to metadata/entities/.pstruth-entities.json`);
+  });
+  for (const [file, names] of [['.pstruth-entities.json', tables], ['.pstruth-c1-entities.json', C1_TABLES], ['.pstruth-copy-entities.json', COPY_TABLES]]) {
+    const records = names.map(entityRecord);
+    writeFileSync(path.join(entitiesDir, file), `${JSON.stringify(records, null, 2)}\n`);
+    console.log(`wrote ${records.length} entity records to metadata/entities/${file}`);
+  }
 } else {
   process.stdout.write(`${lines.join('\n')}\n`);
 }

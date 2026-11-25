@@ -194,6 +194,27 @@ When configured, the server acts as both an OAuth resource server and an OAuth p
 
 The OAuth proxy handles the authorization flow for MCP clients that don't natively support OAuth, proxying between the client and your identity provider.
 
+#### Rate limit and reverse proxies
+
+The OAuth proxy router limits requests per client IP: 60 per minute by default. It is mounted at the app root, so `/mcp` traffic counts against the limit too, not only the `/oauth/*` routes. Size the limit with `auth.proxy.rateLimit`.
+
+Behind CloudFront, a load balancer or another reverse proxy, also set `trustProxy`. It is passed to Express's [`trust proxy`](https://expressjs.com/en/guide/behind-proxies.html) setting. Without it, Express sees the proxy as every request's client, so all users share one limit.
+
+```javascript
+mcpServerSettings: {
+  trustProxy: 1,                // proxy hops to trust; or true, or 'loopback, 10.0.0.0/8'
+  auth: {
+    mode: 'oauth',
+    proxy: {
+      enabled: true,
+      rateLimit: { windowMs: 60_000, limit: 300 },   // per client IP; omitted fields keep the defaults
+    },
+  },
+},
+```
+
+Only set `trustProxy: true` when nothing can reach the server except through the proxy, because a client could otherwise choose its own `X-Forwarded-For`.
+
 ## Tool Filtering
 
 Filter which tools are exposed using glob-style patterns:
@@ -214,6 +235,15 @@ Patterns support:
 ## Compiled Tool & Schema Caching
 
 To avoid rebuilding entity/agent/action/prompt tool definitions and Zod parameter schemas on every SSE or StreamableHTTP session initialization, the MCP server compiles and caches `ToolConfig` entries in memory on first access (`GetOrBuildCompiledToolConfigs`). Each session registers lightweight handler wrappers against the pre-compiled schemas while routing execution to the active request's authenticated `SessionContext`. Use `ClearCompiledToolCache()` when tool configuration or metadata changes at runtime and needs to be recompiled.
+
+## Streamable HTTP Session Lifetime
+
+Each Streamable HTTP session owns its own `McpServer`, and a session normally ends when the client sends an HTTP `DELETE`. Clients that crash, sleep or lose their network never send one, so `StreamableSessionStore` tracks session activity without evicting active sessions under an arbitrary count cap:
+
+- A session that has not been used for `mcpServerSettings.sessionIdleTtlMs` (default **24 hours**) is closed and dropped (`mcpServerSettings.sessionSweepIntervalMs` controls background sweep cadence, default **5 minutes**). Every request on a session restarts its idle clock.
+- Sessions closed explicitly by the client leave immediately via `transport.onclose`.
+
+A client whose idle session expired sees the same thing it sees after a server restart: its `Mcp-Session-Id` is unknown, so it sends a new `initialize` request.
 
 ## CLI Options
 

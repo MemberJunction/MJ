@@ -1,18 +1,15 @@
 import { describe, it, expect } from 'vitest';
+import { ANSI_LEXICAL } from '../dialects/ansi.js';
+import { SQLServerSchemaDDL } from '../dialects/sqlServerSchemaDDL.js';
 import { PostgreSQLDialect } from '../postgresqlDialect.js';
-import { SQLServerDialect } from '../sqlServerDialect.js';
+import { SQLServerDialect, SQLServerWriter } from '../sqlServerDialect.js';
 
 /**
- * SQLDialect.SplitStatements splits an oversized batch on `;`+EOL so the RSU
- * migration chunker can re-group statements under a client request timeout.
- *
- * The PostgreSQL override MUST NOT split inside a dollar-quoted block (DO
- * blocks, function bodies, the integration view-drop guard), whose body
- * legitimately contains `;`+newline. The base implementation (used by SQL
- * Server, which has no dollar-quoted blocks) is the prior naive
- * `split(/;\s*\n/g)` behavior. These tests pin both.
+ * SQLDialect.SplitStatements and SplitBatches split SQL scripts on top-level statement
+ * (`;`+EOL) and batch (`GO`) boundaries so the RSU migration executor can run and chunk
+ * migrations without tearing apart string literals, comments, or dollar-quoted blocks.
  */
-describe('PostgreSQLDialect.SplitStatements (dollar-aware)', () => {
+describe('PostgreSQLDialect.SplitStatements (quote-, comment-, and dollar-aware)', () => {
     const dialect = new PostgreSQLDialect();
 
     it('splits plain statements on ;+newline (prior behavior preserved)', () => {
@@ -77,9 +74,51 @@ describe('PostgreSQLDialect.SplitStatements (dollar-aware)', () => {
             'ALTER TABLE b ADD y INT;',
         ]);
     });
+
+    it('does not split on ;+newline inside single-quoted literals (including doubled quotes and E-strings)', () => {
+        const comment = `COMMENT ON COLUMN "hubspot"."Contact"."Status" IS 'User''s codes:\n- A: Active;\n- I: Inactive;  \r\n- D: Deleted;\n';`;
+        const eString = `INSERT INTO t VALUES (E'don\\'t;\nsplit');`;
+        const sql = `${comment}\n${eString}\nALTER TABLE a ADD x INT;\n`;
+        expect(dialect.SplitStatements(sql)).toEqual([
+            comment,
+            eString,
+            'ALTER TABLE a ADD x INT;',
+        ]);
+    });
+
+    it('ignores $$ and $tag$ inside single-quoted string literals so subsequent statements still split', () => {
+        const comment = `COMMENT ON COLUMN "hubspot"."Deal"."Tier" IS 'Price tier ($, $$, $$$) or $usd$';`;
+        const alter = `ALTER TABLE "hubspot"."Deal" ADD COLUMN "Notes" TEXT NULL;`;
+        const sql = `${comment}\n${alter}\n`;
+        expect(dialect.SplitStatements(sql)).toEqual([comment, alter]);
+    });
+
+    it('ignores apostrophes in line comments and ;+newline in nested block comments', () => {
+        const sql =
+            `-- Don't drop this column\n` +
+            `ALTER TABLE a ADD x INT;\n` +
+            `/* outer /* inner ';\n */ still comment;\n */\n` +
+            `ALTER TABLE b ADD y INT;\n`;
+        const out = dialect.SplitStatements(sql);
+        expect(out).toHaveLength(2);
+        expect(out[0]).toContain('ALTER TABLE a ADD x INT;');
+        expect(out[1]).toContain('ALTER TABLE b ADD y INT;');
+    });
+
+    it('ignores apostrophes and ;+newline inside double-quoted identifiers (including doubled quotes)', () => {
+        const stmt1 = `ALTER TABLE "hubspot"."User's ""Contact""" ADD COLUMN "Note;\nText" TEXT NULL;`;
+        const stmt2 = `ALTER TABLE "hubspot"."Deal" ADD COLUMN "Amount" NUMERIC NULL;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
+
+    it('does not mistake $ inside unquoted identifiers (a$b$c, foo$$) for a dollar-quote opener', () => {
+        const stmt1 = `SELECT a$b$c, foo$$ FROM t;`;
+        const stmt2 = `ALTER TABLE a ADD x INT;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
 });
 
-describe('SQLDialect base SplitStatements (naive split, via SQLServerDialect)', () => {
+describe('SQLServerDialect.SplitStatements (quote- and comment-aware)', () => {
     const dialect = new SQLServerDialect();
 
     it('splits plain statements on ;+newline', () => {
@@ -107,5 +146,108 @@ describe('SQLDialect base SplitStatements (naive split, via SQLServerDialect)', 
             'ALTER TABLE a ADD x INT;',
             'ALTER TABLE b ADD y INT;',
         ]);
+    });
+
+    it('does not split on ;+newline inside N-prefixed or plain single-quoted string literals', () => {
+        const execStmt =
+            `EXEC sp_addextendedproperty\n` +
+            `    @name = N'MS_Description',\n` +
+            `    @value = N'User''s codes:\n- A: Active;\n- I: Inactive;   \r\n- D: Deleted;\n',\n` +
+            `    @level0type = N'SCHEMA', @level0name = 'hubspot',\n` +
+            `    @level1type = N'TABLE', @level1name = 'Contact',\n` +
+            `    @level2type = N'COLUMN', @level2name = 'Status';`;
+        const sql = `ALTER TABLE [hubspot].[Contact] ADD [Status] NVARCHAR(50) NULL;\n\n${execStmt}\n`;
+        expect(dialect.SplitStatements(sql)).toEqual([
+            'ALTER TABLE [hubspot].[Contact] ADD [Status] NVARCHAR(50) NULL;',
+            execStmt,
+        ]);
+    });
+
+    it('ignores apostrophes in line comments and ;+newline in nested block comments', () => {
+        const sql =
+            `-- Don't modify\n` +
+            `ALTER TABLE [a] ADD [x] INT;\n` +
+            `/* outer /* inner ';\n */ comment;\n */\n` +
+            `ALTER TABLE [b] ADD [y] INT;\n`;
+        const out = dialect.SplitStatements(sql);
+        expect(out).toHaveLength(2);
+        expect(out[0]).toContain('ALTER TABLE [a] ADD [x] INT;');
+        expect(out[1]).toContain('ALTER TABLE [b] ADD [y] INT;');
+    });
+
+    it('ignores apostrophes and ;+newline inside bracket-quoted and double-quoted identifiers', () => {
+        const stmt1 = `ALTER TABLE [hubspot].[User's ]]Table] ADD [Note;\nText] NVARCHAR(MAX) NULL;`;
+        const stmt2 = `ALTER TABLE "hubspot"."Deal's ""Row""" ADD [Amount] DECIMAL(18,2) NULL;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
+
+    it('keeps doubled-]] bracket identifiers intact when ;+newline and GO appear after ]]', () => {
+        const stmt1 = `ALTER TABLE [a]];\nGO\nb] ADD x INT;`;
+        const stmt2 = `SELECT 2;`;
+        expect(dialect.SplitStatements(`${stmt1}\n${stmt2}\n`)).toEqual([stmt1, stmt2]);
+    });
+});
+
+describe('SQLDialect.SplitBatches', () => {
+    it('splits SQL Server scripts on standalone GO lines while preserving GO inside strings, quoted identifiers, and comments', () => {
+        const ss = new SQLServerDialect();
+        const batch1 =
+            `CREATE SCHEMA [hubspot];`;
+        const batch2 =
+            `-- GO\n` +
+            `/* block\nGO\ncomment */\n` +
+            `ALTER TABLE [hubspot].[User's\nGO\nTable] ADD [Notes] NVARCHAR(MAX) NULL;\n` +
+            `EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'Click Submit to\nGO\nto next screen';\n` +
+            `GOTO done;`;
+        const script = `${batch1}\n  go  \r\n${batch2}\nGO`;
+        expect(ss.SplitBatches(script)).toEqual([batch1, batch2]);
+    });
+
+    it('splits on a GO line immediately after a comment or multi-line string while ignoring inline GO after a block comment', () => {
+        const ss = new SQLServerDialect();
+        expect(ss.SplitBatches('SELECT 1\n-- end of block\nGO\nSELECT 2')).toEqual([
+            'SELECT 1\n-- end of block',
+            'SELECT 2',
+        ]);
+        expect(ss.SplitBatches("SELECT 'a\nb'\nGO\nSELECT 2")).toEqual([
+            "SELECT 'a\nb'",
+            'SELECT 2',
+        ]);
+        expect(ss.SplitBatches('SELECT 1\n/* end of block */\nGO\nSELECT 2')).toEqual([
+            'SELECT 1\n/* end of block */',
+            'SELECT 2',
+        ]);
+        expect(ss.SplitBatches('/* comment */ GO\nSELECT 2')).toEqual([
+            '/* comment */ GO\nSELECT 2',
+        ]);
+    });
+
+    it('keeps doubled-]] bracket identifiers intact when GO appears after ]]', () => {
+        const ss = new SQLServerDialect();
+        const batch1 = `ALTER TABLE [a]];\nGO\nb] ADD x INT;`;
+        const batch2 = `SELECT 2;`;
+        expect(ss.SplitBatches(`${batch1}\nGO\n${batch2}`)).toEqual([batch1, batch2]);
+    });
+
+    it('never splits PostgreSQL scripts on standalone GO lines (no batch separator)', () => {
+        const pg = new PostgreSQLDialect();
+        const sql = `COMMENT ON TABLE "hubspot"."Contact" IS 'Click Submit to\nGO\nto next screen';`;
+        expect(pg.SplitBatches(sql)).toEqual([sql]);
+        expect(pg.SplitBatches('   \n\t  ')).toEqual([]);
+    });
+
+    it('honors DialectLexicalRules.BlockComments.Nested = false on flat-comment dialects and handles tiny MaxCommentLength safely', () => {
+        class TinyCapDDL extends SQLServerSchemaDDL {
+            override get MaxCommentLength(): number { return 2; }
+        }
+        const flatDdl = new TinyCapDDL(new SQLServerWriter(), ANSI_LEXICAL);
+        // Under ANSI_LEXICAL (Nested: false), the first `*/` closes the block comment so the `;` after it splits.
+        const sql = `/* outer /* inner */\nSELECT 1;\nSELECT 2;\n`;
+        expect(flatDdl.SplitStatements(sql)).toEqual([
+            '/* outer /* inner */\nSELECT 1;',
+            'SELECT 2;',
+        ]);
+        // MaxCommentLength <= 3 truncates cleanly without negative slice bounds.
+        expect(flatDdl.CommentOnColumn('dbo', 'T', 'C', 'abcdef')).toContain("@value = N'ab'");
     });
 });

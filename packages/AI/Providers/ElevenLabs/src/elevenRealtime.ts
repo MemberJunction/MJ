@@ -179,6 +179,14 @@ export class ElevenRealtime extends OpenAIRealtime {
 
     public static override readonly SupportsDynamicToolSet = ELEVEN_REALTIME_PROFILE.supportsDynamicToolSet;
 
+    public override get DefaultCallDurationSeconds(): number | undefined {
+        return undefined;
+    }
+
+    public override get TrustsNativeResumption(): boolean {
+        return false;
+    }
+
     /**
      * @param apiKey The ElevenLabs API key. It is only ever sent as `xi-api-key` to mint client
      * secrets; the realtime socket itself is opened with a minted secret.
@@ -194,7 +202,7 @@ export class ElevenRealtime extends OpenAIRealtime {
 
     /** Returns the Eleven-branded session subclass so instanceof checks and logs stay provider-true. */
     protected override createSessionInstance(connection: IOpenAIRealtimeConnection): OpenAIRealtimeSession {
-        return new ElevenRealtimeSession(connection, RealtimeDriverFactsOf(this));
+        return new ElevenRealtimeSession(connection, RealtimeDriverFactsOf(this), this);
     }
 
     /**
@@ -215,6 +223,10 @@ export class ElevenRealtime extends OpenAIRealtime {
         const secret = await this.mintClientSecret({ session: { type: 'realtime', model: params.Model } });
         const connection = this.createAuthenticatedConnection(params.Model, secret.value);
         const session = this.createSessionInstance(connection);
+        session.SetConnectionFactory(async () => {
+            const nextSecret = await this.mintClientSecret({ session: { type: 'realtime', model: params.Model } });
+            return this.createAuthenticatedConnection(params.Model, nextSecret.value);
+        });
         session.applyInitialConfig(this.withClampedMaxDuration(params));
         return session;
     }
@@ -279,8 +291,13 @@ export class ElevenRealtimeSession extends OpenAIRealtimeSession {
      * @param connection The provider connection (a real `OpenAIRealtimeWebSocket` in production, a
      * fake in tests).
      * @param driverFacts The creating driver's static facts; defaults to Eleven Realtime's for direct construction.
+     * @param model Optional parent driver instance for timing resolution.
      */
-    constructor(connection: IOpenAIRealtimeConnection, driverFacts: Readonly<RealtimeDriverFacts> = ElevenRealtime.DriverFacts) {
-        super(connection, ELEVEN_REALTIME_PROFILE, driverFacts);
+    constructor(
+        connection: IOpenAIRealtimeConnection,
+        driverFacts: Readonly<RealtimeDriverFacts> = ElevenRealtime.DriverFacts,
+        model?: BaseRealtimeModel,
+    ) {
+        super(connection, ELEVEN_REALTIME_PROFILE, driverFacts, model);
     }
 }

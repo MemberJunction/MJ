@@ -20,10 +20,28 @@ interface FieldState {
     OldValue?: unknown;
 }
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
     class MockMJAIAgentUserPolicyEntity {
         public UserID: string | null = null;
         public AgentID: string | null = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
+        public Status: 'Active' | 'Paused' | 'Revoked' = 'Active';
+        public CoordinationMode: 'Observer' | 'Advisor' | 'Assisted' | 'Autonomous' = 'Assisted';
+        public DefaultDataAccessMode: 'UserCeiling' | 'ReadOnly' | 'AllowListOnly' = 'ReadOnly';
+        public EmailChannelMode: 'Disabled' | 'DraftOnly' | 'SendAsAgent' | 'SendAsUser' = 'DraftOnly';
+        public CalendarChannelMode: 'Disabled' | 'DraftOnly' | 'RespondOnly' | 'FullAccess' = 'DraftOnly';
+        public AllowInternalMessaging = true;
+        public AllowInterAgentCoordination = true;
+        public RequireApprovalForExternalComms = true;
+        public MaxAutoActionsPerRun: number | null = 10;
+        public ActionRules: string | null = null;
+        public ActionRulesObject: unknown = null;
+        public EntityAccessRules: string | null = null;
+        public EntityAccessRulesObject: unknown = null;
+        public AllowedEmailDomainList: string | null = null;
+        public AllowedEmailDomainListObject: unknown = null;
+        public BlockedEmailAddressList: string | null = null;
+        public BlockedEmailAddressListObject: unknown = null;
         public ID = 'PPPPPPPP-0000-0000-0000-00000000000P';
         public IsSaved = false;
         public ContextCurrentUser: { ID: string; Type: string | null } | null = null;
@@ -45,9 +63,11 @@ vi.mock('@memberjunction/core-entities', () => {
             return true;
         }
     }
-    return { MJAIAgentUserPolicyEntity: MockMJAIAgentUserPolicyEntity };
+    return { ...actual, MJAIAgentUserPolicyEntity: MockMJAIAgentUserPolicyEntity };
 });
 
+import { AgentUserPolicyEngine } from '@memberjunction/ai-core-plus';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MJAIAgentUserPolicyEntityServer } from '../custom/MJAIAgentUserPolicyEntityServer.server';
 
 interface MockHooks {
@@ -120,5 +140,140 @@ describe('MJAIAgentUserPolicyEntityServer.Save', () => {
         e.ContextCurrentUser = { ID: OWNER, Type: 'Owner' };
         await e.Save();
         expect(e.UserID).toBe(OTHER);
+    });
+});
+
+describe('MJAIAgentUserPolicyEntityServer.Validate — agent context non-widening', () => {
+    const AGENT_A = 'C05A8E01-4C11-4E8A-9B01-1A2B3C4D5E00';
+    const AGENT_B = 'BBBBBBBB-4C11-4E8A-9B01-1A2B3C4D5E99';
+
+    it('refuses cross-agent policy modifications when ExecutingAgentID is set', () => {
+        const e = makeEntity();
+        e.UserID = OWNER;
+        e.AgentID = AGENT_B;
+        e.ExecutingAgentID = AGENT_A;
+        e.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        const r = e.Validate();
+        expect(r.Success).toBe(false);
+        expect(r.Errors.some((err) => err.Source === 'AgentID')).toBe(true);
+    });
+
+    it('refuses self-widening when ExecutingAgentID is set on an existing policy', () => {
+        const e = makeEntity();
+        e.IsSaved = true;
+        e.UserID = OWNER;
+        e.AgentID = AGENT_A;
+        e.ExecutingAgentID = AGENT_A;
+        e.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        e.RequireApprovalForExternalComms = false;
+        e.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: true });
+        const r = e.Validate();
+        expect(r.Success).toBe(false);
+        expect(r.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
+    });
+
+    it('allows self-narrowing when ExecutingAgentID is set on an existing policy', () => {
+        const e = makeEntity();
+        e.IsSaved = true;
+        e.UserID = OWNER;
+        e.AgentID = AGENT_A;
+        e.ExecutingAgentID = AGENT_A;
+        e.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        e.RequireApprovalForExternalComms = true;
+        e.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: false });
+        const r = e.Validate();
+        expect(r.Success).toBe(true);
+    });
+
+    it('isolates RunWithExecutingAgentContext across concurrent agent runs and allows concurrent human saves without bleed', async () => {
+        const engine = AgentUserPolicyEngine.Instance;
+        let releaseAgentA!: () => void;
+        const agentABarrier = new Promise<void>((resolve) => {
+            releaseAgentA = resolve;
+        });
+
+        // Start Agent A in flight and suspend at an await point
+        const agentARun = engine.RunWithExecutingAgentContext(AGENT_A, async () => {
+            expect(engine.GetActiveExecutingAgentID()).toBe(AGENT_A);
+            await agentABarrier;
+            expect(engine.GetActiveExecutingAgentID()).toBe(AGENT_A);
+
+            // Agent A trying to widen its own policy via RunWithExecutingAgentContext (without ExecutingAgentID set) is refused
+            const agentAPolicy = makeEntity();
+            agentAPolicy.IsSaved = true;
+            agentAPolicy.UserID = OWNER;
+            agentAPolicy.AgentID = AGENT_A;
+            agentAPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+            agentAPolicy.RequireApprovalForExternalComms = false;
+            agentAPolicy.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: true });
+            return agentAPolicy.Validate();
+        });
+
+        // Concurrently run Agent B while Agent A is suspended
+        const agentBRun = engine.RunWithExecutingAgentContext(AGENT_B, async () => {
+            expect(engine.GetActiveExecutingAgentID()).toBe(AGENT_B);
+            const agentBPolicy = makeEntity();
+            agentBPolicy.IsSaved = true;
+            agentBPolicy.UserID = OWNER;
+            agentBPolicy.AgentID = AGENT_B;
+            agentBPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+            agentBPolicy.RequireApprovalForExternalComms = true;
+            agentBPolicy.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: false });
+            return agentBPolicy.Validate();
+        });
+
+        // Concurrently perform a human Governance save (outside RunWithExecutingAgentContext) while Agent A is still in flight
+        expect(engine.GetActiveExecutingAgentID()).toBeNull();
+        const humanPolicy = makeEntity();
+        humanPolicy.IsSaved = true;
+        humanPolicy.UserID = OWNER;
+        humanPolicy.AgentID = AGENT_B;
+        humanPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        humanPolicy.RequireApprovalForExternalComms = false;
+        humanPolicy.SetFieldState('RequireApprovalForExternalComms', { Dirty: true, OldValue: true });
+        const humanValidation = humanPolicy.Validate();
+        expect(humanValidation.Success).toBe(true);
+
+        releaseAgentA();
+        const [resA, resB] = await Promise.all([agentARun, agentBRun]);
+        expect(resA.Success).toBe(false);
+        expect(resA.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
+        expect(resB.Success).toBe(true);
+    });
+
+    it('permits template agent to initialize policy on newly minted derived child while blocking privilege widening', () => {
+        const DERIVED_PEPPER = 'CCCCCCCC-4C11-4E8A-9B01-1A2B3C4D5E01';
+        Reflect.set(AIEngineBase.Instance, '_agents', [
+            { ID: AGENT_A, Name: 'Chief of Staff', BaseAgentID: null, OwnerUserID: null, Status: 'Active' },
+            { ID: DERIVED_PEPPER, Name: 'Pepper', BaseAgentID: AGENT_A, OwnerUserID: OWNER, Status: 'Active' },
+        ]);
+
+        // Valid narrowed/default policy created by template AGENT_A for Alice's Pepper
+        const okPolicy = makeEntity();
+        okPolicy.IsSaved = false;
+        okPolicy.UserID = OWNER;
+        okPolicy.AgentID = DERIVED_PEPPER;
+        okPolicy.ExecutingAgentID = AGENT_A;
+        okPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        okPolicy.CoordinationMode = 'Observer';
+        okPolicy.DefaultDataAccessMode = 'ReadOnly';
+        okPolicy.EmailChannelMode = 'DraftOnly';
+        okPolicy.CalendarChannelMode = 'ProposeWithApproval';
+        okPolicy.RequireApprovalForExternalComms = true;
+        expect(okPolicy.Validate().Success).toBe(true);
+
+        // Attempting to widen EmailChannelMode to SendAsUser during template -> child creation MUST fail!
+        const widenedPolicy = makeEntity();
+        widenedPolicy.IsSaved = false;
+        widenedPolicy.UserID = OWNER;
+        widenedPolicy.AgentID = DERIVED_PEPPER;
+        widenedPolicy.ExecutingAgentID = AGENT_A;
+        widenedPolicy.ContextCurrentUser = { ID: OWNER, Type: 'User' };
+        widenedPolicy.EmailChannelMode = 'SendAsUser';
+        const widenedResult = widenedPolicy.Validate();
+        expect(widenedResult.Success).toBe(false);
+        expect(widenedResult.Errors.some((err) => /cannot widen privileges/i.test(err.Message))).toBe(true);
+
+        Reflect.set(AIEngineBase.Instance, '_agents', []);
     });
 });

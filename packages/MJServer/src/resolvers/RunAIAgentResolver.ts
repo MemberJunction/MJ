@@ -1,10 +1,29 @@
 import { Resolver, Mutation, Query, Arg, Ctx, ObjectType, Field, PubSub, PubSubEngine, Subscription, Root, ResolverFilterData, ID, Int } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ConversationEngine } from '@memberjunction/core-entities';
+import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider, ServerOperationScopeManager } from '@memberjunction/core';
+import { MJConversationDetailEntity, MJConversationDetailEntityExtended, MJConversationDetailAttachmentEntity, MJConversationDetailArtifactEntity, MJArtifactVersionEntity, MJAIAgentRequestEntity, ArtifactMetadataEngine, ArtifactPermissionEngine, ConversationEngine } from '@memberjunction/core-entities';
 import { RouteArtifact } from './artifact-routing.js';
-import { AgentRunner, ArtifactToolManager, CanAgentOwnSubAgentConsults, LoadOpenSubAgentConsults, HostAllowedAgentIDs } from '@memberjunction/ai-agents';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult, ConversationUtility, AttachmentData, ContinuationAnnouncementText } from '@memberjunction/ai-core-plus';
+import {
+    AgentRunner,
+    ArtifactToolManager,
+    CanAgentOwnSubAgentConsults,
+    DecisionDiscoveryCatalog,
+    DecisionDiscoveryRunnableAgents,
+    HostAllowedAgentIDs,
+    KeepHostAllowedAgents,
+    LoadOpenSubAgentConsults,
+} from '@memberjunction/ai-agents';
+import {
+    AttachmentData,
+    ContinuationAnnouncementText,
+    ConversationUtility,
+    EDGE_PRE_DISCOVERY_DATA_KEY,
+    ExecuteAgentResult,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
+    SanitizeEdgePreDiscoveryHint,
+    BuildTaskGraphStartDebug,
+} from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
@@ -15,6 +34,8 @@ import { StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
 import { EscapeSQLString, IsValidUUID, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
@@ -288,6 +309,34 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     /**
+     * Strips or sanitizes untrusted `EdgePreDiscoveryHint` entries from incoming GraphQL `data`
+     * against the user's server-verified runnable & directly-discoverable agents (and optional
+     * host allow-list) so forged or unauthorized agent IDs never propagate past the resolver.
+     */
+    private async sanitizeEdgePreDiscoveryInData(
+        parsedData: Record<string, unknown> | undefined,
+        runningAgentId: string,
+        currentUser: UserInfo
+    ): Promise<Record<string, unknown> | undefined> {
+        if (!parsedData || !(EDGE_PRE_DISCOVERY_DATA_KEY in parsedData)) {
+            return parsedData;
+        }
+        const runnable = await DecisionDiscoveryRunnableAgents(AIEngine.Instance.Agents, currentUser);
+        const catalog = KeepHostAllowedAgents(
+            DecisionDiscoveryCatalog(runnable, runningAgentId),
+            HostAllowedAgentIDs(parsedData)
+        );
+        const sanitized = SanitizeEdgePreDiscoveryHint(parsedData[EDGE_PRE_DISCOVERY_DATA_KEY], catalog);
+        const nextData: Record<string, unknown> = { ...parsedData };
+        if (sanitized) {
+            nextData[EDGE_PRE_DISCOVERY_DATA_KEY] = sanitized;
+        } else {
+            delete nextData[EDGE_PRE_DISCOVERY_DATA_KEY];
+        }
+        return nextData;
+    }
+
+    /**
      * Internal method that handles the core AI agent execution logic.
      * This method is called by both the regular and system user resolvers.
      * @private
@@ -345,6 +394,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
         // The publisher owns every status message, including the failure completion the catch below sends.
         const statusPublisher = new AgentRunStatusPublisher(pubSub, userPayload, sessionId, conversationDetailId);
+        let currentPublisher = statusPublisher;
 
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
@@ -359,7 +409,7 @@ export class RunAIAgentResolver extends ResolverBase {
             const userMessage = this.extractUserMessage(parsedMessages);
 
             // Parse data contexts
-            const parsedData = this.parseJsonInput(data, 'data');
+            const rawParsedData = this.parseJsonInput(data, 'data');
             const parsedTemplateData = this.parseJsonInput(templateData, 'templateData');
 
             // Get and validate current user
@@ -371,6 +421,10 @@ export class RunAIAgentResolver extends ResolverBase {
             // Validate agent
             const agentEntity = await this.validateAgent(agentId, currentUser);
 
+            // Server remains guard of truth: strip/sanitize any untrusted client EdgePreDiscoveryHint
+            // at the GraphQL ingress boundary before passing data into AgentRunner / BaseAgent.
+            const parsedData = await this.sanitizeEdgePreDiscoveryInData(rawParsedData, agentEntity.ID, currentUser);
+
             // Create AI agent runner with the per-request isolated provider so all agent DB operations
             // (AIAgentRun, AIAgentRunSteps, AIAgentRequests, AIPromptRuns) never share the global
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
@@ -381,7 +435,6 @@ export class RunAIAgentResolver extends ResolverBase {
             // The publisher owns every status message. The resolver still copies the run into
             // agentRunRef, including noise steps, for the fire-and-forget liveness pulse.
             const sourcePublisher = statusPublisher;
-            let currentPublisher = sourcePublisher;
 
             // A widget- or guest-hosted run must not get a handoffChain unless the host also passes an
             // allow-list under trusted run data.
@@ -595,6 +648,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 executionTimeMs: executionTime,
                 result: JSON.stringify(errorResult)
             };
+        } finally {
+            currentPublisher.Dispose();
+            if (currentPublisher !== statusPublisher) {
+                statusPublisher.Dispose();
+            }
         }
     }
 
@@ -718,6 +776,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Public mutation for regular users to run AI agents with authentication.
      * Supports fire-and-forget mode to avoid Azure proxy timeouts on long-running agent executions.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
         @Arg('agentId') agentId: string,
@@ -1036,7 +1095,10 @@ export class RunAIAgentResolver extends ResolverBase {
             const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<MJAIAgentRequestEntity>({
                 EntityName: 'MJ: AI Agent Requests',
-                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested'`,
+                // Not a workflow step's request (OriginatingTaskID): the graph's own run is its provenance, so a
+                // follow-up message to that run is not an answer to it. A person answers a workflow step on purpose,
+                // through the request itself; resumption and AgentWake skip those requests the same way.
+                ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(trimmedLastRunId)}' AND Status='Requested' AND OriginatingTaskID IS NULL`,
                 MaxRows: 1,
                 SkipTotalRowCount: true,
                 ResultType: 'entity_object'
@@ -1055,7 +1117,9 @@ export class RunAIAgentResolver extends ResolverBase {
                 request.Response = userMessage;
             }
 
-            const saved = await request.Save();
+            // The user's own reply, made through this request: saved as their client request, so the server
+            // records them as the responder (`MJAIAgentRequestEntityServer`), as it does for a CRUD save.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (saved) {
                 LogStatus(`📋 Synced feedback request ${request.ID} → Responded (via conversation)`);
             } else {
@@ -1200,6 +1264,16 @@ export class RunAIAgentResolver extends ResolverBase {
         // visitor's session is refused before any elevated work happens. The reply row is written
         // as the guest too, never as the elevated principal, which owns no guest's conversation.
         const widgetElevation = await ResolveWidgetGuestRunContext(userPayload, p);
+        // Every OTHER scope-limited session (resource-scoped magic links, anonymous guests without a
+        // resolvable widget) is refused: its RLS scope does not bound which agent runs or what the
+        // agent does, so only the pinned-agent widget path above may dispatch for a guest. The refusal
+        // returns this resolver's own { success: false } shape rather than throwing the decorator's
+        // AuthorizationError, so a refused guest sees the same result as any other failed run.
+        if (!widgetElevation && IsScopeLimitedPrincipal(currentUser) && !userPayload.isSystemUser) {
+            const errorMessage = 'RunAIAgentFromConversationDetail is not available to scope-limited sessions';
+            LogStatus(`[Auth] Refused RunAIAgentFromConversationDetail for a scope-limited session (user ${currentUser.ID}).`);
+            return { success: false, errorMessage, result: JSON.stringify({ success: false, errorMessage }) };
+        }
         const effectiveAgentId = widgetElevation ? widgetElevation.PinnedAgentId : agentId;
         // Check API key scope authorization for agent execution against the resolved agent id.
         await this.CheckAPIKeyScopeAuthorization('agent:execute', effectiveAgentId, userPayload);
@@ -1464,6 +1538,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Updates the request record with the response and optionally spawns a
      * new agent run to resume execution with the human's input.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async RespondToAgentRequest(
         @Arg('requestId') requestId: string,
@@ -1506,7 +1581,9 @@ export class RunAIAgentResolver extends ResolverBase {
             request.RespondedAt = new Date();
             request.ResponseByUserID = currentUser.ID;
 
-            const saved = await request.Save();
+            // The caller's own answer, made through this mutation: saved as their client request, so the
+            // server records them as the responder (`MJAIAgentRequestEntityServer`), as it does for a CRUD save.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (!saved) {
                 throw new Error(`Failed to save response for request ${requestId}`);
             }
@@ -1541,6 +1618,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Reassign an agent request to a different user.
      * Updates RequestForUserID and sends a notification to the new assignee.
      */
+    @RefuseScopeLimitedPrincipals()
     @Mutation(() => AIAgentRunResult)
     async ReassignAgentRequest(
         @Arg('requestId') requestId: string,
@@ -1580,7 +1658,9 @@ export class RunAIAgentResolver extends ResolverBase {
                     : reassignEntry;
             }
 
-            const saved = await request.Save();
+            // The caller's own reassignment, made through this mutation: saved as their client request, which a
+            // workflow step's request requires (`MJAIAgentRequestEntityServer`), as a CRUD save is.
+            const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
             if (!saved) {
                 throw new Error(`Failed to save reassignment for request ${requestId}`);
             }
@@ -1903,7 +1983,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Batch load input artifact versions for conversation details.
      * Returns a map of ConversationDetailID -> ArtifactVersion[]
      */
-    private async loadInputArtifactsBatch(
+    protected async loadInputArtifactsBatch(
         conversationDetailIds: string[],
         contextUser: UserInfo,
         provider: IMetadataProvider
@@ -1935,15 +2015,38 @@ export class RunAIAgentResolver extends ResolverBase {
 
         if (!versionsResult.Success || !versionsResult.Results) return map;
 
-        // Build a lookup of version ID -> version entity
+        // Enforce artifact read ACL via ArtifactPermissionEngine so conversation context loading never bypasses permissions (D3)
+        const canReadByArtifactId = new Map<string, boolean>();
+        for (const v of versionsResult.Results) {
+            const artId = (v.ArtifactID ?? '').trim();
+            if (!artId) {
+                continue;
+            }
+            const lowerArtId = artId.toLowerCase();
+            if (!canReadByArtifactId.has(lowerArtId)) {
+                const perms = await ArtifactPermissionEngine.Instance.ResolvePermissions(
+                    provider,
+                    artId,
+                    contextUser
+                );
+                canReadByArtifactId.set(lowerArtId, perms.CanRead === true);
+            }
+        }
+
+        // Build a lookup of version ID -> readable version entity (keyed lowercase for case-insensitive UUID matching)
         const versionMap = new Map<string, MJArtifactVersionEntity>();
         for (const v of versionsResult.Results) {
-            versionMap.set(v.ID, v);
+            const lowerArtId = (v.ArtifactID ?? '').trim().toLowerCase();
+            if (lowerArtId && canReadByArtifactId.get(lowerArtId) === true) {
+                versionMap.set(v.ID.toLowerCase(), v);
+            }
         }
 
         // Group by conversation detail ID
         for (const link of linksResult.Results) {
-            const version = versionMap.get(link.ArtifactVersionID);
+            const version = link.ArtifactVersionID
+                ? versionMap.get(link.ArtifactVersionID.toLowerCase())
+                : undefined;
             if (version) {
                 const existing = map.get(link.ConversationDetailID) || [];
                 existing.push(version);
@@ -2000,10 +2103,11 @@ function parseAgentHistoryFrom(raw?: string | null): Date | undefined {
     return parsed;
 }
 
-function parseTaskGraphDebug(raw?: string): { paused?: boolean } | undefined {
+function parseTaskGraphDebug(raw?: string): { paused?: boolean; breakpointStepIDs?: string[] } | undefined {
     if (!raw) return undefined;
     const parsed: unknown = SafeJSONParse(raw);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    const paused = (parsed as { paused?: unknown }).paused;
-    return paused === true ? { paused: true } : undefined;
+    const request = parsed as { paused?: unknown; breakpointStepIDs?: unknown };
+    // Remembered breakpoints (#3798) travel as stable step IDs; Submit maps them to this run's task IDs.
+    return BuildTaskGraphStartDebug({ paused: request.paused === true, breakpointStepIDs: request.breakpointStepIDs });
 }

@@ -24,6 +24,8 @@ import { TaskGraphService } from './TaskGraphService';
 
 @RegisterClass(TaskGraphSubmitter, TASK_GRAPH_SUBMITTER_KEY)
 export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
+    public override readonly SupportsSecurityEnvelope: boolean = true;
+
     public async Submit(request: TaskGraphSubmitRequest): Promise<TaskGraphSubmitOutcome> {
         const result = await new TaskGraphService().Submit(request.Spec, {
             EnvironmentID: request.EnvironmentID,
@@ -31,6 +33,11 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             ContextUser: request.ContextUser,
             Provider: request.Provider,
             AgentRunID: request.AgentRunID ?? null,
+            AgentID: request.AgentID ?? null,
+            RoutineID: request.RoutineID ?? null,
+            LimitsOverride: request.LimitsOverride,
+            UserPolicyLimitsOverride: request.UserPolicyLimitsOverride,
+            EnableGovernance: request.EnableGovernance,
             ParentAgentHierarchy: request.ParentAgentHierarchy,
             // Carried through so MAX_REINVOKE_DEPTH bounds a real chain. Without it every
             // submission was depth 0 and the cap could never trip.
@@ -40,10 +47,15 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             // reference has to travel with it (R3-3).
             Invocation: request.Invocation,
             Debug: request.Debug,
+            SecurityEnvelope: request.SecurityEnvelope,
+            Dispatch: request.Dispatch,
+            QueueTopic: request.QueueTopic,
         });
         return {
             Success: result.Success,
             ParentTaskID: result.ParentTaskID,
+            Dispatch: result.Dispatch,
+            QueueMessageID: result.QueueMessageID,
             ErrorMessage: result.ErrorMessage,
         };
     }

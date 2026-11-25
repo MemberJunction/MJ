@@ -207,11 +207,12 @@ function newField(row: MJQueryFieldEntity, queryID: string, fact: QueryFieldFact
     row.Description = fact.DocDescription ?? fact.SourceDescription;
     row.IsSummary = false;
     row.DetectionMethod = 'Database';
+    row.InAllBranchVariants = fact.InAllBranchVariants ?? true;
 }
 
 /**
- * Sets a field row's facts (name casing, sequence, types, nullability, computed flag, source) from
- * the extracted fact, leaving its annotations alone.
+ * Sets a field row's facts (name casing, sequence, types, nullability, computed flag, source,
+ * branch-variant presence) from the extracted fact, leaving its annotations alone.
  */
 export function ApplyFieldFacts(row: MJQueryFieldEntity, fact: QueryFieldFact): void {
     row.Name = fact.Name;
@@ -224,6 +225,10 @@ export function ApplyFieldFacts(row: MJQueryFieldEntity, fact: QueryFieldFact): 
     row.SourceEntityFieldID = fact.SourceEntityFieldID;
     row.SourceFieldName = fact.SourceFieldName;
     row.SourceObjectName = fact.SourceObjectName;
+    const inAllBranches = fact.InAllBranchVariants ?? true;
+    if (!row.IsSaved || row.InAllBranchVariants !== null || !inAllBranches) {
+        row.InAllBranchVariants = inAllBranches;
+    }
 }
 
 /** A stored field's description and detection method: authored ones kept, a doc comment applied. */
