@@ -1,9 +1,9 @@
 # Guided Tours: a Framework Primitive for In-App Guidance
 
 ## Status
-- **Status**: Draft (revised after team review, ready for Phase 0/1)
+- **Status**: Approved — Phases 0–3 in active implementation
 - **Created**: 2026-11-04
-- **Updated**: 2026-11-13
+- **Updated**: 2026-11-24
 - **Author**: Amith Nagarajan + Claude (with review synthesis from `@cmbrock-BC` & `@MattC-BC`)
 - **Branch**: `claude/guided-tours`
 - **Companion doc**: [MJ Guided Tours — Design Proposal](https://claude.ai/artifact/R2s29bJUkhy2iboGB2qmxQ). That doc is the narrative version; **this file is the plan of record** and supersedes it where they differ. The main additions here are hosts beyond Explorer (§4.2), the extension model (§5), agent integration (§10), the two-stage Light DOM embed architecture (§4.1), and the default tour catalogs (§16–§17).
@@ -111,7 +111,7 @@ Nothing tour-shaped exists: there is no tour, coach-mark or spotlight component,
 | A prompt-level tour today | `BuildTourGuidanceClause()`; its comment says it should become "a dedicated Tour skill once that agent primitive exists" | `packages/AI/Agents/src/realtime/realtime-tool-broker.ts:100` |
 | An agent mode that lasts across turns | Skills with `ActivationScope = 'Conversation'` | `guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md` §1.6c |
 | UI commands in agent replies | `actionableCommands` / `automaticCommands` (open:resource, notification, …) | `packages/AI/CorePlus/src/ui-commands.ts` |
-| Branching pathway engine | `GraphTraversalEngine`: zero-dependency pure TypeScript (`SelectOutgoingEdges`, `AdvanceFrontier`), to be moved from `AI/CorePlus` to `@memberjunction/global` so runtimes don't pull `core-entities` | `packages/AI/CorePlus/src/task-graph/graph-traversal-engine.ts` → `@memberjunction/global` |
+| Branching pathway & layout engine | `GraphTraversalEngine` + pure graph algorithms & layered layout: zero-dependency pure TypeScript (`SelectOutgoingEdges`, `AdvanceFrontier`, `ComputeLayeredGraphLayout`), extracted from `AI/CorePlus` into a dedicated `@memberjunction/graph` package (`packages/Graph`) so runtimes never pull `core-entities` | `packages/AI/CorePlus/src/task-graph/graph-*.ts` → `packages/Graph` (`@memberjunction/graph`) |
 | Anchors on every generated form | `data-field-name`, `data-section-key`, `data-rail-key`, plus `OnNavigateToCommentAnchor` (switch rail group, expand section, scroll, pulse) | `packages/Angular/Generic/base-forms/src/lib/field/form-field.component.ts:207`; `.../container/record-form-container.component.ts:3304` |
 | Conditions and audiences | `CompositeFilter.FromJSON(json).Evaluate(ctx)` (pure TS over `filter.types`) and `mj-filter-builder` | `guides/FILTER_BUILDER_AND_EVALUATION.md` |
 | Per-user preferences | `UserInfoEngine` settings: synchronous read, debounced write | `packages/MJCoreEntities/src/engines/UserInfoEngine.ts` |
@@ -172,9 +172,10 @@ The tour is data, and the session owns state. Directors, step types, presenters 
 
 | Package | Layer (`mjUILayer`) | Holds |
 |---|---|---|
-| `@memberjunction/tours-runtime` (`packages/Tours/Runtime`) | `runtime`: pure TypeScript, no Angular, no DOM; runs in Node | `TourSession`; the pathway compiler onto `GraphTraversalEngine` (from `@memberjunction/global`); anchor-descriptor and step-config types; the logic-half base classes (`BaseTourDriver`, `BaseTourStepType`, `BaseTourCompletionCheck`, `BaseTourTrigger`, `BaseTourEligibilityPolicy`, `BaseTourDirector`) and their standard implementations; `ITourHost`, capability, `ITourDefinitionSource`, `ITourProgressStore` contracts (§4.2); `InlineTourSource`, `MemoryProgressStore`; `TourAgentToolkit`; `TourEvents`. Never depends on `@memberjunction/core-entities` or `@memberjunction/ai-core-plus` |
+| `@memberjunction/graph` (`packages/Graph`) | `runtime`: zero-dependency pure TypeScript; runs in Node and any browser | `GraphTraversalEngine` (`SelectOutgoingEdges`, `AdvanceFrontier`, `IsJoinSatisfied`, `CreateTraversalState`), pure DAG algorithms (`TopologicalSort`, `DetectCycles`, status propagation), and pure Sugiyama layered graph layout (`ComputeLayeredGraphLayout`). Shared directly (no re-exports) by Flow agents, TaskGraph, `tours-runtime`, and Tour Studio |
+| `@memberjunction/tours-runtime` (`packages/Tours/Runtime`) | `runtime`: pure TypeScript, no Angular, no DOM; runs in Node | `TourSession`; the pathway compiler onto `@memberjunction/graph`; anchor-descriptor and step-config types; the logic-half base classes (`BaseTourDriver`, `BaseTourStepType`, `BaseTourCompletionCheck`, `BaseTourTrigger`, `BaseTourEligibilityPolicy`, `BaseTourDirector`) and their standard implementations; `ITourHost`, capability, `ITourDefinitionSource`, `ITourProgressStore` contracts (§4.2); `InlineTourSource`, `MemoryProgressStore`; `TourAgentToolkit`; `TourEvents`. Never depends on `@memberjunction/core-entities` or `@memberjunction/ai-core-plus` |
 | `TourEngine` in `@memberjunction/core-entities` (`packages/MJCoreEntities/src/engines/tours.ts`) | Both tiers | The MJ-connected definition source and progress store: implements `ITourDefinitionSource` / `ITourProgressStore` over `tours-runtime` contracts; cached definitions and current user's runs, `ObserveProperty` streams, `ActiveSession$`, `Tours.Enabled` kill switch. Resolved via `TourEngine.GetProviderInstance(this.ProviderToUse, TourEngine)` in L2 widgets |
-| `@memberjunction/ng-tours` (`packages/Angular/Generic/tours`) | `widgets`: no router, no Explorer | **Single UI + embed package**, matching `ng-realtime-widget`'s two-stage build:<br>• **Stage-1 vanilla shell (`shell-entry.ts` → `mj-tours.js`, ~10 KB gzipped IIFE, `FORBIDDEN_IN_SHELL` blocking `@angular/*`, `rxjs`, `zone.js`, `@memberjunction/*`):** defines `<mj-tour-host>`, exports `MountTours()` and `RegisterAnchor()`, runs the `data-mj-tour-anchor` `MutationObserver` (`AnchorRegistry`), and evaluates guest surface eligibility/triggers. Pages where no tour runs never download Angular or `zone.js`.<br>• **Stage-2 session bundle (`session-entry.ts` → `mj-tours-session.js` + lazy `chunks/`):** lazy-loaded via `import()` only when a tour starts or shows a beacon. Boots `createApplication()`, mounts `TourGlobalStylesComponent` (`@layer mj-tours-defaults` with `--mj-*` tokens, `mjButton`, Font Awesome), renders the **single** set of Angular `BaseTourStepRenderer` and `BaseTourPresenter` components in **Light DOM** (`@floating-ui/dom`, `mjt-` CSS prefix, spotlight SVG mask, focus/inert management, live region), plus `[mjTourAnchor]` directive, `MJ_TOUR_HOST` token, `SurfaceTourSource`/`SurfaceProgressStore`, and `WebTourHost`. Heavy step renderers (`AskAgent`, `Media`, `EmbeddedComponent`) sit in split lazy chunks so basic web tours never pull `ng-conversations` or `@memberjunction/core-entities` |
+| `@memberjunction/ng-tours` (`packages/Angular/Generic/tours`) | `widgets`: no router, no Explorer | **Single UI + embed package**, matching `ng-realtime-widget`'s two-stage build:<br>• **Stage-1 vanilla shell (`shell-entry.ts` → `mj-tours.js`, ~10 KB gzipped IIFE, `FORBIDDEN_IN_SHELL` blocking `@angular/*`, `rxjs`, `zone.js`, `@memberjunction/*`):** uses `import type` only; defines `<mj-tour-host>`, exports `MountTours()` and `RegisterAnchor()`, runs the `data-mj-tour-anchor` `MutationObserver` (`AnchorRegistry`), and evaluates zero-dep URL-pattern / `FirstVisit` / server-pre-filtered surface triggers (`CompositeFilter` evaluation stays in `Tours.GetSurfaceTours` or Stage-2). Pages where no tour runs never download Angular or `zone.js`.<br>• **Stage-2 session bundle (`session-entry.ts` → `mj-tours-session.js` + lazy `chunks/`):** lazy-loaded via `import()` only when a tour starts or shows a beacon. Boots `createApplication()`, mounts `TourGlobalStylesComponent` (`@layer mj-tours-defaults` with `--mj-*` tokens, `mjButton`, Font Awesome), renders the **single** set of Angular `BaseTourStepRenderer` and `BaseTourPresenter` components in **Light DOM** (`@floating-ui/dom`, `mjt-` CSS prefix, spotlight SVG mask, focus/inert management, live region), plus `[mjTourAnchor]` directive, `MJ_TOUR_HOST` token, `SurfaceTourSource`/`SurfaceProgressStore`, and `WebTourHost`. Heavy step renderers (`AskAgent`, `Media`, `EmbeddedComponent` / `ComponentSpec` interactive steps) sit in split lazy chunks so basic web tours never pull `ng-conversations`, `ng-react`, or `@memberjunction/core-entities` |
 | Explorer integration (`explorer-core`, `explorer-app`, `dashboards`) | `surface` / `shell` | `ExplorerTourHost` (NavigationService, workspace state, `ResourceLoaded$`, agent bridge); header launcher; `OmnibarToursProvider`; Home learning-path card; the "tour" notification type; the **Tour Studio** app |
 | `@memberjunction/tours-server` (`packages/Tours/Server`) | Server | Remote Operations (server predicates, batched run recording, claim guest runs, publish, surface tour delivery); Actions (`Start Tour For User`, `Suggest Tours`, `Get Tour Progress`, `Assign Learning Path`); `BaseTourServerPredicate`; server entity subclasses (including auto-snapshotting `TourVersion` when an `Active` tour changes); generalized embed guest-session service shared with `WidgetSessionService` |
 
@@ -447,14 +448,14 @@ erDiagram
 
 | Entity | What it is | Key fields |
 |---|---|---|
-| `MJ: Tour Step Types` | Registry of step types: the plugin catalog authors pick from | `Name`, `Description`, `DriverClass`, `RendererClass`, `ConfigSchema`, `SupportedModes` (Show/Guide/Do), `IsAgentCapable`, `Icon`, `Status` |
-| `MJ: Tours` | One guidance experience | `Name`, `TourKey` (stable, namespaced, e.g. `sales.first-deal`), `Description`, `ApplicationID` (owning app; null = core), `RunInAuthenticatedHosts` (default true; Explorer and MJ-connected apps), `Status` (Draft, Active, Retired), `CurrentVersionID`, `EstimatedMinutes`, `AudienceFilter` (CompositeFilter JSON), `LaunchPolicy` (JSON), `Priority`, `ThrottleTags`, `DefaultGuideMode` (Visual, Chat, Voice, User Choice), `AllowAgentActions`, `GuideAgentID` (null = app default, then Sage), `DriverClass`, `PresenterClass`, `Goal` (`ITourGoal`), `StartLocation` (`ITourStartLocation`, including context requirements such as "any open record") |
+| `MJ: Tour Step Types` | Registry of step types: the plugin catalog authors pick from | `Name`, `Description`, `DriverClass`, `RendererClass`, `ComponentID` (optional FK to `MJ: Components` for zero-deploy runtime `ComponentSpec` interactive step types), `ConfigSchema`, `SupportedModes` (Show/Guide/Do), `IsAgentCapable`, `Icon`, `Status` |
+| `MJ: Tours` | One guidance experience | `Name`, `TourKey` (stable, namespaced, e.g. `sales.first-deal`), `Description`, `ApplicationID` (owning app; null = core), `RunInAuthenticatedHosts` (default true; Explorer and MJ-connected apps), `Status` (Draft, Active, Retired), `CurrentVersionID`, `EstimatedMinutes`, `AudienceFilter` (CompositeFilter JSON), `LaunchPolicy` (JSON), `Priority`, `ThrottleTags`, `DefaultGuideMode` (Visual, Chat, Voice, User Choice), `AllowAgentActions`, `GuideAgentID` (null = app default, then Sage), `DriverClass`, `PresenterClass`, `Goal` (`ITourGoal`), `StartLocation` (`ITourStartLocation`, including context requirements such as "any open record"), `Configuration` (`ITourConfiguration` JSONType: `localizations`, extensible settings) |
 | `MJ: Tour Versions` | Immutable published snapshot (same pattern as Rubric Versions and Sonar score-model versions) | `TourID`, `VersionNumber`, `Definition` (steps and paths as JSON), `PublishedAt`, `PublishedByUserID`, `ChangeSummary` |
-| `MJ: Tour Steps` | Editable draft step | `TourID`, `StepKey` (stable), `Sequence`, `StepTypeID`, `DriverClass` (per-step override), `Title`, `Body` (Markdown, MJ template variables), `Configuration` (validated against the type's schema), `Anchor` (`ITourAnchor`), `Placement`, `Mode` (Show, Guide, Do), `Prepare` (`ITourStepPrepare`), `Completion` (`ITourCompletion`), `SkipWhen` (CompositeFilter), `OnMissing` (Skip, Center, Stall, AgentRecover), `IsOptional`, `GuideNotes` (agent-only context), `VoiceScript` (optional) |
-| `MJ: Tour Step Paths` | Branch edge; linear tours need none | `TourID`, `FromStepID`, `ToStepID`, `Condition` (CompositeFilter over session context, or a choice key), `Label`, `Priority`, `IsDefault` |
+| `MJ: Tour Steps` | Editable draft step | `TourID`, `StepKey` (stable), `Sequence`, `StepTypeID`, `DriverClass` (per-step override), `Title`, `Body` (Markdown, MJ template variables), `Configuration` (`ITourStepConfiguration` JSONType: validated against the type's schema, plus `localizations`), `Anchor` (`ITourAnchor`), `Placement`, `Mode` (Show, Guide, Do), `Prepare` (`ITourStepPrepare`), `Completion` (`ITourCompletion`), `SkipWhen` (CompositeFilter), `OnMissing` (Skip, Center, Stall, AgentRecover), `IsOptional`, `GuideNotes` (agent-only context), `VoiceScript` (optional) |
+| `MJ: Tour Step Paths` | Branch edge; linear tours need none | `TourID`, `FromStepID`, `ToStepID`, `Condition` (CompositeFilter over session context, or a choice key), `Label`, `Priority`, `IsDefault`, `Configuration` (`ITourStepPathConfiguration` JSONType: `localizations`, metadata) |
 | `MJ: Tour Prerequisites` | What must come first | `TourID`, `PrerequisiteType` (Tour, Role, Authorization, Application, Data), `RequiredTourID`, `Condition`, `Strength` (Required, Recommended) |
 | `MJ: Tour Triggers` | When to offer | `TourID`, `TriggerType` (open key, §5.1), `Configuration`, `Delivery` (Offer, Beacon, Notification, Auto), `CooldownDays`, `Status` |
-| `MJ: Learning Paths` | A curriculum, rendered as a checklist | `Name`, `PathKey`, `Description`, `ApplicationID`, `AudienceFilter`, `Status` |
+| `MJ: Learning Paths` | A curriculum, rendered as a checklist | `Name`, `PathKey`, `Description`, `ApplicationID`, `AudienceFilter`, `Status`, `Configuration` (`ILearningPathConfiguration` JSONType: `localizations`, checklist presentation options) |
 | `MJ: Learning Path Tours` | Membership | `LearningPathID`, `TourID`, `Sequence`, `IsRequired` |
 | `MJ: Tour Runs` | One attempt by one user or guest visitor: the progress ledger | `UserID` (null for guests), `VisitorKey` (guests; falls back to `mj_sid` when visitor memory is off), `SurfaceID`, `TourID`, `TourVersionID`, `Status` (Pending, In Progress, Completed, Dismissed, Snoozed, Abandoned, Failed), `GuideMode`, `DirectorType`, `CurrentStepKey`, `PathTaken` (JSON), `LaunchSource` (Launcher, Omnibar, Agent, Trigger, Notification, Link), `LaunchedByAgentRunID`, `StartedAt`, `CompletedAt`, `GoalMetAt`, `SnoozedUntil`, `ConversationID`, `AgentSessionID`, `IsHoldout` |
 | `MJ: Tour Run Steps` | Telemetry per stop | `TourRunID`, `StepKey`, `EnteredAt`, `ExitedAt`, `Outcome` (Completed, Skipped, Already Known, Done By Agent, Anchor Missing, Dismissed), `AnchorResolution` (Registered, Semantic, Role, Selector, Failed), `QuestionCount` |
@@ -464,7 +465,7 @@ erDiagram
 
 Rules:
 - **Runs pin a version.** An app upgrade that rewrites a tour never corrupts someone's half-finished run. A run on a retired version finishes on its snapshot, or is offered a restart.
-- **Active seeded tours auto-snapshot `TourVersion`.** `TourRun.TourVersionID` is `NOT NULL`, while `metadata/tours/` seeds `Tour`, `TourStep`, and `TourStepPath` without requiring authors to duplicate JSON snapshots by hand. Server entity logic (and the `mj sync push` / publish pipeline) automatically creates/updates the immutable `TourVersion` and `CurrentVersionID` whenever an `Active` tour has un-snapshotted step/path changes.
+- **Active seeded tours publish cleanly via two-phase metadata sync (`tours` → `tour-publications`).** `TourRun.TourVersionID` is `NOT NULL`. To avoid minting `1 + S + P` partial `TourVersion` rows during `mj sync push` (which saves `Tour` before its child `TourStep` and `TourStepPath` rows), `metadata/tours/` seeds tours in `Draft` status with all nested steps and paths, and `metadata/tour-publications/.publish-shipped-tours.json` (ordered immediately after `tours` in `.mj-sync.json`, mirroring `rubric-publications`) flips shipped tours to `Active` once all steps and paths exist — snapshotting a single canonical `TourVersion` and updating `CurrentVersionID` only when canonical step/path content differs from the current snapshot.
 - **Shipped rows are never edited by host admins.** Their changes go into Tour Overrides, the same layering Form Chrome Rules and Form Contributions use, so customizations survive upgrades.
 - **CHECK values are written for people**, per the readable-status-values standard (`In Progress`, not `InProgress`).
 
@@ -762,7 +763,7 @@ The primary metric is the goal, not completion. Tour Studio's dashboard uses sta
   - `--mj-z-tour-popover`: non-modal `Action` / `Beacon` layer (below modals/dialogs)
   - `--mj-z-tour-modal`: modal `Spotlight` / `Modal` backdrop and card layer (above dialogs, below omnibar and toasts)
 - Voice has text parity, and every voice command has a keyboard equivalent. Tested with NVDA, JAWS and VoiceOver, plus axe in DOM tests.
-- **Localization.** MJ has no framework i18n yet. Step text is stored with a `Localizations` JSON keyed by locale, ready for it. Agent modes can deliver a tour in the user's language live.
+- **Localization via `Configuration` JSONType.** MJ has no framework i18n yet. Display copy on `MJ: Tours`, `MJ: Tour Steps`, `MJ: Tour Step Paths`, and `MJ: Learning Paths` stores locale-keyed overrides inside each table's strongly-typed `Configuration` JSONType column (`localizations?: Record<string, ...>`), avoiding future schema migrations while letting agent modes deliver tours in the user's language live.
 
 ---
 
@@ -882,8 +883,8 @@ flowchart LR
 
 No durations are given here; sizing follows review of this plan. Host independence is built in from phase 0, not retrofitted in phase 3. Phase 3 adds packaging and public surfaces on top of contracts that already exist.
 
-### Phase 0 — Anchors (runtime + Angular directive + CI gate)
-1. **Extract `GraphTraversalEngine`** from `@memberjunction/ai-core-plus` (`packages/AI/CorePlus/src/task-graph/graph-traversal-engine.ts`) to `@memberjunction/global` (`packages/MJGlobal`, zero dependencies), updating internal MJ consumers directly so `tours-runtime` never pulls `core-entities`.
+### Phase 0 — Anchors & Graph Foundation (runtime + Angular directive + CI gate)
+1. **Extract `@memberjunction/graph`** (`packages/Graph`, `"mjUILayer": "runtime"`, zero dependencies) from `@memberjunction/ai-core-plus` (`graph-traversal-engine.ts`, `graph-algorithms.ts`, and pure layered layout `ComputeLayeredGraphLayout`), updating internal MJ consumers (`ai-agents`, `ai-core-plus`, `task-graph`) directly with zero re-exports so `tours-runtime` never pulls `core-entities`.
 2. **`@memberjunction/tours-runtime`** (`packages/Tours/Runtime`, `"mjUILayer": "runtime"`): `ITourAnchor` types, `BaseTourAnchorResolver` (logic), `ITourHost` / `ITourDefinitionSource` / `ITourProgressStore` / capability contracts, and anchor-key/namespace conventions.
 3. **`@memberjunction/ng-tours` Stage-0/Anchor foundation** (`packages/Angular/Generic/tours`, `"mjUILayer": "widgets"`):
    - `AnchorRegistry` with register/unregister events, `WaitFor(key, timeoutMs)`, `RegisterAnchor(key, element)`, and the `data-mj-tour-anchor` `MutationObserver` scanner
@@ -894,37 +895,37 @@ No durations are given here; sizing follows review of this plan. Host independen
 5. **Shell anchors.** Add anchors to the app switcher (`explorer-core/.../header/app-switcher.component.ts`), omnibar toggle, chat overlay, notifications, user menu, tab strip and Home.
 6. **Stable nav-item keys.** Add an optional `Key` to `NavItem` (`base-application/src/lib/interfaces/nav-item.interface.ts`). Resolve `NavItem` anchors by `Key`, then by `DriverClass`, never by `Label`.
 7. **`NavigationService.ResourceLoaded$`.** Emit it from the tab container when `LoadCompleteEvent` fires (`explorer-core/.../tabs/tab-container.component.ts`).
-8. **`tour-anchors` standard.** `packages/Standards/src/checks/tour-anchors.ts`, with fixtures, adopted in `.mj-standards.json`. Recognizes both `[mjTourAnchor]` and `data-mj-tour-anchor`, loads the core anchor manifest for downstream repos, and allows `{{Context...}}` template expressions.
+8. **`tour-anchors` standard.** `packages/Standards/src/checks/tour-anchors.ts`, with fixtures, adopted in `.mj-standards.json` (including `allowedPrefixes` namespace enforcement, core anchor manifest loading, and `{{Context...}}` template expressions).
 9. **Design tokens.** Tokenize the high z-index rungs above `--mj-z-dialog` in `packages/Angular/Generic/shared/src/lib/_tokens.scss` and add `--mj-z-tour-popover` and `--mj-z-tour-modal`, documenting both in `.claude/rules/design-tokens.md`.
 
-### Phase 1 — Visual tours on the host contracts, and agents can start them
-1. **Migration.** `migrations/v6/V<YYYYMMDDHHMM>__v6.<minor>.x__Guided_Tours.sql` creates the 14 tables in §6 (including `TourSurfaceTour` and `Tour.RunInAuthenticatedHosts`, sketch in §19), followed by the appended CodeGen output.
-2. **JSONType interfaces** in `metadata/entities/JSONType-interfaces/`: `ITourAnchor`, `ITourCompletion`, `ITourGoal`, `ITourStartLocation`, `ITourStepPrepare`, `ITourLaunchPolicy`, `ITourVersionDefinition`, plus one config interface per standard step type (9 primitives).
+### Phase 1 — Visual tours on the host contracts, runtime `ComponentSpec` steps, and agent launch
+1. **Migration.** `migrations/v6/V<YYYYMMDDHHMM>__v6.4.x__Guided_Tours.sql` creates the 14 tables in §6 (with `COLLATE SQL_Latin1_General_CP1_CI_AS` on all string columns, `Configuration` JSONType columns on `Tour`/`TourStep`/`TourStepPath`/`LearningPath`, `TourStepType.ComponentID`, `TourSurfaceTour`, and `Tour.RunInAuthenticatedHosts`), followed by 50 blank lines and the appended CodeGen output.
+2. **JSONType interfaces** in `metadata/entities/JSONType-interfaces/`: `ITourConfiguration`, `ITourStepConfiguration`, `ITourStepPathConfiguration`, `ILearningPathConfiguration`, `ITourAnchor`, `ITourCompletion`, `ITourGoal`, `ITourStartLocation`, `ITourStepPrepare`, `ITourLaunchPolicy`, `ITourVersionDefinition`, plus step-type config shapes.
 3. **CodeGen** after `mj sync push` of the JSONType definitions.
 4. **`TourEngine`** (`packages/MJCoreEntities/src/engines/tours.ts`) on the `InteractiveFormsEngine` model, implementing `ITourDefinitionSource` and `ITourProgressStore`, and always resolved via `TourEngine.GetProviderInstance(this.ProviderToUse, TourEngine)` in L2 widgets.
 5. **Runtime (`@memberjunction/tours-runtime`):**
-   - `TourSession`, `tour-graph-compiler.ts` (over `GraphTraversalEngine`), `Before*` / `After*` event-args classes, `TourSignals`
+   - `TourSession`, `tour-graph-compiler.ts` (over `@memberjunction/graph`), `Before*` / `After*` event-args classes, `TourSignals`
    - `BaseTourDriver` (`Default`), standard logic halves for the 9 step types (`Prepare`-based navigation, `Action` absorbing field entry and signals, `Modal` absorbing checkpoint recaps, `Choice` absorbing knowledge checks) and completion checks, and the `Visual` director
    - `InlineTourSource`, `MemoryProgressStore` and `TourAgentToolkit`
 6. **`@memberjunction/ng-tours` UI layer (Light DOM, `@layer` + `mjt-`):**
    - `TourGlobalStylesComponent` (`@layer mj-tours-defaults`, `--mj-*` tokens, `mjButton`, Font Awesome)
-   - SVG `evenodd` spotlight mask + sibling-subtree `inert` (leaving the target in the a11y tree)
+   - SVG `evenodd` spotlight mask (`aria-hidden="true"`) + sibling-subtree `inert` (leaving the target in the a11y tree)
    - `@floating-ui/dom` `autoUpdate` + `ResizeObserver` synced with `FormAnchorNavigator` settle
-   - focus management, live region (`Prepare` navigation + step progress), keyboard (Esc, opt-in arrows, F6)
-   - `BaseTourStepRenderer`, standard Light DOM renderers and `Overlay` presenter, `mj-tour-host` and `MJ_TOUR_HOST` token
+   - focus management (`:focus-visible`), polite live region outside `inert` DOM (`Prepare` navigation + step progress), keyboard (Esc, opt-in arrows, F6)
+   - `BaseTourStepRenderer`, standard Light DOM renderers (including `EmbeddedComponent` + `TourStepType.ComponentID` runtime `ComponentSpec` steps via `<mj-react-component>`), `Overlay`/`SidePanel`/`Embedded` presenters, `mj-tour-host` and `MJ_TOUR_HOST` token
    - DOM tests (`vitest.dom`) and axe checks
 7. **Explorer:** `ExplorerTourHost`; mount `mj-tour-host` in the shell; header launcher; `OmnibarToursProvider`; the notification type `tour` in `user-notifications.component.ts`; the Home learning-path card.
 8. **A second host from day one.** A minimal non-Explorer Angular harness (`packages/Tours/examples/angular-host`) uses `ng-tours` with its own `ITourHost`, catching Explorer coupling in phase 1 instead of phase 3.
 9. **Server package (`@memberjunction/tours-server`, `packages/Tours/Server`):**
    - Remote Operations `Tours.RecordEvents` (batched) and `Tours.EvaluatePredicates`, plus `metadata/remote-operations/` rows
-   - server entity subclasses: `TourVersion` immutability, auto-snapshotting `TourVersion` + updating `CurrentVersionID` whenever an `Active` tour's steps/paths change (on save or `mj sync push`), and step `Configuration` validation against `ConfigSchema`
+   - server entity subclasses: `TourVersion` immutability, canonical-hash-checked `TourVersion` snapshotting + `CurrentVersionID` updates when an `Active` tour changes, and step `Configuration` validation against `ConfigSchema`
    - `HasRecords`, `QueryReturnsRows`, and `AuthorizationHeld` predicates
 10. **Agents can start tours:**
     - global tour client tools from `TourAgentToolkit`, attached by `ExplorerTourHost.AttachAgentBridge` (`explorer-app.component.ts` `registerClientTools`, plus `metadata/client-tool-definitions/` rows bound to Sage)
     - the `start:tour` UI command in `ui-commands.ts`
     - `AppContextSnapshot.ActiveTour` and `AvailableTours`
-    - the Actions `Start Tour For User`, `Suggest Tours` and `Get Tour Progress`
-11. **Seeds.** `metadata/tour-step-types/` (9 primitives) and the first core tours: `core.welcome`, `core.records`, `core.chat`.
+    - the Actions `Start Tour For User`, `Suggest Tours`, `Get Tour Progress`, and `Assign Learning Path`
+11. **Seeds & interactive component examples.** `metadata/tour-step-types/` (9 primitives + an example `ComponentID`-backed interactive step type), `metadata/components/` interactive `ComponentSpec` tour widgets, `metadata/tours/` (`Status: "Draft"`), and `metadata/tour-publications/` (`Status: "Active"`).
 
 ### Phase 2 — Smart offering, Tour Studio, health
 1. **Triggers.** `BaseTourTrigger`: `FirstVisit`, `EntityFormOpened`, `Signal`, `AppUpgraded`, `Schedule`, `AgentSuggested`.
@@ -1002,41 +1003,44 @@ PostgreSQL comes from the release-time converter. The sketch below shows four ke
 ```sql
 CREATE TABLE ${flyway:defaultSchema}.TourStepType (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    Name NVARCHAR(100) NOT NULL,
-    Description NVARCHAR(MAX) NULL,
-    DriverClass NVARCHAR(255) NOT NULL,
-    RendererClass NVARCHAR(255) NULL,
-    ConfigSchema NVARCHAR(MAX) NULL,
-    SupportedModes NVARCHAR(100) NOT NULL DEFAULT 'Show,Guide',
+    Name NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    Description NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    DriverClass NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    RendererClass NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    ComponentID UNIQUEIDENTIFIER NULL,
+    ConfigSchema NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    SupportedModes NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL DEFAULT 'Show,Guide',
     IsAgentCapable BIT NOT NULL DEFAULT 1,
-    Icon NVARCHAR(100) NULL,
-    Status NVARCHAR(20) NOT NULL DEFAULT 'Active',
+    Icon NVARCHAR(100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    Status NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL DEFAULT 'Active',
     CONSTRAINT PK_TourStepType PRIMARY KEY (ID),
     CONSTRAINT UQ_TourStepType_Name UNIQUE (Name),
+    CONSTRAINT FK_TourStepType_Component FOREIGN KEY (ComponentID) REFERENCES ${flyway:defaultSchema}.Component(ID),
     CONSTRAINT CK_TourStepType_Status CHECK (Status IN ('Active', 'Deprecated', 'Disabled'))
 );
 
 CREATE TABLE ${flyway:defaultSchema}.Tour (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
-    Name NVARCHAR(255) NOT NULL,
-    TourKey NVARCHAR(150) NOT NULL,
-    Description NVARCHAR(MAX) NULL,
+    Name NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    TourKey NVARCHAR(150) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+    Description NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     ApplicationID UNIQUEIDENTIFIER NULL,
     RunInAuthenticatedHosts BIT NOT NULL DEFAULT 1,
-    Status NVARCHAR(20) NOT NULL DEFAULT 'Draft',
+    Status NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL DEFAULT 'Draft',
     CurrentVersionID UNIQUEIDENTIFIER NULL,
     EstimatedMinutes INT NULL,
-    AudienceFilter NVARCHAR(MAX) NULL,
-    LaunchPolicy NVARCHAR(MAX) NULL,
+    AudienceFilter NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    LaunchPolicy NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     Priority INT NOT NULL DEFAULT 100,
-    ThrottleTags NVARCHAR(500) NULL,
-    DefaultGuideMode NVARCHAR(20) NOT NULL DEFAULT 'Visual',
+    ThrottleTags NVARCHAR(500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    DefaultGuideMode NVARCHAR(20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL DEFAULT 'Visual',
     AllowAgentActions BIT NOT NULL DEFAULT 0,
     GuideAgentID UNIQUEIDENTIFIER NULL,
-    DriverClass NVARCHAR(255) NULL,
-    PresenterClass NVARCHAR(255) NULL,
-    Goal NVARCHAR(MAX) NULL,
-    StartLocation NVARCHAR(MAX) NULL,
+    DriverClass NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    PresenterClass NVARCHAR(255) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    Goal NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    StartLocation NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+    Configuration NVARCHAR(MAX) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
     CONSTRAINT PK_Tour PRIMARY KEY (ID),
     CONSTRAINT UQ_Tour_TourKey UNIQUE (TourKey),
     CONSTRAINT FK_Tour_Application FOREIGN KEY (ApplicationID) REFERENCES ${flyway:defaultSchema}.Application(ID),
@@ -1044,7 +1048,7 @@ CREATE TABLE ${flyway:defaultSchema}.Tour (
     CONSTRAINT CK_Tour_Status CHECK (Status IN ('Draft', 'Active', 'Retired')),
     CONSTRAINT CK_Tour_DefaultGuideMode CHECK (DefaultGuideMode IN ('Visual', 'Chat', 'Voice', 'User Choice'))
 );
--- CurrentVersionID's FK to TourVersion is added after TourVersion is created (circular reference).
+-- CurrentVersionID's FK to TourVersion is added via ALTER TABLE after TourVersion is created (circular reference).
 
 CREATE TABLE ${flyway:defaultSchema}.TourSurfaceTour (
     ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
@@ -1111,21 +1115,19 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 - **Guest abuse on public surfaces.** *Mitigation:* allowed origins, rate limits, JWT-claimed `SurfaceID`/`VisitorKey` enforcement in Remote Operations, and a `Tour Guest` role with zero entity CRUD.
 
 **Resolved design decisions (post-review)**
-- **Naming & placement:** `Tour` in schema/API naming, presented as **"Tours & Help"** in Explorer UI; tables live in core `__mj` (`MJ: Tour*`).
-- **Two-stage Light DOM embed (`ng-tours`), no `tours-dom` or `packages/Web/Tours`:** `@memberjunction/tours-runtime` stays strictly DOM-free (`runtime`), while `@memberjunction/ng-tours` (`widgets`) owns the single Angular Light DOM renderer set + two-stage `@angular/elements` / `mj-tours.js` build (mirroring `ng-realtime-widget`), removing Shadow DOM boundaries.
-- **`GraphTraversalEngine` extraction:** move zero-dependency `GraphTraversalEngine` from `AI/CorePlus` to `@memberjunction/global`, eliminating any `core-entities` transitive dependency from `tours-runtime`.
-- **9 step primitives:** fold `Navigate` → `Prepare` + live announcement, `FieldEntry` + `WaitForSignal` → `Action`, `Checkpoint` → `Modal`, and `KnowledgeCheck` → `Choice`.
+- **Naming & placement:** `Tour` in schema/API naming, presented as **"Tours & Help"** in Explorer UI; tables live in core `__mj` (`MJ: Tour*`), with `COLLATE SQL_Latin1_General_CP1_CI_AS` on every `NVARCHAR` column.
+- **Two-stage Light DOM embed (`ng-tours`), no `tours-dom` or `packages/Web/Tours`:** `@memberjunction/tours-runtime` stays strictly DOM-free (`runtime`), while `@memberjunction/ng-tours` (`widgets`) owns the single Angular Light DOM renderer set + two-stage `@angular/elements` / `mj-tours.js` build (mirroring `ng-realtime-widget`), with Stage-1 (`mj-tours.js`) using `import type` only and deferring `CompositeFilter` evaluation to `Tours.GetSurfaceTours` or Stage-2.
+- **Dedicated `@memberjunction/graph` package (`packages/Graph`):** extract zero-dependency `GraphTraversalEngine`, pure DAG algorithms, and layered Sugiyama layout out of `AI/CorePlus` into `@memberjunction/graph` (`runtime`), updating `ai-agents`, `ai-core-plus`, `task-graph`, `tours-runtime`, and Tour Studio directly (zero re-exports).
+- **9 step primitives + runtime `ComponentSpec` interactive step types:** fold `Navigate` → `Prepare` + live announcement, `FieldEntry` + `WaitForSignal` → `Action`, `Checkpoint` → `Modal`, and `KnowledgeCheck` → `Choice`; add optional `TourStepType.ComponentID` (`MJ: Components`) alongside `EmbeddedComponent` (`ComponentID` or inline `ComponentSpec` via `<mj-react-component>`) and ship tested interactive component step examples in Phase 1.
+- **Two-phase `tour-publications` sync:** mirror `rubrics` → `rubric-publications` so `mj sync push` inserts `Draft` tours + all steps/paths first and flips shipped tours to `Active` in `metadata/tour-publications/`, creating one clean `TourVersion` snapshot per tour.
 - **Surface assignment:** M:N `MJ: Tour Surface Tours` + `Tour.RunInAuthenticatedHosts`, replacing single `Tour.SurfaceID`.
 - **Guest sessions:** generalize `WidgetSessionService` + `visitorIdentity.ts` into a shared embed-surface session service; add `mj_sid` fallback, RV4 `Tours.ClaimGuestRuns`, and RV5 `ForgetVisitor` erasure.
 - **Agent modes:** Guided Tour agents run in hybrid mode (`NativeOnly: false`); Voice director uses a headless `BaseRealtimeChannelClient` descriptor (`DisplayPolicy: 'headless'`, `ClientOnlyChannelServer`); Do mode enforces **per-mutation confirmation** and hard-bans deletes, financial posting, permission grants, and outbound messages.
 - **Z-index ladder:** tokenize high rungs above `--mj-z-dialog` in `_tokens.scss` and split `--mj-z-tour-popover` vs `--mj-z-tour-modal`.
+- **Telemetry retention:** unlimited by default (`Tours.RunStepRetentionDays = null`), with opt-in auto-discard configurable by host admins.
+- **Localization & extensibility:** strongly-typed `Configuration` JSONType columns (`ITourConfiguration`, `ITourStepConfiguration`, `ITourStepPathConfiguration`, `ILearningPathConfiguration`) carry `localizations` and future settings without extra DDL.
+- **Cross-app namespace governance:** automated in `tour-anchors` via `allowedPrefixes` in each repo's `.mj-standards.json`.
 - **Practice sandbox:** deferred out of scope for this initiative.
-
-**Remaining operational open questions**
-- [ ] Retention policies: archive/purge window for `TourRunStep` telemetry and agent-guided tour transcripts.
-- [ ] Localization rollout: validate `Localizations` JSON schema timing alongside MJ framework i18n.
-- [ ] Cross-app namespace governance: designate collision reviewer for `<app>.<area>.<thing>` anchor and signal keys.
-- [ ] Runtime interactive step components: evaluate allowing compiled Form-Contribution-style interactive components as dynamic step types after Phase 2.
 
 ---
 
@@ -1146,7 +1148,7 @@ CREATE TABLE ${flyway:defaultSchema}.TourRun (
 
 | File | Change |
 |---|---|
-| `packages/MJGlobal/src/generic/graph-traversal-engine.ts` (moved from `AI/CorePlus`) | Zero-dependency `GraphTraversalEngine` shared by Flow agents and `tours-runtime` |
+| `packages/Graph/**` (new, extracted from `AI/CorePlus`) | Zero-dependency `@memberjunction/graph` (`GraphTraversalEngine`, DAG algorithms, layered Sugiyama layout) shared directly by Flow agents, TaskGraph, `tours-runtime`, and Tour Studio |
 | `packages/Tours/Runtime/**` (new) | `@memberjunction/tours-runtime`: session, compiler, base classes, 9 step logic plugins, events, signals, host/source/store contracts, agent toolkit |
 | `packages/Angular/Generic/tours/**` (new) | `@memberjunction/ng-tours`: Light DOM renderers/presenters, `TourGlobalStylesComponent` (`@layer`), `AnchorRegistry`, `[mjTourAnchor]`, `mj-tour-host`, `MJ_TOUR_HOST`, `RegisterTourElements()`, two-stage `build-element.mjs` (`mj-tours.js` + `mj-tours-session.js`), `WebTourHost`, exported core anchor manifest JSON |
 | `packages/Tours/examples/angular-host/**` (new) | Non-Explorer Angular reference host |
