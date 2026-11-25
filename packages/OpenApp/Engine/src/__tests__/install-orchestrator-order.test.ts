@@ -1946,4 +1946,159 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
         expect(result.Success).toBe(true);
         expect(warnings.filter((w) => w.includes("installed app 'app-root'"))).toEqual([]);
     });
+
+    describe('--dependencies-from-head', () => {
+        const extra = manifestJSON('app-extra', {});
+        /** app-tasks on its default branch: same version, one dependency more. */
+        const tasksWithExtra = manifestJSON('app-tasks', { ...needs('app-common', '^1.0.0'), ...needs('app-extra', '*') });
+
+        it('install: installs a dependency that only the default branch of an installed app declares', async () => {
+            vi.mocked(ListInstalledApps).mockResolvedValue([
+                installedRow('app-tasks', tasksAtInstalledVersion),
+                installedRow('app-common', manifestJSON('app-common', {})),
+            ]);
+            serveRefs({
+                [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksWithExtra,
+                [repoUrl('app-common')]: manifestJSON('app-common', {}), [repoUrl('app-extra')]: extra,
+            });
+
+            const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: 'all' }, ctx);
+
+            expect(result.ErrorMessage).toBeUndefined();
+            expect(installSequence).toEqual(['app-extra', 'app-root']);
+            expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([undefined]);
+        });
+
+        it('upgrade: holds an installed app to its default branch', async () => {
+            const rootRow = installedRow('app-root', root, '0.9.0');
+            vi.mocked(FindInstalledApp).mockResolvedValue(rootRow);
+            vi.mocked(ListInstalledApps).mockResolvedValue([
+                rootRow, installedRow('app-tasks', tasksAtInstalledVersion), installedRow('app-common', manifestJSON('app-common', {})),
+            ]);
+            serveRefs({
+                [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch,
+                [repoUrl('app-common')]: manifestJSON('app-common', {}),
+            });
+
+            const result = await UpgradeApp({ AppName: 'app-root', Version: '1.0.0', DependenciesFromHead: 'all' }, ctx);
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain("Dependency 'app-common' is installed (v1.0.0) but does not satisfy required range '>=1.5.0 <2.0.0'");
+        });
+
+        it('reads only the named apps from their default branches', async () => {
+            vi.mocked(ListInstalledApps).mockResolvedValue([
+                installedRow('app-tasks', tasksAtInstalledVersion),
+                installedRow('app-common', manifestJSON('app-common', {})),
+            ]);
+            // The default branch of app-tasks would refuse this install.
+            serveRefs({ [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch, [repoUrl('app-common')]: manifestJSON('app-common', {}) });
+
+            const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: ['app-common'] }, ctx);
+
+            expect(result.ErrorMessage).toBeUndefined();
+            expect(fetchedVersions(repoUrl('app-common'))).toEqual([undefined]);
+            expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+        });
+
+        it.each([
+            ['is not installed', 'app-typo', 'Active'],
+            ['is installed but did not finish installing', 'app-stuck', 'Error'],
+        ])('refuses a named app that %s, and changes nothing', async (_name, name, status) => {
+            vi.mocked(ListInstalledApps).mockResolvedValue([
+                installedRow('app-tasks', tasksAtInstalledVersion),
+                installedRow('app-common', manifestJSON('app-common', {})),
+                { ...installedRow('app-stuck', manifestJSON('app-stuck', {})), Status: status } as InstalledAppInfo,
+            ]);
+            serveRefs({ [repoUrl('app-root')]: root });
+
+            const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: ['app-tasks', name] }, ctx);
+
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain(`'${name}'`);
+            expect(result.ErrorMessage).not.toContain("'app-tasks'");
+            expect(installSequence).toEqual([]);
+        });
+
+        describe('an app without dependencies', () => {
+            const leaf = manifestJSON('app-leaf', {});
+            const leafRow = installedRow('app-leaf', leaf, '0.9.0');
+
+            beforeEach(() => {
+                vi.mocked(ListInstalledApps).mockResolvedValue([leafRow, installedRow('app-tasks', tasksAtInstalledVersion)]);
+                serveRefs({ [repoUrl('app-leaf')]: leaf, [`${repoUrl('app-leaf')}@1.0.0`]: leaf });
+            });
+
+            it('install: refuses a name that is not installed, and changes nothing', async () => {
+                const result = await InstallApp({ Source: repoUrl('app-leaf'), DependenciesFromHead: ['app-tasks', 'app-typo'] }, ctx);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain("'app-typo'");
+                expect(result.ErrorMessage).not.toContain("'app-tasks'");
+                expect(installSequence).toEqual([]);
+            });
+
+            it.each([
+                ['a name that is not installed', 'app-typo'],
+                ['its own name', 'app-leaf'],
+            ])('upgrade: refuses %s, and changes nothing', async (_name, name) => {
+                vi.mocked(FindInstalledApp).mockResolvedValue(leafRow);
+
+                const result = await UpgradeApp({ AppName: 'app-leaf', Version: '1.0.0', DependenciesFromHead: [name] }, ctx);
+
+                expect(result.Success).toBe(false);
+                expect(result.ErrorMessage).toContain(`'${name}'`);
+                expect(vi.mocked(SetAppStatus)).not.toHaveBeenCalled();
+                expect(vi.mocked(AddAppPackages)).not.toHaveBeenCalled();
+            });
+
+            it.each([['all', 'all' as const], ['the name of an installed app', ['app-tasks']]])('installs with %s, and reads no default branch', async (_name, value) => {
+                const result = await InstallApp({ Source: repoUrl('app-leaf'), DependenciesFromHead: value }, ctx);
+
+                expect(result.ErrorMessage).toBeUndefined();
+                expect(installSequence).toEqual(['app-leaf']);
+                expect(fetchedVersions(repoUrl('app-tasks'))).toEqual([]);
+            });
+
+            it('does not list the installed apps without the flag', async () => {
+                const result = await InstallApp({ Source: repoUrl('app-leaf') }, ctx);
+
+                expect(result.ErrorMessage).toBeUndefined();
+                expect(vi.mocked(ListInstalledApps)).not.toHaveBeenCalled();
+            });
+        });
+
+        it('uses the record, with a warning, when the default branch declares a file: dependency that a GitHub app may not', async () => {
+            vi.mocked(ListInstalledApps).mockResolvedValue([
+                installedRow('app-tasks', tasksAtInstalledVersion),
+                installedRow('app-common', manifestJSON('app-common', {})),
+            ]);
+            serveRefs({
+                [repoUrl('app-root')]: root,
+                [repoUrl('app-tasks')]: manifestJSON('app-tasks', { 'app-local': { version: '^1.0.0', repository: 'file:apps/app-local' } }),
+            });
+
+            const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: ['app-tasks'] }, ctx);
+
+            expect(result.ErrorMessage).toBeUndefined();
+            expect(installSequence).toEqual(['app-root']);
+            expect(tasksWarnings()).toHaveLength(1);
+            expect(tasksWarnings()[0]).toContain('recorded dependencies are used');
+        });
+
+        it('says that the default branch is read, not the installed version, when the record is unreadable', async () => {
+            vi.mocked(ListInstalledApps).mockResolvedValue([
+                installedRow('app-tasks', '{not json'), installedRow('app-common', manifestJSON('app-common', {})),
+            ]);
+            serveRefs({
+                [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksAtInstalledVersion,
+                [repoUrl('app-common')]: manifestJSON('app-common', {}),
+            });
+
+            await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: 'all' }, ctx);
+
+            expect(tasksWarnings()).toHaveLength(1);
+            expect(tasksWarnings()[0]).toContain('on its default branch');
+        });
+    });
 });
