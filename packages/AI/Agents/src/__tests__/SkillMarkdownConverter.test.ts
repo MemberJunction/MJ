@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { SkillMarkdownConverter } from '../SkillMarkdownConverter';
+import { IsTemplatedSkillInstructions } from '../skill-instructions-template';
 
 describe('SkillMarkdownConverter', () => {
     describe('Parse', () => {
@@ -91,6 +92,13 @@ Second line.
             expect(edited).toContain('actions:\n  - Run Query\n  - Generate PDF'); // the bundle line is untouched
             expect(edited).toMatch(/codeOnlyActions:\n(?!  - )/);                   // the key stands, its one item is gone
             expect(SkillMarkdownConverter.Parse(edited).frontmatter.codeOnlyActions).toEqual([]);
+        });
+
+        it('round-trips templated instructions: the leading template marker and the Nunjucks syntax survive', () => {
+            const instructions = '{# mj:template #}\n# Designer\n{% for e in entities %}- {{ e }}\n{% endfor %}';
+            const parsed = SkillMarkdownConverter.Parse(SkillMarkdownConverter.Serialize({ name: 'Designer', instructions }));
+            expect(parsed.instructions).toBe(instructions);
+            expect(IsTemplatedSkillInstructions(parsed.instructions)).toBe(true);
         });
 
         it('skips the items of an unknown list key instead of rejecting the file', () => {

@@ -6,6 +6,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { SearchEngine, SearchResult as SearchEngineResult, SearchResultItem as SearchEngineResultItem, SearchProviderInfo, SearchContext, GetSearchScopePermissionResolver } from '@memberjunction/search-engine';
 import { SearchEngineBase, MJAIAgentEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 /* ───── GraphQL types ───── */
 
@@ -200,6 +201,7 @@ export class SearchScopeInfo {
 
 /* ───── Resolver (thin wrapper around SearchEngine) ───── */
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class SearchKnowledgeResolver extends ResolverBase {
 

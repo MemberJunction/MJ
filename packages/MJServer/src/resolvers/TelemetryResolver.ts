@@ -6,6 +6,7 @@ import {
     TelemetryInsightSeverity,
     AuthorizationEvaluator,
 } from '@memberjunction/core';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { GetReadOnlyProvider } from '../util.js';
 
@@ -319,6 +320,7 @@ export class TelemetryInsightFilterInput {
 // Resolver
 // ============================================================================
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class TelemetryResolver {
     /**

@@ -55,10 +55,12 @@ import {
   ExecuteRSVPMeeting,
   type MeetingHelpers,
 } from './meetings/meetingMutations.js';
+import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 
 // Re-export all meeting types and helpers for external consumers
 export * from './meetings/index.js';
 
+@RefuseScopeLimitedPrincipals()
 @Resolver()
 export class MeetingResolver extends ResolverBase {
   protected readonly sessionManager = new SessionManager();

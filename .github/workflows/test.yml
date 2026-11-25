@@ -51,13 +51,12 @@ env:
   # The default (node_modules/.cache/turbo) lives inside a directory the pnpm setup owns and
   # would be awkward to cache independently of the store.
   TURBO_CACHE_DIR: .turbo/cache
-  # How many parallel test shards. 6 is the point of diminishing returns, not an arbitrary pick:
-  # the heaviest single package (ng-dashboards, ~305s) is an irreducible floor for whichever
-  # shard holds it, and 6 shards puts each shard's total work right at that floor (~916s of
-  # aggregate work ÷ the ~3x effective parallelism a 4-vCPU runner achieves ≈ 305s). A 7th shard
-  # buys nothing. Lower it if this repo starts queueing against the free-tier concurrent-job
-  # limit; the planner handles any value ≥ 1.
-  SHARD_COUNT: '6'
+  # How many parallel test shards. Recalibrated 2026-11-24: the aggregate suite grew from 8,537s
+  # (2026-10-28) to 15,984s (~266 min), with ng-conversations (777s) and ai-agents (766s) as the
+  # heaviest single packages. 8 shards puts each shard's aggregate work around ~33 min (~12-13 min
+  # wall time on a 4-vCPU runner), right at that single-package floor. Lower it if this repo starts
+  # queueing against concurrent-job limits; the planner handles any value ≥ 1.
+  SHARD_COUNT: '8'
 
 jobs:
   # ---------------------------------------------------------------------------------------
@@ -219,6 +218,7 @@ jobs:
             .github/workflows/ci-standards.yml
             .github/workflows/pg-migrations.yml
             .github/workflows/claude-pack.yml
+            .github/workflows/build.yml
             .github/workflows/release-test.yml
             .github/workflows/publish.yml
           PATHS
@@ -820,10 +820,12 @@ jobs:
         run: node .github/scripts/plan-test-shards.mjs --shards="$SHARD_COUNT" --split-above=700 --turbo-args="$TURBO_FILTER"
 
       # The handoff to the shards. Keyed to this RUN (not this ref or sha) so it can never be
-      # read by another run, and deleted by the cleanup job at the end — the repo shares one
+      # read by another run, and always deleted by the cleanup job at the end — the repo shares one
       # LRU-evicted Actions cache budget, and a ~3 GB entry per PR would evict the `next` seed that
-      # every PR's build restores from. run_attempt is in the key so a re-run rebuilds rather
-      # than reading a half-written entry from the attempt that failed.
+      # every PR's build restores from. run_attempt is included so a full re-run gets a fresh key;
+      # on "Re-run failed jobs" (where build does not re-run), shards fall back via restore-keys to
+      # `turbo-run-<run_id>-` if still present and otherwise to `turbo-v1-<os>-` (next's build seed)
+      # so they only rebuild the PR's changed subtree without leaving orphaned ~3 GB entries behind.
       - name: Save turbo cache for the test shards
         uses: actions/cache/save@v6
         with:
@@ -947,6 +949,14 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
+          # Fallback for "Re-run failed jobs": when build passed in attempt 1, attempt 2 runs only
+          # the failed shards and never creates `turbo-run-${run_id}-2`. Attempt 1's cleanup job
+          # always deletes attempt 1's handoff entry, so `turbo-run-${run_id}-` only hits if that
+          # cleanup failed; normally the re-run is served by `turbo-v1-<os>-` (next's build seed),
+          # so a shard rebuilds only the PR's changed subtree, never ~387 packages from scratch.
+          restore-keys: |
+            turbo-run-${{ github.run_id }}-
+            turbo-v1-${{ runner.os }}-
 
       # Deliberately NOT fail-on-cache-miss. A miss is a slow shard, not a wrong one: turbo
       # rebuilds this shard's own subtree (a fraction of the repo) and the tests are just as
@@ -1151,6 +1161,9 @@ jobs:
         with:
           path: .turbo/cache
           key: turbo-run-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-run-${{ github.run_id }}-
+            turbo-v1-${{ runner.os }}-
 
       # The guard imports built dist/, so materialize it from the build job's cache. This is a
       # pure cache replay (no compilation) whenever the handoff hit.

@@ -285,6 +285,43 @@ describe('pnpm store cache', () => {
         expect(preflight).toMatch(/--lockfile-only/);
         expect(preflight).not.toMatch(/cache: '?pnpm'?/);
     });
+
+    it('a job that runs a filtered pnpm install does not write the shared setup-node pnpm cache', () => {
+        const integration = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const sidecar = integration.split(/^ {2}ps-sidecar-pytest:$/m)[1].split(/^ {2}[a-z-]+:$/m)[0];
+        expect(sidecar).toMatch(/--filter /);
+        expect(sidecar).not.toMatch(/cache: '?pnpm'?/);
+    });
+});
+
+describe('test.yml — failed-job re-run cache fallback', () => {
+    it('shard and esm-guard cache restores fall back to attempt 1 and next build seed', () => {
+        for (const job of ['test', 'esm-guard']) {
+            const step = readJobSteps(job).find((s) => s.name === "Restore the build job's turbo cache");
+            expect(step, `${job} must restore the build handoff cache`).toBeDefined();
+            const body = step.body.join('\n');
+            expect(body).toMatch(/restore-keys:/);
+            expect(body).toMatch(/turbo-run-\$\{\{\s*github\.run_id\s*\}\}-/);
+            expect(body).toMatch(/turbo-v1-\$\{\{\s*runner\.os\s*\}\}-/);
+        }
+    });
+
+    it('cleanup always deletes the run-scoped turbo cache so red PR runs never orphan ~3 GB entries', () => {
+        const delStep = readJobSteps('cleanup').find((s) => s.name === 'Delete the run-scoped turbo cache');
+        expect(delStep).toBeDefined();
+        expect(delStep.body.join('\n')).not.toMatch(/^\s*if:/m);
+    });
+});
+
+describe('integration.yml — CodeGen idempotency skips duplicate warm-twice', () => {
+    it('passes --skip-warm to --stage single-column after --stage warm-twice', () => {
+        const integration = readFileSync(join(REPO_ROOT, '.github/workflows/integration.yml'), 'utf8');
+        const lines = integration.split('\n').filter((l) => /codegen-idempotency-check\.mjs\s+--stage\s+single-column/.test(l));
+        expect(lines.length).toBeGreaterThanOrEqual(2);
+        for (const line of lines) {
+            expect(line).toMatch(/--skip-warm\b/);
+        }
+    });
 });
 
 describe('test.yml — backstop integrity', () => {

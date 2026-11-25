@@ -171,6 +171,8 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
       - name: Check changed paths
         id: filter
         env:
@@ -326,11 +328,14 @@ jobs:
       - name: Set up pnpm
         uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
 
+      # No pnpm cache here: the filtered install below downloads only the sidecar's subset of
+      # dependencies, so enabling setup-node's shared pnpm cache saves a ~192 MB partial store
+      # under the full lockfile's key that every full-install workflow then hits and re-downloads.
       - name: Set up Node
         uses: actions/setup-node@v7
         with:
           node-version: 24
-          cache: 'pnpm'
+          package-manager-cache: false
 
       # The parity tests (tests/tools/gate_parity.py, tests/test_snapshot.py) run the built Core through node, from
       # Sidecar/node_modules/@memberjunction/predictive-studio-core/dist, so the sidecar's workspace dependencies are
@@ -452,20 +457,12 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v7
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # ── next's turbo build seed (PR runs only) ─────────────────────────────────────────
       # A PR run receives no remote-cache credentials (see this job's env block), so without
@@ -1120,10 +1117,10 @@ jobs:
       PGDATABASE: test
       # Same reason as the SQL Server job: the smallest local embedding model, read by MJAPI and `mj`.
       MJ_DEFAULT_LOCAL_EMBEDDING_MODEL: 'all-MiniLM-L6-v2 (Local)'
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TOKEN: ${{ github.event_name != 'pull_request' && secrets.TURBO_TOKEN || '' }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_API: ${{ vars.TURBO_API }}
-      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     services:
       postgres:
         image: postgres:16
@@ -1144,17 +1141,9 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
-      - name: Set up node
-        uses: actions/setup-node@v7
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # The turbo build seed from next, as in integration-sqlserver (see the comment there).
       - name: Restore the turbo build seed from next
@@ -1426,24 +1415,14 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - name: Create SQL database
         if: steps.prereq.outputs.READY == 'true'
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        if: steps.prereq.outputs.READY == 'true'
-        uses: actions/setup-node@v7
+      - if: steps.prereq.outputs.READY == 'true'
+        uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        if: steps.prereq.outputs.READY == 'true'
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
       - name: Restore the turbo build seed from next
@@ -1612,20 +1591,12 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v7
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
       - name: Restore the turbo build seed from next
@@ -1802,20 +1773,12 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v7
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
       - name: Restore the turbo build seed from next
@@ -1851,7 +1814,8 @@ jobs:
         id: idempotency
         run: |
           node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai --skip-first-run
-          node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai
+          # --skip-warm: warm-twice just ran above; omitting it re-runs warm-twice from scratch (~3 min).
+          node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai --skip-warm
 
       - name: Diff committed generated artifacts
         id: drift
@@ -1972,17 +1936,9 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
-
-      - name: Set up node
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
       - name: Restore the turbo build seed from next
@@ -2076,20 +2032,12 @@ jobs:
           echo "SQL Server did not become ready within the timeout." >&2
           exit 1
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
-
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
-      - name: Set up node
-        uses: actions/setup-node@v7
+      - uses: ./.github/actions/mj-setup
         with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          create-explorer-env: 'false'
 
       # next's turbo build seed, PR runs only: see the same step in integration-sqlserver.
       - name: Restore the turbo build seed from next
@@ -2122,7 +2070,8 @@ jobs:
         id: idempotency
         run: |
           node scripts/codegen-idempotency-check.mjs --stage warm-twice --skip-first-run
-          node scripts/codegen-idempotency-check.mjs --stage single-column
+          # --skip-warm: warm-twice just ran above; omitting it re-runs warm-twice from scratch.
+          node scripts/codegen-idempotency-check.mjs --stage single-column --skip-warm
 
       - name: Diff committed generated artifacts
         id: drift
@@ -2214,6 +2163,7 @@ jobs:
           persist-credentials: false
           fetch-depth: 1
           filter: blob:none
+          sparse-checkout: .github
 
       - name: Alert on backstop failure
         if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
