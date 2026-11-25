@@ -149,7 +149,7 @@ export async function BuildOrchestratorContext(
       Port: config.dbPort,
       Database: config.dbDatabase,
       User: config.codeGenLogin,
-      Password: pgSecurity?.Password ?? config.codeGenPassword,
+      Password: config.codeGenPassword,
       Encrypt: config.dbEncrypt,
       TrustServerCertificate: config.dbTrustServerCertificate,
       RequestTimeout: config.dbRequestTimeout,
