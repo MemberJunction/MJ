@@ -53,7 +53,7 @@ describe('IndexProposalPersister', () => {
     const mockProvider = {
       Entities: [ordersEntity],
       EntityByName: (name: string) =>
-        name === 'MJ: Entity Indexes' || name === 'MJ: Entity Index Fields' ? ordersEntity : undefined,
+        name === 'MJ: Entity Indices' || name === 'MJ: Entity Index Fields' ? ordersEntity : undefined,
       GetEntityObject: vi.fn(async (entityName: string) => {
         const id = `saved-${nextId++}`;
         let payload: Record<string, unknown> = {};
@@ -84,7 +84,7 @@ describe('IndexProposalPersister', () => {
     expect(res).toEqual({ Persisted: 1, Skipped: 1, Errors: [] });
     expect(savedRecords).toHaveLength(3);
     expect(savedRecords[0]).toEqual({
-      EntityName: 'MJ: Entity Indexes',
+      EntityName: 'MJ: Entity Indices',
       Data: expect.objectContaining({
         EntityID: ENTITY_ID,
         Name: 'IX_Orders_CustomerID',

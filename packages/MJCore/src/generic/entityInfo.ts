@@ -499,7 +499,7 @@ export class EntityIndexFieldInfo extends BaseInfo {
  * A database index (or advisor proposal) on an entity's base table.
  * CodeGen keeps `Active` rows in sync with the database catalog while preserving
  * `Proposed` and `Rejected` rows from advisors such as DBAutoDoc.
- * Maps to the `MJ: Entity Indexes` metadata entity.
+ * Maps to the `MJ: Entity Indices` metadata entity.
  */
 export class EntityIndexInfo extends BaseInfo {
     ID: string = null;
@@ -518,7 +518,7 @@ export class EntityIndexInfo extends BaseInfo {
     __mj_CreatedAt: Date = null;
     __mj_UpdatedAt: Date = null;
 
-    // Virtual field from vwEntityIndexes
+    // Virtual field from vwEntityIndices
     Entity: string | null = null;
 
     private _fields: EntityIndexFieldInfo[] = [];

@@ -509,7 +509,7 @@
             "Code": "EntityIndexes",
             "DatasetID": "@parent:ID",
             "Sequence": 35,
-            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Indexes",
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Entity Indices",
             "DateFieldToCheck": "__mj_UpdatedAt",
             "Description": "Database indexes and advisor proposals for each entity's base table, linked to their entities during metadata post-processing"
           },

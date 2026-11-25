@@ -6,12 +6,12 @@
       "Sets ONLY TrackRecordChanges so caching and other CodeGen-managed attributes stay at their defaults."
     ],
     "fields": {
-      "Name": "MJ: Entity Indexes",
-      "BaseView": "vwEntityIndexes",
+      "Name": "MJ: Entity Indices",
+      "BaseView": "vwEntityIndices",
       "TrackRecordChanges": false
     },
     "primaryKey": {
-      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Indexes"
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Indices"
     }
   },
   {

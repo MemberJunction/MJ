@@ -1,6 +1,6 @@
 /**
  * Persists DBAutoDoc Index Advisor proposals into MemberJunction entity metadata
- * (`MJ: Entity Indexes` and `MJ: Entity Index Fields`) with `Status = 'Proposed'`
+ * (`MJ: Entity Indices` and `MJ: Entity Index Fields`) with `Status = 'Proposed'`
  * and `Source = 'DBAutoDoc'`.
  *
  * When DBAutoDoc runs in standalone CLI mode without an active MJ metadata provider,
@@ -19,7 +19,7 @@ import type { IndexProposal } from './IndexAdvisorTypes.js';
 /** Maximum identifier length for generated proposed index names (fits SQL Server 128-char limit). */
 const MAX_PROPOSED_INDEX_NAME_LENGTH = 128; // SQL Server sysname identifier limit
 
-const ENTITY_INDEXES_NAME = 'MJ: Entity Indexes';
+const ENTITY_INDEXES_NAME = 'MJ: Entity Indices';
 const ENTITY_INDEX_FIELDS_NAME = 'MJ: Entity Index Fields';
 
 /** Summary of persisting proposals into MJ entity metadata. */
@@ -161,7 +161,7 @@ async function saveProposedIndex(
 
 /**
  * Persists `IndexProposal` entries as `Status = 'Proposed'`, `Source = 'DBAutoDoc'` rows in
- * `MJ: Entity Indexes` and `MJ: Entity Index Fields`. Gracefully skips and logs if no MJ
+ * `MJ: Entity Indices` and `MJ: Entity Index Fields`. Gracefully skips and logs if no MJ
  * metadata provider is configured (standalone CLI mode) or the index entities are not registered.
  */
 export async function PersistIndexProposalsToMJMetadata(

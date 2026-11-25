@@ -26,7 +26,8 @@ export class MJEntityFieldFormComponent extends BaseFormComponent {
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityFieldValues', sectionName: 'Entity Field Values', isExpanded: false },
             { sectionKey: 'mJEntityFieldPermissions', sectionName: 'Entity Field Permissions', isExpanded: false },
-            { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false }
+            { sectionKey: 'mJQueryFields', sectionName: 'Query Fields', isExpanded: false },
+            { sectionKey: 'mJEntityIndexFields', sectionName: 'Entity Index Fields', isExpanded: false }
         ]);
     }
 }

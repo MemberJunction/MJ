@@ -296,6 +296,13 @@
       "reason": "NOT NULL reference; the row cannot exist without the entity."
     },
     {
+      "table": "EntityIndex",
+      "column": "EntityID",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference; the row cannot exist without the entity."
+    },
+    {
       "table": "EntityOrganicKey",
       "column": "EntityID",
       "nullable": false,
@@ -925,6 +932,22 @@
       "nullable": false,
       "action": "delete",
       "reason": "NOT NULL reference to a EntityField row this proc deletes; deleted first."
+    },
+    {
+      "table": "EntityIndexField",
+      "column": "EntityFieldID",
+      "references": "EntityField",
+      "nullable": true,
+      "action": "delete",
+      "reason": "Nullable reference to an EntityField row this proc deletes; deleted rather than nulled because CK_EntityIndexField_ColumnOrExpression forbids both EntityFieldID and Expression being NULL."
+    },
+    {
+      "table": "EntityIndexField",
+      "column": "EntityIndexID",
+      "references": "EntityIndex",
+      "nullable": false,
+      "action": "delete",
+      "reason": "NOT NULL reference to an EntityIndex row this proc deletes; deleted first (the FK is also ON DELETE CASCADE)."
     },
     {
       "table": "QueryField",

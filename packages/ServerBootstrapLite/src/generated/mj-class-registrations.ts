@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (534 classes)
+// @memberjunction/core-entities (536 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -506,6 +506,8 @@ import {
     MJEntityFieldValueEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    MJEntityIndexEntity,
+    MJEntityIndexFieldEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -2005,6 +2007,8 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityFieldValueEntity,
     MJEntityFormContributionEntity,
     MJEntityFormOverrideEntity,
+    MJEntityIndexEntity,
+    MJEntityIndexFieldEntity,
     MJEntityOrganicKeyEntity,
     MJEntityOrganicKeyRelatedEntityEntity,
     MJEntityPermissionEntity,
@@ -2058,12 +2062,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
     MJJurisdictionEntity,
-    MJJurisdictionMemberEntity,
-    MJKnowledgeHubSavedSearchEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJJurisdictionMemberEntity,
+    MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -2262,12 +2266,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
-    SavedQueryDocumentBlock,
-    SharedConceptEdgeProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    SavedQueryDocumentBlock,
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -2466,12 +2470,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RubricEngineBase,
     MJScheduledJobEntityExtended,
     TagEngineBase,
-    AIPromptExtension,
-    TemplateEmbedExtension,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AIPromptExtension,
+    TemplateEmbedExtension,
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
@@ -2670,12 +2674,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRemoteOperationEntityServer,
     MJResourcePermissionEntityServer,
     MJRoleEntityServer,
-    MJRowLevelSecurityFilterEntityServer,
-    MJRubricBandEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRowLevelSecurityFilterEntityServer,
+    MJRubricBandEntityServer,
     MJRubricCriterionEntityServer,
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
@@ -2874,12 +2878,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
-    SearchAction,
-    SearchEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    SearchAction,
+    SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
@@ -2993,7 +2997,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1296;
+export const CLASS_REGISTRATIONS_COUNT = 1298;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

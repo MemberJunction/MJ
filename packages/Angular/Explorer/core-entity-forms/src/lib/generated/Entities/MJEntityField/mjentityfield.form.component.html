@@ -798,6 +798,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Entity Index Fields Section -->
+    <mj-collapsible-panel
+        SectionKey="mJEntityIndexFields"
+        SectionName="Entity Index Fields"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJEntityIndexFields')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Index Fields','EntityFieldID')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Index Fields','EntityFieldID')"
+                [AllowLoad]="IsSectionExpanded('mJEntityIndexFields')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJEntityIndexFields', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         
