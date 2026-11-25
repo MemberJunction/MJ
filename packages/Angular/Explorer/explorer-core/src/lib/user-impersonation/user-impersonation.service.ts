@@ -28,8 +28,8 @@ import {
 
 const GRAPHQL_PROVIDER_SINGLETON_KEY = '___SINGLETON__GraphQLDataProvider';
 const IMPERSONATION_SERVICE_GLOBAL_KEY = '___SINGLETON__MJUserImpersonationService';
-const DEFAULT_TTL_MINUTES = 15;
-const MAX_TTL_MINUTES = 60;
+const DEFAULT_TTL_MINUTES = 15; // Fallback mirroring server USER_IMPERSONATION_DEFAULT_TTL_MINUTES until MJCanImpersonateUsers responds
+const MAX_TTL_MINUTES = 60; // Fallback mirroring server USER_IMPERSONATION_MAX_TTL_MINUTES ceiling until MJCanImpersonateUsers responds
 
 const CAN_IMPERSONATE_QUERY = `
 query MJCanImpersonateUsers {
@@ -1003,7 +1003,7 @@ export class MJUserImpersonationService {
         return {
             getActiveProvider: (): MJImpersonationProviderLike | null => {
                 try {
-                    const mdProvider = Metadata.Provider;
+                    const mdProvider = Metadata.Provider; // global-provider-ok: Explorer impersonation service explicitly captures/swaps the process-global active provider
                     if (isProviderLike(mdProvider)) {
                         return mdProvider;
                     }

@@ -98,8 +98,8 @@ export class EntityRecordNameResolver extends ResolverBase {
         const visRes = await rv.RunView<{ ID: string }>(
           {
             EntityName: e.Name,
-            ExtraFilter: `ID = '${EscapeSQLString(idValue)}'`,
-            Fields: ['ID'],
+            ExtraFilter: `ID = '${EscapeSQLString(idValue)}'`, // pk-filter-ok: e.Name is narrowed above to MJ core entities ('MJ: Conversations' | 'MJ: Conversation Details') keyed by ID
+            Fields: ['ID'], // pk-filter-ok: e.Name is narrowed above to MJ core entities ('MJ: Conversations' | 'MJ: Conversation Details') keyed by ID
             MaxRows: 1,
             SkipTotalRowCount: true,
             ResultType: 'simple',
