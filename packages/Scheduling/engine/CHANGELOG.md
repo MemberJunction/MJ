@@ -1,5 +1,99 @@
 # @memberjunction/scheduling-engine
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 2f41586: Default new AI agent user policies (`AIAgentUserPolicy`) to `Autonomous` coordination mode, `DraftOnly` email, `ProposeWithApproval` calendar changes requiring approval, and `Disabled` (Off) phone channel across database schema defaults, stored procedures, `AgentUserPolicyEngine`, `MJAIAgentUserPolicyEntityServer`, Chief of Staff actions, UI draft builders, and agent prompts, and verify the complete Epic 3 acceptance suite.
+- a5dbc84: Add DefaultAgentConfigurationID on MJ: AI Agent Rhythm Templates and AgentConfigurationID on MJ: User Routines to assign default model tiers (Draft/Fast, Standard, High/High Power) per rhythm, seed routines from their template defaults, and pass resolved configuration overrides into agent wake runs.
+- 9fa004a: Enforce fail-closed Active coordination policy wake gating via batched Simple RunView lookups across all event-driven and scheduled wake paths, coalesce per-(UserID, ApplicationID) event wakes into single bounded wake keys within configurable coalescing windows, and add an AIDP server startup/deployment guard watermark preventing spurious startup or retroactive wakes while preserving recovery of pre-existing pending routines.
+
+### Patch Changes
+
+- c6b3913: Pre-freeze AI Agents improvements (Epics B, C, D, and post-`#6852` Epic E hardening):
+  - **Chief of Staff routing parity (Epic B):** Enabled `"enableHandoff": true` on Chief of Staff (`metadata/agents/.chief-of-staff-agent.json`), extracted Section 4 ("Agent Delegation") into a shared `{@include ../_includes/agent-delegation.md}` fragment parameterized by `{{ agentName }}` with zero hard-coded `"Sage"` references, included it in both Sage and Chief of Staff system prompts while keeping each agent's own sub-agents separate, and verified `BaseAgentID` prototype inheritance passes `enableHandoff` cleanly to derived instances.
+  - **Per-user default agent (Epic C):** Extended `DefaultAgentResolver` (`ResolveWithDetails` + `Resolve`) with per-user `UserInfoEngine` preference (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`) and automatic primary-instance (`IsPrimaryInstance = 1`) resolution for instantiable org/app default templates, validating `Active` status and full `BaseAgentID` ancestor `CanRun` permissions with graceful fallback and one-time non-blocking user notice. Added a "Default for new chats" toggle in `ConversationAgentPickerComponent` and unified Chat / My Agents default-agent settings and conversation-manager cache invalidation.
+  - **Remove hard-coded `'Sage'` assumptions (Epic D):** Updated `MemoryManagerAgent`, `LiveKitRoomResourceComponent`, Conversations UI (`conversation-chat-area`, `message-input`, `agent-handoff-card`, `agent-handoff-map`, `agent-turn-routing`, `realtime-*`), and `metadata/prompts/templates/sage/check-intent.template.md` (`{{ conversationManagerName }}`) to use the resolved conversation manager / default agent with neutral `'Assistant'` fallback, keeping `DefaultAgentResolver.FALLBACK_AGENT_NAME = 'Sage'` strictly as the last-resort safety net.
+  - **Post-`#6852` Agent Instances hardening (Epic E `E1`–`E5`):** Enforced `mj.config.cjs` (`MjConfig`) at the root ceiling of `LimitsConfigResolver` / `ResolveAgentRunLimits` so user policies can only narrow org ceilings unless an authorized admin override applies (`E2`/`F1`); resolved `Required` templates to the user's `IsPrimaryInstance = 1` across `AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage` and `UserRoutineDispatcherDriver` (`E1`); hid `"Set up My Chief of Staff"` / create CTAs in `MyAgentsSectionComponent` when the user lacks `CanCreate` on `MJ: AI Agents` (`E5`); and added unit tests covering `E1`–`E5` including derived-instance `ScopeCommonReach` / `SupportsAudience` enforcement and transitive ancestor `CanRun` validation.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [061fa06]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [17406fc]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4c44c40]
+- Updated dependencies [d6c032f]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [0b32bd4]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [f3e942f]
+- Updated dependencies [59afb5f]
+- Updated dependencies [b428089]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [18a02db]
+- Updated dependencies [3d5adab]
+- Updated dependencies [5331ce5]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [9fa004a]
+  - @memberjunction/ai-agents@6.3.0-edge.2
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/task-graph@6.3.0-edge.2
+  - @memberjunction/notifications@6.3.0-edge.2
+  - @memberjunction/actions@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/integration-engine@6.3.0-edge.2
+  - @memberjunction/ai-prompts@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/record-set-processor@6.3.0-edge.2
+  - @memberjunction/record-set-processor-base@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/rubrics@6.3.0-edge.2
+  - @memberjunction/templates@6.3.0-edge.2
+  - @memberjunction/materialization@6.3.0-edge.2
+  - @memberjunction/scheduling-engine-base@6.3.0-edge.2
+  - @memberjunction/scheduling-base-types@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes

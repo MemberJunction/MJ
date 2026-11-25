@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-communications",
-  "version": "6.3.0-edge.1",
+  "version": "6.3.0-edge.2",
   "description": "MemberJunction: Standalone Angular components and custom elements for public communication preference center",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -21,7 +21,7 @@
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
     "@babel/core": "^7.29.0",
-    "@memberjunction/ng-test-utils": "6.3.0-edge.1",
+    "@memberjunction/ng-test-utils": "6.3.0-edge.2",
     "esbuild": "0.28.1",
     "vitest": "^4.0.18",
     "zone.js": "~0.16.0"

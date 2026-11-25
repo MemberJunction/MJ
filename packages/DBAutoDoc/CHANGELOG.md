@@ -1,5 +1,49 @@
 # @memberjunction/db-auto-doc
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 9b51f61: fix(db-auto-doc): relationship discovery reuses the column statistics the sampling pass already gathered instead of querying every column a second time. The statistics cache is seeded from the schema before PK and FK detection, FK cardinality checks read from that cache, and merging the cache back onto the schema keeps the fields only sampling records. Note: resuming from a state file written before this fix retains the statistics the earlier merge already overwrote because sampling skips tables that already carry statistics; run a fresh analysis to populate full ranges and distributions.
+- 0d127f7: Fix Phase 0 Wave 1 generator, SQL escaping, dialect row-limit, and evaluation-script defects in `@memberjunction/db-auto-doc`: export `PickBestPKCandidate` from `ApplyPrimaryKeys`, gate rejected/non-winning PK and FK candidates in `AdditionalSchemaInfoGenerator` (preserving real column descriptions and never combining discovered PKs onto declared catalog PKs), escape SQL Server identifier literals in `SQLGenerator`, make `SampleQueryGenerator` dialect-aware for both prompt `databaseType` and validation row limits across SQL Server, PostgreSQL, MySQL, and Oracle, and align `compare.py` with the published `0.35 FK / 0.30 PK / 0.20 TblDesc / 0.15 ColDesc` weights, single-winner PK selection, and schema-qualified FK keys.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [9499d4b]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [3651ef2]
+- Updated dependencies [9471265]
+- Updated dependencies [942e220]
+- Updated dependencies [346795c]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [6946765]
+- Updated dependencies [193d979]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ai@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

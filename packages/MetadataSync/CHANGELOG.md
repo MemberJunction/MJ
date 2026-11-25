@@ -1,5 +1,86 @@
 # @memberjunction/metadata-sync
 
+## 6.3.0-edge.2
+
+### Patch Changes
+
+- 87f0917: PostgreSQL on managed hosts: one TLS setting for every client, token logins, and one API pool instead of two.
+  - **TLS.** MJAPI's pools, the PostgreSQL provider, CodeGen, `mj migrate` (and its connection check), MetadataSync and the pgvector provider all take TLS from one resolver, `BuildPgSslConfig`. It reads `PG_SSL_MODE` (`disable` | `require` | `verify-ca` | `verify-full`), `PG_SSL_CA_FILE` and `PG_SSL_SERVERNAME`; MJAPI also reads `databaseSettings.postgres.ssl` in `mj.config.cjs`. **Behavior change:** with no setting, a host on this machine or a bare service name (`localhost`, `postgres`, `db`) uses plain TCP and any other host uses `verify-full`. Before, MJAPI's own pools never used TLS and CodeGen never did; a remote server without TLS now needs `PG_SSL_MODE=disable`. `PG_VECTOR_SSL=true` now verifies the server certificate (it used to skip the check); `PG_SSL_MODE=require` restores the old behavior.
+  - **Token logins.** `PG_AUTH_MODE` (or `databaseSettings.postgres.authMode`) selects a `BasePgCredentialProvider` registered under that key, which supplies a token for each new connection. Two ship with the provider: `azure-entra` (Microsoft Entra ID via `DefaultAzureCredential`, for Azure Database for PostgreSQL and Azure HorizonDB) and `aws-rds-iam` (RDS/Aurora IAM tokens). Their SDKs, `@azure/identity` and `@aws-sdk/rds-signer`, are optional peer dependencies loaded only in that mode. Token modes require a verified TLS connection. `PGConnectionConfig.PasswordSource` carries the callback.
+  - **Connections.** MJAPI and MetadataSync configure the PostgreSQL provider on the pool they already opened (`ConfigWithSharedPool`) instead of letting it open a second one, which removes up to `connectionPool.max` connections per MJAPI. At startup MJAPI warns when its pools could open more than 80% of the server's usable `max_connections`; `connectionPool.expectedInstances` multiplies the estimate for a fleet.
+  - **Read replicas.** `PG_READ_REPLICA_HOST` / `PG_READ_REPLICA_PORT` (or `databaseSettings.postgres.readReplica`) points the ad-hoc read-only pool (caller-supplied SQL, reports, agents) at a replica; `PG_READ_REPLICA_POOLS=all-read-only` moves the application read-only pool too. Both keep the read-only login. Unset, nothing changes.
+  - `mj migrate`'s connection check explains a PostgreSQL certificate it cannot verify (point `PG_SSL_CA_FILE` at the CA) and a server that only accepts TLS.
+  - **User search** on PostgreSQL matches case-insensitively (`ILIKE`), as SQL Server does under its default collation. Before, searching "acme" did not find "Acme Corp" on PostgreSQL.
+
+- 3b613c8: `mj sync push` and `mj sync pull` keep a record file's trailing newline and its `\uXXXX` escape style when they rewrite it, so an unchanged record writes the same bytes. Pull now includes the content of every `@file` reference in a record's checksum, at any depth, as push does, so a nested reference such as `Configuration.ReplayScript` no longer changes `sync.lastModified` on every pull.
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [916fe91]
+- Updated dependencies [e6b15b9]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [31f66b3]
+- Updated dependencies [59afb5f]
+- Updated dependencies [9499d4b]
+- Updated dependencies [87f0917]
+- Updated dependencies [d635ec5]
+- Updated dependencies [5f514f2]
+- Updated dependencies [3d5adab]
+- Updated dependencies [d74bfbb]
+- Updated dependencies [3651ef2]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [6757289]
+- Updated dependencies [942e220]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [8b8b278]
+- Updated dependencies [c63e493]
+- Updated dependencies [447f7fa]
+- Updated dependencies [6946765]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/core-entities-server@6.3.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/generic-database-provider@6.3.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/postgresql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/record-graph@6.3.0-edge.2
+  - @memberjunction/sql-dialect@6.3.0-edge.2
+  - @memberjunction/cli-core@6.3.0-edge.2
+  - @memberjunction/config@6.3.0-edge.2
+  - @memberjunction/network-utils@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Patch Changes

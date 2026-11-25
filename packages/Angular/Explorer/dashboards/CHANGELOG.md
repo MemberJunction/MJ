@@ -1,5 +1,256 @@
 # @memberjunction/ng-dashboards
 
+## 6.3.0-edge.2
+
+### Minor Changes
+
+- 2f41586: Default new AI agent user policies (`AIAgentUserPolicy`) to `Autonomous` coordination mode, `DraftOnly` email, `ProposeWithApproval` calendar changes requiring approval, and `Disabled` (Off) phone channel across database schema defaults, stored procedures, `AgentUserPolicyEngine`, `MJAIAgentUserPolicyEntityServer`, Chief of Staff actions, UI draft builders, and agent prompts, and verify the complete Epic 3 acceptance suite.
+- cd98580: Implement MemberJunction Communications V2 (Comms V2): schema, metadata seeds, compliance gate with 9 rule drivers, endpoint resolution, link/pixel tracking, SendGrid webhook/domain auth, public preference center and admin dashboard, templated delivery, and IT188–IT192 integration test suites.
+
+  Key behavior details:
+  - V1 `SendSingleMessage` and `CoreActions` remain unchanged by default; opt into V1 compliance gating via `Message.CheckComplianceGate = true` or `MJ_COMMS_V1_COMPLIANCE_GATE=true`.
+  - `EntityCommunicationsEngine.RunEntityCommunication` supports V2 routing via `UseV2 = true` and tags V1 bulk sends as `Message.MessageClass = 'Operational'`.
+  - `MessageClass = 'Transactional'` sends require Owner privileges or the `Communications: Send Transactional` authorization.
+  - A `Marketing` message must be sent under a preference (`Envelope.PreferenceID`); without one it is blocked with `PreferenceRequired` in every enforcement mode.
+  - Every `Marketing` email carries the one-click unsubscribe header (`List-Unsubscribe`, `List-Unsubscribe-Post`), whether or not a compliance regime is enabled. The unsubscribe footer still comes only from an enabled regime.
+  - A link whose click-tracked form would exceed 2,000 characters is left untracked.
+  - The `MJ: Users` principal's email mapping is seeded (`metadata/entity-communication-message-types`), so users are reachable on a new installation.
+  - `spDeleteEntityWithCoreDependencies` removes an entity's communication principals, endpoint links, preferences and principal-only suppressions with it, including the consent audit rows that reference them. A suppression that also names an endpoint (a hard bounce or complaint recorded against a principal) is kept with its entity link cleared, so the address stays blocked. Communication logs and sender types keep their rows with the entity link cleared.
+  - Delivery guarantee is a setting, not an accident: `DeliveryGuarantee` (`At Most Once` | `At Least Once`) on `MJ: Communication Providers` (default `At Most Once`), `MJ: Communication Senders`, `MJ: Communication Runs` and `Envelope.DeliveryGuarantee`, most specific first. A log stuck `In-Progress` for 15 minutes is never resent under At Most Once (reported `OutcomeUnknown`; the recipient may miss it) and is reclaimed and resent under At Least Once (the recipient may get it twice).
+  - Chunked runs are tracked in the new `MJ: Communication Run Chunks` table (one row per chunk, unique per run) and `CommunicationRun.ChunkCount`; the last chunk sets the run's `Status` to `Complete`, or `Failed` if any chunk was refused.
+  - `CommunicationLog.IsDryRun` marks dry-run sends, and `CommunicationLog.DeferredPayload` holds a deferred message until it is dispatched; `CorrelationData` holds only the caller's data.
+  - The database enforces one active `Admin Block` per address (filtered unique index) and keeps `MJ: Communication Consent Audit Logs` append-only (a trigger refuses updates and deletes, except the entity-delete cleanup in `spDeleteEntityWithCoreDependencies`).
+  - The log claim and scheduled-deferral sweep now write `OUTPUT ... INTO` a table variable; the previous bare `OUTPUT` clause is refused by SQL Server on a table with an enabled trigger, which stopped retries and deferred sends from being claimed.
+  - GDPR erasure clears a pending deferred message body and fails loudly if any log or activity cannot be scrubbed.
+
+- 916fe91: Add the extensible Chief of Staff skills platform, typed core actions, offered rhythms, suggestions, and Agent Channels (`V202611201630`):
+  - **Schema & CodeGen (`V202611201630`)**: Add `AISkillAction.Role` (`Tool` | `Briefing` | `Both`), `AIAgentSkill.AllowMetadataSyncUpdate`, `RowLevelSecurityFilter.PlatformVariants` (SQL Server + PostgreSQL dialect RLS), `MJ: AI Agent Rhythm Templates`, `MJ: AI Agent Suggestions`, `ConversationType` `AGENT_CHANNEL`, `MJ: Agent Channels` (IS-A `MJ: Conversations`), and `MJ: Agent Channel Participants`.
+  - **Policy & Briefing Engine**: Introduce `TypedActionPolicyGuard` in `@memberjunction/ai-core-plus` with sub-agent policy ceiling propagation across `BaseAgent` and `AgentUserPolicyEngine`, plus `AIEngine.GetBriefingActionsForAgent` / `GetSkillBriefingActionIDs` for dynamic cross-app briefing fan-out.
+  - **Core Typed Actions & Agent Channels**: Replace all raw SQL / generic CRUD actions on Chief of Staff with 13 scoped typed actions (including `Assemble My Briefing`, Offered Rhythms, Suggestions, Memory, and Agent Channel actions), add `AgentChannelConversationDriver` with loop-guard and hourly wake rate limits, and enforce recurring routine confirmation in `Schedule Next Agent Wake`.
+  - **Inbound Utility Mailbox Adapter**: Add `InboundUtilityMailboxIngestionService` and `EmailUtilityMailboxExtension` (`BaseServerExtension`) in `@memberjunction/messaging-adapters`.
+  - **Governance, Standards & UI**: Add `agent-skill-governance` repo standard, `ChiefOfStaffAgentChannelsComponent` and Governance `InstructionsOverride` size monitor in `@memberjunction/ng-dashboards`, and `IT157` (`COS9–COS12`) integration checks.
+
+- e6b15b9: Harden Chief of Staff security, governance, email ingestion, agent channels, wake policy enforcement, and briefing resilience:
+  - **Chief of Staff skill governance & SQL isolation (`@memberjunction/standards`, Chief of Staff metadata)**: Switched Chief of Staff `AcceptsSkills` from `All` to `Limited`, explicitly granted safe core skills (`Web Research`, `Data Visualization`, `Document Builder`) while excluding `Data Analysis & Queries`, and attached `Query Builder` as an explicit sub-agent bounded by the user's policy ceiling. Extended the `agent-skill-governance` repo standard to flag non-allow-listed agents setting `AcceptsSkills: 'All'` (or explicitly granting an SQL-bundling skill) when an active skill bundles `Run Ad-hoc Query`.
+  - **Server-verified approval & rhythm validation (`@memberjunction/core-actions`)**: Added `VerifyApprovedAgentRequest` and `VerifyActiveRhythmTemplate` helpers; hardened `ScheduleNextAgentWakeAction`, `EnableAgentRhythmAction`, and `SendInterAgentRequestAction` so agent-context execution rejects self-attested `ConfirmedByUser = true` and unverified/inactive/wrong-agent `RhythmTemplateID` values, requiring a server-verified `Approved` `MJ: AI Agent Requests` row (`ConfirmedApprovalRequestID`). Direct human/UI calls continue to work without requiring an approval request.
+  - **MS Graph & Gmail inbound mailbox ingestion + durable dedup (`@memberjunction/messaging-adapters`)**: Added `CommunicationProviderInboundMailboxFetcher` (supporting Microsoft Graph and Gmail via `CommunicationEngine`) and `InMemoryInboundMailboxFetcher`, auto-registered when `PollIntervalMs > 0`. Added native `POST <root>/inbound/msgraph` (including `validationToken` handshake) and `POST <root>/inbound/gmail` (Pub/Sub base64 payload) webhook normalizers and routes on `EmailUtilityMailboxExtension`. Added durable DB-backed deduplication in `InboundUtilityMailboxIngestionService` via `MJ: User Settings` under the System User so deduplication survives restarts and multi-instance concurrency.
+  - **Human replies in Agent Channels wake peer agents (`@memberjunction/core-entities-server`, `@memberjunction/ai-agents`, `@memberjunction/ng-dashboards`)**: Added a decoupled `GetGlobalObjectStore()` hook (`RegisterAgentChannelHumanPostWakeHandler`) invoked by `AgentChannelConversationDriver.HandleHumanMessagePosted` and registered by `AgentWakeTriggerService`, ensuring human replies reopen paused channels and wake peer participant agents. Updated `ChiefOfStaffAgentChannelsComponent` to show clear resumed/notified confirmation banners.
+  - **Active policy enforcement for workstream wakes (`@memberjunction/ai-agents`)**: Updated `AgentWakeTriggerService.TriggerWakeForWorkstream` to require an `Active` `MJ: AI Agent User Policies` row for `(AgentID, UserID)`, cleanly suppressing wakes (`POLICY_DENIED`) for users who have not onboarded.
+  - **Briefing timeout/truncation & rhythm staggering (`@memberjunction/core-actions`, Chief of Staff metadata)**: Added per-contributor timeout (`ContributorTimeoutMs`, default 10s) and serialized payload truncation (`MaxContributorChars`, default 32,768 chars) to `AssembleMyBriefingAction`, and staggered the `Daily Calendar Guard & Conflict Check` rhythm template to `15 7 * * 1-5`.
+
+- 8289a9d: Chief of Staff Wave 2 polish and integration test coverage: calm-UX styling refinements for paused Agent Channel items and floating FAB bottom scroll clearance in Chief of Staff dashboards, plus persistent Chief of Staff World Model seed (`IT183`, `chief-of-staff-world`) and live-model heuristic agent verification suite (`IT184`, `chief-of-staff-live`).
+- 2122c07: Add code-only `BaseRemotableOperation` contracts and server implementations (`Limits.GetDiagnostics`, `Limits.ResumePausedRun`, `Limits.PauseRun`), wire the `AdminLimitsResourceComponent` execution-limits governance dashboard into Explorer's Admin application navigation, add end-to-end 5,000-node workflow and 2,000-turn agent-channel plus synthetic runaway tests, and document the 5-tier limits configuration architecture and sweep inventory.
+- d7a630c: Semantic graph authority tiers are now fully metadata-driven, and the graph engine accepts pluggable access policies (minor: adds three `MJ: Graph Types` columns).
+  - `MJ: Graph Types` gains `DefaultAuthorityTierID`, `DefaultConceptTaxonomyMode` and `DefaultGroundingMode`. The Graph stage reads the target graph's real type and fills in what a content source leaves unset from it; `IsCanon` comes from the graph type, never from a configured type name. Seeded types keep their previous behaviour, and Network graphs now default to `Constrained` as documented.
+  - Authority tier precedence comes only from `MJ: Graph Authority Tiers` rows: `AuthorityTierPrecedence` is removed and `GetAuthorityTierRank` requires the tier rows. A source may name its tier by ID (`AuthorityTierID`) or name; a name that matches no active tier fails the stage. A source with no tier is unranked instead of silently `Reference`. The `IContentSourceGraphOverlayConfig` keys `Enabled`, `DefaultAuthorityTier` and `DefaultAuthorityTierID` are honoured.
+  - `GraphEngine` runs `BaseGraphNodeAccessPolicy` (per entity, `Extend` or `Replace`) and `BaseGraphEdgeAccessPolicy` (per edge type) registrations. Policies only narrow, run once per entity per viewer, and fail closed when they throw or cannot be created.
+  - Built-in provenance policies: a content item, its chunks and the concepts synthesized from them are visible only to someone who can read the source record. An `Approved` concept in a Canon graph stays visible to anyone who can read concepts.
+  - Edge type names are compared ignoring case and whitespace when filtering edges and when finding an edge access policy, matching how the content pipeline resolves them on write, so an edge cannot skip its policy because its name is spaced differently. Providers that name no edge type fall back to `RelatedTo`, the seeded type. `IsCanonGraph` decides from the graph type's `IsCanon` flag only, no longer from a graph named "MJ Canon".
+  - The seeded edge type `Broader Than` (inverse `Narrower Than`) is renamed `BroaderThan` (inverse `NarrowerThan`), so every seeded edge type name is CamelCase. The row keeps its ID, and the content pipeline now writes the CamelCase name.
+
+- 9471265: Honest serving for Predictive Studio: models reach production only through one lifecycle gate (`PredictiveStudio.PromoteModel` takes a `transition`), artifacts are stored durably with a verified SHA-256, every scoring call is a recorded `MJ: ML Scoring Runs` row, predictions are effective-dated `MJ: Feature Values` rows served by `MJ: Latest Feature Values` behind a view authorization, and published models are monitored on real outcomes with automatic rollback.
+
+  Deploy impact (one-time, on the first runs after upgrade):
+  - The registry job re-verifies each `Published` model trained by the previous release's trainer on its stored gate record; one that does not re-verify becomes `Unevaluated` and stops serving (scoring refused `model-not-published` until a retrain publishes through the gate). Older models without a `Delivery` that are `Draft`, `Validated` or `Published` become `Unevaluated`; the one that served each pipeline keeps serving, flagged, until its pipeline is retrained under a protocol. Expect a burst of training compute: auto-train processes retrain on their next run and the registry job retrains at most 3 other pipelines per run; schedules of non-auto-train Record Processes bound to a non-serving demoted model are disabled until re-evaluation publishes.
+  - The registry job copies legacy artifacts into file storage, 50 models per run, until none is `unverified`.
+  - Duplicate `(PipelineID, Version)` model rows are renumbered (the old number kept in `Lineage`).
+  - Existing scoring bindings are migrated (pipeline from their model, feature name from the pipeline name, their column kept as the optional copy); the "View Model Predictions" authorization (granted to Developer and Integration) is set on the daily prediction sweep's first run — until then their predictions are visible to no one through Feature Values. Grant it to the roles that should see predictions.
+  - `MJ: Feature Values` and `MJ: Latest Feature Values` carry a row-level security filter on every role's read permission; pipeline and human values are unaffected.
+  - Score Record Set returns `Success = false` for refusals and for runs with any failed record; direct `MJ: ML Models.Status` writes are refused (`status-changed-outside-gate`).
+  - `MJ: ML Model Publish Records` is append-only and written only by the sign-off operation and the lifecycle gate: a direct create, update or delete through GraphQL, an Action or any other save is refused, whatever the caller's entity permissions.
+  - A `PredictiveStudio.PromoteModel` call made with an API key, and a Promote ML Model Action run inside an agent run, are recorded as non-person initiators: they cannot roll back, and they publish a `KeepBaseline` model only under a protocol with `autoPublishKeepBaseline` (a person publishes it from the model detail). A scoring binding's `Status` changes only through Withdraw, and its view authorization only by a caller who holds the current one.
+  - Breaking: the promotion API (`targetStatus`/`signOff` → `transition`/`signOffId`), the "Promote ML Model" Action's inputs and result codes, the binding's `MLModelID`/`MaterializedResultID`/`'Materialized'` mode, and 217 `@deprecated` aliases are removed with no compatibility shim (see the PR description's list).
+
+- d529e66: Approving a query now needs the new `Queries: Approve` authorization, granted to the Developer and Integration roles. Any user can save a query as a draft (Pending): the UI role gets Create on `MJ: Queries` and `MJ: Query Categories`. The server refuses a save that would approve a query when the user doesn't hold the authorization. The Save Query dialog saves a draft for those users and offers "approve now" to holders, and the Query Browser offers the Approved status only to users who can approve, or for a query that was Approved when the drawer opened.
+
+  A draft (any status but Approved) run by a user who doesn't hold `Queries: Approve` must now pass the same statement screen as ad-hoc SQL, on its rendered SQL: one read statement, reading only entity base views that user reads unscoped (no row or API-key filter, no denied field, not confined by RunView's server hooks). Base tables, system catalogs, other relations and SQL the screen can't account for are refused. Approved queries, queries with `MJ: Query Permissions` rows, and holders of the authorization are not screened, unless the holder's session carries an API-key row filter. A cache check now uses a query's `CacheValidationSQL` only when the query is Approved; a draft gets fresh rows from its screened run (`no_validation`). Saving `CacheValidationSQL` needs `Queries: Approve`. A query saved by a user who can't update queries no longer logs an error when its fingerprint can't be stamped. New helpers: `UserCanApproveQueries`, `APPROVE_QUERIES_AUTHORIZATION`, `QUERY_APPROVAL_REFUSAL`, `QUERY_VALIDATION_SQL_REFUSAL`, and an optional `ApproverRule` on `ApplyApprovalRulesAsync`.
+
+### Patch Changes
+
+- 4d51997: Add personal and shared AI Agent instances via multi-level prototype inheritance (`AIAgent.BaseAgentID`, `MaxDepth = 5`), `InstantiationMode` (`None | Optional | Required`), `AdditionalInstructions`, exclusive `IsPrimaryInstance` sibling sync, 2x2 RBAC with SQL Row-Level Security (`UserAccessibleAIAgents`), ancestor policy/limit ceiling intersection, unified text + Realtime voice personas with audience-aware tone framing, `Manage My Agent Instance` action, `LocalJsonCommunicationProvider` for local JSON-backed Email & Calendar testing, Frecency + FK-style Smart `@Mention` autocomplete, per-user Default Chat Agent (`chat.defaultAgentId`), and the unified **My Agents** Explorer application (`Overview`, `Agents`, `Agent Channels`).
+- c6b3913: Pre-freeze AI Agents improvements (Epics B, C, D, and post-`#6852` Epic E hardening):
+  - **Chief of Staff routing parity (Epic B):** Enabled `"enableHandoff": true` on Chief of Staff (`metadata/agents/.chief-of-staff-agent.json`), extracted Section 4 ("Agent Delegation") into a shared `{@include ../_includes/agent-delegation.md}` fragment parameterized by `{{ agentName }}` with zero hard-coded `"Sage"` references, included it in both Sage and Chief of Staff system prompts while keeping each agent's own sub-agents separate, and verified `BaseAgentID` prototype inheritance passes `enableHandoff` cleanly to derived instances.
+  - **Per-user default agent (Epic C):** Extended `DefaultAgentResolver` (`ResolveWithDetails` + `Resolve`) with per-user `UserInfoEngine` preference (`Conversations.DefaultAgentID`, with read-only fallback to legacy `chat.defaultAgentId`) and automatic primary-instance (`IsPrimaryInstance = 1`) resolution for instantiable org/app default templates, validating `Active` status and full `BaseAgentID` ancestor `CanRun` permissions with graceful fallback and one-time non-blocking user notice. Added a "Default for new chats" toggle in `ConversationAgentPickerComponent` and unified Chat / My Agents default-agent settings and conversation-manager cache invalidation.
+  - **Remove hard-coded `'Sage'` assumptions (Epic D):** Updated `MemoryManagerAgent`, `LiveKitRoomResourceComponent`, Conversations UI (`conversation-chat-area`, `message-input`, `agent-handoff-card`, `agent-handoff-map`, `agent-turn-routing`, `realtime-*`), and `metadata/prompts/templates/sage/check-intent.template.md` (`{{ conversationManagerName }}`) to use the resolved conversation manager / default agent with neutral `'Assistant'` fallback, keeping `DefaultAgentResolver.FALLBACK_AGENT_NAME = 'Sage'` strictly as the last-resort safety net.
+  - **Post-`#6852` Agent Instances hardening (Epic E `E1`–`E5`):** Enforced `mj.config.cjs` (`MjConfig`) at the root ceiling of `LimitsConfigResolver` / `ResolveAgentRunLimits` so user policies can only narrow org ceilings unless an authorized admin override applies (`E2`/`F1`); resolved `Required` templates to the user's `IsPrimaryInstance = 1` across `AgentWakeTriggerService.TriggerWakeOnAgentChannelMessage` and `UserRoutineDispatcherDriver` (`E1`); hid `"Set up My Chief of Staff"` / create CTAs in `MyAgentsSectionComponent` when the user lacks `CanCreate` on `MJ: AI Agents` (`E5`); and added unit tests covering `E1`–`E5` including derived-instance `ScopeCommonReach` / `SupportsAudience` enforcement and transitive ancestor `CanRun` validation.
+
+- a87fe90: The artifact viewer header now has one Export menu in place of the PDF-only button. A viewer lists its formats with `GetExportOptions()` and runs the chosen one with `RunExport(key)`. By default these give the portrait and landscape PDF entries when `SupportsPDFExport` is true, so the Docs and Component viewers export as before. An option with a `DisabledReason` shows greyed out, with the reason in place of its description, and does not run. The menu is an `mj-menu`: the arrow keys move between options, and an unavailable option can still take focus, so a screen reader reads its reason.
+
+  Query (data) artifacts now export their results as Excel, CSV or JSON, and their query as a `.sql` file. A results export runs the query again without paging, up to 100,000 rows, through the grid's own export. A warning shows when that limit is hit or the query fails and only the rows on screen were exported. The same menu saves the query (save, update, or save as new), saves the records as a list, opens the saved query as a live Excel workbook when the server has the Excel add-in, and creates a Live Sheet (a Sheets artifact with a live table on the saved query). Excel (live) and Live Sheet need a saved query that matches the version on screen. The data toolbar no longer has the Save Query, Update Query and Save as List buttons; when the SQL has changed it shows an Open Query button next to its badge.
+
+  More viewers now list their exports in the same menu, through the export code they already had. Docs offer Word, Markdown and PDF. Sheets offer the workbook as Excel and the active sheet as CSV. Slides offer PowerPoint and a printable PDF. PDF, Word, Excel file, image, audio and video artifacts offer their original file. SVG, HTML, JSON and code artifacts save their source with the matching extension. The base viewer has `FILE_EXPORT_KEY` and protected `FileExportOption`, `OriginalFileName`, `ExportFileName` and `DownloadTextFile` helpers for this. The code viewer now detects JavaScript content as JavaScript; before, it showed it as Java. The Word (.docx) export of a Docs artifact now works in the browser; before, it failed with "nodebuffer is not supported by this platform".
+
+  `NavigationRequest` has optional `ArtifactID` and `ArtifactName`. The Conversations resource, the artifact tab, the dashboard chat pane and the chat overlay open that artifact in its own tab.
+
+  **Import change:** `LiveSheetClientToolHelper` and its helpers (`CreateLiveSheetHelperForProvider` and the other exports of `live-sheet-client-tool.helper`) moved from `@memberjunction/ng-dashboards` to `@memberjunction/ng-artifacts`. `@memberjunction/ng-dashboards` no longer exports them, so code outside this repository that imports them from `@memberjunction/ng-dashboards` must import them from `@memberjunction/ng-artifacts`. `@memberjunction/ng-query-viewer` now exports its Open in Excel parameter helpers (`HasRequiredParameterValues`, `ToExcelParameterValues`, `CanOpenQueryInExcel`).
+
+- 4fe5106: Gate `MJ: Graph Concepts` approval, deprecation, governed-field edits, and protected deletes behind the `Graph: Approve Edges` authorization, matching `MJ: Graph Edges`:
+  - `MJGraphConceptEntityServer` requires `Graph: Approve Edges` when creating an `Approved` or `Deprecated` concept, transitioning into or out of `Approved` or `Deprecated`, modifying governed fields on an `Approved` or `Deprecated` concept, or deleting a concept that is not `Draft` or `Proposed`. Brand-new policy-approved concept creates from the Content Pipeline `Graph` stage are allowed inside `GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION`, while edits to existing governed concepts remain refused.
+  - `ResolverBase` forces `MustLoadTruthFromDatabase` on `mj: graph concepts` so stored `Status` and `Dirty` governed columns always evaluate against the database row.
+  - `EntityGraphOverlayStore.UpsertConcept` preserves existing `Approved` and `Deprecated` concepts without overwriting them and scopes saves to `MJ: Graph Concepts` under `GRAPH_PIPELINE_EDGE_APPROVAL_OPERATION`.
+  - `GraphViewComponent` (`CanApproveNodes`, default `false`) and `SemanticGraphExplorerComponent` hide and block the "Approve into Canon" action unless the caller holds `Graph: Approve Edges` (tested via `CanUserApproveGraph`).
+  - Integration test bundle `graph-runtime` (`IT167`) extends `GR3` and adds `GR7` (mutation tier) to verify concept approval, edit, deprecation, delete, and Content Pipeline preservation end to end.
+
+- 31f66b3: Docs only: guides, READMEs and two doc comments now describe what the code does (semantic graphs and Canon, search-scope permissions, taxonomy tagging, the Classify and Tags dashboards, the hierarchy tree, AI providers, testing oracles, SQL Server binary saves, and draft workflows). No code logic changes.
+- 7690d8d: The list update confirmation (refresh preview, move, compose) shows each previewed record's name, with its ID beside it, instead of the bare ID. Names are looked up for the previewed records only; a record with no name, or a failed lookup, keeps showing its ID.
+- d635ec5: Memory-leak audit Round 23 fixes.
+  - `ArtifactCollaborationServer` omits full `BaseVersionText` document bodies from server watermarks whenever a room's working state matches its persisted base version (`Working === Base`), retaining `BaseVersionText` only while uncompacted working-state edits exist and dropping it immediately on compaction — eliminating duplicate multi-MB artifact strings across closed rooms without an arbitrary watermark count cap.
+  - `ConversationToolManager` loads conversation history fresh per agent run via `ConversationEngine.LoadWindowRowsFresh` (memoized on the per-run manager instance and cleared in `BaseAgent.endRun`), preventing server-side agent runs from populating `ConversationEngine`'s process-global UI detail cache.
+  - The fallback artifact suggestion store shared by the document, spreadsheet and slide-deck tool libraries deletes superseded ephemeral content-hash keys when standalone suggestions are accepted and expires idle keys after 2 hours without an arbitrary count cap.
+  - `BaseResourceComponent` replaces `destroy$` with an already-fired notifier on destroy, so a `takeUntil(this.destroy$)` attached after an `await` in a component that was destroyed meanwhile ends immediately instead of living for the session.
+  - `DataExplorerDashboardComponent`, `FormBuilderResourceComponent`, `QueryPartComponent`, `ArtifactTypePluginViewerComponent`, and `PdfArtifactViewerComponent` guard post-`await` timers, subscriptions, plugin instantiations, and PDF document/blob-URL resources when destroyed mid-load.
+  - The MCP server closes Streamable HTTP sessions once idle past `mcpServerSettings.sessionIdleTtlMs` (default 24 hours, swept every `sessionSweepIntervalMs`) without evicting active sessions under a hard count cap, sets `transport.onclose` before `connect()` so the SDK's own close handling runs, and releases sessions whose first request fails.
+  - `CloudDetachedSessionRegistry` clears detached sessions deterministically on terminal turn completion or non-detached `EndSession()` teardown and expires abandoned sessions after their 24-hour idle TTL without an arbitrary count cap.
+
+- 0a24be3: Make `ng-dashboards` tests build `@memberjunction/ai-agents` first. `adminLimitsRoundTrip.test.ts` imports `packages/AI/Agents/dist/index.js` by relative path without declaring the package, so PR runs that do not touch `ai-agents` failed with `Cannot find module`. The test task in `dashboards/turbo.json` now depends on `@memberjunction/ai-agents#build`.
+- 66258b1: Implement UI Phase 0 Workstream 4 contract fixes: retoken the default MJ font family to Montserrat with a `--mj-font-family-display` seed/token (and Theme Studio heading-font control + seamless normalization for saved themes), bundle Font Awesome Free 6.7.2 from npm in `explorer-app`, remove hardcoded `Ubuntu`/`Inter` font stacks from Angular component stylesheets, and strip hardcoded hex fallbacks and the duplicated TS stylesheet from `card-grid`.
+
+  Note for standalone hosts (outside `explorer-app`) that render `<mj-card-grid>`: add `@import '@memberjunction/ng-ui-components/dist/lib/card-grid/card-grid';` to your global stylesheet alongside the other `@memberjunction/ng-ui-components` global styles.
+
+- 97cf34a: Replace a direct UUID comparison in `CreateWorkflowComponent` (`UUIDsEqual`) and replace the nested `UUIDsEqual` scan in `AgentStepListComponent.OrderedSteps` with indexed `IndexByUUID`, `GroupByUUID`, and `UUIDSet` lookups so `UUIDCompliance` passes on `next`. `FlowEditorComponent.ZoomToFit` now does nothing once the editor is destroyed, so an auto-fit timer that fires after teardown no longer throws `NG0911: View has already been destroyed`.
+- dccf367: Redesign the Workflows Explorer app and shared flow/task-graph editors (`@memberjunction/ng-flow-editor`, `@memberjunction/ng-task-graph-editor`) around a unified token-authentic spatial studio and live X-Ray debugger, and polish the custom-form switcher in `@memberjunction/ng-base-forms`:
+  - **`@memberjunction/ng-base-forms`**: Move `Open standard form` / `Back to custom view` into `<mj-form-toolbar>`'s `More` (`...`) menu across all viewports and make `<mj-entity-form-host>`'s custom-view notice strip dismissible per user and per entity via `UserInfoEngine`.
+  - **`@memberjunction/ng-flow-editor`**: Replace dead CSS tokens and hardcoded light colors with semantic `--mj-*` tokens; switch `FlowLayoutService` to static ESM `@dagrejs/dagre`; synchronize port sides with `LR`/`TB` orientation; cap fit-to-screen zoom (`<= 95%`) and persist per-workflow pan/zoom viewports via `UserInfoEngine`; fix `ForEachTask`/`WhileTask` loop detection and skipped-label strikethrough; add squircle icons, multi-output ports, breakpoint gutters, live `NodeProgress` bars, expandable X-Ray telemetry slots, and `+` quick-add ports; upgrade `<mj-flow-agent-editor>` to `Canvas | Split Playbook | Playbook` with searchable pickers, clickable `{{ step.output }}` mapping pills, structured loop fields, `Human` step support, and Saga rollback configuration.
+  - **`@memberjunction/ng-task-graph-editor`**: Register all 8 renderable step types; preserve ghosted untaken paths alongside forced-verdict overrides; upgrade `<mj-task-graph-debug-toolbar>` to DAG-native `Continue` / `Step Next` / `Step Wave` controls plus `X-Ray`, Blast-Radius `Impact` preview, Engine Pulse, and targeted `Step(taskID)`; add plain-English diagnostic co-pilot banners, `Tree | Before ⇄ After` payload diffs with search and Copy JSON, docked interactive replay scrubbing, and adaptive 360px embedded layout.
+  - **`@memberjunction/ng-ai-test-harness`**: Add optional `initialDebugMode` support when opening the workflow test/debug harness for an agent.
+  - **`@memberjunction/ng-dashboards` (`Workflows`)**: Upgrade the Workflows catalog with Blueprint mini-SVG topology cards, Ops Table toggle with 10-run spark-barcodes and `p50` latency, reconciled trigger summaries, `Needs Your Decision` person-step inbox, and direct `Run`/`Debug` actions; upgrade `CreateWorkflowComponent` with starter recipes, iterative AI refinement, live spatial preview before saving, and past-run `TaskGraphSpec` projection; host an in-app Workflow Studio (`<mj-flow-agent-editor>`, `<mj-agent-invocations>`, and recent workflow runs) with query-param round-tripping; and upgrade `WorkflowRunsResourceComponent` with a collapsible run rail, fixed `In Progress` and `Waiting on Person` filters, inline person-step approvals, zero-clipping debugger layout, and a synchronized execution waterfall.
+
+- Updated dependencies [4d51997]
+- Updated dependencies [c6b3913]
+- Updated dependencies [f41ea95]
+- Updated dependencies [0360f3f]
+- Updated dependencies [a87fe90]
+- Updated dependencies [3c70bf7]
+- Updated dependencies [2f41586]
+- Updated dependencies [03e803d]
+- Updated dependencies [30460b0]
+- Updated dependencies [4fe5106]
+- Updated dependencies [cd98580]
+- Updated dependencies [346cdf3]
+- Updated dependencies [916fe91]
+- Updated dependencies [d7a630c]
+- Updated dependencies [d7a630c]
+- Updated dependencies [3c2a521]
+- Updated dependencies [dfc0449]
+- Updated dependencies [1b3ae5f]
+- Updated dependencies [2122c07]
+- Updated dependencies [0711e70]
+- Updated dependencies [90174df]
+- Updated dependencies [29f6a8b]
+- Updated dependencies [c799eea]
+- Updated dependencies [a1ed57b]
+- Updated dependencies [7df9dfd]
+- Updated dependencies [4feb8ad]
+- Updated dependencies [d7a630c]
+- Updated dependencies [59afb5f]
+- Updated dependencies [1d4a3f0]
+- Updated dependencies [7690d8d]
+- Updated dependencies [9499d4b]
+- Updated dependencies [8369c1c]
+- Updated dependencies [d635ec5]
+- Updated dependencies [6e740d7]
+- Updated dependencies [5f514f2]
+- Updated dependencies [798fe51]
+- Updated dependencies [3d5adab]
+- Updated dependencies [9471265]
+- Updated dependencies [d529e66]
+- Updated dependencies [942e220]
+- Updated dependencies [df69cd5]
+- Updated dependencies [62f6560]
+- Updated dependencies [ba46ec9]
+- Updated dependencies [346795c]
+- Updated dependencies [6d26f4f]
+- Updated dependencies [a5dbc84]
+- Updated dependencies [c63e493]
+- Updated dependencies [d498eb9]
+- Updated dependencies [447f7fa]
+- Updated dependencies [96bf010]
+- Updated dependencies [b7ee801]
+- Updated dependencies [93dbc99]
+- Updated dependencies [193d979]
+- Updated dependencies [49a5866]
+- Updated dependencies [66258b1]
+- Updated dependencies [375f9f1]
+- Updated dependencies [6cd3f38]
+- Updated dependencies [be7f58e]
+- Updated dependencies [97cf34a]
+- Updated dependencies [dccf367]
+- Updated dependencies [ab9f8e8]
+  - @memberjunction/ai-core-plus@6.3.0-edge.2
+  - @memberjunction/ai-engine-base@6.3.0-edge.2
+  - @memberjunction/core-entities@6.3.0-edge.2
+  - @memberjunction/ng-composer@6.3.0-edge.2
+  - @memberjunction/ng-conversations@6.3.0-edge.2
+  - @memberjunction/ng-core-entity-forms@6.3.0-edge.2
+  - @memberjunction/core@6.3.0-edge.2
+  - @memberjunction/ng-artifacts@6.3.0-edge.2
+  - @memberjunction/ng-query-viewer@6.3.0-edge.2
+  - @memberjunction/ng-graph-view@6.3.0-edge.2
+  - @memberjunction/communication-types@6.3.0-edge.2
+  - @memberjunction/ng-base-forms@6.3.0-edge.2
+  - @memberjunction/ng-list-management@6.3.0-edge.2
+  - @memberjunction/lists-base@6.3.0-edge.2
+  - @memberjunction/graphql-dataprovider@6.3.0-edge.2
+  - @memberjunction/global@6.3.0-edge.2
+  - @memberjunction/ng-dashboard-viewer@6.3.0-edge.2
+  - @memberjunction/ng-shared@6.3.0-edge.2
+  - @memberjunction/ng-ui-components@6.3.0-edge.2
+  - @memberjunction/ng-auth-services@6.3.0-edge.2
+  - @memberjunction/ng-markdown@6.3.0-edge.2
+  - @memberjunction/feature-pipelines@6.3.0-edge.2
+  - @memberjunction/predictive-studio-core@6.3.0-edge.2
+  - @memberjunction/record-set-processor-base@6.3.0-edge.2
+  - @memberjunction/ng-ai-test-harness@6.3.0-edge.2
+  - @memberjunction/export-engine@6.3.0-edge.2
+  - @memberjunction/actions-base@6.3.0-edge.2
+  - @memberjunction/ng-flow-editor@6.3.0-edge.2
+  - @memberjunction/ng-task-graph-editor@6.3.0-edge.2
+  - @memberjunction/theme-engine@6.3.0-edge.2
+  - @memberjunction/ng-shared-generic@6.3.0-edge.2
+  - @memberjunction/ng-entity-viewer@6.3.0-edge.2
+  - @memberjunction/video-studio-core@6.3.0-edge.2
+  - @memberjunction/ng-base-application@6.3.0-edge.2
+  - @memberjunction/ng-agent-requests@6.3.0-edge.2
+  - @memberjunction/ng-agents@6.3.0-edge.2
+  - @memberjunction/ng-clustering@6.3.0-edge.2
+  - @memberjunction/ng-user-routines@6.3.0-edge.2
+  - @memberjunction/tag-engine-base@6.3.0-edge.2
+  - @memberjunction/api-keys-base@6.3.0-edge.2
+  - @memberjunction/ng-explorer-settings@6.3.0-edge.2
+  - @memberjunction/ng-testing@6.3.0-edge.2
+  - @memberjunction/ng-action-gallery@6.3.0-edge.2
+  - @memberjunction/ng-actions@6.3.0-edge.2
+  - @memberjunction/ng-archive-manager@6.3.0-edge.2
+  - @memberjunction/ng-base-types@6.3.0-edge.2
+  - @memberjunction/ng-brand-kits@6.3.0-edge.2
+  - @memberjunction/ng-code-editor@6.3.0-edge.2
+  - @memberjunction/ng-credentials@6.3.0-edge.2
+  - @memberjunction/ng-map-view@6.3.0-edge.2
+  - @memberjunction/ng-notifications@6.3.0-edge.2
+  - @memberjunction/ng-react@6.3.0-edge.2
+  - @memberjunction/ng-record-process-studio@6.3.0-edge.2
+  - @memberjunction/ng-resource-permissions@6.3.0-edge.2
+  - @memberjunction/ng-rubrics@6.3.0-edge.2
+  - @memberjunction/ng-scheduling@6.3.0-edge.2
+  - @memberjunction/ng-search@6.3.0-edge.2
+  - @memberjunction/ng-trees@6.3.0-edge.2
+  - @memberjunction/ng-versions@6.3.0-edge.2
+  - @memberjunction/credentials@6.3.0-edge.2
+  - @memberjunction/integration-engine-base@6.3.0-edge.2
+  - @memberjunction/templates-base-types@6.3.0-edge.2
+  - @memberjunction/testing-engine-base@6.3.0-edge.2
+  - @memberjunction/work-queue-base@6.3.0-edge.2
+  - @memberjunction/ng-container-directives@6.3.0-edge.2
+  - @memberjunction/ng-entity-relationship-diagram@6.3.0-edge.2
+  - @memberjunction/ng-export-service@6.3.0-edge.2
+  - @memberjunction/ng-filter-builder@6.3.0-edge.2
+  - @memberjunction/ng-media-player@6.3.0-edge.2
+  - @memberjunction/interactive-component-types@6.3.0-edge.2
+  - @memberjunction/rubrics-base@6.3.0-edge.2
+  - @memberjunction/ng-tabstrip@6.3.0-edge.2
+  - @memberjunction/ng-word-cloud@6.3.0-edge.2
+  - @memberjunction/work-queue-core@6.3.0-edge.2
+
 ## 6.3.0-edge.1
 
 ### Minor Changes
