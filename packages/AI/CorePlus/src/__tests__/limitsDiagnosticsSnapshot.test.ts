@@ -326,7 +326,7 @@ describe('limitsDiagnosticsSnapshot & 5-tier AI agent resolution', () => {
             const elapsedMs = Date.now() - t0;
 
             expect(extracted).toEqual({});
-            expect(elapsedMs).toBeLessThan(1000);
+            expect(elapsedMs).toBeLessThan(PATHOLOGICAL_INPUT_CEILING_MS);
             // At most 1 parse attempt per shared closer (3 fields x 1 = 3, never 6,000!)
             expect(parseSpy.mock.calls.length).toBeLessThanOrEqual(6);
 
