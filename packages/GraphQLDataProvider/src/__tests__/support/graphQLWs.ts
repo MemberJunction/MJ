@@ -139,7 +139,7 @@ export class FakeWsClient {
         throw new Error('FakeWsClient.iterate() is not implemented — MJ uses subscribe()');
     }
 
-    public dispose(): void {
+    public dispose(): void | Promise<void> {
         this.Disposed = true;
     }
 
