@@ -1,4 +1,4 @@
-import { EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunViewParams, UserInfo, WellKnownUserSource } from '@memberjunction/core';
 import { BaseSingleton, EscapeSQLString, GetGlobalObjectStore, IndexByUUID, IsValidUUID, MJGlobal, NormalizeUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -189,6 +189,26 @@ interface CollectionVersionRowProjection {
     ArtifactVersionID?: string;
     CollectionID?: string;
 }
+
+interface PendingDefaultEntityFallbackItem {
+    normId: string;
+    id: string;
+    Artifact: ArtifactRowProjection;
+    EntityInfo: EntityInfo;
+    DelegateEntityId: string;
+    DelegateRecordId: string;
+    CanUpdate: boolean;
+    CanDelete: boolean;
+    IsOwner: boolean;
+}
+
+interface ParsedFallbackRecordKey {
+    Item: PendingDefaultEntityFallbackItem;
+    Key: CompositeKey;
+    CanonicalKey: string;
+}
+
+type FallbackRecordRow = Record<string, string | number | boolean | Date | null | undefined>;
 
 const MAX_DELEGATE_DEPTH = 8;
 const MAX_COLLECTION_ANCESTRY_DEPTH = 16;
@@ -654,6 +674,372 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
         return results;
     }
 
+    /**
+     * Evaluates default entity-level Read/Update/Delete permission fallback for an artifact
+     * whose `DelegateEntityID` has no custom {@link IArtifactPermissionDelegate} registered.
+     *
+     * Fails closed whenever `provider`, `contextUser`, `delegateEntityId`, or `delegateRecordId`
+     * is missing/invalid, when `delegateEntityId` is unknown in metadata, when `contextUser`
+     * lacks entity-level `CanRead` permission, or when the target host record is inaccessible
+     * under `contextUser`'s row-level security scope.
+     */
+    public async EvaluateDefaultEntityFallback(
+        provider: IMetadataProvider | null | undefined,
+        delegateEntityId: string | null | undefined,
+        delegateRecordId: string | null | undefined,
+        contextUser: UserInfo | null | undefined,
+        artifactId: string = '',
+        isOwner: boolean = false
+    ): Promise<ResolvedArtifactPermissions> {
+        const trimmedArtifactId = (artifactId ?? '').trim();
+        const trimmedEntityId = (delegateEntityId ?? '').trim();
+        const trimmedRecordId = (delegateRecordId ?? '').trim();
+        if (!contextUser || !IsValidUUID(contextUser.ID)) {
+            return this.buildDenied(trimmedArtifactId, 'Authenticated user context with a valid UUID is required.');
+        }
+        if (contextUser.IsMagicLinkAnonymous || contextUser.MagicLinkScope) {
+            return this.buildDenied(
+                trimmedArtifactId,
+                'Scope-limited or anonymous magic-link principals cannot access governed artifact permissions.'
+            );
+        }
+        const activeProvider = provider ?? Metadata.Provider;
+        if (!activeProvider || !trimmedEntityId || !trimmedRecordId) {
+            return this.buildDenied(trimmedArtifactId, 'Provider, DelegateEntityID, and DelegateRecordID are required.');
+        }
+        const entitiesById: UUIDMap<EntityInfo> | null =
+            typeof activeProvider.EntityByID !== 'function' && Array.isArray(activeProvider.Entities)
+                ? IndexByUUID(activeProvider.Entities, (e) => e.ID)
+                : null;
+        const entityInfo = this.lookupEntityInfo(activeProvider, trimmedEntityId, entitiesById);
+        const artifactStub: ArtifactRowProjection = {
+            ID: trimmedArtifactId,
+            UserID: isOwner ? contextUser.ID : '',
+            DelegateEntityID: trimmedEntityId,
+            DelegateRecordID: trimmedRecordId
+        };
+        const precheck = this.precheckDefaultEntityFallback(
+            artifactStub,
+            entityInfo,
+            trimmedEntityId,
+            trimmedRecordId,
+            contextUser,
+            isOwner
+        );
+        if (precheck.Kind === 'denied') {
+            return precheck.Result;
+        }
+        const resolvedByNorm = new Map<string, ResolvedArtifactPermissions>();
+        const key = trimmedArtifactId ? NormalizeUUID(trimmedArtifactId) : 'default-fallback-single';
+        await this.resolveDefaultEntityFallbackBatch(
+            activeProvider,
+            [
+                {
+                    normId: key,
+                    id: trimmedArtifactId,
+                    Artifact: artifactStub,
+                    EntityInfo: precheck.EntityInfo,
+                    DelegateEntityId: trimmedEntityId,
+                    DelegateRecordId: trimmedRecordId,
+                    CanUpdate: precheck.CanUpdate,
+                    CanDelete: precheck.CanDelete,
+                    IsOwner: isOwner
+                }
+            ],
+            contextUser,
+            resolvedByNorm,
+            false
+        );
+        return (
+            resolvedByNorm.get(key) ??
+            this.buildDenied(trimmedArtifactId, `Host record '${trimmedRecordId}' is inaccessible.`)
+        );
+    }
+
+    private precheckDefaultEntityFallback(
+        artifact: ArtifactRowProjection,
+        entityInfo: EntityInfo | undefined,
+        delegateEntityId: string,
+        delegateRecordId: string,
+        user: UserInfo,
+        isOwner: boolean
+    ):
+        | { Kind: 'denied'; Result: ResolvedArtifactPermissions; LogMessage: string }
+        | { Kind: 'check-record'; EntityInfo: EntityInfo; CanUpdate: boolean; CanDelete: boolean; IsOwner: boolean } {
+        if (!entityInfo) {
+            const reason = `No permission delegate is registered and delegating entity '${delegateEntityId}' was not found in metadata.`;
+            return {
+                Kind: 'denied',
+                Result: this.buildDenied(artifact.ID, reason),
+                LogMessage: `${reason} (artifact '${artifact.ID}', record '${delegateRecordId}').`
+            };
+        }
+        const entityLabel = entityInfo.Name || delegateEntityId;
+        if (typeof entityInfo.GetUserPermisions !== 'function') {
+            const reason = `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}) and entity permission metadata is unavailable.`;
+            return {
+                Kind: 'denied',
+                Result: this.buildDenied(artifact.ID, reason),
+                LogMessage: `${reason} (artifact '${artifact.ID}').`
+            };
+        }
+        const entityPerms = entityInfo.GetUserPermisions(user);
+        if (!entityPerms?.CanRead) {
+            const reason = `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}) and user lacks entity-level Read permission.`;
+            return {
+                Kind: 'denied',
+                Result: this.buildDenied(artifact.ID, reason),
+                LogMessage: `${reason} (artifact '${artifact.ID}', user '${user.ID}').`
+            };
+        }
+        const primaryKeys = Array.isArray(entityInfo.PrimaryKeys) ? entityInfo.PrimaryKeys : [];
+        if (primaryKeys.length === 0) {
+            const reason = `No permission delegate is registered for delegating entity '${entityLabel}' (${delegateRecordId}) and entity primary key metadata is unavailable.`;
+            return {
+                Kind: 'denied',
+                Result: this.buildDenied(artifact.ID, reason),
+                LogMessage: `${reason} (artifact '${artifact.ID}').`
+            };
+        }
+        return {
+            Kind: 'check-record',
+            EntityInfo: entityInfo,
+            CanUpdate: Boolean(entityPerms.CanUpdate),
+            CanDelete: Boolean(entityPerms.CanDelete),
+            IsOwner: isOwner
+        };
+    }
+
+    private async resolveDefaultEntityFallbackBatch(
+        provider: IMetadataProvider,
+        items: ReadonlyArray<PendingDefaultEntityFallbackItem>,
+        user: UserInfo,
+        resolvedByNorm: Map<string, ResolvedArtifactPermissions>,
+        strictThrowOnQueryError: boolean
+    ): Promise<void> {
+        const grouped = new Map<string, { EntityInfo: EntityInfo; Items: PendingDefaultEntityFallbackItem[] }>();
+        for (const item of items) {
+            const normEntId = NormalizeUUID(item.DelegateEntityId);
+            let group = grouped.get(normEntId);
+            if (!group) {
+                group = { EntityInfo: item.EntityInfo, Items: [] };
+                grouped.set(normEntId, group);
+            }
+            group.Items.push(item);
+        }
+        await Promise.all(
+            Array.from(grouped.values()).map((group) =>
+                this.resolveFallbackEntityGroup(
+                    provider,
+                    group.EntityInfo,
+                    group.Items,
+                    user,
+                    resolvedByNorm,
+                    strictThrowOnQueryError
+                )
+            )
+        );
+    }
+
+    private async resolveFallbackEntityGroup(
+        provider: IMetadataProvider,
+        entityInfo: EntityInfo,
+        items: ReadonlyArray<PendingDefaultEntityFallbackItem>,
+        user: UserInfo,
+        resolvedByNorm: Map<string, ResolvedArtifactPermissions>,
+        strictThrowOnQueryError: boolean
+    ): Promise<void> {
+        const parsedItems: ParsedFallbackRecordKey[] = [];
+        for (const item of items) {
+            const parsed = this.parseDelegateRecordKey(entityInfo, item);
+            if (!parsed) {
+                resolvedByNorm.set(
+                    item.normId,
+                    this.buildDenied(
+                        item.Artifact.ID,
+                        `Invalid DelegateRecordID '${item.DelegateRecordId}' for delegating entity '${entityInfo.Name}'.`
+                    )
+                );
+                continue;
+            }
+            parsedItems.push(parsed);
+        }
+        if (parsedItems.length === 0) {
+            return;
+        }
+
+        const queries = this.buildFallbackRecordQueries(entityInfo, parsedItems);
+        const accessibleKeys = await this.executeFallbackRecordQueries(
+            provider,
+            entityInfo,
+            queries,
+            user,
+            strictThrowOnQueryError
+        );
+        if (accessibleKeys === null) {
+            for (const entry of parsedItems) {
+                resolvedByNorm.set(
+                    entry.Item.normId,
+                    this.buildDenied(
+                        entry.Item.Artifact.ID,
+                        `Failed verifying host record '${entry.Item.DelegateRecordId}' on delegating entity '${entityInfo.Name}'.`
+                    )
+                );
+            }
+            return;
+        }
+
+        for (const entry of parsedItems) {
+            const { Item: item, CanonicalKey: canonicalKey } = entry;
+            if (!accessibleKeys.has(canonicalKey)) {
+                resolvedByNorm.set(
+                    item.normId,
+                    this.buildDenied(
+                        item.Artifact.ID,
+                        `No permission delegate is registered for delegating entity '${entityInfo.Name}' (${item.DelegateRecordId}) and host record is inaccessible.`
+                    )
+                );
+                continue;
+            }
+            resolvedByNorm.set(item.normId, {
+                ArtifactID: item.Artifact.ID,
+                CanRead: true,
+                CanEdit: item.CanUpdate,
+                CanDelete: item.CanDelete,
+                CanShare: item.CanUpdate || item.IsOwner,
+                Source: 'Delegate',
+                Reason: `Permissions resolved via default entity-level fallback on '${entityInfo.Name}' (${item.DelegateRecordId}).`
+            });
+        }
+    }
+
+    private parseDelegateRecordKey(
+        entityInfo: EntityInfo,
+        item: PendingDefaultEntityFallbackItem
+    ): ParsedFallbackRecordKey | null {
+        try {
+            const key = CompositeKey.FromRecordID(entityInfo, item.DelegateRecordId);
+            if (!key.KeyValuePairs || key.KeyValuePairs.length !== entityInfo.PrimaryKeys.length) {
+                return null;
+            }
+            const canonicalKey = this.canonicalizeCompositeKey(entityInfo, key);
+            if (!canonicalKey) {
+                return null;
+            }
+            return { Item: item, Key: key, CanonicalKey: canonicalKey };
+        } catch {
+            return null;
+        }
+    }
+
+    private canonicalizeCompositeKey(entityInfo: EntityInfo, key: CompositeKey): string | null {
+        const parts: string[] = [];
+        for (const pk of entityInfo.PrimaryKeys) {
+            const pair = key.KeyValuePairs.find(
+                (kvp) => (kvp.FieldName ?? '').trim().toLowerCase() === pk.Name.trim().toLowerCase()
+            );
+            if (!pair || pair.Value === null || pair.Value === undefined) {
+                return null;
+            }
+            const rawStr = String(pair.Value).trim();
+            if (!rawStr) {
+                return null;
+            }
+            const normVal = IsValidUUID(rawStr) ? NormalizeUUID(rawStr) : rawStr.toLowerCase();
+            parts.push(`${pk.Name.trim().toLowerCase()}=${normVal}`);
+        }
+        return parts.join('|');
+    }
+
+    private buildFallbackRecordQueries(
+        entityInfo: EntityInfo,
+        parsedItems: ReadonlyArray<ParsedFallbackRecordKey>
+    ): RunViewParams[] {
+        const pkFields = entityInfo.PrimaryKeys.map((pk) => pk.Name);
+        const dedupedByCanonical = new Map<string, ParsedFallbackRecordKey>();
+        for (const entry of parsedItems) {
+            if (!dedupedByCanonical.has(entry.CanonicalKey)) {
+                dedupedByCanonical.set(entry.CanonicalKey, entry);
+            }
+        }
+        const uniqueEntries = Array.from(dedupedByCanonical.values());
+        const chunks = chunkArray(uniqueEntries, IN_CLAUSE_CHUNK_SIZE);
+
+        return chunks.map((chunk) => {
+            let extraFilter: string;
+            if (entityInfo.PrimaryKeys.length === 1) {
+                const pkColName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded by PrimaryKeys.length === 1
+                const rawVals = chunk.map((entry) => String(entry.Key.KeyValuePairs[0].Value));
+                extraFilter = buildEqOrInFilter(pkColName, rawVals);
+            } else {
+                extraFilter = chunk.map((entry) => `(${entry.Key.ToWhereClause()})`).join(' OR ');
+            }
+            const params: RunViewParams = {
+                EntityName: entityInfo.Name,
+                ExtraFilter: extraFilter,
+                Fields: pkFields,
+                IgnoreMaxRows: true,
+                SkipTotalRowCount: true,
+                BypassCache: true,
+                ResultType: 'simple'
+            };
+            ArtifactPermissionEngine.MarkPermissionResolutionRecursionGuard(params);
+            return params;
+        });
+    }
+
+    private async executeFallbackRecordQueries(
+        provider: IMetadataProvider,
+        entityInfo: EntityInfo,
+        queries: ReadonlyArray<RunViewParams>,
+        user: UserInfo,
+        strictThrowOnQueryError: boolean
+    ): Promise<Set<string> | null> {
+        const accessible = new Set<string>();
+        const rv = RunView.FromMetadataProvider(provider);
+        try {
+            const responses =
+                queries.length === 1
+                    ? [await rv.RunView<FallbackRecordRow>(queries[0], user)]
+                    : canUseRunViews(provider, rv)
+                        ? await rv.RunViews(Array.from(queries), user)
+                        : await Promise.all(queries.map((q) => rv.RunView<FallbackRecordRow>(q, user)));
+
+            for (const res of responses) {
+                if (!res?.Success) {
+                    const errMsg = res?.ErrorMessage || `Failed verifying host records on '${entityInfo.Name}'.`;
+                    LogError(`ArtifactPermissionEngine.executeFallbackRecordQueries error: ${errMsg}`);
+                    if (strictThrowOnQueryError) {
+                        throw new Error(errMsg);
+                    }
+                    return null;
+                }
+                const rows: ReadonlyArray<FallbackRecordRow> = Array.isArray(res.Results) ? res.Results : [];
+                for (const row of rows) {
+                    if (!row || typeof row !== 'object') {
+                        continue;
+                    }
+                    const rowKey = CompositeKey.FromEntityRecord(entityInfo, row);
+                    const canonical = this.canonicalizeCompositeKey(entityInfo, rowKey);
+                    if (canonical) {
+                        accessible.add(canonical);
+                    }
+                }
+            }
+            return accessible;
+        } catch (err) {
+            LogError(
+                `ArtifactPermissionEngine.executeFallbackRecordQueries error for '${entityInfo.Name}' (user '${user.ID}'): ${
+                    err instanceof Error ? err.message : String(err)
+                }`
+            );
+            if (strictThrowOnQueryError) {
+                throw err;
+            }
+            return null;
+        }
+    }
+
     private lookupEntityInfo(
         provider: IMetadataProvider,
         entityId: string,
@@ -711,6 +1097,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
 
             const artifactsInWave = await this.loadArtifactRowsBatch(provider, waveItems, user, strictThrowOnQueryError);
             const nonDelegatedNonOwners: Array<{ normId: string; id: string; Artifact: ArtifactRowProjection }> = [];
+            const defaultFallbackItems: PendingDefaultEntityFallbackItem[] = [];
             const nextWaveParentsByNorm = new Map<string, { normId: string; id: string }>();
 
             for (const w of waveItems) {
@@ -721,22 +1108,46 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 }
 
                 const isOwner = Boolean(artifact.UserID && UUIDsEqual(artifact.UserID, user.ID));
-                if (artifact.DelegateEntityID && artifact.DelegateRecordID) {
-                    const entityInfo = this.lookupEntityInfo(provider, artifact.DelegateEntityID, entitiesById);
-                    const delegateEntityName = entityInfo?.Name ?? '';
-                    const delegate = this.resolveDelegateInstance(artifact.DelegateEntityID, delegateEntityName);
-                    if (!delegate) {
-                        const entityLabel = delegateEntityName || artifact.DelegateEntityID;
-                        LogError(
-                            `No permission delegate is registered for delegating entity '${entityLabel}' (${artifact.DelegateRecordID}) on artifact '${artifact.ID}'.`
-                        );
+                if (artifact.DelegateEntityID) {
+                    const delegateRecordId = (artifact.DelegateRecordID ?? '').trim();
+                    if (!delegateRecordId) {
                         resolvedByNorm.set(
                             w.normId,
                             this.buildDenied(
                                 artifact.ID,
-                                `No permission delegate is registered for delegating entity '${entityLabel}' (${artifact.DelegateRecordID}).`
+                                `Artifact '${artifact.ID}' specifies DelegateEntityID '${artifact.DelegateEntityID}' without a DelegateRecordID.`
                             )
                         );
+                        continue;
+                    }
+                    const entityInfo = this.lookupEntityInfo(provider, artifact.DelegateEntityID, entitiesById);
+                    const delegateEntityName = entityInfo?.Name ?? '';
+                    const delegate = this.resolveDelegateInstance(artifact.DelegateEntityID, delegateEntityName);
+                    if (!delegate) {
+                        const precheck = this.precheckDefaultEntityFallback(
+                            artifact,
+                            entityInfo,
+                            artifact.DelegateEntityID,
+                            delegateRecordId,
+                            user,
+                            isOwner
+                        );
+                        if (precheck.Kind === 'denied') {
+                            LogError(precheck.LogMessage);
+                            resolvedByNorm.set(w.normId, precheck.Result);
+                        } else {
+                            defaultFallbackItems.push({
+                                normId: w.normId,
+                                id: w.id,
+                                Artifact: artifact,
+                                EntityInfo: precheck.EntityInfo,
+                                DelegateEntityId: artifact.DelegateEntityID,
+                                DelegateRecordId: delegateRecordId,
+                                CanUpdate: precheck.CanUpdate,
+                                CanDelete: precheck.CanDelete,
+                                IsOwner: isOwner
+                            });
+                        }
                         continue;
                     }
                     if (delegate instanceof ParentArtifactPermissionDelegate) {
@@ -744,15 +1155,14 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                             Artifact: artifact,
                             DelegateEntityName: delegateEntityName,
                             DelegateEntityId: artifact.DelegateEntityID,
-                            DelegateRecordId: artifact.DelegateRecordID
+                            DelegateRecordId: delegateRecordId
                         });
-                        const parentTrimmed = artifact.DelegateRecordID.trim();
-                        if (wave < maxExtraWaves && IsValidUUID(parentTrimmed)) {
-                            const parentNorm = NormalizeUUID(parentTrimmed);
+                        if (wave < maxExtraWaves && IsValidUUID(delegateRecordId)) {
+                            const parentNorm = NormalizeUUID(delegateRecordId);
                             const parentMemoKey = `${parentNorm}::${normUserId}`;
                             const hasMemoHit = !strictThrowOnQueryError && memo.has(parentMemoKey);
                             if (!loadedNormIds.has(parentNorm) && !visited.has(parentNorm) && !hasMemoHit) {
-                                nextWaveParentsByNorm.set(parentNorm, { normId: parentNorm, id: parentTrimmed });
+                                nextWaveParentsByNorm.set(parentNorm, { normId: parentNorm, id: delegateRecordId });
                             }
                         }
                     } else {
@@ -763,7 +1173,7 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                             Delegate: delegate,
                             DelegateEntityName: delegateEntityName,
                             DelegateEntityId: artifact.DelegateEntityID,
-                            DelegateRecordId: artifact.DelegateRecordID
+                            DelegateRecordId: delegateRecordId
                         });
                     }
                 } else if (isOwner) {
@@ -771,6 +1181,16 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
                 } else {
                     nonDelegatedNonOwners.push({ normId: w.normId, id: w.id, Artifact: artifact });
                 }
+            }
+
+            if (defaultFallbackItems.length > 0) {
+                await this.resolveDefaultEntityFallbackBatch(
+                    provider,
+                    defaultFallbackItems,
+                    user,
+                    resolvedByNorm,
+                    strictThrowOnQueryError
+                );
             }
 
             if (nonDelegatedNonOwners.length > 0) {
@@ -1801,6 +2221,13 @@ export class ArtifactPermissionEngine extends BaseSingleton<ArtifactPermissionEn
             }
             if (entityName.trim().toLowerCase() === 'mj: artifacts') {
                 return new ParentArtifactPermissionDelegate();
+            }
+            const registration = MJGlobal.Instance.ClassFactory.GetRegistration(
+                BaseArtifactPermissionDelegate,
+                entityName
+            );
+            if (!registration) {
+                return null;
             }
             const registered = MJGlobal.Instance.ClassFactory.CreateInstance<BaseArtifactPermissionDelegate>(
                 BaseArtifactPermissionDelegate,

@@ -95,7 +95,7 @@ Use the core polymorphic junction entity **`MJ: Record Artifacts`** (`[__mj].[Re
 | `PinnedArtifactVersionID` | `uniqueidentifier` | `NULL` | Optional FK → `[__mj].[ArtifactVersion].ID` pinning a specific version snapshot |
 | `Role` | `nvarchar(100)` | `NOT NULL DEFAULT 'General'` | Semantic attachment role; `NOT NULL` guarantees identical uniqueness semantics across SQL Server and PostgreSQL |
 | `Sequence` | `int` | `NOT NULL DEFAULT 0` | Explicit display ordering within `(EntityID, RecordID)` |
-| `ContextDescription` | `nvarchar(500)` | `NULL` | Short human-readable note explaining why this artifact is attached to the record |
+| `ContextDescription` | `nvarchar(max)` | `NULL` | Human-readable note explaining why this artifact is attached to the record |
 | `LinkedByUserID` | `uniqueidentifier` | `NULL` | Optional FK → `[__mj].[User].ID` recording who created the link |
 | `__mj_CreatedAt` / `__mj_UpdatedAt` | `datetimeoffset` | CodeGen-managed | Standard MJ audit timestamps |
 

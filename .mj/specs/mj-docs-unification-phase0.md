@@ -1,6 +1,6 @@
 # MJ Docs Unification — Phase 0 Living Specification
 
-> **Status:** Active (Slice 1 / P0.0 landed; Slices 2–4 pending)
+> **Status:** Active (Slice 1 / P0.0 and Slice 2 / P0.1 landed; Slices 3–4 pending)
 > **Epic Task ID:** `4F2FB67B-5283-4E05-A435-0C1EF05A5A3C`
 > **Approved FactoryPlan:** `B1404C16-5247-4AC3-A33B-E857008FF5C3` (v2, `CriteriaHash: 9536aa83511057af8b828a19fc4104fc6cecebcdbe5fc56dfa647339199dceca`)
 > **Repository & Branches:** `MemberJunction/MJ` · Target: `next` · Epic Branch: `factory/4f2fb67b-mj-docs-unification-phase0`
@@ -96,7 +96,7 @@ Inspected under `.github/workflows/`:
 
 ### 3.1 Migration Folder & Major-Version Alignment Note
 
-`AGENTS.md` requires the `migrations/v*/` directory to match the major version in the migration filename. On `next` at Slice 1 (`c1d4a4c4da`), the active release line is **`v6.3.x`** (`migrations/v6/V202611242026__v6.3.x__Metadata_Sync.sql` and `migrations-pg/v6/V202611242026__v6.3.x__Metadata_Sync.pg.sql`). Slice 2 MUST place the additive `v6.3.x` SQL Server migration in `migrations/v6/` and its deterministically converted PostgreSQL counterpart in `migrations-pg/v6/` (never misfiling a `v6.3.x` migration in `migrations/v5/`), keeping `migrations/v6` ↔ `migrations-pg/v6` paired.
+`AGENTS.md` requires the `migrations/v*/` directory to match the major version in the migration filename. On `next` at Slice 1 (`c1d4a4c4da`), the active release line is **`v6.3.x`** (`migrations/v6/V202611242026__v6.3.x__Metadata_Sync.sql` and `migrations-pg/v6/V202611242026__v6.3.x__Metadata_Sync.pg.sql`). Slice 2 landed the additive `v6.3.x` SQL Server migration at `migrations/v6/V202611261235__v6.3.x__RecordArtifact_Schema.sql` and its deterministically converted and natively rebaked PostgreSQL counterpart at `migrations-pg/v6/V202611261235__v6.3.x__RecordArtifact_Schema.pg.sql`, keeping `migrations/v6` ↔ `migrations-pg/v6` paired.
 
 ### 3.2 `[__mj].[RecordArtifact]` Table Definition
 
@@ -108,7 +108,7 @@ Inspected under `.github/workflows/`:
   - `PinnedArtifactVersionID uniqueidentifier NULL CONSTRAINT FK_RecordArtifact_PinnedArtifactVersion REFERENCES [${flyway:defaultSchema}].[ArtifactVersion] (ID)`
   - `Role nvarchar(100) NOT NULL CONSTRAINT DF_RecordArtifact_Role DEFAULT N'General'`
   - `Sequence int NOT NULL CONSTRAINT DF_RecordArtifact_Sequence DEFAULT (0)`
-  - `ContextDescription nvarchar(500) NULL`
+  - `ContextDescription nvarchar(max) NULL`
   - `LinkedByUserID uniqueidentifier NULL CONSTRAINT FK_RecordArtifact_LinkedByUser REFERENCES [${flyway:defaultSchema}].[User] (ID)`
 - **Constraints & Indexes**:
   - `CONSTRAINT UQ_RecordArtifact_Record_Artifact_Role UNIQUE (EntityID, RecordID, ArtifactID, Role)` — includes `EntityID` and keeps `Role NOT NULL DEFAULT 'General'` for identical SQL Server & PostgreSQL uniqueness semantics.
