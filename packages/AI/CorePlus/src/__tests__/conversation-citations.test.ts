@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { ParseMessageCitations } from '../conversation-citations';
+import { describe, it, expect, beforeEach } from 'vitest';
+import { ConversationEngine, type MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { GetCachedMessageCitations, ParseMessageCitations } from '../conversation-citations';
 import { ConversationUtility } from '../conversation-utility';
 
 describe('ParseMessageCitations', () => {
@@ -186,5 +187,30 @@ describe('ConversationUtility.ToPlainText with wiki citations', () => {
         expect(plain).toBe(
             'Ask @Sage about Acme Corp and Orders, using syntax `[[Entity|ID|Label]]`.'
         );
+    });
+});
+
+describe('GetCachedMessageCitations', () => {
+    beforeEach(() => {
+        ConversationEngine.Instance.ClearCache();
+    });
+
+    it('returns the exact memoized ParsedCitationsResult reference for unchanged detail + text and recomputes on change', () => {
+        const detail = {
+            ID: '11111111-1111-4111-8111-111111111111',
+            ConversationID: '22222222-2222-4222-8222-222222222222',
+        } as MJConversationDetailEntity;
+        const text = 'Check [[Contacts|c-1|Acme Corp]] for details.';
+
+        const first = GetCachedMessageCitations(detail, text);
+        const second = GetCachedMessageCitations(detail, text);
+
+        expect(second).toBe(first);
+        expect(first.Citations).toHaveLength(1);
+        expect(first.Citations[0].DisplayName).toBe('Acme Corp');
+
+        const updated = GetCachedMessageCitations(detail, 'Check [[Contacts|c-2|Globex]] for details.');
+        expect(updated).not.toBe(first);
+        expect(updated.Citations[0].DisplayName).toBe('Globex');
     });
 });

@@ -1,10 +1,12 @@
-import { describe, it, expect, vi } from 'vitest';
+import { Component } from '@angular/core';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { CompositeKey, EntityInfo, IMetadataProvider } from '@memberjunction/core';
-import type { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEngine, type MJConversationDetailEntity } from '@memberjunction/core-entities';
 import type { MessageCitation } from '@memberjunction/ai-core-plus';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { CitedSourcesBarComponent } from './cited-sources-bar.component';
 import { MessageItemComponent } from './message-item.component';
+import type { MJChatCitationTransform } from '../slots/slot-interfaces';
 
 function buildProvider(entities: Record<string, { icon?: string; primaryKeys: string[] }>): IMetadataProvider {
   return {
@@ -95,26 +97,86 @@ describe('CitedSourcesBarComponent (DOM)', () => {
     expect(el.querySelectorAll('.cited-source-pill')).toHaveLength(3);
     expect(el.querySelector('.cited-sources-toggle')).toBeNull();
   });
+
+  it('supports custom PillTemplate (mjChatSlot="citedSourcePill") while preserving overflow toggle', () => {
+    @Component({
+      standalone: true,
+      imports: [CitedSourcesBarComponent],
+      template: `
+        <ng-template #customPill let-citation let-icon="icon" let-open="open">
+          <button type="button" class="custom-source-pill" (click)="open($event)">
+            <i [class]="icon"></i>
+            <span>{{ citation.DisplayName }}</span>
+          </button>
+        </ng-template>
+        <mj-cited-sources-bar
+          [Provider]="Provider"
+          [Citations]="Citations"
+          [PillTemplate]="customPill"
+          (CitationClicked)="OnClicked($event)">
+        </mj-cited-sources-bar>
+      `,
+    })
+    class PillTemplateHostComponent {
+      public Provider = provider;
+      public Citations = makeCitations(5);
+      public Clicked: MessageCitation[] = [];
+      public OnClicked(c: MessageCitation): void {
+        this.Clicked.push(c);
+      }
+    }
+
+    const fixture = renderComponentFixture(PillTemplateHostComponent);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelectorAll('.cited-source-pill')).toHaveLength(0);
+    expect(el.querySelectorAll('.custom-source-pill')).toHaveLength(4);
+    expect(el.querySelector('.cited-sources-toggle')?.textContent?.trim()).toBe('+1 more');
+
+    const firstCustomPill = el.querySelector('.custom-source-pill') as HTMLButtonElement;
+    firstCustomPill.click();
+    expect(fixture.componentInstance.Clicked).toHaveLength(1);
+    expect(fixture.componentInstance.Clicked[0].DisplayName).toBe('Source Item 1');
+  });
 });
 
-describe('MessageItemComponent — inline [[Entity|ID|Label]] citation chips & keyboard activation', () => {
+describe('MessageItemComponent — inline [[Entity|ID|Label]] citation chips, customization hooks & WeakMap cache', () => {
   const provider = buildProvider({
     'MJ: Tasks': { icon: 'fa-solid fa-list-check', primaryKeys: ['ID'] },
     'Space Members': { icon: 'fa-solid fa-users', primaryKeys: ['SpaceID', 'UserID'] },
     LegacyItems: { icon: '', primaryKeys: ['LegacyCode'] },
   });
 
-  function makeMessageItem(messageText: string): {
+  beforeEach(() => {
+    ConversationEngine.Instance.ClearCache();
+  });
+
+  function makeMessageItem(
+    messageText: string,
+    overrides?: Partial<{
+      ShowCitedSources: boolean;
+      EnableInlineCitations: boolean;
+      CitationTransform: MJChatCitationTransform;
+      OpenLinksInNewTab: boolean;
+    }>
+  ): {
     item: MessageItemComponent;
     opened: Array<{ entityName: string; compositeKey: CompositeKey }>;
+    artifactsOpened: Array<{ artifactId: string; versionId?: string }>;
   } {
     const item = Object.create(MessageItemComponent.prototype) as MessageItemComponent;
     const opened: Array<{ entityName: string; compositeKey: CompositeKey }> = [];
+    const artifactsOpened: Array<{ artifactId: string; versionId?: string }> = [];
     Object.assign(item as unknown as Record<string, unknown>, {
       Provider: provider,
-      ShowCitedSources: true,
+      ShowCitedSources: overrides?.ShowCitedSources ?? true,
+      EnableInlineCitations: overrides?.EnableInlineCitations ?? true,
+      CitationTransform: overrides?.CitationTransform,
+      OpenLinksInNewTab: overrides?.OpenLinksInNewTab ?? true,
       message: {
         ID: 'msg-1',
+        ConversationID: 'conv-1',
         Role: 'AI',
         Status: 'Complete',
         Message: messageText,
@@ -130,9 +192,13 @@ describe('MessageItemComponent — inline [[Entity|ID|Label]] citation chips & k
       OpenEntityRecord: {
         emit: (payload: { entityName: string; compositeKey: CompositeKey }) => opened.push(payload),
       },
+      ArtifactClicked: {
+        emit: (payload: { artifactId: string; versionId?: string }) => artifactsOpened.push(payload),
+      },
       DiagnosticRequested: { emit: vi.fn() },
+      OpenCitationBound: (citation: MessageCitation) => item.OnCitedSourceClicked(citation),
     });
-    return { item, opened };
+    return { item, opened, artifactsOpened };
   }
 
   it('transforms [[EntityName|RecordID|DisplayName]] into clickable focusable .mention-badge.record.citation-chip HTML and caches CitedSources', () => {
@@ -212,5 +278,121 @@ describe('MessageItemComponent — inline [[Entity|ID|Label]] citation chips & k
     expect(opened[0].compositeKey.KeyValuePairs).toEqual([
       { FieldName: 'LegacyCode', Value: 'CODE-42' },
     ]);
+  });
+
+  it('respects EnableInlineCitations=false without stripping CitedSources and recomputes when toggled back on', () => {
+    const { item } = makeMessageItem('Review [[MJ: Tasks|task-101|Fix Auth Race]] today.', {
+      EnableInlineCitations: false,
+    });
+
+    const disabledHtml = (item as unknown as { computeDisplayMessage: () => string }).computeDisplayMessage();
+    expect(disabledHtml).not.toContain('citation-chip');
+    expect(disabledHtml).toContain('[[MJ: Tasks|task-101|Fix Auth Race]]');
+    // Footer citations are still available independently of inline chip rendering
+    expect(item.CitedSources).toHaveLength(1);
+    expect(item.CitedSources[0].DisplayName).toBe('Fix Auth Race');
+
+    // Re-enabling invalidates cached display HTML immediately
+    item.EnableInlineCitations = true;
+    const enabledHtml = (item as unknown as { computeDisplayMessage: () => string }).computeDisplayMessage();
+    expect(enabledHtml).toContain('class="mention-badge record citation-chip"');
+  });
+
+  it('applies CitationTransform to filter, relabel, and append custom URL/artifact citations and routes clicks', () => {
+    const transform: MJChatCitationTransform = (citations, msg) => [
+      ...citations.map((c) => ({ ...c, DisplayName: `${c.DisplayName} (${msg.ID})` })),
+      {
+        Index: citations.length + 1,
+        Kind: 'artifact',
+        ArtifactID: 'art-77',
+        DisplayName: 'Q4 Summary Deck',
+        RawToken: 'artifact:art-77',
+      },
+      {
+        Index: citations.length + 2,
+        Kind: 'url',
+        Url: 'https://docs.memberjunction.org/citations',
+        DisplayName: 'MJ Docs',
+        RawToken: 'https://docs.memberjunction.org/citations',
+      },
+    ];
+
+    const { item, artifactsOpened } = makeMessageItem('Check [[MJ: Tasks|task-101|Fix Auth Race]].', {
+      CitationTransform: transform,
+    });
+
+    const sources = item.CitedSources;
+    expect(sources).toHaveLength(3);
+    expect(sources[0].DisplayName).toBe('Fix Auth Race (msg-1)');
+    expect(sources[1].Kind).toBe('artifact');
+    expect(sources[2].Kind).toBe('url');
+
+    // Artifact citation click emits ArtifactClicked
+    item.OnCitedSourceClicked(sources[1]);
+    expect(artifactsOpened).toEqual([{ artifactId: 'art-77' }]);
+
+    // External HTTPS URL opens safely in a new tab; javascript: scheme is blocked
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+    try {
+      item.OnCitedSourceClicked(sources[2]);
+      expect(openSpy).toHaveBeenCalledWith(
+        'https://docs.memberjunction.org/citations',
+        '_blank',
+        'noopener,noreferrer'
+      );
+
+      item.OnCitedSourceClicked({
+        Index: 4,
+        Kind: 'url',
+        Url: 'javascript:alert(1)',
+        DisplayName: 'Bad Link',
+        RawToken: 'javascript:alert(1)',
+      });
+      expect(openSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      openSpy.mockRestore();
+    }
+  });
+
+  it('exposes strongly-typed GetCitedSourcesTemplateContext (mjChatSlot="citedSources") with working openCitation callback and respects ShowCitedSources=false', () => {
+    const { item, opened } = makeMessageItem('See [[MJ: Tasks|task-101|Fix Auth Race]].', {
+      ShowCitedSources: false,
+    });
+
+    expect(item.ShowCitedSources).toBe(false);
+    const ctx = item.GetCitedSourcesTemplateContext();
+    expect(ctx.$implicit).toBe(ctx.citations);
+    expect(ctx.citations).toHaveLength(1);
+    expect(ctx.message.ID).toBe('msg-1');
+
+    ctx.openCitation(ctx.citations[0]);
+    expect(opened).toHaveLength(1);
+    expect(opened[0].entityName).toBe('MJ: Tasks');
+  });
+
+  it('hits ConversationEngine WeakMap citation cache across repeated parses and component instances without re-parsing', () => {
+    const sharedDetail = {
+      ID: 'detail-cache-1',
+      ConversationID: 'conv-cache-1',
+      Role: 'AI',
+      Status: 'Complete',
+      Message: 'See [[MJ: Tasks|task-101|Cached Task]].',
+    } as unknown as MJConversationDetailEntity;
+
+    const { item: overlayItem } = makeMessageItem(sharedDetail.Message);
+    overlayItem.message = sharedDetail;
+    const { item: workspaceItem } = makeMessageItem(sharedDetail.Message);
+    workspaceItem.message = sharedDetail;
+
+    const spy = vi.spyOn(ConversationEngine.Instance, 'GetOrComputeMessageCitations');
+    try {
+      const overlayCitations = overlayItem.CitedSources;
+      const workspaceCitations = workspaceItem.CitedSources;
+      // Same underlying WeakMap-memoized Citations array reference across both components
+      expect(workspaceCitations).toBe(overlayCitations);
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

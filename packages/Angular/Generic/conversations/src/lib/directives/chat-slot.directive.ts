@@ -46,6 +46,8 @@ export type MJChatSlotName =
     | 'headerActions'
     | 'composerExtra'
     | 'messageExtra'
+    | 'citedSources'
+    | 'citedSourcePill'
     | 'demonstrationSurface'
     | 'messageRenderer';
 

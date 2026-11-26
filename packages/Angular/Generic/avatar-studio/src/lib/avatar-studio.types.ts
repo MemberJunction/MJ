@@ -39,9 +39,13 @@ export interface AvatarGenerationResult {
 
 export const AVATAR_GENERATE_IMAGE_ACTION_NAME = 'Generate Image';
 export const AVATAR_GENERATE_IMAGE_FALLBACK_ID = '048FF309-C2CD-44D8-8A8E-8C771ADA8284';
+/** Output square edge length (px) for saved WebP avatars; matches explorer avatar tiles at 2x DPI. */
 export const AVATAR_CANVAS_SIZE = 128;
+/** Higher-resolution square edge length (px) preserved as PNG input for iterative AI refinements. */
 export const AVATAR_REFINE_PNG_SIZE = 256;
+/** WebP encoding quality balancing crisp edges with compact data-URI storage in LogoURL fields. */
 export const AVATAR_WEBP_QUALITY = 0.85;
+/** Bounds the in-session Generate/Refine undo stack inside a single Avatar Studio panel so cached PNG base64 snapshots stay within a predictable browser memory footprint. */
 export const MAX_AVATAR_HISTORY = 10;
 
 export const DEFAULT_AVATAR_ICON_OPTIONS: readonly AvatarIconOption[] = [

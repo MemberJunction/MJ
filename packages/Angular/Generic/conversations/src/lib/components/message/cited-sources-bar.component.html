@@ -7,19 +7,23 @@
 
     <div class="cited-sources-pills">
       @for (citation of VisibleCitations; track citation.Index) {
-        <button
-          type="button"
-          class="cited-source-pill"
-          [title]="GetCitationTitle(citation)"
-          [attr.aria-label]="GetCitationTitle(citation)"
-          (click)="OnPillClick(citation, $event)">
-          <span class="cited-source-index">[{{ citation.Index }}]</span>
-          <i [class]="'cited-source-icon ' + GetCitationIcon(citation)" aria-hidden="true"></i>
-          <span class="cited-source-name">{{ citation.DisplayName }}</span>
-          @if (ShowEntitySubtitle(citation)) {
-            <span class="cited-source-entity">{{ citation.EntityName }}</span>
-          }
-        </button>
+        @if (PillTemplate) {
+          <ng-container *ngTemplateOutlet="PillTemplate; context: GetPillTemplateContext(citation)"></ng-container>
+        } @else {
+          <button
+            type="button"
+            class="cited-source-pill"
+            [title]="GetCitationTitle(citation)"
+            [attr.aria-label]="GetCitationTitle(citation)"
+            (click)="OnPillClick(citation, $event)">
+            <span class="cited-source-index">[{{ citation.Index }}]</span>
+            <i [class]="'cited-source-icon ' + GetCitationIcon(citation)" aria-hidden="true"></i>
+            <span class="cited-source-name">{{ citation.DisplayName }}</span>
+            @if (ShowEntitySubtitle(citation)) {
+              <span class="cited-source-entity">{{ citation.EntityName }}</span>
+            }
+          </button>
+        }
       }
 
       @if (HasOverflow) {

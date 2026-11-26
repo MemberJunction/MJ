@@ -4,9 +4,9 @@
   gap: 6px;
   margin-top: 10px;
   padding: 8px 10px;
-  border-radius: var(--mj-radius-md, 8px);
-  border: 1px solid var(--mj-border-subtle, var(--mj-border-default));
-  background: var(--mj-bg-surface-sunken);
+  border-radius: var(--mj-cited-sources-radius, var(--mj-radius-md, 8px));
+  border: 1px solid var(--mj-cited-sources-border, var(--mj-border-subtle, var(--mj-border-default)));
+  background: var(--mj-cited-sources-bg, var(--mj-bg-surface-sunken));
 }
 
 .cited-sources-header {
@@ -39,8 +39,8 @@
   max-width: 100%;
   padding: 4px 9px;
   border-radius: var(--mj-radius-full, 999px);
-  border: 1px solid var(--mj-border-default);
-  background: var(--mj-bg-surface-card, var(--mj-bg-surface));
+  border: 1px solid var(--mj-cited-source-pill-border, var(--mj-border-default));
+  background: var(--mj-cited-source-pill-bg, var(--mj-bg-surface-card, var(--mj-bg-surface)));
   color: var(--mj-text-primary);
   font-family: inherit;
   font-size: 12px;

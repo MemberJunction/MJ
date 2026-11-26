@@ -1,20 +1,24 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
   EventEmitter,
   Input,
   Output,
+  TemplateRef,
 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { MessageCitation } from '@memberjunction/ai-core-plus';
+import type { IMJChatCitedSourcePillContext } from '../slots/slot-interfaces';
 
 /**
- * Compact footer bar rendered beneath AI messages that cite MemberJunction entity records.
- * Shows up to `MaxInline` (default 4) clickable citation pills inline with a `"+K more"` /
- * `"Show less"` toggle when more sources are referenced.
+ * Compact footer bar rendered beneath AI messages that cite MemberJunction entity records,
+ * artifacts, or external URLs. Shows up to `MaxInline` (default 4) clickable citation pills
+ * inline with a `"+K more"` / `"Show less"` toggle when more sources are referenced.
  */
 @Component({
   standalone: true,
+  imports: [NgTemplateOutlet],
   selector: 'mj-cited-sources-bar',
   templateUrl: './cited-sources-bar.component.html',
   styleUrls: ['./cited-sources-bar.component.css'],
@@ -40,6 +44,12 @@ export class CitedSourcesBarComponent extends BaseAngularComponent {
   /** Maximum number of source pills shown inline before collapsing behind `"+K more"`. */
   @Input() public MaxInline = 4;
 
+  /**
+   * Optional custom template for each individual source pill (forwarded from
+   * `mjChatSlot="citedSourcePill"`). Preserves the bar's header and overflow toggle.
+   */
+  @Input() public PillTemplate: TemplateRef<unknown> | null = null;
+
   @Output() public CitationClicked = new EventEmitter<MessageCitation>();
 
   public IsExpanded = false;
@@ -64,9 +74,20 @@ export class CitedSourcesBarComponent extends BaseAngularComponent {
     this.IsExpanded = !this.IsExpanded;
   }
 
-  public OnPillClick(citation: MessageCitation, event: Event): void {
-    event.stopPropagation();
+  public OnPillClick(citation: MessageCitation, event?: Event): void {
+    event?.stopPropagation();
     this.CitationClicked.emit(citation);
+  }
+
+  /** Builds the typed template context passed to a projected `PillTemplate` (`mjChatSlot="citedSourcePill"`). */
+  public GetPillTemplateContext(citation: MessageCitation): IMJChatCitedSourcePillContext {
+    return {
+      $implicit: citation,
+      citation,
+      icon: this.GetCitationIcon(citation),
+      title: this.GetCitationTitle(citation),
+      open: (event?: Event) => this.OnPillClick(citation, event),
+    };
   }
 
   public GetCitationIcon(citation: MessageCitation): string {

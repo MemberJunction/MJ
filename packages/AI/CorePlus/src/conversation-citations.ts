@@ -10,6 +10,7 @@
  * @module @memberjunction/ai-core-plus
  */
 
+import { ConversationEngine, type MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationUtility, type MentionContent } from './conversation-utility';
 import {
     FindMarkdownCodeRanges,
@@ -223,4 +224,23 @@ export function ParseMessageCitations(text: string): ParsedCitationsResult {
         Citations: citations,
         Occurrences: occurrences,
     };
+}
+
+/**
+ * Parses and memoizes inline citations for a conversation detail row via
+ * {@link ConversationEngine.GetOrComputeMessageCitations}.
+ *
+ * Performs zero `RunView` calls: hits O(1) on `WeakMap` across Angular change-detection
+ * cycles and hits O(1) on `ConversationEngine`'s per-conversation detail cache when
+ * switching between Overlay mode and Full Chat Workspace or tabs.
+ */
+export function GetCachedMessageCitations(
+    detail: Pick<MJConversationDetailEntity, 'ID' | 'ConversationID'> | null | undefined,
+    messageText: string
+): ParsedCitationsResult {
+    return ConversationEngine.Instance.GetOrComputeMessageCitations(
+        detail,
+        messageText,
+        ParseMessageCitations
+    );
 }

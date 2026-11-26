@@ -27,6 +27,7 @@ import { MJEvent, MJEventType, MJGlobal, NormalizeUUID, UUIDsEqual, UUIDSet } fr
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent, MessageAttachment, MessageArtifactRef, MessagePendingArtifactRef } from './message-item.component';
+import type { MJChatCitationTransform } from '../slots/slot-interfaces';
 import {
   BeforeResponseFormSubmittedEventArgs,
   AfterResponseFormSubmittedEventArgs,
@@ -239,8 +240,75 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
   @Input() public ShowMessageRating: boolean = true;
 
-  /** Show the Cited Sources footer bar beneath AI messages containing record citations. */
-  @Input() public ShowCitedSources: boolean = true;
+  /** Show the Cited Sources footer bar beneath AI messages containing citations. */
+  @Input()
+  public set ShowCitedSources(value: boolean) {
+    if (value === this._showCitedSources) {
+      return;
+    }
+    this._showCitedSources = value;
+    this.restampAssistantIdentity();
+  }
+  public get ShowCitedSources(): boolean {
+    return this._showCitedSources;
+  }
+  private _showCitedSources = true;
+
+  /** Transform `[[Entity|ID|Label]]` tokens into inline clickable chips inside message text. */
+  @Input()
+  public set EnableInlineCitations(value: boolean) {
+    if (value === this._enableInlineCitations) {
+      return;
+    }
+    this._enableInlineCitations = value;
+    this.restampAssistantIdentity();
+  }
+  public get EnableInlineCitations(): boolean {
+    return this._enableInlineCitations;
+  }
+  private _enableInlineCitations = true;
+
+  /** Optional per-message hook to filter, reorder, relabel, or append custom citations. */
+  @Input()
+  public set CitationTransform(value: MJChatCitationTransform | undefined) {
+    if (value === this._citationTransform) {
+      return;
+    }
+    this._citationTransform = value;
+    this.restampAssistantIdentity();
+  }
+  public get CitationTransform(): MJChatCitationTransform | undefined {
+    return this._citationTransform;
+  }
+  private _citationTransform?: MJChatCitationTransform;
+
+  /** Optional slot template replacing `<mj-cited-sources-bar>` (forwarded from `mjChatSlot="citedSources"`). */
+  @Input()
+  public set CitedSourcesTemplate(value: TemplateRef<unknown> | null) {
+    if (value === this._citedSourcesTemplate) {
+      return;
+    }
+    this._citedSourcesTemplate = value;
+    this.restampAssistantIdentity();
+  }
+  public get CitedSourcesTemplate(): TemplateRef<unknown> | null {
+    return this._citedSourcesTemplate;
+  }
+  private _citedSourcesTemplate: TemplateRef<unknown> | null = null;
+
+  /** Optional slot template customizing individual source pills (forwarded from `mjChatSlot="citedSourcePill"`). */
+  @Input()
+  public set CitedSourcePillTemplate(value: TemplateRef<unknown> | null) {
+    if (value === this._citedSourcePillTemplate) {
+      return;
+    }
+    this._citedSourcePillTemplate = value;
+    this.restampAssistantIdentity();
+  }
+  public get CitedSourcePillTemplate(): TemplateRef<unknown> | null {
+    return this._citedSourcePillTemplate;
+  }
+  private _citedSourcePillTemplate: TemplateRef<unknown> | null = null;
 
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() public set showMessageRating(value: boolean) {
@@ -2277,6 +2345,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.showReactions = this.ShowReactions;
     instance.showMessageRating = this.ShowMessageRating;
     instance.ShowCitedSources = this.ShowCitedSources;
+    instance.EnableInlineCitations = this.EnableInlineCitations;
+    instance.CitationTransform = this.CitationTransform;
+    instance.CitedSourcesTemplate = this.CitedSourcesTemplate;
+    instance.CitedSourcePillTemplate = this.CitedSourcePillTemplate;
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;

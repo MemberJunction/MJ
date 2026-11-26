@@ -169,6 +169,9 @@
   padding: 2px 9px;
   font-size: 12.5px;
   gap: 5px;
+  background: var(--mj-citation-chip-bg, var(--mj-brand-primary));
+  color: var(--mj-citation-chip-color, var(--mj-text-inverse));
+  border-color: color-mix(in srgb, var(--mj-citation-chip-bg, var(--mj-brand-primary)) 40%, transparent);
 }
 
 :host ::ng-deep .mention-badge.record.citation-chip .citation-index {

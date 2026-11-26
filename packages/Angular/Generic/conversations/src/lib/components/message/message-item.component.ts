@@ -18,7 +18,8 @@ import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJA
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended, ParseMessageCitations, type MessageCitation, type MentionContent } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended, GetCachedMessageCitations, type MessageCitation, type MentionContent } from '@memberjunction/ai-core-plus';
+import type { IMJChatCitedSourcesContext, MJChatCitationTransform } from '../slots/slot-interfaces';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
@@ -601,6 +602,31 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** Show the Cited Sources footer bar beneath AI messages that cite records. */
   @Input() public ShowCitedSources: boolean = true;
 
+  /**
+   * Transform `[[Entity|ID|Label]]` and `@{type:"record",...}` citation tokens into
+   * inline clickable chips inside the message body. Set to `false` to keep inline prose
+   * clean while still optionally rendering the bottom Cited Sources bar.
+   */
+  @Input() public EnableInlineCitations: boolean = true;
+
+  /**
+   * Optional per-message hook to filter, reorder, relabel, or append custom/structured
+   * citations (records, artifacts, or external URLs) before rendering the Cited Sources bar.
+   */
+  @Input() public CitationTransform?: MJChatCitationTransform;
+
+  /**
+   * Optional custom template replacing the entire `<mj-cited-sources-bar>` footer
+   * (forwarded from `mjChatSlot="citedSources"`).
+   */
+  @Input() public CitedSourcesTemplate: TemplateRef<unknown> | null = null;
+
+  /**
+   * Optional custom template for each individual source pill inside `<mj-cited-sources-bar>`
+   * (forwarded from `mjChatSlot="citedSourcePill"`).
+   */
+  @Input() public CitedSourcePillTemplate: TemplateRef<unknown> | null = null;
+
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() public set showMessageRating(value: boolean) {
     this.ShowMessageRating = value;
@@ -1073,9 +1099,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** The raw Message the cached display text was computed from. */
   private _cachedRawText: string = '';
   private _cachedHadHandoff: boolean = false;
-  /** Memoized deduplicated citations for the current message text. */
+  private _cachedEnableInlineCitations: boolean = true;
+  /** Memoized deduplicated (and optionally transformed) citations for the current message. */
   private _cachedCitationsRawText: string = '';
+  private _cachedCitationsMessage: MJConversationDetailEntity | null = null;
+  private _cachedCitationsTransform: MJChatCitationTransform | undefined = undefined;
   private _cachedCitations: readonly MessageCitation[] = [];
+
+  /** Stable bound callback handed to projected `citedSources` templates so they can invoke default navigation. */
+  public readonly OpenCitationBound = (citation: MessageCitation): void => {
+    this.OnCitedSourceClicked(citation);
+  };
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1460,8 +1494,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     this.openRecordLinkBadge(recordBadge);
   }
 
-  /** Handles clicks on a pill inside the `<mj-cited-sources-bar>` footer. */
+  /** Handles clicks on a pill inside the `<mj-cited-sources-bar>` footer or custom `citedSources` slot. */
   public OnCitedSourceClicked(citation: MessageCitation): void {
+    if (citation.Kind === 'artifact') {
+      if (citation.ArtifactID) {
+        this.ArtifactClicked.emit({ artifactId: citation.ArtifactID });
+      }
+      return;
+    }
+    if (citation.Kind === 'url') {
+      const rawUrl = citation.Url?.trim();
+      if (rawUrl && /^https?:\/\//i.test(rawUrl) && typeof window !== 'undefined') {
+        window.open(
+          rawUrl,
+          this.OpenLinksInNewTab ? '_blank' : '_self',
+          this.OpenLinksInNewTab ? 'noopener,noreferrer' : undefined
+        );
+      }
+      return;
+    }
     if (citation.Kind !== 'record' || !citation.EntityName) {
       return;
     }
@@ -1475,6 +1526,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       return;
     }
     this.OpenEntityRecord.emit({ entityName: citation.EntityName, compositeKey });
+  }
+
+  /** Builds the strongly-typed context passed to a projected `mjChatSlot="citedSources"` template. */
+  public GetCitedSourcesTemplateContext(): IMJChatCitedSourcesContext {
+    const citations = this.CitedSources;
+    return {
+      $implicit: citations,
+      citations,
+      message: this.message,
+      openCitation: this.OpenCitationBound,
+    };
   }
 
   private openRecordLinkBadge(el: HTMLElement): void {
@@ -1841,12 +1903,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.DisplayMessage;
   }
 
-  /** Deduplicated inline citations extracted from the current message text (cached per message text). */
+  /**
+   * Deduplicated (and optionally host-transformed) citations for the current message.
+   * Backed by `ConversationEngine`'s zero-`RunView` `WeakMap` + detail cache so repeated
+   * Angular CD passes and Overlay ↔ Full Chat Workspace switches hit O(1).
+   */
   public get CitedSources(): readonly MessageCitation[] {
     const raw = this.displaySourceText();
-    if (raw !== this._cachedCitationsRawText) {
+    if (
+      raw !== this._cachedCitationsRawText ||
+      this.message !== this._cachedCitationsMessage ||
+      this.CitationTransform !== this._cachedCitationsTransform
+    ) {
+      const baseCitations = GetCachedMessageCitations(this.message, raw).Citations;
       this._cachedCitationsRawText = raw;
-      this._cachedCitations = ParseMessageCitations(raw).Citations;
+      this._cachedCitationsMessage = this.message;
+      this._cachedCitationsTransform = this.CitationTransform;
+      this._cachedCitations = this.CitationTransform
+        ? this.CitationTransform(baseCitations, this.message)
+        : baseCitations;
     }
     return this._cachedCitations;
   }
@@ -1858,10 +1933,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private computeDisplayMessage(): string {
     const raw = this.displaySourceText();
     const hadHandoff = Boolean(this.Handoff);
+    const enableInlineCitations = this.EnableInlineCitations !== false;
 
     // ngDoCheck calls this every pass; an unchanged Message is the same string object, so this
-    // compare is a pointer check and nothing below runs until the text changes.
-    if (raw === this._cachedRawText && hadHandoff === this._cachedHadHandoff && this._cachedDisplayMessage) {
+    // compare is a pointer check and nothing below runs until the text or inline-citation toggle changes.
+    if (
+      raw === this._cachedRawText &&
+      hadHandoff === this._cachedHadHandoff &&
+      enableInlineCitations === this._cachedEnableInlineCitations &&
+      this._cachedDisplayMessage
+    ) {
       return this._cachedDisplayMessage;
     }
 
@@ -1875,11 +1956,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
-    // Transform @mentions to HTML pills
-    const transformed = this.transformMentionsToHTML(text);
+    // Transform @mentions (and inline citations when EnableInlineCitations is enabled) to HTML pills
+    const transformed = this.transformMentionsToHTML(text, enableInlineCitations);
 
     this._cachedRawText = raw;
     this._cachedHadHandoff = hadHandoff;
+    this._cachedEnableInlineCitations = enableInlineCitations;
     this._cachedDisplayMessage = transformed;
 
     return transformed;
@@ -1902,25 +1984,27 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Supports both JSON format (@{type:"agent",id:"uuid",...}) and legacy text format (@AgentName)
    * Uses inline HTML that markdown will preserve
    */
-  private transformMentionsToHTML(text: string): string {
+  private transformMentionsToHTML(text: string, enableInlineCitations: boolean = this.EnableInlineCitations !== false): string {
     if (!text) return '';
 
-    // Parse inline citations ([[EntityName|RecordID|DisplayName]] + @{type:"record",...})
-    const parsedCitations = ParseMessageCitations(text);
-    this._cachedCitationsRawText = text;
-    this._cachedCitations = parsedCitations.Citations;
+    // Parse (or hit ConversationEngine O(1) cache for) inline citations
+    const parsedCitations = GetCachedMessageCitations(this.message, text);
 
     // Parse all @{...} tokens
     const tokens = ConversationUtility.ParseSpecialContent(text);
-    const wikiOccurrences = parsedCitations.Occurrences.filter((o) => o.Syntax === 'wiki');
+    const wikiOccurrences = enableInlineCitations
+      ? parsedCitations.Occurrences.filter((o) => o.Syntax === 'wiki')
+      : [];
     if (tokens.length === 0 && wikiOccurrences.length === 0) {
       return text;
     }
 
     const mentionCitationIndexByStart = new Map<number, number>();
-    for (const occ of parsedCitations.Occurrences) {
-      if (occ.Syntax === 'mention') {
-        mentionCitationIndexByStart.set(occ.StartIndex, occ.Citation.Index);
+    if (enableInlineCitations) {
+      for (const occ of parsedCitations.Occurrences) {
+        if (occ.Syntax === 'mention') {
+          mentionCitationIndexByStart.set(occ.StartIndex, occ.Citation.Index);
+        }
       }
     }
 
