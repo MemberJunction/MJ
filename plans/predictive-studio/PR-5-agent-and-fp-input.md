@@ -295,6 +295,8 @@ packages/GraphQLDataProvider/**  (D-091 item 5)
 # Owner-batch item 6: MJServer delete tests timed out on a cold dynamic import (controller, 2026-11-26)
 packages/MJServer/src/__tests__/DeleteOptionsSanitize.test.ts  (D-091 item 6)
 packages/MJServer/src/__tests__/ResolverBase.deleteReturnProjection.test.ts  (D-091 item 6)
+# Owner-batch item 7: spCreateRecordChange contract test's regex over every migration (controller, 2026-11-26)
+packages/SQLServerDataProvider/src/__tests__/spCreateRecordChangeContract.test.ts  (D-091 item 7)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3257,6 +3259,10 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    did `await import('../generic/ResolverBase.js')` in its body: a cold load of a large graph (4.6 s alone, > 30 s under
    load) counted against the test's 30 s timeout, and the timed-out test's `LogError` then landed in the next one. Static
    imports move the load to module import; the tests run in 3 ms. Fixed by the controller.
+7. `packages/SQLServerDataProvider/src/__tests__/spCreateRecordChangeContract.test.ts` — a lazy
+   `CREATE … PROCEDURE[\s\S]*?spCreateRecordChange_Internal` regex over all 815 migrations cost 17.8 s (one 5.7 s file
+   with many procedures and no match), timing the test out under load (A2's measurement). A literal-name prefilter
+   (same matches, same newest file `V202611181700`) brings the regex to ~2.5 s. Fixed by the controller.
 
 ## 10. PR description draft
 
@@ -3502,6 +3508,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - 2026-11-26 — controller: owner-batch item 4 (LiveKitNative avatar decoder, output-side `-threads 1`, root cause by `-debug_ts`) merged from `--item4`; allowlist line added. Wave-1 rules D5-48 (each implementer commits its attack list red first, no separate attacker) and D5-49 (additive one-line barrel exports allowed in any wave-1 sub-branch; identical changeset bytes; controller regenerates both at integration).
 - 2026-11-26 — controller: merged `ps/pr-5-agent-fp-input--item4` into the PR branch.
 - 2026-11-26 — controller: owner-batch item 6 (MJServer delete tests' in-test dynamic import), static imports; 10/10 tests, 3 ms each. ci-mirror now takes a machine-wide lock for every tier (plans `87364bf`).
+- 2026-11-26 — controller: owner-batch item 7 (SQLServerDataProvider contract test prefilter); 2/2 pass.
 
 ### 2026-11-26 — effective-dated Feature Value writes — B1
 
