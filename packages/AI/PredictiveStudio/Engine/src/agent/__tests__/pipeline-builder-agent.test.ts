@@ -13,6 +13,7 @@ import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import { type ExecuteAgentParams, type AgentConfiguration, type BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
+  type BuildApproval, type BuildApprovalRefusal,
   TRAINING_RUN_RESULTS_SCHEMA, GateRules, TrainingRunResultsParser, TracedNumbers, TrustVerdicts, ImportanceDisplay,
   type CandidateInnerScore, type GateDecision, type GateGuardRefusal, type LeakageFlag, type ModelingPlanSpec, type StoredGateRecord, type TracedNumberSource,
   type TrainerCompleted, type TrustComparison,
@@ -536,11 +537,18 @@ class NoSignalSearchBuilder extends PredictiveStudioPipelineBuilder {
 
 /** The agent with the builder seam stubbed and a provider supplied, exposing the protected run. */
 class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
-  constructor(private readonly builder: PredictiveStudioPipelineBuilder = new UnmeasuredBuilder()) {
+  constructor(
+    private readonly builder: PredictiveStudioPipelineBuilder = new UnmeasuredBuilder(),
+    private readonly heldApproval: BuildApproval | BuildApprovalRefusal | null = null,
+  ) {
     super();
   }
   protected override createBuilder(): PredictiveStudioPipelineBuilder {
     return this.builder;
+  }
+  /** The approval the run holds: the test's, instead of the claim row the orchestrator's dispatch names. */
+  protected override async ResolveHeldApproval(): Promise<BuildApproval | BuildApprovalRefusal | null> {
+    return this.heldApproval;
   }
   protected override get ProviderToUse(): IMetadataProvider {
     return new DatabaseProviderStub();
@@ -570,6 +578,12 @@ interface BuilderTestRun {
 
 /** A top-level run by a trusted caller (the system user, or an API key holding `agent:trusted`). */
 const TrustedTopLevelRun: BuilderTestRun = { Trusted: true, SubAgent: false };
+
+/** The approval an orchestrator's claimed dispatch hands its Pipeline Builder (A2, D-090). */
+const HELD_APPROVAL: BuildApproval = {
+  planId: 'plan-1', planHash: 'a'.repeat(64), approvedBy: { kind: 'human', userId: 'user-1' },
+  conversationDetailId: null, approvedAt: '2026-11-26T10:00:00.000Z', requestId: 'request-1',
+};
 
 /** The payload a step wrote; a step without one fails the test. */
 function payloadOf(step: BaseAgentNextStep<PredictiveStudioBuilderPayload>): PredictiveStudioBuilderPayload {
@@ -701,7 +715,7 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
       [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true,
       [PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY]: { autoPublishKeepBaseline: true },
     };
-    await new TestableBuilderAgent(builder).Run({ ...plan }, data, { Trusted: false, SubAgent: false });
+    await new TestableBuilderAgent(builder, HELD_APPROVAL).Run({ ...plan }, data, { Trusted: false, SubAgent: false });
     await new TestableBuilderAgent(builder).Run({ ...plan }, data, TrustedTopLevelRun);
     expect(builder.AutoPublish).toEqual([false, true]);
     expect(builder.ProtocolPromotion).toEqual([null, { autoPublishKeepBaseline: true }]);
@@ -713,7 +727,7 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
       [PredictiveStudioPipelineBuilderAgent.AUTO_PUBLISH_DATA_KEY]: true,
       [PredictiveStudioPipelineBuilderAgent.PROTOCOL_PROMOTION_DATA_KEY]: { autoPublishKeepBaseline: true },
     };
-    await new TestableBuilderAgent(builder).Run({ ...plan }, data, { Trusted: true, SubAgent: true });
+    await new TestableBuilderAgent(builder, HELD_APPROVAL).Run({ ...plan }, data, { Trusted: true, SubAgent: true });
     expect(builder.AutoPublish).toEqual([false]);
     expect(builder.ProtocolPromotion).toEqual([null]);
   });
@@ -763,5 +777,75 @@ describe('PredictiveStudioPipelineBuilderAgent — publishing', () => {
       PredictiveStudioPipelineBuilderAgent.CatalogStatusOf({ published: false, readyToPublish: true }),
       PredictiveStudioPipelineBuilderAgent.CatalogStatusOf({ published: false, readyToPublish: false }),
     ]).toEqual(['published', 'ready-to-publish', 'held']);
+  });
+});
+
+/** A builder that counts its builds: a refused run never reaches it, so it never writes a pipeline row. */
+class CountingBuilder extends DraftBuilder {
+  public Builds = 0;
+  public override async Build(input: BuildPredictionInput): Promise<BuildPredictionResult> {
+    this.Builds++;
+    return super.Build(input);
+  }
+}
+
+describe('A2 attack 8: the Pipeline Builder builds only on an approval or the trusted harness run', () => {
+  it('entered as a sub-agent (not trusted) with no approval → refuses before any pipeline row is written', async () => {
+    const builder = new CountingBuilder();
+    const step = await new TestableBuilderAgent(builder, null).Run({ ...plan }, undefined, { Trusted: false, SubAgent: true });
+    expect(builder.Builds).toBe(0);
+    expect(step.step).toBe('Failed');
+    expect(step.newPayload?.BuildResult).toBeUndefined();
+  });
+
+  it('entered as a sub-agent under a trusted root with no approval → refuses (trust is the top-level harness run only)', async () => {
+    const builder = new CountingBuilder();
+    await new TestableBuilderAgent(builder, null).Run({ ...plan }, undefined, { Trusted: true, SubAgent: true });
+    expect(builder.Builds).toBe(0);
+  });
+
+  it('a refusal (consumed, plan-changed) is not an approval', async () => {
+    for (const refusal of [{ kind: 'consumed', claimId: 'c' }, { kind: 'plan-changed', approvedHash: 'a', currentHash: 'b' }] as const) {
+      const builder = new CountingBuilder();
+      await new TestableBuilderAgent(builder, refusal).Run({ ...plan }, undefined, { Trusted: false, SubAgent: true });
+      expect(builder.Builds).toBe(0);
+    }
+  });
+
+  it('a payload carrying an approval-looking object grants nothing (the approval is read from the claim, not the payload)', async () => {
+    const builder = new CountingBuilder();
+    await new TestableBuilderAgent(builder, null).Run(Object.assign({ ...plan }, { BuildApproval: HELD_APPROVAL, Approved: true }), undefined, { Trusted: false, SubAgent: true });
+    expect(builder.Builds).toBe(0);
+  });
+
+  it('with the approval its parent claimed → builds once', async () => {
+    const builder = new CountingBuilder();
+    await new TestableBuilderAgent(builder, HELD_APPROVAL).Run({ ...plan }, undefined, { Trusted: false, SubAgent: true });
+    expect(builder.Builds).toBe(1);
+  });
+
+  it('the trusted top-level harness run (HarnessAgent.RunBuilderAgent) builds exactly as before, with no approval', async () => {
+    const builder = new CountingBuilder();
+    await new TestableBuilderAgent(builder, null).Run({ ...plan });
+    expect(builder.Builds).toBe(1);
+  });
+
+  it('BuildAllowed is ReadsPublishingSwitches(params) or a BuildApproval', () => {
+    const allowed = (trusted: boolean, sub: boolean, approval: BuildApproval | BuildApprovalRefusal | null): boolean =>
+      PredictiveStudioPipelineBuilderAgent.BuildAllowed({ TrustReservedRunData: trusted, parentRun: sub ? ({ ID: 'p' } as unknown as ExecuteAgentParams['parentRun']) : undefined }, approval);
+    expect(allowed(true, false, null)).toBe(true);
+    expect(allowed(true, true, null)).toBe(false);
+    expect(allowed(false, false, null)).toBe(false);
+    expect(allowed(false, true, HELD_APPROVAL)).toBe(true);
+    expect(allowed(false, true, { kind: 'no-request' })).toBe(false);
+  });
+});
+
+describe('A2 attack 9: a GraphQL RunAIAgent call naming the Pipeline Builder directly (top level, not trusted)', () => {
+  it('builds nothing without an approval', async () => {
+    const builder = new CountingBuilder();
+    const step = await new TestableBuilderAgent(builder, null).Run({ ...plan }, undefined, { Trusted: false, SubAgent: false });
+    expect(builder.Builds).toBe(0);
+    expect(step.step).toBe('Failed');
   });
 });
