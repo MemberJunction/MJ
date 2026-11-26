@@ -3417,6 +3417,22 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   anchor is `c9-cli-fail-exit`, re-pinned at `95feb574a8` (r2) to the CLI that the `next` merge brought, so it cannot
   match the base; at the PR head → `ok 136 · moved 8 · changed 0 · missing 0`.
 - **Tests:** M0 changes no package (the plan of record only); no package test run is owed.
+- **`ci-mirror --tier full` (agent `claudeint`, at `46cfb7f836`):** build ok, test-types ok, **test FAIL** on one non-PS
+  test only: `@memberjunction/ai-bridge-livekit-native` `src/__tests__/avatar-pipeline-ffmpeg.test.ts` "decodes every
+  access unit in order…" (`expected 88 to be greater than or equal to 92` after its 10 s `waitUntil`; 1 failed | 353
+  passed). It fails only when the package runs its 15 files in parallel workers (`pnpm test` there 2/2 red, 90 and 86
+  frames) and passes alone (3/3), paired with each of the other 14 files (14/14), serial (`--no-file-parallelism`,
+  354/354) and alone under 40 busy-loop CPU hogs (1/1). The describe runs only where `ffmpeg` is on PATH (here
+  `/opt/homebrew/bin/ffmpeg` 7.1.1); the file came with the `next` merge (`08a4cfc1f2`). Outside §2.7 and M0's ownership:
+  **D-091 owner-batch item 4, controller-owned, a separate fix outside M0.** The controller ruled the plan-only push
+  through the green pre-push hook (gate + fast mirror, §2.1).
+- **Environment fix for later implementers (Node 24):** the main checkout's `isolated-vm@6.0.2` native binary was the
+  Node 22 prebuild (ABI 127; `pnpm install` under Node 24 does not re-run an already-built package's install script),
+  so `@memberjunction/code-execution` failed 7 bridge tests with `symbol not found in flat namespace
+  '__ZN2v811ArrayBuffer9Allocator10ReallocateEPvmm'`. Fixed by running its own installer under Node 24:
+  `cd node_modules/.pnpm/isolated-vm@6.0.2/node_modules/isolated-vm && ./node_modules/.bin/prebuild-install` (v137
+  prebuild) → `code-execution` 86/86. `pnpm rebuild isolated-vm` does nothing here. A worktree installed fresh under
+  Node 24 (the baseline worktree) already has the right binary.
 - Rulings this milestone: D5-45 (seed texts and worlds), D5-46 (the CLI user, §2.2 step), D5-47 (what counts as
   first-ranked for the shipped agent; attack 4 and A7b attack 1 reworded).
 
