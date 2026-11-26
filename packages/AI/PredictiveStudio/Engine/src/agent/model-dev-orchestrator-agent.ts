@@ -105,7 +105,7 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     const busy = await this.TakeSessionTurn(params);
     if (busy !== null) return this.sessionBusyReply<P>(params, busy);
     const decided = await super.executeNextStep<P>(params, config, null, stepCount);
-    return this.noteTerminal<P>(params, decided);
+    return this.settlePromptTurn<P>(params, decided);
   }
 
   /**
@@ -120,7 +120,7 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     if (transition.Kind === 'present-plan') return this.presentPlanStep<P>(payload, previous);
     if (transition.Kind === 'request-build') return this.requestBuildStep<P>(params, payload, previous, transition.Approval, facts.PayloadHash);
     const decided = await super.executeNextStep<P>(params, config, previous, stepCount);
-    return this.noteTerminal<P>(params, decided);
+    return this.settlePromptTurn<P>(params, decided);
   }
 
   /** A step the prompt decided: gated, noted, then executed by the framework. */
@@ -246,10 +246,18 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     return JsonParse.IsJsonObject(build) ? JsonParse.JsonString(build, 'errorMessage') : null;
   }
 
-  /** A terminal step the framework returned from a prompt turn, with this run's note (when it has one). */
-  private async noteTerminal<P>(params: ExecuteAgentParams, decided: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P>> {
-    if (!decided.terminate || !['Chat', 'Success'].includes(String(decided.step)) || this.noted) return decided;
-    const facts = await this.LoadControlFacts(params, this.payloadOf(params, decided));
+  /**
+   * The step a prompt turn returned (the framework's `executeNextStep` for a first or `Retry` turn). A complete plan not
+   * yet presented with its hash is presented by code in place of a presentable step, the prompt's message on the card:
+   * the framework ends the run on a terminal `Chat` or `Success` without asking this agent again, so this is the only
+   * place such a step can be replaced (D5-A2-7). Otherwise a terminal step gets this run's note (when it has one).
+   */
+  private async settlePromptTurn<P>(params: ExecuteAgentParams, decided: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P>> {
+    if (!AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) return decided;
+    const payload = this.payloadOf(params, decided);
+    const facts = await this.LoadControlFacts(params, payload);
+    if (AgentControlPath.StateOf(facts) === 'present-plan') return this.presentPlanStep<P>(payload, decided, decided.message);
+    if (!decided.terminate || this.noted) return decided;
     return this.noteStep<P>(decided, facts);
   }
 

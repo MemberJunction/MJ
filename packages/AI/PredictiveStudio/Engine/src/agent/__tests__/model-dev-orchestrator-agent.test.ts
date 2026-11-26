@@ -124,6 +124,37 @@ describe('attack 18: a code-decided step runs no orchestrator prompt', () => {
     expect((s.newPayload as PredictiveStudioBuilderPayload).PlanHash).toBe(HASH);
   });
 
+  // The framework ends a run on a terminal step without calling executeNextStep again, so a prompt turn's terminal
+  // Chat/Success must be replaced where the turn returns it (D5-A2-7; found by G4.1 at runtime).
+  it.each(['Chat', 'Success'])('a first turn whose prompt ends the run with a terminal %s presents a complete, unpresented plan by code', async (step) => {
+    superNext.mockResolvedValueOnce({ step, terminate: true, message: 'Here is the plan.' } as BaseAgentNextStep);
+    const o = new TestOrchestrator(facts({ PresentedPlanHash: null, Approval: { kind: 'no-request' } }));
+    const s = await o.Next(params(), null);
+    expect(superNext).toHaveBeenCalledTimes(1);
+    expect(String(s.step)).toBe('Plan');
+    expect(s.terminate).toBe(false);
+    expect(s.message).toBe('Here is the plan.');
+    expect((s.newPayload as PredictiveStudioBuilderPayload).PlanHash).toBe(HASH);
+  });
+
+  it('a Retry turn whose prompt completes the plan and ends the run presents it by code', async () => {
+    const o = new TestOrchestrator(facts({ PlanComplete: false, PresentedPlanHash: null, Approval: { kind: 'no-request' } }));
+    superNext.mockImplementationOnce(async () => {
+      o.Facts = facts({ PresentedPlanHash: null, Approval: { kind: 'no-request' } });
+      return { step: 'Success', terminate: true, message: 'Done planning.', newPayload: { ...PLAN } } as BaseAgentNextStep;
+    });
+    const s = await o.Next(params(), retry());
+    expect(superNext).toHaveBeenCalledTimes(1);
+    expect(String(s.step)).toBe('Plan');
+    expect((s.newPayload as PredictiveStudioBuilderPayload).PlanHash).toBe(HASH);
+  });
+
+  it('a terminal prompt step on an already-presented plan is kept (no second presentation)', async () => {
+    superNext.mockResolvedValueOnce({ step: 'Success', terminate: true, message: 'All set.' } as BaseAgentNextStep);
+    const s = await new TestOrchestrator(facts()).Next(params(), null);
+    expect(s.step).toBe('Success');
+  });
+
   it('gather on a Retry turn runs the prompt (an LLM-decided state)', async () => {
     await new TestOrchestrator(facts({ PlanComplete: false })).Next(params(), retry());
     expect(superNext).toHaveBeenCalledTimes(1);
