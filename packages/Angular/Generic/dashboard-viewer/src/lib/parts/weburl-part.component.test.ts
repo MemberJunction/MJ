@@ -2,10 +2,10 @@ import '@angular/compiler';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChangeDetectorRef } from '@angular/core';
 import type { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import type { DashboardPanel, WebURLPanelConfig } from '../models/dashboard-types';
+import type { DashboardPanel, PanelConfig } from '../models/dashboard-types';
 import { WebURLPartComponent } from './weburl-part.component';
 
-function buildPanel(url: string, overrides: Partial<WebURLPanelConfig> = {}): DashboardPanel {
+function buildPanel(url: string, overrides: Partial<PanelConfig> = {}): DashboardPanel {
     return {
         id: 'panel-weburl-1',
         title: 'Embedded Docs',
