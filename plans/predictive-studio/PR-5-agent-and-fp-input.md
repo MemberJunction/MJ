@@ -3292,7 +3292,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->1<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->1<!-- /gen:checks -->
-- Head: <!-- gen:head -->41119380f6<!-- /gen:head -->
+- Head: <!-- gen:head -->fd9595932c<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3480,7 +3480,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 
 ### 2026-11-26 — Search-strategy policy & comparison ledger (council 30st24) — B4
 
-- **Checked against:** `origin/ps/pr-5-agent-fp-input` @ `261546a083`; red attack commit `a6d71da83c`; database `MJ_PS_PR5_hydrogen1` (port 4053).
+- **Checked against:** `origin/ps/pr-5-agent-fp-input` @ `261546a083`; merged local `ps/pr-5-agent-fp-input` @ `aebd2c4707` (D-091 items 4 & 5: LiveKitNative decoder `-threads 1` & GraphQLDataProvider async `dispose()` catch, merge commit `fd9595932c`); red attack commit `a6d71da83c`; database `MJ_PS_PR5_hydrogen1` (port 4053).
 - **Implemented:**
   - Migration `migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql` (`-- section: B4`): `[__mj].[MLSearchStrategyComparison]` (`TrackRecordChanges = 1`, `CHECK ([Method] IN ('bayesian', 'successive-halving'))`, `CHECK ([ComputeBudgetSecondsPerArm] > 0)`, FK to `[User]`, CodeGen tail with apply-time `MAX(Sequence)+1` `EntityField` inserts).
   - `$C/search-policy.ts`: `EqualCostComparison`, `SearchComparisonColumns`, `SearchPolicyRefusal`, `SearchPolicy.Decide`, `SearchPolicy.ComputeLowerBoundMin`, `SearchPolicy.ComputePassed`, `SearchPolicy.GetComparisonRowProblems`, `SearchPolicy.ParseComparisonRow`; wired into `$C/evaluation-protocol.ts` (`ParsedEvaluationProtocolSpec.ValidateSearchPolicy` / `EvaluationProtocol.ValidateSearchPolicy`) and `$C/evaluation-protocol-rules.ts` (`search` added to `GUARD_FIELDS`).
