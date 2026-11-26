@@ -170,6 +170,11 @@ describe('EnsurePnpmHoistNpmrc & dev-workspace guard', () => {
 
     it('writes shamefully-hoist=true to .npmrc when missing on a standalone pnpm workspace', async () => {
         mockExistsSync.mockReturnValue(false);
+        mockReadFileSync.mockImplementation(() => {
+            const err = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException;
+            err.code = 'ENOENT';
+            throw err;
+        });
         const pending = RunPackageInstallAsync('/repo', false, undefined, 'pnpm', 60_000);
         child.emit('close', 0);
         await pending;

@@ -455,22 +455,22 @@ function IsInsideDevWorkspace(repoRoot: string): boolean {
  */
 export function EnsurePnpmHoistNpmrc(root: string): boolean {
   const npmrcPath = join(root, '.npmrc');
-  if (existsSync(npmrcPath)) {
-    const existing = readFileSync(npmrcPath, 'utf-8');
-    if (PNPM_HOIST_SETTING_RE.test(existing)) {
-      return false;
+  let existing = '';
+  try {
+    existing = readFileSync(npmrcPath, 'utf-8') ?? '';
+  } catch (error: unknown) {
+    const code = (error as NodeJS.ErrnoException | undefined)?.code;
+    if (code && code !== 'ENOENT') {
+      throw error;
     }
-    const prefix = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
-    writeFileSync(
-      npmrcPath,
-      `${existing}${prefix}# Hoist dependencies so Angular/Vite can resolve transitive Open App imports\nshamefully-hoist=true\n`,
-      'utf-8',
-    );
-    return true;
   }
+  if (PNPM_HOIST_SETTING_RE.test(existing)) {
+    return false;
+  }
+  const prefix = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
   writeFileSync(
     npmrcPath,
-    '# Hoist dependencies so Angular/Vite can resolve transitive Open App imports\nshamefully-hoist=true\n',
+    `${existing}${prefix}# Hoist dependencies so Angular/Vite can resolve transitive Open App imports\nshamefully-hoist=true\n`,
     'utf-8',
   );
   return true;
