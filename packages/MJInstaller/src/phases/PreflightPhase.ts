@@ -24,6 +24,7 @@
 
 import os from 'node:os';
 import net from 'node:net';
+import http from 'node:http';
 import path from 'node:path';
 import type { InstallerEventEmitter } from '../events/InstallerEvents.js';
 import type { PartialInstallConfig } from '../models/InstallConfig.js';
@@ -55,6 +56,8 @@ export interface PreflightContext {
   SkipDB: boolean;
   /** Event emitter for progress and diagnostic events. */
   Emitter: InstallerEventEmitter;
+  /** When `true` (from `mj doctor`), an occupied port serving HTTP is reported as active (`pass`). */
+  IsDoctor?: boolean;
 }
 
 /**
@@ -161,8 +164,8 @@ export class PreflightPhase {
     emitter.Emit('step:progress', { Type: 'step:progress', Phase: 'preflight', Message: 'Checking port availability...' });
     const apiPort = context.Config.APIPort ?? 4000;
     const explorerPort = context.Config.ExplorerPort ?? 4200;
-    const apiPortCheck = await this.checkPort(apiPort, 'API');
-    const explorerPortCheck = await this.checkPort(explorerPort, 'Explorer');
+    const apiPortCheck = await this.checkPort(apiPort, 'API', context.IsDoctor);
+    const explorerPortCheck = await this.checkPort(explorerPort, 'Explorer', context.IsDoctor);
     diagnostics.AddCheck(apiPortCheck);
     diagnostics.AddCheck(explorerPortCheck);
     this.emitDiagnostic(emitter, apiPortCheck);
@@ -222,6 +225,7 @@ export class PreflightPhase {
       Config: config,
       SkipDB: false,
       Emitter: emitter,
+      IsDoctor: true,
     });
 
     // Additional doctor-only checks
@@ -370,7 +374,7 @@ export class PreflightPhase {
     }
   }
 
-  private async checkPort(port: number, label: string): Promise<DiagnosticCheck> {
+  private async checkPort(port: number, label: string, isDoctor?: boolean): Promise<DiagnosticCheck> {
     const inUse = await this.isPortInUse(port);
 
     if (!inUse) {
@@ -381,12 +385,55 @@ export class PreflightPhase {
       };
     }
 
+    if (isDoctor) {
+      const probePath = label === 'API' ? '/healthcheck' : '/';
+      const responding = await this.probeHttpEndpoint(port, probePath);
+      if (responding) {
+        return {
+          Name: `Port ${port} (${label})`,
+          Status: 'pass',
+          Message: `Port ${port} (${label}) is active and responding`,
+        };
+      }
+    }
+
     return {
       Name: `Port ${port} (${label})`,
       Status: 'warn',
       Message: `Port ${port} is in use. ${label} will not be able to start on this port.`,
       SuggestedFix: `Stop the process using port ${port}, or configure a different port`,
     };
+  }
+
+  /**
+   * Probes `http://127.0.0.1:<port><probePath>` with a 1500ms timeout to check if a running
+   * MJAPI or Explorer instance is already serving HTTP on an occupied port during `mj doctor`.
+   */
+  private probeHttpEndpoint(port: number, probePath: string): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      const req = http.get(
+        {
+          hostname: '127.0.0.1',
+          port,
+          path: probePath,
+          timeout: 1500,
+        },
+        (res) => {
+          const code = res.statusCode ?? 0;
+          res.resume();
+          resolve(code >= 200 && code <= 499);
+        }
+      );
+
+      req.on('timeout', () => {
+        req.destroy();
+        resolve(false);
+      });
+
+      req.on('error', () => {
+        resolve(false);
+      });
+    });
   }
 
   private async isPortInUse(port: number): Promise<boolean> {

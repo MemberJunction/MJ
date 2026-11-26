@@ -6784,11 +6784,19 @@ export class BaseAgent {
     ): void {
         try {
             const engine = AIEngine.Instance;
-            const persona =
+            const resolvedPersona =
                 typeof engine.ResolveAgentPersona === 'function'
                     ? engine.ResolveAgentPersona(agent.ID, {
                           preferredPersonaId: userPolicy?.PreferredPersonaID ?? null,
                       })
+                    : null;
+            // Only inject text persona & communication style when a persona is explicitly
+            // assigned to the agent (AgentPersona is defined) or chosen via userPolicy.PreferredPersonaID.
+            // Otherwise ResolveAgentPersona falls back to the model's default Audio/TTS voice
+            // (e.g., "Shimmer"), which must not leak into text agent system prompts.
+            const persona =
+                resolvedPersona && (resolvedPersona.AgentPersona != null || Boolean(userPolicy?.PreferredPersonaID))
+                    ? resolvedPersona
                     : null;
             const stackedInstructions =
                 typeof engine.GetStackedAdditionalInstructions === 'function'

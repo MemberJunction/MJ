@@ -8,7 +8,11 @@ let pushResult: PushResult;
 let pushWarnings: string[] = [];
 let validationOptions: Record<string, unknown> | null = null;
 
-const passingValidation = { isValid: true, errors: [], warnings: [] };
+let validationResult: { isValid: boolean; errors: Array<{ message: string }>; warnings: Array<{ message: string }> } = {
+  isValid: true,
+  errors: [],
+  warnings: [],
+};
 
 // The plugin dynamic-imports the engine; stand in for everything but the formatter.
 vi.mock('../index.js', async () => {
@@ -27,11 +31,11 @@ vi.mock('../index.js', async () => {
       constructor(options: Record<string, unknown>) {
         validationOptions = options;
       }
-      async ValidateDirectory(): Promise<typeof passingValidation> {
-        return passingValidation;
+      async ValidateDirectory(): Promise<typeof validationResult> {
+        return validationResult;
       }
-      async validateDirectory(): Promise<typeof passingValidation> {
-        return passingValidation;
+      async validateDirectory(): Promise<typeof validationResult> {
+        return validationResult;
       }
     },
     SyncStateManager: class {},
@@ -184,6 +188,7 @@ describe('mj sync push lists each warning once', () => {
 describe('mj sync push validation options', () => {
   beforeEach(() => {
     validationOptions = null;
+    validationResult = { isValid: true, errors: [], warnings: [] };
     pushResult = {
       created: 0,
       updated: 0,
@@ -221,5 +226,55 @@ describe('mj sync push validation options', () => {
     await runJsonPush({ dir: '.' });
 
     expect(validationOptions).toMatchObject({ HonorPushWhen: true, ValidateChildFoldersOnly: false });
+  });
+
+  it('calls SucceedStep (not FailStep) when validation passes with warnings', async () => {
+    validationResult = {
+      isValid: true,
+      errors: [],
+      warnings: [{ message: 'Minor metadata warning' }],
+    };
+    const succeedStep = vi.fn();
+    const failStep = vi.fn();
+
+    const plugin = Object.create(SyncPushPlugin.prototype) as Record<string, unknown>;
+    plugin.parsedFlags = { 'no-validate': false };
+    plugin.Host = {
+      Format: 'json',
+      Verbose: false,
+      StartStep: () => undefined,
+      SucceedStep: succeedStep,
+      FailStep: failStep,
+      Log: () => undefined,
+    };
+    await (plugin as unknown as { Execute(): Promise<unknown> }).Execute();
+
+    expect(succeedStep).toHaveBeenCalledWith('Validation passed (1 warning(s))');
+    expect(failStep).not.toHaveBeenCalled();
+  });
+
+  it('calls FailStep when validation fails with errors', async () => {
+    validationResult = {
+      isValid: false,
+      errors: [{ message: 'Invalid entity reference' }],
+      warnings: [],
+    };
+    const succeedStep = vi.fn();
+    const failStep = vi.fn();
+
+    const plugin = Object.create(SyncPushPlugin.prototype) as Record<string, unknown>;
+    plugin.parsedFlags = { 'no-validate': false, ci: true };
+    plugin.Host = {
+      Format: 'json',
+      Verbose: false,
+      StartStep: () => undefined,
+      SucceedStep: succeedStep,
+      FailStep: failStep,
+      Log: () => undefined,
+    };
+    await (plugin as unknown as { Execute(): Promise<unknown> }).Execute();
+
+    expect(failStep).toHaveBeenCalledWith('Validation failed');
+    expect(succeedStep).not.toHaveBeenCalledWith(expect.stringContaining('Validation passed'));
   });
 });

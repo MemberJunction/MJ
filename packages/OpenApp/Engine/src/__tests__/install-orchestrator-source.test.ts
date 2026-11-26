@@ -123,7 +123,7 @@ class InMemoryAppSource implements OpenAppSource {
         return json ? { Success: true, ManifestJSON: json } : { Success: false, ErrorMessage: `no manifest at ${version}` };
     }
 
-    public async CopySqlDirectory(directory: string, _version: string, targetDir: string): Promise<MigrationDownloadResult> {
+    public async CopySqlDirectory(directory: string, _version: string | undefined, targetDir: string): Promise<MigrationDownloadResult> {
         const files = this.sqlByDirectory[directory];
         if (!files) {
             return { Success: false, ErrorMessage: `no directory ${directory}` };
@@ -232,7 +232,7 @@ describe('install orchestrator reads app files only through the resolved source'
     it('installs an app and its dependency from source manifests, versions and migration files', async () => {
         sources.set(ROOT_URL, new InMemoryAppSource(
             ROOT_URL,
-            { [DEFAULT_BRANCH]: manifestJSON('acme-root', '1.0.0', { ...ROOT_SCHEMA, dependencies: { 'acme-common': { version: '^1.0.0', repository: COMMON_URL } } }) },
+            { '1.0.0': manifestJSON('acme-root', '1.0.0', { ...ROOT_SCHEMA, dependencies: { 'acme-common': { version: '^1.0.0', repository: COMMON_URL } } }) },
             { migrations: { 'V1__create_widget.sql': CREATE_SQL } },
         ));
         sources.set(COMMON_URL, new InMemoryAppSource(COMMON_URL, {
@@ -248,6 +248,64 @@ describe('install orchestrator reads app files only through the resolved source'
         expect(recorded).toEqual(['acme-common@1.2.0', 'acme-root@1.0.0']);
         expect(migrationRuns).toEqual([{ 'V1__create_widget.sql': CREATE_SQL }]);
         expect(gitHubCalls).toEqual([]);
+    });
+
+    it('fails with actionable error suggesting --version HEAD when repository has no published versions', async () => {
+        sources.set(ROOT_URL, new InMemoryAppSource(
+            ROOT_URL,
+            { [DEFAULT_BRANCH]: manifestJSON('acme-root', '1.0.0', ROOT_SCHEMA) },
+        ));
+
+        const result = await InstallApp({ Source: ROOT_URL }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('--version HEAD');
+        expect(vi.mocked(RecordAppInstallation)).not.toHaveBeenCalled();
+    });
+
+    it('installs from default branch when Version: HEAD is explicitly requested', async () => {
+        const rootSource = new InMemoryAppSource(
+            ROOT_URL,
+            { [DEFAULT_BRANCH]: manifestJSON('acme-root', '1.0.0', ROOT_SCHEMA) },
+            { migrations: { 'V1__create_widget.sql': CREATE_SQL } },
+        );
+        const copySpy = vi.spyOn(rootSource, 'CopySqlDirectory');
+        sources.set(ROOT_URL, rootSource);
+
+        const result = await InstallApp({ Source: ROOT_URL, Version: 'HEAD' }, context);
+
+        expect(result.Success).toBe(true);
+        expect(result.Version).toBe('1.0.0');
+        expect(copySpy).toHaveBeenCalledWith('migrations', undefined, expect.any(String));
+    });
+
+    it('walks tags downward to select the latest MJ-compatible version and does not double-fetch mj-app.json', async () => {
+        const rootSource = new InMemoryAppSource(ROOT_URL, {
+            '2.0.0': manifestJSON('acme-root', '2.0.0', { mjVersionRange: '>=6.0.0 <7.0.0' }),
+            '1.5.0': manifestJSON('acme-root', '1.5.0', { mjVersionRange: '>=5.0.0 <6.0.0' }),
+        });
+        const fetchSpy = vi.spyOn(rootSource, 'FetchManifest');
+        sources.set(ROOT_URL, rootSource);
+
+        const result = await InstallApp({ Source: ROOT_URL }, context);
+
+        expect(result.Success).toBe(true);
+        expect(result.Version).toBe('1.5.0');
+        expect(fetchSpy.mock.calls.filter(([v]) => v === '1.5.0')).toHaveLength(1);
+    });
+
+    it('fails naming latest checked tag, mjVersionRange, and MJVersion when no published tag is compatible', async () => {
+        sources.set(ROOT_URL, new InMemoryAppSource(ROOT_URL, {
+            '2.0.0': manifestJSON('acme-root', '2.0.0', { mjVersionRange: '>=6.0.0 <7.0.0' }),
+            '1.5.0': manifestJSON('acme-root', '1.5.0', { mjVersionRange: '>=6.0.0 <7.0.0' }),
+        }));
+
+        const result = await InstallApp({ Source: ROOT_URL }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain('v2.0.0');
+        expect(result.ErrorMessage).toContain('>=6.0.0 <7.0.0');
+        expect(result.ErrorMessage).toContain('5.37.0');
     });
 
     it('upgrades to the version the source reports and runs its migrations from the new manifest\'s repository', async () => {

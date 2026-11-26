@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogError, LogStatus, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
 import { MJTemplateCategoryEntity, MJTemplateContentEntity, MJTemplateContentTypeEntity, MJTemplateEntityExtended, MJTemplateParamEntity } from "@memberjunction/core-entities";
 import nunjucks from 'nunjucks';
 import { BaseSingleton, MJGlobal, UUIDsEqual } from "@memberjunction/global";
@@ -357,7 +357,7 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
                         .map((error: ValidationErrorInfo) => error.Message)
                         .join(', ');
                     if (warningMessages.length > 0) {
-                        LogError(`Template validation warnings (non-fatal) for template "${templateEntity.Name}": ${warningMessages}`);
+                        LogStatus(`Template validation warnings (non-fatal) for template "${templateEntity.Name}": ${warningMessages}`);
                     }
                 }
             }
