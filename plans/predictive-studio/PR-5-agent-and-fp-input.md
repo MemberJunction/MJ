@@ -694,14 +694,15 @@ gather → draft-unit → profile → draft-protocol → validate-plan → prese
                          └─► decline-no-signal (verdict)        (after ≤ 2 sub-agent repairs)           wait for a NEW approval
 ```
 
-- **Code-decided transitions run no orchestrator prompt (D5-26).** `BaseAgent.determineNextStep` runs only after
-  `executePrompt` has already made the Main Prompt call (`base-agent.ts:19204` → `:19312`), so overriding it would pay
-  one LLM turn per code transition. The orchestrator overrides `executeNextStep` (`protected`, `base-agent.ts:18646`,
-  the loop's per-step entry, called from `executeAgentInternal` at `:5564`): when `AgentControlPath.Next` names a
-  code-decided transition (`draft-unit`, `profile`, `draft-protocol`, `validate-plan`, `present-plan`,
-  `request-build`, a `decline-*`), it returns that step itself (an `Actions`, `Plan` or `Sub-Agent` step built by code)
-  without calling `super`; only `gather`, a sub-agent repair and the final `report` text go through
-  `super.executeNextStep` and so through the orchestrator prompt.
+- **Code-decided transitions run no orchestrator prompt (D5-26, D5-37).** `determineNextStep` runs only after the
+  prompt (`base-agent.ts:19204` → `:19312`), so the orchestrator overrides `executeNextStep` (`:18646`), which both
+  chooses a step (`previousDecision` null or `Retry`) and executes one. It intercepts only `Retry` decision turns: after
+  `checkTreeBudgetLimit` (`:11239`), a **code-decided** transition (`draft-unit`, `profile`, `draft-protocol`,
+  `validate-plan`, `present-plan`, `request-build`, the three `decline-*`) is returned as the next decision (an
+  `Actions`, `Plan` or `Sub-Agent` step built by code, no prompt), and `super` executes it on the next turn; every other
+  step, and every run's first turn (so `DetermineInitialStep`, `recordExecutionRouting` and the budget check run), goes
+  to `super`. LLM-decided: `gather`, a repair after `validate-plan`, the `report` text. Every prompt-made decision
+  passes `AgentControlPath.Gate`, which replaces any build, draft or plan step the state does not allow.
 - `gather`: the Goal Analyst (LLM) proposes goal, unit grain, label, decision date, censoring rule, from a catalog
   source (§5.1.3).
 - `draft-unit` / `draft-protocol`: draft-only Actions (§5.1.2) validate the proposal and the control path writes it
@@ -715,10 +716,12 @@ gather → draft-unit → profile → draft-protocol → validate-plan → prese
 - `validate-plan`: every entity, field, query and feature pipeline the plan names is resolved against metadata (§5.1.3);
   unresolved names go back to the owning sub-agent with the exact error, at most twice, then the session reports the
   unresolved names to the user (`decline-unresolved-reference`).
-- `present-plan`: a Plan Mode step (`executePlanStep`) with the plan text and the plan's content hash (which covers
-  `UnitDraft` and `ProtocolDraft`); the orchestrator overrides `buildPlanApprovalForm` (`protected`,
-  `base-agent.ts:23323`) to add a `planHash` question whose default is that hash. For the root agent this persists an
-  `MJ: AI Agent Requests` row. The run ends `AwaitingFeedback`. A run with an added audience raises no request
+- `present-plan`: a Plan Mode step (`executePlanStep`) with the plan text. **The plan hash is bound server-side
+  (D5-36):** the control path writes `PlanHash` (the content hash of the payload, `UnitDraft` and `ProtocolDraft`
+  included) into the payload in the same code step, so it is stored in the presenting run's `FinalPayload` (and, from
+  A4, on the `present-plan` decision row); no form question carries it (`FormQuestionType`,
+  `CorePlus/src/response-forms.ts:145`, has no hidden or read-only type) and the stock `buildPlanApprovalForm` is
+  unchanged. For the root agent this persists an `MJ: AI Agent Requests` row. The run ends `AwaitingFeedback`. A run with an added audience raises no request
   (`raiseFeedbackRequest`, `base-agent.ts:23380`), so such a session can never build (`no-request`). Every
   renewal-type plan text names the censoring rule (the draft-unit Action refuses a unit without one; the plan renderer
   prints it).
@@ -729,9 +732,9 @@ gather → draft-unit → profile → draft-protocol → validate-plan → prese
 - `report`: final message with the result, the `RunCost`, and, when the build failed or did not finish, the failure
   text. The claim taken at `request-build` consumes the approval whatever the build's outcome (a failure and a crash
   included); another build needs a new approval.
-- **Session and ordering (D5-24).** A session spans several `MJ: AI Agent Runs`: a resume starts a new run with
+- **Session and ordering (D5-24, D5-38).** A session spans several `MJ: AI Agent Runs`: a resume starts a new run with
   `lastRunId` (`MJAIAgentRequestEntityServer.resumeAgent`, `lastRunId = OriginatingAgentRunID`; the conversation path
-  passes `lastRunId` too), stored as the run's `LastRunID`. The **session** is identified by `SessionRunID`: the run
+  gets it from item 3's chaining), stored as the run's `LastRunID`. The **session** is identified by `SessionRunID`: the run
   that wrote the session's first decision row; a run whose `LastRunID` run's newest decision row is not terminal
   (`report`, `decline-*`) continues that run's `SessionRunID`, any other run starts a new session. Each transition
   **appends its decision row before applying its effect**, and the row carries everything the effect needs (the
@@ -739,6 +742,16 @@ gather → draft-unit → profile → draft-protocol → validate-plan → prese
   dispatch); a run that finds the last row's `ResultingPayloadHash` ≠ its payload's hash rebuilds the payload with
   `AgentSessionReplay.Replay` (recorded outputs, no LLM call) before continuing; a claim with no build outcome is
   reported as an unfinished build (approval consumed).
+  **Liveness before recovery (D5-38).** Two runs can continue one session at once (a dashboard `resumeAgent` and a
+  chat turn). A run is **live** when `Status = 'Running'` and its `LastHeartbeatAt` (stamped every 30 s, stale runs
+  force-failed by `AgentRunWatchdog`, `agent-run-watchdog.ts:37`, `:39`) is younger than
+  `AgentSessionLease.STALE_AFTER_MINUTES = 10`. A run's first turn takes the session lock (stored Query
+  `Predictive Studio: Lock Agent Session`, `UPDLOCK, HOLDLOCK, NOWAIT` on the session's first run row, through
+  `PublishLocks`' retry): a live sibling → reply `session-busy`, nothing appended or rebuilt. `Append` is
+  compare-and-append under the lock (`PayloadHash` = newest `ResultingPayloadHash` and `Step` = newest + 1, else
+  `log-diverged`). "Did not finish" only for a claim whose run is not live, else "build in progress". **Order
+  (D5-39):** claim → `request-build` row with the claim ID → dispatch → settle; a claim with no row and a non-live run
+  → a `report` row "the build did not start", never a second claim.
 
 **The Pipeline Builder stays (D-089; DD-1 decided).** `request-build` dispatches the existing `Pipeline Builder` code
 sub-agent (`PredictiveStudioPipelineBuilderAgent`) as the build executor. It refuses to build without a resolved
@@ -750,7 +763,7 @@ so PR 4's G0.2, G0.3 and G3.6 (`HarnessAgent.RunBuilderAgent`) stay green unchan
 
 - The orchestrator asks through MJ's generic agent-request path: its `present-plan` step is a Plan Mode step, and for
   the root run `BaseAgent.createFeedbackRequest` persists the `MJ: AI Agent Requests` row, carrying the plan text and
-  the plan's content hash (the `planHash` form question) in `ResponseSchema`/`Request`.
+  the plan form; the plan hash stays on the server (the presenting run's `FinalPayload.PlanHash`, D5-36).
 - **Answer paths (D5-22).** Two paths answer the request, and each saves the answer **before** the run that reads it:
   (a) Dashboard/API — `RespondToAgentRequest` (`RunAIAgentResolver.ts:1543`) saves `Approved` with `ResponseData`
   under `RunInClientCrudBoundary`, and that save starts `resumeAgent` (`MJAIAgentRequestEntityServer.ts:228`, `:237`), which
@@ -760,14 +773,19 @@ so PR 4's G0.2, G0.3 and G3.6 (`HarnessAgent.RunBuilderAgent`) stay green unchan
   `Approved`, no `ResponseData`) **after** the continuation run finished (`runPostExecutionNotifications`,
   `RunAIAgentResolver.ts:503`, `:683`, `:1112`), so `Resolve` inside that run sees `Requested`. No PS-side route can
   fix this: the answering save must be the person's own client save (rule 3), and only the resolver holds it.
-  **Owner-batch item 3 (D-091; ruled in 2026-11-26 under the owner's "shared code seems like the right choice")**:
-  before `RunAgentInConversation`, when `lastRunId` is set, the message carries a form-response token
-  (`ConversationUtility.ParseSpecialContent`, mode `form`) and the open request (today's filter) came from a `Plan`
-  step, the resolver saves it `Approved`/`Rejected` (the `decision` field) with `RespondedAt`, `Response` and
-  `ResponseData` = the token's fields (`name → value`) inside `RunInClientCrudBoundary`, after a one-shot
-  `MJAIAgentRequestEntityServer.MarkAnsweredByConversationHost()` so that save does not start `resumeAgent`; after the
-  run it links `ResumingAgentRunID`. Every other message keeps today's post-run `Responded` sync, so the framework's
-  Plan Mode gate (`resolvePlanModeGate`, `base-agent.ts:17772`) sees what it sees today for them (§9 item 3).
+  **Owner-batch item 3 (D-091; ruled in 2026-11-26 under the owner's "shared code seems like the right choice"; §9
+  item 3)**, two parts in `RunAIAgentResolver.ts`. (i) **Chaining (D5-35):** Explorer's chat sends no `lastRunId`
+  (`conversation-agent.service.ts:510`; the resolver says so, `:1316`) and `findChainablePredecessor` (`:1028`) chains
+  only user-stopped or open-consult runs (`:1063`), so `LastRunID` stays unset (`base-agent.ts:17516`). A turn with no
+  `lastRunId` whose message carries a form-response token (`ConversationUtility.ParseSpecialContent`, mode `form`) is
+  chained (new reason `'plan-answer'`) to the originating run of the newest `Requested`, `OriginatingTaskID IS NULL`,
+  Plan-step request of this agent in this conversation on the turn's branch path (`BuildStoppedPredecessorFilter`'s
+  predicate); other turns are chained as today. (ii) **Settling** in `executeAIAgent` (`:344`, shared by the awaited
+  and fire-and-forget paths), before `RunAgentInConversation` (`:482`): for such a turn the open Plan-step request is
+  saved `Approved`/`Rejected` (the `decision` field) with `RespondedAt`, `Response` and `ResponseData` = the token's
+  fields, inside `RunInClientCrudBoundary`, after a one-shot `MJAIAgentRequestEntityServer.MarkAnsweredByConversationHost()`
+  so the save does not start `resumeAgent`; after the run it links `ResumingAgentRunID`. Every other message keeps
+  today's post-run sync, so `resolvePlanModeGate` (`base-agent.ts:17772`) sees what it sees today.
 - `BuildApprovalResolver.Resolve(run, provider, contextUser): Promise<BuildApproval | BuildApprovalRefusal>` (a `static`
   on the class that owns the approval rule, D-035/standards §2; each rule below a JSDoc'd `protected static` step) reads,
   through the passed provider, the newest `MJ: AI Agent Requests` row for the session's plan and returns an approval
@@ -784,10 +802,11 @@ so PR 4's G0.2, G0.3 and G3.6 (`HarnessAgent.RunBuilderAgent`) stay green unchan
      or an agent run (`not-human`). `ResponseSource` is not trusted.
   4. **The responder may build.** That user holds `CanCreate` on `MJ: ML Training Pipelines` and on `MJ: ML Models`, the
      shape PR 4 required for publishing (D4-283) (`responder-not-permitted`).
-  5. **The plan is the one approved.** The answering save's `ResponseData.planHash` (read from its Record Change, not
-     the current row) equals the plan's current hash (`plan-changed`), and its `plan` field equals the presented plan
-     text (`plan-edited`: an edited card is feedback for a re-plan, not an approval of the edit); a changed plan needs
-     a new approval.
+  5. **The plan is the one approved.** The presenting run's stored `FinalPayload.PlanHash` (from A4 also its
+     `present-plan` row's `ResultingPayloadHash`) equals `AgentControlPath.PlanHash` of the current payload
+     (`plan-changed`), and the answering save's `ResponseData.plan`, when present (read from its Record Change), equals
+     the presented plan text stored on the Plan step's `InputData` (`plan-edited`: an edited card is feedback for a
+     re-plan); a `RespondToAgentRequest` caller need not echo anything. A changed plan needs a new approval.
   Plus the consumption rule: an approval whose claim exists is refused (`consumed`). `conversationDetailId` is the
   response's conversation detail; `approvedAt = RespondedAt`.
 - **Consumption is an atomic claim made before dispatch (D5-23).** `BuildApprovalClaims.Claim(requestId, runId,
@@ -798,7 +817,8 @@ so PR 4's G0.2, G0.3 and G3.6 (`HarnessAgent.RunBuilderAgent`) stay green unchan
   the claim (`Engine/src/training/training-claims.ts`): of two concurrent claims one inserts, the other's save fails
   and it re-reads the row by `AgentRequestID` → `consumed` (no error text is parsed). Only the run holding the claim
   dispatches the builder; `BuildApprovalClaims.Settle` records `built`/`failed` and the pipeline. A crash mid-build
-  leaves the row `claimed`, so the next `Resolve` is `consumed` and the report says the build did not finish. The
+  leaves the row `claimed`, so the next `Resolve` is `consumed` and the report says the build did not finish (only once
+  the claiming run is not live, D5-38). The
   claim row is created only by `Claim` and changed only by `Settle` (instance-keyed one-shot authorisations, PR 4's
   `PublishRecordWriteAuthorisations` pattern, `Engine/src/registry/publish-record-write-authorisations.ts`; a PS
   `PreSave`/`PreDelete` hook through `PreSaveHookRegistration` refuses every other create, update and delete).
@@ -1077,16 +1097,19 @@ renderer is an L1 widget in the PS dashboards package.
   `LoadByKeyHashes`, `ConcurrentInsertHolds` and `WriteOne` read open rows only; CodeGen refreshes the index's
   `EntityUniqueKey` row from the catalog (it fills and prunes that table on every run, `V202611101200`).
   `RetireHumanValue` closes the Human row (`EffectiveTo` = now) instead of deleting it, so the history keeps it.
-- **Concurrency (D5-28).** Two writers of one record's open value (two overlapping runs of one pipeline: a scheduled
-  continuation slice and a manual run) are serialised by a stored lock Query, PR 4's `publish-locks.ts` pattern:
-  `Predictive Studio: Lock Open Feature Values` (`metadata/queries/.predictive-studio-feature-value-locks.json`, a
-  single `SELECT … FROM __mj.FeatureValue WITH (UPDLOCK, HOLDLOCK)` over the record's features' open `Pipeline` and
-  `Human` rows, like `predictive-studio-next-model-version.sql`), run through `RunQuery` on the transaction's provider
-  before `Decide`. `HOLDLOCK` also locks the empty key range, so a first insert waits too; the second writer reads the
-  first's committed row and decides against it (`unchanged` when it holds the same value). One run processes each
-  record once, so its concurrent records (`MaxConcurrency`) never share an open row. An insert that still fails on an open-row index (a writer outside the lock) re-reads the open row:
-  the same typed value → `Unchanged` (today's `ConcurrentInsertHolds` rule), else `FeatureValueSaveError` with the
-  transaction rolled back (the open row stays open).
+- **Concurrency (D5-28, D5-40).** Writers of one record's open value (two overlapping runs of a pipeline) are
+  serialised by two stored lock Queries (PR 4's `publish-locks.ts` pattern), taken **Pipeline identity first, then
+  Human**, one record at a time, before `Decide`: `Predictive Studio: Lock Open Pipeline Feature Values` / `… Human
+  …` (`metadata/queries/.predictive-studio-feature-value-locks.json`), each one `SELECT … WITH (UPDLOCK, HOLDLOCK,
+  NOWAIT)` whose `WHERE` repeats its filtered index's predicate literally (`EffectiveTo IS NULL AND Source = N'Pipeline'
+  AND Role = N'Champion'`, resp. `N'Human'`) plus the identity, so it seeks `UQ_FeatureValue_OpenPipeline` /
+  `…OpenHuman` and the key-range lock also covers an empty range. `RunQuery` reports a lock conflict as
+  `Success: false`, not a throw (`publish-locks.ts:12`), so `FeatureValueLocks.Acquire`
+  (`FeaturePipelines/src/cache/feature-value-locks.ts`; 250 ms doubling to 4 s, 30 s deadline — its own constants)
+  treats every `Success: false` as "not acquired", never an empty set, and at the deadline throws the typed
+  `FeatureValueLockTimeoutError`: the record fails, nothing is written. A run's concurrent records never share a
+  record. An insert that still fails on an open-row index re-reads: same typed value → `Unchanged`, else
+  `FeatureValueSaveError`, rolled back.
 - `EffectiveAsOf` of a derived value = the instant its input took its current value when the caller passes one (a new
   optional `inputAsOf` on `RecordFeatureValuesParams`, written to the existing `InputAsOf` column), else the
   computation time. A value is never back-dated before its input existed. The owner approved owner-batch item 1 (§9,
@@ -1201,15 +1224,17 @@ renderer is an L1 widget in the PS dashboards package.
   read only by a model trained on that version, and training refuses an unpinned or not-activated version, so old and
   new values never mix in one model. Changing the budget is ordinary configuration, not an approval. The estimate is
   read from the Process Run (its generated form and the API); no dashboard component is added (D5-31).
-- **Single flight and the budget under concurrency (D5-28).** Only one run of a Record Process takes the stale slice:
-  the earliest-started `Running` `MJ: Process Runs` row of that Record Process younger than PR 4's stale threshold
-  (`TrainingClaims.STALE_AFTER_HOURS` = 6, `Engine/src/training/training-claims.ts:85`; ties by `ID`) — the committed
-  run row is the claim, as in PR 4's `TrainingClaims`. A later overlapping run re-derives no stale value (it still
-  writes values whose input changed) and records `Yielded: true`. Within a run, records run with `MaxConcurrency`
-  (`RecordSetProcessor.ts:65`), so the slice **reserves** budget before each prompt call: a call starts only when
-  `SpentUsd + ReservedUsd + meanCostPerCall ≤ maxUsdPerRun` (and the value count likewise), the reservation is replaced
-  by the call's real `Cost` when it returns, so the overrun is bounded by the in-flight calls' cost above their
-  estimate.
+- **Single flight and the budget under concurrency (D5-28, D5-41, D5-42).** One run of a Record Process holds the stale
+  slice through a **lease with a heartbeat**: `MJ: Feature Pipeline Rederivation Leases` (B3's section: `ID`,
+  `RecordProcessID` unique, `ProcessRunID`, `AcquiredAt`, `RenewedAt`, `ReleasedAt`). `RederivationLease.Acquire`, in
+  one transaction, takes `Predictive Studio: Lock Rederivation Lease` (`UPDLOCK, HOLDLOCK, NOWAIT`, through
+  `FeatureValueLocks.Acquire`) and takes the lease only when none exists, it is released, or `RenewedAt` is older than
+  `RederivationLease.TTL_MINUTES = 15` (a constant of `@memberjunction/feature-pipelines`, which cannot import
+  `TrainingClaims`: the PS Engine depends on it). The holder renews every `RENEW_SECONDS = 60` and before each batch
+  (conditional: still its lease, else `lease-lost`, no further call) and releases at the end. A run without the lease
+  re-derives no stale value and records `Yielded: true`. Under `MaxConcurrency` (`RecordSetProcessor.ts:65`) each call
+  first **reserves** budget (`SpentUsd + ReservedUsd + meanCostPerCall ≤ maxUsdPerRun`, values likewise), replaced by
+  its real `Cost` on return, so overrun is bounded by in-flight calls' cost above their estimate.
 - The `FeaturePipelineEngine` comment (`:85-87`) and the guide (§ on `FeaturePipelineEngine`, line 630) are corrected to
   say all Process Runs are cached, or the cache is capped and the text says so (DD-9; default: cap to the newest N runs
   per pipeline and say so).
@@ -1265,7 +1290,8 @@ D-037): PR 4's `PublishRules.ReverifyPublish`, `Delivery.Create`; PR 3's `GateRu
 - **One migration file** (`PrConfig` PR 5 row, §2.2): `V<ts>__v6.<x>.x__PS_Agent_FP_Input.sql`, with one headed
   section per milestone that adds DDL — `-- section: A2` (`MLBuildApprovalClaim`, D5-23), `-- section: A4`
   (`AgentDecisionLog`), `-- section: B1` (`FeatureValue` columns, the set-based close of superseded rows, the narrowed
-  `UQ_FeatureValue_ValueKey` and the open-row indexes, D5-27), `-- section: B4` (`MLSearchStrategyComparison`) — then ≥ 50 blank lines and the CodeGen tail,
+  `UQ_FeatureValue_ValueKey` and the open-row indexes, D5-27), `-- section: B3` (`FeaturePipelineRederivationLease`,
+  D5-41), `-- section: B4` (`MLSearchStrategyComparison`) — then ≥ 50 blank lines and the CodeGen tail,
   which the controller regenerates once per wave on the integration database (never hand-merged).
 - Metadata: `.model-development-agent.json` (caps, `ModelSelectionMode`, `AllowMemoryWrite`, paths, Actions, data
   sources), the four prompt templates, `metadata/actions/predictive-studio/` (new Actions), the PS eval test type, suite
@@ -1322,7 +1348,7 @@ D-037): PR 4's `PublishRules.ReverifyPublish`, `Delivery.Create`; PR 3's `GateRu
   {"id": "c9-runner-driver-class", "file": "packages/AI/Agents/src/AgentRunner.ts", "symbol": "ResolveEffectiveAgentProperties", "pattern": "const effectiveDriverClass = effectiveProps?.DriverClass?.trim() || params.agent.DriverClass?.trim() || 'BaseAgent';", "lineHint": 340, "atCommit": "286baf8d24"},
   {"id": "c9-loop-type-driver", "file": "metadata/agent-types/.agent-types.json", "symbol": "\"Name\": \"Loop\",", "pattern": "\"DriverClass\": \"LoopAgentType\",", "lineHint": 7, "atCommit": "286baf8d24"},
   {"id": "c9-cli-success-log", "file": "packages/MJCLI/src/commands/ai/agents/run.ts", "symbol": "export default class AgentsRun extends Command", "pattern": "this.log(formatter.formatAgentResult(result));", "lineHint": 113, "atCommit": "286baf8d24"},
-  {"id": "c9-cli-fail-exit", "file": "packages/MJCLI/src/commands/ai/agents/run.ts", "symbol": "if (!result.success) {", "pattern": "this.exit(1);", "lineHint": 116, "atCommit": "286baf8d24"},
+  {"id": "c9-cli-fail-exit", "file": "packages/MJCLI/src/commands/ai/agents/run.ts", "symbol": "this.exit(exitCode);", "pattern": "exitCode = 1;", "lineHint": 121, "atCommit": "95feb574a8"},
   {"id": "c9-cli-close-provider", "file": "packages/AI/AICLI/src/lib/mj-provider.ts", "symbol": "connectionPool.close()", "pattern": "export async function CloseMJProvider(): Promise<void> {", "lineHint": 253, "atCommit": "286baf8d24"},
   {"id": "c9-tokens-used", "file": "packages/AI/PredictiveStudio/Engine/src/experiment/seams.ts", "symbol": "TrainingEngineExperimentTrainer", "pattern": "TokensUsed: 0,", "lineHint": 136, "atCommit": "286baf8d24"},
   {"id": "c9-iteration-tokens", "file": "packages/AI/PredictiveStudio/Engine/src/experiment/experiment-orchestrator.ts", "symbol": "ExperimentOrchestrator", "pattern": "iteration.TokensUsed = result.TokensUsed ?? 0;", "lineHint": 446, "atCommit": "286baf8d24"},
@@ -1419,7 +1445,21 @@ D-037): PR 4's `PublishRules.ReverifyPublish`, `Delivery.Create`; PR 3's `GateRu
   {"id": "s-fp-run-result", "file": "packages/AI/Knowledge/FeaturePipelines/src/versions/feature-pipeline-run-results.ts", "symbol": "HumanValuesPreserved: number;", "pattern": "export interface FeaturePipelineRunResult {", "lineHint": 24, "atCommit": "279a1a274b"},
   {"id": "s-infer-run-summary", "file": "packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts", "symbol": "DeferFeatureValuesToWriteBack", "pattern": "public BuildRunSummary(context: ProcessorRunSummaryContext): { ResultSummary?: unknown; WouldRefuse?: string } {", "lineHint": 446, "atCommit": "279a1a274b"},
   {"id": "s-rsp-concurrency", "file": "packages/RecordSetProcessor/engine/src/RecordSetProcessor.ts", "symbol": "MaxConcurrency", "pattern": "const maxConcurrency = Math.max(1, options.MaxConcurrency ?? 1);", "lineHint": 65, "atCommit": "279a1a274b"},
-  {"id": "s-test-engine-parallel", "file": "packages/TestingFramework/Engine/src/engine/TestEngine.ts", "symbol": "runTestsParallel", "pattern": "if (options.parallel && tests.length > 1) {", "lineHint": 373, "atCommit": "279a1a274b"}
+  {"id": "s-test-engine-parallel", "file": "packages/TestingFramework/Engine/src/engine/TestEngine.ts", "symbol": "runTestsParallel", "pattern": "if (options.parallel && tests.length > 1) {", "lineHint": 373, "atCommit": "279a1a274b"},
+  {"id": "s-chain-predecessor", "file": "packages/MJServer/src/resolvers/RunAIAgentResolver.ts", "symbol": "'stopped' | 'open-consult'", "pattern": "private async findChainablePredecessor(", "lineHint": 1028, "atCommit": "279a1a274b"},
+  {"id": "s-chain-cases", "file": "packages/MJServer/src/resolvers/RunAIAgentResolver.ts", "symbol": "LoadOpenSubAgentConsults", "pattern": "if (run.FinalStep === 'Chat' && CanAgentOwnSubAgentConsults(agentId)) {", "lineHint": 1063, "atCommit": "279a1a274b"},
+  {"id": "s-chat-no-last-run", "file": "packages/MJServer/src/resolvers/RunAIAgentResolver.ts", "symbol": "findChainablePredecessor", "pattern": "// by LastRunID (the chat client never sends one) and, when the caller supplied no", "lineHint": 1316, "atCommit": "279a1a274b"},
+  {"id": "s-chat-client-run", "file": "packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts", "symbol": "agentParams", "pattern": "const runResult = await this.agentClientService.RunAgentFromConversationDetail(agentParams);", "lineHint": 510, "atCommit": "279a1a274b"},
+  {"id": "s-execute-ai-agent", "file": "packages/MJServer/src/resolvers/RunAIAgentResolver.ts", "symbol": "RunAgentInConversation", "pattern": "private async executeAIAgent(", "lineHint": 344, "atCommit": "279a1a274b"},
+  {"id": "s-last-run-id-set", "file": "packages/AI/Agents/src/base-agent.ts", "symbol": "validateRunChain", "pattern": "this._agentRun.LastRunID = params.lastRunId;", "lineHint": 17520, "atCommit": "279a1a274b"},
+  {"id": "s-form-question-types", "file": "packages/AI/CorePlus/src/response-forms.ts", "symbol": "TextQuestionType", "pattern": "export type FormQuestionType =", "lineHint": 145, "atCommit": "279a1a274b"},
+  {"id": "s-plan-step-input", "file": "packages/AI/Agents/src/base-agent.ts", "symbol": "Plan Presented for Approval", "pattern": "inputData: { plan: planText },", "lineHint": 23283, "atCommit": "279a1a274b"},
+  {"id": "s-initial-step", "file": "packages/AI/Agents/src/base-agent.ts", "symbol": "recordExecutionRouting", "pattern": "const initialStep = await this.AgentTypeInstance.DetermineInitialStep<P>(params, params.payload, this.AgentTypeState);", "lineHint": 18681, "atCommit": "279a1a274b"},
+  {"id": "s-execution-routing", "file": "packages/AI/Agents/src/base-agent.ts", "symbol": "recordExecutionRouting", "pattern": "private async recordExecutionRouting(params: ExecuteAgentParams): Promise<void> {", "lineHint": 18921, "atCommit": "279a1a274b"},
+  {"id": "s-tree-budget-check", "file": "packages/AI/Agents/src/base-agent.ts", "symbol": "checkTreeBudgetLimit", "pattern": "protected checkTreeBudgetLimit(params?: ExecuteAgentParams): {", "lineHint": 11239, "atCommit": "279a1a274b"},
+  {"id": "s-run-heartbeat", "file": "packages/MJCoreEntities/src/generated/entities/__mj.ts", "symbol": "LastHeartbeatAt", "pattern": "Used by the agent-run watchdog to detect runs orphaned by a process restart/crash", "lineHint": 8980, "atCommit": "279a1a274b"},
+  {"id": "s-watchdog-defaults", "file": "packages/AI/Agents/src/agent-run-watchdog.ts", "symbol": "heartbeatIntervalMs: 30_000,", "pattern": "staleThresholdMinutes: 5,", "lineHint": 39, "atCommit": "279a1a274b"},
+  {"id": "s-publish-locks", "file": "packages/AI/PredictiveStudio/Engine/src/registry/publish-locks.ts", "symbol": "LOCK_WAIT_MS", "pattern": "does not throw out of `RunQuery`", "lineHint": 12, "atCommit": "279a1a274b"}
 ]
 ```
 
@@ -1560,7 +1600,10 @@ F-AG-9; the unowned Data Scout `Name` preload bug.
 `c9-data-scout`, `c9-experiment-designer`, `c9-subagent-model-pin`, `c9-agent-cost-cap`, `s-execute-next-step`,
 `s-determine-next-step-after-prompt`, `s-plan-step-request`, `s-respond-to-request`, `s-request-resume-guard`,
 `s-conversation-sync-after-run`, `s-plan-form-message`, `s-plan-mode-gate`, `s-training-claims`,
-`s-publish-record-authorisations`, `s-run-experiment-revoked`, `s-experiment-sessions-off`.
+`s-publish-record-authorisations`, `s-run-experiment-revoked`, `s-experiment-sessions-off`, `s-chain-predecessor`,
+`s-chain-cases`, `s-chat-no-last-run`, `s-chat-client-run`, `s-execute-ai-agent`, `s-last-run-id-set`,
+`s-form-question-types`, `s-plan-step-input`, `s-initial-step`, `s-execution-routing`, `s-tree-budget-check`,
+`s-run-heartbeat`, `s-watchdog-defaults`, `s-publish-locks`.
 
 **Contracts.**
 - `$C/agent-contracts.ts`: `BuildApproval` (§3.3, ported as `{ planId; planHash; approvedBy; conversationDetailId;
@@ -1587,13 +1630,19 @@ F-AG-9; the unowned Data Scout `Name` preload bug.
 - `AgentControlPath` (`$E/agent/control-path.ts`): `static Next(state: AgentControlState, facts: AgentControlFacts):
   AgentControlTransition` (pure), where `AgentControlFacts` carries the payload hash, the resolved approval or refusal,
   and the last build outcome; `static PlanHash(payload: ModelingPlanSpec): string` (SHA-256 of the canonical payload).
-- `PredictiveStudioModelDevAgent.executeNextStep` (override of `BaseAgent.executeNextStep`, `base-agent.ts:18646`,
-  same casing) asks `AgentControlPath.Next` first and returns a code-decided step without calling `super` (no
-  orchestrator prompt); only `gather`, a sub-agent repair and the `report` text call `super.executeNextStep`. The
-  `determineNextStep` override and its `as unknown as P` casts (`model-dev-orchestrator-agent.ts:73`, `:88`) are gone.
-  `buildPlanApprovalForm` (override, `base-agent.ts:23323`) adds the `planHash` question.
-- Owner-batch item 3 (§5.1.1, D5-22): `RunAIAgentResolver` settles a plan-card answer (`Approved`/`Rejected`,
-  `ResponseData`) before `RunAgentInConversation` and links `ResumingAgentRunID` after it;
+- `PredictiveStudioModelDevAgent.executeNextStep` (override, `base-agent.ts:18646`, D5-37) per §5.1: only `Retry`
+  turns are intercepted (budget check, then `AgentControlPath.Next`); everything else goes to `super`; prompt-made
+  decisions pass `static AgentControlPath.Gate(state: AgentControlState, step: BaseAgentNextStep): BaseAgentNextStep`.
+  The `determineNextStep` override and its `as unknown as P` casts (`:73`, `:88`) are gone; `PlanHash` is a
+  code-written payload slice (D5-36), with no `buildPlanApprovalForm` override.
+- `AgentSessionLease` (`$E/agent/agent-session-lease.ts`, D5-38): `STALE_AFTER_MINUTES = 10`; `static IsLive(run:
+  Pick<MJAIAgentRunEntity, 'Status' | 'LastHeartbeatAt'>, now: Date): boolean`; `static WithSessionLock<T>(sessionRunId:
+  string, work: () => Promise<T>, ctx: RegistryContext): Promise<T | { kind: 'session-busy'; liveRunId: string }>` (the
+  `Lock Agent Session` Query, `metadata/queries/.predictive-studio-agent-session-lock.json`, through `PublishLocks`
+  inside `ProviderTransactions.Run`); used by A2's claim replies and A4's `Append` and replay rebuild.
+- Owner-batch item 3 (§5.1.1, D5-22, D5-35): `RunAIAgentResolver` chains a plan-card answer with no `lastRunId` to
+  its presenting run (`findChainablePredecessor` reason `'plan-answer'`), settles it (`Approved`/`Rejected`,
+  `ResponseData`) in `executeAIAgent` before `RunAgentInConversation` and links `ResumingAgentRunID` after it;
   `MJAIAgentRequestEntityServer.MarkAnsweredByConversationHost(): void` makes that one save skip `resumeAgent`.
 - `PredictiveStudioPipelineBuilderAgent`: `static BuildAllowed(params: ExecuteAgentParams, approval: BuildApproval |
   BuildApprovalRefusal | null): boolean` = `ReadsPublishingSwitches(params) || approval is a BuildApproval`.
@@ -1633,29 +1682,43 @@ F-AG-9; the unowned Data Scout `Name` preload bug.
     Session attached `Revoked`; one C1 run's sub-agent prompt runs each used Gemini 4 Hydrogen (D-092);
     `EXISTING_APPROVED_MODELS` in `loadedSources`.
 13. **Approval through each supported path builds exactly once** (F-012): (a) the conversation plan card's Approve
-    (the form token in a chat turn, owner-batch item 3) → the request is `Approved` with `ResponseData.planHash`
+    (the form token in a chat turn, owner-batch item 3) → the request is `Approved` with the form's `ResponseData`
     **before** the continuation run starts, `Resolve` in that run returns a `BuildApproval`, 1 build, and no
     `resumeAgent` run is started by that save; (b) `RespondToAgentRequest(…, 'Approved', …, responseData)` → 1 build in
     the resumed run. On `next` (a) gives 0 builds (`Requested` during the run).
-14. The plan card's Reject, and a plain chat message answering the card → `Rejected` / today's post-run `Responded`
-    respectively, 0 builds; with plan mode on, the framework's `resolvePlanModeGate` returns exactly what it returns on
-    `next` for the plain message (item 3 changes nothing for it). An edited `plan` field with Approve → `plan-edited`,
-    0 builds.
+14. The plan card's Reject → `Rejected`, 0 builds; a plain chat message after the card → chained (or not) and synced
+    exactly as on `next` (item 3 changes nothing for it; `resolvePlanModeGate` returns what it returns on `next`),
+    0 builds. An edited `plan` field with Approve → `plan-edited`, 0 builds.
 15. **Concurrent consumption** (F-013): two resumed runs on one `Approved` request at once (the requesting person flips
     it `Approved → Requested → Approved` while the first build runs, which starts a second `resumeAgent`) → exactly one
     claim row, one build; the other run's `Resolve` → `consumed`.
-16. **Crash mid-build** (F-013): kill MJAPI after the claim and before the build settles, restart, send a plain user
-    message → 0 builds, the reply says the build did not finish, the claim row stays `claimed`.
+16. **Crash mid-build** (F-013, F-020): kill MJAPI after the claim and before the build settles, restart (the watchdog
+    fails the run), send a plain user message → 0 builds, the reply says the build did not finish, the claim row stays
+    `claimed`; killed after the claim and **before** the `request-build` row → the next run appends a `report` row "the
+    build did not start", 0 builds, no second claim.
 17. Every writer of a claim row: a GraphQL create, a GraphQL update of `Outcome`, a delete, an `Update Record` Action, a
     server `Save()` of a loaded row outside `Claim`/`Settle` → each refused by the claim guard; a client save
     interleaved (same MJAPI process) with a `Claim` in flight is still refused (the authorisation is keyed by the
     instance `Claim` saves, not a process flag).
-18. **No orchestrator prompt on a code step** (F-004): in one C1 session, every decision row of a code-decided
-    transition has `PromptRunID` NULL and the run's `MJ: AI Prompt Runs` for the orchestrator's prompt number exactly
-    the `gather`, repair and `report` steps; on `next` each `determineNextStep` turn carries a prompt run.
+18. **No orchestrator prompt on a code step** (F-004, F-024): in one C1 session, every decision row of a code-decided
+    transition has `PromptRunID` NULL, and the orchestrator's `MJ: AI Prompt Runs` number exactly one per run's first
+    turn plus the `gather`, repair and `report` turns; every code-chosen `Actions`/`Plan`/`Sub-Agent` step has its
+    `MJ: AI Agent Run Steps` row (BaseAgent executed it); each run has its routing record and a run whose tree budget
+    is spent before a code decision ends `Failed` exactly as on `next`.
+19. **Explorer chat, no `lastRunId`** (F-001): the plan card's Approve submitted through `RunAIAgentFromConversationDetail`
+    with no `lastRunId` (what `conversation-agent.service.ts:510` sends) → the run's `LastRunID` is the presenting run,
+    the request is `Approved` before the run, 1 build; on `next` the run is unchained and builds 0.
+20. **No hash in the form** (F-023): the request's stored form has exactly the stock `plan`, `reason`, `decision`
+    questions; `RespondToAgentRequest(…, 'Approved', …, '{"decision":"approve"}')` → 1 build; the payload changed
+    between presenting and approving → `plan-changed`, 0 builds.
+21. **The gate** (F-024): in state `gather`, a prompt decision naming the Pipeline Builder sub-agent or a draft
+    Action → replaced by the control path's step, 0 builds, 0 drafts written by that decision.
+22. **Two live runs of one session** (F-019): a dashboard approval's `resumeAgent` and a chat turn continuing one
+    session at once → one run proceeds, the other replies `session-busy` and appends nothing; while the build runs
+    every reply says "build in progress", never "did not finish"; `Step` stays contiguous.
 
-**Non-PS list.** Owner-batch item 3 (D-091, D5-22): `packages/MJServer/src/resolvers/RunAIAgentResolver.ts` (settle a
-plan-card answer before the continuation run; link `ResumingAgentRunID` after it) and
+**Non-PS list.** Owner-batch item 3 (D-091, D5-22): `packages/MJServer/src/resolvers/RunAIAgentResolver.ts` (chain a
+plan-card answer to its presenting run, settle it before the continuation run, link `ResumingAgentRunID` after it) and
 `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts` (`MarkAnsweredByConversationHost`, so that save does not
 resume), with their tests `packages/MJServer/src/__tests__/RunAIAgentResolver.requestAnswers.test.ts` and
 `packages/AI/Agents/src/__tests__/agent-request-resume-branch.test.ts`. No PS-side route exists: rule 3 needs the
@@ -1670,6 +1733,10 @@ packages/AI/PredictiveStudio/Core/src/index.ts
 packages/AI/PredictiveStudio/Engine/src/agent/build-approval-resolver.ts
 packages/AI/PredictiveStudio/Engine/src/agent/build-approval-claims.ts
 packages/AI/PredictiveStudio/Engine/src/agent/build-approval-claim-write-authorisations.ts
+packages/AI/PredictiveStudio/Engine/src/agent/agent-session-lease.ts
+packages/AI/PredictiveStudio/Engine/src/agent/__tests__/agent-session-lease.test.ts
+metadata/queries/.predictive-studio-agent-session-lock.json
+metadata/queries/SQL/predictive-studio-lock-agent-session.sql
 packages/AI/PredictiveStudio/Engine/src/agent/__tests__/build-approval-claims.test.ts
 packages/MJServer/src/resolvers/RunAIAgentResolver.ts
 packages/MJServer/src/__tests__/RunAIAgentResolver.requestAnswers.test.ts
@@ -1698,8 +1765,8 @@ Receives at integration: B4's `$C/index.ts` export line, A7a's `$E/index.ts` exp
 `FeatureValueEffectiveRangeGuard.Register();` line for `$E/index.ts`, B4's barrel and registry lines for
 `ps-gate-w1-c3-2`.
 
-**Decisions.** DD-1 is decided (D-089, with D5-26: Run Experiment Session stays `Revoked`); the plan hash rides the
-`planHash` form question (D5-22); A2 records CodeGen's claim entity name in §9.
+**Decisions.** DD-1 is decided (D-089, with D5-26: Run Experiment Session stays `Revoked`); the plan hash is the
+server-written `PlanHash` slice (D5-36); A2 records CodeGen's claim entity name in §9.
 
 **Exit.** Common set; G4.1: `PS_PR=5 tools/ps-env.sh pnpm mj test run "C1 -> C1.1"` → pass (5 runs per negated-build
 scenario: 0 builds; forced failure + plain message: 0 further builds in 5 of 5; the one build's decision row (A4 adds
@@ -1710,8 +1777,8 @@ save is a person's); `PS_PR=5 tools/ps-env.sh pnpm mj test suite "Predictive Stu
 `Requested` and an `Approved` request (`check-migration-entityfield-sequence.mjs`, `check:codegen-tail`).
 **Mutation check G4.1:** drop `AnsweredInSeparateSave` from `Resolve` → attack 2 goes red; drop `NotClaimed` → attack 7
 goes red; dispatch before `Claim` (or drop the unique index from section A2) → attack 15 goes red; move the item 3
-settle back after the run → attack 13 (a) goes red; let `BuildAllowed` return true for a non-trusted sub-agent →
-attack 8 goes red.
+settle back after the run → attack 13 (a) goes red; drop the `'plan-answer'` chaining → attack 19 goes red; skip the
+liveness read → attack 22 goes red; let `BuildAllowed` return true for a non-trusted sub-agent → attack 8 goes red.
 
 #### A3 — Drafting tools, catalog and plan validation
 
@@ -1845,7 +1912,8 @@ reproduces the final plan's hash; a run that finds its payload behind the log re
 
 **Seams.** `c9-agent-request-entity` (FK target), `c9-sidecar-timeout` (profile requests), `s-presave-registration`,
 `c9-tokens-used` (replay parameters), `c9-plan-approval-form`, `s-trainer-request`, `s-sidecar-routes`,
-`s-run-last-run-id`, `s-request-resume-last-run`, `s-publish-record-authorisations`.
+`s-run-last-run-id`, `s-request-resume-last-run`, `s-publish-record-authorisations`, `s-run-heartbeat`,
+`s-watchdog-defaults`.
 
 **Contracts.**
 - Migration section A4: `__mj.AgentDecisionLog` exactly as §5.1.6 (CHECK on `Decision`, unique (`SessionRunID`,
@@ -1855,9 +1923,12 @@ reproduces the final plan's hash; a run that finds its payload behind the log re
   `improvement: MetricWithInterval`; `unresolved-reference`), `ProfileResult`.
 - `AgentDecisionLog` (`$E/agent/decision-log.ts`): `static SessionOf(run: MJAIAgentRunEntity, provider, contextUser):
   Promise<string>` (the `SessionRunID` rule of §5.1: the `LastRunID` run's session when its newest row is not
-  terminal, else this run's ID); `static Append(entry: AgentDecisionLogEntry, provider, contextUser): Promise<string>`
-  (called **before** the transition's effect; `Step` = the session's newest + 1, the unique (`SessionRunID`, `Step`)
-  index refusing a second writer of the same step); `static Register(): void` registers, through
+  terminal, else this run's ID); `static Append(entry: AgentDecisionLogEntry, provider, contextUser): Promise<string |
+  { kind: 'log-diverged'; newestStep: number } | { kind: 'session-busy'; liveRunId: string }>` (called **before** the
+  transition's effect, inside `AgentSessionLease.WithSessionLock`; compare-and-append, D5-38: it inserts only when
+  `entry.payloadHash` equals the newest row's `ResultingPayloadHash` and `Step` = that row's `Step + 1`, the unique
+  (`SessionRunID`, `Step`) index backing it; the payload rebuild by replay also runs only inside the lock and only when
+  no other run of the session is live); `static Register(): void` registers, through
   `PreSaveHookRegistration.RegisterOnce` and `RegisterPreDeleteOnce`, the guard that refuses every update and delete of
   a saved `MJ: Agent Decision Log` row and every create that does not carry `Append`'s one-shot authorisation
   (`$E/agent/decision-log-write-authorisations.ts`: PR 4's `PublishRecordWriteAuthorisations` pattern, a
@@ -1896,17 +1967,22 @@ reproduces the final plan's hash; a run that finds its payload behind the log re
    one logged `PromptRunID` deleted from a copy → `replay-incomplete` naming it.
 6. The profile on a C1 draft unit reads 0 holdout rows (shares A3's `AgentReadScope`; `HoldoutRowsRead = 0`).
 7. W7 s42 session, 3 of 3: ends `decline-small-data` with the counts on the decision row, no plan presented, no build.
-8. **Crash between Append and effect** (F-014): kill MJAPI right after the `draft-protocol` row is appended and before
-   the run's payload is saved; the next turn's run finds its payload hash ≠ the row's `ResultingPayloadHash`, rebuilds
-   it by `Replay` and continues at `validate-plan` (no duplicate `draft-protocol` row, `Step` still contiguous); killed
-   after a `request-build` row and its claim, before the builder settles → the next turn reports an unfinished build,
-   0 builds.
+8. **Crash between Append and effect** (F-014, F-020): kill MJAPI right after the `draft-protocol` row is appended and
+   before the run's payload is saved; once the watchdog has failed the run, the next turn's run finds its payload hash
+   ≠ the row's `ResultingPayloadHash`, rebuilds it by `Replay` and continues at `validate-plan` (no duplicate
+   `draft-protocol` row, `Step` still contiguous); killed after a `request-build` row and its claim, before the builder
+   settles → the next turn reports an unfinished build, 0 builds; killed after the claim and before the
+   `request-build` row → a `report` row "the build did not start", 0 builds.
 9. **Interleaved client create** (F-018): while `Append` awaits its save, a GraphQL create of a `MJ: Agent Decision Log`
    row in the same MJAPI process → refused (the authorisation is keyed by `Append`'s instance).
 10. `/profile` (F-006): a request of development arrays with a planted leaky field (equal to the label) and a pure-noise
     field → the leaky field's interval excludes 0 and the noise field's includes it; no `MJ: ML Training Snapshots`,
     `MJ: ML Training Runs` or `MJ: ML Evaluation Protocols` row is written; the sidecar's Python test of the route
     passes.
+11. **Interleaved appends** (F-019): two runs of one session both past the busy check (the lock made to admit them by a
+    test seam) append steps 5 and 6 from different payloads → the second is refused `log-diverged`, nothing written,
+    `Replay` still reproduces the chain; a run continuing a session whose other run is live (heartbeat 30 s old) never
+    rebuilds the payload, while one whose other run's heartbeat is 11 min old and `Failed` does.
 
 **Non-PS list.** None: the guard is a PS `PreSave` hook (`PreSaveHookRegistration`), not an entity server subclass
 outside the PS roots; the `/profile` endpoint is in the PS sidecar.
@@ -1961,7 +2037,8 @@ recorded in §9).
 `npm run check:codegen-tail`); `PS_PR=5 tools/ps-env.sh pnpm mj test run "C1 -> C1.3"` and `"W7 -> C1.4"` → pass.
 **Mutation check G4.3:** let the guard allow an update of a saved row → attack 3 goes red; skip the hash comparison in
 `Replay` → attack 5 goes red; key `Step` on `AgentRunID` instead of `SessionRunID` → attack 4 goes red; replace the
-instance-keyed authorisation with a process flag → attack 9 goes red; skip the payload rebuild → attack 8 goes red.
+instance-keyed authorisation with a process flag → attack 9 goes red; skip the payload rebuild → attack 8 goes red;
+append at newest + 1 without the hash compare → attack 11 goes red.
 **Mutation check G4.7:** `<` → `<=` on either threshold → attack 1 goes red.
 
 #### A5 — The PS memory policy (what `isRunTainted` does not cover)
@@ -2292,9 +2369,16 @@ half).
   re-creation `WHERE ValueKeyHash IS NOT NULL AND EffectiveTo IS NULL`; `UQ_FeatureValue_OpenPipeline` and
   `UQ_FeatureValue_OpenHuman` (§5.2.1); index (`EntityID`, `FeatureName`, `PipelineVersion`, `RecordID`,
   `EffectiveAsOf`).
-- The stored Query `Predictive Studio: Lock Open Feature Values` (`metadata/queries/.predictive-studio-feature-value-locks.json`,
-  `metadata/queries/SQL/predictive-studio-lock-open-feature-values.sql`: parameters `RecordProcessID`, `EntityID`,
-  `RecordID`, `FeatureNames`; `WITH (UPDLOCK, HOLDLOCK)`), run by the service inside its transaction before `Decide`.
+- The stored Queries `Predictive Studio: Lock Open Pipeline Feature Values` and `… Lock Open Human Feature Values`
+  (`metadata/queries/.predictive-studio-feature-value-locks.json`, `SQL/predictive-studio-lock-open-pipeline-feature-values.sql`,
+  `SQL/predictive-studio-lock-open-human-feature-values.sql`: parameters `RecordProcessID`, `EntityID`, `RecordID`,
+  `FeatureNames`; `WITH (UPDLOCK, HOLDLOCK, NOWAIT)`, each `WHERE` repeating its filtered index's predicate literally),
+  taken Pipeline first, then Human, inside the service's transaction before `Decide` (D5-40).
+- `FeatureValueLocks` (`packages/AI/Knowledge/FeaturePipelines/src/cache/feature-value-locks.ts`): `static
+  Acquire(queryName: string, params: Record<string, string | readonly string[]>, provider, contextUser, clock?):
+  Promise<readonly Record<string, string | number | null>[]>` — `Success: false` is "not acquired" and retried
+  (`FIRST_BACKOFF_MS = 250`, doubling, `MAX_BACKOFF_MS = 4_000`, `LOCK_WAIT_MS = 30_000`, its own constants mirroring
+  `PublishLocks`); at the deadline it throws `FeatureValueLockTimeoutError`; an error `RunQuery` throws is rethrown.
 - `RecordFeatureValuesParams` gains `inputAsOf?: Date | null`; `RecordFeatureValuesOutcome` gains `Closed: number`.
 - `FeatureValueEffectiveDating` (`packages/AI/Knowledge/FeaturePipelines/src/cache/effective-dating.ts`):
   `static EffectiveAsOf(inputAsOf: Date | null, computedAt: Date): Date`, `static OpenIdentity(row: Pick<MJFeatureValueEntity,
@@ -2354,6 +2438,12 @@ half).
 14. **Guard scope** (F-018, F-007): a GraphQL update of `EffectiveTo` issued while the service's save of another
     instance is in flight in the same MJAPI process → refused; `Angular/Bootstrap`'s generated registrations import no
     hook-registering module of B1 (the guard is in the PS Engine).
+15. **Lock timeout and order** (F-021): the Pipeline open-row lock held by another transaction past `LOCK_WAIT_MS` →
+    `FeatureValueLockTimeoutError`, nothing written, the record failed; a lock Query result with `Success: false`
+    is never treated as "no open row" (the stub returning it once then succeeding → one retry, one write); the
+    Human lock is never taken before the Pipeline lock (a recorded order check), and the query plan of each lock Query
+    seeks its filtered index (`SET SHOWPLAN_XML` on the integration database names `UQ_FeatureValue_OpenPipeline` /
+    `UQ_FeatureValue_OpenHuman`).
 
 **Non-PS list.** `packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts` — passing `inputAsOf`
 (the instant the input took its value) needs the run loop that reads the input record; no PS-side route — §9 owner
@@ -2369,8 +2459,11 @@ packages/AI/Knowledge/FeaturePipelines/src/__tests__/feature-value-effective-dat
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/feature-value-concurrency.test.ts
 packages/AI/PredictiveStudio/Engine/src/feature-values/effective-range-guard.ts
 packages/AI/PredictiveStudio/Engine/src/feature-values/__tests__/effective-range-guard.test.ts
+packages/AI/Knowledge/FeaturePipelines/src/cache/feature-value-locks.ts
+packages/AI/Knowledge/FeaturePipelines/src/__tests__/feature-value-locks.test.ts
 metadata/queries/.predictive-studio-feature-value-locks.json
-metadata/queries/SQL/predictive-studio-lock-open-feature-values.sql
+metadata/queries/SQL/predictive-studio-lock-open-pipeline-feature-values.sql
+metadata/queries/SQL/predictive-studio-lock-open-human-feature-values.sql
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-input-as-of.test.ts
 ```
@@ -2386,7 +2479,8 @@ unit, dated at the record's `__mj_UpdatedAt`; no save subscriber).
 "Predictive Studio Gates — Feature Pipelines"` green (PR 1's five gates).
 **Mutation check (B1 guards):** build the open-row index before the set-based close → attack 10 goes red; keep
 `UQ_FeatureValue_ValueKey` unfiltered → attack 9 goes red; drop the lock Query → attack 12 goes red; let the guard
-accept any save while an authorisation exists for another instance → attack 14 goes red.
+accept any save while an authorisation exists for another instance → attack 14 goes red; read a `Success: false` lock
+result as an empty set → attack 15 goes red.
 
 #### B2 — Assembly reads the value in effect; pins in lineage
 
@@ -2511,12 +2605,18 @@ says so.
   200 `MJ: AI Prompt Runs`, read with `RunView` (no new stored Query). **Storage (D5-31):** the run's
   `MJ: Process Runs.ResultSummary`, as `FeaturePipelineRunResult.Rederivation` (`feature-pipeline-run-results.ts`),
   built by `InferProcessor.BuildRunSummary` (`InferProcessor.ts:446`); no new column, no migration section.
+- Migration section B3: `__mj.FeaturePipelineRederivationLease` (§5.2.4: unique `RecordProcessID`, FKs),
+  `TrackRecordChanges = 0`; entity `MJ: Feature Pipeline Rederivation Leases` (CodeGen's name recorded in §9).
+- `RederivationLease` (`packages/AI/Knowledge/FeaturePipelines/src/versions/rederivation-lease.ts`, D5-41/D5-42):
+  `static readonly TTL_MINUTES = 15`, `static readonly RENEW_SECONDS = 60` (this package's constants); `static
+  Acquire(recordProcessId: string, processRunId: string, provider, contextUser): Promise<{ Held: true; LeaseID: string }
+  | { Held: false; HolderRunID: string }>` (the lock Query `Predictive Studio: Lock Rederivation Lease`, through
+  `FeatureValueLocks.Acquire`, then the read and the take in one transaction); `static Renew(leaseId, processRunId,
+  provider, contextUser): Promise<boolean>` (false → `lease-lost`); `static Release(...)`.
 - `RederivationSlice` (`packages/AI/Knowledge/FeaturePipelines/src/versions/rederivation-slice.ts`): `static
-  HoldsSlice(run: MJProcessRunEntity, running: readonly MJProcessRunEntity[], now: Date): boolean` (the earliest
-  non-stale `Running` run of the Record Process, ties by `ID`; stale after `TrainingClaims.STALE_AFTER_HOURS`, the
-  committed run row as the claim, D5-28) and `static Reserve(budget: RederivationBudgetState, meanCostPerCall: number):
-  boolean` / `static Settle(budget, reserved: number, actual: number): void` (the per-call reservation under
-  `MaxConcurrency`), called from `InferProcessor`'s slice step.
+  Reserve(budget: RederivationBudgetState, meanCostPerCall: number): boolean` / `static Settle(budget, reserved:
+  number, actual: number): void` (the per-call reservation under `MaxConcurrency`), called from `InferProcessor`'s
+  slice step, which holds the lease and renews it.
 
 **Attack list**
 1. G7.6: a C1 model trained on job-title version 1, the pipeline's Active version moved to 2 → scoring refused
@@ -2538,10 +2638,14 @@ says so.
 8. **Ungated pipelines** (F-005): training and publishing a model pinned to an **ungated** Active version (no golden
    set) → not refused; a gated version without a passing result → refused at both.
 9. **Overlapping slice runs** (F-011): two runs of one Record Process started 1 s apart over 25 stale values with
-   `maxValuesPerRun` = 10 → the earlier re-derives 10, the later 0 (`Yielded: true`), no value is re-derived twice;
-   the earlier marked stale (older than 6 h) → the later takes the slice.
+   `maxValuesPerRun` = 10, including the case where the run with the earlier `StartTime` commits its run row after
+   the other read → exactly one holds the lease and re-derives 10, the other 0 (`Yielded: true`), no value is
+   re-derived (no prompt call made) twice; a slice running longer than `TTL_MINUTES` keeps the lease by renewal and no
+   second run takes it; a holder killed mid-slice → after `TTL_MINUTES` the next run takes the lease.
 10. **Budget under concurrency** (F-011): `MaxConcurrency` = 4, `maxUsdPerRun` = 5 × the mean call cost → at most 5
     calls start, and the run's `SpentUsd` ≤ `maxUsdPerRun` + the 4 in-flight calls' cost above their estimate.
+11. **No reversed dependency** (F-022): `@memberjunction/feature-pipelines`' `package.json` gains no
+    `@memberjunction/predictive-studio*` dependency and its source imports none.
 
 **Non-PS list.** `packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts` — the budgeted
 re-derivation slice (D5-14: re-derive at most `maxValuesPerRun`/`maxUsdPerRun` per run, oldest first, continuing
@@ -2551,6 +2655,7 @@ written through its `BuildRunSummary`; no PS-side route — §9 owner batch item
 dashboard component is added (D5-31); the stored estimate is read on the Process Run.
 
 ```ownership
+migrations/v6/V<ts>__v6.<x>.x__PS_Agent_FP_Input.sql  (section: B3)
 packages/AI/PredictiveStudio/Core/src/scoring-contracts.ts
 packages/AI/PredictiveStudio/Core/src/registry-contracts.ts
 packages/AI/PredictiveStudio/Core/src/lifecycle-labels.ts
@@ -2568,6 +2673,10 @@ packages/AI/PredictiveStudio/Engine/src/feature-pipelines/feature-pipeline-engin
 packages/AI/PredictiveStudio/Engine/src/scoring/__tests__/feature-pin-check.test.ts
 packages/AI/Knowledge/FeaturePipelines/src/versions/rederivation-estimator.ts
 packages/AI/Knowledge/FeaturePipelines/src/versions/rederivation-slice.ts
+packages/AI/Knowledge/FeaturePipelines/src/versions/rederivation-lease.ts
+packages/AI/Knowledge/FeaturePipelines/src/__tests__/rederivation-lease.test.ts
+metadata/queries/.predictive-studio-rederivation-lease-lock.json
+metadata/queries/SQL/predictive-studio-lock-rederivation-lease.sql
 packages/AI/Knowledge/FeaturePipelines/src/versions/feature-pipeline-run-results.ts
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/rederivation-slice.test.ts
 packages/AI/Knowledge/FeaturePipelines/src/entities/MJFeaturePipelineVersionEntityExtended.ts
@@ -2589,10 +2698,12 @@ Hands at integration: its `$C/index.ts` export and its barrel/registry lines to 
 `ResultSummary.Rederivation`), D5-9 (the two new variants) recorded in `program/decisions.md` when they land.
 
 **Exit.** Common set; `PS_PR=5 tools/ps-env.sh mj sync push --dir=metadata --ci` before `mj codegen`;
-`PS_PR=5 tools/ps-env.sh pnpm mj test run "C1 -> S3.3"` → pass.
+`PS_PR=5 tools/ps-env.sh pnpm mj test run "C1 -> S3.3"` → pass; migration section B3 applied on a fresh database
+(`check-migration-entityfield-sequence.mjs`, `check:codegen-tail`).
 **Mutation check G7.6:** remove the pin comparison from `ScoringService.Admit` → attack 1 goes red; drop the golden-set
 refusal at publish → attack 4 goes red; drop `!v.Gated ||` from `IsActivated` → attack 8 goes red; let every running
-run take the slice → attack 9 goes red; reserve nothing before a call → attack 10 goes red.
+run take the slice (or skip the lease renewal) → attack 9 goes red; reserve nothing before a call → attack 10 goes
+red.
 
 #### B4 — The search-strategy policy
 
@@ -2958,72 +3069,60 @@ Record every decision taken in §9 and, when it changes another plan's interface
   record's `__mj_UpdatedAt` as the run loop read it (the instant it took its current value; Record Changes would need a
   second read per record), falling back to the computation time when absent. Item 2: the D5-14 slice runs in the loop
   that selects stale values, oldest `EffectiveAsOf` first. B1 owns the file in wave 1, B3 in wave 3.
-- D5-22 · 2026-11-26 · A build may be approved in the conversation's plan card as well as through the request
-  dashboard/API; the card needs owner-batch item 3 (`RunAIAgentResolver` saves a Plan-step form answer, `Approved`/
-  `Rejected` with `ResponseData`, as the person's client save before the continuation run, marked so it does not also
-  resume; every other message unchanged). The plan hash rides a `planHash` form question; an edited plan is
-  `plan-edited`; a run with an added audience raises no request and cannot build. · On `next` the card's answer is
-  written `Responded` after the run that would build (council F-001, F-012); only the resolver holds the person's save;
-  the owner ruled shared code in on 2026-11-26. · Routing the card through `RespondToAgentRequest` (the resumed run
-  streams nowhere); dashboard-only approval (contradicts §1/§3.3).
-- D5-23 · 2026-11-26 · Consuming an approval is an atomic claim before dispatch: one `MJ: ML Build Approval Claims`
-  row per request (A2's section, unique on `AgentRequestID`), written only by `BuildApprovalClaims.Claim`/`Settle`,
-  kept whether the build fails or the process dies. · Resolve-then-`Consume` let two resumed runs build and a crash
-  leave the approval reusable; wave 1 had no consumed state (council F-013). · A decision-log row as the claim (wave
-  3); a lock alone (a crash leaves nothing).
-- D5-24 · 2026-11-26 · A session is `SessionRunID` (its first run), continued along `LastRunID` while the previous
-  run's newest row is not terminal; `Step` is unique per session; `Replay` and `Resolve` read the whole session; a row
-  is appended before its effect and a payload behind the log is rebuilt by replay. · A resume is a new run, so per-run
-  keys broke the order, the hash chain and replay at the approval boundary (council F-014). · A session column on the
-  shared `MJ: AI Agent Runs`; appending after the effect (a crash loses the row).
-- D5-25 · 2026-11-26 · No unit or protocol row before approval: drafts live in the payload (`UnitDraft`,
-  `ProtocolDraft`, hashed with the plan) and the Pipeline Builder creates both from them (`pipeline-builder.ts`,
-  `modeling-plan-spec.ts`, A3); a draft-free spec builds as on `next`. `BuildApproval` is ported without unit/protocol
-  refs, `AgentToolBoundary.writable` is empty before approval, `PayloadSelfWritePaths` = `Name`, `Report` (deltas from
-  C9a). · The builder always created fresh rows, so draft rows would be orphans (council F-003). · Draft rows the
-  builder binds (two writers of PR 3's rows, orphans on every declined session).
-- D5-26 · 2026-11-26 · The orchestrator overrides `executeNextStep` (`base-agent.ts:18646`, before any prompt), not
-  `determineNextStep` (after `executePrompt`, `:19312`); Run Experiment Session stays `Revoked`, outside the Action
-  set; `ModelingPlanSpec.Approved` stays for the disabled experiment path, set by nothing. · One LLM call per code
-  transition, and an Action that needs `Approved` and `ExperimentSessions.Enabled` (false) (council F-004). · The Loop
-  agent type's `PreProcessNextStep` (shared, not PS's).
-- D5-27 · 2026-11-26 · One open-row identity (`Pipeline`: Record Process, entity, record, feature, version; `Human`:
-  Record Process, binding, entity, record, feature) for the indexes, `Decide` and the reader; `UQ_FeatureValue_ValueKey`
-  narrowed to open rows; the migration closes superseded rows set-based before any new index; `historyOnly` rows
-  written closed; `RetireHumanValue` closes. A fallback-answered value carries its pin's `AIModelID`
-  (`InferProcessor.ts:1960`), a value of the same version. · The old key refused A→B→A, same-input re-derivations and a
-  second Human edit, the index could not be built over PR 1 data, and the three definitions disagreed (council F-002,
-  F-008, F-009, F-010). · The instant in the key hash (changes PR 1's key); an engine backfill (cannot precede the
-  migration's index).
-- D5-28 · 2026-11-26 · Open-value writers are serialised by `Predictive Studio: Lock Open Feature Values` (`UPDLOCK,
-  HOLDLOCK`, PR 4's `publish-locks.ts` pattern) in the write's transaction; the slice is single-flight per Record
-  Process (earliest non-stale `Running` Process Run, `TrainingClaims`' threshold) and reserves budget per call. ·
-  Overlapping runs, overlapping slices and `MaxConcurrency` overrun (council F-011). · Optimistic retry without a lock
-  (the loser has already overwritten `EffectiveTo`).
-- D5-29 · 2026-11-26 · Human edits are captured by PR 1's `FeaturePipelineHumanValueGuard` inside the write-back unit,
-  dated at the record's `__mj_UpdatedAt`; no save subscriber (DD-7). · A subscriber could not tell the pipeline's save
-  from a person's and committed after it (council F-015). · A scoped "pipeline save" marker (the save is in
-  `RecordSetProcessor`, not edited).
-- D5-30 · 2026-11-26 · Every PR 5 write guard (decision log, approval claims, Feature Value range) uses PR 4's
-  instance-keyed one-shot authorisations (`publish-record-write-authorisations.ts`); the Feature Value hook lives in the
-  server-only PS Engine, registered from `$E/index.ts`. · A process flag across an await admits a concurrent client
-  save, and a hook in `@memberjunction/feature-pipelines` loads into Explorer's bundle (council F-007, F-018). ·
-  `@memberjunction/feature-pipelines-engine` (outside the PS roots).
-- D5-31 · 2026-11-26 · Golden-set rule `IsActivated = !Gated || HasPassingResult` at training, scoring and publish (via
-  `StoredPublishInputs.PinActivations`, B3 owns `stored-publish-inputs.ts`); the estimate stored once, in the run's
-  `ResultSummary.Rederivation`, read with `RunView`; no dashboard component. · `HasPassingResult` refused every ungated
-  version, and the plan named two storages, a missing column and an unmounted component (council F-005). · A new
-  version-row column (a second storage and a migration).
-- D5-32 · 2026-11-26 · Profiling runs on a new PS sidecar `POST /profile` (A4) taking development arrays. · `/trainer`
-  needs a snapshot, run and protocol and returns only the best single feature (council F-006). · TypeScript-only
-  statistics (no cross-validated GLM interval for G4.4).
-- D5-33 · 2026-11-26 · Eval memory isolation is scoped to the repeat's run tree, the driver refuses parallel runs, the
-  arms run one after the other. · A time window under parallel mode leaked other tests' notes (council F-016). ·
-  Per-worker scoping (the W3 note is deliberately cross-run).
-- D5-34 · 2026-11-26 · A7b's baseline arm runs in a detached worktree at `d214248682` with A7a's self-contained
-  `agent-eval/` overlaid, on `MJ_PS_PR5_<agent>base`, both kept to A7b's exit; a repeat is re-run there by its manifest
-  key. · The PR branch has no baseline agent by wave 5 (council F-017). · Saved M0 transcripts (6 seeds, not the
-  paired suite).
+- D5-22 · 2026-11-26 · Chat (plan card) approval is product behaviour: owner-batch item 3 settles the card's answer
+  before the continuation run, marked so it does not also resume. · On `next` it is written `Responded` after the run
+  that would build, and only the resolver holds the person's save (F-001, F-012).
+- D5-23 · 2026-11-26 · Consumption is an atomic claim before dispatch: one `MJ: ML Build Approval Claims` row per
+  request (unique), kept on failure or crash. · Resolve-then-`Consume` let two resumed runs build and a crash leave the
+  approval reusable (F-013).
+- D5-24 · 2026-11-26 · A session is `SessionRunID`, continued along `LastRunID`; `Step` unique per session; rows
+  appended before effects; a payload behind the log is rebuilt by replay. · A resume is a new run (F-014).
+- D5-25 · 2026-11-26 · Drafts live in the payload and the Pipeline Builder creates unit and protocol from them (A3);
+  `BuildApproval` without unit/protocol refs; `PayloadSelfWritePaths` = `Name`, `Report`. · The builder always made
+  fresh rows, so draft rows were orphans (F-003).
+- D5-26 · 2026-11-26 · Override `executeNextStep`, not `determineNextStep`; Run Experiment Session stays `Revoked`,
+  outside the Action set; `ModelingPlanSpec.Approved` untouched. · One LLM call per code transition; the Action needs
+  `Approved` and disabled sessions (F-004).
+- D5-27 · 2026-11-26 · One open-row identity for the indexes, `Decide` and the reader; `UQ_FeatureValue_ValueKey`
+  narrowed to open rows; the migration closes superseded rows before any new index. · The old key refused dated
+  history, the index could not build over PR 1 data, and the definitions disagreed (F-002, F-008, F-009, F-010).
+- D5-28 · 2026-11-26 · Open-value writers serialised by a lock Query; the slice single-flight; budget reserved per
+  call (refined by D5-40, D5-41). · Overlapping writers, slices and `MaxConcurrency` overrun (F-011).
+- D5-29 · 2026-11-26 · Human edits captured by PR 1's `FeaturePipelineHumanValueGuard` inside the write-back unit;
+  no save subscriber (DD-7). · A subscriber could not tell the pipeline's save from a person's (F-015).
+- D5-30 · 2026-11-26 · Every write guard uses PR 4's instance-keyed authorisations; the Feature Value hook lives in the
+  server-only PS Engine. · A process flag admits concurrent saves; a hook in feature-pipelines loads in Explorer
+  (F-007, F-018).
+- D5-31 · 2026-11-26 · `IsActivated = !Gated || HasPassingResult`; the estimate stored once in the run's
+  `ResultSummary`; no dashboard component. · Ungated versions were refused; two storages, a missing column, an
+  unmounted component (F-005).
+- D5-32 · 2026-11-26 · Profiling on a new sidecar `POST /profile`. · `/trainer` needs rows that do not exist before
+  approval (F-006).
+- D5-33 · 2026-11-26 · Eval isolation by run tree; parallel refused; arms serial. · A time window leaked notes under
+  parallel mode (F-016).
+- D5-34 · 2026-11-26 · The baseline arm runs in a detached `d214248682` worktree with `agent-eval/` overlaid, on its
+  own database, kept to A7b's exit. · No baseline agent exists on the branch by wave 5 (F-017).
+- D5-35 · 2026-11-26 · Item 3 also chains: a turn with no `lastRunId` carrying a form token is chained to the newest
+  open Plan-step request's presenting run (`findChainablePredecessor` reason `'plan-answer'`); other turns unchanged;
+  same file, no Angular change. · Explorer sends no `lastRunId` and the resolver chained only stopped/open-consult runs
+  (round-2 F-001).
+- D5-36 · 2026-11-26 · The plan hash is bound server-side (`PlanHash` in the presenting run's `FinalPayload`, from A4
+  the `present-plan` row); no form question. · `FormQuestionType` has no hidden type (F-023).
+- D5-37 · 2026-11-26 · `executeNextStep` intercepts only `Retry` decision turns; non-`Retry` steps and first turns go
+  to `super`; prompt decisions pass `AgentControlPath.Gate`. · The earlier contract skipped execution and routing
+  (F-024).
+- D5-38 · 2026-11-26 · Liveness first: `Running` with `LastHeartbeatAt` younger than
+  `AgentSessionLease.STALE_AFTER_MINUTES = 10`; under the session lock a live sibling → `session-busy`;
+  compare-and-append. · A concurrent continuation misread live work as a crash and forked the log (F-019).
+- D5-39 · 2026-11-26 · Claim → row → dispatch → settle; a claim with no row and a non-live run → "did not start". ·
+  The row/claim crash window was undefined (F-020).
+- D5-40 · 2026-11-26 · Two `NOWAIT` lock Queries (Pipeline, then Human) repeating their index predicates, taken by
+  `FeatureValueLocks.Acquire` with a deadline and typed timeout; `Success: false` is never empty. · `RunQuery` reports
+  conflicts as `Success: false`; range locks need a seek (F-021).
+- D5-41 · 2026-11-26 · The slice is held by a renewed lease row (15 min TTL, 60 s renewal) taken under a lock Query. ·
+  The election took no lock and 6 h could expire mid-slice (round-2 F-011).
+- D5-42 · 2026-11-26 · The lease constants belong to `@memberjunction/feature-pipelines`. · The PS Engine depends on
+  it, so importing `TrainingClaims` is a cycle (F-022).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3040,10 +3139,11 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    stored and shown, runs are not sliced).
 3. `packages/MJServer/src/resolvers/RunAIAgentResolver.ts` and `packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts`
    (with `__tests__/RunAIAgentResolver.requestAnswers.test.ts` and `__tests__/agent-request-resume-branch.test.ts`) —
-   settle a conversation plan-card answer (`Approved`/`Rejected`, `ResponseData` = the form's fields) as the person's
-   client save before `RunAgentInConversation`, with a one-shot `MarkAnsweredByConversationHost()` so that save does
+   chain a plan-card answer that arrives with no `lastRunId` (Explorer's chat sends none) to its presenting run
+   (`findChainablePredecessor` reason `'plan-answer'`, D5-35), and settle it (`Approved`/`Rejected`, `ResponseData` =
+   the form's fields) as the person's client save in `executeAIAgent` before `RunAgentInConversation`, with a one-shot `MarkAnsweredByConversationHost()` so that save does
    not start `resumeAgent`, and link `ResumingAgentRunID` after the run; every other message unchanged. Only the
-   resolver holds the person's save, and it runs after the continuation today — A2 (default if rejected: approval
+   resolver holds the person's save and the chaining, and both run too late or not at all today — A2 (default if rejected: approval
    through the request dashboard/API only, and G4.1's chat-approval scenario re-planned).
 
 ## 10. PR description draft
@@ -3096,7 +3196,7 @@ decide, and makes Feature Pipeline outputs safe to train on.
 **Findings closed (22):** F-AG-1, F-AG-2, F-AG-3, F-AG-4, F-AG-5, F-AG-6, F-AG-7, F-AG-8, F-AG-9, F-AG-10, F-AG-11,
 F-AG-12, F-PIT-8, F-EXP-2, F-EXP-3, F-FP-11, F-DOC-9, F-DOC-10, F-DOC-13, F-DOC-14, F-DOC-15, F-DOC-16.
 
-**Migration (one file):** `MLBuildApprovalClaim` (new); `AgentDecisionLog` (new); `FeatureValue` columns, the set-based
+**Migration (one file):** `MLBuildApprovalClaim` (new); `AgentDecisionLog` (new); `FeaturePipelineRederivationLease` (new); `FeatureValue` columns, the set-based
 close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-row indexes; `MLSearchStrategyComparison` (new).
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
@@ -3157,6 +3257,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - 2026-11-26 — owner approved the §9 owner batch (both `InferProcessor.ts` items, D5-21): B1 attack 8 and B3 attack 7 added, `InferProcessor.ts` and its two tests in B1's and B3's ownership blocks and in the allowlist as `(D-091 item <n>)`. PR 4 cleanup done (7 databases, 5 worktrees, 7 branches, 5 backups). Next: implementation under council.
 - 2026-11-26 — plan review r1 (council `30st24`, F-001…F-018; 16 real, F-012 a duplicate of F-001 and F-009 of F-002, F-010 real but its fallback-model premise wrong) fixed in §5.1, §5.2, A2–A4, A7a, A7b, B1–B3, §7, §8.5 and §9 as D5-22…D5-34: chat approval through owner-batch item 3 (`RunAIAgentResolver`, `MJAIAgentRequestEntityServer`, ruled in under the owner's 2026-11-26 statement), an atomic approval claim (A2 migration section), `SessionRunID`, payload drafts the builder consumes, an `executeNextStep` override, one open-row identity with the migration closing superseded rows before its indexes, the open-row lock, write-back-unit human capture, instance-keyed guards, `/profile`, run-tree eval isolation and the baseline worktree; `check-anchors` at `279a1a274b` ok 130 · changed 0 · missing 0, `milestone-exit --skip-commands` 22 checks · failed 0 (wave-ownership ok).
 - 2026-11-26 — merged `origin/next` into the branch (no conflicts). The fast mirror's red `transaction-scope-affinity` test was the runtime, not the code: it fails on Node 22 and passes on Node 24, MJ's `.nvmrc`/CI runtime (`AsyncLocalStorage` scoping differs). `ci-mirror` now refuses a Node major that differs from `.nvmrc`; every mirror and hook run uses Node 24.
+- 2026-11-26 — plan review r2 (council `30st24`; F-001, F-011 re-opened, F-019…F-024 new; all 8 real) fixed as D5-35…D5-42: item 3 also chains a plan-card answer with no `lastRunId` (`'plan-answer'`), the plan hash bound server-side (no form field), `executeNextStep` intercepts only `Retry` turns with a gate, session liveness (heartbeat, session lock, `session-busy`, compare-and-append), claim → row order, `NOWAIT` open-row locks with a typed timeout, a renewed re-derivation lease (B3 section) with feature-pipelines-owned constants; round-1 rulings compacted. `check-anchors` at `95feb574a8` changed 0 · missing 0 (`c9-cli-fail-exit` re-pinned after the next merge); `milestone-exit --skip-commands` failed 0, wave-ownership ok.
 
 ## 12. Refresh log (append-only)
 
