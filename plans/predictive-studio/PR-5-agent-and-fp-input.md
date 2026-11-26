@@ -2369,7 +2369,7 @@ recorded in §11.
 
 #### B1 — Effective-dated writes
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** `FeatureValueCacheService.RecordFeatureValues` writes effective-dated `Pipeline` values on one open-row
 identity (`RecordProcessID`, `EntityID`, `RecordID`, `FeatureName`, `PipelineVersion`; D5-27) shared by the index,
@@ -2497,6 +2497,10 @@ metadata/queries/SQL/predictive-studio-lock-open-pipeline-feature-values.sql
 metadata/queries/SQL/predictive-studio-lock-open-human-feature-values.sql
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-input-as-of.test.ts
+packages/AI/PredictiveStudio/TruthSuite/src/__tests__/feature-value-effective-dating.adversarial.db.test.ts
+packages/AI/Knowledge/FeaturePipelines/src/__tests__/cache.test.ts
+packages/AI/Knowledge/FeaturePipelines/src/__tests__/model-values.test.ts
+packages/AI/PredictiveStudio/TruthSuite/turbo.json
 ```
 
 Hands at integration: `FeatureValueEffectiveRangeGuard.Register();` and its export to A2's `$E/index.ts`.
@@ -3172,6 +3176,35 @@ Record every decision taken in §9 and, when it changes another plan's interface
   At `d214248682` the three planning sub-agents have `ModelSelectionMode = 'Agent Type'` and run on the Loop Agent
   Type's Gemini 3.5 Flash-Lite with no failover (F-AG-9), so the literal D-092 rule could count no baseline run (M0).
 
+- D5-B1-1 · 2026-11-26 · B1's database half of the attacks (5, 10, 12, 14, 15, and the database cases of 1–4, 6–9, 11, 13)
+  lives in one new TruthSuite file, `TruthSuite/src/__tests__/feature-value-effective-dating.adversarial.db.test.ts`
+  (owned by B1 in wave 1, run through `vitest.db.config.ts` against the implementer's database and MJAPI); the logic
+  halves stay unit tests in B1's owned files. The `$E/index.ts` `FeatureValueEffectiveRangeGuard.Register()` line stays
+  a local, uncommitted edit for B1's runs and is handed to A2; the DB file registers the guard in its own process. ·
+  Neither owned package has a database harness, and their `package.json` files are not B1's (controller ruling).
+- D5-B1-2 · 2026-11-26 · Attack 10 runs PR 4's pre-change-migration pattern: in one rolled-back transaction on the
+  implementer's database it removes what section B1 built, seeds the PR 1 Feature Value shapes (several rows per
+  identity after changed inputs, A → B → A keys, an all-null historyOnly row computed after its answer, repeated
+  pre-key Human rows, two Record Processes sharing a feature, two versions, a Challenger row), runs section B1 read from
+  the migration file and asserts every attack-10 property. B1's Exit records `Predictive Studio Gates — Feature
+  Pipelines` environment-blocked under D3-78; the controller runs it with bizapps-common installed (an `mj dev
+  workspace`) on the integration database before MZ. · `MJ_PS_PR5_claude2` holds no bizapps-common schema and no PR 1
+  gate rows (`fp-gate-fixture.ts` PREREQ), and the install needs a workspace over sibling clones (controller ruling).
+- D5-B1-3 · 2026-11-26 · Caller maintenance of B1's own change (D-082): `FeaturePipelines/src/__tests__/cache.test.ts`
+  and `model-values.test.ts` encoded PR 1's update-in-place and delete-on-retire behaviour; their RecordFeatureValues,
+  RecordHumanValue and RetireHumanValue cases are rewritten for the dated semantics (close-and-open, retire closes,
+  the lock Queries mocked) and join B1's ownership block. No other wave-1 milestone owns them; the allowlist's
+  `packages/AI/Knowledge/FeaturePipelines/**` covers them. `TruthSuite/turbo.json` gains the test input
+  `$TURBO_ROOT$/metadata/queries/SQL/predictive-studio-lock-open-*.sql` (the DB file reads the lock Queries' SQL;
+  `check:guards`' turbo-inputs scanner requires it). · B1 replaces the behaviour they asserted.
+- D5-B1-4 · 2026-11-26 · The Human lock Query takes a fifth, optional parameter `MLModelScoringBindingID` and a
+  `{% if RecordProcessID %}` branch, so a binding-scoped Human value (no Record Process, §6.2a) locks its own identity;
+  the pipeline-scoped branch repeats `UQ_FeatureValue_OpenHuman`'s predicate with `MLModelScoringBindingID IS NULL`.
+  The Pipeline lock returns `ID, FeatureName, PipelineVersion`, the Human lock `ID, FeatureName` (both covered by
+  their filtered index). Each lock carries `INDEX([UQ_FeatureValue_OpenPipeline])` / `INDEX([UQ_FeatureValue_OpenHuman])`:
+  attack 15's `SHOWPLAN_XML` showed the optimizer seeking `IX_FeatureValue_Entity_Feature_Version_Record_AsOf`
+  (EntityID, FeatureName leading) without it, so the key-range lock would not have covered the filtered index. · The contract's four parameters cannot address a binding-scoped Human
+  row, which `ScoringService`'s `BindingHumanValueGuard` records.
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
 item becomes an allowlist line `<path>  (D-091 item <n>)`. **Items 1 and 2 approved by the owner 2026-11-26** ("shared
@@ -3435,6 +3468,61 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   Node 24 (the baseline worktree) already has the right binary.
 - Rulings this milestone: D5-45 (seed texts and worlds), D5-46 (the CLI user, §2.2 step), D5-47 (what counts as
   first-ranked for the shipped agent; attack 4 and A7b attack 1 reworded).
+
+### 2026-11-26 — effective-dated Feature Value writes — B1
+
+- **Branch / commits:** `ps/pr-5-agent-fp-input--B1` from `261546a083`; `47d8762a61` (attack list, red: every new
+  attack file failed on the head — 3/3 Feature Pipelines files, the guard file, 5 of 7 InferProcessor cases, the DB file
+  at `beforeAll`), `9264b28be5` (implementation), then this records commit. Database `MJ_PS_PR5_claude2`, MJAPI 4052.
+- **What shipped.** Migration section B1 (`V202611260939__v6.3.x__PS_Agent_FP_Input.sql`, `-- section: B1`, with its
+  CodeGen tail appended after 55 blank lines: the two `EntityField` rows (apply-time `Sequence`), the three
+  `EntityUniqueKey` rows, the FK index, `vwFeatureValues`, `spCreate/Update/DeleteFeatureValue`, `spDeleteAIPrompt`).
+  `FeatureValueEffectiveDating`, `FeatureValueLocks` (+ `FeatureValueLockTimeoutError`), `FeatureValueWriteAuthorisations`
+  and the rewritten write path in `FeatureValueCacheService` (`RecordFeatureValues` → `WriteValues` → `InWriteUnit` →
+  `WriteLocked` → `WriteOne`; `RecordHumanValue` dated by `ReadRecordStamp`; `RetireHumanValue` closes). The two lock
+  Queries (D5-B1-4: the binding branch, the `INDEX(...)` pin). `FeatureValueEffectiveRangeGuard` in the PS Engine.
+  `InferProcessor.InputAsOfOf` feeding `inputAsOf`; its shadow (Challenger) rows now save through the authorisation.
+- **Hands at integration (run rule 4, D5-49):**
+  - A2's `$E/index.ts`: `import { FeatureValueEffectiveRangeGuard } from './feature-values/effective-range-guard';` and
+    `FeatureValueEffectiveRangeGuard.Register();` after `PredictiveStudioPublishRecordGuard.Register();` (kept a local,
+    uncommitted edit for B1's runs, D5-B1-1). B1 committed the additive export line
+    `export * from './feature-values/effective-range-guard';` after `export * from './agent';` (D5-49).
+  - **Writers the guard refuses once registered (not B1's files; caller maintenance for whoever owns them at
+    integration):** `TruthSuite/src/__tests__/pre-change-migration.adversarial.db.test.ts:529` and
+    `scoring-service.adversarial.db.test.ts:154` create `Source = 'Human'` rows with a plain `Save()`; they must save
+    through `FeatureValueWriteAuthorisations.Save(row)` (`@memberjunction/feature-pipelines`, already a TruthSuite
+    dependency). No other non-test writer of `Pipeline`/`Human` rows exists (`git grep` of `.Source = 'Human'|'Pipeline'`).
+- **Tests (pass/fail/skip):** `FeaturePipelines` 349/0/0 (18 files); `FeaturePipelinesEngine` 329/0/0 (17 files);
+  `PredictiveStudio/Engine` 1962/0/0 (131 files); `PredictiveStudio/TruthSuite` unit 197/0/0 (28 files); TruthSuite DB
+  file `feature-value-effective-dating.adversarial.db.test.ts` 25/0/0 against `MJ_PS_PR5_claude2` + MJAPI 4052 (GraphQL
+  and `Update Record` cases live). Builds: `feature-pipelines`, `feature-pipelines-engine`, `predictive-studio`,
+  `core-entities`, `MJServer` 0 TypeScript errors; full `pnpm run build` at setup exit 0.
+- **Attacks:** all 15 pass. Unit half: `feature-value-effective-dating.test.ts` 25, `feature-value-locks.test.ts` 6,
+  `feature-value-concurrency.test.ts` 3, `effective-range-guard.test.ts` 10, `infer-processor-input-as-of.test.ts` 7.
+  Defects the attacks found and fixed: the Pipeline lock's plan sought `IX_FeatureValue_Entity_Feature_Version_Record_AsOf`
+  instead of `UQ_FeatureValue_OpenPipeline` (attack 15; fixed by the index pin, D5-B1-4).
+- **Mutation table (ruling S1):**
+
+  | Guard flipped | Attack that went red | Restored |
+  |---|---|---|
+  | `UQ_FeatureValue_OpenPipeline` built before the set-based close (migration step 4 moved above step 2) | 10 — `CREATE UNIQUE INDEX … duplicate key … UQ_FeatureValue_OpenPipeline` | ✓ (file `cmp`-equal) |
+  | `UQ_FeatureValue_ValueKey` left unfiltered (recreated `WHERE ValueKeyHash IS NOT NULL` on the database) | 9 — all 3 DB cases (A→B→A, re-derived, two Human edits) | ✓ (filter back to `… AND [EffectiveTo] IS NULL`) |
+  | the Pipeline lock Query dropped (`LockOpenRows` never acquires it) | 12 — 2 of 3 unit cases (different values; overlapping runs) | ✓ |
+  | the guard accepts any save while an authorisation exists for another instance (process-wide counter) | 14 — both cases, and 3 of attack 5's | ✓ |
+  | a `Success: false` lock result read as an empty set | 15 — 3 cases (retry, timeout, the service's one-retry) | ✓ |
+
+- **Exit items:** section B1 applied on the migrated database (`mj migrate` → 2 applied) and replayed on PR 1-shaped
+  data in attack 10 (D5-B1-2); `check-migration-entityfield-sequence.mjs` ✓; `npm run check:codegen-tail` OK;
+  `check:guards` ✓ (the two full-tree scanners re-run with `--testTimeout=300000` at load average ~90: 6/6; the
+  default 30 s runs timed out under load, no finding). `Predictive Studio Gates — Feature Pipelines`:
+  **environment-blocked under D3-78 (D5-B1-2)** — `fp-gate-fixture.ts` PREREQ "Gate C1 → C2.x needs bizapps-common
+  installed …"; `MJ_PS_PR5_claude2` holds schemas `__mj`, `__mj_UDT` only and no `C1 -> C2.x` test rows. Standing in:
+  the feature-pipelines and feature-pipelines-engine unit suites above and the deterministic tier's IT124/IT126 (in
+  the full mirror). **Tracked:** the controller runs the Feature Pipelines gate suite with bizapps-common installed (an
+  `mj dev workspace`) on the integration database before MZ.
+- **LLM spend (§2.4 query, `RunAt >= 2026-11-26T09:20Z` on `MJ_PS_PR5_claude2`):** 166 prompt runs, **$0.191346**,
+  464,078 tokens — all CodeGen's own LLM steps (93 `CodeGen: Check Constraint Parser` $0.182770, 1 Form Layout
+  $0.003792, 1 Smart Field $0.004784) and 71 `Vector Sync Embedding` runs at $0 from MJAPI start. No agent run.
 
 ## 12. Refresh log (append-only)
 
