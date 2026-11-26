@@ -1,0 +1,206 @@
+<section class="mj-record-docs" data-testid="mj-record-docs-list">
+  <header class="mj-record-docs__header">
+    <div class="mj-record-docs__heading">
+      <i class="fa-solid fa-folder-open mj-record-docs__heading-icon" aria-hidden="true"></i>
+      <h3 class="mj-record-docs__title">Documents</h3>
+      <span class="mj-record-docs__count" data-testid="record-docs-count">{{ Items.length }}</span>
+      @if (HostCanRead && !HostCanUpdate) {
+        <span class="mj-record-docs__readonly-pill" data-testid="record-docs-readonly-badge">
+          <i class="fa-solid fa-lock" aria-hidden="true"></i>
+          Read-only
+        </span>
+      }
+    </div>
+
+    <div class="mj-record-docs__actions">
+      @if (EffectiveCanSynthesizeSlides) {
+        <button
+          type="button"
+          mjButton
+          variant="outline"
+          size="sm"
+          data-testid="record-docs-synthesize-slides-btn"
+          (click)="OnSynthesizeSlides()"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i>
+          <span>Synthesize Slides</span>
+        </button>
+      }
+      @if (EffectiveCanPromote) {
+        <button
+          type="button"
+          mjButton
+          variant="outline"
+          size="sm"
+          data-testid="record-docs-promote-note-btn"
+          (click)="OpenComposer('promote')"
+        >
+          <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+          <span>Promote Note</span>
+        </button>
+      }
+      @if (EffectiveCanCreate) {
+        <button
+          type="button"
+          mjButton
+          variant="primary"
+          size="sm"
+          data-testid="record-docs-create-btn"
+          (click)="OpenComposer('create')"
+        >
+          <i class="fa-solid fa-plus" aria-hidden="true"></i>
+          <span>New Doc</span>
+        </button>
+      }
+    </div>
+  </header>
+
+  @if (AvailableRoles.length > 1) {
+    <div class="mj-record-docs__roles" role="tablist" aria-label="Filter documents by role">
+      <button
+        type="button"
+        class="mj-record-docs__role-chip"
+        [class.mj-record-docs__role-chip--active]="SelectedRoleFilter === 'All'"
+        data-testid="record-docs-role-filter-all"
+        (click)="OnSelectRoleFilter('All')"
+      >
+        All
+      </button>
+      @for (role of AvailableRoles; track role) {
+        <button
+          type="button"
+          class="mj-record-docs__role-chip"
+          [class.mj-record-docs__role-chip--active]="SelectedRoleFilter === role"
+          [attr.data-testid]="'record-docs-role-filter-' + role"
+          (click)="OnSelectRoleFilter(role)"
+        >
+          {{ role }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (ErrorMessage) {
+    <div class="mj-record-docs__alert" role="alert" data-testid="record-docs-error">
+      <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  @if (ComposerMode !== 'none' && EffectiveCanCreate) {
+    <form
+      class="mj-record-docs__composer"
+      data-testid="record-docs-composer"
+      (submit)="$event.preventDefault(); SubmitComposer()"
+    >
+      <div class="mj-record-docs__composer-row">
+        <label class="mj-record-docs__field">
+          <span class="mj-record-docs__label">Title</span>
+          <input
+            type="text"
+            class="mj-record-docs__input"
+            name="draftTitle"
+            placeholder="Document title"
+            data-testid="record-docs-composer-title"
+            [(ngModel)]="DraftTitle"
+          />
+        </label>
+        <label class="mj-record-docs__field mj-record-docs__field--role">
+          <span class="mj-record-docs__label">Role</span>
+          <select
+            class="mj-record-docs__select"
+            name="draftRole"
+            data-testid="record-docs-composer-role"
+            [(ngModel)]="DraftRole"
+          >
+            @for (role of AvailableRoles; track role) {
+              <option [value]="role">{{ role }}</option>
+            }
+          </select>
+        </label>
+      </div>
+
+      <label class="mj-record-docs__field">
+        <span class="mj-record-docs__label">{{ ComposerMode === 'promote' ? 'Note Content (Markdown)' : 'Initial Content (Markdown)' }}</span>
+        <textarea
+          class="mj-record-docs__textarea"
+          name="draftMarkdown"
+          rows="4"
+          placeholder="Write note or document content..."
+          data-testid="record-docs-composer-content"
+          [(ngModel)]="DraftMarkdown"
+        ></textarea>
+      </label>
+
+      <div class="mj-record-docs__composer-footer">
+        <button
+          type="submit"
+          mjButton
+          variant="primary"
+          size="sm"
+          [disabled]="IsSubmitting"
+          data-testid="record-docs-composer-submit"
+        >
+          <i class="fa-solid fa-check" aria-hidden="true"></i>
+          <span>{{ ComposerMode === 'promote' ? 'Promote to Doc' : 'Create Document' }}</span>
+        </button>
+        <button
+          type="button"
+          mjButton
+          variant="outline"
+          size="sm"
+          [disabled]="IsSubmitting"
+          data-testid="record-docs-composer-cancel"
+          (click)="CloseComposer()"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  }
+
+  @if (IsLoading) {
+    <div class="mj-record-docs__loading" data-testid="record-docs-loading">
+      <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+      <span>Loading documents…</span>
+    </div>
+  } @else if (FilteredItems.length === 0) {
+    <div class="mj-record-docs__empty" data-testid="record-docs-empty">
+      <i class="fa-regular fa-file-lines mj-record-docs__empty-icon" aria-hidden="true"></i>
+      <p class="mj-record-docs__empty-text">No documents linked to this record yet.</p>
+    </div>
+  } @else {
+    <ul class="mj-record-docs__list" data-testid="record-docs-items">
+      @for (item of FilteredItems; track item.RecordArtifactID) {
+        <li class="mj-record-docs__card" [attr.data-testid]="'record-doc-item-' + item.ArtifactID">
+          <button
+            type="button"
+            class="mj-record-docs__card-trigger"
+            (click)="OnOpenItem(item)"
+          >
+            <div class="mj-record-docs__card-main">
+              <div class="mj-record-docs__card-title-row">
+                <i [class]="GetTypeIcon(item.ArtifactTypeName)" class="mj-record-docs__card-icon" aria-hidden="true"></i>
+                <span class="mj-record-docs__card-title">{{ item.ArtifactName }}</span>
+                <span class="mj-record-docs__role-badge">{{ item.Role }}</span>
+                @if (item.PinnedVersionNumber != null) {
+                  <span class="mj-record-docs__pin-badge">v{{ item.PinnedVersionNumber }}</span>
+                }
+                @if (!item.CanEdit) {
+                  <span class="mj-record-docs__item-readonly" data-testid="record-doc-item-readonly">
+                    <i class="fa-solid fa-eye" aria-hidden="true"></i>
+                    View
+                  </span>
+                }
+              </div>
+              @if (item.PlainPreviewExcerpt) {
+                <p class="mj-record-docs__card-excerpt">{{ item.PlainPreviewExcerpt }}</p>
+              }
+            </div>
+            <i class="fa-solid fa-chevron-right mj-record-docs__card-chevron" aria-hidden="true"></i>
+          </button>
+        </li>
+      }
+    </ul>
+  }
+</section>

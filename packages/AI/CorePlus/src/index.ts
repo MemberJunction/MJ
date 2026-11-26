@@ -14,6 +14,7 @@ export * from './assignment-strategy';
 export * from './ui-commands';
 export * from './conversation-utility';
 export * from './conversation-citations';
+export * from './doc-citation-bridge';
 export * from './decision-calibration';
 export * from './conversation-routing-decision';
 export * from './edge-pre-discovery';

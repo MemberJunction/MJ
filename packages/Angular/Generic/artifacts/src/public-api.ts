@@ -18,6 +18,7 @@ export * from './lib/services/artifact-version-diff.service';
 export * from './lib/services/artifact-ai-assistant-bridge';
 export * from './lib/services/live-sheet-client-tool.helper';
 export * from './lib/services/artifact-link-trigger.provider';
+export * from './lib/services/mj-artifact-slideover.service';
 
 // Interfaces
 export * from './lib/interfaces/artifact-viewer-plugin.interface';
@@ -52,6 +53,9 @@ export * from './lib/components/artifact-type-plugin-viewer.component';
 
 // Artifact viewer UI components
 export * from './lib/components/artifact-viewer-panel.component';
+export * from './lib/components/mj-artifact-slideover/mj-artifact-slideover.component';
+export * from './lib/components/mj-record-docs-list/mj-record-docs-list.component';
+export * from './lib/components/mj-embedded-doc-panel/mj-embedded-doc-panel.component';
 export * from './lib/components/artifact-version-history.component';
 export * from './lib/components/artifact-message-card.component';
 export * from './lib/components/context-menu/context-menu.types';

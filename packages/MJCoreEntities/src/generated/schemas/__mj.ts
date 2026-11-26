@@ -36357,6 +36357,91 @@ export const MJRecommendationSchema = z.object({
 export type MJRecommendationEntityType = z.infer<typeof MJRecommendationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Record Artifacts
+ */
+export const MJRecordArtifactSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityID: z.string().describe(`
+        * * Field Name: EntityID
+        * * Display Name: Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Foreign key to Entity identifying the type of host record linked to the artifact.`),
+    RecordID: z.string().describe(`
+        * * Field Name: RecordID
+        * * Display Name: Record ID
+        * * SQL Data Type: nvarchar(700)
+        * * Description: Serialized primary key (compact URL segment for single or composite keys) of the host record in EntityID.`),
+    ArtifactID: z.string().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+        * * Description: Foreign key to Artifact identifying the linked MJ Docs artifact.`),
+    PinnedArtifactVersionID: z.string().nullable().describe(`
+        * * Field Name: PinnedArtifactVersionID
+        * * Display Name: Pinned Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: Optional foreign key to ArtifactVersion pinning this record link to a specific immutable version instead of floating to latest.`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(100)
+        * * Default Value: General
+        * * Description: Semantic role of the linked artifact on the host record (for example General, Brief, Spec, Proposal, MeetingNotes, Reference). Non-null with default General for identical SQL Server and PostgreSQL uniqueness semantics.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Display sort order for artifacts linked to the same host record (lower numbers appear first).`),
+    ContextDescription: z.string().nullable().describe(`
+        * * Field Name: ContextDescription
+        * * Display Name: Context Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional human-readable context note explaining why this artifact is linked to the host record.`),
+    LinkedByUserID: z.string().nullable().describe(`
+        * * Field Name: LinkedByUserID
+        * * Display Name: Linked By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Optional foreign key to User identifying who linked this artifact to the host record.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Entity: z.string().nullable().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    Artifact: z.string().nullable().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
+    PinnedArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: PinnedArtifactVersion
+        * * Display Name: Pinned Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
+    LinkedByUser: z.string().nullable().describe(`
+        * * Field Name: LinkedByUser
+        * * Display Name: Linked By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJRecordArtifactEntityType = z.infer<typeof MJRecordArtifactSchema>;
+
+/**
  * zod schema definition for the entity MJ: Record Change Replay Runs
  */
 export const MJRecordChangeReplayRunSchema = z.object({

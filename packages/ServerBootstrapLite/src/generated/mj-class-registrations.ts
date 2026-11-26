@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (534 classes)
+// @memberjunction/core-entities (535 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -635,6 +635,7 @@ import {
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
+    MJRecordArtifactEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
@@ -2138,6 +2139,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
+    MJRecordArtifactEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
@@ -2263,11 +2265,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
-    SharedConceptEdgeProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
     MJAIAgentEntityExtended,
@@ -2467,11 +2469,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJScheduledJobEntityExtended,
     TagEngineBase,
     AIPromptExtension,
-    TemplateEmbedExtension,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TemplateEmbedExtension,
     TemplateRunServerOperation,
     LLMDecision,
     ParallelExecutionCoordinator,
@@ -2671,11 +2673,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
-    MJRubricBandEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRubricBandEntityServer,
     MJRubricCriterionEntityServer,
     MJRubricCriterionLevelEntityServer,
     MJRubricEvaluationEntityServer,
@@ -2875,11 +2877,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
-    SearchEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
@@ -2993,7 +2995,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1296;
+export const CLASS_REGISTRATIONS_COUNT = 1297;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

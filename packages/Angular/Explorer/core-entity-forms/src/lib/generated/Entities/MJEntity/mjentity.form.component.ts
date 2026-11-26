@@ -125,7 +125,8 @@ export class MJEntityFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCommunicationPrincipals', sectionName: 'Communication Principals', isExpanded: false },
             { sectionKey: 'mJCommunicationSenderTypes', sectionName: 'Communication Sender Types', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressions', sectionName: 'Communication Suppressions', isExpanded: false },
-            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false }
+            { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
+            { sectionKey: 'mJRecordArtifacts', sectionName: 'Record Artifacts', isExpanded: false }
         ]);
     }
 }

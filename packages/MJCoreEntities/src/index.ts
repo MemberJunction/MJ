@@ -19,6 +19,9 @@ export * from './custom/ConversationWriteAccess';
 export * from './custom/ConversationForkAccess';
 export * from './custom/AnchoredConversationSecurity';
 export * from './custom/ArtifactPermissionDelegate';
+// MJ Docs Unification Phase 0 — Slice 3 exports (PromoteNoteToArtifact)
+export * from './custom/PromoteNoteToArtifact';
+// MJ Docs Unification Phase 0 — Slice 4 exports (batch delegate helpers exported from ArtifactPermissionDelegate)
 export * from './custom/DocumentLiveBlockEngine';
 export * from './custom/ArtifactLockValidation';
 export * from './custom/SlideDeckEngine';

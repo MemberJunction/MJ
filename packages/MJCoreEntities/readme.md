@@ -80,6 +80,23 @@ Migration `V202604260056__v5.30.x__Memory_Consolidation_Schema.sql` adds five co
 
 Server-side persistence and vector-store invariant maintenance for these fields lives in [`@memberjunction/core-entities-server`](../MJCoreEntitiesServer/README.md#mjaiagentnoteentityserver-v530x). The pipeline that produces them is documented in [`@memberjunction/ai-agents`](../AI/Agents/README.md#consolidation-pipeline) and [`specs/001-memory-consolidation/spec.md`](../../specs/001-memory-consolidation/spec.md).
 
+#### RecordArtifact Polymorphic Join Schema (v6.3.x+)
+
+Migration `V202611261235__v6.3.x__RecordArtifact_Schema.sql` adds `[__mj].[RecordArtifact]` (generated as `MJRecordArtifactEntity` for entity **`MJ: Record Artifacts`**) to attach one or more `MJ: Artifacts` documents to any MemberJunction entity record via a governed polymorphic foreign key (`EntityID` + `RecordID`, decorated with `EntityIDFieldName: 'EntityID'` in `metadata/entities/.polymorphic-fk-entity-fields.json`):
+
+| Column | Type | Purpose |
+|---|---|---|
+| `EntityID` | uniqueidentifier (FK → `Entity.ID`, NOT NULL) | Target host entity type |
+| `RecordID` | nvarchar(700) NOT NULL | Serialized primary key (compact URL segment) of the host record |
+| `ArtifactID` | uniqueidentifier (FK → `Artifact.ID`, NOT NULL) | Linked `MJ: Artifacts` document or asset |
+| `PinnedArtifactVersionID` | uniqueidentifier (FK → `ArtifactVersion.ID`, NULL) | Optional pin to a specific immutable artifact version |
+| `Role` | nvarchar(100) NOT NULL DEFAULT `'General'` | Semantic role (`General`, `Brief`, `Spec`, `Proposal`, etc.); non-null default ensures SQL Server and PostgreSQL uniqueness parity |
+| `Sequence` | int NOT NULL DEFAULT `0` | Display ordering for artifacts linked to the same host record |
+| `ContextDescription` | nvarchar(max) NULL | Optional context explaining why the artifact is linked |
+| `LinkedByUserID` | uniqueidentifier (FK → `User.ID`, NULL) | User who created the record-to-artifact link |
+
+Uniqueness is enforced across `(EntityID, RecordID, ArtifactID, Role)` (`UQ_RecordArtifact_Record_Artifact_Role`), with composite lookup index `IDX_RecordArtifact_Entity_Record (EntityID, RecordID, Sequence)` and full entity-deletion cleanup in `spDeleteEntityWithCoreDependencies`. See [`guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md`](../../guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md) for the complete decision rubric and UI recipes.
+
 ### Extended Entity Classes
 
 Several entities require custom business logic beyond what CodeGen can generate. Extended classes use `@RegisterClass` to override the generated base class in MJ's class factory:
@@ -510,6 +527,26 @@ flowchart TD
 ```
 
 Permission levels are hierarchical: **Owner** > **Edit** > **View**. The engine returns the highest applicable level across all sources (direct user grants and role-based grants).
+
+### ArtifactPermissionEngine & Default `DelegateEntityID` Fallback
+
+`ArtifactPermissionEngine` (`src/custom/ArtifactPermissionDelegate.ts`) resolves `CanRead`, `CanEdit`, `CanDelete`, and `CanShare` for `MJ: Artifacts` across ownership, delegated host entities (`DelegateEntityID` + `DelegateRecordID`), direct `MJ: Artifact Permissions`, and inherited `MJ: Collection Permissions`:
+
+1. **Custom delegate precedence**: A delegate registered via `ArtifactPermissionEngine.Instance.RegisterDelegate(...)`, `@RegisterClass(BaseArtifactPermissionDelegate, '<EntityName>')`, or built-in `ParentArtifactPermissionDelegate` (`'MJ: Artifacts'`) always runs first.
+2. **Default entity-level Read/Update fallback**: When an artifact specifies `DelegateEntityID` + `DelegateRecordID` and **no** custom `IArtifactPermissionDelegate` is registered for that entity:
+   - Fails closed (`Denied`) if `DelegateEntityID` does not resolve to an `EntityInfo`, if `contextUser` is missing/anonymous/magic-link-scoped, or if `entityInfo.GetUserPermisions(contextUser)` lacks `CanRead`.
+   - Executes a batched, primary-key-only `RunView` (`ResultType: 'simple'`, `<= 200` keys per chunk) under `contextUser` to confirm the host record exists and passes row-level security; fails closed if inaccessible.
+   - Maps entity permissions cleanly to artifact permissions (`CanRead: true`, `CanEdit: Boolean(perms.CanUpdate)`, `CanDelete: Boolean(perms.CanDelete)`, `CanShare: Boolean(perms.CanUpdate) || isOwner`, `Source: 'Delegate'`).
+3. **Explicit `contextUser` forwarding**: All resolution methods (`ResolvePermissions`, `ResolvePermissionsBatch`, `CheckPermission`, `EvaluateDefaultEntityFallback`, `FilterArtifactsByPermissionBatch`, and `FilterReadableArtifactIDsBatch`) accept and forward an explicit `contextUser: UserInfo` to both metadata permission checks and `RunView`, failing closed on null/missing, inactive, or magic-link-scoped users so they are safe on multi-tenant server paths.
+4. **Batched Vector/Search Retrieval Filtering (`FilterArtifactsByPermissionBatch` / `FilterReadableArtifactIDsBatch`)**: Filters arbitrary candidate hit objects or artifact ID arrays across mixed batches (custom `IArtifactPermissionDelegate`, default entity-level Read/Update fallback grouped by `DelegateEntityID`, and non-delegated owner/shared/collection artifacts) in bounded SQL `IN`-clause chunks of `<= 200` IDs (`ARTIFACT_PERMISSION_IN_CLAUSE_CHUNK_SIZE = 200`, `ResultType: 'simple'`, zero N+1 `GetEntityObject` loops), preserving deterministic input order without mutating inputs.
+
+### `PromoteNoteToArtifact` & `LinkArtifactToRecord` (v6.3.x+)
+
+`src/custom/PromoteNoteToArtifact.ts` provides a dual browser/server helper that promotes any lightweight note or narrative field into a versioned `MJ: Artifacts` document (defaulting to `'Markdown Document'`):
+
+- Creates `MJ: Artifacts` with `DelegateEntityID` + `DelegateRecordID` bound to the host record, initial `v1` `MJ: Artifact Versions`, and an optional `MJ: Record Artifacts` link (`Role` defaults to `'General'`).
+- Forwards an explicit `contextUser?: UserInfo` and `provider?: IMetadataProvider` to every `GetEntityObject`, `RunView`, and entity permission check (denying promotion when the user lacks Read + Update permissions on the host entity).
+- Performs compensating rollback if `v1` version or link persistence fails, and handles `UQ_RecordArtifact_Record_Artifact_Role` unique collisions idempotently by returning the existing link (`LinkReusedExisting: true`).
 
 ## View Filter Architecture
 

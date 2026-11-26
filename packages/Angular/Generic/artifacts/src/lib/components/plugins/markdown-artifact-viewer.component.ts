@@ -265,11 +265,13 @@ interface DocsInlineToken {
   template: `
     <div
       class="mj-docs-workspace"
+      [class.mj-docs-workspace--compact]="CompactMode"
       [ngClass]="cssClass"
       data-testid="mj-docs-workspace"
       (keydown)="OnDocsWorkspaceKeydown($event)"
     >
       <!-- Tier 1: Calm Progressive Disclosure Collaboration & Mode Toolbar -->
+      @if (!CompactMode) {
       <div class="mj-docs-toolbar" data-testid="mj-docs-toolbar">
         <div class="mj-docs-toolbar__left">
           <div class="mj-docs-mode-group" role="tablist" aria-label="Document Mode">
@@ -616,9 +618,10 @@ interface DocsInlineToken {
           </div>
         </div>
       </div>
+      }
 
       <!-- Tier 2 (Progressive Disclosure): Collapsible Formatting Ribbon -->
-      @if (CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
+      @if (!CompactMode && CanUserEdit && (ViewMode === 'edit' || ViewMode === 'suggest' || ViewMode === 'source')) {
         <div
           class="mj-docs-format-ribbon"
           [hidden]="!ShowFormattingRibbon"
@@ -900,7 +903,7 @@ interface DocsInlineToken {
       <!-- 3-Column Body: Left Outline Rail + Center Canvas + Right Comments Drawer -->
       <div class="mj-docs-body">
         <!-- Left Collapsible Table of Contents & Block Outline Rail -->
-        @if (ShowOutlineRail) {
+        @if (ShowOutlineRail && !CompactMode) {
           <aside class="mj-docs-outline-rail" data-testid="docs-outline-rail">
             <div class="mj-docs-outline-rail__header">
               <div class="mj-docs-outline-rail__title-row">
@@ -5353,8 +5356,12 @@ export class MarkdownArtifactViewerComponent
    */
   @Output() public OpenEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
   @Output() public ToolbarPinChanged = new EventEmitter<{ Key: DocsToolbarItemKey; Pinned: boolean }>();
+  @Output() public DraftContentChanged = new EventEmitter<string>();
   /** @deprecated Use {@link OpenEntityRecord}. */
   @Output() public openEntityRecord = this.OpenEntityRecord;
+
+  /** When true, hides the left outline rail and secondary studio toolbars for compact embedded editing. */
+  @Input() public CompactMode = false;
 
   public readonly IsAiAssistantEnabled = ARTIFACT_AI_ASSISTANT_ENABLED;
 

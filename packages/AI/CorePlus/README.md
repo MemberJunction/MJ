@@ -145,6 +145,10 @@ The `SystemPlaceholderManager` automatically injects common values into all prom
 | Export | Purpose |
 |---|---|
 | `ConversationUtility` | Helper for creating, loading, and managing conversation records |
+| `ParseMessageCitations` / `GetCachedMessageCitations` | Inline conversation citation parser for `[[Entity\|ID\|Label]]` and `@{type:"record"}` tokens |
+| `ParseDocRecordLinks` / `DeduplicateDocRecordLinks` / `BridgeDocLinksToCitationsAndArtifactUses` | Bidirectional `DocRecordLink` (`[[...]]` & durable `@{...}`) ↔ `MessageCitation` / `ArtifactUseCitationPayload` citation unification bridge (`doc-citation-bridge.ts`) |
+| `DocRecordLinkToMessageCitation` / `MessageCitationToDocRecordLink` / `FormatDocRecordLink` / `FormatMessageCitationAsDocLink` | Lossless conversion and canonical `[[...]]` round-trip formatting preserving entity, record, composite key, artifact ID, version ID, and version number metadata |
+| `DocRecordLinkToArtifactUse` / `MessageCitationToArtifactUse` / `RecordCitedArtifactUse` | Maps cited artifact links to strongly-typed `MJ: Artifact Uses` payloads (`UsageType: MJArtifactUseEntity['UsageType']`) and persists them with explicit `contextUser` forwarding |
 | `AgentResponseForm` | Structured response format definitions for agent outputs |
 | `ActionableCommand` / `AutomaticCommand` | UI command types for agent-driven interfaces |
 | `AgentPayloadChangeRequest` | Request to modify agent payload data during execution |
