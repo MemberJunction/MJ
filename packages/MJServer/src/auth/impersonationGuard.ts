@@ -253,7 +253,6 @@ const impersonationByUser = new WeakMap<UserInfo, ImpersonationSessionInfo>();
 const currentUserBootstrapStorage = new AsyncLocalStorage<string>();
 const impersonationRequestStorage = new AsyncLocalStorage<ImpersonationSessionInfo>();
 const impersonationKeyMintStorage = new AsyncLocalStorage<boolean>();
-const impersonationKeyRevokeStorage = new AsyncLocalStorage<boolean>();
 
 /**
  * Returns `true` when `label` starts with the server-reserved `MJ-Impersonation:` prefix
@@ -268,9 +267,10 @@ export function HasReservedImpersonationKeyLabelPrefix(label: string | null | un
 
 /**
  * Scoped execution wrapper owned exclusively by `UserImpersonationResolver` when minting a
- * server-controlled `MJ-Impersonation:` API key. Every other caller attempting to create or
- * modify protected fields (`Label`, `Status`, `ExpiresAt`, `UserID`) on an `MJ: API Keys` row
- * carrying that prefix is refused by `ImpersonationPreSaveHook`.
+ * server-controlled `MJ-Impersonation:` API key. Outside this scope, creating a key with that
+ * prefix, modifying `Label`/`ExpiresAt`/`UserID`, or changing `Status` to anything other than
+ * `'Revoked'` (e.g. reactivating a revoked key) is refused by `ImpersonationPreSaveHook`.
+ * Revoking an impersonation key (`Status = 'Revoked'`) remains permitted on the normal revoke path.
  */
 export function WithImpersonationKeyMintScope<T>(fn: () => Promise<T>): Promise<T> {
     return impersonationKeyMintStorage.run(true, fn);
@@ -279,20 +279,6 @@ export function WithImpersonationKeyMintScope<T>(fn: () => Promise<T>): Promise<
 /** True ONLY while executing inside {@link WithImpersonationKeyMintScope}. */
 export function IsInImpersonationKeyMintScope(): boolean {
     return impersonationKeyMintStorage.getStore() === true;
-}
-
-/**
- * Scoped execution wrapper owned exclusively by `UserImpersonationResolver` when revoking an
- * `MJ-Impersonation:` API key (`Status = 'Revoked'`). Outside this scope and the mint scope,
- * mutating `Status` (including reactivation), `ExpiresAt`, `UserID`, or `Label` is refused.
- */
-export function WithImpersonationKeyRevokeScope<T>(fn: () => Promise<T>): Promise<T> {
-    return impersonationKeyRevokeStorage.run(true, fn);
-}
-
-/** True ONLY while executing inside {@link WithImpersonationKeyRevokeScope}. */
-export function IsInImpersonationKeyRevokeScope(): boolean {
-    return impersonationKeyRevokeStorage.getStore() === true;
 }
 
 /**
@@ -1989,8 +1975,11 @@ export const ImpersonationPreSaveHook: PreSaveHook = (
                 if (statusState.dirty) {
                     const nextStatus =
                         typeof statusState.value === 'string' ? statusState.value.trim().toLowerCase() : '';
-                    if (!IsInImpersonationKeyRevokeScope() || nextStatus !== 'revoked') {
-                        return `Modifying Status on a server-managed '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' MJ: API Keys record is prohibited outside the impersonation revoke path.`;
+                    // Always allow transitioning Status -> 'Revoked' on the normal revoke path so
+                    // incident responders and standard APIKeyEngine.RevokeAPIKey can kill any key;
+                    // refuse reactivation ('Active') or any other Status mutation for every caller.
+                    if (nextStatus !== 'revoked') {
+                        return `Reactivating or changing Status to '${String(statusState.value ?? '')}' on a server-managed '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' MJ: API Keys record is prohibited (only revocation to 'Revoked' is permitted).`;
                     }
                 }
             }

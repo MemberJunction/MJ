@@ -27,7 +27,7 @@ vi.mock('../config.js', () => ({
 
 import { parse, getOperationAST, type ExecutionArgs } from 'graphql';
 import type { Request, Response, NextFunction } from 'express';
-import type { APIKeyEngine } from '@memberjunction/api-keys';
+import { GetAPIKeyEngine, type APIKeyEngine } from '@memberjunction/api-keys';
 import {
     AuthorizationInfo,
     AuthorizationRoleInfo,
@@ -81,7 +81,6 @@ import {
     ValidateImpersonationWebSocketSubscribe,
     WithImpersonationCurrentUserBootstrap,
     WithImpersonationKeyMintScope,
-    WithImpersonationKeyRevokeScope,
 } from '../auth/impersonationGuard.js';
 import { ImpersonationSessionRefusalGuard } from '../auth/scopeLimitedAccess.js';
 import {
@@ -1614,7 +1613,7 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
             } as unknown as BaseEntity;
             expect(typeof ImpersonationPreSaveHook(strippedExistingKey, normalUser)).toBe('string');
 
-            // 5. Protected fields (Status reactivation/change, ExpiresAt extension, UserID swap) are refused outside control-plane scopes
+            // 5. Protected fields (ExpiresAt extension, UserID swap, non-Revoked Status changes) are refused outside mint scope
             const baseLabelField = {
                 Name: 'Label',
                 Value: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
@@ -1622,36 +1621,6 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
                 Dirty: false,
             };
 
-            const statusRevokeOutsideScope = {
-                EntityInfo: { Name: 'MJ: API Keys' },
-                IsSaved: true,
-                Fields: [
-                    baseLabelField,
-                    { Name: 'Status', Value: 'Revoked', OldValue: 'Active', Dirty: true },
-                ],
-            } as unknown as BaseEntity;
-            expect(typeof ImpersonationPreSaveHook(statusRevokeOutsideScope, normalUser)).toBe('string');
-
-            // Status -> Revoked IS allowed inside WithImpersonationKeyRevokeScope
-            await WithImpersonationKeyRevokeScope(async () => {
-                expect(ImpersonationPreSaveHook(statusRevokeOutsideScope, normalUser)).toBe(true);
-            });
-
-            // Status -> Active (reactivation) is refused BOTH outside scope AND inside revoke scope!
-            const statusReactivate = {
-                EntityInfo: { Name: 'MJ: API Keys' },
-                IsSaved: true,
-                Fields: [
-                    baseLabelField,
-                    { Name: 'Status', Value: 'Active', OldValue: 'Revoked', Dirty: true },
-                ],
-            } as unknown as BaseEntity;
-            expect(typeof ImpersonationPreSaveHook(statusReactivate, normalUser)).toBe('string');
-            await WithImpersonationKeyRevokeScope(async () => {
-                expect(typeof ImpersonationPreSaveHook(statusReactivate, normalUser)).toBe('string');
-            });
-
-            // ExpiresAt extension and UserID target swap are refused outside mint scope (even inside revoke scope!)
             const expiresAtExtend = {
                 EntityInfo: { Name: 'MJ: API Keys' },
                 IsSaved: true,
@@ -1666,9 +1635,6 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
                 ],
             } as unknown as BaseEntity;
             expect(typeof ImpersonationPreSaveHook(expiresAtExtend, normalUser)).toBe('string');
-            await WithImpersonationKeyRevokeScope(async () => {
-                expect(typeof ImpersonationPreSaveHook(expiresAtExtend, normalUser)).toBe('string');
-            });
 
             const userIdSwap = {
                 EntityInfo: { Name: 'MJ: API Keys' },
@@ -1679,11 +1645,8 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
                 ],
             } as unknown as BaseEntity;
             expect(typeof ImpersonationPreSaveHook(userIdSwap, normalUser)).toBe('string');
-            await WithImpersonationKeyRevokeScope(async () => {
-                expect(typeof ImpersonationPreSaveHook(userIdSwap, normalUser)).toBe('string');
-            });
 
-            // 6. Benign LastUsedAt-only updates remain allowed outside mint/revoke scopes
+            // 6. Benign LastUsedAt-only updates remain allowed outside mint scope
             const lastUsedOnly = {
                 EntityInfo: { Name: 'MJ: API Keys' },
                 IsSaved: true,
@@ -2565,7 +2528,7 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
         });
     });
 
-    describe('10. Round 2 Hardening — Linear-Time ReDoS Bounds, SQL Word-Boundary Matching, WS Execution ALS & HTTP Queries Refusal', () => {
+    describe('13. Round 2 & Round 3 Hardening — Linear-Time ReDoS Bounds, SQL Word-Boundary Matching, WS Execution ALS, HTTP Queries Refusal & Revoke/Reactivation Policy', () => {
         it('normalizes worst-case 64,000-slash HTTP paths in linear time (< 100 ms) without regex backtracking', () => {
             RegisterServerUserImpersonationConfig({ enabled: true });
             const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
@@ -2852,6 +2815,117 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
             expect(subObservedSetup).toEqual([MINTED_KEY_ID]);
             expect(subObservedSteps).toEqual([MINTED_KEY_ID, MINTED_KEY_ID]);
             expect(GetActiveRequestImpersonationSession()).toBeUndefined();
+        });
+
+        it('allows revoking an MJ-Impersonation: key through the ordinary APIKeyEngine.RevokeAPIKey / APIKeyResolver.RevokeAPIKey path', async () => {
+            // Incident-responding administrator without User Impersonation grant and outside any special scope
+            const incidentAdmin = makeUser({
+                id: ADMIN_TARGET_ID,
+                name: 'Incident Admin',
+                email: 'admin@example.com',
+                roles: [{ RoleID: ADMIN_ROLE_ID, Role: 'Administrator' }],
+            });
+
+            const statusField = { Name: 'Status', Value: 'Active', OldValue: 'Active', Dirty: false };
+            const labelField = {
+                Name: 'Label',
+                Value: BuildImpersonationKeyLabel('ViewAs', ACTOR_USER_ID, TARGET_USER_ID),
+                OldValue: BuildImpersonationKeyLabel('ViewAs', ACTOR_USER_ID, TARGET_USER_ID),
+                Dirty: false,
+            };
+            let persistedStatus = 'Active';
+
+            const mockKeyEntity = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [labelField, statusField],
+                Load: vi.fn(async (id: string) => id === MINTED_KEY_ID),
+                get Status() {
+                    return statusField.Value;
+                },
+                set Status(next: string) {
+                    statusField.Value = next;
+                    statusField.Dirty = next !== statusField.OldValue;
+                },
+                Save: vi.fn(async () => {
+                    const verdict = ImpersonationPreSaveHook(mockKeyEntity as unknown as BaseEntity, incidentAdmin);
+                    if (verdict !== true) {
+                        return false;
+                    }
+                    persistedStatus = statusField.Value;
+                    return true;
+                }),
+            };
+
+            const mockProvider = {
+                GetEntityObject: vi.fn(async () => mockKeyEntity),
+            } as unknown as IMetadataProvider;
+
+            // 1. Direct APIKeyEngine.RevokeAPIKey (ordinary revoke path, outside WithImpersonationKeyMintScope)
+            const engine = GetAPIKeyEngine();
+            const revokedViaEngine = await engine.RevokeAPIKey(MINTED_KEY_ID, incidentAdmin, mockProvider);
+            expect(revokedViaEngine).toBe(true);
+            expect(persistedStatus).toBe('Revoked');
+
+            // 2. Standard APIKeyResolver.RevokeAPIKey GraphQL mutation path
+            const revokeSpy = vi
+                .spyOn(engine, 'RevokeAPIKey')
+                .mockImplementation(async (id, user) => {
+                    statusField.Value = 'Revoked';
+                    statusField.Dirty = true;
+                    return ImpersonationPreSaveHook(mockKeyEntity as unknown as BaseEntity, user) === true && id === MINTED_KEY_ID;
+                });
+            try {
+                const apiKeyResolver = new APIKeyResolver();
+                const res = await apiKeyResolver.RevokeAPIKey(MINTED_KEY_ID, {
+                    providers: [],
+                    dataSources: [],
+                    dataSource: {} as AppContext['dataSource'],
+                    userPayload: { email: incidentAdmin.Email, userRecord: incidentAdmin, sessionId: 'incident-1' },
+                });
+                expect(res.Success).toBe(true);
+            } finally {
+                revokeSpy.mockRestore();
+            }
+        });
+
+        it('refuses changing Status from Revoked back to Active (or any non-Revoked status) on an MJ-Impersonation: key for EVERY caller', () => {
+            const callers: UserInfo[] = [
+                makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' }),
+                makeUser({
+                    id: ADMIN_TARGET_ID,
+                    name: 'Admin',
+                    email: 'admin@example.com',
+                    roles: [{ RoleID: ADMIN_ROLE_ID, Role: 'Administrator' }],
+                }),
+                makeUser({ id: OWNER_TARGET_ID, name: 'Owner', email: 'owner@example.com', type: 'Owner' }),
+                makeUser({ id: SYSTEM_USER_ID, name: 'System', email: 'system@example.com', type: 'System' }),
+            ];
+
+            const labelField = {
+                Name: 'Label',
+                Value: BuildImpersonationKeyLabel('ViewAs', ACTOR_USER_ID, TARGET_USER_ID),
+                OldValue: BuildImpersonationKeyLabel('ViewAs', ACTOR_USER_ID, TARGET_USER_ID),
+                Dirty: false,
+            };
+
+            for (const caller of callers) {
+                for (const attemptedStatus of ['Active', 'Expired', 'Suspended', '']) {
+                    const reactivateEntity = {
+                        EntityInfo: { Name: 'MJ: API Keys' },
+                        IsSaved: true,
+                        Fields: [
+                            labelField,
+                            { Name: 'Status', Value: attemptedStatus, OldValue: 'Revoked', Dirty: true },
+                        ],
+                    } as unknown as BaseEntity;
+                    const verdict = ImpersonationPreSaveHook(reactivateEntity, caller);
+                    expect(
+                        typeof verdict,
+                        `Caller ${caller.Name} setting Status='${attemptedStatus}' must be refused`
+                    ).toBe('string');
+                }
+            }
         });
     });
 });
