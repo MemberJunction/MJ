@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (534 classes)
+// @memberjunction/core-entities (535 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -611,6 +611,7 @@ import {
     MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
     MJMLScoringRunEntity,
+    MJMLSearchStrategyComparisonEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -1543,7 +1544,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (99 classes)
+// @memberjunction/core-entities-server (100 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1609,6 +1610,7 @@ import {
     MJMLModelScoringBindingEntityServer,
     MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
+    MJMLSearchStrategyComparisonEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
     MJMaterializedResultEntityServer,
@@ -2488,6 +2490,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJMLOutputBindingEntity,
     MJMLPredictionUnitEntity,
     MJMLScoringRunEntity,
+    MJMLSearchStrategyComparisonEntity,
     MJMLTrainingPipelineEntity,
     MJMLTrainingRunEntity,
     MJMLTrainingSnapshotEntity,
@@ -2649,11 +2652,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueMessageEntity,
     MJWorkQueueSubscriptionEntity,
     MJWorkQueueTopicEntity,
-    MJWorkQueueTransportEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     MJvwLatestFeatureValuesEntity,
@@ -2853,11 +2856,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     OracleExternalDataSourceDriver,
     PostgresExternalDataSourceDriver,
     SnowflakeExternalDataSourceDriver,
-    SQLServerExternalDataSourceDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SQLServerExternalDataSourceDriver,
     MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
     GeocodioGeocodingProvider,
@@ -3057,11 +3060,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateEntityAction,
     DescribeEntityAction,
     ListMyEntitiesAction,
-    ModifyEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ModifyEntityAction,
     ValidateEntitySchemaAction,
     RecordProcessCancelRunServerOperation,
     RecordProcessGetRunStatusServerOperation,
@@ -3186,6 +3189,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJMLModelScoringBindingEntityServer,
     MJMLOutputBindingEntityServer,
     MJMLPredictionUnitEntityServer,
+    MJMLSearchStrategyComparisonEntityServer,
     MJMLTrainingPipelineEntityServer,
     MJMLTrainingSnapshotEntityServer,
     MJMaterializedResultEntityServer,
@@ -3260,12 +3264,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AgentEvalDriver,
     DecisionEvalDriver,
     PromptEvalDriver,
-    RubricCalibrationTestDriver,
-    ComputerUseAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RubricCalibrationTestDriver,
+    ComputerUseAction,
     ComputerUseTestDriver,
     DecisionFeaturePipelineDriver,
     FeaturePipelineGoldenSetDriver,
@@ -3464,12 +3468,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
-    ScopedSearchAction,
-    SearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    ScopedSearchAction,
+    SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -3570,7 +3574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1482;
+export const CLASS_REGISTRATIONS_COUNT = 1484;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

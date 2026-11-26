@@ -21,6 +21,8 @@ import type {
   Budget,
   Budgets,
   LeaderboardEntry,
+  SearchStrategy,
+  EqualCostComparison,
 } from '@memberjunction/predictive-studio-core';
 import type {
   MJExperimentEntity,
@@ -246,6 +248,20 @@ export interface ExperimentRunOptions {
    * `maxComputeSeconds` compute seconds in total, failed attempts included. Omitted when the session runs under no protocol.
    */
   protocolBudgets?: Budgets;  // case-violation-ok-legacy-back-compat: matches the existing ExperimentRunOptions member casing
+  /**
+   * Protocol search strategy governing wave selection (`random` by default; `guided` requires a passing equal-cost comparison).
+   */
+  searchStrategy?: SearchStrategy;  // case-violation-ok-legacy-back-compat: matches ExperimentRunOptions camelCase option naming
+  /**
+   * Seed used by {@link SeededRandomWaveStrategist} and persisted onto the session (`PlanSpec.SearchSeed`).
+   */
+  searchSeed?: number;  // case-violation-ok-legacy-back-compat: matches ExperimentRunOptions camelCase option naming
+  /**
+   * Optional equal-cost comparison store used in unit tests without a database provider.
+   */
+  searchComparisonStore?: {
+    LoadComparison(comparisonId: string): Promise<EqualCostComparison | null>;
+  };  // case-violation-ok-legacy-back-compat: matches ExperimentRunOptions camelCase option naming
 }
 
 /**

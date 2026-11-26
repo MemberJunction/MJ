@@ -8,7 +8,6 @@ import type {
   MJMLTrainingRunEntity,
 } from '@memberjunction/core-entities';
 import {
-  DEFAULT_PIPELINE_SEED,
   type EqualCostComparison,
   type LeaderboardEntry,
   type ModelingPlanSpec,
@@ -178,22 +177,20 @@ function exp(label: string, priority: number): ProposedExperiment {
 
 function makePlan(experiments: ProposedExperiment[]): ModelingPlanSpec {
   return {
-    Version: 1,
-    Approved: true,
     Goal: 'Predict churn',
-    SourceEntity: 'Members',
     TargetDefinition: {
       EntityName: 'Members',
       TargetVariable: 'Churned',
       ProblemType: 'classification',
       SuccessMetric: 'roc_auc',
     },
-    FeatureStrategy: { SourceEntities: ['Members'], FeatureSteps: [], Exclusions: [] },
+    CandidateSources: [],
+    CandidateFeatures: [],
+    LeakageNotes: [],
     ProposedExperiments: experiments,
-    ValidationStrategy: { ValidationMethod: 'k-fold', Folds: 5, RandomSeed: DEFAULT_PIPELINE_SEED },
+    ValidationStrategy: { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 },
     ProposedBudget: {},
-    RiskAssessment: [],
-    RecommendedExperiment: experiments[0]?.Label ?? 'A',
+    Approved: true,
   };
 }
 

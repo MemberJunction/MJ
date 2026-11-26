@@ -22,9 +22,9 @@ import type { Actor, PredictionUnitSpec } from './prediction-unit';
 import type { TaskKind, TaskType } from './task-type';
 
 /** The protocol fields `GuardFieldsEditableBy` governs between versions. */
-export type GuardField = 'holdout' | 'promotion' | 'leakageAudit' | 'exclusions' | 'budgets' | 'minMinorityClassRows' | 'guardFieldsEditableBy';
+export type GuardField = 'holdout' | 'promotion' | 'leakageAudit' | 'exclusions' | 'budgets' | 'minMinorityClassRows' | 'search' | 'guardFieldsEditableBy';
 /** Every guard field; `ChangedGuardFields` reports changed fields in this order. */
-export const GUARD_FIELDS: readonly GuardField[] = ['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'minMinorityClassRows', 'guardFieldsEditableBy'];
+export const GUARD_FIELDS: readonly GuardField[] = ['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'minMinorityClassRows', 'search', 'guardFieldsEditableBy'];
 
 /** One reason a protocol version may not be saved, or may not be used with a Prediction Unit version. */
 export type ProtocolRefusal =

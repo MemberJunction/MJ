@@ -7,6 +7,7 @@
 import { UUIDsEqual } from '@memberjunction/global';
 import { JsonParse, type JsonObject, type JsonValue, type ListsEveryMember, type ParseResult } from './json-value';
 import { PredictionUnit, type Actor } from './prediction-unit';
+import { SearchPolicy, type EqualCostComparison, type SearchPolicyRefusal } from './search-policy';
 import { UtcDay } from './utc-day';
 
 declare const nonNegativeBrand: unique symbol;
@@ -196,6 +197,15 @@ export interface EvaluationProtocolSpec {
   readonly guardFieldsEditableBy: GuardFieldsEditableBy;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
   readonly authoredBy: Actor;  // case-violation-ok-legacy-back-compat: stored Evaluation Protocol JSON field name
 }
+
+/**
+ * Parsed {@link EvaluationProtocolSpec} carrying a non-enumerable `ValidateSearchPolicy` check so callers can validate
+ * guided vs random search strategies against an equal-cost comparison record.
+ */
+export type ParsedEvaluationProtocolSpec = EvaluationProtocolSpec & {
+  /** Validates this protocol's `SearchStrategy` via {@link SearchPolicy.Decide}. */
+  readonly ValidateSearchPolicy: (comparison: EqualCostComparison | null, strategistName?: string) => SearchPolicyRefusal | null;
+};
 
 /** The one sentence the shape check and the parser give a seeded-random holdout whose fraction is not in (0, 1). */
 const SEEDED_RANDOM_FRACTION_PROBLEM = 'Holdout seeded-random needs a fraction strictly between 0 and 1';
@@ -418,7 +428,7 @@ export class EvaluationProtocol {
    * reported (each names its column); the shape checks ({@link GetEvaluationProtocolShapeProblems}) run first so
    * their messages are the ones a user sees for the fixed fields.
    */
-  public static ParseEvaluationProtocolRow(row: EvaluationProtocolColumns): ParseResult<EvaluationProtocolSpec> {
+  public static ParseEvaluationProtocolRow(row: EvaluationProtocolColumns): ParseResult<ParsedEvaluationProtocolSpec> {
     const errors: string[] = [...EvaluationProtocol.GetEvaluationProtocolShapeProblems(row)];
     const holdout = EvaluationProtocol.parseHoldout(EvaluationProtocol.objectOf(row.Holdout, 'Holdout', errors), errors);
     const innerValidation = EvaluationProtocol.parseInnerValidation(EvaluationProtocol.objectOf(row.InnerValidation, 'InnerValidation', errors), errors);
@@ -449,17 +459,35 @@ export class EvaluationProtocol {
     ) {
       return { Ok: false, Errors: errors.length > 0 ? errors : ['Evaluation Protocol row is incomplete'] };
     }
+    const spec: EvaluationProtocolSpec = {
+      id: row.ID, lineageRootId: row.LineageRootID, version: row.Version, name: row.Name,
+      holdout, innerValidation, seed: row.Seed, holdoutAccessBudget: 1, primaryScore, secondaryMetrics, baselines,
+      calibration, resampling, intervals, promotion, allowedOutcomes: ALLOWED_OUTCOMES, leakageAudit,
+      exclusions, slices, predictionIntervals, residualDiagnostics,
+      retrainTriggers, search, budgets, minMinorityClassRows: row.MinMinorityClassRows, guardFieldsEditableBy,
+      authoredBy,
+    };
+    Object.defineProperty(spec, 'ValidateSearchPolicy', {
+      value: (comparison: EqualCostComparison | null, strategistName = SearchPolicy.SeededRandomStrategistName): SearchPolicyRefusal | null =>
+        EvaluationProtocol.ValidateSearchPolicy(spec, comparison, strategistName),
+      enumerable: false,
+    });
     return {
       Ok: true,
-      Value: {
-        id: row.ID, lineageRootId: row.LineageRootID, version: row.Version, name: row.Name,
-        holdout, innerValidation, seed: row.Seed, holdoutAccessBudget: 1, primaryScore, secondaryMetrics, baselines,
-        calibration, resampling, intervals, promotion, allowedOutcomes: ALLOWED_OUTCOMES, leakageAudit,
-        exclusions, slices, predictionIntervals, residualDiagnostics,
-        retrainTriggers, search, budgets, minMinorityClassRows: row.MinMinorityClassRows, guardFieldsEditableBy,
-        authoredBy,
-      },
+      Value: spec as ParsedEvaluationProtocolSpec,
     };
+  }
+
+  /**
+   * Enforces {@link SearchPolicy.Decide} for a protocol's `SearchStrategy`: refuses `guided` unless backed by a passing
+   * equal-cost comparison on W1-signal and C1, and refuses non-random strategists under `random`. Pure.
+   */
+  public static ValidateSearchPolicy(
+    protocol: Pick<EvaluationProtocolSpec, 'search'>,
+    comparison: EqualCostComparison | null,
+    strategistName: string = SearchPolicy.SeededRandomStrategistName,
+  ): SearchPolicyRefusal | null {
+    return SearchPolicy.Decide(protocol.search, strategistName, comparison);
   }
 
   private static isBlank(text: string | null): boolean {

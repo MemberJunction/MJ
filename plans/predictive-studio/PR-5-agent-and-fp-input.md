@@ -2739,7 +2739,7 @@ red.
 
 #### B4 — The search-strategy policy
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** Random search is the only enabled strategy: the experiment orchestrator reads the protocol's
 `SearchStrategy`; `random {candidates}` draws `candidates` experiments with a seed stored on the session, at equal
@@ -2777,12 +2777,17 @@ compute; a `guided` protocol, or an injected strategist that is not the random o
 migrations/v6/V<ts>__v6.<x>.x__PS_Agent_FP_Input.sql  (section: B4)
 packages/AI/PredictiveStudio/Core/src/search-policy.ts
 packages/AI/PredictiveStudio/Core/src/evaluation-protocol.ts
+packages/AI/PredictiveStudio/Core/src/evaluation-protocol-rules.ts
+packages/AI/PredictiveStudio/Core/src/__tests__/evaluation-protocol-rules.test.ts
+packages/AI/PredictiveStudio/Core/src/__tests__/search-policy.test.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/random-strategist.ts
+packages/AI/PredictiveStudio/Engine/src/experiment/types.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/experiment-orchestrator.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/index.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/__tests__/search-policy.test.ts
-packages/AI/PredictiveStudio/Core/src/__tests__/search-policy.test.ts
+packages/AI/PredictiveStudio/Engine/src/experiment/__tests__/experiment-orchestrator.test.ts
 packages/MJCoreEntitiesServer/src/custom/MJMLSearchStrategyComparisonEntityServer.server.ts
+packages/MJCoreEntitiesServer/src/custom/MJMLEvaluationProtocolEntityServer.server.ts
 packages/MJCoreEntitiesServer/src/index.ts
 packages/MJCoreEntitiesServer/src/__tests__/ml-search-strategy-comparison.test.ts
 metadata-optional/integration-test/tests/gates/.gate-W1-C3.2.json
@@ -3171,6 +3176,25 @@ Record every decision taken in §9 and, when it changes another plan's interface
   first-ranked model of the list its shipped selection mode reads and none failed; the candidate arm uses A2's rule. ·
   At `d214248682` the three planning sub-agents have `ModelSelectionMode = 'Agent Type'` and run on the Loop Agent
   Type's Gemini 3.5 Flash-Lite with no failover (F-AG-9), so the literal D-092 rule could count no baseline run (M0).
+- D5-B4-1 · 2026-11-26 · B4 updates the three `PlanOrderWaveStrategist` / anonymous-strategist assertions in
+  `packages/AI/PredictiveStudio/Engine/src/experiment/__tests__/experiment-orchestrator.test.ts` to the `SeededRandomWaveStrategist`
+  and `SearchPolicy` contract and adds the test file to B4's ownership block (no wave-1 conflict; A6 owns it in wave 4). ·
+  Coordinator ruling (B4).
+- D5-B4-2 · 2026-11-26 · Shared barrels (`$C/index.ts`, `integration-test-suite/src/index.ts`,
+  `integration-test-suite/src/__tests__/check-registry.test.ts`) take purely additive one-line additions on wave-1
+  sub-branches for local build/Exit and list every added line in §11 for integration merge; `.changeset/ps-agent-fp-input.md`
+  is committed with MZ's identical bytes. · Coordinator ruling (D5-49, B4).
+- D5-B4-3 · 2026-11-26 · `MJMLEvaluationProtocolEntityServer.ValidateAsync()` enforces the §5.2.5 guided-search
+  comparison check (`SearchPolicy.Decide` + `MJ: ML Search Strategy Comparisons` lookup), and `search` is added to
+  `GUARD_FIELDS` in `evaluation-protocol-rules.ts` so PR 3 `GuardFieldsEditableBy` protocols govern `SearchStrategy`
+  against agent edits. · Coordinator ruling (B4).
+- D5-B4-4 · 2026-11-26 · `MJMLSearchStrategyComparisonEntityServer` always computes `Passed = LowerBoundMin > 0`
+  (strictly `>`, never `>=`) on every save and refuses any client-supplied `Passed` (including `ReplayOnly`) that differs
+  from the computed value (`comparison-passed-client-override`), leaving nothing written. · Coordinator ruling (B4).
+- D5-B4-5 · 2026-11-26 · The session search seed for `SeededRandomWaveStrategist` is persisted as `SearchSeed` in
+  `MJ: Experiment Sessions.PlanSpec` JSON (defaulting to `SeededRandomWaveStrategist.DefaultSeed = 42` or
+  `options.searchSeed` / injected strategist `.Seed`). · `MJExperimentSessionEntity` has no dedicated `Seed` column and
+  no schema change was planned on `ExperimentSession` (B4).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3573,3 +3597,26 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   exit 0; plan 2,723 lines before this entry (cap 3,076); ```` ```ts ```` fences 1 (as after the refresh).
 - **Decisions recorded:** §9 D5-18 (agent JSON one owner per wave), D5-19 (allowlist additions), D5-20 (waves kept);
   the owner batch (2 items, both `FeaturePipelinesEngine/…/InferProcessor.ts`: B1 `inputAsOf`, B3 the budget slice).
+
+### 2026-11-26 — Search-strategy policy & comparison ledger (council 30st24) — B4
+
+- **Checked against:** `origin/ps/pr-5-agent-fp-input` @ `261546a083`; red attack commit `a6d71da83c`; database `MJ_PS_PR5_hydrogen1` (port 4053).
+- **Implemented:**
+  - Migration `migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql` (`-- section: B4`): `[__mj].[MLSearchStrategyComparison]` (`TrackRecordChanges = 1`, `CHECK ([Method] IN ('bayesian', 'successive-halving'))`, `CHECK ([ComputeBudgetSecondsPerArm] > 0)`, FK to `[User]`, CodeGen tail with apply-time `MAX(Sequence)+1` `EntityField` inserts).
+  - `$C/search-policy.ts`: `EqualCostComparison`, `SearchComparisonColumns`, `SearchPolicyRefusal`, `SearchPolicy.Decide`, `SearchPolicy.ComputeLowerBoundMin`, `SearchPolicy.ComputePassed`, `SearchPolicy.GetComparisonRowProblems`, `SearchPolicy.ParseComparisonRow`; wired into `$C/evaluation-protocol.ts` (`ParsedEvaluationProtocolSpec.ValidateSearchPolicy` / `EvaluationProtocol.ValidateSearchPolicy`) and `$C/evaluation-protocol-rules.ts` (`search` added to `GUARD_FIELDS`).
+  - `$E/experiment/random-strategist.ts` & `experiment-orchestrator.ts`: `SeededRandomWaveStrategist` replaces `PlanOrderWaveStrategist` as default; `SearchPolicy.Decide` enforced before any session or training run; `SearchSeed` persisted in `session.PlanSpec` JSON.
+  - `MJMLSearchStrategyComparisonEntityServer` + `MJMLEvaluationProtocolEntityServer.ValidateAsync`: server computes `Passed = LowerBoundMin > 0` strictly on every save, validates `LowerBoundMin = min(ci[0])` across `W1-signal` & `C1` (never averaged), refuses client-set `Passed` overrides (`comparison-passed-client-override`, including `ReplayOnly`), and refuses `guided` protocols lacking a passing comparison.
+  - Gate `G7.7` (`W1 -> C3.2`): `metadata-optional/integration-test/tests/gates/.gate-W1-C3.2.json`, `.ps-gates-feature-pipelines-suite.json`, `ps-gate-w1-c3-2.checks.ts`.
+- **Unit & Integration Tests (all run post-final-edit):**
+  - `@memberjunction/predictive-studio-core`: 46/46 files, 602/602 tests passed (0 failed, 0 skipped).
+  - `@memberjunction/predictive-studio`: 131/131 files, 1955/1955 tests passed (0 failed, 0 skipped).
+  - `@memberjunction/core-entities-server`: 119/119 files, 1705/1705 tests passed (0 failed, 0 skipped).
+  - `@memberjunction/integration-test-suite`: 78/78 files, 1156/1156 tests passed (0 failed, 0 skipped), `tsc -p tsconfig.rigs.json` exit 0.
+  - Live Gate `W1 -> C3.2`: `MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 $PSE pnpm mj test run "W1 -> C3.2"` → 1/1 passed (`Score: 1.0000`, `forgedCreateRefused=true`, `storedAfterCreate=false`, `gqlUpdateRefused=true`, `storedAfterGqlUpdate=false`, `actionUpdateRefused=true`, `storedAfterActionUpdate=false`, `protocolSaved=false`, `orchestratorRefused=true`).
+- **Mutation output G7.7:** `LowerBoundMin > 0` → `>= 0` in `SearchPolicy.Decide` + `ComputePassed` → Attack 1 (`Core/src/__tests__/search-policy.test.ts`) failed 1/9 (`AssertionError: expected null to deeply equal { kind: 'comparison-not-passed', comparisonId: 'A1111111-1111-4111-8111-111111111111', lowerBoundMin: 0 }`); restored. Dropping `strategist-not-random` refusal in `ExperimentOrchestrator.runSession` → Attack 2 (`Engine/src/experiment/__tests__/search-policy.test.ts`) failed 1/3 (`AssertionError: expected { …(6) } to be an instance of SearchPolicyRefusedError`); restored.
+- **Additive barrel/registry lines handed to A2 at integration (D5-49 / D5-B4-2):**
+  - `packages/AI/PredictiveStudio/Core/src/index.ts`: `export * from './search-policy';`
+  - `packages/TestingFramework/integration-test-suite/src/index.ts`: `export * from './checks/ps-gate-w1-c3-2.checks';`
+  - `packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts`: `'ps-gate-w1-c3-2': 1,`, `'ps-gate-w1-c3-2.G7.7',`, and `expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(293);`
+- **LLM spend (§2.4):** `192` prompt runs, `$0.17999902` USD, `233,824` tokens on `MJ_PS_PR5_hydrogen1` (from CodeGen metadata generation; B4 tests/gate spent `$0.00`).
+- **Decisions recorded:** §9 `D5-B4-1`–`D5-B4-5`.

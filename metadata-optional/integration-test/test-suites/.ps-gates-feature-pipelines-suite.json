@@ -7,14 +7,100 @@
     },
     "relatedEntities": {
       "MJ: Test Suite Tests": [
-        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.1", "Sequence": 1, "Status": "Active" }, "primaryKey": { "ID": "F373635F-989D-492C-B8B7-C6EE09D47ACD" } },
-        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.2", "Sequence": 2, "Status": "Active" }, "primaryKey": { "ID": "7311A216-EE5B-4BE7-BCA4-4DB22AE6D5EA" } },
-        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.3", "Sequence": 3, "Status": "Active" }, "primaryKey": { "ID": "C149F05C-405E-42E9-878E-4F4E2DB165B6" } },
-        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.5", "Sequence": 4, "Status": "Active" }, "primaryKey": { "ID": "4472A16F-4057-40C8-A4A1-7A227E151EEE" } },
-        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=IT125 - Job-title classifier consistency (live)", "Sequence": 5, "Status": "Active" }, "primaryKey": { "ID": "86797EFC-29B6-4ABC-BC7F-BFA1FF6A096E" } },
-        { "fields": { "SuiteID": "@parent:ID", "TestID": "@lookup:MJ: Tests.Name=W1 -> C3.2", "Sequence": 6, "Status": "Active" }, "primaryKey": { "ID": "032CDD17-CF4E-430F-B4DD-E5A8DC6B8316" } }
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.1",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F373635F-989D-492C-B8B7-C6EE09D47ACD"
+          },
+          "sync": {
+            "lastModified": "2026-11-26T09:54:17.714Z",
+            "checksum": "254b31a88bae00bc9b20df037fc505656056aa94a1f5b3212e5dad1f22003b44"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.2",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7311A216-EE5B-4BE7-BCA4-4DB22AE6D5EA"
+          },
+          "sync": {
+            "lastModified": "2026-11-26T09:54:18.187Z",
+            "checksum": "8c331215f05413fbce6b7b3c62eb467fdd6326d5e7d678519f049b6289db31da"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.3",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C149F05C-405E-42E9-878E-4F4E2DB165B6"
+          },
+          "sync": {
+            "lastModified": "2026-11-26T09:54:18.488Z",
+            "checksum": "689f3085f476276cdabebab7a1df34128abdaecd4d61ff6e06d25d046c5c9230"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.5",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4472A16F-4057-40C8-A4A1-7A227E151EEE"
+          },
+          "sync": {
+            "lastModified": "2026-11-26T09:54:18.601Z",
+            "checksum": "69c9bda7ef7272a915ff87a07ade1c4cd2bb8ee2a0efc260e5439f4c51c12bb5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT125 - Job-title classifier consistency (live)",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "86797EFC-29B6-4ABC-BC7F-BFA1FF6A096E"
+          },
+          "sync": {
+            "lastModified": "2026-11-26T09:54:18.738Z",
+            "checksum": "3ea54ad03c52bc83701a7c05a73b1ee2cd73dae83b4f8b4d72db33657410f7bc"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W1 -> C3.2",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "032CDD17-CF4E-430F-B4DD-E5A8DC6B8316"
+          },
+          "sync": {
+            "lastModified": "2026-11-26T09:54:18.855Z",
+            "checksum": "eb551160c7199f75dca30dab3747675ca9b771a4ec9c0b28c15781babac3fca9"
+          }
+        }
       ]
     },
-    "primaryKey": { "ID": "226B334D-3CC1-4424-91D4-3B8A5425BD9C" }
+    "primaryKey": {
+      "ID": "226B334D-3CC1-4424-91D4-3B8A5425BD9C"
+    }
   }
 ]

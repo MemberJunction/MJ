@@ -1,8 +1,44 @@
 import { describe, it, expect } from 'vitest';
-import { EvaluationProtocol, type EvaluationProtocolSpec, type SearchStrategy } from '../evaluation-protocol';
+import { EvaluationProtocol, ALLOWED_OUTCOMES, type EvaluationProtocolColumns, type EvaluationProtocolSpec, type SearchStrategy } from '../evaluation-protocol';
 import { EvaluationProtocolRules, GUARD_FIELDS, type Actor } from '../evaluation-protocol-rules';
 import { SearchPolicy, type EqualCostComparison } from '../search-policy';
-import { PROTOCOL_ROWS } from './fixtures/protocol-rows';
+
+function minimalProtocolRow(overrides: Partial<EvaluationProtocolColumns> = {}): EvaluationProtocolColumns {
+  return {
+    ID: 'P1',
+    LineageRootID: 'P1',
+    Version: 1,
+    Name: 'Renewal grading',
+    Holdout: JSON.stringify({ kind: 'date-carved', dateColumn: 'OrderDate', cutoff: '2024-01-01', holdoutEnd: null, newEntityReport: null }),
+    InnerValidation: JSON.stringify({ kind: 'repeated-stratified-kfold', folds: 5, repeats: 3 }),
+    Seed: 0,
+    HoldoutAccessBudget: 1,
+    PrimaryScore: JSON.stringify({ family: 'binary', metric: 'log-loss' }),
+    SecondaryMetrics: JSON.stringify(['auc', 'calibration-slope']),
+    Baselines: JSON.stringify([
+      { kind: 'dummy', name: 'base-rate' },
+      { kind: 'one-feature', selection: 'best-single-feature-inner-cv' },
+      { kind: 'glm', family: 'logistic', penalty: 'l2' },
+    ]),
+    Calibration: JSON.stringify({ kind: 'auto', thresholdRows: 1000, fitOn: 'disjoint-calibration-fold' }),
+    Resampling: JSON.stringify({ kind: 'none' }),
+    Intervals: JSON.stringify({ level: 0.95, method: 'bootstrap', resamples: 1000, pairedTest: 'paired-bootstrap' }),
+    Promotion: JSON.stringify({ comparators: [], incumbent: 'current-published', margin: 0, lowerBoundLevel: 0.95, pairedOn: 'same-holdout-rows', decisionTable: 'Q13+Q14+Q15' }),
+    AllowedOutcomes: JSON.stringify(ALLOWED_OUTCOMES),
+    LeakageAudit: JSON.stringify({ singleFeatureHeldOutAucMax: 0.9, timeShiftedLabelTest: true, dropColumnTest: true, importanceAggregation: 'per-source-column', highCardinalityIdCheck: true }),
+    Exclusions: JSON.stringify({ denyFields: ['Renewed2'], denySources: [] }),
+    Slices: JSON.stringify({ outOfTime: true, subgroups: ['Region'] }),
+    PredictionIntervals: null,
+    ResidualDiagnostics: null,
+    RetrainTriggers: JSON.stringify([]),
+    SearchStrategy: JSON.stringify({ kind: 'random', candidates: 3 }),
+    Budgets: JSON.stringify({ maxComputeSeconds: 600, maxTokens: 0, maxCandidates: 3, hardStop: true }),
+    MinMinorityClassRows: 20,
+    GuardFieldsEditableBy: 'non-agent',
+    AuthoredBy: JSON.stringify({ kind: 'human', userId: 'U-1' }),
+    ...overrides,
+  };
+}
 
 const COMPARISON_ID = 'A1111111-1111-4111-8111-111111111111';
 const HUMAN: Actor = { kind: 'human', userId: 'U-1' };
@@ -28,9 +64,9 @@ function makeComparison(overrides: Partial<EqualCostComparison> = {}): EqualCost
 }
 
 function parseBaselineProtocol(): EvaluationProtocolSpec {
-  const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(PROTOCOL_ROWS.MinimalValid());
+  const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(minimalProtocolRow());
   if (parsed.Ok === false) {
-    throw new Error(`MinimalValid fixture failed to parse: ${parsed.Errors.join('; ')}`);
+    throw new Error(`minimalProtocolRow fixture failed to parse: ${parsed.Errors.join('; ')}`);
   }
   return parsed.Value;
 }
@@ -102,7 +138,7 @@ describe('B4 SearchPolicy — Attack 1 (guided comparison validation)', () => {
   });
 
   it('EvaluationProtocol.ValidateSearchPolicy delegates guided and random enforcement to SearchPolicy.Decide', () => {
-    const row = PROTOCOL_ROWS.MinimalValid({
+    const row = minimalProtocolRow({
       SearchStrategy: JSON.stringify(guidedBayesian),
     });
     const parsed = EvaluationProtocol.ParseEvaluationProtocolRow(row);

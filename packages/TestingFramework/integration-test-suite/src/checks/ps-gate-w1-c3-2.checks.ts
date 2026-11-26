@@ -14,7 +14,7 @@ import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphq
 import { EscapeSQLString } from '@memberjunction/global';
 import { IntegrationCheckRegistry, type NamedCheck } from '@memberjunction/testing-integration';
 import { EvaluationProtocolRules, type Actor, type HoldoutSplit, type PredictionUnitSpec } from '@memberjunction/predictive-studio-core';
-import { EvaluationProtocolVersioning, ExperimentOrchestrator, SearchPolicyRefusedError, TrainingFixtures } from '@memberjunction/predictive-studio';
+import { ExperimentOrchestrator, SearchPolicyRefusedError } from '@memberjunction/predictive-studio';
 import type { TruthHarness } from '@memberjunction/predictive-studio-truth-suite';
 import { PsGate } from './ps-gates/ps-gate-fixture';
 
@@ -197,7 +197,7 @@ export const PsGateW1C32Checks: NamedCheck[] = [
           version: 1,
           name: 'w1-g77',
           rows: { kind: 'grain', grainEntity: 'Members', decisionDate: { kind: 'fixed', date: '2020-01-01' }, filter: [] },
-          label: { rule: { kind: 'column', column: 'Renewed' }, windowDays: 31, gapDays: 0, outcome: { kind: 'binary' }, labelVersion: 1 },
+          label: { rule: { kind: 'column', column: 'Renewed' }, windowDays: 31, gapDays: 0, outcome: { kind: 'binary', classOrder: ['0', '1'], adverseIndex: 0 }, labelVersion: 1 },
           censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2020-12-31' } },
           history: { onUncoveredRow: 'refuse', externalSourceRows: 'ineligible' },
           groupKey: null,
@@ -236,7 +236,7 @@ export const PsGateW1C32Checks: NamedCheck[] = [
         protocolEntity.SearchStrategy = cols.SearchStrategy;
         protocolEntity.Budgets = cols.Budgets;
         protocolEntity.MinMinorityClassRows = cols.MinMinorityClassRows;
-        protocolEntity.GuardFieldsEditableBy = cols.GuardFieldsEditableBy;
+        protocolEntity.GuardFieldsEditableBy = draft.guardFieldsEditableBy;
         protocolEntity.AuthoredBy = cols.AuthoredBy;
         const protocolSaved = await protocolEntity.Save();
         if (protocolSaved) {
@@ -248,19 +248,17 @@ export const PsGateW1C32Checks: NamedCheck[] = [
         try {
           await new ExperimentOrchestrator().runSession(
             {
-              Version: 1,
-              Approved: true,
               Goal: 'G7.7 gate refusal check',
-              SourceEntity: 'Members',
               TargetDefinition: { EntityName: 'Members', TargetVariable: 'Renewed', ProblemType: 'classification', SuccessMetric: 'roc_auc' },
-              FeatureStrategy: { SourceEntities: ['Members'], FeatureSteps: [], Exclusions: [] },
+              CandidateSources: [],
+              CandidateFeatures: [],
+              LeakageNotes: [],
               ProposedExperiments: [
-                { Label: 'E1', Algorithm: 'logistic_regression', FeatureSteps: [], Hyperparameters: {}, Priority: 1, Hypothesis: 'h' },
+                { Label: 'E1', AlgorithmName: 'logistic_regression', FeatureSet: [], Hyperparameters: {}, Priority: 1, Rationale: 'h' },
               ],
-              ValidationStrategy: { ValidationMethod: 'k-fold', Folds: 5, RandomSeed: 42 },
+              ValidationStrategy: { Strategy: 'train_test_split', TestSize: 0.2, LockedHoldoutFraction: 0.1 },
               ProposedBudget: {},
-              RiskAssessment: [],
-              RecommendedExperiment: 'E1',
+              Approved: true,
             },
             {
               entityFactory: { getEntityObject: (name, user) => h.Provider.GetEntityObject(name, user) },
@@ -315,5 +313,3 @@ export const PsGateW1C32Checks: NamedCheck[] = [
 
 for (const c of PsGateW1C32Checks) IntegrationCheckRegistry.Instance.Register(c);
 IntegrationCheckRegistry.Instance.RegisterLifecycle('ps-gate-w1-c3-2', PsGate.Lifecycle);
-// Silence unused imports if TrainingFixtures/EvaluationProtocolVersioning not needed in direct helper path
-export type _UnusedGateImports = typeof TrainingFixtures | typeof EvaluationProtocolVersioning;
