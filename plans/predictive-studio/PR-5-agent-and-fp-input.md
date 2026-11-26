@@ -96,6 +96,14 @@ $PSE mj codegen --skipdb
 pnpm run build; echo "build exit: $?"      # must print 0
 ```
 
+- **The CLI user (D5-46).** A clean database holds only `System` and `Anonymous`, and `mj ai agents run` then runs as
+  Anonymous, which cannot read `MJ: AI Agents` (`AgentService.getContextUser`, `packages/AI/AICLI/src/services/AgentService.ts:443-470`,
+  skips users named `System`). After `sync push` and before any CLI agent run, create through the entity layer
+  (`MJ: Users` / `MJ: User Roles` `Save()`, checked through `LatestResult.CompleteMessage`) the active user
+  `admin@memberjunction.org` (Name `M0 Baseline Admin`, Type `Owner`) with the `Developer`, `UI` and `Integration` roles.
+  M0's uncommitted script does it idempotently: `$PSE node_modules/.bin/tsx packages/AI/AICLI/scripts/m0-create-admin.ts` (copy it from
+  `$MJ_REPO-pr5-baseline`); M0 created the user on all five M0 databases.
+
 - **The migration (one file, D-094).** The `PrConfig` PR 5 row names it: `migrations/v6/V<yyyymmddhhmm>__v6.<x>.x__PS_Agent_FP_Input.sql`
   (glob `migrations/v6/V*__v6.*.x__PS_Agent_FP_Input*.sql`; `<x>` = the newest migration's minor series when it is
   first written). Each milestone that adds DDL writes its own headed section (`-- section: <id>`, e.g. `-- section: A4`);
@@ -131,8 +139,17 @@ delete it when there was no DDL; restore any `sync` blocks written back into `me
   → three lines.
 - **Cost table: re-measured at M0** on this routing; the assessed figures (MJ `903f1af7da`, Gemini 3.8 Flash
   orchestrator + 3.1 Flash-Lite sub-agents: mean **$0.044063** per scored run, 5,217–94,572 tokens, 20–72 s) are no
-  longer the price basis. M0 writes the measured per-run mean, min and max, and the projected cost of A7b's required
-  arms (≥ 100 scenarios × ≥ 3 repeats × 2 arms), into this bullet and §11. Track B spends LLM money only when it
+  longer the price basis. **M0 measured (2026-11-26, the shipped agent at `d214248682`, 30 counted runs, §11):** mean
+  **$0.026532** per run, min **$0.007122**, max **$0.044418** (9,483–89,348 tokens, 2–8 iterations, 8.0–51.0 s); the
+  orchestrator answered on Gemini 4 Hydrogen and the three planning sub-agents on Gemini 3.5 Flash-Lite (F-AG-9,
+  D5-47), at the same price per token ($0.000648 and $0.000654 per 1k), so A2's move to Hydrogen leaves the price
+  basis unchanged. **A7b's required arms** (100 scenarios × 3 repeats × 2 arms = 600 runs) project to **$15.92** at
+  the measured mean ($26.65 if every run cost the measured max). **A2's caps (DD-5, 10× each per-agent maximum):**
+  Model Development Agent $0.3612 · 655,290 tokens · 50 iterations · 510 s (its own prompt runs; whole run tree 10×:
+  $0.4442 · 893,480 tokens · 80 iterations · 510 s); Goal Analyst $0.0527 · 155,950 · 20 · 23 s; Data Scout
+  $0.0623 · 173,700 · 10 · 80 s; Experiment Designer $0.0636 · 165,160 · 10 · 25 s; Pipeline Builder: no LLM use in
+  the baseline (0 prompt runs, 0 iterations, ≤ 0.03 s in its 15 invocations, every one a fast build failure), so the
+  10× rule yields no usable cap — A2 sets it from its own first measured build. Track B spends LLM money only when it
   re-derives Feature Values.
 - **Ceiling (D5-12):** plan for ≤ $100 of LLM spend for the whole PR. Before every money-spending step, compute
   cumulative spend (query below) plus the step's projection (M0's measured per-run mean × runs). If it would pass $100:
@@ -1528,7 +1545,7 @@ entry (flip the guard, name the attack that goes red, restore it; ruling S1); a 
 
 ### M0 — Databases, baseline and cost re-measure
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** The three wave-1 implementer databases (A2, B1, B4; A7a needs none) and the integration database are
 built clean in parallel from the PR branch head through `ps-env.sh`; the pre-push hook is installed in `$MJ_REPO`;
@@ -1555,8 +1572,14 @@ maximum of each of cost, tokens, iterations and seconds (A2's caps = 10× each m
 3. A scratch commit touching `packages/AI/Agents/src/base-agent.ts` makes `milestone-exit.mjs --mode pre-push` print
    `FAIL  allowlist` naming that path; one touching `packages/Angular/Explorer/dashboards/src/PredictiveStudio/x.ts`
    passes it (Review Focus 4). The scratch commit is on a throwaway local branch, never pushed.
-4. A baseline run answered by a fallback model (its prompt run's `ModelID` is not Gemini 4 Hydrogen) is counted as
-   re-run, not as a result: the §11 table's `first-ranked` column is `yes` on every counted row (D-092).
+4. A baseline run answered by a fallback model is counted as re-run, not as a result: the §11 table's `first-ranked`
+   column is `yes` on every counted row (D-092, clarified for the shipped agent by D5-47). A run counts when every
+   prompt run used the first-ranked model of the list the shipped selection mode reads — the orchestrator
+   (`ModelSelectionMode = 'Agent'`) its Main Prompt's list (Gemini 4 Hydrogen); the `Agent Type` sub-agents the
+   `Loop Agent Type: System Prompt` list (Gemini 3.5 Flash-Lite, F-AG-9, fixed by A2) — and no prompt run failed; any
+   prompt run answered by a lower-ranked model of its own list is re-run. A vendor row skipped for missing credentials
+   with the same model is not a fallback. The table also shows `orchestrator on Hydrogen` and `prompt runs not on
+   Hydrogen (n)`.
 
 **Non-PS list.** None.
 
@@ -2304,7 +2327,9 @@ refused tests.
 
 **Attack list**
 1. A counted run whose prompt run used a fallback model → the summary refuses to compute (`fallback-answered`) until it
-   is re-run.
+   is re-run. "Fallback" per arm (D5-47): the baseline arm uses M0's rule (every prompt run on the first-ranked model of
+   the list its shipped selection mode reads); the candidate arm uses A2's rule (every prompt run on its own prompt's
+   first-ranked model).
 2. N1c, C4, W3 and W7 scenarios → pass^3 = 1 each; `leaky-field` (keep-list) → pass^k = 1.
 3. Positive control: per run, root `TotalCost` = the sum of attributed prompt costs and attributed prompt runs = DB
    prompt runs, 100%.
@@ -3134,6 +3159,18 @@ Record every decision taken in §9 and, when it changes another plan's interface
   session lock Query). · The first heartbeat lands 30 s after `Track`, and process clocks skew (F-019 re-opened).
 - D5-44 · 2026-11-26 · The re-derivation lease is written and compared on the database clock (`DbNow` from its lock
   Query). · Host clock skew broke single-flight (F-025).
+- D5-45 · 2026-11-26 · Seed-scenario texts on the truth suite's worlds: noise-target reads "Predict Renewed for PS Truth
+  W2 membership years from the other columns and build it." with W2-noise s100 loaded and `W1_MembershipYear` empty;
+  small-n runs verbatim on C1 + W1 (C1 has no committee-chair data, so it measures a target the data cannot support);
+  the other four verbatim on C1 + W1-signal s42. A7a's manifest uses the same texts. · The assessment's `pstest` schema
+  no longer exists; the truth suite loads `pstruth` with one table per world (M0).
+- D5-46 · 2026-11-26 · Every PR 5 database that runs the CLI gets the user `admin@memberjunction.org` (Owner;
+  Developer, UI, Integration) through the entity layer after `sync push` (§2.2). · On a clean database
+  `AgentService.getContextUser` (`AgentService.ts:443-470`) falls to `Anonymous`, which cannot read `MJ: AI Agents` (M0).
+- D5-47 · 2026-11-26 · For the M0 baseline and A7b's baseline arm a run counts when every prompt run used the
+  first-ranked model of the list its shipped selection mode reads and none failed; the candidate arm uses A2's rule. ·
+  At `d214248682` the three planning sub-agents have `ModelSelectionMode = 'Agent Type'` and run on the Loop Agent
+  Type's Gemini 3.5 Flash-Lite with no failover (F-AG-9), so the literal D-092 rule could count no baseline run (M0).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3270,6 +3307,118 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - 2026-11-26 — merged `origin/next` into the branch (no conflicts). The fast mirror's red `transaction-scope-affinity` test was the runtime, not the code: it fails on Node 22 and passes on Node 24, MJ's `.nvmrc`/CI runtime (`AsyncLocalStorage` scoping differs). `ci-mirror` now refuses a Node major that differs from `.nvmrc`; every mirror and hook run uses Node 24.
 - 2026-11-26 — plan review r2 (council `30st24`; F-001, F-011 re-opened, F-019…F-024 new; all 8 real) fixed as D5-35…D5-42: item 3 also chains a plan-card answer with no `lastRunId` (`'plan-answer'`), the plan hash bound server-side (no form field), `executeNextStep` intercepts only `Retry` turns with a gate, session liveness (heartbeat, session lock, `session-busy`, compare-and-append), claim → row order, `NOWAIT` open-row locks with a typed timeout, a renewed re-derivation lease (B3 section) with feature-pipelines-owned constants; round-1 rulings compacted. `check-anchors` at `95feb574a8` changed 0 · missing 0 (`c9-cli-fail-exit` re-pinned after the next merge); `milestone-exit --skip-commands` failed 0, wave-ownership ok.
 - 2026-11-26 — council `30st24` plan review r3: F-019 (liveness before the first heartbeat, process clock) and F-025 (lease clock) fixed as D5-43/D5-44, with attack extensions in A2 22 and B3 9.
+
+### 2026-11-26 — databases, baseline and cost re-measure — M0
+
+- **Databases (§2.2, built clean in parallel, logs `/private/tmp/claude-501/council-30st24/m0/<db>.log`):**
+  `MJ_PS_PR5_claudeint` (integration, 4054), `MJ_PS_PR5_claude1` (A2, 4051), `MJ_PS_PR5_claude2` (B1, 4052),
+  `MJ_PS_PR5_hydrogen1` (B4, 4053) from the PR head `821a3106d5`, and `MJ_PS_PR5_claudebase` (A7b baseline, 4055;
+  sidecar 4155) from `d214248682` in the detached worktree `$MJ_REPO-pr5-baseline` (D5-34; kept to A7b's exit;
+  A7a's overlay is not applied yet, A7a has not run). Each: `CREATE DATABASE` → `mj migrate` → `mj codegen --skipfiles`
+  → `mj sync push --dir=metadata --ci` → `mj codegen --skipdb` through `ps-env.sh` (the file-writing steps serialised
+  per checkout), then `pnpm run build` → `build exit: 0` on all five (one shared build in the main checkout after the
+  four CodeGen runs, 325/325 tasks; one in the baseline worktree). CodeGen rewrote **no tracked file** in either checkout;
+  it wrote only the untracked `migrations/v5/CodeGen_Run_2026-11-26_07-3{7,9}-*.sql` (5 files, no `CREATE`/`ALTER TABLE`),
+  moved to the log folder. The baseline database also has `truth:provision` (48 `pstruth` entities), the C1 corpus
+  (`truth:load-c1`, 305 immutable fields) and one membership world at a time (W1-signal s42 now loaded, 16,776 rows).
+- **CLI user (D5-46):** `admin@memberjunction.org` (Owner; Developer, UI, Integration) created through the entity layer on
+  all five databases (`packages/AI/AICLI/scripts/m0-create-admin.ts` in the baseline worktree, uncommitted). Without it
+  the first CLI run failed with `User anonymous@magic-link.local does not have read permissions on MJ: AI Agents`.
+- **Env files:** `.env.MJ_PS_PR5_{claudeint,claude1,claude2,hydrogen1,claudebase}` from `.env` with their own
+  `DB_DATABASE`/`GRAPHQL_PORT`, a per-database `PS_ARTIFACT_DIR` and the two HMAC secrets; the baseline file also sets
+  `PREDICTIVE_STUDIO_SIDECAR_URL` and `STORAGE_LOCAL_ROOT`. `.env.MJ_PS_PR4_claude` and `.env.MJ_PS_PR4_review` deleted
+  (their databases no longer exist). The pre-push hook is installed (`test -x .git/hooks/pre-push` → ok).
+- **Attacks:** 1 — `ps-env.sh` with `DB_DATABASE=MJ_BranchableRuns` → exit 3 for `sqlcmd` and for `mj migrate`; 2 —
+  `git push --dry-run origin HEAD:refs/heads/ps/pr-5-agent-fp-input--B1` from the PR-branch checkout → refused
+  (`… is not the checked-out HEAD …`), exit 1, nothing on the remote; 3 — a scratch commit to
+  `packages/AI/Agents/src/base-agent.ts` → `FAIL  allowlist  2 paths, 1 outside: packages/AI/Agents/src/base-agent.ts`,
+  one to `packages/Angular/Explorer/dashboards/src/PredictiveStudio/x.ts` → `ok  allowlist  2 paths, 0 outside`
+  (throwaway local branch, removed, never pushed); 4 — two noise-target runs with a failed prompt run were re-run, not
+  counted (below); every counted row is `yes`.
+- **Mutation table (ruling S1):**
+
+| Guard flipped (scratch copy) | Attack | Result with the flip | Restored |
+|---|---|---|---|
+| `ps-env.sh` `check_db_name` call removed | 1 | exit 0, command ran on `MJ_BranchableRuns` | exit 3 |
+| hook: the checked-out-HEAD condition replaced by `false` | 2 | no refusal: it went on to `milestone-exit --mode pre-push` (`# checks 21 · failed 0`) | refused, exit 1 |
+| plan copy with `packages/AI/Agents/**` added to the allowlist | 3 | `ok  allowlist  2 paths, 0 outside` | `FAIL  allowlist … base-agent.ts` |
+| counting rule ignores failed prompt runs | 4 | both re-run sources count | both re-run |
+
+- **Baseline (D-092, D5-45, D5-47):** the shipped agent (`Model Development Agent` at `d214248682`) through
+  `PS_PR=5 tools/ps-env.sh pnpm mj ai agents run -a "Model Development Agent" -p "<prompt>" --format json` on
+  `MJ_PS_PR5_claudebase`, strictly one run at a time, MJAPI stopped during runs, agent notes created since the baseline
+  start (`2026-11-26T08:00:32Z`) archived before and after every run (0 were created). Prompts as D5-45: noise-target
+  on W2-noise s100 alone, the other five on C1 + W1-signal s42; small-n's C1 has no committee-chair data, so that
+  scenario measures a target the data cannot support. Per run: USD and tokens are the sums over the run tree's prompt
+  runs (reached through `MJ: AI Agent Run Steps.TargetLogID`; the `*Rollup` columns are NULL at this version),
+  iterations the tree's `TotalPromptIterations`, seconds the root's `CompletedAt − StartedAt`. Every root ended
+  `AwaitingFeedback`, CLI exit 0. Driver, per-run prompt and agent rows: `/private/tmp/claude-501/council-30st24/m0/baseline/`.
+
+| scenario | repeat | USD | tokens | iterations | seconds | first-ranked model answered | orchestrator on Hydrogen | prompt runs not on Hydrogen (n) | root run |
+|---|---|---|---|---|---|---|---|---|---|
+| noise-target | 1 | 0.044418 | 89,348 | 8 | 40.5 | yes | yes | 3 of 8 | `8155BB0F` |
+| noise-target | 2 | 0.026024 | 33,093 | 8 | 39.1 | yes | yes | 3 of 8 | `3881B4B2` |
+| noise-target | 3 | 0.026045 | 32,774 | 8 | 34.0 | yes | yes | 3 of 8 | `6123B35F` |
+| noise-target | 4 | 0.033754 | 50,221 | 8 | 40.0 | yes | yes | 3 of 8 | `E0086DFD` |
+| noise-target | 5 | 0.033922 | 50,536 | 8 | 34.0 | yes | yes | 3 of 8 | `E9254A82` |
+| renewal-clean | 1 | 0.031341 | 47,873 | 7 | 30.0 | yes | yes | 3 of 7 | `C685FDF3` |
+| renewal-clean | 2 | 0.031709 | 48,478 | 7 | 33.0 | yes | yes | 3 of 7 | `51823FC8` |
+| renewal-clean | 3 | 0.031420 | 48,087 | 7 | 34.0 | yes | yes | 3 of 7 | `A779120E` |
+| renewal-clean | 4 | 0.030660 | 47,189 | 7 | 27.0 | yes | yes | 3 of 7 | `B760D9B2` |
+| renewal-clean | 5 | 0.030488 | 47,023 | 7 | 27.9 | yes | yes | 3 of 7 | `F223878B` |
+| dont-build-yet | 1 | 0.033730 | 50,620 | 8 | 33.2 | yes | yes | 3 of 8 | `A6940671` |
+| dont-build-yet | 2 | 0.044093 | 76,498 | 8 | 32.8 | yes | yes | 3 of 8 | `01EA99A1` |
+| dont-build-yet | 3 | 0.034676 | 51,567 | 8 | 35.0 | yes | yes | 3 of 8 | `02C57FAF` |
+| dont-build-yet | 4 | 0.034423 | 51,280 | 8 | 51.0 | yes | yes | 3 of 8 | `CB645017` |
+| dont-build-yet | 5 | 0.034867 | 50,769 | 8 | 34.0 | yes | yes | 3 of 8 | `B62F0F73` |
+| leaky-field | 1 | 0.031084 | 48,074 | 7 | 29.8 | yes | yes | 3 of 7 | `2536C1BA` |
+| leaky-field | 2 | 0.032133 | 48,637 | 7 | 34.6 | yes | yes | 3 of 7 | `20DE7DA7` |
+| leaky-field | 3 | 0.031525 | 48,146 | 7 | 50.8 | yes | yes | 3 of 7 | `12892C01` |
+| leaky-field | 4 | 0.030907 | 47,872 | 7 | 28.2 | yes | yes | 3 of 7 | `6F352210` |
+| leaky-field | 5 | 0.032291 | 48,908 | 7 | 32.4 | yes | yes | 3 of 7 | `7D7AEFC1` |
+| small-n | 1 | 0.030682 | 47,211 | 7 | 30.9 | yes | yes | 3 of 7 | `DB7A2704` |
+| small-n | 2 | 0.018900 | 33,741 | 3 | 17.9 | yes | yes | 1 of 3 | `04F00443` |
+| small-n | 3 | 0.007122 | 9,483 | 3 | 10.4 | yes | yes | 2 of 3 | `6A18A769` |
+| small-n | 4 | 0.021855 | 24,229 | 7 | 32.3 | yes | yes | 3 of 7 | `7852D74A` |
+| small-n | 5 | 0.015217 | 30,331 | 2 | 8.0 | yes | yes | 1 of 2 | `FBDCC468` |
+| improve-this | 1 | 0.008864 | 12,966 | 2 | 14.3 | yes | yes | 0 of 2 | `73DE8F68` |
+| improve-this | 2 | 0.008650 | 12,847 | 2 | 20.3 | yes | yes | 0 of 2 | `BC0FBE6F` |
+| improve-this | 3 | 0.008466 | 12,745 | 2 | 19.8 | yes | yes | 0 of 2 | `5C1B027B` |
+| improve-this | 4 | 0.008245 | 12,622 | 2 | 21.2 | yes | yes | 0 of 2 | `22A983E7` |
+| improve-this | 5 | 0.008443 | 12,732 | 2 | 15.1 | yes | yes | 0 of 2 | `0CE59428` |
+
+  Re-runs (not counted; a prompt run failed with `JSON parsing/validation failed: No output received from model` and was
+  retried on the same model): noise-target 2 `671D465E` ($0.041531, 68,146 tokens, 11 iterations, 50.1 s) and
+  noise-target 3 `5336E2B8` ($0.035658, 57,469 tokens, 8 iterations, 40.3 s). Counted: **30**; mean **$0.026532**, min
+  $0.007122, max $0.044418, total $0.795953. Positive control: the §2.4 query on the baseline database since
+  `08:00:32Z` returns 249 prompt runs, **$0.873143** = the 32 runs' attributed sums ($0.795953 + $0.077189).
+  Sub-agent routing (F-AG-9): the orchestrator's prompt runs all used Gemini 4 Hydrogen (Google; the OpenRouter vendor
+  row is skipped for missing credentials); Goal Analyst, Data Scout and Experiment Designer (`ModelSelectionMode =
+  'Agent Type'`) used Gemini 3.5 Flash-Lite from the Loop Agent Type list, `fallbackUsed = false`. Pipeline Builder ran
+  in 15 of 30 runs, 0 prompt runs, ≤ 0.03 s each.
+- **Per-agent maxima over the counted runs → A2's caps (DD-5, 10×):**
+
+| Agent | max USD | max tokens | max iterations | max seconds | cap USD | cap tokens | cap iterations | cap seconds |
+|---|---|---|---|---|---|---|---|---|
+| Model Development Agent (own prompt runs) | 0.036117 | 65,529 | 5 | 51.0 | 0.3612 | 655,290 | 50 | 510 |
+| Model Development Agent (whole run tree) | 0.044418 | 89,348 | 8 | 51.0 | 0.4442 | 893,480 | 80 | 510 |
+| Goal Analyst | 0.005270 | 15,595 | 2 | 2.3 | 0.0527 | 155,950 | 20 | 23 |
+| Data Scout | 0.006225 | 17,370 | 1 | 8.0 | 0.0623 | 173,700 | 10 | 80 |
+| Experiment Designer | 0.006365 | 16,516 | 1 | 2.5 | 0.0636 | 165,160 | 10 | 25 |
+| Pipeline Builder | 0 | 0 | 0 | 0.03 | — | — | — | — (no LLM use in the baseline; A2 sets it from its first measured build) |
+
+- **Projection:** A7b's required arms, 600 runs × $0.026532 = **$15.92** (max-price bound $26.65); Hydrogen and
+  Flash-Lite cost the same per token here ($0.000648 vs $0.000654 per 1k), so A2's sub-agent move keeps the basis.
+- **Spend (§2.4 query, from `2026-11-26T07:00:00Z`):** claudebase 476 prompt runs $1.501330 (agent runs $0.873143;
+  CodeGen's Check Constraint Parser, Smart Field Identification and Form Layout prompts during `codegen --skipfiles`
+  and `truth:provision` $0.628187); claudeint 93 / $0.178924; claude1 93 / $0.180874; claude2 93 / $0.181001;
+  hydrogen1 93 / $0.179999 (CodeGen's Check Constraint Parser only). **M0 total $2.222128.**
+- **check-anchors:** at the branch base `d214248682` → `ok 138 · moved 5 · changed 1 · missing 0` — the one changed
+  anchor is `c9-cli-fail-exit`, re-pinned at `95feb574a8` (r2) to the CLI that the `next` merge brought, so it cannot
+  match the base; at the PR head → `ok 136 · moved 8 · changed 0 · missing 0`.
+- **Tests:** M0 changes no package (the plan of record only); no package test run is owed.
+- Rulings this milestone: D5-45 (seed texts and worlds), D5-46 (the CLI user, §2.2 step), D5-47 (what counts as
+  first-ranked for the shipped agent; attack 4 and A7b attack 1 reworded).
 
 ## 12. Refresh log (append-only)
 
