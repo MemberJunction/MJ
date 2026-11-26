@@ -27,6 +27,9 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
 });
 
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
+// Imported statically: ResolverBase pulls in a large module graph, and a cold dynamic import inside a test counted
+// that load against the test's own timeout (30 s under load), leaving its LogError to land in the next test.
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 /** A wire-shaped options object with every field populated, as type-graphql would deliver it. */
 function wireOptions(overrides: Partial<DeleteOptionsInput> = {}): DeleteOptionsInput {
@@ -119,7 +122,6 @@ describe('ResolverBase.DeleteRecord — the sanitize is wired, not just availabl
      * concerns with their own tests; the production body under test is unmodified.
      */
     async function callDeleteRecord(options: DeleteOptionsInput, provider: unknown) {
-        const { ResolverBase } = await import('../generic/ResolverBase.js');
         const resolver = Object.create(ResolverBase.prototype) as Record<string, unknown> & {
             DeleteRecord: (...args: unknown[]) => Promise<unknown>;
         };
