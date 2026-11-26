@@ -2069,15 +2069,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   private renderWikiCitationHTML(citation: MessageCitation): string {
     const entityName = citation.EntityName ?? '';
-    const entityIcon = entityName
-      ? this.ProviderToUse?.EntityByName?.(entityName)?.Icon
-      : undefined;
-    const iconClass = this.normalizeIconClass(entityIcon || 'fa-solid fa-up-right-from-square');
+    const entity = entityName ? this.ProviderToUse?.EntityByName?.(entityName) : undefined;
+    const entityDisplayName = entity?.DisplayNameOrName?.trim() || entityName;
+    const iconClass = this.normalizeIconClass(entity?.Icon || 'fa-solid fa-up-right-from-square');
     const keys = citation.Keys ?? (citation.RecordID ? { ID: citation.RecordID } : {});
-    const label = citation.DisplayName;
+    const label =
+      entityName && citation.DisplayName.trim().toLowerCase() === entityName.trim().toLowerCase()
+        ? entityDisplayName
+        : citation.DisplayName;
     const ariaLabel =
-      entityName && entityName.toLowerCase() !== label.toLowerCase()
-        ? `Open ${label} (${entityName})`
+      entityDisplayName && entityDisplayName.toLowerCase() !== label.trim().toLowerCase()
+        ? `Open ${label} (${entityDisplayName})`
         : `Open ${label}`;
     const indexBadge = `<span class="citation-index">[${citation.Index}]</span>`;
 
@@ -2106,6 +2108,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let logoURL = '';
     let configPresetName = '';
     let inlineStyle = '';
+
+    let recordEntityDisplayName = '';
 
     // Look up actual name and icon if ID provided
     if (content.type === 'agent' && agents) {
@@ -2151,10 +2155,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     } else if (content.type === 'record') {
       name = (content.name ?? '').trim();
-      const entityIcon = content.entityName
-        ? this.ProviderToUse?.EntityByName?.(content.entityName)?.Icon
+      const recordEntity = content.entityName
+        ? this.ProviderToUse?.EntityByName?.(content.entityName)
         : undefined;
-      iconClass = this.normalizeIconClass(entityIcon || 'fa-solid fa-up-right-from-square');
+      recordEntityDisplayName = recordEntity?.DisplayNameOrName?.trim() || content.entityName?.trim() || 'record';
+      if (name && content.entityName && name.toLowerCase() === content.entityName.trim().toLowerCase()) {
+        name = recordEntityDisplayName;
+      }
+      iconClass = this.normalizeIconClass(recordEntity?.Icon || 'fa-solid fa-up-right-from-square');
     }
 
     const iconOnly = content.type === 'record' && !name;
@@ -2178,7 +2186,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         : '';
 
     const recordOpenLabel = content.type === 'record'
-      ? (name ? `Open ${name}` : `Open ${content.entityName || 'record'}`)
+      ? (name
+          ? (recordEntityDisplayName && recordEntityDisplayName.toLowerCase() !== name.toLowerCase()
+              ? `Open ${name} (${recordEntityDisplayName})`
+              : `Open ${name}`)
+          : `Open ${recordEntityDisplayName || 'record'}`)
       : '';
     const recordAttrs = content.type === 'record' && content.entityName
       ? ` role="link" tabindex="0" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content as MentionContent)))}"${citationIndex != null ? ` data-citation-index="${citationIndex}"` : ''}`

@@ -85,6 +85,7 @@ export class CitedSourcesBarComponent extends BaseAngularComponent {
       $implicit: citation,
       citation,
       icon: this.GetCitationIcon(citation),
+      entityDisplayName: this.GetEntityDisplayName(citation),
       title: this.GetCitationTitle(citation),
       open: (event?: Event) => this.OnPillClick(citation, event),
     };
@@ -103,18 +104,46 @@ export class CitedSourcesBarComponent extends BaseAngularComponent {
     return this.normalizeIconClass(entityIcon || 'fa-solid fa-up-right-from-square');
   }
 
+  /**
+   * Resolves the human-friendly entity display name (`EntityInfo.DisplayNameOrName`, e.g. `"Tasks"`
+   * instead of `"MJ_BizApps_Tasks: Tasks"`), falling back to `citation.EntityName` when metadata is absent.
+   */
+  public GetEntityDisplayName(citation: MessageCitation): string {
+    const rawEntityName = citation.EntityName?.trim();
+    if (!rawEntityName) {
+      return '';
+    }
+    const entity = this.ProviderToUse?.EntityByName?.(rawEntityName);
+    return entity?.DisplayNameOrName?.trim() || rawEntityName;
+  }
+
+  /**
+   * Resolves the primary visible label for a citation pill. When a record citation had no explicit
+   * record label (so `DisplayName` fell back to the raw `EntityName`), uses `GetEntityDisplayName`
+   * so users see `"Tasks"` instead of `"MJ_BizApps_Tasks: Tasks"`.
+   */
+  public GetCitationDisplayName(citation: MessageCitation): string {
+    const rawEntityName = citation.EntityName?.trim();
+    if (rawEntityName && citation.DisplayName.trim().toLowerCase() === rawEntityName.toLowerCase()) {
+      return this.GetEntityDisplayName(citation);
+    }
+    return citation.DisplayName;
+  }
+
   public ShowEntitySubtitle(citation: MessageCitation): boolean {
-    if (!citation.EntityName) {
+    const entityDisplayName = this.GetEntityDisplayName(citation);
+    if (!entityDisplayName) {
       return false;
     }
-    return citation.EntityName.trim().toLowerCase() !== citation.DisplayName.trim().toLowerCase();
+    return entityDisplayName.toLowerCase() !== this.GetCitationDisplayName(citation).trim().toLowerCase();
   }
 
   public GetCitationTitle(citation: MessageCitation): string {
+    const displayLabel = this.GetCitationDisplayName(citation);
     if (this.ShowEntitySubtitle(citation)) {
-      return `Open ${citation.DisplayName} (${citation.EntityName})`;
+      return `Open ${displayLabel} (${this.GetEntityDisplayName(citation)})`;
     }
-    return `Open ${citation.DisplayName}`;
+    return `Open ${displayLabel}`;
   }
 
   private normalizeIconClass(iconClass: string): string {

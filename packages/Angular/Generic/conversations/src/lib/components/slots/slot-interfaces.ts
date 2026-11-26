@@ -188,6 +188,8 @@ export interface IMJChatCitedSourcePillContext {
     citation: MessageCitation;
     /** Resolved Font Awesome icon class (from `EntityInfo.Icon` or citation kind fallback). */
     icon: string;
+    /** Resolved human-friendly entity display name (`EntityInfo.DisplayNameOrName`), or empty string for non-record citations. */
+    entityDisplayName: string;
     /** Accessible title / tooltip label for the citation. */
     title: string;
     /** Triggers the bar's click handler (stops event propagation and emits `CitationClicked`). */

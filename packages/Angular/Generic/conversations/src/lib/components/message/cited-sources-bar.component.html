@@ -18,9 +18,9 @@
             (click)="OnPillClick(citation, $event)">
             <span class="cited-source-index">[{{ citation.Index }}]</span>
             <i [class]="'cited-source-icon ' + GetCitationIcon(citation)" aria-hidden="true"></i>
-            <span class="cited-source-name">{{ citation.DisplayName }}</span>
+            <span class="cited-source-name">{{ GetCitationDisplayName(citation) }}</span>
             @if (ShowEntitySubtitle(citation)) {
-              <span class="cited-source-entity">{{ citation.EntityName }}</span>
+              <span class="cited-source-entity">{{ GetEntityDisplayName(citation) }}</span>
             }
           </button>
         }
