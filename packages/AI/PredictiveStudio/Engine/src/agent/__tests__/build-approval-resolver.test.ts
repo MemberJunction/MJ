@@ -8,7 +8,8 @@
  * `ConversationDetailID`), the users (`UserInfo` with `ID`, `Type`) and the request entity the hook checks.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { RunView, UserCache, UserInfo, WellKnownUserSource, ServerOperationScopeManager, type IMetadataProvider, type BaseEntity } from '@memberjunction/core';
+import { RunView, UserInfo, WellKnownUserSource, ServerOperationScopeManager, type IMetadataProvider, type BaseEntity } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { BuildApprovalResolver } from '../build-approval-resolver';
@@ -242,6 +243,7 @@ describe('attack 3 (a–c): the answering-save hook records a non-person answer 
     const state = { AgentID: MDA, Status: over.status ?? 'Approved', ResponseByUserID: over.user.ID as string | null, OriginatingTaskID: null };
     Object.defineProperty(e, 'EntityInfo', { get: () => ({ Name: 'MJ: AI Agent Requests' }) });
     Object.defineProperty(e, 'AgentID', { get: () => state.AgentID });
+    Object.defineProperty(e, 'Agent', { get: () => 'Model Development Agent' });
     Object.defineProperty(e, 'Status', { get: () => state.Status });
     Object.defineProperty(e, 'OriginatingTaskID', { get: () => state.OriginatingTaskID });
     Object.defineProperty(e, 'ResponseByUserID', { get: () => state.ResponseByUserID, set: (v: string | null) => { state.ResponseByUserID = v; } });

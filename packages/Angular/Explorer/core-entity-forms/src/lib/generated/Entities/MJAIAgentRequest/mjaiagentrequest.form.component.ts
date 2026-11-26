@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJAIAgentRequestEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Requests') // Tell MemberJunction about this class
 @Component({
@@ -19,7 +20,8 @@ export class MJAIAgentRequestFormComponent extends BaseFormComponent {
             { sectionKey: 'responseSummary', sectionName: 'Response Summary', isExpanded: true },
             { sectionKey: 'executionContext', sectionName: 'Execution Context', isExpanded: true },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJMLBuildApprovalClaims', sectionName: 'ML Build Approval Claims', isExpanded: false }
         ]);
     }
 }

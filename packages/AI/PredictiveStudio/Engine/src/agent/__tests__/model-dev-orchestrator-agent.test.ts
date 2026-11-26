@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { BaseAgent } from '@memberjunction/ai-agents';
+import type { IMetadataProvider } from '@memberjunction/core';
 import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import type { BuildApproval, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import * as orchestratorModule from '../model-dev-orchestrator-agent';
@@ -47,6 +48,10 @@ class TestOrchestrator extends PredictiveStudioModelDevAgent {
   }
   protected override get CurrentRunID(): string {
     return 'RUN2';
+  }
+  /** A provider the spied claim calls receive (no database). */
+  protected override get ProviderToUse(): IMetadataProvider {
+    return {} as IMetadataProvider;
   }
   public Next(params: ExecuteAgentParams, previous: BaseAgentNextStep | null): Promise<BaseAgentNextStep> {
     return this.executeNextStep(params, {} as AgentConfiguration, previous, 1);
@@ -108,6 +113,15 @@ describe('attack 18: a code-decided step runs no orchestrator prompt', () => {
     await o.Next(params(), planStep);
     expect(superNext).toHaveBeenCalledTimes(1);
     expect(superNext.mock.calls[0][2]).toBe(planStep);
+  });
+
+  it('a complete, unpresented plan is presented by code even when the prompt chose to chat (its message goes on the card)', async () => {
+    const o = new TestOrchestrator(facts({ PresentedPlanHash: null, Approval: { kind: 'no-request' } }));
+    const s = await o.Next(params(), { step: 'Chat', terminate: false, message: 'Shall I build it?' } as BaseAgentNextStep);
+    expect(superNext).not.toHaveBeenCalled();
+    expect(String(s.step)).toBe('Plan');
+    expect(s.message).toBe('Shall I build it?');
+    expect((s.newPayload as PredictiveStudioBuilderPayload).PlanHash).toBe(HASH);
   });
 
   it('gather on a Retry turn runs the prompt (an LLM-decided state)', async () => {
@@ -246,7 +260,7 @@ describe('attack 22 (the orchestrator half): a live sibling run → session-busy
 describe('attacks 11 and 12: the agent metadata', () => {
   const here = dirname(fileURLToPath(import.meta.url));
   const json = JSON.parse(readFileSync(resolve(here, '../../../../../../../metadata/agents/.model-development-agent.json'), 'utf8')) as AgentRecord[];
-  interface AgentRecord { fields: Record<string, string | number | boolean | null | string[]>; relatedEntities?: Record<string, AgentRecord[]> }
+  interface AgentRecord { fields: Record<string, string | number | boolean | null | string[]>; relatedEntities?: Record<string, AgentRecord[]>; deleteRecord?: { delete: boolean } }
   const root = json[0];
   const subs = root.relatedEntities?.['MJ: AI Agents'] ?? [];
   const all = [root, ...subs];
@@ -279,7 +293,8 @@ describe('attacks 11 and 12: the agent metadata', () => {
     for (const n of ['Goal Analyst', 'Data Scout', 'Experiment Designer']) expect(byName(n).fields.ModelSelectionMode).toBe('Agent');
   });
   it('attack 12: none of the five removed Actions is attached; Run Experiment Session stays Revoked', () => {
-    const actions = root.relatedEntities?.['MJ: AI Agent Actions'] ?? [];
+    // a record marked deleteRecord is removed from the database by `mj sync push`: it is not attached
+    const actions = (root.relatedEntities?.['MJ: AI Agent Actions'] ?? []).filter((a) => a.deleteRecord?.delete !== true);
     const names = actions.map((a) => String(a.fields.ActionID).replace('@lookup:MJ: Actions.Name=', ''));
     for (const removed of ['Write Entity Field(s)', 'Promote ML Model', 'Schedule Model Scoring', 'Train ML Model', 'Score Record Set']) expect(names).not.toContain(removed);
     expect(actions.find((a) => String(a.fields.ActionID).endsWith('Run Experiment Session'))?.fields.Status).toBe('Revoked');

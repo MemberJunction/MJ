@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Agent",
+      "Description": "The Model Development Agent's PR 5 gates, datasets first: the truth-suite dataset load, then G4.1 (C1 -> C1.1: the agent builds only on a person's structured approval of the plan it presented). Later PR 5 milestones add G4.2–G4.9 here. Needs the truth sidecar, `pnpm run truth:provision` done, the LLM keys and the D5-46 user; spends LLM money. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Agent\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=PS truth datasets: load and verify",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "16053304-F7DE-4D6C-985C-60157432A2CD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C1.1",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7632ACDC-D5F9-486B-940F-DE33F9DB5230"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "052B7679-2C3E-4DB5-863A-90DB7CD6B7E7"
+    }
+  }
+]

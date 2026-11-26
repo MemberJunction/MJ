@@ -23,12 +23,14 @@ import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
 import {
-  ImportanceDisplay, EvaluationLineage, GateRules, InnerScoreSelection, JsonParse, TracedNumbers, TrainingRunResultsParser, TrustVerdicts,
-  type Actor, type GateOutcome, type JsonValue, type MetricKey, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning,
+  BuildApprovals, ImportanceDisplay, EvaluationLineage, GateRules, InnerScoreSelection, JsonParse, TracedNumbers, TrainingRunResultsParser, TrustVerdicts,
+  type Actor, type BuildApproval, type GateOutcome, type JsonValue, type MetricKey, type ModelingPlanSpec, type OutcomeTitleText, type FeatureStepWarning,
   type StoredGateRecord, type StoredTrainerResult, type TracedNumber, type TrainingRunResults, type TrustVerdict,
 } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioPipelineBuilder, type BuildPredictionResult, type MLLeaderboardEntryPayload, type ProtocolPromotionSetting } from './pipeline-builder';
+import { BuildApprovalClaims } from './build-approval-claims';
+import { AgentControlPath, type AgentBuildApprovalRefusal } from './control-path';
 export type { MLLeaderboardEntryPayload };
 
 /** The compact, payload-safe outcome the builder writes back so the agent can narrate the result. */
@@ -72,13 +74,14 @@ export interface PredictiveStudioBuilderPayload extends Omit<ModelingPlanSpec, '
   /** Optional display name */
   Name?: string;
   BuildResult?: PredictiveStudioBuildOutcome;
-  /**
-   * The count of USER messages in the conversation at the moment the orchestrator last FORCED a build
-   * (stamped by `PredictiveStudioModelDevAgent.determineNextStep`). After a **failed** build this is what
-   * distinguishes the stale "build it" message that triggered the failed attempt (same count → no re-force,
-   * the no-loop guard) from a FRESH user request to retry (higher count → deterministic rebuild).
-   */
-  BuildAttemptUserMessageCount?: number;
+  /** SHA-256 of the plan content the control path presented (`AgentControlPath.PlanHash`); written only by its code step. */
+  PlanHash?: string;
+  /** The presented plan's id; written only by the control path's present-plan step. */
+  PlanId?: string;
+  /** The approval claim the orchestrator took before dispatching this build (`BuildApprovalClaims.Claim`). */
+  BuildClaimID?: string;
+  /** The orchestrator's report text (one of the two slices its prompt may write, D5-25). */
+  Report?: string;
   /** Plain-language summary of results for MLExperimentResultsSpec */
   Summary?: string;
   /** Full markdown results narrative for MLExperimentResultsSpec */
@@ -581,6 +584,20 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     return value.autoPublishKeepBaseline === true ? { autoPublishKeepBaseline: true } : null;
   }
 
+  /**
+   * Whether this run may build (D-089, D-090): PR 4's trusted top-level gate-harness run
+   * ({@link ReadsPublishingSwitches}), or a run holding a {@link BuildApproval} — the claimed approval its parent
+   * orchestrator dispatched it under ({@link ResolveHeldApproval}). Anything else (a sub-agent with no approval, a
+   * GraphQL call naming this agent, a refusal) builds nothing.
+   */
+  public static BuildAllowed(params: Pick<ExecuteAgentParams, 'TrustReservedRunData' | 'parentRun'>, approval: BuildApproval | AgentBuildApprovalRefusal | null): boolean {
+    return PredictiveStudioPipelineBuilderAgent.ReadsPublishingSwitches(params) || BuildApprovals.IsApproval(approval);
+  }
+
+  /** The refusal message of a run that may not build. */
+  public static readonly NO_APPROVAL_MESSAGE =
+    'I did not build: a build starts only from an approved plan (approve the plan I presented), so nothing was created.';
+
   /** The catalog status of a build's outcome. */
   public static CatalogStatusOf(o: Pick<PredictiveStudioBuildOutcome, 'published' | 'readyToPublish'>): CatalogStatus {
     if (o.published) return 'published';
@@ -637,6 +654,11 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     const provider = this.ProviderToUse;
     if (!provider) {
       return this.codeStep<P>('Failed', payload, 'No metadata provider available — cannot build the pipeline.');
+    }
+
+    const approval = PredictiveStudioPipelineBuilderAgent.ReadsPublishingSwitches(params) ? null : await this.ResolveHeldApproval(params, payload);
+    if (!PredictiveStudioPipelineBuilderAgent.BuildAllowed(params, approval)) {
+      return this.codeStep<P>('Failed', payload, PredictiveStudioPipelineBuilderAgent.NO_APPROVAL_MESSAGE);
     }
 
     let result: BuildPredictionResult;
@@ -700,6 +722,21 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       GateOutcome: result.Gate?.Outcome,
       GateReason: result.Gate?.Reason,
     };
+  }
+
+  /**
+   * The approval this run holds: the claim its parent orchestrator took and named in the payload (`BuildClaimID`), for
+   * this payload's plan, by that parent run. Null for a run with no parent, no claim, or a claim that does not match. A
+   * payload cannot grant one: the claim row is written only by `BuildApprovalClaims.Claim` (its guard refuses any other
+   * writer). Overridden in unit tests.
+   */
+  protected async ResolveHeldApproval(params: ExecuteAgentParams, payload: PredictiveStudioBuilderPayload): Promise<BuildApproval | AgentBuildApprovalRefusal | null> {
+    const parentRunId = params.parentRun?.ID;
+    const user = params.contextUser;
+    const provider = this.ProviderToUse;
+    if (!parentRunId || !payload.BuildClaimID || !user || !provider) return null;
+    const planHash = AgentControlPath.PlanHash(PredictiveStudioPipelineBuilderAgent.PlanOf(payload));
+    return BuildApprovalClaims.HeldApproval(payload.BuildClaimID, parentRunId, planHash, payload.PlanId || '', provider, user);
   }
 
   /** Builder seam — overridden in unit tests to inject a stub (no DB / sidecar). */

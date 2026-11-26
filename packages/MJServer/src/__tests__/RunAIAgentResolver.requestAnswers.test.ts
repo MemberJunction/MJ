@@ -184,8 +184,12 @@ function turnContext(provider: Record<string, unknown> = {}): AppContext {
     return { userPayload: { sessionId: 'session-1', userRecord: USER } as unknown as UserPayload, providers: [{ type: 'Read-Write', provider }], dataSource: {} } as unknown as AppContext;
 }
 const pubSub = { publish: vi.fn() } as unknown as PubSubEngine;
-/** Argument positions on `executeAIAgent`: lastRunId, and the plan answer after followHandoffs (27). */
-const SYNC_LAST_RUN = 10, PLAN_ANSWER_ARG = 28;
+/** Argument positions on `executeAIAgent`: lastRunId, and the reply row the turn created (which carries its plan answer). */
+const SYNC_LAST_RUN = 10, REPLY_ARG = 26;
+/** The plan answer a dispatched turn carries: the one its reply row (`executeAIAgent`'s reply argument) holds. */
+function planAnswerOf(resolver: RunAIAgentResolver, args: unknown[]): unknown {
+    return resolver.TakePlanAnswer(args[REPLY_ARG] as Parameters<RunAIAgentResolver['TakePlanAnswer']>[0]);
+}
 
 async function runTurn(resolver: RunAIAgentResolver, provider: Record<string, unknown> = {}) {
     return resolver.RunAIAgentFromConversationDetail(
@@ -209,7 +213,7 @@ describe('RunAIAgentResolver — the plan card answered in the chat (owner-batch
         await runTurn(resolver);
         const args = seams.executeAIAgent.mock.calls[0];
         expect(args[SYNC_LAST_RUN]).toBe(PRESENTING_RUN);
-        expect(args[PLAN_ANSWER_ARG]).toMatchObject({ RequestID: PLAN_REQUEST, Decision: 'approve' });
+        expect(planAnswerOf(resolver, args)).toMatchObject({ RequestID: PLAN_REQUEST, Decision: 'approve' });
         const filter = (runViewMock.mock.calls[0][0] as { ExtraFilter: string }).ExtraFilter;
         expect(filter).toContain("Status='Requested'");
         expect(filter).toContain('OriginatingTaskID IS NULL');
@@ -229,7 +233,7 @@ describe('RunAIAgentResolver — the plan card answered in the chat (owner-batch
         expect(seams.findChainablePredecessor).toHaveBeenCalledTimes(1);
         const args = seams.executeAIAgent.mock.calls[0];
         expect(args[SYNC_LAST_RUN]).toBeUndefined();
-        expect(args[PLAN_ANSWER_ARG]).toBeUndefined();
+        expect(planAnswerOf(resolver, args)).toBeUndefined();
     });
 
     it('a form token with no open Plan-step request falls back to the existing chaining', async () => {
@@ -238,7 +242,7 @@ describe('RunAIAgentResolver — the plan card answered in the chat (owner-batch
         await runTurn(resolver);
         expect(seams.findChainablePredecessor).toHaveBeenCalledTimes(1);
         const args = seams.executeAIAgent.mock.calls[0];
-        expect(args[PLAN_ANSWER_ARG]).toBeUndefined();
+        expect(planAnswerOf(resolver, args)).toBeUndefined();
     });
 });
 
@@ -264,9 +268,12 @@ describe('RunAIAgentResolver.executeAIAgent — settling the plan answer before 
     async function execute(resolver: RunAIAgentResolver, provider: Record<string, unknown>, decision: 'approve' | 'reject', plan = PLAN_TEXT) {
         const token = planCardToken(decision, plan);
         const args: unknown[] = [provider, {}, 'agent-1', { sessionId: 's' }, JSON.stringify([{ role: 'user', content: token }]), 's', pubSub];
-        while (args.length < PLAN_ANSWER_ARG) args.push(undefined);
+        while (args.length <= REPLY_ARG) args.push(undefined);
         args[10] = PRESENTING_RUN;
-        args[PLAN_ANSWER_ARG] = { RequestID: PLAN_REQUEST, Decision: decision, ResponseData: { plan, reason: '', decision }, Response: token };
+        // the turn's reply row carries the plan answer the chaining found (RunAIAgentFromConversationDetail sets it)
+        const reply = { ID: 'reply-1' };
+        args[REPLY_ARG] = reply;
+        (resolver as unknown as { planAnswers: WeakMap<object, unknown> }).planAnswers.set(reply, { RequestID: PLAN_REQUEST, Decision: decision, ResponseData: { plan, reason: '', decision }, Response: token });
         return (resolver as unknown as ExecuteCallable).executeAIAgent(...args);
     }
 

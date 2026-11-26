@@ -1,39 +1,7 @@
 {
   "taskComplete": false,
-  "message": "I've put together a plan to predict which active members are at risk of not renewing in the next 90 days. We'll train and compare a few models and judge them by AUC (how well they rank who's most at risk). One heads-up: the Data Scout flagged 'last_payment_date' as a leakage risk, so we'll exclude it. Want me to go ahead and run the experiments, or adjust anything first?",
-  "reasoning": "Goal, data, and experiments are defined and leakage has been addressed. Presenting the plan for explicit approval before execution.",
-  "responseForm": {
-    "title": "Ready to run the experiments?",
-    "submitLabel": "Continue",
-    "questions": [
-      {
-        "id": "planDecision",
-        "label": "How would you like to proceed?",
-        "required": true,
-        "type": {
-          "type": "buttongroup",
-          "options": [
-            {
-              "value": "approve_and_run_it",
-              "label": "Approve and run it"
-            },
-            {
-              "value": "change_the_goal",
-              "label": "Change the goal"
-            },
-            {
-              "value": "change_the_data_features",
-              "label": "Change the data/features"
-            },
-            {
-              "value": "change_the_experiments",
-              "label": "Change the experiments"
-            }
-          ]
-        }
-      }
-    ]
-  },
+  "message": "Got it \u2014 you want to know which active members are at risk of not renewing. Before I hand this to the Goal Analyst: should we look at members whose membership ends in the next 90 days, or over the whole coming year?",
+  "reasoning": "The goal is clear but the outcome window is not; the Goal Analyst needs it to define the target. Asking one focused question before calling it.",
   "nextStep": {
     "type": "Chat"
   }

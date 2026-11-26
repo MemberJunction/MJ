@@ -323,6 +323,7 @@ import type {
   MJMLAlgorithmUseCaseRankingEntityType,
   MJMLAlgorithmUseCaseEntityType,
   MJMLAlgorithmEntityType,
+  MJMLBuildApprovalClaimEntityType,
   MJMLEvaluationProtocolEntityType,
   MJMLModelPublishRecordEntityType,
   MJMLModelScoringBindingEntityType,
@@ -88265,6 +88266,177 @@ export class MJMLAlgorithmEntity extends BaseEntity<MJMLAlgorithmEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: ML Build Approval Claims - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLBuildApprovalClaim
+ * * Base View: vwMLBuildApprovalClaims
+ * * @description The atomic claim a Model Development Agent run takes on an approved build request (MJ: AI Agent Requests) before it dispatches the Pipeline Builder: one row per request (unique), created only by BuildApprovalClaims.Claim and changed only by BuildApprovalClaims.Settle. The row is kept whatever the build does, a failure or a crash included, so one approval starts at most one build and another build needs a new approval.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Build Approval Claims')
+export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalClaimEntityType> {
+    /**
+    * Loads the MJ: ML Build Approval Claims record from the database
+    * @param ID: string - primary key value to load the MJ: ML Build Approval Claims record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLBuildApprovalClaimEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentRequestID
+    * * Display Name: Agent Request
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
+    * * Description: The approved build request this claim consumes; unique, so a request is claimed once.
+    */
+    get AgentRequestID(): string {
+        return this.Get('AgentRequestID');
+    }
+    set AgentRequestID(value: string) {
+        this.Set('AgentRequestID', value);
+    }
+
+    /**
+    * * Field Name: ClaimingAgentRunID
+    * * Display Name: Claiming Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The Model Development Agent run that took the claim and alone dispatches the build.
+    */
+    get ClaimingAgentRunID(): string {
+        return this.Get('ClaimingAgentRunID');
+    }
+    set ClaimingAgentRunID(value: string) {
+        this.Set('ClaimingAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: PlanHash
+    * * Display Name: Plan Hash
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 (hex) of the canonical plan payload the approval was for (AgentControlPath.PlanHash).
+    */
+    get PlanHash(): string {
+        return this.Get('PlanHash');
+    }
+    set PlanHash(value: string) {
+        this.Set('PlanHash', value);
+    }
+
+    /**
+    * * Field Name: ClaimedAt
+    * * Display Name: Claimed At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: When the claim was taken (database clock).
+    */
+    get ClaimedAt(): Date {
+        return this.Get('ClaimedAt');
+    }
+    set ClaimedAt(value: Date) {
+        this.Set('ClaimedAt', value);
+    }
+
+    /**
+    * * Field Name: Outcome
+    * * Display Name: Outcome
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: claimed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * built
+    *   * claimed
+    *   * failed
+    * * Description: claimed (the build was dispatched or is about to be; still claimed after a crash), built (the build ran) or failed (the build failed).
+    */
+    get Outcome(): 'built' | 'claimed' | 'failed' {
+        return this.Get('Outcome');
+    }
+    set Outcome(value: 'built' | 'claimed' | 'failed') {
+        this.Set('Outcome', value);
+    }
+
+    /**
+    * * Field Name: MLTrainingPipelineID
+    * * Display Name: ML Training Pipeline ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+    * * Description: The training pipeline the build created, when it created one.
+    */
+    get MLTrainingPipelineID(): string | null {
+        return this.Get('MLTrainingPipelineID');
+    }
+    set MLTrainingPipelineID(value: string | null) {
+        this.Set('MLTrainingPipelineID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ClaimingAgentRun
+    * * Display Name: Claiming Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ClaimingAgentRun(): string | null {
+        return this.Get('ClaimingAgentRun');
+    }
+
+    /**
+    * * Field Name: MLTrainingPipeline
+    * * Display Name: ML Training Pipeline
+    * * SQL Data Type: nvarchar(255)
+    */
+    get MLTrainingPipeline(): string | null {
+        return this.Get('MLTrainingPipeline');
     }
 }
 

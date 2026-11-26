@@ -1,0 +1,40 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Agent Session",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock this Model Development Agent session so no other run of it can start its turn until my transaction ends, and tell me the database's current time, or tell me at once that another run holds it.",
+      "Description": "Takes an update lock on the first MJ: AI Agent Runs row of a Model Development Agent session for the rest of the caller's transaction and returns the database clock (DbNow). Two runs continuing one session check for a live sibling run one after the other (D5-38); liveness is measured on DbNow, never the process clock (D5-43). NOWAIT: a held lock fails at once and the caller retries.",
+      "SQL": "@file:SQL/predictive-studio-lock-agent-session.sql",
+      "TechnicalDescription": "SELECT ID, SYSUTCDATETIME() AS DbNow FROM AIAgentRun WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE ID = SessionRunID. Must run inside the caller's transaction on the caller's provider (AgentSessionLease.WithSessionLock, through ProviderTransactions.Run): the update and key-range locks are held until commit or rollback. NOWAIT raises SQL Server error 1222 immediately when another transaction holds the row; PublishLocks.Acquire retries with backoff up to 30 s. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "14523DB4-DF17-4B79-9D9F-42435EF6F6DB"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "SessionRunID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The ID of the session's first MJ: AI Agent Runs row (the SessionRunID).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "39F0142E-72C4-49FC-B160-E748598038AB"
+          }
+        }
+      ]
+    }
+  }
+]

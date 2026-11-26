@@ -3,7 +3,7 @@
     "fields": {
       "Name": "Model Development Agent",
       "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-      "Description": "Conversational Loop orchestrator for Predictive Studio. Collaborates with a business user to build a strongly-typed ModelingPlanSpec via three specialist sub-agents (Goal Analyst, Data Scout, Experiment Designer), gates on explicit user approval, then hands the approved plan to the deterministic Pipeline Builder (experiment sessions are switched off), enforces the leakage warn/sign-off rule before any promotion, and authors an ML Experiment Results artifact with drill-through to the winning models. Mirrors the Agent Manager pattern: collaborate -> typed plan -> approve -> deterministic execution -> LLM report.",
+      "Description": "Conversational Loop orchestrator for Predictive Studio. Collaborates with a business user to draft a strongly-typed ModelingPlanSpec through three specialist sub-agents (Goal Analyst, Data Scout, Experiment Designer). Code decides every step with an effect: it presents the plan for approval, and it builds only from a person's structured approval of that exact plan (an approved Plan request, claimed once) by dispatching the deterministic Pipeline Builder. The LLM only drafts the plan and the report text; no message is read as an approval.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -17,8 +17,14 @@
       "MaxNotesToInject": 10,
       "NoteInjectionStrategy": "Relevant",
       "PayloadSelfWritePaths": [
-        "*"
-      ]
+        "Name",
+        "Report"
+      ],
+      "MaxCostPerRun": 0.4442,
+      "MaxTokensPerRun": 893480,
+      "MaxIterationsPerRun": 80,
+      "MaxTimePerRun": 510,
+      "AllowMemoryWrite": false
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -65,6 +71,9 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:47.428Z",
             "checksum": "1cda67ebc82db05a041930b6f0f6dbf01dfb1533ead88f59ab2c7d5c31f08e78"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         },
         {
@@ -79,6 +88,9 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:47.443Z",
             "checksum": "235608c4a8b6ca93e80e2dc924015b5e92a150e482c87e59d62f6d3872501d3d"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         },
         {
@@ -93,6 +105,9 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:47.459Z",
             "checksum": "28b3f92ea6b17a0be0285abd706a4dcc7fb94749ed5a39d473ac156b1df1f37b"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         },
         {
@@ -107,6 +122,9 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:47.473Z",
             "checksum": "5f0a699166de31bd10ae41641115c67192457c539a3f8473d58803fbbc6a5161"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         },
         {
@@ -121,6 +139,9 @@
           "sync": {
             "lastModified": "2026-07-01T17:33:47.491Z",
             "checksum": "9c73345bcf5686928dd3bd765f997e0d38b7feb983d0824b22d253bc425dd1e1"
+          },
+          "deleteRecord": {
+            "delete": true
           }
         }
       ],
@@ -144,7 +165,13 @@
               "Goal",
               "TargetDefinition",
               "TargetDefinition.*"
-            ]
+            ],
+            "MaxCostPerRun": 0.0527,
+            "MaxTokensPerRun": 155950,
+            "MaxIterationsPerRun": 20,
+            "MaxTimePerRun": 23,
+            "AllowMemoryWrite": false,
+            "ModelSelectionMode": "Agent"
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -195,7 +222,13 @@
               "CandidateFeatures.*",
               "LeakageNotes",
               "LeakageNotes.*"
-            ]
+            ],
+            "MaxCostPerRun": 0.0623,
+            "MaxTokensPerRun": 173700,
+            "MaxIterationsPerRun": 10,
+            "MaxTimePerRun": 80,
+            "AllowMemoryWrite": false,
+            "ModelSelectionMode": "Agent"
           },
           "relatedEntities": {
             "MJ: AI Agent Data Sources": [
@@ -239,11 +272,14 @@
                   "SourceType": "RunView",
                   "EntityName": "MJ: ML Models",
                   "ExtraFilter": "Status IN ('Published', 'Validated')",
-                  "OrderBy": "Name ASC",
+                  "OrderBy": "Pipeline ASC, Version DESC",
                   "FieldsToRetrieve": [
                     "ID",
-                    "Name",
-                    "Description"
+                    "Pipeline",
+                    "Version",
+                    "TargetVariable",
+                    "ProblemType",
+                    "Status"
                   ],
                   "ResultType": "simple",
                   "DestinationType": "Data",
@@ -376,7 +412,13 @@
               "ValidationStrategy.*",
               "ProposedBudget",
               "ProposedBudget.*"
-            ]
+            ],
+            "MaxCostPerRun": 0.0636,
+            "MaxTokensPerRun": 165160,
+            "MaxIterationsPerRun": 10,
+            "MaxTimePerRun": 25,
+            "AllowMemoryWrite": false,
+            "ModelSelectionMode": "Agent"
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -410,7 +452,7 @@
             "ParentID": "@parent:ID",
             "Name": "Pipeline Builder",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-            "Description": "Code-based agent (no LLM) that deterministically turns the approved ModelingPlanSpec into a real MJ: ML Training Pipeline, trains the model, and publishes it ONLY when the stored gate decision of its training run ships it (publish gated on the stored decision). Mirrors the Database Designer schema builder. The orchestrator forces this sub-agent once the user approves the plan.",
+            "Description": "Code-based agent (no LLM) that deterministically turns the approved ModelingPlanSpec into a real MJ: ML Training Pipeline, trains the model, and publishes it ONLY when the stored gate decision of its training run ships it (publish gated on the stored decision). It builds only for a run holding an approval its parent orchestrator claimed (or for the trusted top-level gate-harness run); anything else builds nothing.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 4,
@@ -423,7 +465,12 @@
             ],
             "PayloadUpstreamPaths": [
               "*"
-            ]
+            ],
+            "MaxCostPerRun": 0.01,
+            "MaxTokensPerRun": 1000,
+            "MaxIterationsPerRun": 10,
+            "MaxTimePerRun": 600,
+            "AllowMemoryWrite": false
           },
           "primaryKey": {
             "ID": "3EF80176-DEEF-492B-97BF-B889DD404B64"

@@ -31152,6 +31152,77 @@ export const MJMLAlgorithmSchema = z.object({
 export type MJMLAlgorithmEntityType = z.infer<typeof MJMLAlgorithmSchema>;
 
 /**
+ * zod schema definition for the entity MJ: ML Build Approval Claims
+ */
+export const MJMLBuildApprovalClaimSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentRequestID: z.string().describe(`
+        * * Field Name: AgentRequestID
+        * * Display Name: Agent Request
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
+        * * Description: The approved build request this claim consumes; unique, so a request is claimed once.`),
+    ClaimingAgentRunID: z.string().describe(`
+        * * Field Name: ClaimingAgentRunID
+        * * Display Name: Claiming Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The Model Development Agent run that took the claim and alone dispatches the build.`),
+    PlanHash: z.string().describe(`
+        * * Field Name: PlanHash
+        * * Display Name: Plan Hash
+        * * SQL Data Type: char(64)
+        * * Description: SHA-256 (hex) of the canonical plan payload the approval was for (AgentControlPath.PlanHash).`),
+    ClaimedAt: z.date().describe(`
+        * * Field Name: ClaimedAt
+        * * Display Name: Claimed At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: When the claim was taken (database clock).`),
+    Outcome: z.union([z.literal('built'), z.literal('claimed'), z.literal('failed')]).describe(`
+        * * Field Name: Outcome
+        * * Display Name: Outcome
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: claimed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * built
+    *   * claimed
+    *   * failed
+        * * Description: claimed (the build was dispatched or is about to be; still claimed after a crash), built (the build ran) or failed (the build failed).`),
+    MLTrainingPipelineID: z.string().nullable().describe(`
+        * * Field Name: MLTrainingPipelineID
+        * * Display Name: ML Training Pipeline ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
+        * * Description: The training pipeline the build created, when it created one.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ClaimingAgentRun: z.string().nullable().describe(`
+        * * Field Name: ClaimingAgentRun
+        * * Display Name: Claiming Agent Run
+        * * SQL Data Type: nvarchar(255)`),
+    MLTrainingPipeline: z.string().nullable().describe(`
+        * * Field Name: MLTrainingPipeline
+        * * Display Name: ML Training Pipeline
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJMLBuildApprovalClaimEntityType = z.infer<typeof MJMLBuildApprovalClaimSchema>;
+
+/**
  * zod schema definition for the entity MJ: ML Evaluation Protocols
  */
 export const MJMLEvaluationProtocolSchema = z.object({

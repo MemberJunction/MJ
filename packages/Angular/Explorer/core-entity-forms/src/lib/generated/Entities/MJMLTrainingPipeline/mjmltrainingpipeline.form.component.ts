@@ -24,7 +24,8 @@ export class MJMLTrainingPipelineFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMLTrainingRuns', sectionName: 'ML Training Runs', isExpanded: false },
             { sectionKey: 'mJMLModels', sectionName: 'ML Models', isExpanded: false },
             { sectionKey: 'mJMLTrainingSnapshots', sectionName: 'ML Training Snapshots', isExpanded: false },
-            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false }
+            { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
+            { sectionKey: 'mJMLBuildApprovalClaims', sectionName: 'ML Build Approval Claims', isExpanded: false }
         ]);
     }
 }

@@ -7,8 +7,8 @@
  */
 import { describe, it, expect } from 'vitest';
 import type { BaseAgentNextStep } from '@memberjunction/ai-core-plus';
-import type { BuildApproval, BuildApprovalRefusal, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
-import { AgentControlPath, type AgentControlFacts } from '../control-path';
+import type { BuildApproval, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import { AgentControlPath, type AgentBuildApprovalRefusal, type AgentControlFacts } from '../control-path';
 
 const PLAN: ModelingPlanSpec = {
   Goal: 'Predict renewal',
@@ -82,7 +82,7 @@ describe('AgentControlPath.StateOf / Next', () => {
     expect(t).toEqual({ Kind: 'request-build', Approval: APPROVAL });
   });
 
-  const refusals: BuildApprovalRefusal[] = [
+  const refusals: AgentBuildApprovalRefusal[] = [
     { kind: 'no-request' },
     { kind: 'not-agent-created', requestId: 'r' },
     { kind: 'not-two-step', requestId: 'r' },

@@ -14,6 +14,7 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioEvidenceGuard, PredictiveStudioPublishRecordGuard, PredictiveStudioStatusGuard } from './registry';
 import { PredictiveStudioScoringBindingGuard } from './governance';
+import { BuildApprovalClaims, BuildApprovalResolver } from './agent';
 
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
 // `@memberjunction/predictive-studio-sidecar` — import it directly from there.
@@ -65,6 +66,11 @@ PredictiveStudioPublishRecordGuard.Register();
 // The scoring binding guard: a binding's Status changes only through ScoringBindings.Withdraw, its ViewAuthorizationID
 // only for a caller holding the stored authorization.
 PredictiveStudioScoringBindingGuard.Register();
+// The agent's build approval (PR 5, A2): the claim guard (MJ: ML Build Approval Claims rows are written only by
+// BuildApprovalClaims.Claim and .Settle, never deleted) and the answering-save hook (an answer to the Model Development
+// Agent's plan request that is not the person's own client save is recorded with no responder, D-090 rule 3).
+BuildApprovalClaims.Register();
+BuildApprovalResolver.Register();
 
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10), and the daily prediction
 // retention job's driver (PredictiveStudioPredictionRetentionJobDriver, registered with BaseScheduledJob on load).

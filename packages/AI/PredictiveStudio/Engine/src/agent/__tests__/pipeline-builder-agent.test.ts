@@ -13,7 +13,7 @@ import { DatabaseProviderStub } from '@memberjunction/unit-testing';
 import { type ExecuteAgentParams, type AgentConfiguration, type BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJMLModelEntity } from '@memberjunction/core-entities';
 import {
-  type BuildApproval, type BuildApprovalRefusal,
+  type BuildApproval,
   TRAINING_RUN_RESULTS_SCHEMA, GateRules, TrainingRunResultsParser, TracedNumbers, TrustVerdicts, ImportanceDisplay,
   type CandidateInnerScore, type GateDecision, type GateGuardRefusal, type LeakageFlag, type ModelingPlanSpec, type StoredGateRecord, type TracedNumberSource,
   type TrainerCompleted, type TrustComparison,
@@ -33,6 +33,7 @@ import {
   type MLLeaderboardEntryPayload,
 } from '../pipeline-builder';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
+import type { AgentBuildApprovalRefusal as BuildApprovalRefusal } from '../control-path';
 
 // Test-double casts: the model entity, the agent's provider, user and agent-params doubles below implement only the
 // members the code under test reads, so each is cast to its framework type (`as unknown as`, or `as` for an empty object)

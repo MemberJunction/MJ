@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C1.1",
+    "Description": "Gate G4.1 (owner PR 5, phase 4, dataset C1, criterion C1.1): the Model Development Agent builds only from a person's structured approval of the plan it presented (D-090), never from a message. On the truth suite's W1-signal world with a complete plan seeded: each of the four \"don't build\" sentences, 5 runs each, starts 0 builds; a forced build failure approved by the person and then a plain message starts no further build, 5 of 5; one approval of the real plan builds once, its training run under the Pipeline Builder run of the orchestrator run holding the approval's claim, whose request is Approved by the person's own save. Server transport (the agent runs as the D5-46 person, who answers as their own client save); spends LLM money. Mutation: drop AnsweredInSeparateSave from BuildApprovalResolver.Resolve, or dispatch before BuildApprovalClaims.Claim -> red.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G4.1\",\"owner:PR5\",\"phase:4\",\"dataset:C1\",\"criterion:C1.1\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "0 of 20 negated-build runs build; 5 of 5 failed builds are not retried by a plain message; the one approved build traces to a person's approval."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-c1-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "35F1436A-2C1F-430B-BDE3-507C23EFEDDE"
+  }
+}
