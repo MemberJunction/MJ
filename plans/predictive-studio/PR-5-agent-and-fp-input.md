@@ -744,8 +744,10 @@ gather → draft-unit → profile → draft-protocol → validate-plan → prese
   reported as an unfinished build (approval consumed).
   **Liveness before recovery (D5-38).** Two runs can continue one session at once (a dashboard `resumeAgent` and a
   chat turn). A run is **live** when `Status = 'Running'` and its `LastHeartbeatAt` (stamped every 30 s, stale runs
-  force-failed by `AgentRunWatchdog`, `agent-run-watchdog.ts:37`, `:39`) is younger than
-  `AgentSessionLease.STALE_AFTER_MINUTES = 10`. A run's first turn takes the session lock (stored Query
+  force-failed by `AgentRunWatchdog`, `agent-run-watchdog.ts:37`, `:39`), or its `StartedAt` while no heartbeat has
+  been stamped yet (the first stamp lands one interval after `Track`, `agent-run-watchdog.ts:362`), is younger than
+  `AgentSessionLease.STALE_AFTER_MINUTES = 10`, measured on the database clock (`SYSUTCDATETIME()` returned by the
+  session lock Query as `DbNow`), never the process clock (D5-43). A run's first turn takes the session lock (stored Query
   `Predictive Studio: Lock Agent Session`, `UPDLOCK, HOLDLOCK, NOWAIT` on the session's first run row, through
   `PublishLocks`' retry): a live sibling → reply `session-busy`, nothing appended or rebuilt. `Append` is
   compare-and-append under the lock (`PayloadHash` = newest `ResultingPayloadHash` and `Step` = newest + 1, else
@@ -1229,7 +1231,8 @@ renderer is an L1 widget in the PS dashboards package.
   `RecordProcessID` unique, `ProcessRunID`, `AcquiredAt`, `RenewedAt`, `ReleasedAt`). `RederivationLease.Acquire`, in
   one transaction, takes `Predictive Studio: Lock Rederivation Lease` (`UPDLOCK, HOLDLOCK, NOWAIT`, through
   `FeatureValueLocks.Acquire`) and takes the lease only when none exists, it is released, or `RenewedAt` is older than
-  `RederivationLease.TTL_MINUTES = 15` (a constant of `@memberjunction/feature-pipelines`, which cannot import
+  `RederivationLease.TTL_MINUTES = 15` on the database clock: the lock Query returns `SYSUTCDATETIME()` as `DbNow`,
+  the comparison uses it, and `AcquiredAt`/`RenewedAt` are written from that same `DbNow`, never the host clock (D5-44) (a constant of `@memberjunction/feature-pipelines`, which cannot import
   `TrainingClaims`: the PS Engine depends on it). The holder renews every `RENEW_SECONDS = 60` and before each batch
   (conditional: still its lease, else `lease-lost`, no further call) and releases at the end. A run without the lease
   re-derives no stale value and records `Yielded: true`. Under `MaxConcurrency` (`RecordSetProcessor.ts:65`) each call
@@ -1636,7 +1639,8 @@ F-AG-9; the unowned Data Scout `Name` preload bug.
   The `determineNextStep` override and its `as unknown as P` casts (`:73`, `:88`) are gone; `PlanHash` is a
   code-written payload slice (D5-36), with no `buildPlanApprovalForm` override.
 - `AgentSessionLease` (`$E/agent/agent-session-lease.ts`, D5-38): `STALE_AFTER_MINUTES = 10`; `static IsLive(run:
-  Pick<MJAIAgentRunEntity, 'Status' | 'LastHeartbeatAt'>, now: Date): boolean`; `static WithSessionLock<T>(sessionRunId:
+  Pick<MJAIAgentRunEntity, 'Status' | 'LastHeartbeatAt' | 'StartedAt'>, dbNow: Date): boolean` (`LastHeartbeatAt ??
+  StartedAt`; `dbNow` is the lock Query's `SYSUTCDATETIME()`, D5-43); `static WithSessionLock<T>(sessionRunId:
   string, work: () => Promise<T>, ctx: RegistryContext): Promise<T | { kind: 'session-busy'; liveRunId: string }>` (the
   `Lock Agent Session` Query, `metadata/queries/.predictive-studio-agent-session-lock.json`, through `PublishLocks`
   inside `ProviderTransactions.Run`); used by A2's claim replies and A4's `Append` and replay rebuild.
@@ -1715,7 +1719,9 @@ F-AG-9; the unowned Data Scout `Name` preload bug.
     Action → replaced by the control path's step, 0 builds, 0 drafts written by that decision.
 22. **Two live runs of one session** (F-019): a dashboard approval's `resumeAgent` and a chat turn continuing one
     session at once → one run proceeds, the other replies `session-busy` and appends nothing; while the build runs
-    every reply says "build in progress", never "did not finish"; `Step` stays contiguous.
+    every reply says "build in progress", never "did not finish"; `Step` stays contiguous. Two continuation runs
+    started together, both before their first heartbeat (`LastHeartbeatAt` NULL), with the process clock skewed
+    +15 min → still one proceeds and one replies `session-busy`, and a claim 5 s old is "build in progress" (D5-43).
 
 **Non-PS list.** Owner-batch item 3 (D-091, D5-22): `packages/MJServer/src/resolvers/RunAIAgentResolver.ts` (chain a
 plan-card answer to its presenting run, settle it before the continuation run, link `ResumingAgentRunID` after it) and
@@ -2641,7 +2647,8 @@ says so.
    `maxValuesPerRun` = 10, including the case where the run with the earlier `StartTime` commits its run row after
    the other read → exactly one holds the lease and re-derives 10, the other 0 (`Yielded: true`), no value is
    re-derived (no prompt call made) twice; a slice running longer than `TTL_MINUTES` keeps the lease by renewal and no
-   second run takes it; a holder killed mid-slice → after `TTL_MINUTES` the next run takes the lease.
+   second run takes it; a holder killed mid-slice → after `TTL_MINUTES` the next run takes the lease. With the
+   contender's host clock skewed +20 min, a lease renewed 1 min ago (database time) is not taken (D5-44).
 10. **Budget under concurrency** (F-011): `MaxConcurrency` = 4, `maxUsdPerRun` = 5 × the mean call cost → at most 5
     calls start, and the run's `SpentUsd` ≤ `maxUsdPerRun` + the 4 in-flight calls' cost above their estimate.
 11. **No reversed dependency** (F-022): `@memberjunction/feature-pipelines`' `package.json` gains no
@@ -3123,6 +3130,10 @@ Record every decision taken in §9 and, when it changes another plan's interface
   The election took no lock and 6 h could expire mid-slice (round-2 F-011).
 - D5-42 · 2026-11-26 · The lease constants belong to `@memberjunction/feature-pipelines`. · The PS Engine depends on
   it, so importing `TrainingClaims` is a cycle (F-022).
+- D5-43 · 2026-11-26 · Liveness reads `LastHeartbeatAt ?? StartedAt` against the database clock (`DbNow` from the
+  session lock Query). · The first heartbeat lands 30 s after `Track`, and process clocks skew (F-019 re-opened).
+- D5-44 · 2026-11-26 · The re-derivation lease is written and compared on the database clock (`DbNow` from its lock
+  Query). · Host clock skew broke single-flight (F-025).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3258,6 +3269,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - 2026-11-26 — plan review r1 (council `30st24`, F-001…F-018; 16 real, F-012 a duplicate of F-001 and F-009 of F-002, F-010 real but its fallback-model premise wrong) fixed in §5.1, §5.2, A2–A4, A7a, A7b, B1–B3, §7, §8.5 and §9 as D5-22…D5-34: chat approval through owner-batch item 3 (`RunAIAgentResolver`, `MJAIAgentRequestEntityServer`, ruled in under the owner's 2026-11-26 statement), an atomic approval claim (A2 migration section), `SessionRunID`, payload drafts the builder consumes, an `executeNextStep` override, one open-row identity with the migration closing superseded rows before its indexes, the open-row lock, write-back-unit human capture, instance-keyed guards, `/profile`, run-tree eval isolation and the baseline worktree; `check-anchors` at `279a1a274b` ok 130 · changed 0 · missing 0, `milestone-exit --skip-commands` 22 checks · failed 0 (wave-ownership ok).
 - 2026-11-26 — merged `origin/next` into the branch (no conflicts). The fast mirror's red `transaction-scope-affinity` test was the runtime, not the code: it fails on Node 22 and passes on Node 24, MJ's `.nvmrc`/CI runtime (`AsyncLocalStorage` scoping differs). `ci-mirror` now refuses a Node major that differs from `.nvmrc`; every mirror and hook run uses Node 24.
 - 2026-11-26 — plan review r2 (council `30st24`; F-001, F-011 re-opened, F-019…F-024 new; all 8 real) fixed as D5-35…D5-42: item 3 also chains a plan-card answer with no `lastRunId` (`'plan-answer'`), the plan hash bound server-side (no form field), `executeNextStep` intercepts only `Retry` turns with a gate, session liveness (heartbeat, session lock, `session-busy`, compare-and-append), claim → row order, `NOWAIT` open-row locks with a typed timeout, a renewed re-derivation lease (B3 section) with feature-pipelines-owned constants; round-1 rulings compacted. `check-anchors` at `95feb574a8` changed 0 · missing 0 (`c9-cli-fail-exit` re-pinned after the next merge); `milestone-exit --skip-commands` failed 0, wave-ownership ok.
+- 2026-11-26 — council `30st24` plan review r3: F-019 (liveness before the first heartbeat, process clock) and F-025 (lease clock) fixed as D5-43/D5-44, with attack extensions in A2 22 and B3 9.
 
 ## 12. Refresh log (append-only)
 
