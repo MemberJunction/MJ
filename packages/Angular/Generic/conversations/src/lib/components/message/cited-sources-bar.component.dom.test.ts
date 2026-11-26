@@ -8,13 +8,18 @@ import { CitedSourcesBarComponent } from './cited-sources-bar.component';
 import { MessageItemComponent } from './message-item.component';
 import type { MJChatCitationTransform } from '../slots/slot-interfaces';
 
-function buildProvider(entities: Record<string, { icon?: string; primaryKeys: string[] }>): IMetadataProvider {
+function buildProvider(
+  entities: Record<string, { displayName?: string; icon?: string; primaryKeys: string[] }>
+): IMetadataProvider {
   return {
     EntityByName: (name: string) => {
       const def = entities[name];
       if (!def) return undefined;
+      const displayName = def.displayName ?? null;
       return {
         Name: name,
+        DisplayName: displayName,
+        DisplayNameOrName: displayName || name,
         Icon: def.icon ?? null,
         PrimaryKeys: def.primaryKeys.map((pk) => ({ Name: pk })),
       } as unknown as EntityInfo;
@@ -24,8 +29,10 @@ function buildProvider(entities: Record<string, { icon?: string; primaryKeys: st
 
 describe('CitedSourcesBarComponent (DOM)', () => {
   const provider = buildProvider({
-    'MJ: Tasks': { icon: 'fa-list-check', primaryKeys: ['ID'] },
-    'MJ: Users': { icon: 'fa-solid fa-user', primaryKeys: ['ID'] },
+    'MJ_BizApps_Tasks: Tasks': { displayName: 'Tasks', icon: 'fa-list-check', primaryKeys: ['ID'] },
+    'MJ: Artifacts': { displayName: 'Artifacts', icon: 'fa-solid fa-file-lines', primaryKeys: ['ID'] },
+    'MJ: Tasks': { displayName: 'Tasks', icon: 'fa-list-check', primaryKeys: ['ID'] },
+    'MJ: Users': { displayName: 'Users', icon: 'fa-solid fa-user', primaryKeys: ['ID'] },
     Contacts: { icon: '', primaryKeys: ['ID'] },
   });
 
@@ -139,11 +146,70 @@ describe('CitedSourcesBarComponent (DOM)', () => {
     expect(fixture.componentInstance.Clicked).toHaveLength(1);
     expect(fixture.componentInstance.Clicked[0].DisplayName).toBe('Source Item 1');
   });
+
+  it('uses EntityInfo.DisplayNameOrName instead of full prefixed EntityName on source pills, tooltips, and unnamed record citations', () => {
+    const citations: MessageCitation[] = [
+      {
+        Index: 1,
+        Kind: 'record',
+        EntityName: 'MJ_BizApps_Tasks: Tasks',
+        RecordID: 'task-1',
+        Keys: { ID: 'task-1' },
+        DisplayName: 'AI Member Concierge & AMS Modernization',
+        RawToken: '[[MJ_BizApps_Tasks: Tasks|task-1|AI Member Concierge & AMS Modernization]]',
+      },
+      {
+        Index: 2,
+        Kind: 'record',
+        EntityName: 'MJ: Artifacts',
+        RecordID: 'art-1',
+        Keys: { ID: 'art-1' },
+        DisplayName: 'Apex Security Attestation.pdf',
+        RawToken: '[[MJ: Artifacts|art-1|Apex Security Attestation.pdf]]',
+      },
+      {
+        Index: 3,
+        Kind: 'record',
+        EntityName: 'MJ_BizApps_Tasks: Tasks',
+        RecordID: 'task-2',
+        Keys: { ID: 'task-2' },
+        // 2-part citation with no explicit label falls back to EntityName in parser
+        DisplayName: 'MJ_BizApps_Tasks: Tasks',
+        RawToken: '[[MJ_BizApps_Tasks: Tasks|task-2]]',
+      },
+    ];
+
+    const fixture = renderComponentFixture(CitedSourcesBarComponent, {
+      inputs: {
+        Provider: provider,
+        Citations: citations,
+      },
+    });
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const pills = Array.from(el.querySelectorAll('.cited-source-pill')) as HTMLButtonElement[];
+    expect(pills).toHaveLength(3);
+
+    // Pill 1 shows "Tasks" instead of "MJ_BizApps_Tasks: Tasks"
+    expect(pills[0].querySelector('.cited-source-entity')?.textContent?.trim()).toBe('Tasks');
+    expect(pills[0].getAttribute('title')).toBe('Open AI Member Concierge & AMS Modernization (Tasks)');
+
+    // Pill 2 shows "Artifacts" instead of "MJ: Artifacts"
+    expect(pills[1].querySelector('.cited-source-entity')?.textContent?.trim()).toBe('Artifacts');
+    expect(pills[1].getAttribute('title')).toBe('Open Apex Security Attestation.pdf (Artifacts)');
+
+    // Pill 3 (2-part unnamed citation) shows "Tasks" as main label and omits duplicate subtitle
+    expect(pills[2].querySelector('.cited-source-name')?.textContent?.trim()).toBe('Tasks');
+    expect(pills[2].querySelector('.cited-source-entity')).toBeNull();
+    expect(pills[2].getAttribute('title')).toBe('Open Tasks');
+  });
 });
 
 describe('MessageItemComponent — inline [[Entity|ID|Label]] citation chips, customization hooks & WeakMap cache', () => {
   const provider = buildProvider({
-    'MJ: Tasks': { icon: 'fa-solid fa-list-check', primaryKeys: ['ID'] },
+    'MJ_BizApps_Tasks: Tasks': { displayName: 'Tasks', icon: 'fa-solid fa-list-check', primaryKeys: ['ID'] },
+    'MJ: Tasks': { displayName: 'Tasks', icon: 'fa-solid fa-list-check', primaryKeys: ['ID'] },
     'Space Members': { icon: 'fa-solid fa-users', primaryKeys: ['SpaceID', 'UserID'] },
     LegacyItems: { icon: '', primaryKeys: ['LegacyCode'] },
   });
@@ -222,6 +288,25 @@ describe('MessageItemComponent — inline [[Entity|ID|Label]] citation chips, cu
     expect(item.CitedSources).toHaveLength(2);
     expect(item.CitedSources[0].DisplayName).toBe('Fix Auth Race');
     expect(item.CitedSources[1].Keys).toEqual({ SpaceID: 'sp-1', UserID: 'u-2' });
+  });
+
+  it('uses EntityInfo.DisplayNameOrName on inline citation chip tooltips and unnamed 2-part / record-mention fallbacks', () => {
+    const { item } = makeMessageItem(
+      'Named [[MJ_BizApps_Tasks: Tasks|task-1|Ship LTS]], unnamed [[MJ_BizApps_Tasks: Tasks|task-2]], and mention @{"_mode":"mention","type":"record","entityName":"MJ_BizApps_Tasks: Tasks","ID":"task-3","name":"Audit RLS"}.'
+    );
+
+    const html = (item as unknown as { computeDisplayMessage: () => string }).computeDisplayMessage();
+
+    // Named wiki chip uses "Tasks" in title/aria-label, while keeping data-record-entity exact for lookup
+    expect(html).toContain('title="Open Ship LTS (Tasks)"');
+    expect(html).toContain('data-record-entity="MJ_BizApps_Tasks: Tasks"');
+
+    // Unnamed 2-part wiki chip renders "Tasks" instead of "MJ_BizApps_Tasks: Tasks"
+    expect(html).toContain('<i class="fa-solid fa-list-check" aria-hidden="true"></i>Tasks</span>');
+    expect(html).toContain('title="Open Tasks"');
+
+    // Record mention chip uses "Tasks" in title/aria-label
+    expect(html).toContain('title="Open Audit RLS (Tasks)"');
   });
 
   it('activates inline citation chips via both click and Enter/Space keyboard events and emits OpenEntityRecord', () => {
