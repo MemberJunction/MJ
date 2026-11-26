@@ -161,11 +161,13 @@ describe('SQLServerDataProvider <-> spCreateRecordChange_Internal migration cont
 
   it('every @Param rendered for Internal, Restore, Clone, and Sync saves/deletes/siblings exists in the newest migration and MJ_BASE_BEFORE_SQL.sql', async () => {
     const migrationFiles = collectVersionedMigrationFiles(path.join(repoRoot, 'migrations'));
-    const procMigrations = migrationFiles.filter(f =>
-      /CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE[\s\S]*?spCreateRecordChange_Internal/i.test(
-        fs.readFileSync(f, 'utf8'),
-      ),
-    );
+    // A literal `includes` first: the lazy regex alone took ~18 s over every migration (one 5.7 s file with many
+    // procedures and no match), which timed this test out under load. Files without the name can never match.
+    const procMigrations = migrationFiles.filter(f => {
+      const sql = fs.readFileSync(f, 'utf8');
+      return /spCreateRecordChange_Internal/i.test(sql)
+        && /CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE[\s\S]*?spCreateRecordChange_Internal/i.test(sql);
+    });
     expect(procMigrations.length).toBeGreaterThan(0);
 
     const newestProcMigration = procMigrations[procMigrations.length - 1];
