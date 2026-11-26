@@ -18,6 +18,7 @@ import {
 import {
     SharedTabKernelClient,
     CloneKernelValue,
+    WrapGraphQLWsClient,
     type KernelPortMessageEventLike,
     type KernelWsClientConfig,
     type KernelWsClientLike,
@@ -27,6 +28,7 @@ import {
     type TabKernelWorkerLike,
     type TabPortLike,
 } from '../index';
+import type { Client } from 'graphql-ws';
 import type {
     BroadcastChannelLike,
     MessageEventLike,
@@ -34,6 +36,7 @@ import type {
     WebLocksLike,
 } from '../ClientTabInvalidationMultiplexer';
 import { GraphQLWire } from './support/graphQLWire';
+import { GraphQLWsWire } from './support/graphQLWs';
 import {
     ResetGraphQLProviderSingleton,
     WireTestGraphQLProvider,
@@ -42,6 +45,11 @@ import {
 vi.mock('graphql-request', async () => {
     const wire = await import('./support/graphQLWire');
     return { gql: wire.FakeGql, GraphQLClient: wire.FakeGraphQLClient };
+});
+
+vi.mock('graphql-ws', async () => {
+    const wire = await import('./support/graphQLWs');
+    return { createClient: wire.FakeCreateClient };
 });
 
 // ── Test Fakes: MessageChannel Port Pairs, WebSocket Client, Storage & Fallback Hubs ──
@@ -536,6 +544,7 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
 
     beforeEach(() => {
         GraphQLWire.Reset();
+        GraphQLWsWire.Reset();
         GraphQLDataProvider.SetSharedWorkerFactory(null);
         GraphQLDataProvider.EnableSharedTabKernel = true;
         GraphQLDataProvider.EnableMultiTabInvalidationMultiplexing = true;
@@ -1204,7 +1213,6 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
     // ── 6. Graceful Fallback to BroadcastChannel + Web Locks ─────────────────
 
     it('automatically falls back to BroadcastChannel + Web Locks when SharedWorker is unavailable, errors, or times out', async () => {
-        const wsRegistry = new FakeWsServerRegistry();
         const fallbackHub = new FakeFallbackBroadcastHub();
         const locks = new FakeWebLocks();
 
@@ -1260,7 +1268,6 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
             sessionId: 'timeout-tab-d',
             kernelEnv: silentPortEnv,
         });
-        void wsRegistry;
 
         providersToDispose.push(tabA, tabB, tabC, tabD);
         tabA.SubscribeToCacheInvalidation();
@@ -1288,6 +1295,8 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         // BroadcastChannel + Web Locks elected strictly 1 leader among Tabs A..D sharing the same scope
         const leaders = [tabA, tabB, tabC, tabD].filter((t) => t.SharedTabKernel!.IsLeader);
         expect(leaders).toHaveLength(1);
+        // Only the elected fallback leader opened a fake graphql-ws client (never a real socket)
+        expect(GraphQLWsWire.Clients).toHaveLength(1);
     });
 
     // ── 7. Reproducible BEFORE vs AFTER 10-Tab Stress Benchmark ──────────────
@@ -1492,5 +1501,33 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         expect(afterStatsSnapshot.IdbWritesForIdenticalPayload).toBe(1);
         expect(afterStatsSnapshot.StatusMessagesDelivered).toBe(1000);
         expect(UUIDsEqual('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001')).toBe(true);
+    });
+
+    it('handles async rejections from graphql-ws client.dispose() without unhandled promise rejections', async () => {
+        const provider = createTestTabProvider({
+            sessionId: 'dispose-reject-tab',
+            kernelEnv: null,
+        });
+        providersToDispose.push(provider);
+
+        const sub = provider.PushStatusUpdates('dispose-reject-tab').subscribe(() => {});
+        const fakeWsClient = GraphQLWsWire.LastClient;
+        fakeWsClient.dispose = () => Promise.reject(new Error('WebSocket failed while connecting'));
+
+        sub.unsubscribe();
+        provider.DisposeWebSocketResources();
+
+        const rejectingRawClient: Client = {
+            on: () => () => {},
+            subscribe: () => () => {},
+            iterate: async function* () {},
+            terminate: () => {},
+            dispose: () => Promise.reject(new Error('Wrapped WebSocket failed while connecting')),
+        };
+        const wrapped = WrapGraphQLWsClient(rejectingRawClient);
+        wrapped.Dispose();
+
+        await flushMicrotasksAndTimers(10);
+        expect(fakeWsClient.Terminated).toBe(false);
     });
 });
