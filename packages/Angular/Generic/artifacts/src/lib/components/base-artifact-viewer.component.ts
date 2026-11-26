@@ -359,7 +359,7 @@ export abstract class BaseArtifactViewerPluginComponent extends BaseAngularCompo
    * `WhiteboardArtifactViewerComponent` in OLE canvas mode) commits updated serialized
    * content that should be persisted as a new `MJ: Artifact Versions` record.
    */
-  public ContentCommitted = new EventEmitter<string>();
+  @Output() public ContentCommitted = new EventEmitter<string>();
 
   /**
    * Whether this plugin supports inline editing when `[readonly]="false"` ("MS OLE" inline mode, § 3.4.1).

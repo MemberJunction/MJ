@@ -1,0 +1,101 @@
+@if (State.IsOpen && State.CurrentRequest; as req) {
+  <div
+    class="mj-artifact-slideover-backdrop"
+    data-testid="artifact-slideover-backdrop"
+    role="presentation"
+    (click)="OnBackdropClick()"
+  >
+    <aside
+      class="mj-artifact-slideover-drawer"
+      [class.mj-artifact-slideover-drawer--maximized]="State.IsMaximized"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="req.Title || 'Artifact viewer slideover'"
+      data-testid="artifact-slideover-drawer"
+      (click)="$event.stopPropagation()"
+    >
+      <header class="mj-artifact-slideover-chrome" data-testid="artifact-slideover-chrome">
+        <div class="mj-artifact-slideover-chrome__left">
+          @if (CanGoBack) {
+            <button
+              type="button"
+              mjButton
+              variant="flat"
+              size="sm"
+              data-testid="artifact-slideover-back-btn"
+              title="Back to previous artifact"
+              (click)="OnGoBack()"
+            >
+              <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+              <span>Back ({{ State.HistoryStack.length }})</span>
+            </button>
+          }
+          <span class="mj-artifact-slideover-chrome__title" data-testid="artifact-slideover-title">
+            <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+            <span>{{ req.Title || 'Document Preview' }}</span>
+          </span>
+          @if (!req.CanEdit) {
+            <span class="mj-artifact-slideover-badge" data-testid="artifact-slideover-readonly-badge">
+              <i class="fa-solid fa-lock" aria-hidden="true"></i>
+              Read-only
+            </span>
+          }
+        </div>
+        <div class="mj-artifact-slideover-chrome__actions">
+          <button
+            type="button"
+            mjButton
+            variant="icon"
+            size="sm"
+            data-testid="artifact-slideover-maximize-btn"
+            [title]="State.IsMaximized ? 'Restore width' : 'Maximize width'"
+            [attr.aria-label]="State.IsMaximized ? 'Restore slideover width' : 'Maximize slideover width'"
+            [attr.aria-pressed]="State.IsMaximized"
+            (click)="OnToggleMaximize()"
+          >
+            <i
+              class="fa-solid"
+              [class.fa-compress]="State.IsMaximized"
+              [class.fa-expand]="!State.IsMaximized"
+              aria-hidden="true"
+            ></i>
+          </button>
+          <button
+            type="button"
+            mjButton
+            variant="icon"
+            size="sm"
+            data-testid="artifact-slideover-close-btn"
+            title="Close (Esc)"
+            aria-label="Close slideover"
+            (click)="OnClose()"
+          >
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+          </button>
+        </div>
+      </header>
+
+      <div class="mj-artifact-slideover-body">
+        <mj-artifact-viewer-panel
+          [Provider]="EffectiveProvider"
+          [artifactId]="req.ArtifactID"
+          [VersionNumber]="req.VersionNumber"
+          [CurrentUser]="EffectiveCurrentUser!"
+          [EnvironmentId]="EffectiveEnvironmentId"
+          [CanEdit]="req.CanEdit === true"
+          [canShare]="req.CanShare === true"
+          [IsMaximized]="State.IsMaximized"
+          [ShowCloseButton]="false"
+          [ShowMaximizeButton]="false"
+          (Closed)="OnClose()"
+          (MaximizeToggled)="OnToggleMaximize()"
+          (VersionSaved)="OnPanelVersionSaved($event)"
+          (NavigateToLink)="OnPanelNavigateToLink($event)"
+          (OpenArtifactRequested)="OnPanelOpenArtifactRequested($event)"
+          (OpenEntityRecord)="OnPanelOpenEntityRecord($event)"
+        >
+        </mj-artifact-viewer-panel>
+      </div>
+    </aside>
+  </div>
+}

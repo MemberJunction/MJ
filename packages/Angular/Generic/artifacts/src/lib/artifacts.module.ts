@@ -66,6 +66,9 @@ import { IArtifactViewerPluginPreviewStatics } from './interfaces/artifact-viewe
 import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
 import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
 import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
+import { MJArtifactSlideoverComponent } from './components/mj-artifact-slideover/mj-artifact-slideover.component';
+import { MJRecordDocsListComponent } from './components/mj-record-docs-list/mj-record-docs-list.component';
+import { MJEmbeddedDocPanelComponent } from './components/mj-embedded-doc-panel/mj-embedded-doc-panel.component';
 import { ArtifactRelatedPanelComponent } from './components/artifact-related-panel.component';
 import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
 import { ArtifactAgentPresenceBarComponent } from './components/presence/artifact-agent-presence-bar.component';
@@ -96,6 +99,9 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
 
     // Artifact viewer UI components
     ArtifactViewerPanelComponent,
+    MJArtifactSlideoverComponent,
+    MJRecordDocsListComponent,
+    MJEmbeddedDocPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
     MjContextMenuComponent,
@@ -181,6 +187,9 @@ import { QueryVersionDiffComponent } from './components/version-diff/query-versi
 
     // Export artifact viewer UI components
     ArtifactViewerPanelComponent,
+    MJArtifactSlideoverComponent,
+    MJRecordDocsListComponent,
+    MJEmbeddedDocPanelComponent,
     ArtifactVersionHistoryComponent,
     ArtifactMessageCardComponent,
     MjContextMenuComponent,

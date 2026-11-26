@@ -1,0 +1,118 @@
+.mj-embedded-doc {
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mj-embedded-doc--compact {
+  min-height: 240px;
+}
+
+.mj-embedded-doc--full {
+  min-height: 480px;
+}
+
+.mj-embedded-doc__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.mj-embedded-doc__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.mj-embedded-doc__icon {
+  color: var(--mj-brand-primary);
+}
+
+.mj-embedded-doc__title {
+  margin: 0;
+  font-size: 0.925rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-embedded-doc__version {
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+}
+
+.mj-embedded-doc__readonly-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-secondary);
+  border: 1px solid var(--mj-border-default);
+}
+
+.mj-embedded-doc__autosave-status {
+  font-size: 0.76rem;
+  color: var(--mj-text-muted);
+}
+
+.mj-embedded-doc__autosave-status--pending {
+  color: var(--mj-status-warning-text);
+}
+
+.mj-embedded-doc__autosave-status--error {
+  color: var(--mj-status-error-text);
+}
+
+.mj-embedded-doc__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mj-embedded-doc__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-bottom: 1px solid var(--mj-status-error-border);
+  font-size: 0.85rem;
+}
+
+.mj-embedded-doc__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mj-embedded-doc__loading,
+.mj-embedded-doc__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px 14px;
+  color: var(--mj-text-muted);
+  font-size: 0.875rem;
+}
