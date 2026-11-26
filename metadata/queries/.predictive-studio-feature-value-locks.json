@@ -1,0 +1,190 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Open Pipeline Feature Values",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock the current pipeline values of these features of this record so no other write of them can run until my transaction ends, or tell me at once that another write holds them.",
+      "Description": "Takes update and key-range locks on the open Source = Pipeline Champion Feature Values of one record's features (every pipeline version) for the rest of the caller's transaction and returns them. The Feature Pipelines write path runs it before it closes or opens a value, so two writers of one record's value serialise. NOWAIT: when another transaction holds the lock it fails at once, and the write path waits up to 30 s by retrying.",
+      "SQL": "@file:SQL/predictive-studio-lock-open-pipeline-feature-values.sql",
+      "TechnicalDescription": "SELECT ID, FeatureName, PipelineVersion FROM FeatureValue WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE EffectiveTo IS NULL AND Source = N'Pipeline' AND Role = N'Champion' AND RecordProcessID = RecordProcessID AND EntityID = EntityID AND RecordID = RecordID AND FeatureName IN FeatureNames. The predicate repeats UQ_FeatureValue_OpenPipeline's filter literally so the read seeks that filtered index and the key-range lock covers a feature with no open row. Must run inside the caller's transaction on the caller's provider: the locks are held until commit or rollback. NOWAIT never waits: a held lock raises SQL Server error 1222 immediately, which RunQuery reports as Success: false; FeatureValueLocks.Acquire retries with backoff (250 ms doubling to 4 s) for up to 30 s, then the record fails with FeatureValueLockTimeoutError (D5-40). Taken before the Human lock. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "2BEDE7FD-C341-4DD3-9BEC-73FEC8F50166"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "RecordProcessID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The Feature Pipeline (MJ: Record Processes ID) whose values are locked.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E3E0E020-B118-41A9-A609-59019C9BD2F4"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EntityID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The entity of the record (MJ: Entities ID).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "6AF9971F-5BDF-44B6-95CA-D1BFDD56CB0B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecordID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "1",
+            "Description": "The record whose Feature Values are locked.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "E0F56E5F-F64A-4A3D-B5C8-CC0F97A6D69B"
+          }
+        },
+        {
+          "fields": {
+            "Name": "FeatureNames",
+            "Type": "array",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "[\"JobTitleLevel\"]",
+            "Description": "The features of the record to lock (rendered with sqlIn).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "EE5A8E58-4ED3-44C4-84F8-E6B7861B99B2"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Open Human Feature Values",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock the current values people entered for these features of this record so no other write of them can run until my transaction ends, or tell me at once that another write holds them.",
+      "Description": "Takes update and key-range locks on the open Source = Human Champion Feature Values of one record's features for the rest of the caller's transaction and returns them. The Feature Pipelines write path runs it after the Pipeline lock and before it records or retires a person's value. NOWAIT: when another transaction holds the lock it fails at once, and the write path waits up to 30 s by retrying.",
+      "SQL": "@file:SQL/predictive-studio-lock-open-human-feature-values.sql",
+      "TechnicalDescription": "SELECT ID, FeatureName FROM FeatureValue WITH (UPDLOCK, HOLDLOCK, NOWAIT) WHERE EffectiveTo IS NULL AND Source = N'Human' AND Role = N'Champion' AND (RecordProcessID = RecordProcessID AND MLModelScoringBindingID IS NULL, or with no RecordProcessID: RecordProcessID IS NULL AND MLModelScoringBindingID = MLModelScoringBindingID) AND EntityID = EntityID AND RecordID = RecordID AND FeatureName IN FeatureNames. The predicate repeats UQ_FeatureValue_OpenHuman's filter literally so the read seeks that filtered index and the key-range lock covers a feature with no open row. Must run inside the caller's transaction on the caller's provider, after the Pipeline lock. NOWAIT: a held lock raises error 1222 immediately, reported by RunQuery as Success: false; FeatureValueLocks.Acquire retries for up to 30 s, then fails with FeatureValueLockTimeoutError (D5-40). Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "8EF0A3B9-3CB4-48BF-8E21-C4A8E1B58595"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "RecordProcessID",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The Feature Pipeline (MJ: Record Processes ID) whose values are locked. Empty for a Human value on a scoring binding with no Record Process.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "FE17EEF6-5EB3-4653-B239-627C7A24DF3D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "EntityID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The entity of the record (MJ: Entities ID).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "13E03CE4-5A36-4A92-AE7C-BFBF8DA2D3AA"
+          }
+        },
+        {
+          "fields": {
+            "Name": "RecordID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "1",
+            "Description": "The record whose Feature Values are locked.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "56336F99-ECB4-4754-BF79-710BBBE8709A"
+          }
+        },
+        {
+          "fields": {
+            "Name": "FeatureNames",
+            "Type": "array",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "[\"JobTitleLevel\"]",
+            "Description": "The features of the record to lock (rendered with sqlIn).",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "13CB09B1-47D1-42EF-B8D8-C2D6C17E897D"
+          }
+        },
+        {
+          "fields": {
+            "Name": "MLModelScoringBindingID",
+            "Type": "string",
+            "IsRequired": false,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The scoring binding a Human value overrides, when it has no Record Process; empty otherwise.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "77A757E7-EB94-4216-81D4-5C881DF5360A"
+          }
+        }
+      ]
+    }
+  }
+]

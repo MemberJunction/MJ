@@ -77174,6 +77174,33 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     }
 
     /**
+    * * Field Name: EffectiveTo
+    * * Display Name: Effective To
+    * * SQL Data Type: datetimeoffset
+    * * Description: End of the instant range in which this value is the record's value of the feature (exclusive); NULL while it is the open (current) value. Set by the Feature Pipelines write path when a later value of the same identity is recorded, or when a Human value is retired. Maintained for Pipeline and Human rows only; Model rows are keyed by their scoring as-of instant and never closed.
+    */
+    get EffectiveTo(): Date | null {
+        return this.Get('EffectiveTo');
+    }
+    set EffectiveTo(value: Date | null) {
+        this.Set('EffectiveTo', value);
+    }
+
+    /**
+    * * Field Name: SourceUserID
+    * * Display Name: Source User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Human rows: the user who entered the value (the user of the record's newest Record Change when the entity tracks record changes); NULL when unknown and on every other row.
+    */
+    get SourceUserID(): string | null {
+        return this.Get('SourceUserID');
+    }
+    set SourceUserID(value: string | null) {
+        this.Set('SourceUserID', value);
+    }
+
+    /**
     * * Field Name: RecordProcess
     * * Display Name: Record Process
     * * SQL Data Type: nvarchar(255)
@@ -77234,6 +77261,15 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
     */
     get MLModelScoringBinding(): string | null {
         return this.Get('MLModelScoringBinding');
+    }
+
+    /**
+    * * Field Name: SourceUser
+    * * Display Name: Source User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SourceUser(): string | null {
+        return this.Get('SourceUser');
     }
 }
 

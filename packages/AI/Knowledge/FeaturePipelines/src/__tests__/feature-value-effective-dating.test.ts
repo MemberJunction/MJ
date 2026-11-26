@@ -230,6 +230,8 @@ const user = { ID: 'user-1', Email: 'test@example.com' } as Partial<UserInfo> as
 const provider = {
     GetEntityObject: vi.fn(async () => store.NewRow()),
     RunQuery: vi.fn(),
+    // the record's entity is not in this provider's metadata, so a Human value's stamp is unknown unless a case stubs it
+    EntityByID: vi.fn(() => undefined),
 } as Partial<IMetadataProvider> as IMetadataProvider;
 const svc = FeatureValueCacheService.Instance;
 

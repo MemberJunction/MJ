@@ -160,9 +160,10 @@ function sectionB1(): string[] {
   const text = readFileSync(path.join(dir, file), 'utf8');
   const from = text.indexOf('-- section: B1');
   if (from < 0) throw new Error(`${file} has no '-- section: B1'`);
-  const rest = text.slice(from + 1);
-  const nextSection = rest.search(/\n-- section: |\n\/\*{10,}/);
-  const body = nextSection < 0 ? rest : rest.slice(0, nextSection);
+  // the section runs from its heading to the next section heading or the CodeGen block
+  const rest = text.slice(from);
+  const end = rest.slice(1).search(/\n-- section: |\n\/\*{10,}/);
+  const body = end < 0 ? rest : rest.slice(0, end + 1);
   return body.split('${flyway:defaultSchema}').join(coreSchema()).split(/^GO\s*$/m).map((b) => b.trim()).filter((b) => b.replace(/--.*$/gm, '').trim().length > 0);
 }
 
@@ -304,7 +305,7 @@ describe('B1 attacks 1–4, 7, 9, 11: dated writes on the real indexes', () => {
     const rows = await rowsOf(p);
     expect(rows.map((r) => [r.AIModelID?.toUpperCase(), isOpen(r)])).toEqual([[aiModelID.toUpperCase(), false], [aiModelID.toUpperCase(), true]]);
     expect(await readerRows(p, rp1, 1, aiModelID)).toBe(2);
-  }, CASE_TIMEOUT_MS);
+  }, LOCK_CASE_TIMEOUT_MS);
 });
 
 describe('B1 attack 6: a failure between close and open rolls the close back', () => {
@@ -320,7 +321,7 @@ describe('B1 attack 6: a failure between close and open rolls the close back', (
       PreSaveHookRegistration.Unregister(mark);
     }
     expect((await rowsOf(p)).map((r) => [r.ValueText, isOpen(r)])).toEqual([['Director', true]]);
-  }, CASE_TIMEOUT_MS);
+  }, LOCK_CASE_TIMEOUT_MS);
 });
 
 describe('B1 attack 8 (database half): EffectiveAsOf = the caller\'s inputAsOf', () => {
@@ -330,7 +331,7 @@ describe('B1 attack 8 (database half): EffectiveAsOf = the caller\'s inputAsOf',
     await FeatureValueCacheService.Instance.RecordFeatureValues(pipelineWrite(p, 'Director', 'in-1', { inputAsOf: t }));
     const [row] = await rowsOf(p);
     expect([row.EffectiveAsOf?.getTime(), row.InputAsOf?.getTime()]).toEqual([t.getTime(), t.getTime()]);
-  }, CASE_TIMEOUT_MS);
+  }, LOCK_CASE_TIMEOUT_MS);
 });
 
 describe('B1 attack 12: concurrent writers (F-011)', () => {
@@ -396,7 +397,7 @@ describe('B1 attack 13: write-back is never Human; a Human value is dated at the
     expect((await rowsOf(p)).filter((r) => r.Source === 'Human')).toEqual([]);
     const description = (await pool.request().input('ID', sql.UniqueIdentifier, p).query<{ D: string }>(`SELECT Description AS D FROM ${tableOf('MJ: Roles')} WHERE ID = @ID`)).recordset[0].D;
     expect(description).toBe('Predictive Studio B1 scratch (safe to delete)');
-  }, CASE_TIMEOUT_MS);
+  }, LOCK_CASE_TIMEOUT_MS);
 });
 
 describe('B1 attacks 5 and 14: every other writer of the effective range is refused (D5-30)', () => {
@@ -466,7 +467,7 @@ describe('B1 attacks 5 and 14: every other writer of the effective range is refu
     expect(serviceWrite.Upserted).toBe(1);
     expect(forgedSave).toBe(false);
     expect((await rowsOf(RecordID)).map(isOpen)).toEqual([true]);
-  }, CASE_TIMEOUT_MS);
+  }, LOCK_CASE_TIMEOUT_MS);
 });
 
 describe('B1 attack 15: lock timeout and order (F-021)', () => {
@@ -564,11 +565,15 @@ describe('B1 attack 10: migration section B1 on PR 1 data (F-008, D5-B1-2)', () 
     try {
       // 1. back to the state before section B1: its indexes, FK, CodeGen's FK index and columns gone, the old key index back
       const fkIndex = (await new sql.Request(tx).query<{ name: string }>(`SELECT i.name FROM sys.indexes i JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
-        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id WHERE i.object_id = OBJECT_ID(N'${schema}.FeatureValue') AND c.name IN (N'EffectiveTo', N'SourceUserID')`)).recordset.map((r) => r.name);
+        JOIN sys.columns c ON c.object_id = ic.object_id AND c.column_id = ic.column_id WHERE i.object_id = OBJECT_ID(N'${schema}.FeatureValue') AND c.name IN (N'EffectiveTo', N'SourceUserID')
+        UNION SELECT i.name FROM sys.indexes i WHERE i.object_id = OBJECT_ID(N'${schema}.FeatureValue') AND i.filter_definition LIKE N'%EffectiveTo%'`)).recordset.map((r) => r.name);
       for (const name of [...new Set(fkIndex)]) await run(`DROP INDEX [${name}] ON ${fv}`);
       const fks = (await new sql.Request(tx).query<{ name: string }>(`SELECT fk.name FROM sys.foreign_keys fk JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
         JOIN sys.columns c ON c.object_id = fkc.parent_object_id AND c.column_id = fkc.parent_column_id WHERE fk.parent_object_id = OBJECT_ID(N'${schema}.FeatureValue') AND c.name = N'SourceUserID'`)).recordset.map((r) => r.name);
       for (const name of fks) await run(`ALTER TABLE ${fv} DROP CONSTRAINT [${name}]`);
+      // a PR 1 database holds no closed history (B1's writer made it, e.g. this file's earlier cases): it would repeat keys
+      // under the old, unfiltered key index
+      await run(`DELETE FROM ${fv} WHERE [EffectiveTo] IS NOT NULL`);
       await run(`ALTER TABLE ${fv} DROP COLUMN [EffectiveTo], [SourceUserID]`);
       await run(`CREATE UNIQUE NONCLUSTERED INDEX [UQ_FeatureValue_ValueKey] ON ${fv} ([RecordProcessID], [ValueKeyHash]) WHERE [ValueKeyHash] IS NOT NULL`);
       // 2. the PR 1 states (direct DML: the shapes PR 1's writer left, which no current writer produces)
@@ -604,8 +609,11 @@ describe('B1 attack 10: migration section B1 on PR 1 data (F-008, D5-B1-2)', () 
           AND name IN (N'UQ_FeatureValue_ValueKey', N'UQ_FeatureValue_OpenPipeline', N'UQ_FeatureValue_OpenHuman') ORDER BY name`)).recordset;
       expect(indexes.map((i) => i.name)).toEqual(['UQ_FeatureValue_OpenHuman', 'UQ_FeatureValue_OpenPipeline', 'UQ_FeatureValue_ValueKey']);
       expect(indexes.find((i) => i.name === 'UQ_FeatureValue_ValueKey')?.filter_definition).toContain('[EffectiveTo] IS NULL');
-    } finally {
-      await tx.rollback();
+    } catch (e) {
+      // a failed statement can abort the transaction: roll back what remains and report the statement's own error
+      await tx.rollback().catch(() => undefined);
+      throw e;
     }
-  }, CASE_TIMEOUT_MS);
+    await tx.rollback();
+  }, LOCK_CASE_TIMEOUT_MS);
 });

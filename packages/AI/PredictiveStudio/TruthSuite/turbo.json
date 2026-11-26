@@ -7,7 +7,8 @@
     "test": {
       "inputs": [
         "$TURBO_EXTENDS$",
-        "$TURBO_ROOT$/migrations/v6/**"
+        "$TURBO_ROOT$/migrations/v6/**",
+        "$TURBO_ROOT$/metadata/queries/SQL/predictive-studio-lock-open-*.sql"
       ]
     }
   }

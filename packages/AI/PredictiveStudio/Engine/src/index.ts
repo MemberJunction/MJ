@@ -101,6 +101,7 @@ export * from './monitoring';
 // ModelingPlanSpec→pipeline-config mapper + PredictiveStudioPipelineBuilder (create
 // pipeline → train → publish gated on the trust verdict). Code, never LLM.
 export * from './agent';
+export * from './feature-values/effective-range-guard';
 
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
