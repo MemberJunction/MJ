@@ -67,6 +67,7 @@ import {
     StampImpersonationSession,
     USER_IMPERSONATION_AUTHORIZATION_NAME,
     ValidateImpersonationWebSocketSubscribe,
+    WithImpersonationKeyMintScope,
 } from '@memberjunction/server/impersonation-guard';
 import { RegisterServerUserImpersonationConfig } from '@memberjunction/server/user-impersonation-config';
 import {
@@ -627,12 +628,24 @@ export const UserImpersonationChecks: NamedCheck[] = [
                 const apiKeyId = startRes.APIKeyID!;
                 const rawKey = startRes.RawApiKey!;
 
-                // Move ExpiresAt cleanly into the past in the real database
+                // Verify modifying ExpiresAt outside the impersonation control-plane scope is refused by ImpersonationPreSaveHook
                 const pastDate = new Date(Date.now() - EXPIRY_PAST_OFFSET_MS);
-                const keyRow = await dbProvider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User);
-                Assert(await keyRow.Load(apiKeyId), 'Failed to load minted API key for expiry test');
-                keyRow.ExpiresAt = pastDate;
-                Assert(await keyRow.Save(), `Failed to backdate ExpiresAt: ${keyRow.LatestResult?.CompleteMessage}`);
+                const unprivilegedEditRow = await dbProvider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User);
+                Assert(await unprivilegedEditRow.Load(apiKeyId), 'Failed to load minted API key for tamper protection check');
+                unprivilegedEditRow.ExpiresAt = pastDate;
+                AssertEqual(
+                    await unprivilegedEditRow.Save(),
+                    false,
+                    'Modifying ExpiresAt on an MJ-Impersonation: key outside the control-plane scope must be refused'
+                );
+
+                // Move ExpiresAt cleanly into the past inside the server mint scope so we can verify real-DB expiry enforcement
+                await WithImpersonationKeyMintScope(async () => {
+                    const keyRow = await dbProvider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', ctx.User);
+                    Assert(await keyRow.Load(apiKeyId), 'Failed to load minted API key for expiry test');
+                    keyRow.ExpiresAt = pastDate;
+                    Assert(await keyRow.Save(), `Failed to backdate ExpiresAt: ${keyRow.LatestResult?.CompleteMessage}`);
+                });
 
                 const engine = GetAPIKeyEngine();
                 await engine.Config(true, ctx.User);

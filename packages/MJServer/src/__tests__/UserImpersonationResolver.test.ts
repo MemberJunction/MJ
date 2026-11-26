@@ -25,7 +25,7 @@ vi.mock('../config.js', () => ({
     },
 }));
 
-import { parse, getOperationAST } from 'graphql';
+import { parse, getOperationAST, type ExecutionArgs } from 'graphql';
 import type { Request, Response, NextFunction } from 'express';
 import type { APIKeyEngine } from '@memberjunction/api-keys';
 import {
@@ -53,6 +53,7 @@ import {
     CreateImpersonationHttpGuardMiddleware,
     EvaluateGraphQLOperationForImpersonation,
     EvaluateTargetImpersonationEligibility,
+    GetActiveRequestImpersonationSession,
     GetImpersonationSession,
     HasReservedImpersonationKeyLabelPrefix,
     IMPERSONATION_FORBIDDEN_ENTITY_NAMES,
@@ -67,8 +68,11 @@ import {
     IsEntityWriteForbiddenDuringImpersonation,
     IsOnlyEndImpersonationMutation,
     IsSavedQueryForbiddenDuringImpersonation,
+    MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH,
+    NormalizeImpersonationHttpPath,
     ParseImpersonationKeyLabel,
     RegisterImpersonationWebSocket,
+    RunGraphQLOperationWithImpersonationSession,
     RunWithImpersonationSession,
     StampImpersonationSession,
     USER_IMPERSONATION_AUTHORIZATION_NAME,
@@ -77,6 +81,7 @@ import {
     ValidateImpersonationWebSocketSubscribe,
     WithImpersonationCurrentUserBootstrap,
     WithImpersonationKeyMintScope,
+    WithImpersonationKeyRevokeScope,
 } from '../auth/impersonationGuard.js';
 import { ImpersonationSessionRefusalGuard } from '../auth/scopeLimitedAccess.js';
 import {
@@ -91,7 +96,7 @@ import {
     UserImpersonationConfigSchema,
 } from '../userImpersonationConfigUnits.js';
 import { QueryEngine } from '@memberjunction/core-entities';
-import { RunQueryResolver } from '../resolvers/QueryResolver.js';
+import { ExtractComposedQueryReferences, RunQueryResolver } from '../resolvers/QueryResolver.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AdhocQueryResolver } from '../resolvers/AdhocQueryResolver.js';
 import { APIKeyResolver } from '../resolvers/APIKeyResolver.js';
@@ -1609,26 +1614,88 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
             } as unknown as BaseEntity;
             expect(typeof ImpersonationPreSaveHook(strippedExistingKey, normalUser)).toBe('string');
 
-            // 5. Benign updates (Status/LastUsedAt) where Label is NOT dirty remain allowed for non-impersonated callers
-            const statusUpdateOnly = {
+            // 5. Protected fields (Status reactivation/change, ExpiresAt extension, UserID swap) are refused outside control-plane scopes
+            const baseLabelField = {
+                Name: 'Label',
+                Value: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
+                OldValue: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
+                Dirty: false,
+            };
+
+            const statusRevokeOutsideScope = {
                 EntityInfo: { Name: 'MJ: API Keys' },
                 IsSaved: true,
                 Fields: [
+                    baseLabelField,
+                    { Name: 'Status', Value: 'Revoked', OldValue: 'Active', Dirty: true },
+                ],
+            } as unknown as BaseEntity;
+            expect(typeof ImpersonationPreSaveHook(statusRevokeOutsideScope, normalUser)).toBe('string');
+
+            // Status -> Revoked IS allowed inside WithImpersonationKeyRevokeScope
+            await WithImpersonationKeyRevokeScope(async () => {
+                expect(ImpersonationPreSaveHook(statusRevokeOutsideScope, normalUser)).toBe(true);
+            });
+
+            // Status -> Active (reactivation) is refused BOTH outside scope AND inside revoke scope!
+            const statusReactivate = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [
+                    baseLabelField,
+                    { Name: 'Status', Value: 'Active', OldValue: 'Revoked', Dirty: true },
+                ],
+            } as unknown as BaseEntity;
+            expect(typeof ImpersonationPreSaveHook(statusReactivate, normalUser)).toBe('string');
+            await WithImpersonationKeyRevokeScope(async () => {
+                expect(typeof ImpersonationPreSaveHook(statusReactivate, normalUser)).toBe('string');
+            });
+
+            // ExpiresAt extension and UserID target swap are refused outside mint scope (even inside revoke scope!)
+            const expiresAtExtend = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [
+                    baseLabelField,
                     {
-                        Name: 'Label',
-                        Value: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
-                        OldValue: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
-                        Dirty: false,
-                    },
-                    {
-                        Name: 'Status',
-                        Value: 'Revoked',
-                        OldValue: 'Active',
+                        Name: 'ExpiresAt',
+                        Value: new Date(Date.now() + 86_400_000),
+                        OldValue: new Date(Date.now() + 60_000),
                         Dirty: true,
                     },
                 ],
             } as unknown as BaseEntity;
-            expect(ImpersonationPreSaveHook(statusUpdateOnly, normalUser)).toBe(true);
+            expect(typeof ImpersonationPreSaveHook(expiresAtExtend, normalUser)).toBe('string');
+            await WithImpersonationKeyRevokeScope(async () => {
+                expect(typeof ImpersonationPreSaveHook(expiresAtExtend, normalUser)).toBe('string');
+            });
+
+            const userIdSwap = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [
+                    baseLabelField,
+                    { Name: 'UserID', Value: ADMIN_TARGET_ID, OldValue: TARGET_USER_ID, Dirty: true },
+                ],
+            } as unknown as BaseEntity;
+            expect(typeof ImpersonationPreSaveHook(userIdSwap, normalUser)).toBe('string');
+            await WithImpersonationKeyRevokeScope(async () => {
+                expect(typeof ImpersonationPreSaveHook(userIdSwap, normalUser)).toBe('string');
+            });
+
+            // 6. Benign LastUsedAt-only updates remain allowed outside mint/revoke scopes
+            const lastUsedOnly = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [
+                    baseLabelField,
+                    { Name: 'Status', Value: 'Active', OldValue: 'Active', Dirty: false },
+                    { Name: 'ExpiresAt', Value: new Date(), OldValue: new Date(), Dirty: false },
+                    { Name: 'UserID', Value: TARGET_USER_ID, OldValue: TARGET_USER_ID, Dirty: false },
+                    { Name: 'LastUsedAt', Value: new Date(), OldValue: null, Dirty: true },
+                ],
+            } as unknown as BaseEntity;
+            expect(ImpersonationPreSaveHook(lastUsedOnly, normalUser)).toBe(true);
         });
 
         it('refuses MJEndUserImpersonation on a forged key with no resolver-minted Started audit row and writes ZERO audit rows naming the admin', async () => {
@@ -2495,6 +2562,296 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
                 )
             ).resolves.toBe('ok');
             expect(next).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('10. Round 2 Hardening — Linear-Time ReDoS Bounds, SQL Word-Boundary Matching, WS Execution ALS & HTTP Queries Refusal', () => {
+        it('normalizes worst-case 64,000-slash HTTP paths in linear time (< 100 ms) without regex backtracking', () => {
+            RegisterServerUserImpersonationConfig({ enabled: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'redos-path',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+
+            const leadingSlashAttack = `${'/'.repeat(64_000)}x`;
+            const trailingSlashAttack = `/api/v1/entities${'/'.repeat(64_000)}`;
+            const allSlashes = '/'.repeat(64_000);
+
+            const start = performance.now();
+            expect(NormalizeImpersonationHttpPath(leadingSlashAttack)).toBe(leadingSlashAttack);
+            expect(NormalizeImpersonationHttpPath(trailingSlashAttack)).toBe('/api/v1/entities');
+            expect(NormalizeImpersonationHttpPath(allSlashes)).toBe('/');
+
+            // Also run through CreateImpersonationHttpGuardMiddleware end-to-end
+            const middleware = CreateImpersonationHttpGuardMiddleware('/');
+            let status = 200;
+            let nextCalled = false;
+            const res = {
+                status(code: number) {
+                    status = code;
+                    return this;
+                },
+                json() {
+                    return this;
+                },
+            } as unknown as Response;
+            const next: NextFunction = () => {
+                nextCalled = true;
+            };
+            middleware(
+                { method: 'GET', path: leadingSlashAttack, url: leadingSlashAttack, userPayload } as unknown as Request,
+                res,
+                next
+            );
+            const elapsedMs = performance.now() - start;
+
+            expect(status).toBe(403);
+            expect(nextCalled).toBe(false);
+            expect(elapsedMs).toBeLessThan(100);
+        });
+
+        it('scans worst-case repeated composition tokens linearly (< 100 ms) and refuses oversized saved SQL during impersonation', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true });
+
+            // 1. 88 KB repeated `{{query:"!(` (below 256 KiB cap) — linear scan completes fast
+            const payload88Kb = '{{query:"!('.repeat(8_000);
+            const t1 = performance.now();
+            const scan88 = ExtractComposedQueryReferences(payload88Kb);
+            const elapsed88Ms = performance.now() - t1;
+            expect(scan88.ExceededLengthCap).toBe(false);
+            expect(scan88.References).toEqual([]);
+            expect(elapsed88Ms).toBeLessThan(100);
+
+            // 2. 352 KB repeated `{{query:"!(` — exceeds default 256 KiB cap immediately AND linear scanner itself handles 352 KB < 100 ms
+            const payload352Kb = '{{query:"!('.repeat(32_000);
+            const t2 = performance.now();
+            const scanCapped = ExtractComposedQueryReferences(payload352Kb);
+            const scanUncapped = ExtractComposedQueryReferences(payload352Kb, 500_000);
+            const elapsed352Ms = performance.now() - t2;
+            expect(scanCapped.ExceededLengthCap).toBe(true);
+            expect(scanUncapped.ExceededLengthCap).toBe(false);
+            expect(scanUncapped.References).toEqual([]);
+            expect(elapsed352Ms).toBeLessThan(100);
+
+            // 3. Valid composition tokens still extract accurately (including optional args and single/double quotes)
+            const mixedSql =
+                `SELECT * FROM ({{query:"Sales/Monthly Revenue"}}) a ` +
+                `JOIN ({{ query : 'Reports/KPI Summary(year=2025, region="West")' }}) b ON a.ID = b.ID ` +
+                `-- {{query:"!(`;
+            const validScan = ExtractComposedQueryReferences(mixedSql);
+            expect(validScan.ExceededLengthCap).toBe(false);
+            expect(validScan.References).toEqual(['Sales/Monthly Revenue', 'Reports/KPI Summary']);
+
+            // 4. QueryResolver refuses oversized saved SQL during impersonation in < 100 ms
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'q-cap',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+            const oversizedQuery = {
+                ID: '99999999-9999-4999-8999-999999999901',
+                Name: 'OversizedQuery',
+                SQL: payload352Kb,
+                Entities: [],
+            };
+            const md = {
+                Entities: [{ Name: 'MJ: Credentials', SchemaName: '__mj', BaseView: 'vwCredentials', BaseTable: 'Credential' }],
+                Queries: [oversizedQuery],
+            } as unknown as IMetadataProvider;
+            const qr = new RunQueryResolver() as unknown as {
+                assertSavedQueryAllowedForImpersonation: (
+                    m: IMetadataProvider,
+                    up: UserPayload,
+                    ref: { QueryID?: string }
+                ) => Promise<void>;
+            };
+
+            const t3 = performance.now();
+            await expect(
+                qr.assertSavedQueryAllowedForImpersonation(md, userPayload, { QueryID: oversizedQuery.ID })
+            ).rejects.toThrow(/exceeds the maximum inspectable SQL length/i);
+            expect(performance.now() - t3).toBeLessThan(100);
+            expect(
+                IsSavedQueryForbiddenDuringImpersonation(
+                    { SQL: 'SELECT 1 ' + 'x'.repeat(MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH) },
+                    [{ Name: 'MJ: Credentials', SchemaName: '__mj', BaseView: 'vwCredentials', BaseTable: 'Credential' }]
+                )
+            ).toBe(true);
+        });
+
+        it('refuses POST /api/v1/queries/run in ViewAs while continuing to allow POST /api/v1/views/* and GET /api/v1/entities/*', () => {
+            RegisterServerUserImpersonationConfig({ enabled: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'http-q-run',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+
+            const middleware = CreateImpersonationHttpGuardMiddleware('/');
+            const runHttp = (method: string, path: string): { status: number; code?: string; nextCalled: boolean } => {
+                let status = 200;
+                let code: string | undefined;
+                let nextCalled = false;
+                const req = { method, path, url: path, userPayload } as unknown as Request;
+                const res = {
+                    status(s: number) {
+                        status = s;
+                        return this;
+                    },
+                    json(body: { code?: string }) {
+                        code = body?.code;
+                        return this;
+                    },
+                } as unknown as Response;
+                middleware(req, res, () => {
+                    nextCalled = true;
+                });
+                return { status, code, nextCalled };
+            };
+
+            const queryRunRes = runHttp('POST', '/api/v1/queries/run');
+            expect(queryRunRes.status).toBe(403);
+            expect(queryRunRes.code).toBe('IMPERSONATION_READ_ONLY');
+            expect(queryRunRes.nextCalled).toBe(false);
+
+            const viewPostRes = runHttp('POST', '/api/v1/views/run');
+            expect(viewPostRes.status).toBe(200);
+            expect(viewPostRes.nextCalled).toBe(true);
+
+            const entityGetRes = runHttp('GET', '/api/v1/entities/Accounts');
+            expect(entityGetRes.status).toBe(200);
+            expect(entityGetRes.nextCalled).toBe(true);
+        });
+
+        it('matches saved-query forbidden tables on word-boundary / schema-qualified / FROM-JOIN identifiers without false positives on Enrollment or RoleName', () => {
+            const entities = [
+                { Name: 'MJ: Roles', SchemaName: '__mj', BaseView: 'vwRoles', BaseTable: 'Role' },
+                { Name: 'MJ: Credentials', SchemaName: '__mj', BaseView: 'vwCredentials', BaseTable: 'Credential' },
+                { Name: 'MJ: Authorizations', SchemaName: '__mj', BaseView: 'vwAuthorizations', BaseTable: 'Authorization' },
+                { Name: 'MJ: API Keys', SchemaName: '__mj', BaseView: 'vwAPIKeys', BaseTable: 'APIKey' },
+                { Name: 'MJ: Users', SchemaName: '__mj', BaseView: 'vwUsers', BaseTable: 'User' },
+            ];
+
+            // Benign queries containing "role", "credential", "authorization" as substrings or non-schema-qualified columns MUST pass
+            expect(
+                IsSavedQueryForbiddenDuringImpersonation(
+                    {
+                        SQL: `
+                            SELECT e.EnrollmentID, e.RoleName, e.CredentialStatus, e.AuthorizationCode, u.Role, e.Authorization
+                            FROM __mj.vwEnrollments e
+                            INNER JOIN __mj.vwUsers u ON u.ID = e.UserID
+                            WHERE e.Role = 'Member' AND e.PayrollTier = 'Standard'
+                        `,
+                    },
+                    entities
+                )
+            ).toBe(false);
+
+            // Real forbidden references MUST be blocked across SQL Server & PostgreSQL quoting, comments, comma-joins, and views
+            const forbiddenQueries = [
+                'SELECT * FROM __mj.Role',
+                'SELECT * FROM [__mj].[Credential]',
+                'SELECT * FROM "__mj"."Authorization"',
+                'SELECT * FROM mydb.__mj.Role',
+                'SELECT * FROM Role',
+                'SELECT * FROM vwAccounts a INNER JOIN [Credential] c ON c.ID = a.ID',
+                'SELECT * FROM vwAccounts a, Role r WHERE r.ID = a.RoleID',
+                'SELECT * FROM vwAccounts WITH (NOLOCK), Role r',
+                'SELECT * FROM /* comment */ Role',
+                'SELECT * FROM ONLY Role',
+                'SELECT * FROM vwRoles',
+                'SELECT * FROM [__mj].[vwAPIKeys]',
+                'WITH x AS (SELECT ID FROM __mj.vwAuthorizations) SELECT * FROM x',
+            ];
+            for (const sql of forbiddenQueries) {
+                expect(IsSavedQueryForbiddenDuringImpersonation({ SQL: sql }, entities), `Expected blocked: ${sql}`).toBe(true);
+            }
+        });
+
+        it('wraps WebSocket execute and subscribe (including yielded async-iterable steps) inside request-scoped AsyncLocalStorage', async () => {
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const wsArgs = {
+                contextValue: {
+                    userPayload: {
+                        email: target.Email,
+                        userRecord: target,
+                        sessionId: 'ws-als',
+                        apiKeyId: MINTED_KEY_ID,
+                        impersonationSession: session,
+                    },
+                },
+            } as unknown as ExecutionArgs;
+
+            // 1. execute() sees active ALS session inside async execution and clears outside
+            expect(GetActiveRequestImpersonationSession()).toBeUndefined();
+            const execObserved = await RunGraphQLOperationWithImpersonationSession(wsArgs, async () => {
+                await Promise.resolve();
+                return GetActiveRequestImpersonationSession()?.apiKeyId ?? null;
+            });
+            expect(execObserved).toBe(MINTED_KEY_ID);
+            expect(GetActiveRequestImpersonationSession()).toBeUndefined();
+
+            // 2. subscribe() sees active ALS session during setup AND on every yielded iterator step!
+            const subObservedSetup: Array<string | null> = [];
+            const subObservedSteps: Array<string | null> = [];
+            const stream = await RunGraphQLOperationWithImpersonationSession(wsArgs, async () => {
+                subObservedSetup.push(GetActiveRequestImpersonationSession()?.apiKeyId ?? null);
+                async function* gen() {
+                    await Promise.resolve();
+                    yield GetActiveRequestImpersonationSession()?.apiKeyId ?? null;
+                    await Promise.resolve();
+                    yield GetActiveRequestImpersonationSession()?.apiKeyId ?? null;
+                }
+                return gen();
+            });
+            for await (const val of stream) {
+                subObservedSteps.push(val);
+            }
+            expect(subObservedSetup).toEqual([MINTED_KEY_ID]);
+            expect(subObservedSteps).toEqual([MINTED_KEY_ID, MINTED_KEY_ID]);
+            expect(GetActiveRequestImpersonationSession()).toBeUndefined();
         });
     });
 });

@@ -1891,7 +1891,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT194 - User Impersonation End-to-End Security, Expiry, Audit & Regression",
+            "TestID": "@lookup:MJ: Tests.Name=IT194 - User Impersonation End-to-End Security, Expiry, Audit, and Regression",
             "Sequence": 49,
             "Status": "Active"
           },

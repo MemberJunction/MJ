@@ -49,6 +49,7 @@ import {
     USER_IMPERSONATION_KEY_LABEL_V1_PREFIX,
     USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
     WithImpersonationKeyMintScope,
+    WithImpersonationKeyRevokeScope,
     type ImpersonationMode,
 } from '../auth/impersonationGuard.js';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
@@ -1794,9 +1795,11 @@ export class UserImpersonationResolver extends ResolverBase {
             // Continue revocation
         }
 
-        // 3. Revoke via APIKeyEngine (immediately marks Status='Revoked' and evicts validation cache)
+        // 3. Revoke via APIKeyEngine inside the control-plane revoke scope (immediately marks Status='Revoked' and evicts validation cache)
         try {
-            await engine.RevokeAPIKey(cleanId, privilegedUser, provider);
+            await WithImpersonationKeyRevokeScope(async () => {
+                await engine.RevokeAPIKey(cleanId, privilegedUser, provider);
+            });
         } catch (err) {
             LogError(
                 `Impersonation key cleanup: RevokeAPIKey failed for ${cleanId}: ${err instanceof Error ? err.message : String(err)}`

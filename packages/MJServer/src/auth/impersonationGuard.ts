@@ -1,7 +1,13 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ApolloServerPlugin } from '@apollo/server';
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
-import { GraphQLError, getOperationAST, parse, type OperationDefinitionNode } from 'graphql';
+import {
+    GraphQLError,
+    getOperationAST,
+    parse,
+    type ExecutionArgs,
+    type OperationDefinitionNode,
+} from 'graphql';
 import { AuthorizationError } from 'type-graphql';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import {
@@ -240,11 +246,14 @@ export const IMPERSONATION_ENTITY_DENY_SCOPE_PATHS: ReadonlyArray<string> = Obje
 
 const IMPERSONATION_HOOKS_REGISTERED_KEY = '___MJServer___ImpersonationDataHooksRegistered';
 const IMPERSONATION_ACTIVE_WS_STORE_KEY = '___MJServer___ImpersonationActiveWebSockets';
+/** Upper bound (256 KiB) on saved-query SQL length inspected during impersonation; larger SQL fails closed. */
+export const MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH = 262_144;
 const INTERNAL_SECURITY_LOOKUP_PARAMS = new WeakSet<object>();
 const impersonationByUser = new WeakMap<UserInfo, ImpersonationSessionInfo>();
 const currentUserBootstrapStorage = new AsyncLocalStorage<string>();
 const impersonationRequestStorage = new AsyncLocalStorage<ImpersonationSessionInfo>();
 const impersonationKeyMintStorage = new AsyncLocalStorage<boolean>();
+const impersonationKeyRevokeStorage = new AsyncLocalStorage<boolean>();
 
 /**
  * Returns `true` when `label` starts with the server-reserved `MJ-Impersonation:` prefix
@@ -260,7 +269,8 @@ export function HasReservedImpersonationKeyLabelPrefix(label: string | null | un
 /**
  * Scoped execution wrapper owned exclusively by `UserImpersonationResolver` when minting a
  * server-controlled `MJ-Impersonation:` API key. Every other caller attempting to create or
- * modify an `MJ: API Keys` row carrying or stripping that prefix is refused by `ImpersonationPreSaveHook`.
+ * modify protected fields (`Label`, `Status`, `ExpiresAt`, `UserID`) on an `MJ: API Keys` row
+ * carrying that prefix is refused by `ImpersonationPreSaveHook`.
  */
 export function WithImpersonationKeyMintScope<T>(fn: () => Promise<T>): Promise<T> {
     return impersonationKeyMintStorage.run(true, fn);
@@ -269,6 +279,20 @@ export function WithImpersonationKeyMintScope<T>(fn: () => Promise<T>): Promise<
 /** True ONLY while executing inside {@link WithImpersonationKeyMintScope}. */
 export function IsInImpersonationKeyMintScope(): boolean {
     return impersonationKeyMintStorage.getStore() === true;
+}
+
+/**
+ * Scoped execution wrapper owned exclusively by `UserImpersonationResolver` when revoking an
+ * `MJ-Impersonation:` API key (`Status = 'Revoked'`). Outside this scope and the mint scope,
+ * mutating `Status` (including reactivation), `ExpiresAt`, `UserID`, or `Label` is refused.
+ */
+export function WithImpersonationKeyRevokeScope<T>(fn: () => Promise<T>): Promise<T> {
+    return impersonationKeyRevokeStorage.run(true, fn);
+}
+
+/** True ONLY while executing inside {@link WithImpersonationKeyRevokeScope}. */
+export function IsInImpersonationKeyRevokeScope(): boolean {
+    return impersonationKeyRevokeStorage.getStore() === true;
 }
 
 /**
@@ -289,6 +313,66 @@ export function RunWithImpersonationSession<T>(
 /** Returns the active request-scoped `ImpersonationSessionInfo` from `AsyncLocalStorage`, if any. */
 export function GetActiveRequestImpersonationSession(): ImpersonationSessionInfo | undefined {
     return impersonationRequestStorage.getStore();
+}
+
+function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {
+    return (
+        typeof value === 'object' &&
+        value !== null &&
+        Symbol.asyncIterator in value &&
+        typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+    );
+}
+
+function wrapAsyncIterableWithImpersonationSession<T>(
+    iterable: AsyncIterable<T>,
+    session: ImpersonationSessionInfo
+): AsyncIterable<T> {
+    return {
+        [Symbol.asyncIterator](): AsyncIterator<T> {
+            const inner = iterable[Symbol.asyncIterator]();
+            const wrapped: AsyncIterator<T> = {
+                next: (...args) => RunWithImpersonationSession(session, () => inner.next(...args)),
+            };
+            if (inner.return) {
+                const innerReturn = inner.return.bind(inner);
+                wrapped.return = (...args) => RunWithImpersonationSession(session, () => innerReturn(...args));
+            }
+            if (inner.throw) {
+                const innerThrow = inner.throw.bind(inner);
+                wrapped.throw = (...args) => RunWithImpersonationSession(session, () => innerThrow(...args));
+            }
+            return wrapped;
+        },
+    };
+}
+
+/**
+ * Wraps GraphQL `execute` / `subscribe` (used by `graphql-ws` `useServer`) inside the request-scoped
+ * impersonation `AsyncLocalStorage` store whenever `args.contextValue` carries an impersonation session,
+ * and wraps any returned `AsyncIterable` so every yielded subscription step also executes inside the store.
+ */
+export function RunGraphQLOperationWithImpersonationSession<TResult>(
+    args: ExecutionArgs,
+    runner: (execArgs: ExecutionArgs) => TResult
+): TResult {
+    const wsContext = args.contextValue as { readonly userPayload?: UserPayload } | undefined;
+    const session = GetImpersonationSession(wsContext?.userPayload);
+    if (!session) {
+        return runner(args);
+    }
+    const rawResult = RunWithImpersonationSession(session, () => runner(args));
+    if (isAsyncIterable(rawResult)) {
+        return wrapAsyncIterableWithImpersonationSession(rawResult, session) as unknown as TResult;
+    }
+    if (rawResult instanceof Promise) {
+        return rawResult.then((resolved) =>
+            isAsyncIterable(resolved)
+                ? wrapAsyncIterableWithImpersonationSession(resolved, session)
+                : resolved
+        ) as unknown as TResult;
+    }
+    return rawResult;
 }
 
 function getActiveImpersonationWsRegistry(): Map<string, Set<() => void>> {
@@ -686,17 +770,220 @@ export function IsEntityWriteForbiddenDuringImpersonation(
     return IsEntityForbiddenDuringImpersonation(entityName, contextUser, entityInfo);
 }
 
+type SqlToken =
+    | { readonly kind: 'ident'; readonly value: string; readonly quoted: boolean }
+    | { readonly kind: 'dot' }
+    | { readonly kind: 'comma' }
+    | { readonly kind: 'lparen' }
+    | { readonly kind: 'rparen' }
+    | { readonly kind: 'semi' }
+    | { readonly kind: 'other' };
+
+const SQL_CLAUSE_TERMINATORS: ReadonlySet<string> = new Set([
+    'where',
+    'select',
+    'group',
+    'order',
+    'having',
+    'union',
+    'intersect',
+    'except',
+    'set',
+    'values',
+    'limit',
+    'offset',
+    'fetch',
+    'on',
+    'using',
+    'when',
+    'then',
+    'else',
+    'end',
+    'inner',
+    'left',
+    'right',
+    'full',
+    'cross',
+    'outer',
+    'natural',
+    'lateral',
+]);
+
+function isSqlIdentStart(code: number): boolean {
+    return (
+        (code >= 65 && code <= 90) || // A-Z
+        (code >= 97 && code <= 122) || // a-z
+        code === 95 || // _
+        code === 64 || // @
+        code === 35 // #
+    );
+}
+
+function isSqlIdentContinue(code: number): boolean {
+    return (
+        isSqlIdentStart(code) ||
+        (code >= 48 && code <= 57) || // 0-9
+        code === 36 // $
+    );
+}
+
+/**
+ * Strictly linear O(n), regex-free SQL tokenizer extracting quoted/unquoted identifiers and
+ * clause punctuation while skipping `--` / `/* *\/` comments and single-quoted string literals.
+ */
+function tokenizeSqlIdentifiers(sql: string): SqlToken[] {
+    const tokens: SqlToken[] = [];
+    const len = sql.length;
+    let i = 0;
+
+    while (i < len) {
+        const ch = sql.charCodeAt(i);
+
+        // Skip ASCII whitespace
+        if (ch <= 32) {
+            i++;
+            continue;
+        }
+
+        // Single-line `--` comment
+        if (ch === 45 /* '-' */ && i + 1 < len && sql.charCodeAt(i + 1) === 45) {
+            i += 2;
+            while (i < len && sql.charCodeAt(i) !== 10 /* '\n' */) {
+                i++;
+            }
+            continue;
+        }
+
+        // Block `/* ... */` comment
+        if (ch === 47 /* '/' */ && i + 1 < len && sql.charCodeAt(i + 1) === 42 /* '*' */) {
+            i += 2;
+            while (i + 1 < len && !(sql.charCodeAt(i) === 42 && sql.charCodeAt(i + 1) === 47)) {
+                i++;
+            }
+            i = Math.min(len, i + 2);
+            continue;
+        }
+
+        // Single-quoted SQL string literal (handles '' escapes)
+        if (ch === 39 /* "'" */) {
+            i++;
+            while (i < len) {
+                if (sql.charCodeAt(i) === 39) {
+                    if (i + 1 < len && sql.charCodeAt(i + 1) === 39) {
+                        i += 2;
+                        continue;
+                    }
+                    i++;
+                    break;
+                }
+                i++;
+            }
+            tokens.push({ kind: 'other' });
+            continue;
+        }
+
+        // Quoted identifiers: `[...]`, `"..."`, `` `...` ``
+        if (ch === 91 /* '[' */ || ch === 34 /* '"' */ || ch === 96 /* '`' */) {
+            const closeChar = ch === 91 ? 93 /* ']' */ : ch;
+            i++;
+            const start = i;
+            let hasEscapedClose = false;
+            while (i < len) {
+                if (sql.charCodeAt(i) === closeChar) {
+                    if (i + 1 < len && sql.charCodeAt(i + 1) === closeChar) {
+                        hasEscapedClose = true;
+                        i += 2;
+                        continue;
+                    }
+                    break;
+                }
+                i++;
+            }
+            let rawIdent = sql.slice(start, i);
+            if (hasEscapedClose) {
+                const closeStr = String.fromCharCode(closeChar);
+                rawIdent = rawIdent.split(closeStr + closeStr).join(closeStr);
+            }
+            if (i < len && sql.charCodeAt(i) === closeChar) {
+                i++;
+            }
+            const normalized = rawIdent.trim().toLowerCase();
+            if (normalized) {
+                tokens.push({ kind: 'ident', value: normalized, quoted: true });
+            }
+            continue;
+        }
+
+        if (ch === 46 /* '.' */) {
+            tokens.push({ kind: 'dot' });
+            i++;
+            continue;
+        }
+        if (ch === 44 /* ',' */) {
+            tokens.push({ kind: 'comma' });
+            i++;
+            continue;
+        }
+        if (ch === 40 /* '(' */) {
+            tokens.push({ kind: 'lparen' });
+            i++;
+            continue;
+        }
+        if (ch === 41 /* ')' */) {
+            tokens.push({ kind: 'rparen' });
+            i++;
+            continue;
+        }
+        if (ch === 59 /* ';' */) {
+            tokens.push({ kind: 'semi' });
+            i++;
+            continue;
+        }
+
+        if (isSqlIdentStart(ch)) {
+            const start = i;
+            i++;
+            while (i < len && isSqlIdentContinue(sql.charCodeAt(i))) {
+                i++;
+            }
+            tokens.push({
+                kind: 'ident',
+                value: sql.slice(start, i).toLowerCase(),
+                quoted: false,
+            });
+            continue;
+        }
+
+        tokens.push({ kind: 'other' });
+        i++;
+    }
+
+    return tokens;
+}
+
 /**
  * Returns `true` when a saved `MJ: Queries` definition touches secret, credential, API-key,
- * encryption, OAuth, magic-link, or audit-log entities that an impersonated session must NEVER
- * read even through a role-permitted saved query.
+ * encryption, OAuth, magic-link, permission, or audit-log entities that an impersonated session
+ * must NEVER read even through a role-permitted saved query.
+ *
+ * Uses a strictly linear O(n), regex-free SQL identifier tokenizer so:
+ * - `BaseView` names match on whole SQL identifier boundaries (`vwRoles`, `[__mj].[vwCredentials]`).
+ * - `BaseTable` names match ONLY on schema-qualified references (`__mj.Role`, `[__mj].[Credential]`)
+ *   or table-source positions (`FROM Role`, `JOIN "Authorization"`, `FROM a, Role`), eliminating
+ *   false positives on words/columns such as `Enrollment`, `RoleName`, or `u.Role`.
+ * - SQL exceeding {@link MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH} fails closed (`true`).
  */
 export function IsSavedQueryForbiddenDuringImpersonation(
     queryInfo: {
         readonly SQL?: string | null;
         readonly Entities?: ReadonlyArray<{ readonly Entity?: string | null }> | null;
     } | null | undefined,
-    allEntities?: ReadonlyArray<{ readonly Name: string; readonly BaseView?: string | null; readonly BaseTable?: string | null }>
+    allEntities?: ReadonlyArray<{
+        readonly Name: string;
+        readonly SchemaName?: string | null;
+        readonly BaseView?: string | null;
+        readonly BaseTable?: string | null;
+    }>
 ): boolean {
     if (!queryInfo) {
         return false;
@@ -707,20 +994,141 @@ export function IsSavedQueryForbiddenDuringImpersonation(
             return true;
         }
     }
-    const sqlLower = (queryInfo.SQL ?? '').toLowerCase();
-    if (!sqlLower) {
+    const rawSql = queryInfo.SQL ?? '';
+    if (!rawSql) {
         return false;
     }
+    if (rawSql.length > MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH) {
+        return true;
+    }
+
+    const forbiddenViews = new Set<string>();
+    const forbiddenTables = new Set<string>();
+    const forbiddenSchemaTables = new Set<string>();
+
     for (const ent of allEntities ?? []) {
-        if (!SAVED_QUERY_SECRET_ENTITY_LOWER_SET.has(ent.Name.trim().toLowerCase())) {
+        const entNameLower = ent.Name.trim().toLowerCase();
+        if (!SAVED_QUERY_SECRET_ENTITY_LOWER_SET.has(entNameLower)) {
             continue;
         }
         const baseView = (ent.BaseView ?? '').trim().toLowerCase();
+        if (baseView) {
+            forbiddenViews.add(baseView);
+        }
         const baseTable = (ent.BaseTable ?? '').trim().toLowerCase();
-        if ((baseView && sqlLower.includes(baseView)) || (baseTable && sqlLower.includes(baseTable))) {
-            return true;
+        if (baseTable) {
+            forbiddenTables.add(baseTable);
+            const explicitSchema = (ent.SchemaName ?? '').trim().toLowerCase();
+            if (explicitSchema) {
+                forbiddenSchemaTables.add(`${explicitSchema}.${baseTable}`);
+            } else if (entNameLower.startsWith('mj:')) {
+                forbiddenSchemaTables.add(`__mj.${baseTable}`);
+            } else {
+                forbiddenSchemaTables.add(`dbo.${baseTable}`);
+            }
         }
     }
+
+    if (forbiddenViews.size === 0 && forbiddenTables.size === 0) {
+        return false;
+    }
+
+    const tokens = tokenizeSqlIdentifiers(rawSql);
+    const fromListStack: boolean[] = [];
+    let inFromCommaList = false;
+    let expectTableSource = false;
+
+    for (let i = 0; i < tokens.length; i++) {
+        const tok = tokens[i];
+
+        if (tok.kind === 'lparen') {
+            fromListStack.push(inFromCommaList);
+            inFromCommaList = false;
+            expectTableSource = false;
+            continue;
+        }
+        if (tok.kind === 'rparen') {
+            inFromCommaList = fromListStack.pop() ?? false;
+            expectTableSource = false;
+            continue;
+        }
+        if (tok.kind === 'semi') {
+            inFromCommaList = false;
+            expectTableSource = false;
+            continue;
+        }
+        if (tok.kind === 'comma') {
+            if (inFromCommaList) {
+                expectTableSource = true;
+            }
+            continue;
+        }
+        if (tok.kind !== 'ident') {
+            expectTableSource = false;
+            continue;
+        }
+
+        // Collapse dotted identifier chains (`schema.table` or `db.schema.table`) in one step.
+        const parts: Array<{ readonly value: string; readonly quoted: boolean }> = [tok];
+        while (
+            i + 2 < tokens.length &&
+            tokens[i + 1].kind === 'dot' &&
+            tokens[i + 2].kind === 'ident'
+        ) {
+            const nextIdent = tokens[i + 2];
+            if (nextIdent.kind === 'ident') {
+                parts.push(nextIdent);
+            }
+            i += 2;
+        }
+
+        const objectPart = parts[parts.length - 1];
+        const schemaPart = parts.length >= 2 ? parts[parts.length - 2] : null;
+        const objectName = objectPart.value;
+
+        // 1. Whole-identifier BaseView match anywhere in SQL
+        if (forbiddenViews.has(objectName)) {
+            return true;
+        }
+
+        // 2. Schema-qualified BaseTable match (e.g. `__mj.Role`, `[__mj].[Credential]`, `db.__mj.Authorization`)
+        if (schemaPart && forbiddenSchemaTables.has(`${schemaPart.value}.${objectName}`)) {
+            return true;
+        }
+
+        // 3. Table-source position match (`FROM Role`, `JOIN [Credential]`, `FROM a, Role`, `FROM custom.Role`)
+        if (expectTableSource) {
+            if (parts.length === 1 && !objectPart.quoted && objectName === 'only') {
+                // PostgreSQL `FROM ONLY table_name` keeps expecting a table source
+                continue;
+            }
+            if (forbiddenTables.has(objectName)) {
+                return true;
+            }
+            expectTableSource = false;
+            continue;
+        }
+
+        // Update clause state for unquoted single-identifier SQL keywords
+        if (parts.length === 1 && !objectPart.quoted) {
+            if (objectName === 'from') {
+                inFromCommaList = true;
+                expectTableSource = true;
+            } else if (
+                objectName === 'join' ||
+                objectName === 'into' ||
+                objectName === 'update' ||
+                objectName === 'apply'
+            ) {
+                inFromCommaList = false;
+                expectTableSource = true;
+            } else if (SQL_CLAUSE_TERMINATORS.has(objectName)) {
+                inFromCommaList = false;
+                expectTableSource = false;
+            }
+        }
+    }
+
     return false;
 }
 
@@ -1169,10 +1577,21 @@ export async function ValidateImpersonationWebSocketSubscribe(
     return opErr ? [opErr] : undefined;
 }
 
-function normalizeHttpPath(raw: string | undefined): string {
-    const withoutQuery = (raw ?? '/').split('?')[0].trim() || '/';
+/**
+ * Normalizes an HTTP request path in strictly linear O(n) time (no regex backtracking)
+ * by stripping query parameters, ensuring a leading `/`, trimming trailing `/` characters,
+ * and lowercasing.
+ */
+export function NormalizeImpersonationHttpPath(raw: string | undefined): string {
+    const rawStr = raw ?? '/';
+    const qIdx = rawStr.indexOf('?');
+    const withoutQuery = (qIdx === -1 ? rawStr : rawStr.slice(0, qIdx)).trim() || '/';
     const withLeadingSlash = withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`;
-    const trimmed = withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : '/';
+    let end = withLeadingSlash.length;
+    while (end > 1 && withLeadingSlash.charCodeAt(end - 1) === 47 /* '/' */) {
+        end--;
+    }
+    const trimmed = end === withLeadingSlash.length ? withLeadingSlash : withLeadingSlash.slice(0, end);
     return (trimmed || '/').toLowerCase();
 }
 
@@ -1183,7 +1602,7 @@ function normalizeHttpPath(raw: string | undefined): string {
  * 1. The **exact** configured GraphQL endpoint (`graphqlPathPrefix`, e.g. `/` or `/graphql`, `POST`/`GET`/`OPTIONS`),
  *    which then passes through Apollo's `didResolveOperation` plugin (allowing `MJEndUserImpersonation` self-revoke).
  * 2. REST API routes (`/api/v1/*`) — subject to kill switch, forbidden-entity path checks, and Read-Only
- *    enforcement (`GET`/`HEAD`/`OPTIONS` and read-only `POST /views/*`, `POST /queries/run` in `ViewAs`).
+ *    enforcement (`GET`/`HEAD`/`OPTIONS` and read-only `POST /views/*` in `ViewAs`; `POST /queries/run` is refused).
  *
  * Every other post-auth route (post-auth Server Extensions, `/realtime/recording/*`, `/oauth/*`,
  * `/magic-link/*`, `/widget/*`, etc.) is **refused by default** regardless of `GRAPHQL_ROOT_PATH`.
@@ -1192,8 +1611,8 @@ export function CreateImpersonationHttpGuardMiddleware(
     graphqlPathPrefix: string = '/',
     restApiPrefix: string = '/api/v1'
 ): RequestHandler {
-    const normalizedGqlPath = normalizeHttpPath(graphqlPathPrefix);
-    const normalizedRestPrefix = normalizeHttpPath(restApiPrefix);
+    const normalizedGqlPath = NormalizeImpersonationHttpPath(graphqlPathPrefix);
+    const normalizedRestPrefix = NormalizeImpersonationHttpPath(restApiPrefix);
 
     return (req: Request, res: Response, next: NextFunction): void => {
         const session = GetImpersonationSession(req.userPayload);
@@ -1210,7 +1629,7 @@ export function CreateImpersonationHttpGuardMiddleware(
             return;
         }
 
-        const reqPath = normalizeHttpPath(req.path || req.url);
+        const reqPath = NormalizeImpersonationHttpPath(req.path || req.url);
         const method = req.method.toUpperCase();
 
         // 1. Exact GraphQL endpoint ONLY (never a prefix match when GRAPHQL_ROOT_PATH='/').
@@ -1267,9 +1686,7 @@ export function CreateImpersonationHttpGuardMiddleware(
             }
 
             if (session.readOnly) {
-                const isReadPost =
-                    method === 'POST' &&
-                    (/^\/views\//i.test(restSubpath) || /^\/queries\/run\/?$/i.test(restSubpath));
+                const isReadPost = method === 'POST' && /^\/views\//i.test(restSubpath);
                 const isSafeMethod =
                     method === 'GET' || method === 'HEAD' || method === 'OPTIONS' || isReadPost;
                 if (!isSafeMethod) {
@@ -1346,23 +1763,36 @@ function resolveRunViewTargetEntityName(params: RunViewParams): string {
     return '';
 }
 
+function readEntityFieldRawAndDirty(
+    entity: BaseEntity,
+    fieldName: string
+): { readonly value: unknown; readonly oldValue: unknown; readonly dirty: boolean } {
+    const field = entity.Fields?.find((f) => f.Name?.toLowerCase() === fieldName.toLowerCase());
+    if (field) {
+        return {
+            value: field.Value,
+            oldValue: field.OldValue,
+            dirty: Boolean(field.Dirty),
+        };
+    }
+    const hasOwn = Object.prototype.hasOwnProperty.call(entity, fieldName);
+    const rawProp = hasOwn ? (entity as unknown as Record<string, unknown>)[fieldName] : undefined;
+    return {
+        value: rawProp,
+        oldValue: null,
+        dirty: hasOwn && rawProp !== undefined,
+    };
+}
+
 function readEntityFieldValueAndDirty(
     entity: BaseEntity,
     fieldName: string
 ): { readonly value: string | null; readonly oldValue: string | null; readonly dirty: boolean } {
-    const field = entity.Fields?.find((f) => f.Name?.toLowerCase() === fieldName.toLowerCase());
-    if (field) {
-        return {
-            value: typeof field.Value === 'string' ? field.Value : null,
-            oldValue: typeof field.OldValue === 'string' ? field.OldValue : null,
-            dirty: Boolean(field.Dirty),
-        };
-    }
-    const rawProp = (entity as unknown as Record<string, unknown>)[fieldName];
+    const raw = readEntityFieldRawAndDirty(entity, fieldName);
     return {
-        value: typeof rawProp === 'string' ? rawProp : null,
-        oldValue: null,
-        dirty: true,
+        value: typeof raw.value === 'string' ? raw.value : null,
+        oldValue: typeof raw.oldValue === 'string' ? raw.oldValue : null,
+        dirty: raw.dirty,
     };
 }
 
@@ -1530,21 +1960,40 @@ export const ImpersonationPreSaveHook: PreSaveHook = (
     const entityName = entity.EntityInfo?.Name ?? '';
     const entityLower = entityName.trim().toLowerCase();
 
-    // ALWAYS protect the server-reserved `MJ-Impersonation:` API key prefix on EVERY save path
-    // (including non-impersonated admins/callers!) so no caller can forge a fake impersonation key
-    // or strip the prefix off an active impersonation key mid-session.
+    // ALWAYS protect server-managed `MJ-Impersonation:` API keys on EVERY save path
+    // (including non-impersonated admins/callers!) so no caller outside the mint/revoke control
+    // plane can forge a key, strip the prefix, reactivate Status, extend ExpiresAt, or swap UserID.
     if (entityLower === 'mj: api keys' && !IsInImpersonationKeyMintScope()) {
         const labelState = readEntityFieldValueAndDirty(entity, 'Label');
         if (!entity.IsSaved) {
             if (HasReservedImpersonationKeyLabelPrefix(labelState.value)) {
                 return `API key labels starting with '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' are reserved for server-managed user impersonation sessions.`;
             }
-        } else if (
-            labelState.dirty &&
-            (HasReservedImpersonationKeyLabelPrefix(labelState.value) ||
-                HasReservedImpersonationKeyLabelPrefix(labelState.oldValue))
-        ) {
-            return `Modifying or stripping the reserved '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' prefix on an MJ: API Keys record is prohibited.`;
+        } else {
+            const isReservedKey =
+                HasReservedImpersonationKeyLabelPrefix(labelState.value) ||
+                HasReservedImpersonationKeyLabelPrefix(labelState.oldValue);
+            if (isReservedKey) {
+                if (labelState.dirty) {
+                    return `Modifying or stripping the reserved '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' prefix on an MJ: API Keys record is prohibited.`;
+                }
+                const expiresAtState = readEntityFieldRawAndDirty(entity, 'ExpiresAt');
+                if (expiresAtState.dirty) {
+                    return `Modifying ExpiresAt on a server-managed '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' MJ: API Keys record is prohibited.`;
+                }
+                const userIdState = readEntityFieldRawAndDirty(entity, 'UserID');
+                if (userIdState.dirty) {
+                    return `Modifying UserID on a server-managed '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' MJ: API Keys record is prohibited.`;
+                }
+                const statusState = readEntityFieldRawAndDirty(entity, 'Status');
+                if (statusState.dirty) {
+                    const nextStatus =
+                        typeof statusState.value === 'string' ? statusState.value.trim().toLowerCase() : '';
+                    if (!IsInImpersonationKeyRevokeScope() || nextStatus !== 'revoked') {
+                        return `Modifying Status on a server-managed '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' MJ: API Keys record is prohibited outside the impersonation revoke path.`;
+                    }
+                }
+            }
         }
     }
 

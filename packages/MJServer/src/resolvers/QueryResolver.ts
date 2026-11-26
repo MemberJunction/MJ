@@ -9,8 +9,150 @@ import { GetReadOnlyProvider } from '../util.js';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
-import { GetImpersonationSession, IsSavedQueryForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
+import {
+  GetImpersonationSession,
+  IsSavedQueryForbiddenDuringImpersonation,
+  MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH,
+} from '../auth/impersonationGuard.js';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
+
+/** Upper bound on characters inspected within a single `{{query:"..."}}` composition token. */
+const MAX_COMPOSITION_TOKEN_LENGTH = 2048;
+
+export interface ComposedQueryScanResult {
+  readonly References: readonly string[];
+  readonly ExceededLengthCap: boolean;
+}
+
+/**
+ * Linear-time (O(n), regex-free) scanner extracting inline `{{query:"Category/Name(args)"}}`
+ * composition references from saved SQL. Enforces `maxSqlLength` so oversized stored queries
+ * fail closed during impersonation instead of consuming unbounded CPU.
+ */
+export function ExtractComposedQueryReferences(
+  sql: string,
+  maxSqlLength: number = MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH
+): ComposedQueryScanResult {
+  if (!sql) {
+    return { References: [], ExceededLengthCap: false };
+  }
+  if (sql.length > maxSqlLength) {
+    return { References: [], ExceededLengthCap: true };
+  }
+
+  const references: string[] = [];
+  const len = sql.length;
+  let cursor = 0;
+
+  while (cursor < len) {
+    const openIdx = sql.indexOf('{{', cursor);
+    if (openIdx === -1) {
+      break;
+    }
+
+    let i = openIdx + 2;
+    const tokenLimit = Math.min(len, openIdx + MAX_COMPOSITION_TOKEN_LENGTH);
+
+    // Skip whitespace before `query`
+    while (i < tokenLimit && sql.charCodeAt(i) <= 32) {
+      i++;
+    }
+
+    // Match case-insensitive `query`
+    if (i + 5 > tokenLimit || sql.slice(i, i + 5).toLowerCase() !== 'query') {
+      cursor = openIdx + 2;
+      continue;
+    }
+    i += 5;
+
+    // Skip whitespace before `:`
+    while (i < tokenLimit && sql.charCodeAt(i) <= 32) {
+      i++;
+    }
+    if (i >= tokenLimit || sql.charCodeAt(i) !== 58 /* ':' */) {
+      cursor = openIdx + 2;
+      continue;
+    }
+    i++;
+
+    // Skip whitespace before opening quote `"` or `'`
+    while (i < tokenLimit && sql.charCodeAt(i) <= 32) {
+      i++;
+    }
+    if (i >= tokenLimit) {
+      cursor = openIdx + 2;
+      continue;
+    }
+    const quoteChar = sql.charCodeAt(i);
+    if (quoteChar !== 34 /* '"' */ && quoteChar !== 39 /* "'" */) {
+      cursor = openIdx + 2;
+      continue;
+    }
+    i++;
+
+    // Scan query path until closing quote or optional `(` parameter block.
+    // Stopping on `{{` guarantees every character is visited O(1) times on malformed inputs.
+    const pathStart = i;
+    while (
+      i < tokenLimit &&
+      sql.charCodeAt(i) !== quoteChar &&
+      sql.charCodeAt(i) !== 34 &&
+      sql.charCodeAt(i) !== 39 &&
+      sql.charCodeAt(i) !== 40 /* '(' */ &&
+      sql.charCodeAt(i) !== 41 /* ')' */ &&
+      !(sql.charCodeAt(i) === 123 /* '{' */ && i + 1 < tokenLimit && sql.charCodeAt(i + 1) === 123)
+    ) {
+      i++;
+    }
+    const pathEnd = i;
+    if (pathEnd === pathStart || i >= tokenLimit) {
+      cursor = Math.max(openIdx + 2, i);
+      continue;
+    }
+
+    // Optional `(...)` parameter list inside the quoted reference
+    if (sql.charCodeAt(i) === 40 /* '(' */) {
+      i++;
+      while (
+        i < tokenLimit &&
+        sql.charCodeAt(i) !== 41 /* ')' */ &&
+        sql.charCodeAt(i) !== quoteChar &&
+        !(sql.charCodeAt(i) === 123 /* '{' */ && i + 1 < tokenLimit && sql.charCodeAt(i + 1) === 123)
+      ) {
+        i++;
+      }
+      if (i >= tokenLimit || sql.charCodeAt(i) !== 41 /* ')' */) {
+        cursor = Math.max(openIdx + 2, i);
+        continue;
+      }
+      i++;
+    }
+
+    // Require matching closing quote
+    if (i >= tokenLimit || sql.charCodeAt(i) !== quoteChar) {
+      cursor = Math.max(openIdx + 2, i);
+      continue;
+    }
+    i++;
+
+    // Skip whitespace before `}}`
+    while (i < tokenLimit && sql.charCodeAt(i) <= 32) {
+      i++;
+    }
+    if (i + 1 >= tokenLimit || sql.charCodeAt(i) !== 125 /* '}' */ || sql.charCodeAt(i + 1) !== 125) {
+      cursor = Math.max(openIdx + 2, i);
+      continue;
+    }
+
+    const rawPath = sql.slice(pathStart, pathEnd).trim();
+    if (rawPath) {
+      references.push(rawPath);
+    }
+    cursor = i + 2;
+  }
+
+  return { References: references, ExceededLengthCap: false };
+}
 
 /**
  * Input type for batch query execution - allows running multiple queries in a single network call
@@ -289,9 +431,7 @@ export class RunQueryResolver extends ResolverBase {
       );
     }
 
-    // Extract `{{query:"Path/To/QueryName(...)"}}` composition tokens to follow SQL-level compositions
-    // even when QueryDependencies rows have not yet been refreshed.
-    const compositionTokenRegex = /\{\{\s*query\s*:\s*["']([^"'()]+?)(?:\([^)]*\))?["']\s*\}\}/gi;
+    // Collect known queries, platform SQL variants, and declared QueryDependencies for BFS inspection.
     const allKnownQueries: readonly InspectableQuery[] =
       engineQueries.length > 0 ? [...engineQueries, ...mdQueries] : mdQueries;
     const queriesByNormId = new Map<string, InspectableQuery>();
@@ -345,6 +485,12 @@ export class RunQueryResolver extends ResolverBase {
       const variantSqls = sqlsByQueryId.get(normId) ?? [];
       const combinedSql = [current.SQL ?? '', ...variantSqls].filter(Boolean).join('\n');
 
+      if (combinedSql.length > MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH) {
+        throw new AuthorizationError(
+          `Saved query '${current.Name}' exceeds the maximum inspectable SQL length (${MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH} chars) during user impersonation.`
+        );
+      }
+
       if (
         IsSavedQueryForbiddenDuringImpersonation(
           { SQL: combinedSql, Entities: current.Entities },
@@ -369,11 +515,17 @@ export class RunQueryResolver extends ResolverBase {
         }
       }
 
-      // 2. Follow inline `{{query:"Category/Name"}}` composition references
-      compositionTokenRegex.lastIndex = 0;
-      let match: RegExpExecArray | null;
-      while ((match = compositionTokenRegex.exec(combinedSql)) !== null) {
-        const rawPath = match[1].trim();
+      // 2. Follow inline `{{query:"Category/Name"}}` composition references via O(n) linear scan
+      const compositionScan = ExtractComposedQueryReferences(
+        combinedSql,
+        MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH
+      );
+      if (compositionScan.ExceededLengthCap) {
+        throw new AuthorizationError(
+          `Saved query '${current.Name}' exceeds the maximum inspectable SQL length (${MAX_IMPERSONATION_SAVED_QUERY_SQL_LENGTH} chars) during user impersonation.`
+        );
+      }
+      for (const rawPath of compositionScan.References) {
         const segments = rawPath.split('/').map((s) => s.trim()).filter(Boolean);
         const depName = segments.pop() ?? '';
         const depCatPath = segments.length > 0 ? segments.join('/') : undefined;
@@ -387,7 +539,7 @@ export class RunQueryResolver extends ResolverBase {
             `Composed query reference '${rawPath}' inside '${current.Name}' could not be resolved during user impersonation.`
           );
         }
-        if (!visitedIds.has(depQuery.ID.trim().toLowerCase())) {
+        if (!visitedIds.has(NormalizeUUID(depQuery.ID))) {
           queue.push(depQuery);
         }
       }

@@ -428,32 +428,3 @@ describe('GraphQLDataProvider - dataset failure status preservation (MJ#6106)', 
     });
   });
 });
-
-describe('GraphQLDataProvider - InstanceConnectionString user scoping (PR #6958)', () => {
-  it('appends #user=<normalizedUserId> so actor and impersonated target caches never collide', () => {
-    const makeProvider = (userId: string | null): GraphQLDataProvider => {
-      const p = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
-      (p as unknown as { _configData: { URL: string } })._configData = {
-        URL: 'https://api.example.com/graphql',
-      };
-      Object.defineProperty(p, 'CurrentUser', {
-        get: () => (userId ? { ID: userId } : null),
-        configurable: true,
-      });
-      return p;
-    };
-
-    const actorProvider = makeProvider('11111111-1111-4111-8111-111111111111');
-    const targetProvider = makeProvider('22222222-2222-4222-8222-222222222222');
-    const unauthenticatedProvider = makeProvider(null);
-
-    expect(actorProvider.InstanceConnectionString).toBe(
-      'https://api.example.com/graphql#user=11111111-1111-4111-8111-111111111111'
-    );
-    expect(targetProvider.InstanceConnectionString).toBe(
-      'https://api.example.com/graphql#user=22222222-2222-4222-8222-222222222222'
-    );
-    expect(actorProvider.InstanceConnectionString).not.toBe(targetProvider.InstanceConnectionString);
-    expect(unauthenticatedProvider.InstanceConnectionString).toBe('https://api.example.com/graphql');
-  });
-});

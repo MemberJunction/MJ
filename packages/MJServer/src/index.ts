@@ -354,6 +354,7 @@ import {
   CreateImpersonationHttpGuardMiddleware,
   EnsureImpersonationDataHooksRegistered,
   RegisterImpersonationWebSocket,
+  RunGraphQLOperationWithImpersonationSession,
   RunWithImpersonationSession,
   ValidateImpersonationWebSocketSubscribe,
 } from './auth/impersonationGuard.js';
@@ -375,7 +376,7 @@ LoadArtifactGuestShareOperations();
 LoadCommsAdminOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
-import type { GraphQLSchema } from 'graphql';
+import { execute, subscribe, type GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { HumanTaskProviderDefaults, SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -1590,6 +1591,8 @@ const setupComplete$ = new ReplaySubject(1);
           )
         );
       },
+      execute: (args) => RunGraphQLOperationWithImpersonationSession(args, execute),
+      subscribe: (args) => RunGraphQLOperationWithImpersonationSession(args, subscribe),
       // context() now just reads the already-validated payload — no I/O, no logging
       context: async (ctx) => {
         // No RequestOrigin here: the upgrade request's Origin is not carried onto subscription contexts.
