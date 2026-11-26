@@ -28,7 +28,14 @@ describe('the decoders\' command lines', () => {
         const input = args.indexOf('-i');
         expect(after(args, '-threads')).toBe('1');
         expect(args.slice(0, input)).toEqual(expect.arrayContaining(['-flags', 'low_delay', '-probesize', '32', '-analyzeduration', '0', '-f', 'h264']));
-        expect(args.slice(input)).toEqual(['-i', 'pipe:0', '-fps_mode', 'passthrough', '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-flush_packets', '1', 'pipe:1']);
+        expect(args.slice(input)).toEqual(['-i', 'pipe:0', '-threads', '1', '-fps_mode', 'passthrough', '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-flush_packets', '1', 'pipe:1']);
+    });
+
+    it('runs the rawvideo encoder on one thread, so no frame waits in a frame-threaded encoder for the next one', () => {
+        for (const args of [AvatarVideoDecoderArgs(V9), AvatarVideoDecoderArgs(V42)]) {
+            const output = args.slice(args.indexOf('-i') + 2);
+            expect(after(output, '-threads')).toBe('1');
+        }
     });
 
     it('decodes ADTS AAC into mono 16-bit PCM at the voice track\'s rate', () => {

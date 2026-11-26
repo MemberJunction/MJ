@@ -117,12 +117,12 @@ describe.skipIf(!hasFfmpeg)('the avatar pipeline with the installed ffmpeg', () 
         disposers.push(() => videoDecoder.Dispose(), () => audioDecoder.Dispose());
         videoUnits.forEach((data, i) => videoDecoder.Decode({ Seq: i, Epoch: 0, Time: i, Data: data }));
         audioUnits.forEach((unit, i) => audioDecoder.Decode({ Seq: i, Epoch: 0, Time: i, DecodedSamples: 1024, Samples: unit.Samples, Data: unit.Data }));
-        // ffmpeg keeps the newest access units (one when they come in real time, up to three after a burst like this one)
-        // until more input comes; every earlier frame comes back.
-        await waitUntil(() => frames.length >= videoUnits.length - 3 && pcm.length === audioUnits.length, 10_000);
+        // Each unit ends with an access unit delimiter and the encoder runs on one thread, so every frame comes back
+        // without waiting for more input, however busy the machine is.
+        await waitUntil(() => frames.length === videoUnits.length && pcm.length === audioUnits.length, 10_000);
 
         expect(failures).toEqual([]);
-        expect(frames.length).toBeGreaterThanOrEqual(videoUnits.length - 4);
+        expect(frames).toHaveLength(videoUnits.length);
         expect(frames.map((f) => f.Seq)).toEqual(frames.map((_, i) => i));
         const white = frames.filter((f) => meanLuma(f) > 200).map((f) => f.Seq);
         expect(white).toEqual([24, 48, 72]);

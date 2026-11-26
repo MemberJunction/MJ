@@ -5148,7 +5148,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 this._disarmPongWatchdog?.();
                 this._disarmPongWatchdog = null;
                 try {
-                    this._wsClient.dispose();
+                    // graphql-ws dispose() returns a Promise that awaits any in-flight `connecting`
+                    // attempt and rejects with the socket ErrorEvent/CloseEvent if it fails.
+                    Promise.resolve(this._wsClient.dispose()).catch((e: unknown) => {
+                        LogStatusEx({
+                            message: `[GraphQLDataProvider] WebSocket client dispose rejected: ${e instanceof Error ? e.message : String(e)}`,
+                            verboseOnly: true,
+                        });
+                    });
                 } catch (e) {
                     console.error('[GraphQLDataProvider] Error disposing WebSocket client:', e);
                 }
