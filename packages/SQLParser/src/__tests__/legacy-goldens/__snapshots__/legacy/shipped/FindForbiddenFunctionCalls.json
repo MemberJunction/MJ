@@ -49,6 +49,8 @@
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": [],
   "shipped/SQL/list-conversation-detail-feedback.sql": [],
   "shipped/SQL/predictive-studio-lock-model.sql": [],
+  "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": [],
+  "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": [],
   "shipped/SQL/predictive-studio-lock-pipeline.sql": [],
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": [],
   "shipped/SQL/predictive-studio-next-model-version.sql": [],

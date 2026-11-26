@@ -279,6 +279,8 @@ packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts
 src/generated/class-registrations-manifest.ts
 # The lockfile: A7a adds @memberjunction/testing-engine to the PS Engine (§9 D5-19)
 pnpm-lock.yaml
+# Caller maintenance of PR 5's own changes (D-082)
+packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5)
 # Owner-approved non-PS items (§9 owner batch, 2026-11-26)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
@@ -2501,6 +2503,7 @@ packages/AI/PredictiveStudio/TruthSuite/src/__tests__/feature-value-effective-da
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/cache.test.ts
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/model-values.test.ts
 packages/AI/PredictiveStudio/TruthSuite/turbo.json
+packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**
 ```
 
 Hands at integration: `FeatureValueEffectiveRangeGuard.Register();` and its export to A2's `$E/index.ts`.
@@ -3205,6 +3208,12 @@ Record every decision taken in §9 and, when it changes another plan's interface
   attack 15's `SHOWPLAN_XML` showed the optimizer seeking `IX_FeatureValue_Entity_Feature_Version_Record_AsOf`
   (EntityID, FeatureName leading) without it, so the key-range lock would not have covered the filtered index. · The contract's four parameters cannot address a binding-scoped Human
   row, which `ScoringService`'s `BindingHumanValueGuard` records.
+- D5-B1-5 · 2026-11-26 · Caller maintenance of B1's own change (D-082): the two new lock Query SQL files join
+  `@memberjunction/sql-parser`'s 'shipped' legacy-golden corpus, so its shipped snapshots gain one entry each per
+  golden (additions only; an existing entry never changes, and reviewed goldens are never re-captured otherwise).
+  Allowlist line `packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5)`. At
+  integration the controller regenerates the shipped goldens once over the merged corpus. · PR 4 precedent
+  (`a675ad5657`, `1539e1b80d`); controller ruling.
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
 item becomes an allowlist line `<path>  (D-091 item <n>)`. **Items 1 and 2 approved by the owner 2026-11-26** ("shared
@@ -3520,6 +3529,12 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   the feature-pipelines and feature-pipelines-engine unit suites above and the deterministic tier's IT124/IT126 (in
   the full mirror). **Tracked:** the controller runs the Feature Pipelines gate suite with bizapps-common installed (an
   `mj dev workspace`) on the integration database before MZ.
+- **Shipped-corpus goldens (D5-B1-5):** the full mirror's `test` step went red only in `@memberjunction/sql-parser`
+  (29 legacy-golden cases, 'shipped' corpus): B1's two lock Query SQL files join that corpus. Regenerated with
+  `vitest run -u src/__tests__/legacy-goldens` in `packages/SQLParser`: 29 snapshot files, **+58 −0** lines, every
+  added line one of the two new `predictive-studio-lock-open-*-feature-values.sql` entries (4 frozen
+  `Frozen*.sha256.json`; 25 reviewed: `ReviewedLexSQL.sha256.json` and 24 `<Method>.json`). No existing entry changed:
+  `reviewed.extractors.golden.test.ts` keeps every existing value byte for byte. `sql-parser` 2175/0/0 (63 files).
 - **LLM spend (§2.4 query, `RunAt >= 2026-11-26T09:20Z` on `MJ_PS_PR5_claude2`):** 166 prompt runs, **$0.191346**,
   464,078 tokens — all CodeGen's own LLM steps (93 `CodeGen: Check Constraint Parser` $0.182770, 1 Form Layout
   $0.003792, 1 Smart Field $0.004784) and 71 `Vector Sync Embedding` runs at $0 from MJAPI start. No agent run.
