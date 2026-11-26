@@ -3535,6 +3535,20 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   added line one of the two new `predictive-studio-lock-open-*-feature-values.sql` entries (4 frozen
   `Frozen*.sha256.json`; 25 reviewed: `ReviewedLexSQL.sha256.json` and 24 `<Method>.json`). No existing entry changed:
   `reviewed.extractors.golden.test.ts` keeps every existing value byte for byte. `sql-parser` 2175/0/0 (63 files).
+- **milestone-exit** (`--milestone B1`, head `c747524810`): checks 28 · failed 0 (first run: `changeset-file` until
+  `pr-body.mjs` regenerated the changeset (D5-49 amendment), `test:python` until `pnpm run setup:python`).
+- **ci-mirror (D5-51: the full tier now runs once at integration, by the controller, alone on the machine).** Full-tier
+  results recorded, not re-run: `20261126-155946-34799` test red only in `sql-parser` (the shipped goldens, fixed by
+  D5-B1-5); `20261126-163216-75280` test red only in `graphql-dataprovider` (an unhandled `ws://localhost:4000` socket
+  error from `sharedTabKernel.test.ts:1295`, 1 of 3 runs alone; owner-batch item 5, the controller's);
+  `20261126-171116-30716` test red only in `ng-entity-viewer` (`aggregate-expression.test.ts:34` 30 s timeout at load
+  51–66; judged at integration under no load). Fast tier `20261126-180333-42859`, `-182423-78557`, `-182753-92051`:
+  build and test-types ok; test red only in `sqlserver-dataprovider` — `spCreateRecordChangeContract.test.ts` 30 s
+  timeout. Measured cause: its filter `/CREATE\s+(?:OR\s+ALTER\s+)?PROCEDURE[\s\S]*?spCreateRecordChange_Internal/i`
+  over all 815 migrations is quadratic on files with many procedures and no match: 15.3–23.8 s in total, led by
+  `V202611062330` (5.7 s), `V202605021056` (4.7 s), `V202602211553` (3.5 s), `V202605032116` (2.8 s); B1's migration
+  costs 1 ms. The package passes alone (30 files passed, 3 skipped; 447/0/17); the file takes 7.4 s alone and 23.4 s
+  through turbo at load 36. Outside §2.7; reported to the controller.
 - **LLM spend (§2.4 query, `RunAt >= 2026-11-26T09:20Z` on `MJ_PS_PR5_claude2`):** 166 prompt runs, **$0.191346**,
   464,078 tokens — all CodeGen's own LLM steps (93 `CodeGen: Check Constraint Parser` $0.182770, 1 Form Layout
   $0.003792, 1 Smart Field $0.004784) and 71 `Vector Sync Embedding` runs at $0 from MJAPI start. No agent run.
