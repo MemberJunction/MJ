@@ -7,10 +7,12 @@ import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
 import type { UserInfo } from '@memberjunction/core';
 import { EmployeeEntity, FullWidthEmployeeRow, HRUser, Intern, SECRET_SALARY } from './fieldSecurityFixtures.js';
+// Imported statically: ResolverBase pulls in a large module graph, and a cold dynamic import inside a test counted
+// that load against the test's own timeout (30 s under load).
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 /** Drives the real `ResolverBase.DeleteRecord` with its unrelated collaborators stubbed on the instance. */
 async function deleteAs(user: UserInfo): Promise<Record<string, unknown>> {
-    const { ResolverBase } = await import('../generic/ResolverBase.js');
     const entityObject = {
         EntityInfo: EmployeeEntity(true),
         InnerLoad: async () => true,
