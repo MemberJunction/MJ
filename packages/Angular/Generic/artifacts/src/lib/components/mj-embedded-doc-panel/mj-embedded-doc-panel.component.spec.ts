@@ -127,7 +127,14 @@ function createMockHarness(perms: ResolvedArtifactPermissions) {
   } as Pick<RunView, 'RunView'> as RunView);
 
   const collabStub = {
-    CommitInlineEditOnServer: vi.fn(async () => ({ HandledByServer: false, Success: false })),
+    CommitInlineEditOnServer: vi.fn<
+      (
+        artifactId: string,
+        content: string,
+        saveVersion?: boolean,
+        providerOverride?: IMetadataProvider | null,
+      ) => ReturnType<DocumentCollaborationService['CommitInlineEditOnServer']>
+    >(async () => ({ HandledByServer: false, Success: false })),
   };
 
   return { provider, savedVersions, collabStub };
@@ -285,5 +292,147 @@ describe('MJEmbeddedDocPanelComponent (DOM)', () => {
 
     // Open Full Studio remains available even in read-only mode
     expect(query(fixture, '[data-testid="embedded-doc-open-studio-btn"]')).not.toBeNull();
+  });
+
+  it('transitions AutosaveStatus to error and does NOT emit WorkingStateAutosaved when CommitInlineEditOnServer returns HandledByServer=true, Success=false', async () => {
+    vi.useFakeTimers();
+    const { provider, collabStub } = createMockHarness({
+      ArtifactID: ARTIFACT_A,
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: false,
+      CanShare: true,
+      Source: 'Delegate',
+      Reason: 'Entity Read+Update',
+    });
+    collabStub.CommitInlineEditOnServer.mockResolvedValue({
+      HandledByServer: true,
+      Success: false,
+      ErrorMessage: 'Optimistic lock conflict while persisting draft',
+    });
+
+    const fixture = renderComponentFixture(MJEmbeddedDocPanelComponent, {
+      imports: [MarkdownArtifactViewerStub, MJButtonDirective],
+      declarations: [MJEmbeddedDocPanelComponent],
+      providers: [{ provide: DocumentCollaborationService, useValue: collabStub }],
+      inputs: {
+        Provider: provider,
+        ArtifactID: ARTIFACT_A,
+        CurrentUser: createUser(),
+        Mode: 'compact',
+        AutosaveDebounceMs: 1000,
+      },
+    });
+    const autosavedEvents = capture(fixture.componentInstance.WorkingStateAutosaved);
+
+    await fixture.componentInstance.LoadArtifact();
+    fixture.detectChanges();
+
+    fixture.componentInstance.OnDraftContentChanged('# Conflicting Draft');
+    await vi.advanceTimersByTimeAsync(1000);
+    fixture.detectChanges();
+
+    expect(collabStub.CommitInlineEditOnServer).toHaveBeenCalledWith(
+      ARTIFACT_A,
+      '# Conflicting Draft',
+      false,
+      provider,
+    );
+    expect(fixture.componentInstance.AutosaveStatus).toBe('error');
+    expect(fixture.componentInstance.AutosaveStatusLabel).toBe('Autosave failed');
+    expect(fixture.componentInstance.ErrorMessage).toBe(
+      'Optimistic lock conflict while persisting draft',
+    );
+    expect(query(fixture, '[data-testid="embedded-doc-error"]')?.textContent).toContain(
+      'Optimistic lock conflict while persisting draft',
+    );
+    expect(autosavedEvents).toHaveLength(0);
+  });
+
+  it('transitions AutosaveStatus to error and does NOT emit WorkingStateAutosaved when CommitInlineEditOnServer returns HandledByServer=false, Success=false', async () => {
+    vi.useFakeTimers();
+    const { provider, collabStub } = createMockHarness({
+      ArtifactID: ARTIFACT_A,
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: false,
+      CanShare: true,
+      Source: 'Delegate',
+      Reason: 'Entity Read+Update',
+    });
+    collabStub.CommitInlineEditOnServer.mockResolvedValue({
+      HandledByServer: false,
+      Success: false,
+    });
+
+    const fixture = renderComponentFixture(MJEmbeddedDocPanelComponent, {
+      imports: [MarkdownArtifactViewerStub, MJButtonDirective],
+      declarations: [MJEmbeddedDocPanelComponent],
+      providers: [{ provide: DocumentCollaborationService, useValue: collabStub }],
+      inputs: {
+        Provider: provider,
+        ArtifactID: ARTIFACT_A,
+        CurrentUser: createUser(),
+        Mode: 'compact',
+        AutosaveDebounceMs: 1000,
+      },
+    });
+    const autosavedEvents = capture(fixture.componentInstance.WorkingStateAutosaved);
+
+    await fixture.componentInstance.LoadArtifact();
+    fixture.detectChanges();
+
+    fixture.componentInstance.OnDraftContentChanged('# Unhandled Server Draft');
+    await vi.advanceTimersByTimeAsync(1000);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.AutosaveStatus).toBe('error');
+    expect(fixture.componentInstance.AutosaveStatusLabel).toBe('Autosave failed');
+    expect(fixture.componentInstance.ErrorMessage).toBeTruthy();
+    expect(autosavedEvents).toHaveLength(0);
+  });
+
+  it('transitions AutosaveStatus to saved and emits WorkingStateAutosaved when CommitInlineEditOnServer returns HandledByServer=true, Success=true', async () => {
+    vi.useFakeTimers();
+    const { provider, collabStub } = createMockHarness({
+      ArtifactID: ARTIFACT_A,
+      CanRead: true,
+      CanEdit: true,
+      CanDelete: false,
+      CanShare: true,
+      Source: 'Delegate',
+      Reason: 'Entity Read+Update',
+    });
+    collabStub.CommitInlineEditOnServer.mockResolvedValue({
+      HandledByServer: true,
+      Success: true,
+    });
+
+    const fixture = renderComponentFixture(MJEmbeddedDocPanelComponent, {
+      imports: [MarkdownArtifactViewerStub, MJButtonDirective],
+      declarations: [MJEmbeddedDocPanelComponent],
+      providers: [{ provide: DocumentCollaborationService, useValue: collabStub }],
+      inputs: {
+        Provider: provider,
+        ArtifactID: ARTIFACT_A,
+        CurrentUser: createUser(),
+        Mode: 'compact',
+        AutosaveDebounceMs: 1000,
+      },
+    });
+    const autosavedEvents = capture(fixture.componentInstance.WorkingStateAutosaved);
+
+    await fixture.componentInstance.LoadArtifact();
+    fixture.detectChanges();
+
+    fixture.componentInstance.OnDraftContentChanged('# Persisted Server Draft');
+    await vi.advanceTimersByTimeAsync(1000);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.AutosaveStatus).toBe('saved');
+    expect(fixture.componentInstance.AutosaveStatusLabel).toBe('Draft synced');
+    expect(fixture.componentInstance.ErrorMessage).toBeNull();
+    expect(autosavedEvents).toHaveLength(1);
+    expect(autosavedEvents[0].Content).toBe('# Persisted Server Draft');
   });
 });

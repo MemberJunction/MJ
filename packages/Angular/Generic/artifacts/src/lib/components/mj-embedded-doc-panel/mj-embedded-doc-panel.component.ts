@@ -84,6 +84,7 @@ export class MJEmbeddedDocPanelComponent extends BaseAngularComponent implements
   private _canEditOverride: boolean | undefined = undefined;
   private isInitialized = false;
   private isDestroyed = false;
+  private isFlushingFromViewer = false;
   private loadSequence = 0;
 
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -329,6 +330,10 @@ export class MJEmbeddedDocPanelComponent extends BaseAngularComponent implements
     if (!this.CanEdit || !this._artifactId) {
       return;
     }
+    if (this.isFlushingFromViewer) {
+      this.DraftContent = nextContent;
+      return;
+    }
     this.DraftContent = nextContent;
     this.HasPendingChanges = true;
     this.AutosaveStatus = 'pending';
@@ -359,11 +364,13 @@ export class MJEmbeddedDocPanelComponent extends BaseAngularComponent implements
     this.cdr.markForCheck();
 
     try {
+      this.flushViewerPendingEdits();
       const contentToPersist = this.MarkdownViewer?.MarkdownContent ?? this.DraftContent;
       const saved = await this.persistNewVersion(contentToPersist);
       if (!saved) {
         return;
       }
+      this.DraftContent = contentToPersist;
       this.HasPendingChanges = false;
       this.AutosaveStatus = 'version-saved';
       this.VersionSaved.emit(saved);
@@ -453,42 +460,96 @@ export class MJEmbeddedDocPanelComponent extends BaseAngularComponent implements
     if (this.isDestroyed || this.pendingAutosaveContent === null || !this.pendingAutosaveArtifactId) {
       return;
     }
-    const payload: EmbeddedDocWorkingStatePayload = {
-      ArtifactID: this.pendingAutosaveArtifactId,
-      VersionNumber: this.CurrentVersionNumber,
-      Content: this.pendingAutosaveContent,
-      SavedAt: new Date(),
-    };
-    this.pendingAutosaveContent = null;
-    this.pendingAutosaveArtifactId = null;
-
+    const payload = this.buildPendingWorkingStatePayload();
     this.AutosaveStatus = 'saving';
     this.cdr.markForCheck();
 
     try {
-      if (this.AutosaveHandler) {
-        await this.AutosaveHandler(payload);
-      } else if (this.collaborationService) {
-        await this.collaborationService.CommitInlineEditOnServer(
-          payload.ArtifactID,
-          payload.Content,
-          false,
-          this.ProviderToUse,
-        );
+      const failureMessage = await this.persistWorkingState(payload);
+      if (this.isDestroyed) {
+        return;
       }
-      if (!this.isDestroyed) {
-        this.LastAutosavedAt = payload.SavedAt;
-        this.AutosaveStatus = 'saved';
-        this.WorkingStateAutosaved.emit(payload);
-        this.cdr.markForCheck();
+      if (failureMessage) {
+        this.reportAutosaveFailure(failureMessage);
+        return;
       }
+      this.ErrorMessage = null;
+      this.LastAutosavedAt = payload.SavedAt;
+      this.AutosaveStatus = 'saved';
+      this.WorkingStateAutosaved.emit(payload);
+      this.cdr.markForCheck();
     } catch (err) {
       if (!this.isDestroyed) {
-        const message = err instanceof Error ? err.message : String(err);
-        LogError(`MJEmbeddedDocPanelComponent autosave failed: ${message}`);
-        this.AutosaveStatus = 'error';
-        this.cdr.markForCheck();
+        this.reportAutosaveFailure(err instanceof Error ? err.message : String(err));
       }
+    }
+  }
+
+  private buildPendingWorkingStatePayload(): EmbeddedDocWorkingStatePayload {
+    const targetArtifactId = this.pendingAutosaveArtifactId ?? this._artifactId;
+    const queuedContent = this.pendingAutosaveContent ?? this.DraftContent;
+    this.pendingAutosaveContent = null;
+    this.pendingAutosaveArtifactId = null;
+
+    const isSameArtifact = targetArtifactId === this._artifactId;
+    if (isSameArtifact) {
+      this.flushViewerPendingEdits();
+    }
+    const contentToPersist = isSameArtifact
+      ? (this.MarkdownViewer?.MarkdownContent ?? this.DraftContent)
+      : queuedContent;
+    if (isSameArtifact) {
+      this.DraftContent = contentToPersist;
+    }
+    return {
+      ArtifactID: targetArtifactId,
+      VersionNumber: this.CurrentVersionNumber,
+      Content: contentToPersist,
+      SavedAt: new Date(),
+    };
+  }
+
+  private async persistWorkingState(payload: EmbeddedDocWorkingStatePayload): Promise<string | null> {
+    if (this.AutosaveHandler) {
+      await this.AutosaveHandler(payload);
+      return null;
+    }
+    if (!this.collaborationService) {
+      return 'Working-state autosave unavailable: no autosave handler or collaboration service configured.';
+    }
+    const result = await this.collaborationService.CommitInlineEditOnServer(
+      payload.ArtifactID,
+      payload.Content,
+      false,
+      this.ProviderToUse,
+    );
+    if (!result.HandledByServer || !result.Success) {
+      return (
+        result.ErrorMessage ||
+        (result.HandledByServer
+          ? 'Working-state autosave failed on server.'
+          : 'Working-state autosave unavailable: server collaboration endpoint did not handle the request.')
+      );
+    }
+    return null;
+  }
+
+  private reportAutosaveFailure(message: string): void {
+    LogError(`MJEmbeddedDocPanelComponent autosave failed: ${message}`);
+    this.ErrorMessage = message;
+    this.AutosaveStatus = 'error';
+    this.cdr.markForCheck();
+  }
+
+  private flushViewerPendingEdits(): void {
+    if (!this.MarkdownViewer) {
+      return;
+    }
+    this.isFlushingFromViewer = true;
+    try {
+      this.MarkdownViewer.FlushPendingEdits();
+    } finally {
+      this.isFlushingFromViewer = false;
     }
   }
 
