@@ -22,7 +22,7 @@ import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/glob
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentRunEntity, MJMLBuildApprovalClaimEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJMLBuildApprovalClaimEntity } from '@memberjunction/core-entities';
 import { BuildApprovals, JsonParse, type BuildApproval } from '@memberjunction/predictive-studio-core';
 
 import { AgentSessionLease, type SessionBusy } from './agent-session-lease';
@@ -133,6 +133,9 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     if (state === 'present-plan' && AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) return this.presentPlanStep<P>(payload, decided, decided.message);
     const gated = AgentControlPath.Gate(state, decided);
     if (gated !== decided && String(decided.step) === String(PLAN_STEP) && facts.PlanComplete) return this.presentPlanStep<P>(payload, decided, decided.message);
+    // A replaced step goes to the control path, not back to the prompt (D5-A2-7): executing the gate's Retry here would
+    // run the prompt inside the framework, so a `request-build` state would never reach its code-decided transition.
+    if (gated !== decided && gated.step === 'Retry') return this.decisionTurn<P>(params, config, gated, stepCount);
     const noted = this.noteStep<P>(gated, facts);
     return super.executeNextStep<P>(params, config, noted, stepCount);
   }
@@ -256,9 +259,39 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     if (!AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) return decided;
     const payload = this.payloadOf(params, decided);
     const facts = await this.LoadControlFacts(params, payload);
-    if (AgentControlPath.StateOf(facts) === 'present-plan') return this.presentPlanStep<P>(payload, decided, decided.message);
+    if (AgentControlPath.StateOf(facts) === 'present-plan') {
+      // The framework already raised a request for the prompt's Chat (BaseAgent.executePromptStep); the code Plan step
+      // raises the one the person answers, so the prompt's is canceled rather than left open beside it.
+      if (String(decided.step) === 'Chat') await this.CancelPromptRaisedRequests(params);
+      return this.presentPlanStep<P>(payload, decided, decided.message);
+    }
     if (!decided.terminate || this.noted) return decided;
     return this.noteStep<P>(decided, facts);
+  }
+
+  /**
+   * Cancels this run's open requests, called just before the code Plan step runs: each was raised by this run's prompt
+   * (or by a plan the new one supersedes), so the person is left one card to answer. A failed save is logged; the Plan
+   * step's request is the session's newest either way, and the approval rule reads only that one.
+   */
+  protected async CancelPromptRaisedRequests(params: ExecuteAgentParams): Promise<void> {
+    const ctx = this.contextOf(params);
+    const runId = this.CurrentRunID;
+    if (!ctx || !runId) return;
+    const result = await RunView.FromMetadataProvider(ctx.Provider).RunView<MJAIAgentRequestEntity>({
+      EntityName: 'MJ: AI Agent Requests',
+      ExtraFilter: `OriginatingAgentRunID='${EscapeSQLString(runId)}' AND Status='Requested'`,
+      ResultType: 'entity_object',
+      BypassCache: true,
+    }, ctx.ContextUser);
+    if (!result.Success) {
+      LogError(`PredictiveStudioModelDevAgent: reading run ${runId}'s prompt-raised requests failed: ${result.ErrorMessage || 'unknown error'}`);
+      return;
+    }
+    for (const request of result.Results) {
+      request.Status = 'Canceled';
+      if (!(await request.Save())) LogError(`PredictiveStudioModelDevAgent: canceling request ${request.ID} failed: ${request.LatestResult?.CompleteMessage || 'unknown error'}`);
+    }
   }
 
   /** `step` with the note about the session's newest claim or unusable answer appended to its message, once per run. */

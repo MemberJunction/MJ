@@ -46,6 +46,11 @@ class TestOrchestrator extends PredictiveStudioModelDevAgent {
   protected override async TakeSessionTurn(): Promise<{ kind: 'session-busy'; liveRunId: string } | null> {
     return this.Busy;
   }
+  /** How many times the run canceled its prompt-raised requests (no database). */
+  public CanceledPromptRequests = 0;
+  protected override async CancelPromptRaisedRequests(): Promise<void> {
+    this.CanceledPromptRequests++;
+  }
   protected override get CurrentRunID(): string {
     return 'RUN2';
   }
@@ -135,6 +140,8 @@ describe('attack 18: a code-decided step runs no orchestrator prompt', () => {
     expect(s.terminate).toBe(false);
     expect(s.message).toBe('Here is the plan.');
     expect((s.newPayload as PredictiveStudioBuilderPayload).PlanHash).toBe(HASH);
+    // The framework raised a request for the prompt's Chat before the turn returned; the presented plan replaces it.
+    expect(o.CanceledPromptRequests).toBe(step === 'Chat' ? 1 : 0);
   });
 
   it('a Retry turn whose prompt completes the plan and ends the run presents it by code', async () => {
@@ -149,10 +156,12 @@ describe('attack 18: a code-decided step runs no orchestrator prompt', () => {
     expect((s.newPayload as PredictiveStudioBuilderPayload).PlanHash).toBe(HASH);
   });
 
-  it('a terminal prompt step on an already-presented plan is kept (no second presentation)', async () => {
-    superNext.mockResolvedValueOnce({ step: 'Success', terminate: true, message: 'All set.' } as BaseAgentNextStep);
-    const s = await new TestOrchestrator(facts()).Next(params(), null);
-    expect(s.step).toBe('Success');
+  it('a terminal prompt step on an already-presented plan is kept (no second presentation, nothing canceled)', async () => {
+    superNext.mockResolvedValueOnce({ step: 'Chat', terminate: true, message: 'Any questions?' } as BaseAgentNextStep);
+    const o = new TestOrchestrator(facts());
+    const s = await o.Next(params(), null);
+    expect(s.step).toBe('Chat');
+    expect(o.CanceledPromptRequests).toBe(0);
   });
 
   it('gather on a Retry turn runs the prompt (an LLM-decided state)', async () => {
@@ -221,6 +230,17 @@ describe('attack 21: the gate on prompt decisions', () => {
     const step = sub('Data Scout');
     await new TestOrchestrator(facts({ PlanComplete: false })).Next(params(), step);
     expect(superNext.mock.calls[0][2]).toBe(step);
+  });
+
+  // The framework runs a Retry it is handed as the prompt, so a replaced step must go to the control path here: found by
+  // G4.1 at runtime (an approved run's prompt kept naming the builder until ProgressStalled paused it).
+  it('in request-build, a prompt decision naming the Pipeline Builder goes to the control path: claim, then the code dispatch, no prompt', async () => {
+    const o = new TestOrchestrator(facts({ Approval: APPROVAL }));
+    const s = await o.Next(params(), sub('Pipeline Builder'));
+    expect(superNext).not.toHaveBeenCalled();
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(dispatchesBuilder(s)).toBe(true);
+    expect((s.newPayload as PredictiveStudioBuilderPayload).BuildClaimID).toBe('CL1');
   });
 
   it('attack 9 (a chat turn): even with an approved-looking state, a prompt that names the builder never dispatches it', async () => {
