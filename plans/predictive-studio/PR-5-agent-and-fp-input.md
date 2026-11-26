@@ -262,6 +262,9 @@ packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts
 src/generated/class-registrations-manifest.ts
 # The lockfile: A7a adds @memberjunction/testing-engine to the PS Engine (§9 D5-19)
 pnpm-lock.yaml
+# Owner-approved non-PS items (§9 owner batch, 2026-11-26)
+packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
+packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -964,8 +967,8 @@ renderer is an L1 widget in the PS dashboards package.
   pipeline versions are never touched (older models stay readable).
 - `EffectiveAsOf` of a derived value = the instant its input took its current value when the caller passes one (a new
   optional `inputAsOf` on `RecordFeatureValuesParams`, written to the existing `InputAsOf` column), else the
-  computation time. A value is never back-dated before its input existed. `InferProcessor` passes no `inputAsOf` until
-  owner-batch item 1 (§9) is approved, so on the defaults every pipeline value is effective from its computation time.
+  computation time. A value is never back-dated before its input existed. The owner approved owner-batch item 1 (§9,
+  2026-11-26), so `InferProcessor` passes `inputAsOf` = the input record's `__mj_UpdatedAt` as the run loop read it (D5-21).
 - **Human edits** are their own dated values: when a user (not a pipeline run) saves a materialized target field of an
   active Feature Pipeline, a Feature Value row is written with source `Human`, the user's ID, `EffectiveAsOf` = the
   save time, and the pipeline value open at that time is closed. Capture mechanism: a server-side subscriber to
@@ -1948,11 +1951,13 @@ half).
    stays open).
 7. After B1, PR 3's reader (`featureValueReader`) reads the new pipeline rows (they carry `EffectiveAsOf`); before B1 it
    reads 0 (`[EffectiveAsOf] IS NOT NULL`).
+8. An `InferProcessor` run over an input record last updated at T writes its derived value with `EffectiveAsOf` = T and
+   `InputAsOf` = T, not the computation time; a record with no `__mj_UpdatedAt` falls back to the computation time
+   (owner-batch item 1, D5-21).
 
 **Non-PS list.** `packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts` — passing `inputAsOf`
 (the instant the input took its value) needs the run loop that reads the input record; no PS-side route — §9 owner
-batch item 1. Default (implemented): no `inputAsOf`, so values are effective from computation time; G7.4 is unaffected
-(planted values).
+batch item 1, **approved by the owner 2026-11-26** (allowlist line `(D-091 item 1)`); B1 implements it.
 
 ```ownership
 migrations/v6/V<ts>__v6.<x>.x__PS_Agent_FP_Input.sql  (section: B1)
@@ -1962,6 +1967,8 @@ packages/AI/Knowledge/FeaturePipelines/src/cache/effective-range-guard.ts
 packages/AI/Knowledge/FeaturePipelines/src/index.ts
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/feature-value-effective-dating.test.ts
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/effective-range-guard.test.ts
+packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts
+packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-input-as-of.test.ts
 ```
 
 **Decisions.** DD-3 (existing rows: no migration data step; the first write-back of each version closes superseded
@@ -2091,11 +2098,14 @@ published` for such a model with `feature-version-not-activated`; a new version 
 5. A version activation stores an estimate with N affected values and the projected USD before any re-derivation run;
    `RederivationEstimator.Estimate` on a fixture with known prompt-run costs returns their mean × calls.
 6. `FeaturePipelineEngine`'s Process Run cache holds at most 50 runs per pipeline (DD-9).
+7. With `maxValuesPerRun` = 10 over 25 stale values, three runs re-derive 10, 10 and 5, oldest `EffectiveAsOf` first,
+   and a fourth re-derives none; with `maxUsdPerRun` set, a run stops before the call that would pass it (owner-batch
+   item 2, D5-14).
 
 **Non-PS list.** `packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts` — the budgeted
 re-derivation slice (D5-14: re-derive at most `maxValuesPerRun`/`maxUsdPerRun` per run, oldest first, continuing
-across runs) lives in the run loop; no PS-side route — §9 owner batch item 2. Default (implemented): the estimate is
-stored and shown (PS dashboard), and runs re-derive without the slice. The Knowledge Hub Feature Pipelines view is not
+across runs) lives in the run loop; no PS-side route — §9 owner batch item 2, **approved by the owner 2026-11-26**
+(allowlist line `(D-091 item 2)`); B3 implements the slice, and the estimate is stored and shown (PS dashboard). The Knowledge Hub Feature Pipelines view is not
 changed: the estimate is shown in the PS dashboards instead (a PS-side route).
 
 ```ownership
@@ -2116,6 +2126,8 @@ packages/AI/Knowledge/FeaturePipelines/src/versions/rederivation-estimator.ts
 packages/AI/Knowledge/FeaturePipelines/src/entities/MJFeaturePipelineVersionEntityExtended.ts
 packages/AI/Knowledge/FeaturePipelines/src/index.ts
 packages/AI/Knowledge/FeaturePipelines/src/__tests__/rederivation-estimator.test.ts
+packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts
+packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-rederivation-slice.test.ts
 packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/rederivation-estimate/rederivation-estimate.component.ts
 packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/rederivation-estimate/rederivation-estimate.component.html
 metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes.ts
@@ -2491,10 +2503,15 @@ Record every decision taken in §9 and, when it changes another plan's interface
   handed per run rule 4: `$E/index.ts` and `$C/index.ts` (A2 in wave 1, A3 in wave 2, A4 in wave 3), the barrel and
   registry (the same owners), the agent gate suite (A2, A3, A4, A6, A7b) and the Feature Pipelines gate suite (B4, B2,
   B3). · Design §6.7's dependency graph holds; no file is owned twice in a wave. · Moving A5 or B3 to wave 4.
+- D5-21 · 2026-11-26 · Owner batch approved (both `InferProcessor.ts` items). Item 1: `inputAsOf` = the input
+  record's `__mj_UpdatedAt` as the run loop read it (the instant it took its current value; Record Changes would need a
+  second read per record), falling back to the computation time when absent. Item 2: the D5-14 slice runs in the loop
+  that selects stale values, oldest `EffectiveAsOf` first. B1 owns the file in wave 1, B3 in wave 3.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
-item becomes an allowlist line `<path>  (D-091 item <n>)`.
+item becomes an allowlist line `<path>  (D-091 item <n>)`. **Both items approved by the owner 2026-11-26** ("shared code
+seems like the right choice"); B1 and B3 implement them, in waves 1 and 3, so the file is never owned twice in a wave.
 1. `packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts` — pass `inputAsOf` (the instant the
    input record took its current value) to `FeatureValueCacheService.RecordFeatureValues`, so a derived value is
    effective from its input's date, not its computation time; only the run loop reads the input record, and
@@ -2611,6 +2628,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - Header `Status` set to `ready` (the refresh and tier upgrade are done).
 - Next: M0 (three implementer databases from clean, baseline on the D-092 routing, §2.4 cost re-measure). The MJ copy of this entry rides M0's first commit.
 - Kickoff code review r1 (council `xhczg6`, 8 findings F-031…F-038, all confirmed and fixed): plans-repo tools `882a363`/`cb7e898` (mirror MJAPI port and integration.yml flags, MJAPI stop, `merge-next` throw handling, `milestone-exit` plan resolution and contract enumeration), and here §11 moved out of §12 and the allowlist now lists every tracked `mj:manifest` output. The MJ copy carries this §11 entry from this commit on (the pre-push `handoff-recency` check requires it on the PR branch).
+- 2026-11-26 — owner approved the §9 owner batch (both `InferProcessor.ts` items, D5-21): B1 attack 8 and B3 attack 7 added, `InferProcessor.ts` and its two tests in B1's and B3's ownership blocks and in the allowlist as `(D-091 item <n>)`. PR 4 cleanup done (7 databases, 5 worktrees, 7 branches, 5 backups). Next: implementation under council.
 
 ## 12. Refresh log (append-only)
 
