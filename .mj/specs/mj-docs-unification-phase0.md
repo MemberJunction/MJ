@@ -1,6 +1,6 @@
 # MJ Docs Unification — Phase 0 Living Specification
 
-> **Status:** Active (Slice 1 / P0.0 and Slice 2 / P0.1 landed; Slices 3–4 pending)
+> **Status:** Active (Slice 1 / P0.0, Slice 2 / P0.1, and Slice 3 / P0.2–P0.4 landed; Slice 4 / P0.5 pending)
 > **Epic Task ID:** `4F2FB67B-5283-4E05-A435-0C1EF05A5A3C`
 > **Approved FactoryPlan:** `B1404C16-5247-4AC3-A33B-E857008FF5C3` (v2, `CriteriaHash: 9536aa83511057af8b828a19fc4104fc6cecebcdbe5fc56dfa647339199dceca`)
 > **Repository & Branches:** `MemberJunction/MJ` · Target: `next` · Epic Branch: `factory/4f2fb67b-mj-docs-unification-phase0`

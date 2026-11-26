@@ -284,7 +284,9 @@ In the host container template:
 
 ```html
 <mj-artifact-slideover
-  (OpenEntityRecord)="OnOpenEntityRecord($event)">
+  [FallbackCurrentUser]="CurrentUser"
+  (OpenEntityRecord)="OnOpenEntityRecord($event)"
+  (ExternalNavigate)="OnExternalNavigate($event)">
 </mj-artifact-slideover>
 ```
 

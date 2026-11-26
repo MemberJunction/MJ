@@ -124,6 +124,16 @@ Automatically resolves and mounts the registered plugin for an artifact type —
 
 `<mj-artifact-version-history>` accepts `[Artifact]` (`MJArtifactEntity`) + `[CurrentUser]` (`UserInfo`); `<mj-artifact-message-card>` accepts `[artifactId]` (and optional `[Artifact]` / `[artifactVersion]` / `[VersionNumber]`) + `[CurrentUser]` and emits `(ActionPerformed)`:
 
+### Reusable Record-Attached Document Primitives (`P0.2`–`P0.4`)
+
+All three primitives follow strict MJ standards (`ChangeDetectionStrategy.OnPush`, `@if`/`@for`, `inject()`, `--mj-*` CSS tokens exclusively, `UserInfoEngine.Instance` for preferences, zero `localStorage`, zero `window.print()`, and zero `@angular/router` imports):
+
+- **`MJArtifactSlideoverService` + `<mj-artifact-slideover>`**: Root-injected Angular service (`Open`, `Close`, `ToggleMaximize`, `NavigateToLink` chaining with back-stack `GoBack()`, `NotifyVersionSaved`) paired with a slideover drawer wrapping `<mj-artifact-viewer-panel>`, with `Escape`-to-close keyboard handling and `UserInfoEngine.Instance` maximize persistence (`MJ.Artifacts.Slideover.Maximized`).
+- **`<mj-record-docs-list>`**: Displays `MJ: Record Artifacts` linked to `(EntityName, RecordID)` using batched `RunView` (`ResultType: 'simple'`, bounded `<= 200`-ID `IN`-clause chunks) and `ArtifactPermissionEngine.Instance.ResolvePermissionsBatch`. Hides create, promote, and slide-synthesis actions for read-only users, supports note promotion via `PromoteNoteToArtifact` (`@memberjunction/core-entities`), and emits `ArtifactOpened` / `SynthesizeSlidesRequested`.
+- **`<mj-embedded-doc-panel Mode="compact" | "full">`**: Inline wrapper over `MarkdownArtifactViewerComponent` (`[CompactMode]="true"` hides the outline rail and secondary studio toolbars), with debounced working-state autosave (`>= 1000ms` debounce floor, cleanly cancelled/flushed on `Save Version`, `[ArtifactID]` switch, and `ngOnDestroy`), delegated read-only permission enforcement, explicit **Save Version**, and **Open Full Studio** actions.
+
+See [`guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md`](../../../../guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md) for copy-paste Angular and Server recipes.
+
 ```html
 <mj-artifact-version-history
   [Artifact]="selectedArtifact"

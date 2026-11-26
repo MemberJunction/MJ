@@ -539,6 +539,14 @@ Permission levels are hierarchical: **Owner** > **Edit** > **View**. The engine 
    - Maps entity permissions cleanly to artifact permissions (`CanRead: true`, `CanEdit: Boolean(perms.CanUpdate)`, `CanDelete: Boolean(perms.CanDelete)`, `CanShare: Boolean(perms.CanUpdate) || isOwner`, `Source: 'Delegate'`).
 3. **Explicit `contextUser` forwarding**: All resolution methods (`ResolvePermissions`, `ResolvePermissionsBatch`, `CheckPermission`, and `EvaluateDefaultEntityFallback`) accept and forward an explicit `contextUser: UserInfo` to both metadata permission checks and `RunView`, making them safe on multi-tenant server paths.
 
+### `PromoteNoteToArtifact` & `LinkArtifactToRecord` (v6.3.x+)
+
+`src/custom/PromoteNoteToArtifact.ts` provides a dual browser/server helper that promotes any lightweight note or narrative field into a versioned `MJ: Artifacts` document (defaulting to `'Markdown Document'`):
+
+- Creates `MJ: Artifacts` with `DelegateEntityID` + `DelegateRecordID` bound to the host record, initial `v1` `MJ: Artifact Versions`, and an optional `MJ: Record Artifacts` link (`Role` defaults to `'General'`).
+- Forwards an explicit `contextUser?: UserInfo` and `provider?: IMetadataProvider` to every `GetEntityObject`, `RunView`, and entity permission check (denying promotion when the user lacks Read + Update permissions on the host entity).
+- Performs compensating rollback if `v1` version or link persistence fails, and handles `UQ_RecordArtifact_Record_Artifact_Role` unique collisions idempotently by returning the existing link (`LinkReusedExisting: true`).
+
 ## View Filter Architecture
 
 The `UserViewEntityExtended` converts structured filter JSON into SQL WHERE clauses:

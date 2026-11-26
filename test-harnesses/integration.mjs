@@ -8,9 +8,11 @@
  */
 
 import { runRecordArtifactPermissionsCheck } from '../packages/IntegrationTests/checks/record-artifact-permissions.check.mjs';
+import { runPromoteAndRecordDocsCheck } from '../packages/IntegrationTests/checks/promote-and-record-docs.check.mjs';
 
 const CHECKS = {
     'record-artifact-permissions': runRecordArtifactPermissionsCheck,
+    'promote-and-record-docs': runPromoteAndRecordDocsCheck,
 };
 
 function parseArgs(argv) {
