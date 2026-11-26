@@ -85,8 +85,8 @@ function boolLit(platform, val) {
     return val ? '1' : '0';
 }
 
-export async function runRecordArtifactPermissionsCheck() {
-    const db = createDbClient();
+export async function runRecordArtifactPermissionsCheck(dbOverride = null) {
+    const db = dbOverride ?? createDbClient();
     const p = db.platform;
     const assertions = [];
     const recordAssertion = (name) => assertions.push(name);
@@ -293,7 +293,7 @@ export async function runRecordArtifactPermissionsCheck() {
                     return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
                 }
                 if (params.EntityName === 'MJ: Companies') {
-                    const sql = `SELECT ${col(p, 'ID')} AS "ID" FROM ${tbl(p, 'Company')} WHERE ${params.ExtraFilter.replace(/\bID\b/g, col(p, 'ID'))}`;
+                    const sql = `SELECT ${col(p, 'ID')} AS "ID" FROM ${tbl(p, 'Company')} WHERE ${params.ExtraFilter.replace(/\bID\b/g, () => col(p, 'ID'))}`;
                     const rows = await db.query(sql);
                     return { Success: true, Results: rows, RowCount: rows.length, TotalRowCount: rows.length, ExecutionTime: 1, ErrorMessage: '' };
                 }

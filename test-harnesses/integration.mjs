@@ -9,10 +9,12 @@
 
 import { runRecordArtifactPermissionsCheck } from '../packages/IntegrationTests/checks/record-artifact-permissions.check.mjs';
 import { runPromoteAndRecordDocsCheck } from '../packages/IntegrationTests/checks/promote-and-record-docs.check.mjs';
+import { runDelegatedSearchAndCitationsCheck } from '../packages/IntegrationTests/checks/delegated-search-and-citations.check.mjs';
 
 const CHECKS = {
     'record-artifact-permissions': runRecordArtifactPermissionsCheck,
     'promote-and-record-docs': runPromoteAndRecordDocsCheck,
+    'delegated-search-and-citations': runDelegatedSearchAndCitationsCheck,
 };
 
 function parseArgs(argv) {

@@ -1,6 +1,6 @@
 # MJ Docs Unification — Phase 0 Living Specification
 
-> **Status:** Active (Slice 1 / P0.0, Slice 2 / P0.1, and Slice 3 / P0.2–P0.4 landed; Slice 4 / P0.5 pending)
+> **Status:** Complete (All 4 slices landed: Slice 1 / P0.0, Slice 2 / P0.1, Slice 3 / P0.2–P0.4, and Slice 4 / P0.5)
 > **Epic Task ID:** `4F2FB67B-5283-4E05-A435-0C1EF05A5A3C`
 > **Approved FactoryPlan:** `B1404C16-5247-4AC3-A33B-E857008FF5C3` (v2, `CriteriaHash: 9536aa83511057af8b828a19fc4104fc6cecebcdbe5fc56dfa647339199dceca`)
 > **Repository & Branches:** `MemberJunction/MJ` · Target: `next` · Epic Branch: `factory/4f2fb67b-mj-docs-unification-phase0`
@@ -136,14 +136,19 @@ In `packages/MJCoreEntities/src/custom/ArtifactPermissionDelegate.ts`:
 
 ### 4.2 Batched Vector/Search Permission Filter (`P0.5`)
 
-- Accepts `(provider: IMetadataProvider, candidateArtifactIds: ReadonlyArray<string>, contextUser: UserInfo)` with explicit `contextUser` required on server paths.
-- Chunks SQL `IN`-clauses strictly at `<= 200` IDs (`IN_CLAUSE_CHUNK_SIZE = 200`).
-- Zero N+1 `GetEntityObject` loops; fails closed when `contextUser` is missing/anonymous/magic-link-scoped, `DelegateEntityID` is unknown, or the target record fails RLS.
+- Exported from `@memberjunction/core-entities` (`packages/MJCoreEntities/src/custom/ArtifactPermissionDelegate.ts`):
+  - `ArtifactPermissionEngine.Instance.FilterArtifactsByPermissionBatch(provider, candidates, getArtifactId, contextUser, options?)`
+  - `ArtifactPermissionEngine.Instance.FilterReadableArtifactIDsBatch(provider, candidateArtifactIds, contextUser, options?)`
+  - `ARTIFACT_PERMISSION_IN_CLAUSE_CHUNK_SIZE` (`200`), `ArtifactBatchFilterOptions`, `ArtifactBatchFilterOutcome<TCandidate>`, `ArtifactBatchFilterResult<TCandidate>`, `FilterReadableArtifactIDsResult`
+- Requires explicit `contextUser: UserInfo` on server paths; fails closed with zero DB queries when `contextUser` is missing, inactive, magic-link-scoped, or carries an invalid UUID.
+- Handles mixed batches (custom `IArtifactPermissionDelegate`, default entity-level fallback grouped by `DelegateEntityID`, and standalone owner/shared/collection artifacts) in bounded SQL `IN`-clause chunks of `<= 200` IDs (`ResultType: 'simple'`, zero N+1 `GetEntityObject` loops), preserving deterministic input ordering without mutating inputs.
 
 ### 4.3 `DocRecordLink` ↔ `MessageCitation` / `ArtifactUse` Unification (`P0.5`)
 
-- Implemented in `packages/AI/CorePlus/src/doc-citation-bridge.ts` (exported from `packages/AI/CorePlus/src/index.ts`, zero cross-package re-exports).
-- Deterministically maps both durable `@{"_mode":"mention","type":"record",...}` tokens and wiki `[[EntityName|RecordID|DisplayName]]` / `[[EntityName|RecordID]]` tokens outside fenced/inline Markdown code spans into deduplicated `MessageCitation` (`Kind: 'record' | 'artifact'`) records and structured `MJ: Artifact Uses` attribution payloads (`UsageType: MJArtifactUseEntity['UsageType']`).
+- Implemented in `packages/AI/CorePlus/src/doc-citation-bridge.ts` and exported from `packages/AI/CorePlus/src/index.ts` (zero cross-package re-exports):
+  - `ParseDocRecordLinks`, `DeduplicateDocRecordLinks`, `DocRecordLinkToMessageCitation`, `MessageCitationToDocRecordLink`, `FormatDocRecordLink`, `FormatMessageCitationAsDocLink`, `DocRecordLinkToArtifactUse`, `MessageCitationToArtifactUse`, `BridgeDocLinksToCitationsAndArtifactUses`, `RecordCitedArtifactUse`
+  - Strongly-typed types: `DocRecordLink`, `DocRecordLinkSyntax`, `DocRecordLinkTargetKind`, `ArtifactCitationUsageType` (derived from `MJArtifactUseEntity['UsageType']`), `ArtifactUseCitationContext`, `ArtifactUseCitationPayload`, `ArtifactUseMappingOptions`, `DocCitationBridgeOptions`, `BridgedDocCitationEntry`, `DocCitationBridgeResult`, `RecordCitedArtifactUseResult`
+- Deterministically parses both durable `@{"_mode":"mention","type":"record",...}` tokens and wiki `[[...]]` tokens (records, composite keys, artifacts, `@v<N>` and `@<VersionUUID>` versioned artifacts, and `MJ: Artifact Versions`) outside fenced/inline Markdown code spans, deduplicates case-insensitively across UUIDs, round-trip formats cleanly back to canonical `[[...]]`, and produces/persists `MJ: Artifact Uses` attribution payloads.
 
 ---
 

@@ -173,12 +173,12 @@ When `ArtifactPermissionEngine.Instance.ResolvePermissions(provider, artifactId,
 When a vector store, full-text search engine, or RAG+ pipeline returns candidate `ArtifactID`s (often 50–500 hits across multiple entities):
 
 - **NEVER** loop `await md.GetEntityObject('MJ: Artifacts', user)` or invoke `ResolvePermissions` one-by-one inside a `for` loop.
-- Use `ArtifactPermissionEngine.Instance`'s batched resolution (`ResolvePermissionsBatch` / `FilterReadableArtifactIDsBatch`), which:
-  1. Deduplicates and validates candidate UUIDs.
-  2. Queries `MJ: Artifacts` headers (`ID`, `UserID`, `DelegateEntityID`, `DelegateRecordID`) in **bounded SQL `IN`-clause chunks of `<= 200` IDs** (`IN_CLAUSE_CHUNK_SIZE = 200`).
-  3. Groups non-custom delegated artifacts by `DelegateEntityID` and runs **one batched primary-key-only `RunView` (`ResultType: 'simple'`) per entity per `<= 200`-ID chunk** under `contextUser` (preserving RLS without leaking titles/fields).
-  4. Runs custom `IArtifactPermissionDelegate` checks with a shared per-request memo (`Map<string, Promise<ResolvedArtifactPermissions>>`).
-  5. Returns only authorized `ArtifactID`s (`CanRead === true`), failing closed on any query error, unknown entity, or missing record.
+- Use `ArtifactPermissionEngine.Instance.FilterArtifactsByPermissionBatch` (for candidate hit objects) or `ArtifactPermissionEngine.Instance.FilterReadableArtifactIDsBatch` (for ID lists), which:
+  1. Fails closed with zero DB queries whenever `contextUser` is null/missing, inactive, magic-link-scoped, or carries an invalid UUID.
+  2. Deduplicates and validates candidate UUIDs and queries `MJ: Artifacts` headers (`ID`, `UserID`, `DelegateEntityID`, `DelegateRecordID`) in **bounded SQL `IN`-clause chunks of `<= 200` IDs** (`ARTIFACT_PERMISSION_IN_CLAUSE_CHUNK_SIZE = 200`).
+  3. Groups default-fallback delegated artifacts by `DelegateEntityID` and runs **one batched primary-key-only `RunView` (`ResultType: 'simple'`) per entity per `<= 200`-ID chunk** under `contextUser` (preserving RLS without leaking titles/fields).
+  4. Runs custom `IArtifactPermissionDelegate` checks with a shared per-request memo (`Map<string, Promise<ResolvedArtifactPermissions>>`) alongside standalone ownership/share/collection resolution in one mixed pass.
+  5. Returns deterministic ordered `Allowed`, `Denied`, `Outcomes`, and `PermissionsByArtifactID` without mutating inputs, failing closed on any query error, unknown entity, or missing/RLS-hidden host record.
 
 ---
 
@@ -431,17 +431,19 @@ export async function FilterAuthorizedArtifactHits(
     return [];
   }
 
-  // Server-side batch resolution chunks SQL IN-clauses at <= 200 IDs, enforces
-  // custom delegates and default entity-level Read fallback, and fails closed
-  // on missing contextUser, unknown DelegateEntityID, or RLS-hidden records.
-  const candidateIds = hits.map((hit) => hit.ArtifactID);
-  const permsByArtifactId = await ArtifactPermissionEngine.Instance.ResolvePermissionsBatch(
+  // Server-side batch filter chunks SQL IN-clauses at <= 200 IDs, handles mixed
+  // custom delegates + default entity fallback + standalone artifacts, preserves
+  // original order without mutating input, and fails closed on missing/inactive
+  // contextUser, unknown DelegateEntityID, or RLS-hidden records.
+  const filtered = await ArtifactPermissionEngine.Instance.FilterArtifactsByPermissionBatch(
     provider,
-    candidateIds,
-    contextUser
+    hits,
+    (hit) => hit.ArtifactID,
+    contextUser,
+    { RequiredAction: 'Read' }
   );
 
-  return hits.filter((hit) => permsByArtifactId.get(hit.ArtifactID)?.CanRead === true);
+  return filtered.Allowed;
 }
 ```
 
@@ -503,52 +505,46 @@ export class ProjectArtifactPermissionDelegate extends BaseArtifactPermissionDel
 
 ### Recipe 6: Bridging `DocRecordLink` (`[[...]]`) with `MessageCitation` & `MJ: Artifact Uses`
 
-Documents store durable record references (`@{"_mode":"mention","type":"record",...}` inserted via `[[` autocomplete, plus wiki tokens `[[EntityName|RecordID|DisplayName]]`). AI conversations parse both syntaxes via `@memberjunction/ai-core-plus` (`ParseMessageCitations` + the P0.5 citation unification bridge) and record artifact provenance in `MJ: Artifact Uses`:
+Documents store durable record references (`@{"_mode":"mention","type":"record",...}` inserted via `[[` autocomplete, plus wiki tokens `[[EntityName|RecordID|DisplayName]]`, `[[MJ: Artifacts|ArtifactID@v2|Label]]`, and `[[MJ: Artifacts|ArtifactID@VersionUUID|Label]]`). Use the `@memberjunction/ai-core-plus` citation unification bridge (`doc-citation-bridge.ts`) to parse, deduplicate, convert to `MessageCitation`, round-trip format back to canonical `[[...]]`, and record provenance in `MJ: Artifact Uses`:
 
 ```typescript
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
-  ParseMessageCitations,
-  type MessageCitation,
+  BridgeDocLinksToCitationsAndArtifactUses,
+  FormatMessageCitationAsDocLink,
+  RecordCitedArtifactUse,
+  type DocCitationBridgeResult,
 } from '@memberjunction/ai-core-plus';
-import {
-  MJArtifactUseEntity,
-  type MJArtifactUseEntity as ArtifactUseEntityClass,
-} from '@memberjunction/core-entities';
 
-type ArtifactUsageType = ArtifactUseEntityClass['UsageType'];
-
-export interface UnifiedDocumentCitation {
-  Citation: MessageCitation;
-  UsageType: ArtifactUsageType;
-  ArtifactVersionID?: string;
-}
-
-export function ExtractArtifactCitations(markdownOrMessage: string): MessageCitation[] {
-  const parsed = ParseMessageCitations(markdownOrMessage);
-  return parsed.Citations.filter(
-    (citation) =>
-      citation.Kind === 'artifact' ||
-      (citation.Kind === 'record' &&
-        citation.EntityName?.trim().toLowerCase() === 'mj: artifacts')
-  );
-}
-
-export async function RecordCitedArtifactUsage(
-  artifactVersionId: string,
-  sourceConversationId: string,
-  contextUser: UserInfo
-): Promise<boolean> {
-  const md = new Metadata();
-  const use = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses', contextUser);
-  use.ArtifactVersionID = artifactVersionId;
-  use.UserID = contextUser.ID;
-  use.UsageType = 'Viewed';
-  use.UsageContext = JSON.stringify({
-    source: 'doc-citation-bridge',
-    conversationId: sourceConversationId,
+export async function ProcessDocumentAndConversationCitations(
+  markdownOrMessage: string,
+  conversationId: string,
+  contextUser: UserInfo,
+  provider: IMetadataProvider,
+  activeVersionByArtifactId: ReadonlyMap<string, string>
+): Promise<DocCitationBridgeResult> {
+  const bridged = BridgeDocLinksToCitationsAndArtifactUses(markdownOrMessage, {
+    UserID: contextUser.ID,
+    UsageType: 'Viewed',
+    ConversationID: conversationId,
+    ResolveArtifactVersionID: (link) =>
+      link.ArtifactID ? activeVersionByArtifactId.get(link.ArtifactID.toLowerCase()) : undefined,
   });
-  return use.Save();
+
+  for (const usePayload of bridged.ArtifactUses) {
+    const saved = await RecordCitedArtifactUse(usePayload, contextUser, provider);
+    if (!saved.Success) {
+      throw new Error(saved.ErrorMessage ?? 'Failed to record cited artifact usage.');
+    }
+  }
+
+  // Lossless reverse formatting from MessageCitation back to canonical [[...]] links
+  const canonicalLinks = bridged.Citations
+    .map((citation) => FormatMessageCitationAsDocLink(citation))
+    .filter((token): token is string => token !== null);
+  void canonicalLinks;
+
+  return bridged;
 }
 ```
 
