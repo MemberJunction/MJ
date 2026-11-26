@@ -625,7 +625,10 @@ export function WrapGraphQLWsClient(client: Client): KernelWsClientLike {
             );
         },
         Dispose: (): void => {
-            void client.dispose();
+            Promise.resolve(client.dispose()).catch(() => {
+                // graphql-ws dispose() awaits any in-flight `connecting` attempt and rejects
+                // with the socket ErrorEvent/CloseEvent if the handshake fails.
+            });
         },
         Terminate: (): void => {
             client.terminate();
