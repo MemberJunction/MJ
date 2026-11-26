@@ -437,17 +437,18 @@ export function ResourceUrlsEquivalent(left: string, right: string): boolean {
     return resourceQueryEqual(a.query, b.query);
 }
 
-function splitResourceUrl(raw: string): { path: string; query: Record<string, string> } {
+function splitResourceUrl(raw: string): { path: string; query: Map<string, string> } {
     const trimmed = (raw ?? '').trim();
     const q = trimmed.indexOf('?');
     const path = q === -1 ? trimmed : trimmed.slice(0, q);
     const search = q === -1 ? '' : trimmed.slice(q + 1);
-    // Null prototype: query keys come from a URL, and a `__proto__` or `constructor` key must stay
-    // an ordinary own key instead of reaching Object.prototype members.
-    const query: Record<string, string> = Object.create(null);
+    // Use a Map instead of dynamic bracket writes on an object so URL-supplied keys
+    // (`__proto__`, `constructor`, etc.) stay ordinary map entries and satisfy CodeQL's
+    // `js/remote-property-injection` check.
+    const query = new Map<string, string>();
     if (search.length > 0) {
         new URLSearchParams(search).forEach((value, key) => {
-            query[key] = value;
+            query.set(key, value);
         });
     }
     return { path, query };
@@ -461,14 +462,19 @@ function safeDecodePath(path: string): string {
     }
 }
 
-function resourceQueryEqual(a: Record<string, string>, b: Record<string, string>): boolean {
-    const keysA = Object.keys(a);
-    const keysB = Object.keys(b);
-    if (keysA.length !== keysB.length) return false;
-    return keysA.every((key) =>
-        decodeURIComponent((a[key] ?? '').replace(/\+/g, ' ')) ===
-        decodeURIComponent((b[key] ?? '').replace(/\+/g, ' ')),
-    );
+function resourceQueryEqual(a: Map<string, string>, b: Map<string, string>): boolean {
+    if (a.size !== b.size) return false;
+    for (const [key, valA] of a.entries()) {
+        if (!b.has(key)) return false;
+        const valB = b.get(key) ?? '';
+        if (
+            decodeURIComponent(valA.replace(/\+/g, ' ')) !==
+            decodeURIComponent(valB.replace(/\+/g, ' '))
+        ) {
+            return false;
+        }
+    }
+    return true;
 }
 
 
