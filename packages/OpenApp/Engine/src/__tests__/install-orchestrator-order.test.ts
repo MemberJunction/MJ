@@ -231,7 +231,7 @@ describe('InstallApp dependency orchestration', () => {
 
         expect(result.Success).toBe(true);
         // Resolved during graph construction only, not again at install time.
-        expect(vi.mocked(ListGitHubTags)).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(ListGitHubTags).mock.calls.filter(([url]) => url === 'https://github.com/test/app-common')).toHaveLength(1);
         const commonFetches = vi.mocked(FetchManifestFromGitHub).mock.calls
             .filter(([repoUrl]) => repoUrl === 'https://github.com/test/app-common')
             .map(([, version]) => version);
@@ -352,6 +352,8 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
         vi.mocked(FindInstalledApp).mockResolvedValue(null);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockResolvedValue('id-hubspot');
         vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: fullAppJSON });
         vi.mocked(DownloadMigrations).mockResolvedValue({ Success: true, LocalPath: '/tmp/m', Files: ['V1__x.sql'] });
@@ -451,6 +453,8 @@ describe('InstallApp — compensation when migrations fail', () => {
         vi.mocked(DropAppSchema).mockResolvedValue({ Success: true });
         vi.mocked(FindInstalledApp).mockResolvedValue(null);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
         // No teardown scripts on disk — enough to prove the teardown path was entered
         // without needing real files.
@@ -615,6 +619,8 @@ describe('InstallApp — compensation teardown runs the downloaded scripts (#350
         });
         vi.mocked(FindInstalledApp).mockResolvedValue(null);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined as never);
         vi.mocked(FetchManifestFromGitHub).mockResolvedValue({ Success: true, ManifestJSON: manifestJson });
         // Only the teardown folder carries a script; the migration download stays empty.
@@ -751,6 +757,8 @@ describe('InstallApp — post-install summary (#4238: no CodeGen step for a sche
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
             return `id-${manifest.name}`;
@@ -796,6 +804,8 @@ describe('InstallApp — reinstall over a prior install (B17: Error apps are rei
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
             return `id-${manifest.name}`;
@@ -857,6 +867,8 @@ describe('InstallApp — npm-install failure disables the app AND its dynamicPac
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
             return `id-${manifest.name}`;
@@ -905,6 +917,8 @@ describe('InstallApp — schema rollback tracks actual creation (B18)', () => {
         vi.mocked(RecordInstallHistoryEntry).mockResolvedValue(undefined);
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
             return `id-${manifest.name}`;
@@ -1322,6 +1336,8 @@ describe('reserved-schema guard on the adopt-an-existing-schema path', () => {
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined); // nothing installed yet
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
             return `id-${manifest.name}`;
@@ -1536,6 +1552,8 @@ describe('adopting a schema another installed app already owns', () => {
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
             return `id-${manifest.name}`;
@@ -1595,6 +1613,8 @@ describe('creating the app schema — core schema owner (#4756)', () => {
         vi.mocked(RecordAppDependencies).mockResolvedValue(undefined);
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(CheckSchemaSharedByOtherApps).mockResolvedValue({ Shared: false, CheckFailed: false });
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
             installSequence.push(manifest.name);
@@ -1720,6 +1740,8 @@ describe('InstallApp — public page slug owned by another app', () => {
         installSequence.length = 0;
         vi.mocked(FindInstalledApp).mockResolvedValue(undefined);
         vi.mocked(ListInstalledApps).mockResolvedValue([]);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
     });
 
     it('fails with the conflict message before any database or config change', async () => {
@@ -1775,6 +1797,8 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
         vi.mocked(AddClientDynamicPackages).mockReturnValue({ Success: true });
         vi.mocked(AddEntityPackageMapping).mockReturnValue({ Success: true });
         vi.mocked(ReplaceAppDependenciesAtomically).mockResolvedValue(true);
+        vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
+        vi.mocked(ListGitHubReleases).mockResolvedValue([]);
         vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
         vi.mocked(FindInstalledApp).mockResolvedValue(null);
         vi.mocked(RecordAppInstallation).mockImplementation(async (_user, manifest) => {
@@ -1788,7 +1812,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
             installedRow('app-tasks', tasksAtInstalledVersion),
             installedRow('app-common', manifestJSON('app-common', {})),
         ]);
-        serveRefs({ [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch });
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch });
 
         const result = await InstallApp({ Source: repoUrl('app-root') }, ctx);
 
@@ -1821,7 +1845,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
             installedRow('app-common', manifestJSON('app-common', {})),
         ]);
         serveRefs({
-            [repoUrl('app-root')]: root,
+            [`${repoUrl('app-root')}@1.0.0`]: root,
             [repoUrl('app-tasks')]: tasksOnDefaultBranch,
             [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion,
         });
@@ -1839,7 +1863,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
             installedRow('app-tasks', record),
             installedRow('app-common', manifestJSON('app-common', {})),
         ]);
-        serveRefs({ [repoUrl('app-root')]: root, ...refs });
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root, ...refs });
         return InstallApp({ Source: repoUrl('app-root') }, ctx);
     }
     const recordWith = (changes: Record<string, unknown>) => JSON.stringify({ ...JSON.parse(manifestJSON('app-tasks', {})), ...changes });
@@ -1900,7 +1924,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
             { ...installedRow('app-tasks', '{not json'), Subpath: 'apps/tasks' },
             installedRow('app-common', manifestJSON('app-common', {})),
         ]);
-        serveRefs({ [repoUrl('app-root')]: root, [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion });
+        serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root, [`${repoUrl('app-tasks')}@1.0.0`]: tasksAtInstalledVersion });
 
         await InstallApp({ Source: repoUrl('app-root') }, ctx);
 
@@ -1958,8 +1982,8 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
                 installedRow('app-common', manifestJSON('app-common', {})),
             ]);
             serveRefs({
-                [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksWithExtra,
-                [repoUrl('app-common')]: manifestJSON('app-common', {}), [repoUrl('app-extra')]: extra,
+                [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksWithExtra,
+                [repoUrl('app-common')]: manifestJSON('app-common', {}), [`${repoUrl('app-extra')}@1.0.0`]: extra,
             });
 
             const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: 'all' }, ctx);
@@ -1992,7 +2016,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
                 installedRow('app-common', manifestJSON('app-common', {})),
             ]);
             // The default branch of app-tasks would refuse this install.
-            serveRefs({ [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch, [repoUrl('app-common')]: manifestJSON('app-common', {}) });
+            serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksOnDefaultBranch, [repoUrl('app-common')]: manifestJSON('app-common', {}) });
 
             const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: ['app-common'] }, ctx);
 
@@ -2010,7 +2034,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
                 installedRow('app-common', manifestJSON('app-common', {})),
                 { ...installedRow('app-stuck', manifestJSON('app-stuck', {})), Status: status } as InstalledAppInfo,
             ]);
-            serveRefs({ [repoUrl('app-root')]: root });
+            serveRefs({ [`${repoUrl('app-root')}@1.0.0`]: root });
 
             const result = await InstallApp({ Source: repoUrl('app-root'), DependenciesFromHead: ['app-tasks', name] }, ctx);
 
@@ -2074,7 +2098,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
                 installedRow('app-common', manifestJSON('app-common', {})),
             ]);
             serveRefs({
-                [repoUrl('app-root')]: root,
+                [`${repoUrl('app-root')}@1.0.0`]: root,
                 [repoUrl('app-tasks')]: manifestJSON('app-tasks', { 'app-local': { version: '^1.0.0', repository: 'file:apps/app-local' } }),
             });
 
@@ -2091,7 +2115,7 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
                 installedRow('app-tasks', '{not json'), installedRow('app-common', manifestJSON('app-common', {})),
             ]);
             serveRefs({
-                [repoUrl('app-root')]: root, [repoUrl('app-tasks')]: tasksAtInstalledVersion,
+                [`${repoUrl('app-root')}@1.0.0`]: root, [repoUrl('app-tasks')]: tasksAtInstalledVersion,
                 [repoUrl('app-common')]: manifestJSON('app-common', {}),
             });
 
@@ -2100,5 +2124,22 @@ describe('Requirements of an already-installed dependency (#6877)', () => {
             expect(tasksWarnings()).toHaveLength(1);
             expect(tasksWarnings()[0]).toContain('on its default branch');
         });
+    });
+
+    it('includes app name and effective version in Step 3 MJ version compatibility error', async () => {
+        vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
+        vi.mocked(FetchManifestFromGitHub).mockResolvedValue({
+            Success: true,
+            ManifestJSON: JSON.stringify({
+                ...JSON.parse(manifestJSON('my-incompatible-app', {})),
+                version: '2.4.0',
+                mjVersionRange: '>=6.0.0 <7.0.0',
+            }),
+        });
+
+        const result = await InstallApp({ Source: 'https://github.com/test/my-incompatible-app', Version: '2.4.0' }, context);
+
+        expect(result.Success).toBe(false);
+        expect(result.ErrorMessage).toContain("'my-incompatible-app' (v2.4.0)");
     });
 });

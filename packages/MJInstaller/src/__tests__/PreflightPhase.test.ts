@@ -74,6 +74,52 @@ vi.mock('node:net', () => {
   };
 });
 
+import { EventEmitter } from 'node:events';
+
+// ---------------------------------------------------------------------------
+// Mock node:http — RunDiagnostics probes occupied ports over HTTP
+// ---------------------------------------------------------------------------
+
+type HttpProbeBehavior =
+  | { kind: 'response'; statusCode: number }
+  | { kind: 'error'; message: string }
+  | { kind: 'timeout' };
+
+let httpProbeBehavior: Record<number, HttpProbeBehavior> = {};
+const httpGetPaths: Array<{ port: number; path: string }> = [];
+
+vi.mock('node:http', () => {
+  const get = vi.fn((options: { port?: number; path?: string }, cb?: (res: EventEmitter & { statusCode?: number; resume: () => void }) => void) => {
+    const port = options.port ?? 0;
+    const reqPath = options.path ?? '/';
+    httpGetPaths.push({ port, path: reqPath });
+
+    const req = new EventEmitter() as EventEmitter & { destroy: () => void };
+    req.destroy = vi.fn();
+
+    const behavior = httpProbeBehavior[port] ?? { kind: 'error', message: 'ECONNREFUSED' };
+    queueMicrotask(() => {
+      if (behavior.kind === 'response' && cb) {
+        const res = new EventEmitter() as EventEmitter & { statusCode?: number; resume: () => void };
+        res.statusCode = behavior.statusCode;
+        res.resume = vi.fn();
+        cb(res);
+      } else if (behavior.kind === 'timeout') {
+        req.emit('timeout');
+      } else {
+        req.emit('error', new Error(behavior.kind === 'error' ? behavior.message : 'ECONNREFUSED'));
+      }
+    });
+
+    return req;
+  });
+
+  return {
+    default: { get },
+    get,
+  };
+});
+
 // ---------------------------------------------------------------------------
 // Import the phase under test AFTER mocks are set up
 // ---------------------------------------------------------------------------
@@ -151,6 +197,8 @@ describe('PreflightPhase', () => {
     mockFs.DirectoryExists.mockResolvedValue(true);
     mockSql.CheckConnectivity.mockResolvedValue({ Reachable: true, LatencyMs: 15 });
     netServerBehavior = 'listening';
+    httpProbeBehavior = {};
+    httpGetPaths.length = 0;
   });
 
   // ─── Node version checks ───────────────────────────────────────────
@@ -643,6 +691,57 @@ describe('PreflightPhase', () => {
       const codegenCheck = diagnostics.Checks.find(c => c.Name === 'CodeGen artifacts');
       expect(codegenCheck).toBeDefined();
       expect(codegenCheck!.Status).toBe('pass');
+    });
+
+    it('marks occupied API and Explorer ports as pass when they respond to HTTP probes', async () => {
+      netServerBehavior = 'EADDRINUSE';
+      httpProbeBehavior = {
+        4000: { kind: 'response', statusCode: 200 },
+        4200: { kind: 'response', statusCode: 200 },
+      };
+
+      const { emitter } = createMockEmitter();
+      const diagnostics = await phase.RunDiagnostics('/test/install', samplePartialConfig(), emitter);
+
+      const apiCheck = diagnostics.Checks.find(c => c.Name === 'Port 4000 (API)');
+      const explorerCheck = diagnostics.Checks.find(c => c.Name === 'Port 4200 (Explorer)');
+      expect(apiCheck?.Status).toBe('pass');
+      expect(apiCheck?.Message).toBe('Port 4000 (API) is active and responding');
+      expect(explorerCheck?.Status).toBe('pass');
+      expect(explorerCheck?.Message).toBe('Port 4200 (Explorer) is active and responding');
+      expect(httpGetPaths).toContainEqual({ port: 4000, path: '/healthcheck' });
+      expect(httpGetPaths).toContainEqual({ port: 4200, path: '/' });
+    });
+
+    it('warns on an occupied port during RunDiagnostics when HTTP probe fails or times out', async () => {
+      netServerBehavior = 'EADDRINUSE';
+      httpProbeBehavior = {
+        4000: { kind: 'error', message: 'ECONNRESET' },
+        4200: { kind: 'timeout' },
+      };
+
+      const { emitter } = createMockEmitter();
+      const diagnostics = await phase.RunDiagnostics('/test/install', samplePartialConfig(), emitter);
+
+      const apiCheck = diagnostics.Checks.find(c => c.Name === 'Port 4000 (API)');
+      const explorerCheck = diagnostics.Checks.find(c => c.Name === 'Port 4200 (Explorer)');
+      expect(apiCheck?.Status).toBe('warn');
+      expect(apiCheck?.Message).toContain('in use');
+      expect(explorerCheck?.Status).toBe('warn');
+      expect(explorerCheck?.Message).toContain('in use');
+    });
+
+    it('still warns without HTTP probing during install preflight (Run)', async () => {
+      netServerBehavior = 'EADDRINUSE';
+      httpProbeBehavior = {
+        4000: { kind: 'response', statusCode: 200 },
+        4200: { kind: 'response', statusCode: 200 },
+      };
+
+      const result = await phase.Run(makeContext());
+      const apiCheck = result.Diagnostics.Checks.find(c => c.Name === 'Port 4000 (API)');
+      expect(apiCheck?.Status).toBe('warn');
+      expect(httpGetPaths).toEqual([]);
     });
   });
 

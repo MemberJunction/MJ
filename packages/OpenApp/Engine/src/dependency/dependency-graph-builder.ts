@@ -56,7 +56,9 @@ export type ManifestFetcher = (
  */
 export type DependencyVersionResolver = (
     repoUrl: string,
-    versionRange: string
+    versionRange: string,
+    subpath?: string,
+    appName?: string
 ) => Promise<{ Version?: string; ErrorMessage?: string }>;
 
 /**
@@ -294,7 +296,7 @@ async function ProcessEdge(
     // Resolve an uninstalled dependency's version before fetching, so its own
     // dependencies come from the manifest of the version that will be installed.
     if (!node.AlreadyInstalled && resolveVersion) {
-        const resolved = await resolveVersion(resolvedRepo, versionRange);
+        const resolved = await resolveVersion(resolvedRepo, versionRange, node.Subpath, depName);
         if (resolved.ErrorMessage) {
             errors.push(
                 `Cannot resolve dependency '${depName}' ('${edge.parent}' requires '${versionRange}'): ${resolved.ErrorMessage}`

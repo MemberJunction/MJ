@@ -4405,11 +4405,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * In all cases, merges agent-level StyleOverride (Tone, SpeakingStyle) over the persona's defaults.
      *
      * @param agentId - The agent ID
-     * @param options - Optional overrides for modelId, vendorId, modalityName, preferredPersonaId
+     * @param options - Optional overrides for modelId, vendorId, modalityName, preferredPersonaId, and allowModelFallback (defaults to true)
      */
     public ResolveAgentPersona(
         agentId: string,
-        options?: { modelId?: string; vendorId?: string; modalityName?: string; preferredPersonaId?: string | null }
+        options?: { modelId?: string; vendorId?: string; modalityName?: string; preferredPersonaId?: string | null; allowModelFallback?: boolean }
     ): EffectiveAgentPersona | null {
         const modalityName = options?.modalityName ?? 'Audio';
         const agentPersonas = this.GetAgentPersonas(agentId);
@@ -4447,7 +4447,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         const resolvedModelId = this.resolveAgentModelId(agentId, options?.modelId);
 
-        if (!chosenPersona && resolvedModelId) {
+        if (!chosenPersona && resolvedModelId && options?.allowModelFallback !== false) {
             const modelPersonas = this.GetModelPersonas(resolvedModelId, modalityName, options?.vendorId);
             if (modelPersonas.length > 0) {
                 chosenPersona = modelPersonas[0].Persona;

@@ -443,7 +443,7 @@ describe('InstallApp with local dependencies', () => {
         const fromGitHub = otherManifest('crm', '1.0.0', { dependencies: { settings: { version: '^1.0.0', repository: settings } } });
         vi.mocked(FetchManifestFromGitHub).mockResolvedValueOnce({ Success: true, ManifestJSON: JSON.stringify(fromGitHub) });
 
-        const result = await InstallApp({ Source: 'https://github.com/acme/crm' }, buildContext());
+        const result = await InstallApp({ Source: 'https://github.com/acme/crm', Version: 'HEAD' }, buildContext());
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toContain(settings);
@@ -455,7 +455,7 @@ describe('InstallApp with local dependencies', () => {
         const settings = writeOtherApp('settings', '1.2.0');
         const shared = otherManifest('shared', '1.0.0', { dependencies: { settings: { version: '^1.0.0', repository: settings } } });
         vi.mocked(FetchManifestFromGitHub).mockResolvedValueOnce({ Success: true, ManifestJSON: JSON.stringify(shared) });
-        writeManifest('1.0.0', { dependencies: { shared: { version: '*', repository: 'https://github.com/acme/shared' } } });
+        writeManifest('1.0.0', { dependencies: { shared: { version: '1.0.0', repository: 'https://github.com/acme/shared' } } });
         writeSql('migrations', 'V1__create_event.sql', CREATE_SQL);
 
         const result = await InstallApp({ Source: LOCATOR }, buildContext());

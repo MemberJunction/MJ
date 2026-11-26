@@ -263,3 +263,26 @@ export async function CloseMJProvider(): Promise<void> {
 export async function closeMJProvider(): Promise<void> {
   return CloseMJProvider();
 }
+
+/**
+ * Flushes `process.stdout` before an explicit `process.exit()` so buffered output
+ * exceeding pipe buffer capacity (e.g., >64-128 KB over non-TTY pipes) is never truncated.
+ */
+export async function FlushStdout(): Promise<void> {
+  if (process.stdout.destroyed || !process.stdout.writable) {
+    return;
+  }
+  if (process.stdout.writableNeedDrain || !process.stdout.write('')) {
+    await new Promise<void>((resolve) => {
+      const done = (): void => {
+        process.stdout.off('drain', done);
+        process.stdout.off('error', done);
+        process.stdout.off('close', done);
+        resolve();
+      };
+      process.stdout.once('drain', done);
+      process.stdout.once('error', done);
+      process.stdout.once('close', done);
+    });
+  }
+}

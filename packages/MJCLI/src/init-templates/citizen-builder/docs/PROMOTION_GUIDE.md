@@ -13,11 +13,14 @@ A citizen builder submits an export archive (e.g. `dist/InvoiceAuditAgent-packag
    - Classification: **Tier 1 (Declarative)** vs **Tier 2 (Runtime Action)**.
    - Data Footprint: Explicit list of entities read and entities modified.
    - Sample Execution Receipt: Verification trace from a test run.
-2. **Metadata Files**:
+2. **Metadata Files** (including `.mj-sync.json` files so `mj sync push --dir <extracted>/metadata` succeeds out of the box):
+   - `metadata/.mj-sync.json`
+   - `metadata/agents/.mj-sync.json`
    - `metadata/agents/.*<name>*.json`
+   - `metadata/prompts/.mj-sync.json`
    - `metadata/prompts/.*<name>*.json`
    - `metadata/prompts/templates/<name>*.md`
-   - (If Tier 2) `metadata/actions/.*<name>*.json`
+   - (If Tier 2) `metadata/actions/.mj-sync.json` and `metadata/actions/.*<name>*.json`
 
 ---
 

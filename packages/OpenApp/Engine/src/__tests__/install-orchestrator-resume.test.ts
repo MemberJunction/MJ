@@ -149,7 +149,7 @@ function baseHappyPathStubs(): void {
     vi.mocked(ReplaceAppDependenciesAtomically).mockResolvedValue(true);
     vi.mocked(ListInstalledApps).mockResolvedValue([]);
     vi.mocked(GetLatestVersion).mockResolvedValue('2.0.0' as unknown as Awaited<ReturnType<typeof GetLatestVersion>>);
-    vi.mocked(ListGitHubTags).mockResolvedValue([]);
+    vi.mocked(ListGitHubTags).mockResolvedValue(['1.0.0']);
     vi.mocked(ListGitHubReleases).mockResolvedValue([]);
     vi.mocked(ValidateGitHubTag).mockResolvedValue({ Exists: true });
     vi.mocked(FindDependentApps).mockResolvedValue([]);
