@@ -239,6 +239,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
   @Input() public ShowMessageRating: boolean = true;
 
+  /** Show the Cited Sources footer bar beneath AI messages containing record citations. */
+  @Input() public ShowCitedSources: boolean = true;
+
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() public set showMessageRating(value: boolean) {
     this.ShowMessageRating = value;
@@ -2273,6 +2276,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     instance.showAgentRunDetails = this.ShowAgentRunDetails;
     instance.showReactions = this.ShowReactions;
     instance.showMessageRating = this.ShowMessageRating;
+    instance.ShowCitedSources = this.ShowCitedSources;
     instance.allowPinning = this.AllowPinning;
     instance.allowMessageEdit = this.AllowMessageEdit;
     instance.allowMessageDelete = this.AllowMessageDelete;

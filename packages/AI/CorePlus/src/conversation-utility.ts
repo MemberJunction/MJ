@@ -22,6 +22,7 @@ import {
 } from '@memberjunction/ai';
 import { UUIDsEqual } from '@memberjunction/global';
 import { CompositeKey, type KeyValuePair } from '@memberjunction/core';
+import { ReplaceWikiCitationsWithPlainText } from './conversation-citation-scanner';
 
 /**
  * Utility class for parsing and formatting special content in conversation messages
@@ -114,30 +115,31 @@ export class ConversationUtility {
     if (!text) return '';
 
     const tokens = this.ParseSpecialContent(text);
-    if (tokens.length === 0) return text;
-
-    // Replace tokens in reverse order to maintain indices
     let result = text;
-    for (let i = tokens.length - 1; i >= 0; i--) {
-      const token = tokens[i];
-      let replacement = '';
 
-      switch (token.mode) {
-        case 'mention':
-          replacement = this.mentionToPlainText(token.content as MentionContent, agents, users);
-          break;
-        case 'form':
-          replacement = this.formToPlainText(token.content as FormResponseContent);
-          break;
-        default:
-          // Unknown mode, leave original text
-          replacement = token.originalText;
+    if (tokens.length > 0) {
+      // Replace tokens in reverse order to maintain indices
+      for (let i = tokens.length - 1; i >= 0; i--) {
+        const token = tokens[i];
+        let replacement = '';
+
+        switch (token.mode) {
+          case 'mention':
+            replacement = this.mentionToPlainText(token.content as MentionContent, agents, users);
+            break;
+          case 'form':
+            replacement = this.formToPlainText(token.content as FormResponseContent);
+            break;
+          default:
+            // Unknown mode, leave original text
+            replacement = token.originalText;
+        }
+
+        result = result.substring(0, token.startIndex) + replacement + result.substring(token.endIndex);
       }
-
-      result = result.substring(0, token.startIndex) + replacement + result.substring(token.endIndex);
     }
 
-    return result;
+    return ReplaceWikiCitationsWithPlainText(result);
   }
 
   /**

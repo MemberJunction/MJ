@@ -4132,21 +4132,46 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return emptyWindowPeripherals();
         }
 
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const md = this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
         const byDetail = detailIdInFilter(detailIds);
-        const [runsResult, ratingsResult, junctionsResult] = await rv.RunViews<
-            MJAIAgentRunEntity | MJConversationDetailRatingEntityType | MJConversationDetailArtifactEntityType
-        >([
+        const entities = md.Entities;
+        const canReadRatings = Array.isArray(entities) && entities.length > 0
+            ? Boolean(
+                entities
+                    .find(e => e.Name === 'MJ: Conversation Detail Ratings')
+                    ?.GetUserPermisions(contextUser)?.CanRead
+            )
+            : true;
+
+        const views: Array<{
+            EntityName: string;
+            ExtraFilter: string;
+            OrderBy?: string;
+            ResultType: 'entity_object' | 'simple';
+        }> = [
             { EntityName: 'MJ: AI Agent Runs', ExtraFilter: byDetail, ResultType: 'entity_object' },
-            { EntityName: 'MJ: Conversation Detail Ratings', ExtraFilter: byDetail, ResultType: 'simple' },
-            // Direction='Output' mirrors GetConversationComplete — input artifacts aren't shown.
-            {
-                EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `${byDetail} AND Direction='Output'`,
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'simple'
-            }
-        ], contextUser);
+        ];
+        const ratingsIndex = canReadRatings ? views.length : -1;
+        if (canReadRatings) {
+            views.push({ EntityName: 'MJ: Conversation Detail Ratings', ExtraFilter: byDetail, ResultType: 'simple' });
+        }
+        const junctionsIndex = views.length;
+        // Direction='Output' mirrors GetConversationComplete — input artifacts aren't shown.
+        views.push({
+            EntityName: 'MJ: Conversation Detail Artifacts',
+            ExtraFilter: `${byDetail} AND Direction='Output'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            ResultType: 'simple'
+        });
+
+        const results = await rv.RunViews<
+            MJAIAgentRunEntity | MJConversationDetailRatingEntityType | MJConversationDetailArtifactEntityType
+        >(views, contextUser);
+
+        const runsResult = results[0];
+        const ratingsResult = ratingsIndex >= 0 ? results[ratingsIndex] : undefined;
+        const junctionsResult = results[junctionsIndex];
 
         const runs = (runsResult?.Success ? runsResult.Results : []) as MJAIAgentRunEntity[];
         const ratings = (ratingsResult?.Success ? ratingsResult.Results : []) as MJConversationDetailRatingEntityType[];

@@ -18,7 +18,7 @@ import { MJConversationDetailEntity, MJConversationEntity, MJArtifactEntity, MJA
 import { UserInfo, RunView, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
+import { AgentResponseForm, FormQuestion, ChoiceQuestionType, ActionableCommand, AutomaticCommand, OpenResourceCommand, ConversationUtility, MJAIAgentRunEntityExtended, ParseMessageCitations, type MessageCitation, type MentionContent } from '@memberjunction/ai-core-plus';
 import { FormResponseUtils } from '@memberjunction/ng-forms';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { FormatAgentFailureForDisplay } from '../../utils/agent-failure-display';
@@ -598,6 +598,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** Show the per-message thumbs rating control on completed AI messages. */
   @Input() public ShowMessageRating: boolean = true;
 
+  /** Show the Cited Sources footer bar beneath AI messages that cite records. */
+  @Input() public ShowCitedSources: boolean = true;
+
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() public set showMessageRating(value: boolean) {
     this.ShowMessageRating = value;
@@ -1070,6 +1073,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /** The raw Message the cached display text was computed from. */
   private _cachedRawText: string = '';
   private _cachedHadHandoff: boolean = false;
+  /** Memoized deduplicated citations for the current message text. */
+  private _cachedCitationsRawText: string = '';
+  private _cachedCitations: readonly MessageCitation[] = [];
 
   // Shared AI mention/suggestion engine (BaseSingleton — same instance the composer plugins use)
   private mentionAutocomplete = MentionAutocompleteService.Instance;
@@ -1440,31 +1446,84 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.OnMessageBubbleClick(event);
   }
 
+  /** Keyboard accessibility (Enter / Space) for focusable inline record citation chips. */
+  public OnMessageBubbleKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    const recordBadge = (event.target as HTMLElement | null)?.closest?.('.mention-badge.record') as HTMLElement | null;
+    if (!recordBadge) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    this.openRecordLinkBadge(recordBadge);
+  }
+
+  /** Handles clicks on a pill inside the `<mj-cited-sources-bar>` footer. */
+  public OnCitedSourceClicked(citation: MessageCitation): void {
+    if (citation.Kind !== 'record' || !citation.EntityName) {
+      return;
+    }
+    const compositeKey = this.resolveCompositeKeyForRecord(
+      citation.EntityName,
+      citation.Keys ?? (citation.RecordID ? { ID: citation.RecordID } : {}),
+      citation.RecordID
+    );
+    if (!compositeKey) {
+      console.warn('Cited source: incomplete primary key', citation.EntityName, citation.RecordID);
+      return;
+    }
+    this.OpenEntityRecord.emit({ entityName: citation.EntityName, compositeKey });
+  }
+
   private openRecordLinkBadge(el: HTMLElement): void {
     const entityName = el.getAttribute('data-record-entity');
     const keysJson = el.getAttribute('data-record-keys');
     if (!entityName) return;
-    let content: { type: 'record'; name: string; entityName: string; keys?: Record<string, string | number> };
+    let keys: Record<string, string | number> = {};
     try {
-      const keys = keysJson ? JSON.parse(keysJson) as Record<string, string | number> : {};
-      content = { type: 'record', name: el.textContent?.trim() || entityName, entityName, keys };
+      keys = keysJson ? (JSON.parse(keysJson) as Record<string, string | number>) : {};
     } catch {
       return;
     }
-    const entity = this.ProviderToUse.EntityByName(entityName);
-    if (!entity) {
-      console.warn('Record link: unknown entity', entityName);
-      return;
-    }
-    const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(
-      content,
-      entity.PrimaryKeys.map(pk => pk.Name)
-    );
+    const compositeKey = this.resolveCompositeKeyForRecord(entityName, keys);
     if (!compositeKey) {
       console.warn('Record link: incomplete primary key', entityName, keysJson);
       return;
     }
     this.OpenEntityRecord.emit({ entityName, compositeKey });
+  }
+
+  private resolveCompositeKeyForRecord(
+    entityName: string,
+    keys: Record<string, string | number>,
+    fallbackRecordId?: string
+  ): CompositeKey | null {
+    const entity = this.ProviderToUse?.EntityByName?.(entityName);
+    if (!entity) {
+      console.warn('Record link: unknown entity', entityName);
+      return null;
+    }
+    const primaryKeyNames = entity.PrimaryKeys.map(pk => pk.Name);
+    const content: MentionContent = {
+      type: 'record',
+      name: entityName,
+      entityName,
+      keys,
+    };
+    const compositeKey = ConversationUtility.CompositeKeyFromRecordLink(content, primaryKeyNames);
+    if (compositeKey) {
+      return compositeKey;
+    }
+    // Single primary key whose column is not named `ID` (e.g. `[[Entity|42|Label]]`)
+    if (primaryKeyNames.length === 1) {
+      const singleValue = fallbackRecordId ?? (keys['ID'] != null ? String(keys['ID']) : undefined);
+      if (singleValue) {
+        return new CompositeKey([{ FieldName: primaryKeyNames[0], Value: singleValue }]);
+      }
+    }
+    return null;
   }
 
   /**
@@ -1782,6 +1841,16 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.DisplayMessage;
   }
 
+  /** Deduplicated inline citations extracted from the current message text (cached per message text). */
+  public get CitedSources(): readonly MessageCitation[] {
+    const raw = this.displaySourceText();
+    if (raw !== this._cachedCitationsRawText) {
+      this._cachedCitationsRawText = raw;
+      this._cachedCitations = ParseMessageCitations(raw).Citations;
+    }
+    return this._cachedCitations;
+  }
+
   /**
    * Computes the display message from the current message text. Called from
    * ngDoCheck to snapshot the value; templates read _stableDisplayMessage.
@@ -1836,39 +1905,118 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private transformMentionsToHTML(text: string): string {
     if (!text) return '';
 
-    // Get available agents and users for name/icon lookup
-    const agents = this.mentionAutocomplete.getAvailableAgents();
-    const users = this.mentionAutocomplete.getAvailableUsers();
+    // Parse inline citations ([[EntityName|RecordID|DisplayName]] + @{type:"record",...})
+    const parsedCitations = ParseMessageCitations(text);
+    this._cachedCitationsRawText = text;
+    this._cachedCitations = parsedCitations.Citations;
 
     // Parse all @{...} tokens
     const tokens = ConversationUtility.ParseSpecialContent(text);
-    if (tokens.length === 0) return text; // No tokens found, return original text
+    const wikiOccurrences = parsedCitations.Occurrences.filter((o) => o.Syntax === 'wiki');
+    if (tokens.length === 0 && wikiOccurrences.length === 0) {
+      return text;
+    }
 
-    // Replace tokens in reverse order to maintain indices
-    let result = text;
-    for (let i = tokens.length - 1; i >= 0; i--) {
-      const token = tokens[i];
+    const mentionCitationIndexByStart = new Map<number, number>();
+    for (const occ of parsedCitations.Occurrences) {
+      if (occ.Syntax === 'mention') {
+        mentionCitationIndexByStart.set(occ.StartIndex, occ.Citation.Index);
+      }
+    }
+
+    // Get available agents and users for name/icon lookup (only when @{...} tokens exist)
+    const agents = tokens.length > 0 && this.mentionAutocomplete ? this.mentionAutocomplete.getAvailableAgents() : [];
+    const users = tokens.length > 0 && this.mentionAutocomplete ? this.mentionAutocomplete.getAvailableUsers() : [];
+
+    const replacements: Array<{ startIndex: number; endIndex: number; html: string }> = [];
+
+    for (const token of tokens) {
       let html = '';
-
       switch (token.mode) {
         case 'mention':
-          html = this.renderMentionHTML(token.content as any, agents, users);
+          html = this.renderMentionHTML(
+            token.content as Omit<MentionContent, 'type'> & {
+              type: MentionContent['type'] | 'skill';
+              configId?: string;
+              config?: string;
+            },
+            agents,
+            users,
+            mentionCitationIndexByStart.get(token.startIndex)
+          );
           break;
         case 'form':
-          html = this.renderFormHTML(token.content as any);
+          html = this.renderFormHTML(
+            token.content as { title?: string; fields?: Array<{ name?: string; value: unknown; label?: string; type?: string; displayValue?: string }> }
+          );
           break;
         default:
-          // Unknown mode, leave original text as-is
           html = token.originalText;
       }
+      replacements.push({ startIndex: token.startIndex, endIndex: token.endIndex, html });
+    }
 
-      result = result.substring(0, token.startIndex) + html + result.substring(token.endIndex);
+    for (const occ of wikiOccurrences) {
+      replacements.push({
+        startIndex: occ.StartIndex,
+        endIndex: occ.EndIndex,
+        html: this.renderWikiCitationHTML(occ.Citation),
+      });
+    }
+
+    // Sort ascending, discard any overlap, then splice in reverse order to preserve indices
+    replacements.sort((a, b) => a.startIndex - b.startIndex || a.endIndex - b.endIndex);
+    const nonOverlapping: Array<{ startIndex: number; endIndex: number; html: string }> = [];
+    let lastEnd = -1;
+    for (const item of replacements) {
+      if (item.startIndex < lastEnd) continue;
+      lastEnd = item.endIndex;
+      nonOverlapping.push(item);
+    }
+
+    let result = text;
+    for (let i = nonOverlapping.length - 1; i >= 0; i--) {
+      const rep = nonOverlapping[i];
+      result = result.substring(0, rep.startIndex) + rep.html + result.substring(rep.endIndex);
     }
 
     return result;
   }
 
-  private renderMentionHTML(content: any, agents: any[], users: any[]): string {
+  private renderWikiCitationHTML(citation: MessageCitation): string {
+    const entityName = citation.EntityName ?? '';
+    const entityIcon = entityName
+      ? this.ProviderToUse?.EntityByName?.(entityName)?.Icon
+      : undefined;
+    const iconClass = this.normalizeIconClass(entityIcon || 'fa-solid fa-up-right-from-square');
+    const keys = citation.Keys ?? (citation.RecordID ? { ID: citation.RecordID } : {});
+    const label = citation.DisplayName;
+    const ariaLabel =
+      entityName && entityName.toLowerCase() !== label.toLowerCase()
+        ? `Open ${label} (${entityName})`
+        : `Open ${label}`;
+    const indexBadge = `<span class="citation-index">[${citation.Index}]</span>`;
+
+    return (
+      `<span class="mention-badge record citation-chip" role="link" tabindex="0"` +
+      ` title="${this.escapeHtml(ariaLabel)}" aria-label="${this.escapeHtml(ariaLabel)}"` +
+      ` data-record-entity="${this.escapeHtml(entityName)}"` +
+      ` data-record-keys="${this.escapeHtml(JSON.stringify(keys))}"` +
+      ` data-citation-index="${citation.Index}">` +
+      `${indexBadge}<i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${this.escapeHtml(label)}</span>`
+    );
+  }
+
+  private renderMentionHTML(
+    content: Omit<MentionContent, 'type'> & {
+      type: MentionContent['type'] | 'skill';
+      configId?: string;
+      config?: string;
+    },
+    agents: Array<{ ID: string; Name?: string | null; IconClass?: string | null; LogoURL?: string | null }>,
+    users: Array<{ ID: string; Name?: string | null }>,
+    citationIndex?: number
+  ): string {
     let name = typeof content.name === 'string' ? content.name : '';
     let iconClass = '';
     let logoURL = '';
@@ -1879,12 +2027,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (content.type === 'agent' && agents) {
       const agent = agents.find(a => UUIDsEqual(a.ID, content.id));
       if (agent) {
-        name = agent.Name;
+        name = agent.Name || name;
         iconClass = agent.IconClass || '';
         logoURL = agent.LogoURL || '';
 
         // Check for configuration preset (only show if non-default)
-        if (content.configId && AIEngineBase.Instance) {
+        if (content.configId && content.id && AIEngineBase.Instance) {
           const presets = AIEngineBase.Instance.GetAgentConfigurationPresets(content.id, true);
           if (presets && presets.length > 0) {
             const defaultPreset = presets.find(p => p.IsDefault) || presets[0];
@@ -1899,7 +2047,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     } else if (content.type === 'user' && users) {
       const user = users.find(u => UUIDsEqual(u.ID, content.id));
-      if (user) name = user.Name;
+      if (user?.Name) name = user.Name;
     } else if (content.type === 'entity') {
       const entity = this.mentionAutocomplete.getAvailableEntities().find(e => UUIDsEqual(e.ID, content.id));
       name = entity ? entity.DisplayNameOrName : name;
@@ -1919,34 +2067,46 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     } else if (content.type === 'record') {
       name = (content.name ?? '').trim();
-      iconClass = this.normalizeIconClass('fa-solid fa-up-right-from-square');
+      const entityIcon = content.entityName
+        ? this.ProviderToUse?.EntityByName?.(content.entityName)?.Icon
+        : undefined;
+      iconClass = this.normalizeIconClass(entityIcon || 'fa-solid fa-up-right-from-square');
     }
 
     const iconOnly = content.type === 'record' && !name;
     const escapedName = name ? this.escapeHtml(name) : '';
+    const baseType =
+      content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' || content.type === 'record'
+        ? content.type
+        : 'user';
     const typeClass =
-      (content.type === 'agent' || content.type === 'entity' || content.type === 'query' || content.type === 'skill' || content.type === 'record' ? content.type : 'user')
-      + (iconOnly ? ' icon-only' : '');
+      baseType +
+      (iconOnly ? ' icon-only' : '') +
+      (content.type === 'record' && citationIndex != null ? ' citation-chip' : '');
 
     // Build preset indicator HTML if present
     const presetIndicator = configPresetName
       ? `<span class="preset-indicator">${this.escapeHtml(configPresetName)}</span>`
       : '';
+    const citationIndexBadge =
+      content.type === 'record' && citationIndex != null
+        ? `<span class="citation-index">[${citationIndex}]</span>`
+        : '';
 
     const recordOpenLabel = content.type === 'record'
       ? (name ? `Open ${name}` : `Open ${content.entityName || 'record'}`)
       : '';
     const recordAttrs = content.type === 'record' && content.entityName
-      ? ` role="link" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content)))}"`
+      ? ` role="link" tabindex="0" title="${this.escapeHtml(recordOpenLabel)}" aria-label="${this.escapeHtml(recordOpenLabel)}" data-record-entity="${this.escapeHtml(content.entityName)}" data-record-keys="${this.escapeHtml(JSON.stringify(ConversationUtility.RecordLinkKeyMap(content as MentionContent)))}"${citationIndex != null ? ` data-citation-index="${citationIndex}"` : ''}`
       : '';
 
     // Generate HTML based on whether we have an icon
     if (logoURL) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${citationIndexBadge}<img src="${this.escapeHtml(logoURL)}" alt="" role="presentation" />${escapedName}${presetIndicator}</span>`;
     } else if (iconClass) {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}><i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${citationIndexBadge}<i class="${this.escapeHtml(iconClass)}" aria-hidden="true"></i>${escapedName}${presetIndicator}</span>`;
     } else {
-      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${escapedName}${presetIndicator}</span>`;
+      return `<span class="mention-badge ${typeClass}"${inlineStyle}${recordAttrs}>${citationIndexBadge}${escapedName}${presetIndicator}</span>`;
     }
   }
 

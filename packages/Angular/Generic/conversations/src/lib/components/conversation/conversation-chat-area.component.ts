@@ -582,6 +582,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   /** Show the per-message thumbs rating control on completed AI messages. */
   @Input() ShowMessageRating = true;
 
+  /** Show the Cited Sources footer bar beneath AI messages containing record citations. */
+  @Input() ShowCitedSources = true;
+
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() set showMessageRating(value: ConversationChatAreaComponent['ShowMessageRating']) {
     this.ShowMessageRating = value;

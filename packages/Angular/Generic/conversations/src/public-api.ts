@@ -77,6 +77,7 @@ export * from './lib/components/conversation/conversation-chat-area.component';
 export * from './lib/components/conversation/conversation-remote-browser-controller';
 export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
+export * from './lib/components/message/cited-sources-bar.component';
 export * from './lib/components/message/agent-handoff-card.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';

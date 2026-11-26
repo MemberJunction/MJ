@@ -1,0 +1,40 @@
+@if (Citations.length > 0) {
+  <div class="cited-sources-bar" role="region" [attr.aria-label]="'Cited Sources (' + Citations.length + ')'">
+    <div class="cited-sources-header">
+      <i class="fa-solid fa-book-bookmark cited-sources-header-icon" aria-hidden="true"></i>
+      <span class="cited-sources-title">Cited Sources ({{ Citations.length }})</span>
+    </div>
+
+    <div class="cited-sources-pills">
+      @for (citation of VisibleCitations; track citation.Index) {
+        <button
+          type="button"
+          class="cited-source-pill"
+          [title]="GetCitationTitle(citation)"
+          [attr.aria-label]="GetCitationTitle(citation)"
+          (click)="OnPillClick(citation, $event)">
+          <span class="cited-source-index">[{{ citation.Index }}]</span>
+          <i [class]="'cited-source-icon ' + GetCitationIcon(citation)" aria-hidden="true"></i>
+          <span class="cited-source-name">{{ citation.DisplayName }}</span>
+          @if (ShowEntitySubtitle(citation)) {
+            <span class="cited-source-entity">{{ citation.EntityName }}</span>
+          }
+        </button>
+      }
+
+      @if (HasOverflow) {
+        <button
+          type="button"
+          class="cited-sources-toggle"
+          [attr.aria-expanded]="IsExpanded"
+          (click)="ToggleExpanded($event)">
+          @if (IsExpanded) {
+            <span>Show less</span>
+          } @else {
+            <span>+{{ HiddenCount }} more</span>
+          }
+        </button>
+      }
+    </div>
+  </div>
+}

@@ -1,0 +1,301 @@
+<div class="mjas-root" role="region" aria-label="Avatar Studio">
+  <div class="mjas-topbar">
+    @if (ShowBackButton) {
+      <button
+        type="button"
+        class="mjas-back-btn"
+        [disabled]="IsGenerating"
+        (click)="OnBackClick()">
+        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+        <span>{{ BackButtonLabel }}</span>
+      </button>
+    } @else {
+      <span></span>
+    }
+    <span class="mjas-pill">{{ AvatarStatusLabel }}</span>
+  </div>
+
+  <div class="mjas-hero">
+    <div
+      class="mjas-hero-avatar"
+      [class.mjas-hero-avatar--busy]="IsGenerating"
+      [style.border-color]="AccentColor || null"
+      [style.color]="!PreviewAvatarUrl && AccentColor ? AccentColor : null">
+      @if (PreviewAvatarUrl) {
+        <img
+          [src]="PreviewAvatarUrl"
+          [alt]="HeroDisplayName + ' avatar'"
+          (error)="PreviewError = true" />
+      } @else {
+        <i [class]="IconClass || 'fa-solid fa-wand-magic-sparkles'" aria-hidden="true"></i>
+      }
+      @if (IsGenerating) {
+        <span class="mjas-hero-spinner" aria-hidden="true">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+        </span>
+      }
+    </div>
+
+    <div class="mjas-hero-meta">
+      <div class="mjas-hero-name">{{ HeroDisplayName }}</div>
+      @if (SubjectSubtitle) {
+        <div class="mjas-hero-sub">{{ SubjectSubtitle }}</div>
+      }
+    </div>
+  </div>
+
+  <div class="mjas-tabs" role="tablist" aria-label="Avatar source">
+    <button
+      type="button"
+      role="tab"
+      class="mjas-tab"
+      [class.mjas-tab--active]="ActiveTab === 'ai'"
+      [attr.aria-selected]="ActiveTab === 'ai'"
+      (click)="SetTab('ai')">
+      <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> AI Generate
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="mjas-tab"
+      [class.mjas-tab--active]="ActiveTab === 'icon'"
+      [attr.aria-selected]="ActiveTab === 'icon'"
+      (click)="SetTab('icon')">
+      <i class="fa-solid fa-icons" aria-hidden="true"></i> Icons
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="mjas-tab"
+      [class.mjas-tab--active]="ActiveTab === 'upload'"
+      [attr.aria-selected]="ActiveTab === 'upload'"
+      (click)="SetTab('upload')">
+      <i class="fa-solid fa-upload" aria-hidden="true"></i> Upload / URL
+    </button>
+  </div>
+
+  @if (ErrorMessage) {
+    <div class="mjas-error" role="alert">
+      <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+      <span>{{ ErrorMessage }}</span>
+    </div>
+  }
+
+  <!-- Tab 1: AI Generate & Iterative Refinement -->
+  @if (ActiveTab === 'ai') {
+    <div class="mjas-pane" role="tabpanel">
+      <div class="mjas-label-row">
+        <label class="mjas-sublabel mjas-sublabel--flush" for="mjas-avatar-prompt">
+          Avatar Prompt
+        </label>
+        <button
+          type="button"
+          class="mjas-link-btn"
+          [disabled]="IsGenerating"
+          (click)="RebuildPrompt()"
+          title="Rebuild prompt from subject details">
+          <i class="fa-solid fa-rotate" aria-hidden="true"></i> {{ RebuildPromptLabel }}
+        </button>
+      </div>
+
+      <textarea
+        id="mjas-avatar-prompt"
+        class="mjas-textarea mjas-prompt-textarea"
+        rows="4"
+        [(ngModel)]="AvatarPrompt"
+        (input)="OnPromptUserInput()"
+        [disabled]="IsGenerating"
+        placeholder="Describe your avatar..."
+        aria-label="Avatar generation prompt"></textarea>
+
+      <div class="mjas-generate-bar">
+        <div class="mjas-chip-row" role="group" aria-label="Avatar style presets">
+          <span class="mjas-chip-hint">Style:</span>
+          @for (style of StylePresets; track style) {
+            <button
+              type="button"
+              class="mjas-chip"
+              [class.mjas-chip--active]="SelectedStyle === style"
+              [disabled]="IsGenerating"
+              (click)="SelectStylePreset(style)">
+              {{ style }}
+            </button>
+          }
+        </div>
+
+        <button
+          mjButton
+          variant="primary"
+          size="sm"
+          type="button"
+          class="mjas-generate-btn"
+          [disabled]="IsGenerating"
+          (click)="GenerateAvatar()">
+          @if (IsGenerating) {
+            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Generating...
+          } @else {
+            <i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i> Generate Avatar
+          }
+        </button>
+      </div>
+
+      @if (HasImageAvatar) {
+        <div class="mjas-refine-box">
+          <label class="mjas-refine-label" for="mjas-avatar-refine-input">
+            <i class="fa-solid fa-arrows-rotate" aria-hidden="true"></i> Refine current avatar
+          </label>
+          <div class="mjas-refine-row">
+            <textarea
+              id="mjas-avatar-refine-input"
+              class="mjas-textarea mjas-refine-textarea"
+              rows="2"
+              [(ngModel)]="RefinePrompt"
+              [disabled]="IsGenerating"
+              placeholder='Describe tweaks — e.g., "Add sleek glasses", "Make background deep teal"'></textarea>
+            <button
+              mjButton
+              variant="outline"
+              size="sm"
+              type="button"
+              [disabled]="IsGenerating || !RefinePrompt.trim()"
+              (click)="RefineAvatar()">
+              <i class="fa-solid fa-sliders" aria-hidden="true"></i> Refine
+            </button>
+          </div>
+          <div class="mjas-chip-row">
+            @for (quick of QuickRefinements; track quick) {
+              <button
+                type="button"
+                class="mjas-chip"
+                [disabled]="IsGenerating"
+                (click)="ApplyQuickRefinement(quick)">
+                {{ quick }}
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Tab 2: Curated Icons + Full Icon Picker + Optional Accent Color -->
+  @if (ActiveTab === 'icon') {
+    <div class="mjas-pane" role="tabpanel">
+      <div class="mjas-icon-grid">
+        @for (opt of IconOptions; track opt.IconClass) {
+          <button
+            type="button"
+            class="mjas-icon-tile"
+            [class.mjas-icon-tile--selected]="!HasImageAvatar && IconClass === opt.IconClass"
+            [title]="opt.Label"
+            [attr.aria-label]="opt.Label"
+            (click)="SelectIcon(opt.IconClass)">
+            <i [class]="opt.IconClass" aria-hidden="true"></i>
+            <span class="mjas-icon-tile-label">{{ opt.Label }}</span>
+          </button>
+        }
+      </div>
+
+      @if (ShowFullIconPicker) {
+        <div class="mjas-icon-search">
+          <label class="mjas-sublabel">Search all Font Awesome icons</label>
+          <mj-icon-picker
+            [Value]="IconClass"
+            Placeholder="Search icons, or type a class"
+            AriaLabel="Search all Font Awesome icons"
+            (ValueChange)="OnIconPickerChange($event)">
+          </mj-icon-picker>
+        </div>
+      }
+
+      @if (ShowAccentColorPicker) {
+        <div class="mjas-accent-section">
+          <div class="mjas-label-row">
+            <span class="mjas-sublabel mjas-sublabel--flush">Accent Color</span>
+            @if (AccentColor) {
+              <button
+                type="button"
+                class="mjas-link-btn"
+                (click)="SelectAccentColor(null)">
+                Reset
+              </button>
+            }
+          </div>
+          <div class="mjas-swatch-row" role="group" aria-label="Accent colors">
+            @for (swatch of AccentColorOptions; track swatch.Value) {
+              <button
+                type="button"
+                class="mjas-swatch"
+                [class.mjas-swatch--selected]="AccentColor?.toLowerCase() === swatch.Value.toLowerCase()"
+                [style.background-color]="swatch.Value"
+                [title]="swatch.Label"
+                [attr.aria-label]="swatch.Label"
+                [attr.aria-pressed]="AccentColor?.toLowerCase() === swatch.Value.toLowerCase()"
+                (click)="SelectAccentColor(swatch.Value)">
+                @if (AccentColor?.toLowerCase() === swatch.Value.toLowerCase()) {
+                  <i class="fa-solid fa-check" aria-hidden="true"></i>
+                }
+              </button>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Tab 3: Local File Upload & Image URL -->
+  @if (ActiveTab === 'upload') {
+    <div class="mjas-pane" role="tabpanel">
+      <label class="mjas-upload-dropzone">
+        <i class="fa-solid fa-cloud-arrow-up" aria-hidden="true"></i>
+        <span>
+          <strong>Upload image</strong>
+          <span class="mjas-upload-sub">Auto-cropped &amp; compressed to 128×128 WebP</span>
+        </span>
+        <input
+          type="file"
+          accept="image/*"
+          class="mjas-file-input"
+          (change)="OnFileSelected($event)" />
+      </label>
+
+      <div>
+        <label class="mjas-sublabel" for="mjas-logo-url">Or paste an image URL</label>
+        <input
+          id="mjas-logo-url"
+          type="url"
+          class="mjas-input"
+          [ngModel]="ImageUrl"
+          (ngModelChange)="OnUrlInputChanged($event)"
+          placeholder="https://example.com/avatar.png" />
+      </div>
+    </div>
+  }
+
+  @if (ShowInlineFooter && (AvatarHistory.length > 0 || HasImageAvatar)) {
+    <div class="mjas-footer">
+      @if (AvatarHistory.length > 0) {
+        <button
+          mjButton
+          variant="outline"
+          size="sm"
+          type="button"
+          [disabled]="IsGenerating"
+          (click)="Undo()">
+          <i class="fa-solid fa-rotate-left" aria-hidden="true"></i> Undo ({{ AvatarHistory.length }})
+        </button>
+      }
+      @if (HasImageAvatar) {
+        <button
+          mjButton
+          variant="flat"
+          size="sm"
+          type="button"
+          [disabled]="IsGenerating"
+          (click)="ClearAvatarImage()">
+          <i class="fa-solid fa-icons" aria-hidden="true"></i> Use Icon Instead
+        </button>
+      }
+    </div>
+  }
+</div>

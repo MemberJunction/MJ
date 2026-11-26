@@ -48,6 +48,7 @@
     "@memberjunction/interactive-component-types": "6.3.0-edge.2",
     "@memberjunction/ng-agent-client": "6.3.0-edge.2",
     "@memberjunction/ng-artifacts": "6.3.0-edge.2",
+    "@memberjunction/ng-avatar-studio": "6.3.0-edge.2",
     "@memberjunction/ng-base-forms": "6.3.0-edge.2",
     "@memberjunction/ng-base-types": "6.3.0-edge.2",
     "@memberjunction/ng-code-editor": "6.3.0-edge.2",

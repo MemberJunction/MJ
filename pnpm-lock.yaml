@@ -6928,6 +6928,58 @@ importers:
         specifier: 6.3.0-edge.2
         version: link:../test-utils
 
+  packages/Angular/Generic/avatar-studio:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/forms':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@memberjunction/ai-core-plus':
+        specifier: 6.3.0-edge.2
+        version: link:../../../AI/CorePlus
+      '@memberjunction/core':
+        specifier: 6.3.0-edge.2
+        version: link:../../../MJCore
+      '@memberjunction/global':
+        specifier: 6.3.0-edge.2
+        version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.3.0-edge.2
+        version: link:../../../GraphQLDataProvider
+      '@memberjunction/ng-base-types':
+        specifier: 6.3.0-edge.2
+        version: link:../base-types
+      '@memberjunction/ng-notifications':
+        specifier: 6.3.0-edge.2
+        version: link:../notifications
+      '@memberjunction/ng-ui-components':
+        specifier: 6.3.0-edge.2
+        version: link:../ui-components
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@memberjunction/ng-test-utils':
+        specifier: 6.3.0-edge.2
+        version: link:../test-utils
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/Angular/Generic/base-forms:
     dependencies:
       '@angular/animations':
@@ -7544,6 +7596,9 @@ importers:
       '@memberjunction/ng-artifacts':
         specifier: 6.3.0-edge.2
         version: link:../artifacts
+      '@memberjunction/ng-avatar-studio':
+        specifier: 6.3.0-edge.2
+        version: link:../avatar-studio
       '@memberjunction/ng-base-forms':
         specifier: 6.3.0-edge.2
         version: link:../base-forms
