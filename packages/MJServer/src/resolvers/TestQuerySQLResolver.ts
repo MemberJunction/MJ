@@ -129,8 +129,8 @@ export class TestQuerySQLResolver extends ResolverBase {
                 return this.buildErrorResult('Read-only data source is not available. TestQuerySQL requires a read-only connection for security.');
             }
 
-            const contextUser = context.userPayload.userRecord;
-            const refusal = this.authorizeRenderedTestSQL(input, provider, contextUser);
+            const contextUser = context.userPayload?.userRecord;
+            const refusal = this.AuthorizeRenderedTestSQL(input, provider, contextUser);
             if (refusal) {
                 return this.buildErrorResult(refusal);
             }
@@ -177,7 +177,7 @@ export class TestQuerySQLResolver extends ResolverBase {
      * and only wraps it in server-built MaxRows capping, so the rendered SQL is the full set of
      * reads. Returns the refusal message, or null.
      */
-    private authorizeRenderedTestSQL(input: TestQuerySQLInput, provider: DatabaseProviderBase, contextUser: UserInfo | undefined): string | null {
+    public AuthorizeRenderedTestSQL(input: TestQuerySQLInput, provider: DatabaseProviderBase, contextUser: UserInfo | undefined): string | null {
         try {
             const rendered = RenderPipeline.Run(input.SQL, {
                 Platform: provider.PlatformKey,
@@ -185,6 +185,7 @@ export class TestQuerySQLResolver extends ResolverBase {
                 Parameters: input.Parameters,
                 UsesTemplate: input.UsesTemplate,
                 Dependencies: input.Dependencies,
+                OriginalSQL: input.SQL,
                 RequireReadStatement: true,
             });
             this.assertFullQueryUsesReadableEntityViews(rendered.Trace.AfterTemplates, provider, contextUser, 'transient test SQL');
