@@ -26,6 +26,7 @@ declare module '@memberjunction/ng-explorer-core' {
     export const OmnibarCommandProvider: unknown;
     export const OmnibarRecordProvider: unknown;
     export const OmnibarSearchProvider: unknown;
+    export const OmnibarToursProvider: new (...args: never[]) => object;
     export const QueryResource: unknown;
     export const SearchResultsResource: unknown;
     export const UserViewResource: unknown;

@@ -166,5 +166,44 @@
       "lastModified": "2026-11-24T20:27:46.333Z",
       "checksum": "7875f6988a1c4c96db6a8883eb296269699434f3e8754c117eef8e75d2a0100b"
     }
+  },
+  {
+    "fields": {
+      "Name": "Tours Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Tours",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-tours-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95,
+      "Configuration": {
+        "recordFilter": {
+          "extraFilter": "Status = 'Active'"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "FAEEF43F-C2C5-4B31-B79E-ED55005D3FB6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tour Steps Search",
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Tour Steps",
+      "TypeID": "@lookup:MJ: Entity Document Types.Name=Search",
+      "Status": "Active",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Simple Vector Service Provider",
+      "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=Default - SVS + gte-small (Local)",
+      "AIModelID": "@lookup:MJ: AI Models.Name=gte-small (Local)",
+      "TemplateText": "@file:templates/mj-tour-steps-search.njk",
+      "PotentialMatchThreshold": 0.7,
+      "AbsoluteMatchThreshold": 0.95
+    },
+    "primaryKey": {
+      "ID": "043D2272-672D-4B8D-BC2D-E2F9E4235CE5"
+    }
   }
 ]

@@ -39,12 +39,12 @@ import {
     MJAIAgentRequestEntity,
     type MJActionEntity,
 } from '@memberjunction/core-entities';
+import { RankGraphNodes } from '@memberjunction/graph';
 import {
     BuildEnqueueCorrelationKey,
     FormatValidationErrors,
     NormalizeDependency,
     ParseTaskSecurityEnvelope,
-    RankGraphNodes,
     SerializeTaskSecurityEnvelope,
     SanitizeInvocationEnvelope,
     TASK_GRAPH_RUNTIME_SECURITY_OPERATION,

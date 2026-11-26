@@ -471,6 +471,7 @@
                 <div class="mj-forms-chrome-rail-item is-more-child"
                      role="button"
                      tabindex="0"
+                     [attr.data-rail-key]="child.Key"
                      [class.is-active]="ChromeActiveGroupKey === child.Key"
                      [attr.aria-current]="ChromeActiveGroupKey === child.Key ? 'page' : null"
                      [class.is-drag-over]="RailDragOverKey === child.Key"
@@ -585,6 +586,7 @@
               <button type="button"
                       class="mj-forms-section-sheet-item"
                       role="listitem"
+                      [attr.data-rail-key]="group.Key"
                       [class.is-active]="ChromeActiveGroupKey === group.Key"
                       [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
                       (click)="OnSectionSheetSelect(group.Key)">

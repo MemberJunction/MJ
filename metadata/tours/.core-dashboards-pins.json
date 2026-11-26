@@ -1,0 +1,156 @@
+[
+  {
+    "fields": {
+      "Name": "Dashboards, Sharing & Home Pins",
+      "TourKey": "core.dashboards-pins",
+      "Description": "Learn how to browse owned and shared dashboards by category, manage access in the Sharing Center, and pin workspaces directly to Home.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Dashboards",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 82,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Dashboards",
+        "Description": "User explores the Dashboards library rail, sharing options, and Pin to Home."
+      },
+      "StartLocation": {
+        "Application": "Dashboards"
+      }
+    },
+    "primaryKey": {
+      "ID": "3226E6E2-0C51-4935-871B-2F3E5D785FC0"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "dashboards-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Your Dashboards Library",
+            "Body": "Every dashboard you own or that has been shared with you lives in one organized library, complete with categories, favorites, and Home pins.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Dashboards",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "0F90B7D4-49C7-4B05-8F9D-13DF5593BBCC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "dashboards-rail",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Filter by Ownership, Favorites & Categories",
+            "Body": "Use the left navigation rail to switch between **All**, **Mine**, **Shared with me**, **Favorites**, and **Recently opened**, or drill into nested category folders.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.dashboards.rail"
+            },
+            "Prepare": {
+              "ApplicationName": "Dashboards"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2D67E0A5-F3BB-4E44-9D71-F79885D47AC3"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "dashboards-pin-share",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Pin to Home & Manage Sharing",
+            "Body": "Open any dashboard and select **Pin to Home** from the User Menu (or tab menu) to keep it on your Home workspace. Open **Sharing Center** here anytime to review or revoke shared access.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.user-menu"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "50916510-D9B9-4D69-82A2-816B1A502A9B"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "dashboards-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Build, Share & Pin Your Workspaces",
+            "Body": "Create new dashboards right from the Library browser, share them with fine-grained Read/Edit/Share permissions, and pin your daily favorites to Home.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "BD4B8FE0-3F41-4545-86A4-029AF7416CCC"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Dashboards"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 82,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FE568235-5F8B-4CD5-958E-C8DAFF497BD7"
+          }
+        }
+      ]
+    }
+  }
+]

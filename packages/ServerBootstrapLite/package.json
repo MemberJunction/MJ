@@ -120,14 +120,16 @@
     "@memberjunction/task-graph": "6.3.0-edge.2",
     "@memberjunction/templates": "6.3.0-edge.2",
     "@memberjunction/testing-engine": "6.3.0-edge.2",
+    "@memberjunction/tours-runtime": "6.3.0-edge.2",
+    "@memberjunction/tours-server": "6.3.0-edge.2",
     "@memberjunction/video-studio": "6.3.0-edge.2",
     "@memberjunction/work-queue-engine": "6.3.0-edge.2",
     "@memberjunction/work-queue-samples": "6.3.0-edge.2"
   },
   "devDependencies": {
+    "@memberjunction/global": "6.3.0-edge.2",
     "@types/node": "^24.10.11",
-    "typescript": "^5.9.3",
-    "@memberjunction/global": "6.3.0-edge.2"
+    "typescript": "^5.9.3"
   },
   "files": [
     "dist/**/*"

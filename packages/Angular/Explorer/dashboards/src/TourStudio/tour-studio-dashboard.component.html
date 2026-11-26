@@ -1,0 +1,1234 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Tour Studio"
+    Icon="fa-solid fa-route"
+    Subtitle="Design, govern, preview, and analyze Guided Tours">
+
+    <div meta>
+      <mj-stat-badge
+        [Count]="FilteredCatalogItems.length"
+        [Total]="CatalogItems.length"
+        Label="tours">
+      </mj-stat-badge>
+      @if (SelectedTourCapabilityWarnings.length > 0) {
+        <mj-stat-badge
+          Icon="fa-solid fa-triangle-exclamation"
+          [Count]="SelectedTourCapabilityWarnings.length"
+          Label="surface mismatch"
+          Variant="warning">
+        </mj-stat-badge>
+      } @else if (GraphData && !GraphData.Valid) {
+        <mj-stat-badge
+          Icon="fa-solid fa-circle-exclamation"
+          Label="Graph Error"
+          Variant="error">
+        </mj-stat-badge>
+      }
+    </div>
+
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
+      @if (ActiveTab === 'builder' && SelectedTour) {
+        <button type="button" mjButton variant="secondary" size="sm" (click)="CreateNewTour()" [disabled]="IsSaving">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> New Tour
+        </button>
+        <button type="button" mjButton variant="secondary" size="sm" (click)="PreviewSelectedTour()">
+          <i class="fa-solid fa-play" aria-hidden="true"></i> Preview
+        </button>
+        <button type="button" mjButton variant="primary" size="sm" (click)="PublishSelectedTour()" [disabled]="IsPublishing">
+          <i class="fa-solid fa-rocket" aria-hidden="true"></i>
+          {{ IsPublishing ? 'Publishing…' : 'Publish Version' }}
+        </button>
+      } @else {
+        <button type="button" mjButton variant="primary" size="sm" (click)="CreateNewTour()" [disabled]="IsSaving">
+          <i class="fa-solid fa-plus" aria-hidden="true"></i> New Tour
+        </button>
+      }
+    </div>
+
+    <div toolbar>
+      <mj-tab-nav
+        [Tabs]="Tabs"
+        [ActiveKey]="ActiveTab"
+        (TabChange)="OnTabChange($event)">
+      </mj-tab-nav>
+      @if (ActiveTab === 'catalog') {
+        <mj-page-search
+          Placeholder="Search tours by name, key, or description..."
+          [Value]="SearchQuery"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
+        <mj-filter-popover
+          Label="Filters"
+          Icon="fa-solid fa-filter"
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="ResetFilters()">
+          <mj-filter-panel
+            [Fields]="FilterFields"
+            [Values]="FilterValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()">
+          </mj-filter-panel>
+        </mj-filter-popover>
+      }
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
+    @if (BannerMessage) {
+      <div
+        class="ts-banner"
+        [class.ts-banner--error]="BannerKind === 'error'"
+        [class.ts-banner--warning]="BannerKind === 'warning'"
+        [class.ts-banner--info]="BannerKind === 'info'"
+        role="status">
+        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+        <span>{{ BannerMessage }}</span>
+        <button type="button" class="ts-banner-close" aria-label="Dismiss notice" (click)="DismissBanner()">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+    }
+
+    @if (IsLoading && Tours.length === 0) {
+      <div class="ts-loading">
+        <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+        <span>Loading Guided Tours catalog…</span>
+      </div>
+    } @else {
+      @switch (ActiveTab) {
+        <!-- ============================================================= -->
+        <!-- TAB 1: CATALOG                                                -->
+        <!-- ============================================================= -->
+        @case ('catalog') {
+          @if (FilteredCatalogItems.length === 0) {
+            <mj-empty-state
+              Icon="fa-solid fa-route"
+              Title="No tours match your filters"
+              Message="Create a new Guided Tour or reset your search filters.">
+              <button actions mjButton variant="secondary" (click)="ResetFilters()">Reset Filters</button>
+              <button actions mjButton variant="primary" (click)="CreateNewTour()">+ New Tour</button>
+            </mj-empty-state>
+          } @else {
+            <div class="ts-catalog-grid">
+              @for (item of FilteredCatalogItems; track item.Tour.ID) {
+                <article
+                  class="ts-tour-card"
+                  [class.ts-tour-card--selected]="SelectedTour && SelectedTour.ID === item.Tour.ID">
+                  <div class="ts-tour-card-top">
+                    <div>
+                      <h3 class="ts-tour-title">{{ item.Tour.Name }}</h3>
+                      <div class="ts-tour-key">{{ item.Tour.TourKey }}</div>
+                    </div>
+                    <span
+                      class="ts-pill"
+                      [class.ts-pill--active]="item.Tour.Status === 'Active'"
+                      [class.ts-pill--draft]="item.Tour.Status === 'Draft'"
+                      [class.ts-pill--retired]="item.Tour.Status === 'Retired'">
+                      {{ item.Tour.Status }}
+                    </span>
+                  </div>
+
+                  @if (item.Tour.Description) {
+                    <p class="ts-tour-desc">{{ item.Tour.Description }}</p>
+                  }
+
+                  <div class="ts-pill-row">
+                    <span class="ts-pill">{{ item.StepCount }} steps</span>
+                    <span class="ts-pill">v{{ item.LatestVersionNumber }}</span>
+                    <span class="ts-pill">{{ item.Tour.DefaultGuideMode }}</span>
+                    <span class="ts-pill">{{ item.ApplicationName || 'Framework Core' }}</span>
+                    @for (surface of item.AssignedSurfaces; track surface.ID) {
+                      <span class="ts-pill">{{ surface.Name }}</span>
+                    }
+                    @if (item.CapabilityWarningCount > 0) {
+                      <span class="ts-pill ts-pill--warn">
+                        <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                        {{ item.CapabilityWarningCount }} mismatch
+                      </span>
+                    }
+                  </div>
+
+                  <div class="ts-metrics-strip">
+                    <div class="ts-metric-cell">
+                      <span class="ts-metric-label">Runs</span>
+                      <span class="ts-metric-val">{{ item.TotalRuns }}</span>
+                    </div>
+                    <div class="ts-metric-cell">
+                      <span class="ts-metric-label">Completion</span>
+                      <span class="ts-metric-val">{{ item.CompletionRatePct != null ? item.CompletionRatePct + '%' : '—' }}</span>
+                    </div>
+                    <div class="ts-metric-cell">
+                      <span class="ts-metric-label">Goal Lift</span>
+                      <span class="ts-metric-val">
+                        @if (item.GoalLiftPct != null) {
+                          {{ item.GoalLiftPct >= 0 ? '+' : '' }}{{ item.GoalLiftPct }}%
+                        } @else {
+                          —
+                        }
+                      </span>
+                    </div>
+                    <div class="ts-metric-cell">
+                      <span class="ts-metric-label">Anchor Health</span>
+                      <span class="ts-metric-val">{{ item.AnchorHealthPct != null ? item.AnchorHealthPct + '%' : '—' }}</span>
+                    </div>
+                  </div>
+
+                  <div class="ts-tour-card-actions">
+                    <button type="button" mjButton variant="flat" size="sm" (click)="OpenTourAnalytics(item.Tour)">
+                      Analytics
+                    </button>
+                    <button type="button" mjButton variant="secondary" size="sm" (click)="OpenTourInBuilder(item.Tour)">
+                      Open Builder
+                    </button>
+                  </div>
+                </article>
+              }
+            </div>
+          }
+        }
+
+        <!-- ============================================================= -->
+        <!-- TAB 2: BUILDER                                                -->
+        <!-- ============================================================= -->
+        @case ('builder') {
+          @if (!SelectedTour) {
+            <mj-empty-state
+              Icon="fa-solid fa-diagram-project"
+              Title="Select a tour to edit"
+              Message="Pick a tour from the Catalog or create a new draft tour.">
+              <button actions mjButton variant="primary" (click)="CreateNewTour()">+ New Tour</button>
+            </mj-empty-state>
+          } @else {
+            <!-- Top Builder Action & Preview Bar -->
+            <div class="ts-builder-bar">
+              <div class="ts-builder-bar-left">
+                <label class="ts-label" for="ts-builder-tour-select">Editing Tour:</label>
+                <select
+                  id="ts-builder-tour-select"
+                  class="ts-select"
+                  [value]="SelectedTour.ID"
+                  (change)="OnTourSelectById(GetSelectValue($event))">
+                  @for (t of Tours; track t.ID) {
+                    <option [value]="t.ID">{{ t.Name }} ({{ t.TourKey }})</option>
+                  }
+                </select>
+                <button type="button" mjButton variant="secondary" size="sm" (click)="ToggleElementPicker()">
+                  <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+                  {{ PickerActive && !RecorderActive ? 'Cancel Picker' : 'Pick Element' }}
+                </button>
+                <button type="button" mjButton variant="secondary" size="sm" (click)="ToggleStepRecorder()">
+                  <i class="fa-solid fa-circle-dot" aria-hidden="true"></i>
+                  {{ RecorderActive ? 'Stop Recorder' : 'Record Steps' }}
+                </button>
+              </div>
+              <div class="ts-builder-bar-right">
+                <select
+                  class="ts-select"
+                  aria-label="Preview Guide Mode"
+                  [value]="PreviewGuideMode"
+                  (change)="OnPreviewGuideModeChange(GetSelectValue($event))">
+                  @for (mode of PreviewModes; track mode) {
+                    <option [value]="mode">Mode: {{ mode }}</option>
+                  }
+                </select>
+                <select
+                  class="ts-select"
+                  aria-label="Simulate Role"
+                  [value]="SimulatedRoleFilter"
+                  (change)="SimulatedRoleFilter = GetSelectValue($event)">
+                  <option value="">Current User Roles</option>
+                  @for (role of Roles; track role.ID) {
+                    <option [value]="role.Name">Simulate: {{ role.Name }}</option>
+                  }
+                </select>
+                <button type="button" mjButton variant="primary" size="sm" (click)="SaveSelectedTour()" [disabled]="IsSaving">
+                  <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Tour
+                </button>
+              </div>
+            </div>
+
+            <!-- Surface Capability Mismatch Warnings -->
+            @if (SelectedTourCapabilityWarnings.length > 0) {
+              <div class="ts-banner ts-banner--warning" role="alert">
+                <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                <div>
+                  <strong>Surface Capability Mismatch ({{ SelectedTourCapabilityWarnings.length }}):</strong>
+                  @for (w of SelectedTourCapabilityWarnings; track w.SurfaceID + ':' + w.StepKey) {
+                    <span>
+                      {{ w.SurfaceName }} ({{ w.SurfaceType }}) lacks {{ w.MissingCapabilities.join(', ') }} needed by "{{ w.StepTitle }}".
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Proposed Anchor from DOM Picker -->
+            @if (ProposedAnchor) {
+              <div class="ts-banner ts-banner--info">
+                <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+                <div>
+                  <strong>Picked &lt;{{ ProposedAnchor.TagName }}&gt;:</strong>
+                  Strategy <code>{{ ProposedAnchor.Strategy }}</code>
+                  @if (ProposedAnchor.Key) { (<code>{{ ProposedAnchor.Key }}</code>) }
+                  @if (ProposedAnchor.Field) { (<code>{{ ProposedAnchor.Entity }}.{{ ProposedAnchor.Field }}</code>) }
+                  @if (ProposedAnchor.Selector) { (<code>{{ ProposedAnchor.Selector }}</code>) }
+                  @if (ProposedAnchor.IsFragileSelector) {
+                    <span> — Warning: raw CSS Selector fallback is fragile; prefer adding a <code>data-mj-tour-anchor</code> attribute.</span>
+                  }
+                </div>
+                <button type="button" mjButton variant="primary" size="sm" (click)="ApplyProposedAnchorToSelectedStep()">
+                  Apply to Step
+                </button>
+                <button type="button" mjButton variant="flat" size="sm" (click)="AddNewStep(ProposedAnchor)">
+                  New Step
+                </button>
+              </div>
+            }
+
+            <div class="ts-builder-layout">
+              <!-- Left Column: Steps List + Tour Metadata & Surfaces + Publish -->
+              <div class="ts-builder-sidebar">
+                <section class="ts-panel">
+                  <div class="ts-panel-header">
+                    <h3 class="ts-panel-title">Steps ({{ SelectedTourSteps.length }})</h3>
+                    <button type="button" mjButton variant="primary" size="sm" (click)="AddNewStep()" [disabled]="IsSaving">
+                      <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Step
+                    </button>
+                  </div>
+                  @if (SelectedTourSteps.length === 0) {
+                    <div class="ts-hint">No steps yet. Add a step or click Record Steps.</div>
+                  } @else {
+                    <div class="ts-step-list">
+                      @for (step of SelectedTourSteps; track step.ID) {
+                        <button
+                          type="button"
+                          class="ts-step-item"
+                          [class.ts-step-item--active]="SelectedStep && SelectedStep.ID === step.ID"
+                          (click)="SelectStep(step)">
+                          <span class="ts-step-seq">{{ step.Sequence }}</span>
+                          <span class="ts-step-item-info">
+                            <span class="ts-step-item-title">{{ step.Title }}</span>
+                            <span class="ts-step-item-meta">{{ step.StepKey }} · {{ step.Mode }}</span>
+                          </span>
+                        </button>
+                      }
+                    </div>
+                  }
+                </section>
+
+                <section class="ts-panel" style="margin-top: var(--mj-space-4);">
+                  <div class="ts-panel-header">
+                    <h3 class="ts-panel-title">Tour Metadata &amp; Surfaces</h3>
+                    <span class="ts-pill">v{{ SelectedTourLatestVersionNumber }}</span>
+                  </div>
+                  <div class="ts-form-grid">
+                    <div class="ts-field ts-field--full">
+                      <label class="ts-label">Name</label>
+                      <input class="ts-input" [value]="SelectedTour.Name" (input)="SelectedTour.Name = GetInputValue($event)" />
+                    </div>
+                    <div class="ts-field ts-field--full">
+                      <label class="ts-label">Tour Key</label>
+                      <input class="ts-input" [value]="SelectedTour.TourKey" (input)="SelectedTour.TourKey = GetInputValue($event)" />
+                    </div>
+                    <div class="ts-field">
+                      <label class="ts-label">Status</label>
+                      <select class="ts-select" [value]="SelectedTour.Status" (change)="OnTourStatusChange(GetSelectValue($event))">
+                        @for (st of TourStatuses; track st) {
+                          <option [value]="st">{{ st }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="ts-field">
+                      <label class="ts-label">Default Guide Mode</label>
+                      <select class="ts-select" [value]="SelectedTour.DefaultGuideMode" (change)="OnTourGuideModeChange(GetSelectValue($event))">
+                        @for (gm of TourGuideModes; track gm) {
+                          <option [value]="gm">{{ gm }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="ts-field ts-field--full">
+                      <label class="ts-label">Application</label>
+                      <select
+                        class="ts-select"
+                        [value]="SelectedTour.ApplicationID ?? ''"
+                        (change)="SelectedTour.ApplicationID = GetSelectValue($event) || null">
+                        <option value="">Framework Core (Global)</option>
+                        @for (app of Applications; track app.ID) {
+                          <option [value]="app.ID">{{ app.Name }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="ts-field ts-field--full">
+                      <label class="ts-label">Description</label>
+                      <textarea class="ts-textarea" rows="2" [value]="SelectedTour.Description ?? ''" (input)="SelectedTour.Description = GetInputValue($event) || null"></textarea>
+                    </div>
+                    <div class="ts-field ts-field--full">
+                      <label class="ts-checkbox-row">
+                        <input
+                          type="checkbox"
+                          [checked]="SelectedTour.RunInAuthenticatedHosts"
+                          (change)="SelectedTour.RunInAuthenticatedHosts = GetCheckboxChecked($event)" />
+                        <span>Run in Authenticated Hosts (Explorer / MJ Apps)</span>
+                      </label>
+                    </div>
+                    <div class="ts-field ts-field--full">
+                      <label class="ts-checkbox-row">
+                        <input
+                          type="checkbox"
+                          [checked]="SelectedTour.AllowAgentActions"
+                          (change)="SelectedTour.AllowAgentActions = GetCheckboxChecked($event)" />
+                        <span>Allow Agent Do-mode Actions</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="ts-subsection">
+                    <h4 class="ts-subsection-title">Assigned Surfaces</h4>
+                    <div class="ts-surface-checks">
+                      @for (surface of Surfaces; track surface.ID) {
+                        <button
+                          type="button"
+                          class="ts-surface-chip"
+                          [class.ts-surface-chip--selected]="SelectedTourAssignedSurfaceIDs.has(surface.ID.toLowerCase())"
+                          (click)="ToggleTourSurfaceAssignment(surface)">
+                          <i
+                            [class]="SelectedTourAssignedSurfaceIDs.has(surface.ID.toLowerCase()) ? 'fa-solid fa-square-check' : 'fa-regular fa-square'"
+                            aria-hidden="true"></i>
+                          <span>{{ surface.Name }} ({{ surface.SurfaceType }})</span>
+                        </button>
+                      }
+                    </div>
+                  </div>
+
+                  <div class="ts-subsection">
+                    <h4 class="ts-subsection-title">Publish Snapshot</h4>
+                    <div class="ts-publish-box">
+                      <input
+                        class="ts-input"
+                        placeholder="Change summary for version history..."
+                        [value]="PublishChangeSummary"
+                        (input)="PublishChangeSummary = GetInputValue($event)" />
+                      <button type="button" mjButton variant="primary" size="sm" (click)="PublishSelectedTour()" [disabled]="IsPublishing">
+                        <i class="fa-solid fa-rocket" aria-hidden="true"></i> Publish Version
+                      </button>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- Right Column: Pathway Graph SVG DAG + Schema-Driven Step Editor -->
+              <div class="ts-builder-main">
+                <!-- Pathway Graph SVG + Edges -->
+                <section class="ts-panel" style="margin-bottom: var(--mj-space-4);">
+                  <div class="ts-panel-header">
+                    <h3 class="ts-panel-title">Pathway Graph</h3>
+                    @if (GraphData) {
+                      <span class="ts-pill" [class.ts-pill--active]="GraphData.Valid" [class.ts-pill--warn]="!GraphData.Valid">
+                        {{ GraphData.Valid ? 'Valid DAG' : GraphData.HasCycle ? 'Cycle Detected' : 'Graph Error' }}
+                      </span>
+                    }
+                  </div>
+
+                  @if (GraphData && GraphData.Nodes.length > 0) {
+                    <div class="ts-graph-container">
+                      <svg
+                        class="ts-graph-svg"
+                        [attr.width]="GraphData.Width"
+                        [attr.height]="GraphData.Height"
+                        [attr.viewBox]="'0 0 ' + GraphData.Width + ' ' + GraphData.Height">
+                        @for (edge of GraphData.Edges; track edge.ID) {
+                          <path
+                            class="ts-graph-edge"
+                            [class.ts-graph-edge--branch]="!edge.IsSyntheticLinear"
+                            [class.ts-graph-edge--linear]="edge.IsSyntheticLinear"
+                            [attr.d]="edge.PathD" />
+                          @if (edge.Label) {
+                            <text class="ts-graph-edge-label" [attr.x]="edge.LabelX" [attr.y]="edge.LabelY" text-anchor="middle">
+                              {{ edge.Label }}
+                            </text>
+                          }
+                        }
+                        @for (node of GraphData.Nodes; track node.StepKey) {
+                          <g (click)="SelectStepByKey(node.StepKey)">
+                            <rect
+                              class="ts-graph-node-rect"
+                              [class.ts-graph-node-rect--start]="node.IsStart"
+                              [class.ts-graph-node-rect--selected]="node.Selected"
+                              [attr.x]="node.X"
+                              [attr.y]="node.Y"
+                              [attr.width]="node.Width"
+                              [attr.height]="node.Height"
+                              rx="8" />
+                            <text class="ts-graph-node-title" [attr.x]="node.X + 12" [attr.y]="node.Y + 24">
+                              {{ node.Title.length > 21 ? (node.Title.slice(0, 20) + '…') : node.Title }}
+                            </text>
+                            <text class="ts-graph-node-sub" [attr.x]="node.X + 12" [attr.y]="node.Y + 42">
+                              {{ node.StepKey }} · {{ node.StepType }}
+                            </text>
+                          </g>
+                        }
+                      </svg>
+                    </div>
+                  }
+
+                  <!-- Edge Editor -->
+                  @if (SelectedTourSteps.length >= 2) {
+                    <div class="ts-subsection">
+                      <h4 class="ts-subsection-title">Branch Edges (MJ: Tour Step Paths)</h4>
+                      <div class="ts-form-grid">
+                        <div class="ts-field">
+                          <label class="ts-label">From Step</label>
+                          <select class="ts-select" [value]="NewEdgeFromStepId" (change)="NewEdgeFromStepId = GetSelectValue($event)">
+                            @for (s of SelectedTourSteps; track s.ID) {
+                              <option [value]="s.ID">{{ s.Sequence }}. {{ s.Title }}</option>
+                            }
+                          </select>
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">To Step</label>
+                          <select class="ts-select" [value]="NewEdgeToStepId" (change)="NewEdgeToStepId = GetSelectValue($event)">
+                            @for (s of SelectedTourSteps; track s.ID) {
+                              <option [value]="s.ID">{{ s.Sequence }}. {{ s.Title }}</option>
+                            }
+                          </select>
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Label</label>
+                          <input class="ts-input" placeholder="e.g. Sales Role" [value]="NewEdgeLabel" (input)="NewEdgeLabel = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Condition (Choice key / CompositeFilter)</label>
+                          <input class="ts-input" placeholder="e.g. Choice:sales or true" [value]="NewEdgeCondition" (input)="NewEdgeCondition = GetInputValue($event)" />
+                        </div>
+                      </div>
+                      <div class="ts-inline-actions">
+                        <label class="ts-checkbox-row">
+                          <input type="checkbox" [checked]="NewEdgeIsDefault" (change)="NewEdgeIsDefault = GetCheckboxChecked($event)" />
+                          <span>Default Fallback Edge</span>
+                        </label>
+                        <button type="button" mjButton variant="secondary" size="sm" (click)="AddStepPathEdge()" [disabled]="IsSaving">
+                          <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Edge
+                        </button>
+                      </div>
+
+                      @if (SelectedTourPaths.length > 0) {
+                        <div class="ts-table-wrap">
+                          <table class="ts-table">
+                            <thead>
+                              <tr>
+                                <th>From</th>
+                                <th>To</th>
+                                <th>Label</th>
+                                <th>Condition</th>
+                                <th>Default</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              @for (edge of SelectedTourPaths; track edge.ID) {
+                                <tr>
+                                  <td>{{ edge.FromStep || edge.FromStepID }}</td>
+                                  <td>{{ edge.ToStep || edge.ToStepID }}</td>
+                                  <td>{{ edge.Label || '—' }}</td>
+                                  <td><code>{{ edge.Condition || '—' }}</code></td>
+                                  <td>{{ edge.IsDefault ? 'Yes' : 'No' }}</td>
+                                  <td>
+                                    <button type="button" mjButton variant="danger" size="sm" (click)="DeleteStepPathEdge(edge)">
+                                      Remove
+                                    </button>
+                                  </td>
+                                </tr>
+                              }
+                            </tbody>
+                          </table>
+                        </div>
+                      }
+                    </div>
+                  }
+                </section>
+
+                <!-- Step Editor -->
+                @if (SelectedStep) {
+                  <section class="ts-panel">
+                    <div class="ts-panel-header">
+                      <h3 class="ts-panel-title">Step Editor · {{ SelectedStep.Title }}</h3>
+                      <div class="ts-inline-actions">
+                        <button type="button" mjButton variant="danger" size="sm" (click)="DeleteSelectedStep()" [disabled]="IsSaving">
+                          Delete Step
+                        </button>
+                        <button type="button" mjButton variant="primary" size="sm" (click)="SaveSelectedStep()" [disabled]="IsSaving">
+                          <i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Save Step
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="ts-form-grid">
+                      <div class="ts-field">
+                        <label class="ts-label">Title</label>
+                        <input class="ts-input" [value]="SelectedStep.Title" (input)="SelectedStep.Title = GetInputValue($event)" />
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">Step Key</label>
+                        <input class="ts-input" [value]="SelectedStep.StepKey" (input)="SelectedStep.StepKey = GetInputValue($event)" />
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">Step Type</label>
+                        <select class="ts-select" [value]="SelectedStep.StepTypeID" (change)="OnStepTypeChange(GetSelectValue($event))">
+                          @for (st of StepTypes; track st.ID) {
+                            <option [value]="st.ID">{{ st.Name }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">Sequence</label>
+                        <input type="number" class="ts-input" [value]="SelectedStep.Sequence" (input)="SelectedStep.Sequence = GetNumberValue($event, 1)" />
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">Placement</label>
+                        <select class="ts-select" [value]="SelectedStep.Placement" (change)="OnStepPlacementChange(GetSelectValue($event))">
+                          @for (pl of StepPlacements; track pl) {
+                            <option [value]="pl">{{ pl }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">Interaction Mode</label>
+                        <select class="ts-select" [value]="SelectedStep.Mode" (change)="OnStepModeChange(GetSelectValue($event))">
+                          @for (sm of StepModes; track sm) {
+                            <option [value]="sm">{{ sm }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">On Missing Anchor</label>
+                        <select class="ts-select" [value]="SelectedStep.OnMissing" (change)="OnStepOnMissingChange(GetSelectValue($event))">
+                          @for (om of StepOnMissingOptions; track om) {
+                            <option [value]="om">{{ om }}</option>
+                          }
+                        </select>
+                      </div>
+                      <div class="ts-field">
+                        <label class="ts-label">Optional Step</label>
+                        <label class="ts-checkbox-row" style="margin-top: 6px;">
+                          <input type="checkbox" [checked]="SelectedStep.IsOptional" (change)="SelectedStep.IsOptional = GetCheckboxChecked($event)" />
+                          <span>User can skip without blocking completion</span>
+                        </label>
+                      </div>
+                      <div class="ts-field ts-field--full">
+                        <label class="ts-label">Body (Markdown)</label>
+                        <textarea class="ts-textarea" rows="3" [value]="SelectedStep.Body ?? ''" (input)="SelectedStep.Body = GetInputValue($event)"></textarea>
+                      </div>
+                      <div class="ts-field ts-field--full">
+                        <label class="ts-label">Agent Guide Notes (Chat/Voice grounding only)</label>
+                        <textarea class="ts-textarea" rows="2" [value]="SelectedStep.GuideNotes ?? ''" (input)="SelectedStep.GuideNotes = GetInputValue($event) || null"></textarea>
+                      </div>
+                    </div>
+
+                    <!-- Dynamic ConfigSchema Fields -->
+                    @if (ActiveSchemaFields.length > 0) {
+                      <div class="ts-subsection">
+                        <h4 class="ts-subsection-title">Step Type Configuration ({{ SelectedStepType?.Name }})</h4>
+                        <div class="ts-form-grid">
+                          @for (field of ActiveSchemaFields; track field.Key) {
+                            <div class="ts-field" [class.ts-field--full]="field.Type === 'json'">
+                              <label class="ts-label">{{ field.Title }}</label>
+                              @switch (field.Type) {
+                                @case ('boolean') {
+                                  <label class="ts-checkbox-row">
+                                    <input
+                                      type="checkbox"
+                                      [checked]="GetStepConfigBooleanValue(field)"
+                                      (change)="SetStepConfigFieldValue(field, GetCheckboxChecked($event))" />
+                                    <span>{{ field.Description || field.Key }}</span>
+                                  </label>
+                                }
+                                @case ('enum') {
+                                  <select
+                                    class="ts-select"
+                                    [value]="GetStepConfigFieldValue(field)"
+                                    (change)="SetStepConfigFieldValue(field, GetSelectValue($event))">
+                                    <option value="">(default)</option>
+                                    @for (opt of field.EnumValues; track opt) {
+                                      <option [value]="opt">{{ opt }}</option>
+                                    }
+                                  </select>
+                                }
+                                @case ('number') {
+                                  <input
+                                    type="number"
+                                    class="ts-input"
+                                    [value]="GetStepConfigFieldValue(field)"
+                                    (input)="SetStepConfigFieldValue(field, GetInputValue($event))" />
+                                }
+                                @case ('integer') {
+                                  <input
+                                    type="number"
+                                    step="1"
+                                    class="ts-input"
+                                    [value]="GetStepConfigFieldValue(field)"
+                                    (input)="SetStepConfigFieldValue(field, GetInputValue($event))" />
+                                }
+                                @case ('json') {
+                                  <textarea
+                                    class="ts-textarea ts-textarea--mono"
+                                    rows="3"
+                                    [value]="GetStepConfigFieldValue(field)"
+                                    (change)="SetStepConfigFieldValue(field, GetInputValue($event))">
+                                  </textarea>
+                                }
+                                @default {
+                                  <input
+                                    type="text"
+                                    class="ts-input"
+                                    [value]="GetStepConfigFieldValue(field)"
+                                    (input)="SetStepConfigFieldValue(field, GetInputValue($event))" />
+                                }
+                              }
+                              @if (field.Description && field.Type !== 'boolean') {
+                                <span class="ts-hint">{{ field.Description }}</span>
+                              }
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+
+                    <!-- ComponentID / ComponentSpec Picker -->
+                    <div class="ts-subsection">
+                      <h4 class="ts-subsection-title">Interactive Component (ComponentID / ComponentSpec)</h4>
+                      <div class="ts-form-grid">
+                        <div class="ts-field">
+                          <label class="ts-label">MJ Component</label>
+                          <select class="ts-select" [value]="StepComponentID" (change)="StepComponentID = GetSelectValue($event)">
+                            <option value="">(None — standard renderer)</option>
+                            @for (cmp of Components; track cmp.ID) {
+                              <option [value]="cmp.ID">{{ cmp.Name }}</option>
+                            }
+                          </select>
+                        </div>
+                        <div class="ts-field ts-field--full">
+                          <label class="ts-label">Inline ComponentSpec JSON (optional)</label>
+                          <textarea
+                            class="ts-textarea ts-textarea--mono"
+                            rows="3"
+                            placeholder="{ &quot;name&quot;: &quot;...&quot; }"
+                            [value]="StepComponentSpecJson"
+                            (input)="StepComponentSpecJson = GetInputValue($event)">
+                          </textarea>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Anchor Editor -->
+                    <div class="ts-subsection">
+                      <h4 class="ts-subsection-title">Anchor Strategy</h4>
+                      <div class="ts-form-grid">
+                        <div class="ts-field">
+                          <label class="ts-label">Strategy</label>
+                          <select class="ts-select" [value]="StepAnchorStrategy" (change)="OnStepAnchorStrategyChange(GetSelectValue($event))">
+                            @for (strat of AnchorStrategies; track strat) {
+                              <option [value]="strat">{{ strat }}</option>
+                            }
+                          </select>
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Anchor Key (data-mj-tour-anchor)</label>
+                          <input class="ts-input" [value]="StepAnchorKey" (input)="StepAnchorKey = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Entity Name</label>
+                          <input class="ts-input" [value]="StepAnchorEntity" (input)="StepAnchorEntity = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Field Name</label>
+                          <input class="ts-input" [value]="StepAnchorField" (input)="StepAnchorField = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">ARIA Role</label>
+                          <input class="ts-input" [value]="StepAnchorRole" (input)="StepAnchorRole = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Accessible Name</label>
+                          <input class="ts-input" [value]="StepAnchorName" (input)="StepAnchorName = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field ts-field--full">
+                          <label class="ts-label">CSS Selector Fallback</label>
+                          <input class="ts-input" [value]="StepAnchorSelector" (input)="StepAnchorSelector = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field ts-field--full">
+                          <label class="ts-checkbox-row">
+                            <input
+                              type="checkbox"
+                              [checked]="StepAllowSelectorGate"
+                              (change)="StepAllowSelectorGate = GetCheckboxChecked($event)" />
+                            <span>Allow CSS Selector fallback in CI gate (`tourAnchorsAllowSelector`)</span>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Prepare & Completion Editors -->
+                    <div class="ts-subsection">
+                      <h4 class="ts-subsection-title">Prepare Navigation &amp; Completion Check</h4>
+                      <div class="ts-form-grid">
+                        <div class="ts-field">
+                          <label class="ts-label">Prepare: Application</label>
+                          <input class="ts-input" placeholder="e.g. Data Explorer" [value]="StepPrepareApp" (input)="StepPrepareApp = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Prepare: Nav Item</label>
+                          <input class="ts-input" placeholder="NavItem key or label" [value]="StepPrepareNavItem" (input)="StepPrepareNavItem = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Prepare: URL</label>
+                          <input class="ts-input" placeholder="/app/..." [value]="StepPrepareUrl" (input)="StepPrepareUrl = GetInputValue($event)" />
+                        </div>
+                        <div class="ts-field">
+                          <label class="ts-label">Completion Check</label>
+                          <select class="ts-select" [value]="StepCompletionMode" (change)="OnStepCompletionModeChange(GetSelectValue($event))">
+                            <option value="Manual">Manual Next Button</option>
+                            <option value="Action">DOM Click / Interaction</option>
+                            <option value="Signal">Component Signal</option>
+                            <option value="EntityEvent">Entity Save / Delete Event</option>
+                          </select>
+                        </div>
+                        @if (StepCompletionMode === 'Signal') {
+                          <div class="ts-field ts-field--full">
+                            <label class="ts-label">Signal Key</label>
+                            <input class="ts-input" placeholder="e.g. core.omnibar.howDoISearch" [value]="StepCompletionSignal" (input)="StepCompletionSignal = GetInputValue($event)" />
+                          </div>
+                        }
+                        @if (StepCompletionMode === 'EntityEvent') {
+                          <div class="ts-field">
+                            <label class="ts-label">Entity Name</label>
+                            <input class="ts-input" placeholder="e.g. Deals" [value]="StepCompletionEntity" (input)="StepCompletionEntity = GetInputValue($event)" />
+                          </div>
+                          <div class="ts-field">
+                            <label class="ts-label">Event Action</label>
+                            <select class="ts-select" [value]="StepCompletionEventAction" (change)="OnStepCompletionEventActionChange(GetSelectValue($event))">
+                              <option value="Save">Save</option>
+                              <option value="Create">Create</option>
+                              <option value="Update">Update</option>
+                              <option value="Delete">Delete</option>
+                            </select>
+                          </div>
+                        }
+                      </div>
+                    </div>
+
+                    <!-- Localizations Editor -->
+                    <div class="ts-subsection">
+                      <h4 class="ts-subsection-title">Localizations (Configuration.localizations)</h4>
+                      <div class="ts-inline-actions">
+                        <input class="ts-input" style="max-width: 160px;" placeholder="BCP-47 (e.g. es, fr-CA)" [value]="NewLocaleCode" (input)="NewLocaleCode = GetInputValue($event)" />
+                        <button type="button" mjButton variant="secondary" size="sm" (click)="AddStepLocale()">Add Locale</button>
+                      </div>
+                      @for (loc of StepLocalizations; track loc.Locale) {
+                        <div class="ts-locale-row">
+                          <div class="ts-panel-header">
+                            <strong>{{ loc.Locale }}</strong>
+                            <button type="button" mjButton variant="flat" size="sm" (click)="RemoveStepLocale(loc.Locale)">Remove</button>
+                          </div>
+                          <input class="ts-input" placeholder="Localized title" [value]="loc.Title" (input)="loc.Title = GetInputValue($event)" />
+                          <textarea class="ts-textarea" rows="2" placeholder="Localized body" [value]="loc.Body" (input)="loc.Body = GetInputValue($event)"></textarea>
+                        </div>
+                      }
+                    </div>
+                  </section>
+                }
+              </div>
+            </div>
+          }
+        }
+
+        <!-- ============================================================= -->
+        <!-- TAB 3: GOVERNANCE (LEARNING PATHS & OVERRIDES)                -->
+        <!-- ============================================================= -->
+        @case ('governance') {
+          <div class="ts-split-grid">
+            <!-- Learning Paths Manager -->
+            <section class="ts-panel">
+              <div class="ts-panel-header">
+                <h3 class="ts-panel-title">Learning Paths ({{ LearningPathViews.length }})</h3>
+              </div>
+
+              <div class="ts-form-grid">
+                <div class="ts-field">
+                  <label class="ts-label">Path Name</label>
+                  <input class="ts-input" placeholder="New User Onboarding" [value]="NewPathName" (input)="NewPathName = GetInputValue($event)" />
+                </div>
+                <div class="ts-field">
+                  <label class="ts-label">Path Key</label>
+                  <input class="ts-input" placeholder="core.onboarding" [value]="NewPathKey" (input)="NewPathKey = GetInputValue($event)" />
+                </div>
+                <div class="ts-field ts-field--full">
+                  <label class="ts-label">Description</label>
+                  <input class="ts-input" [value]="NewPathDescription" (input)="NewPathDescription = GetInputValue($event)" />
+                </div>
+              </div>
+              <div class="ts-inline-actions">
+                <button type="button" mjButton variant="primary" size="sm" (click)="CreateLearningPath()" [disabled]="IsSaving">
+                  Create Learning Path
+                </button>
+              </div>
+
+              @if (LearningPathViews.length > 0 && Tours.length > 0) {
+                <div class="ts-subsection">
+                  <h4 class="ts-subsection-title">Add Tour to Learning Path</h4>
+                  <div class="ts-form-grid">
+                    <div class="ts-field">
+                      <label class="ts-label">Learning Path</label>
+                      <select class="ts-select" [value]="AddMemberPathId" (change)="AddMemberPathId = GetSelectValue($event)">
+                        @for (lpv of LearningPathViews; track lpv.Path.ID) {
+                          <option [value]="lpv.Path.ID">{{ lpv.Path.Name }}</option>
+                        }
+                      </select>
+                    </div>
+                    <div class="ts-field">
+                      <label class="ts-label">Tour</label>
+                      <select class="ts-select" [value]="AddMemberTourId" (change)="AddMemberTourId = GetSelectValue($event)">
+                        @for (t of Tours; track t.ID) {
+                          <option [value]="t.ID">{{ t.Name }}</option>
+                        }
+                      </select>
+                    </div>
+                  </div>
+                  <div class="ts-inline-actions">
+                    <label class="ts-checkbox-row">
+                      <input type="checkbox" [checked]="AddMemberRequired" (change)="AddMemberRequired = GetCheckboxChecked($event)" />
+                      <span>Required Tour</span>
+                    </label>
+                    <button type="button" mjButton variant="secondary" size="sm" (click)="AddTourToLearningPath()">
+                      Add Tour
+                    </button>
+                  </div>
+                </div>
+              }
+
+              @for (lpv of LearningPathViews; track lpv.Path.ID) {
+                <div class="ts-subsection">
+                  <div class="ts-panel-header">
+                    <strong>{{ lpv.Path.Name }} (<code>{{ lpv.Path.PathKey }}</code>)</strong>
+                    <span class="ts-pill">{{ lpv.Members.length }} tours</span>
+                  </div>
+                  <div class="ts-table-wrap">
+                    <table class="ts-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Tour</th>
+                          <th>Required</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (m of lpv.Members; track m.Membership.ID) {
+                          <tr>
+                            <td>{{ m.Membership.Sequence }}</td>
+                            <td>{{ m.Tour?.Name || m.Membership.TourID }}</td>
+                            <td>
+                              <button type="button" mjButton variant="flat" size="sm" (click)="ToggleLearningPathMemberRequired(m.Membership)">
+                                {{ m.Membership.IsRequired ? 'Required' : 'Optional' }}
+                              </button>
+                            </td>
+                            <td>
+                              <button type="button" mjButton variant="danger" size="sm" (click)="RemoveLearningPathMember(m.Membership)">
+                                Remove
+                              </button>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              }
+            </section>
+
+            <!-- Tour Overrides Manager -->
+            <section class="ts-panel">
+              <div class="ts-panel-header">
+                <h3 class="ts-panel-title">Tour Overrides ({{ OverrideViews.length }})</h3>
+              </div>
+
+              <div class="ts-form-grid">
+                <div class="ts-field">
+                  <label class="ts-label">Tour</label>
+                  <select class="ts-select" [value]="NewOverrideTourId" (change)="NewOverrideTourId = GetSelectValue($event)">
+                    @for (t of Tours; track t.ID) {
+                      <option [value]="t.ID">{{ t.Name }}</option>
+                    }
+                  </select>
+                </div>
+                <div class="ts-field">
+                  <label class="ts-label">Scope</label>
+                  <select class="ts-select" [value]="NewOverrideScope" (change)="OnOverrideScopeChange(GetSelectValue($event))">
+                    @for (sc of OverrideScopes; track sc) {
+                      <option [value]="sc">{{ sc }}</option>
+                    }
+                  </select>
+                </div>
+                @if (NewOverrideScope === 'Role') {
+                  <div class="ts-field">
+                    <label class="ts-label">Target Role</label>
+                    <select class="ts-select" [value]="NewOverrideRoleId" (change)="NewOverrideRoleId = GetSelectValue($event)">
+                      <option value="">Select Role…</option>
+                      @for (r of Roles; track r.ID) {
+                        <option [value]="r.ID">{{ r.Name }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+                @if (NewOverrideScope === 'User') {
+                  <div class="ts-field">
+                    <label class="ts-label">Target User</label>
+                    <select class="ts-select" [value]="NewOverrideUserId" (change)="NewOverrideUserId = GetSelectValue($event)">
+                      <option value="">Select User…</option>
+                      @for (u of Users; track u.ID) {
+                        <option [value]="u.ID">{{ u.Name }}</option>
+                      }
+                    </select>
+                  </div>
+                }
+                <div class="ts-field">
+                  <label class="ts-label">Precedence</label>
+                  <input type="number" class="ts-input" [value]="NewOverridePrecedence" (input)="NewOverridePrecedence = GetNumberValue($event, 0)" />
+                </div>
+              </div>
+              <div class="ts-inline-actions">
+                <label class="ts-checkbox-row">
+                  <input type="checkbox" [checked]="NewOverrideIsDisabled" (change)="NewOverrideIsDisabled = GetCheckboxChecked($event)" />
+                  <span>Suppress Tour (`IsDisabled`)</span>
+                </label>
+                <button type="button" mjButton variant="primary" size="sm" (click)="SaveNewOverride()" [disabled]="IsSaving">
+                  Create Override
+                </button>
+              </div>
+
+              @if (OverrideViews.length > 0) {
+                <div class="ts-table-wrap">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Tour</th>
+                        <th>Scope / Target</th>
+                        <th>Precedence</th>
+                        <th>Suppressed</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (ov of OverrideViews; track ov.Override.ID) {
+                        <tr>
+                          <td>{{ ov.TourName }}</td>
+                          <td>{{ ov.TargetLabel }}</td>
+                          <td>{{ ov.Override.Precedence }}</td>
+                          <td>
+                            <button type="button" mjButton variant="flat" size="sm" (click)="ToggleOverrideDisabled(ov.Override)">
+                              {{ ov.Override.IsDisabled ? 'Disabled' : 'Enabled' }}
+                            </button>
+                          </td>
+                          <td>
+                            <button type="button" mjButton variant="danger" size="sm" (click)="DeleteOverride(ov.Override)">
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </section>
+          </div>
+        }
+
+        <!-- ============================================================= -->
+        <!-- TAB 4: ANALYTICS & HOLDOUTS                                   -->
+        <!-- ============================================================= -->
+        @case ('analytics') {
+          <div class="ts-builder-bar">
+            <div class="ts-builder-bar-left">
+              <label class="ts-label" for="ts-analytics-tour">Tour:</label>
+              <select
+                id="ts-analytics-tour"
+                class="ts-select"
+                [value]="AnalyticsTourId"
+                (change)="OnAnalyticsTourChange(GetSelectValue($event))">
+                @for (t of Tours; track t.ID) {
+                  <option [value]="t.ID">{{ t.Name }} ({{ t.TourKey }})</option>
+                }
+              </select>
+            </div>
+          </div>
+
+          @if (!AnalyticsSummary) {
+            <mj-empty-state
+              Icon="fa-solid fa-chart-line"
+              Title="No analytics data available"
+              Message="Select a tour or record tour runs to analyze completion, holdouts, and anchor health.">
+            </mj-empty-state>
+          } @else {
+            <div class="ts-kpi-grid">
+              <div class="ts-kpi-card">
+                <span class="ts-kpi-label">Treated Runs</span>
+                <span class="ts-kpi-value">{{ AnalyticsSummary.TotalRuns }}</span>
+                <span class="ts-kpi-sub">{{ AnalyticsSummary.NonStartersCount }} offered, not started</span>
+              </div>
+              <div class="ts-kpi-card">
+                <span class="ts-kpi-label">Completion Rate</span>
+                <span class="ts-kpi-value">{{ AnalyticsSummary.CompletionRatePct }}%</span>
+                <span class="ts-kpi-sub">{{ AnalyticsSummary.CompletedCount }} completed</span>
+              </div>
+              <div class="ts-kpi-card">
+                <span class="ts-kpi-label">Completers Goal Rate</span>
+                <span class="ts-kpi-value">{{ AnalyticsSummary.CompletersGoalRatePct }}%</span>
+                <span class="ts-kpi-sub">{{ AnalyticsSummary.GoalMetCount }} total goal conversions</span>
+              </div>
+              <div class="ts-kpi-card">
+                <span class="ts-kpi-label">Holdout Goal Lift</span>
+                <span class="ts-kpi-value">
+                  @if (AnalyticsSummary.GoalLiftPct != null) {
+                    {{ AnalyticsSummary.GoalLiftPct >= 0 ? '+' : '' }}{{ AnalyticsSummary.GoalLiftPct }}%
+                  } @else {
+                    —
+                  }
+                </span>
+                <span class="ts-kpi-sub">
+                  {{ AnalyticsSummary.HoldoutCount }} holdout runs
+                  @if (AnalyticsSummary.HoldoutGoalRatePct != null) {
+                    ({{ AnalyticsSummary.HoldoutGoalRatePct }}% baseline)
+                  }
+                </span>
+              </div>
+            </div>
+
+            <div class="ts-split-grid">
+              <!-- Funnel & Guide Mode Comparison -->
+              <section class="ts-panel">
+                <div class="ts-panel-header">
+                  <h3 class="ts-panel-title">Tour Funnel</h3>
+                </div>
+                <div class="ts-funnel-row">
+                  <span>Assigned / Offered</span>
+                  <div class="ts-funnel-bar-track">
+                    <div class="ts-funnel-bar-fill" style="width: 100%"></div>
+                  </div>
+                  <strong>{{ AnalyticsSummary.TotalRuns }}</strong>
+                </div>
+                <div class="ts-funnel-row">
+                  <span>Started</span>
+                  <div class="ts-funnel-bar-track">
+                    <div
+                      class="ts-funnel-bar-fill"
+                      [style.width.%]="AnalyticsSummary.TotalRuns ? (AnalyticsSummary.StartedCount / AnalyticsSummary.TotalRuns) * 100 : 0">
+                    </div>
+                  </div>
+                  <strong>{{ AnalyticsSummary.StartedCount }}</strong>
+                </div>
+                <div class="ts-funnel-row">
+                  <span>Completed</span>
+                  <div class="ts-funnel-bar-track">
+                    <div
+                      class="ts-funnel-bar-fill"
+                      [style.width.%]="AnalyticsSummary.TotalRuns ? (AnalyticsSummary.CompletedCount / AnalyticsSummary.TotalRuns) * 100 : 0">
+                    </div>
+                  </div>
+                  <strong>{{ AnalyticsSummary.CompletedCount }}</strong>
+                </div>
+                <div class="ts-funnel-row">
+                  <span>Goal Met</span>
+                  <div class="ts-funnel-bar-track">
+                    <div
+                      class="ts-funnel-bar-fill ts-funnel-bar-fill--goal"
+                      [style.width.%]="AnalyticsSummary.TotalRuns ? (AnalyticsSummary.GoalMetCount / AnalyticsSummary.TotalRuns) * 100 : 0">
+                    </div>
+                  </div>
+                  <strong>{{ AnalyticsSummary.GoalMetCount }}</strong>
+                </div>
+
+                <div class="ts-subsection">
+                  <h4 class="ts-subsection-title">Guide Mode Comparison (Visual vs Chat vs Voice)</h4>
+                  <div class="ts-table-wrap">
+                    <table class="ts-table">
+                      <thead>
+                        <tr>
+                          <th>Mode</th>
+                          <th>Runs</th>
+                          <th>Completion</th>
+                          <th>Goal Rate</th>
+                          <th>Avg Qs</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (gm of AnalyticsSummary.GuideModes; track gm.Mode) {
+                          <tr>
+                            <td><strong>{{ gm.Mode }}</strong></td>
+                            <td>{{ gm.RunCount }}</td>
+                            <td>{{ gm.CompletionRatePct }}%</td>
+                            <td>{{ gm.GoalRatePct }}%</td>
+                            <td>{{ gm.AvgQuestionsPerRun }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Per-Step Anchor Resolution Health -->
+              <section class="ts-panel">
+                <div class="ts-panel-header">
+                  <h3 class="ts-panel-title">Per-Step Anchor Health</h3>
+                </div>
+                <div class="ts-table-wrap">
+                  <table class="ts-table">
+                    <thead>
+                      <tr>
+                        <th>Step</th>
+                        <th>Visits</th>
+                        <th>Reg / Sem</th>
+                        <th>Selector</th>
+                        <th>Failed (Miss%)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (row of AnalyticsSummary.StepAnchorHealth; track row.StepKey) {
+                        <tr>
+                          <td>
+                            <div><strong>{{ row.StepTitle }}</strong></div>
+                            <div class="ts-hint">{{ row.StepKey }}</div>
+                          </td>
+                          <td>{{ row.TotalVisits }}</td>
+                          <td>{{ row.RegisteredCount + row.SemanticCount }}</td>
+                          <td>{{ row.SelectorCount }}</td>
+                          <td>
+                            <span class="ts-pill" [class.ts-pill--warn]="row.MissRatePct >= 10">
+                              {{ row.FailedCount }} ({{ row.MissRatePct }}%)
+                            </span>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          }
+        }
+      }
+    }
+  </mj-page-body>
+</mj-page-layout>
+
+@if (PickerActive) {
+  <div class="ts-picker-floating" role="status">
+    <i class="fa-solid fa-crosshairs" aria-hidden="true"></i>
+    <span>
+      {{ RecorderActive ? 'Recorder active: click elements to append steps (Esc to stop)' : 'Click any element in Explorer to inspect its anchor (Esc to cancel)' }}
+    </span>
+    <button type="button" mjButton variant="secondary" size="sm" (click)="ToggleElementPicker()">Stop</button>
+  </div>
+}

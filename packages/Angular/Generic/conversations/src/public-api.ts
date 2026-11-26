@@ -183,6 +183,7 @@ export * from './lib/components/realtime/realtime-session-timeline-card.componen
 export * from './lib/utils/realtime-session-timeline';
 // Pluggable interactive-channel contract (registry-resolved client plugins) + pane host
 export * from './lib/components/realtime/channels/client-context-channel';
+export * from './lib/components/realtime/channels/tour-channel';
 export * from './lib/components/realtime/channels/realtime-channel-pane.component';
 export * from './lib/components/realtime/channels/channel-onboarding-panel.component';
 // Live whiteboard channel plugin + artifact viewer (thin consumers of the generic board).

@@ -1,0 +1,156 @@
+[
+  {
+    "fields": {
+      "Name": "Working with a Record",
+      "TourKey": "core.records",
+      "Description": "Contextual walkthrough of any entity record form: sections, history rail, toolbar actions, tags, record links, and audit trails.",
+      "ApplicationID": null,
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 85,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Signal",
+        "Signal": "core.records.explored",
+        "Description": "User explores record sections, rail tools, tags, record links, and audit trails on an open record."
+      },
+      "StartLocation": {
+        "RequiresOpenRecord": true
+      }
+    },
+    "primaryKey": {
+      "ID": "90DCA61B-1F61-438D-BFEA-C8D6CC5072A7"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "record-section",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Structured Record Sections",
+            "Body": "Every record form organizes fields into collapsible sections tailored to the active {{Context.Record.EntityName}} schema.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "FormSection",
+              "Entity": "{{Context.Record.EntityName}}",
+              "SectionKey": "Details"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6BC9A973-9A15-4033-8515-6B66C20B70F2"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "record-rail",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "History & Related Context Rail",
+            "Body": "Use the record rail to switch between field sections, change history, comments, and related entities.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "FormRailGroup",
+              "RailKey": "history"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "29EEAACD-FA3C-4AAE-9140-0D7C91610B53"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "record-toolbar",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Quick Record Actions",
+            "Body": "Favorite records, add them to lists, tag items, or inspect audit trails from the record toolbar.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "FormToolbarAction",
+              "ActionKey": "favorite"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": true
+          },
+          "primaryKey": {
+            "ID": "3B7C5F93-ADA5-4A04-B099-F23694947E3A"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "record-tags-audit",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Tags, Record Links & Audit Trail",
+            "Body": "Categorize any record with polymorphic **MJ: Tagged Items**, navigate connected records through **Record Links**, and review field-level **Record Changes** history anytime from the form.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "49C7243F-B4A4-44E9-A65B-F98E5256F9BF"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "EntityFormOpened",
+            "Configuration": {
+              "Mode": "Any"
+            },
+            "Delivery": "Beacon",
+            "CooldownDays": 14,
+            "Priority": 70,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "56024633-9801-4417-AD29-BE34DED1A81C"
+          }
+        }
+      ]
+    }
+  }
+]

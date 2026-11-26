@@ -1,5 +1,6 @@
 <mj-page-layout>
   <mj-page-header
+    data-mj-tour-anchor="kh.config.header"
     Title="Knowledge Hub Configuration"
     Icon="fa-solid fa-cogs"
     Subtitle="Pipeline, vector store, search, and automation settings">
@@ -32,6 +33,7 @@
 } @else {
     <div class="config-layout">
         <mj-left-nav
+            data-mj-tour-anchor="kh.config.nav"
             MobileTitle="Settings"
             [Sections]="navSections"
             [ActiveId]="ActiveSection"
@@ -420,7 +422,7 @@
             <!-- Search Scopes Section -->
             @if (ActiveSection === 'search-scopes') {
                 <div class="config-section">
-                    <div class="scope-manager">
+                    <div class="scope-manager" data-mj-tour-anchor="kh.config.search-scopes">
                         <!-- Scope list -->
                         <aside class="scope-manager-list">
                             <div class="scope-manager-list-header">

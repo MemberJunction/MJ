@@ -1,6 +1,7 @@
 <mj-page-layout>
   <!-- Header -->
   <mj-page-header
+    data-mj-tour-anchor="ai.config.header"
     Title="Configuration"
     Icon="fa-solid fa-cogs">
     <div meta>
@@ -39,7 +40,7 @@
   </mj-page-header>
 
   <!-- Main Content (no sidebar — filters live in the popover above) -->
-  <mj-page-body [Flex]="true">
+  <mj-page-body [Flex]="true" data-mj-tour-anchor="ai.config.body">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">

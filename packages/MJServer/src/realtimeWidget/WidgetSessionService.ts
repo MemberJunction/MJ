@@ -18,19 +18,40 @@ import { createPublicKey } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { ComputeJwkThumbprint, MJLruCache, ToProofPublicJwk, UUIDsEqual, VerifyProofOfPossessionJwt, type ProofPublicJwk, IsEmailShaped } from '@memberjunction/global';
-import type { MJConversationWidgetInstanceEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import type { MJConversationWidgetInstanceEntity, MJConversationEntity, MJTourSurfaceEntity } from '@memberjunction/core-entities';
 import { ResolveConfiguredPrincipal } from '../auth/principals.js';
 import { MagicLinkKeyManager } from '../auth/magicLink/MagicLinkKeys.js';
 import { GenerateSessionId } from '../auth/magicLink/magicLinkCore.js';
 import { MagicLinkService } from '../auth/magicLink/MagicLinkService.js';
 import { configInfo, type WidgetConfig } from '../config.js';
-import { BuildWidgetGuestClaims, EvaluateWidgetMint, IsIsolatedGuestRole, ParseEnabledChannels, type GuestRolePolicy, type WidgetMintErrorCode } from './widgetCore.js';
+import {
+  BuildSurfaceGuestClaims,
+  BuildWidgetGuestClaims,
+  EvaluateTourSurfaceMint,
+  EvaluateWidgetMint,
+  IsIsolatedGuestRole,
+  IsIsolatedTourSurfaceGuestRole,
+  ParseEnabledChannels,
+  TOUR_GUEST_ROLE_NAME,
+  TOUR_SURFACE_RESOURCE_TYPE,
+  type GuestRolePolicy,
+  type WidgetMintErrorCode,
+} from './widgetCore.js';
 import { VerifyHostAssertion, type HostAssertedIdentity } from './host-identity.js';
 import { WriteReturningVisitorRecap } from '../agentSessions/ReturningVisitorRecap.js';
-import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, type ResolvedVisitorIdentity } from './visitorIdentity.js';
+import { ResolveIdentityByEmail, MergeVisitorIdentity, ForgetVisitor, ClaimGuestTourRuns, type ResolvedVisitorIdentity } from './visitorIdentity.js';
 
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
+const TOUR_SURFACE_ENTITY = 'MJ: Tour Surfaces';
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
+
+/** Matches the `NVARCHAR(150)` column length of `PublicKey` on widget instances and tour surfaces. */
+const MAX_PUBLIC_KEY_LENGTH = 150;
+
+/** Authoritative DB-resolved target for a guest session request (`Kind` is set only after entity lookup). */
+type ResolvedGuestTarget =
+  | { Kind: 'Widget'; Widget: MJConversationWidgetInstanceEntity }
+  | { Kind: 'Surface'; Surface: MJTourSurfaceEntity };
 
 /** Shape of the durable visitor anchor key (opaque base64url, same alphabet as generateSessionId). */
 const VISITOR_KEY_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -87,10 +108,12 @@ export interface WidgetMintAuditContext {
   origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
 }
 
-/** Input to mint a guest session. */
+/** Input to mint a guest session (for a widget instance or tour surface). */
 export interface MintGuestSessionInput {
-  /** The widget's public embed key (pk_live_…). */
-  widgetKey: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  /** The widget's public embed key (pk_live_…), or optional when `surfaceKey` is supplied. */
+  widgetKey?: string;  // case-violation-ok-legacy-back-compat: the old name is also read off a value typed `any`, where a rename would compile and silently return undefined
+  /** Optional `MJ: Tour Surfaces.PublicKey` (`ts_…`) for embed-surface or shared widget+tour sessions. */
+  surfaceKey?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The request's Origin header — enforced against the instance allowlist. */
   origin?: string;  // case-violation-ok-legacy-back-compat: optional, and the old name is also read off a value the checker cannot type; renaming it stays assignable and silently yields undefined
   /**
@@ -131,6 +154,12 @@ export interface MintGuestSessionResult {
   expiresAt?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The widget instance id (also carried as the `mj_widget_id` claim). */
   widgetId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Tour surface ID when minted from or linked to an `MJ: Tour Surfaces` record. */
+  surfaceId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Tour surface key (`SurfaceKey`) when minted from a tour surface. */
+  surfaceKey?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Linked `MJ: Conversation Widget Instances.ID` when a tour surface shares a widget session. */
+  conversationWidgetInstanceId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The Application the session is scoped to. */
   applicationId?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** The pinned support agent the widget passes as explicitAgentId for every turn (D5). */
@@ -175,8 +204,10 @@ export interface MintGuestSessionResult {
 
 /** Input to resolve a returning visitor's identity after they verify (RV4, magic-link upgrade path). */
 export interface ResolveVisitorIdentityInput {
-  /** The widget's public embed key. */
-  WidgetKey: string;
+  /** The widget's public embed key (or optional when `SurfaceKey` is supplied). */
+  WidgetKey?: string;
+  /** Optional `MJ: Tour Surfaces.PublicKey` (`ts_…`). */
+  SurfaceKey?: string;
   /** The durable returning-visitor anchor whose trail should be promoted to the verified identity. */
   VisitorKey: string;
   /** The verified visitor's email (from the authenticated session) — resolved to a record via config. */
@@ -192,14 +223,18 @@ export interface ResolveVisitorIdentityResult {
   resolved?: ResolvedVisitorIdentity;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** How many conversations were stamped with the resolved identity. */
   mergedConversations?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** How many guest `MJ: Tour Runs` rows were claimed onto the resolved MJ user. */
+  claimedTourRuns?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
 
 /** Input to a "forget me" request (RV5). */
 export interface ForgetVisitorInput {
-  /** The widget's public embed key. */
-  WidgetKey: string;
+  /** The widget's public embed key (or optional when `SurfaceKey` is supplied). */
+  WidgetKey?: string;
+  /** Optional `MJ: Tour Surfaces.PublicKey` (`ts_…`). */
+  SurfaceKey?: string;
   /** The durable returning-visitor anchor to forget. */
   VisitorKey: string;
   /** The request's Origin header — enforced against the instance allowlist. */
@@ -209,11 +244,12 @@ export interface ForgetVisitorInput {
 /**
  * Result of the shared RV4/RV5 visitor-privacy gate. A single flat shape (not a discriminated union)
  * because MJServer compiles without strictNullChecks, where literal-discriminant narrowing is disabled.
- * On `ok`, `widget`/`contextUser` are set; otherwise `errorCode`/`error` are set.
+ * On `ok`, `widget`/`surface`/`contextUser` are set; otherwise `errorCode`/`error` are set.
  */
 interface VisitorPrivacyGateResult {
   ok: boolean;
   widget?: MJConversationWidgetInstanceEntity;
+  surface?: MJTourSurfaceEntity;
   contextUser?: UserInfo;
   errorCode?: WidgetMintErrorCode;
   error?: string;
@@ -226,6 +262,10 @@ export interface ForgetVisitorResult {
   notesArchived?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   /** Count of conversations whose VisitorKey linkage was cleared. */
   conversationsCleared?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Count of claimed `MJ: Tour Runs` whose `VisitorKey` was cleared. */
+  tourRunsCleared?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
+  /** Count of guest-only `MJ: Tour Runs` deleted. */
+  tourRunsDeleted?: number;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   error?: string;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
   errorCode?: WidgetMintErrorCode;  // case-violation-ok-legacy-back-compat: the type crosses a serialization boundary (JSON / HTTP body), so this member name is part of a wire or on-disk shape
 }
@@ -278,10 +318,14 @@ export class WidgetSessionService {
         return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
       }
 
-      const widget = await this.loadWidgetByKey(input.widgetKey, contextUser);
-      if (!widget) {
+      const target = await this.resolveGuestTarget(input, contextUser);
+      if (!target) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
       }
+      if (target.Kind === 'Surface') {
+        return this.mintOrRefreshTourSurfaceSession(target.Surface, input, contextUser, false);
+      }
+      const widget = target.Widget;
 
       const eligibility = EvaluateWidgetMint(
         { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
@@ -357,10 +401,14 @@ export class WidgetSessionService {
         return { success: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
       }
 
-      const widget = await this.loadWidgetByKey(input.widgetKey, contextUser);
-      if (!widget) {
+      const target = await this.resolveGuestTarget(input, contextUser);
+      if (!target) {
         return this.audited({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' }, input, undefined);
       }
+      if (target.Kind === 'Surface') {
+        return this.mintOrRefreshTourSurfaceSession(target.Surface, input, contextUser, true);
+      }
+      const widget = target.Widget;
 
       const eligibility = EvaluateWidgetMint(
         { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
@@ -412,8 +460,13 @@ export class WidgetSessionService {
    * widget, issued by another deployment, or not bound to a key; or when the proof is missing or not made by
    * that key for this request and token.
    */
-  private async verifyRefreshRequest(bearerToken: string | undefined, proof: string | undefined, widgetId: string): Promise<RefreshableGuestSession | null> {
-    const session = this.verifyRefreshBearerToken(bearerToken, widgetId);
+  private async verifyRefreshRequest(
+    bearerToken: string | undefined,
+    proof: string | undefined,
+    widgetId: string | undefined,
+    surfaceId?: string,
+  ): Promise<RefreshableGuestSession | null> {
+    const session = this.verifyRefreshBearerToken(bearerToken, widgetId, surfaceId);
     if (!session) {
       return null;
     }
@@ -425,18 +478,22 @@ export class WidgetSessionService {
       MaxSkewSeconds: REFRESH_PROOF_MAX_SKEW_SECONDS,
     });
     if (verification.Valid === false) {
-      LogError(`[Widget] Refresh proof refused for widget ${widgetId} (${verification.Reason}).`);
+      LogError(`[Widget] Refresh proof refused for ${widgetId ?? surfaceId ?? 'unknown'} (${verification.Reason}).`);
       return null;
     }
     if (verification.Thumbprint !== session.KeyThumbprint) {
-      LogError(`[Widget] Refresh proof refused for widget ${widgetId}: signed by a key the token is not bound to.`);
+      LogError(`[Widget] Refresh proof refused for ${widgetId ?? surfaceId ?? 'unknown'}: signed by a key the token is not bound to.`);
       return null;
     }
     return session;
   }
 
   /** The token half of {@link verifyRefreshRequest}: everything except the proof. */
-  private verifyRefreshBearerToken(bearerToken: string | undefined, widgetId: string): RefreshableGuestSession | null {
+  private verifyRefreshBearerToken(
+    bearerToken: string | undefined,
+    widgetId: string | undefined,
+    surfaceId?: string,
+  ): RefreshableGuestSession | null {
     const token = (bearerToken ?? '').trim();
     if (!token) {
       return null;
@@ -464,7 +521,21 @@ export class WidgetSessionService {
       if (payload.mj_magic_link !== true || payload.mj_anon !== true) {
         return null;
       }
-      if (typeof payload.mj_widget_id !== 'string' || !UUIDsEqual(payload.mj_widget_id, widgetId)) {
+      const matchesWidget = Boolean(
+        widgetId && typeof payload.mj_widget_id === 'string' && UUIDsEqual(payload.mj_widget_id, widgetId),
+      );
+      const scopes = Array.isArray(payload.mj_scopes) ? payload.mj_scopes : [];
+      const matchesSurface = Boolean(
+        surfaceId &&
+        scopes.some(
+          (s: { resourceType?: unknown; resourceId?: unknown }) =>
+            s &&
+            s.resourceType === TOUR_SURFACE_RESOURCE_TYPE &&
+            typeof s.resourceId === 'string' &&
+            UUIDsEqual(s.resourceId, surfaceId),
+        ),
+      );
+      if (!matchesWidget && !matchesSurface) {
         return null;
       }
       const sid = typeof payload.mj_sid === 'string' ? payload.mj_sid.trim() : '';
@@ -481,7 +552,7 @@ export class WidgetSessionService {
       }
       return { SessionId: sid, StartedAtSeconds: startedAt, KeyThumbprint: keyThumbprint };
     } catch (e) {
-      LogError(`[Widget] Refresh token verification failed for widget ${widgetId}: ${e instanceof Error ? e.message : String(e)}`);
+      LogError(`[Widget] Refresh token verification failed for ${widgetId ?? surfaceId ?? 'unknown'}: ${e instanceof Error ? e.message : String(e)}`);
       return null;
     }
   }
@@ -527,9 +598,11 @@ export class WidgetSessionService {
     try {
       const contextUser = this.resolveLookupUser();
       if (contextUser) {
-        const widget = await this.loadWidgetByKey(key, contextUser);
-        if (widget && widget.RateLimitPerMinute > 0) {
-          limit = widget.RateLimitPerMinute;
+        const target = await this.resolveGuestTarget({ widgetKey: key }, contextUser);
+        if (target?.Kind === 'Surface' && target.Surface.RateLimitPerMinute > 0) {
+          limit = target.Surface.RateLimitPerMinute;
+        } else if (target?.Kind === 'Widget' && target.Widget.RateLimitPerMinute > 0) {
+          limit = target.Widget.RateLimitPerMinute;
         }
       }
     } catch (e) {
@@ -710,23 +783,41 @@ export class WidgetSessionService {
    */
   public async ResolveVisitorIdentity(input: ResolveVisitorIdentityInput): Promise<ResolveVisitorIdentityResult> {
     try {
-      const gate = await this.gateVisitorPrivacyRequest(input.WidgetKey, input.VisitorKey, input.origin);
+      const gate = await this.gateVisitorPrivacyRequest(input.WidgetKey, input.SurfaceKey, input.VisitorKey, input.origin);
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const identity = await ResolveIdentityByEmail(input.VerifiedEmail, gate.contextUser, Metadata.Provider, this.config.identityResolution); // global-provider-ok: server-side mint under the single default provider
+      const provider = Metadata.Provider; // global-provider-ok: server-side mint under the single default provider
+      const identity = await ResolveIdentityByEmail(input.VerifiedEmail, gate.contextUser, provider, this.config.identityResolution);
       if (!identity) {
         // Verified, but no record matches the email under the configured target — nothing to merge.
-        return { success: true, mergedConversations: 0 };
+        return { success: true, mergedConversations: 0, claimedTourRuns: 0 };
       }
-      const mergedConversations = await MergeVisitorIdentity({
-        visitorKey: input.VisitorKey,
-        applicationId: gate.widget.ApplicationID,
-        identity,
-        contextUser: gate.contextUser,
-        provider: Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
-      });
-      return { success: true, resolved: identity, mergedConversations };
+      let mergedConversations = 0;
+      if (gate.widget) {
+        mergedConversations = await MergeVisitorIdentity({
+          visitorKey: input.VisitorKey,
+          applicationId: gate.widget.ApplicationID,
+          identity,
+          contextUser: gate.contextUser,
+          provider,
+        });
+      }
+      let claimedTourRuns = 0;
+      const usersEntityId = provider?.EntityByName('Users')?.ID;
+      if (
+        usersEntityId &&
+        UUIDsEqual(usersEntityId, identity.entityId) &&
+        typeof ClaimGuestTourRuns === 'function'
+      ) {
+        claimedTourRuns = await ClaimGuestTourRuns({
+          visitorKey: input.VisitorKey,
+          userId: identity.recordId,
+          surfaceId: gate.surface?.ID,
+          contextUser: gate.contextUser,
+        });
+      }
+      return { success: true, resolved: identity, mergedConversations, claimedTourRuns };
     } catch (e) {
       LogError(e);
       return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
@@ -735,22 +826,29 @@ export class WidgetSessionService {
 
   /**
    * RV5 "forget me": archives the visitor's auto-generated memory and clears the VisitorKey linkage for
-   * this anchor in the widget's application. Public (the visitor proves possession of the durable key,
-   * not an identity). Validates the widget + origin + opt-in + key, then delegates to {@link forgetVisitor}.
+   * this anchor in the widget's application and/or tour surface. Public (the visitor proves possession of
+   * the durable key, not an identity).
    */
   public async ForgetVisitor(input: ForgetVisitorInput): Promise<ForgetVisitorResult> {
     try {
-      const gate = await this.gateVisitorPrivacyRequest(input.WidgetKey, input.VisitorKey, input.origin);
+      const gate = await this.gateVisitorPrivacyRequest(input.WidgetKey, input.SurfaceKey, input.VisitorKey, input.origin);
       if (!gate.ok) {
         return { success: false, errorCode: gate.errorCode, error: gate.error };
       }
-      const { notesArchived, conversationsCleared } = await ForgetVisitor({
+      const res = await ForgetVisitor({
         visitorKey: input.VisitorKey,
-        applicationId: gate.widget.ApplicationID,
+        applicationId: gate.widget?.ApplicationID,
+        surfaceId: gate.surface?.ID,
         contextUser: gate.contextUser,
         provider: Metadata.Provider, // global-provider-ok: server-side mint under the single default provider
       });
-      return { success: true, notesArchived, conversationsCleared };
+      return {
+        success: true,
+        notesArchived: res.notesArchived,
+        conversationsCleared: res.conversationsCleared,
+        tourRunsCleared: res.tourRunsCleared ?? 0,
+        tourRunsDeleted: res.tourRunsDeleted ?? 0,
+      };
     } catch (e) {
       LogError(e);
       return { success: false, errorCode: 'server_error', error: e instanceof Error ? e.message : String(e) };
@@ -759,11 +857,12 @@ export class WidgetSessionService {
 
   /**
    * Shared guard for the RV4/RV5 visitor-privacy endpoints: resolves the lookup user, loads + validates
-   * the widget (status/origin), requires returning-visitor memory to be ON, and validates the presented
-   * VisitorKey shape. Returns the resolved widget + context user on success, or a structured failure.
+   * the widget or tour surface (status/origin), requires returning-visitor memory to be enabled, and
+   * validates the presented VisitorKey shape.
    */
   private async gateVisitorPrivacyRequest(
-    widgetKey: string,
+    widgetKey: string | undefined,
+    surfaceKey: string | undefined,
     visitorKey: string,
     origin: string | undefined,
   ): Promise<VisitorPrivacyGateResult> {
@@ -771,10 +870,29 @@ export class WidgetSessionService {
     if (!contextUser) {
       return { ok: false, errorCode: 'server_error', error: 'Server not configured for widget sessions.' };
     }
-    const widget = await this.loadWidgetByKey(widgetKey, contextUser);
-    if (!widget) {
+    const target = await this.resolveGuestTarget({ widgetKey, surfaceKey }, contextUser);
+    if (!target) {
       return { ok: false, errorCode: 'not_found', error: 'Unknown widget key.' };
     }
+    if (target.Kind === 'Surface') {
+      const surface = target.Surface;
+      const eligibility = EvaluateTourSurfaceMint(
+        { Status: surface.Status, AllowedOrigins: surface.AllowedOrigins, AuthStrategy: surface.AuthStrategy },
+        origin,
+      );
+      if (!eligibility.ok) {
+        return { ok: false, errorCode: eligibility.errorCode ?? 'server_error', error: 'Surface request rejected.' };
+      }
+      if (!VISITOR_KEY_PATTERN.test((visitorKey ?? '').trim())) {
+        return { ok: false, errorCode: 'not_found', error: 'A valid visitorKey is required.' };
+      }
+      const linkedWidget = surface.ConversationWidgetInstanceID
+        ? await this.loadWidgetById(surface.ConversationWidgetInstanceID, contextUser)
+        : null;
+      return { ok: true, surface, widget: linkedWidget ?? undefined, contextUser };
+    }
+
+    const widget = target.Widget;
     const eligibility = EvaluateWidgetMint(
       { Status: widget.Status, AllowedOrigins: widget.AllowedOrigins, Modality: widget.Modality },
       origin,
@@ -872,6 +990,264 @@ export class WidgetSessionService {
       return undefined;
     }
     return result.Results?.[0]?.ID ?? undefined;
+  }
+
+  /**
+   * Resolves a caller-supplied guest key (`surfaceKey` or `widgetKey`) against the database so all
+   * downstream session minting, refresh, and privacy checks branch strictly on an authoritative
+   * database entity (`Kind: 'Widget' | 'Surface'`) rather than raw request string shape.
+   */
+  private async resolveGuestTarget(
+    input: { widgetKey?: string; surfaceKey?: string },
+    contextUser: UserInfo,
+  ): Promise<ResolvedGuestTarget | null> {
+    const rawSurfaceKey = typeof input.surfaceKey === 'string' ? input.surfaceKey.trim() : '';
+    if (rawSurfaceKey.length > 0) {
+      if (rawSurfaceKey.length > MAX_PUBLIC_KEY_LENGTH) {
+        return null;
+      }
+      const surface = await this.loadTourSurfaceByKey(rawSurfaceKey, contextUser);
+      return surface ? { Kind: 'Surface', Surface: surface } : null;
+    }
+
+    const rawWidgetKey = typeof input.widgetKey === 'string' ? input.widgetKey.trim() : '';
+    if (rawWidgetKey.length === 0 || rawWidgetKey.length > MAX_PUBLIC_KEY_LENGTH) {
+      return null;
+    }
+
+    const widget = await this.loadWidgetByKey(rawWidgetKey, contextUser);
+    if (widget) {
+      return { Kind: 'Widget', Widget: widget };
+    }
+
+    const surface = await this.loadTourSurfaceByKey(rawWidgetKey, contextUser);
+    return surface ? { Kind: 'Surface', Surface: surface } : null;
+  }
+
+  /**
+   * Mints or refreshes a guest session for an `MJ: Tour Surfaces` embed surface.
+   * When the surface links to an `MJ: Conversation Widget Instances` record, both chat/voice
+   * widget capabilities and tour telemetry share the same JWT, `sessionId`, and `visitorKey`.
+   */
+  private async mintOrRefreshTourSurfaceSession(
+    surface: MJTourSurfaceEntity,
+    input: MintGuestSessionInput,
+    contextUser: UserInfo,
+    isRefresh: boolean,
+  ): Promise<MintGuestSessionResult> {
+    const eligibility = EvaluateTourSurfaceMint(
+      { Status: surface.Status, AllowedOrigins: surface.AllowedOrigins, AuthStrategy: surface.AuthStrategy },
+      input.origin,
+    );
+    if (!eligibility.ok) {
+      return this.audited({ success: false, errorCode: eligibility.errorCode, error: 'Tour surface mint rejected.' }, input, undefined);
+    }
+
+    const presented = (input.visitorKey ?? '').trim();
+    const resolvedVisitorKey = VISITOR_KEY_PATTERN.test(presented) ? presented : GenerateSessionId();
+
+    if (surface.ConversationWidgetInstanceID) {
+      const linkedWidget = await this.loadWidgetById(surface.ConversationWidgetInstanceID, contextUser);
+      if (!linkedWidget || linkedWidget.Status.trim().toLowerCase() !== 'active') {
+        return this.audited({ success: false, errorCode: 'disabled', error: 'Linked widget instance is unavailable.' }, input, linkedWidget);
+      }
+
+      const roleCheck = surface.GuestRoleID
+        ? this.resolveTourSurfaceGuestRole(surface)
+        : this.resolveIsolatedGuestRole(linkedWidget);
+      if (roleCheck.ok === false) {
+        return this.audited(roleCheck.refusal, input, linkedWidget);
+      }
+
+      let hostIdentity: HostAssertedIdentity | undefined;
+      if (linkedWidget.AuthStrategy === 'HostIdentity') {
+        const verified = this.verifyHost(linkedWidget, input.hostAssertion);
+        if (!verified) {
+          return this.audited({ success: false, errorCode: 'host_assertion_invalid', error: 'Host identity assertion invalid.' }, input, linkedWidget);
+        }
+        hostIdentity = verified;
+      }
+
+      let existingSession: RefreshableGuestSession | undefined;
+      let proofKeyThumbprint: string | undefined;
+      if (isRefresh) {
+        const verifiedSession = await this.verifyRefreshRequest(input.BearerToken, input.Proof, linkedWidget.ID, surface.ID);
+        if (!verifiedSession) {
+          return this.audited({ success: false, errorCode: 'not_found', error: 'Invalid refresh session.' }, input, linkedWidget);
+        }
+        existingSession = verifiedSession;
+        proofKeyThumbprint = verifiedSession.KeyThumbprint;
+      } else if (input.ProofKey !== undefined) {
+        const proofKey = ToProofPublicJwk(input.ProofKey);
+        if (!proofKey) {
+          return this.audited({ success: false, errorCode: 'not_found', error: 'Tour surface mint rejected.' }, input, linkedWidget);
+        }
+        proofKeyThumbprint = await ComputeJwkThumbprint(proofKey);
+      }
+
+      const returningVisitor = linkedWidget.RememberReturningVisitors
+        ? await this.resolveReturningVisitor(linkedWidget, resolvedVisitorKey, contextUser)
+        : { visitorKey: resolvedVisitorKey };
+      if (!isRefresh && linkedWidget.RememberReturningVisitors) {
+        await this.recapPriorConversationIfNeeded(linkedWidget, returningVisitor, contextUser);
+      }
+      const resolvedIdentity = await this.resolveHostIdentityIfApplicable(linkedWidget, hostIdentity, returningVisitor, contextUser);
+
+      const minted = this.mintToken(
+        linkedWidget,
+        roleCheck.name,
+        hostIdentity,
+        returningVisitor,
+        resolvedIdentity,
+        existingSession,
+        proofKeyThumbprint,
+      );
+      return this.audited(
+        {
+          ...minted,
+          surfaceId: surface.ID,
+          surfaceKey: surface.SurfaceKey,
+          conversationWidgetInstanceId: linkedWidget.ID,
+          visitorKey: minted.visitorKey ?? resolvedVisitorKey,
+          rememberReturningVisitors: true,
+        },
+        input,
+        linkedWidget,
+      );
+    }
+
+    const roleCheck = this.resolveTourSurfaceGuestRole(surface);
+    if (roleCheck.ok === false) {
+      return this.audited(roleCheck.refusal, input, undefined);
+    }
+
+    let existingSession: RefreshableGuestSession | undefined;
+    let proofKeyThumbprint: string | undefined;
+    if (isRefresh) {
+      const verifiedSession = await this.verifyRefreshRequest(input.BearerToken, input.Proof, undefined, surface.ID);
+      if (!verifiedSession) {
+        return this.audited({ success: false, errorCode: 'not_found', error: 'Invalid refresh session.' }, input, undefined);
+      }
+      existingSession = verifiedSession;
+      proofKeyThumbprint = verifiedSession.KeyThumbprint;
+    } else if (input.ProofKey !== undefined) {
+      const proofKey = ToProofPublicJwk(input.ProofKey);
+      if (!proofKey) {
+        return this.audited({ success: false, errorCode: 'not_found', error: 'Tour surface mint rejected.' }, input, undefined);
+      }
+      proofKeyThumbprint = await ComputeJwkThumbprint(proofKey);
+    }
+
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const sessionId = existingSession?.SessionId ?? GenerateSessionId();
+    const startedAtSeconds = existingSession?.StartedAtSeconds ?? nowSeconds;
+    const ttlSeconds = Math.min(
+      this.config.defaultSessionTtlMinutes * 60,
+      startedAtSeconds + MAX_GUEST_SESSION_SECONDS - nowSeconds,
+    );
+    const claims = BuildSurfaceGuestClaims({
+      issuer: this.publicUrl,
+      audience: this.config.audience,
+      surfaceId: surface.ID,
+      sessionId,
+      anonymousEmail: this.config.anonymousEmail,
+      guestRoleName: roleCheck.name,
+      nowSeconds,
+      ttlSeconds,
+      sessionStartedAtSeconds: startedAtSeconds,
+      proofKeyThumbprint,
+      visitorKey: resolvedVisitorKey,
+    });
+    const token = MagicLinkKeyManager.Instance.Sign(claims);
+
+    return this.audited(
+      {
+        success: true,
+        token,
+        expiresAt: new Date(claims.exp * 1000).toISOString(),
+        surfaceId: surface.ID,
+        surfaceKey: surface.SurfaceKey,
+        sessionId,
+        visitorKey: resolvedVisitorKey,
+        rememberReturningVisitors: true,
+      },
+      input,
+      undefined,
+    );
+  }
+
+  /** Resolves and enforces an isolated guest role for an `MJ: Tour Surfaces` record. */
+  private resolveTourSurfaceGuestRole(
+    surface: MJTourSurfaceEntity,
+  ): { ok: true; name: string } | { ok: false; refusal: MintGuestSessionResult } {
+    const md = Metadata.Provider; // global-provider-ok: pre-auth server-side mint under the single default provider
+    let roleName: string | null = null;
+    if (surface.GuestRoleID) {
+      roleName = this.resolveGuestRoleName(surface.GuestRoleID);
+      if (!roleName) {
+        LogError(`[Widget] Guest role ${surface.GuestRoleID} for tour surface ${surface.ID} not found in metadata.`);
+        return { ok: false, refusal: { success: false, errorCode: 'server_error', error: 'Guest role not resolvable.' } };
+      }
+    } else {
+      const defaultRole = md?.Roles.find((r) => r.Name.trim().toLowerCase() === TOUR_GUEST_ROLE_NAME.toLowerCase());
+      roleName = defaultRole?.Name ?? TOUR_GUEST_ROLE_NAME;
+    }
+
+    if (!IsIsolatedTourSurfaceGuestRole(roleName, this.guestRolePolicy)) {
+      LogError(
+        `[Widget] Tour surface ${surface.ID} grants guest role '${roleName}', which is not isolated for guest visitors.`,
+      );
+      return { ok: false, refusal: { success: false, errorCode: 'guest_role_not_isolated', error: 'Tour surface mint rejected.' } };
+    }
+    return { ok: true, name: roleName };
+  }
+
+  /** Loads an `MJ: Tour Surfaces` row by its public key (`ts_…`). */
+  private async loadTourSurfaceByKey(publicKey: string, contextUser: UserInfo): Promise<MJTourSurfaceEntity | null> {
+    const key = (publicKey ?? '').trim();
+    if (!key) {
+      return null;
+    }
+    const rv = new RunView();
+    const result = await rv.RunView<MJTourSurfaceEntity>(
+      {
+        EntityName: TOUR_SURFACE_ENTITY,
+        ExtraFilter: `PublicKey = '${key.replace(/'/g, "''")}'`,
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!result.Success) {
+      LogError(`[Widget] Failed to load tour surface by key: ${result.ErrorMessage}`);
+      return null;
+    }
+    return result.Results?.[0] ?? null;
+  }
+
+  /** Loads an `MJ: Conversation Widget Instances` row by ID. */
+  private async loadWidgetById(widgetId: string, contextUser: UserInfo): Promise<MJConversationWidgetInstanceEntity | null> {
+    const id = (widgetId ?? '').trim();
+    if (!id) {
+      return null;
+    }
+    const rv = new RunView();
+    const result = await rv.RunView<MJConversationWidgetInstanceEntity>(
+      {
+        EntityName: WIDGET_ENTITY,
+        ExtraFilter: `ID = '${id.replace(/'/g, "''")}'`,
+        MaxRows: 1,
+        SkipTotalRowCount: true,
+        ResultType: 'entity_object',
+      },
+      contextUser,
+    );
+    if (!result.Success) {
+      LogError(`[Widget] Failed to load linked widget by id: ${result.ErrorMessage}`);
+      return null;
+    }
+    return result.Results?.[0] ?? null;
   }
 
   /** Loads a single widget instance by its public key (read-only, simple result). */

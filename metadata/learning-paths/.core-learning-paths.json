@@ -1,0 +1,166 @@
+[
+  {
+    "fields": {
+      "Name": "MJ Essentials",
+      "PathKey": "core.essentials",
+      "Description": "Core orientation checklist for every MemberJunction user covering workspace navigation, Home, entity records, Data Explorer views, Dashboards, and collaborating with Sage.",
+      "ApplicationID": null,
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true,
+        "localizations": {
+          "es": {
+            "Name": "Conceptos Esenciales de MJ",
+            "Description": "Lista de orientación esencial para todos los usuarios de MemberJunction."
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "2DD336E5-6CA5-45BC-9030-F2CC2E31BF16"
+    },
+    "relatedEntities": {
+      "MJ: Tour Learning Path Tour Links": [
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=core.welcome",
+            "Sequence": 1,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "0A816A5F-28FC-47D7-B8CF-834A21014407"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=core.home",
+            "Sequence": 2,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "E799AF5E-FA7F-4613-A319-9633602A63E5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=core.records",
+            "Sequence": 3,
+            "IsRequired": false,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "FF7B7594-1CB8-4FF6-AE08-53307402B6CF"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=core.chat",
+            "Sequence": 4,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "2221F96E-10BB-4EE7-AAC1-B4CA650DC27C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=core.views-filters",
+            "Sequence": 5,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "CDECD818-70BE-465B-88CA-08D97695DACB"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=core.dashboards-pins",
+            "Sequence": 6,
+            "IsRequired": false,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "F32F8E8A-4B1C-44EE-A663-890040E0A1B9"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ Administrator",
+      "PathKey": "admin.essentials",
+      "Description": "Onboarding checklist for administrators governing tours, overrides, triggers, and learning path assignments.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Tour Studio",
+      "AudienceFilter": {
+        "logic": "and",
+        "filters": [
+          {
+            "field": "user.Roles",
+            "operator": "contains",
+            "value": "Developer"
+          }
+        ]
+      },
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": false,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "CFD458D4-47F6-4557-BD8E-A66336DCE0E2"
+    },
+    "relatedEntities": {
+      "MJ: Tour Learning Path Tour Links": [
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=admin.tours",
+            "Sequence": 1,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "2826CFBD-E00F-4098-9207-A9A7CB318EAC"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "MJ Builder",
+      "PathKey": "builder.essentials",
+      "Description": "Curriculum for developers and power builders creating, testing, and publishing Guided Tours and interactive components.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Tour Studio",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "C6BA717B-FB9F-4684-94ED-9E59AF05F189"
+    },
+    "relatedEntities": {
+      "MJ: Tour Learning Path Tour Links": [
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=builder.tour-authoring",
+            "Sequence": 1,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "0B446E4A-C8DC-4CE7-A4A0-6F97149CB3EB"
+          }
+        }
+      ]
+    }
+  }
+]

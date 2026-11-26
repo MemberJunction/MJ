@@ -1,0 +1,38 @@
+[
+  {
+    "fields": {
+      "Name": "Tour Workspace Quick Configurator",
+      "Namespace": "Tours/Interactive",
+      "Title": "Workspace Quick Configurator",
+      "Description": "Interactive onboarding selector rendered inside Guided Tour EmbeddedComponent steps so new users can choose a starting workspace track or mark onboarding configuration complete.",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "FunctionalRequirements": "Displays 3 clickable workspace tracks (Explore Data, Collaborate with Sage, Manage & Build) with keyboard-accessible selection cards, optional custom focus area input, and completion actions that emit 'chooseBranch' (with payload { choiceKey }) and 'completeStep' events through callbacks.OnEvent to drive TourSession branching and step progression.",
+      "TechnicalDesign": "Stateless-mount React component accepting standard MJ ComponentSpec props (data, step, callbacks). Uses useState hooks directly from the sandbox runtime, design-token CSS variables (--mj-*) with safe fallbacks, accessible role='radiogroup'/aria-checked controls, and calls callbacks.OnEvent('chooseBranch', { choiceKey }) when a user selects and applies a workspace track or callbacks.OnEvent('completeStep', { selectedTrack, completed: true }) on direct completion.",
+      "Specification": "@file:spec/tour-workspace-quick-configurator.spec.json"
+    },
+    "primaryKey": {
+      "ID": "0AA4BCCA-0116-41CB-9CA0-05458B37E936"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tour Interactive Readiness Check",
+      "Namespace": "Tours/Interactive",
+      "Title": "Interactive Tour Readiness Check",
+      "Description": "Interactive pre-publish readiness checklist widget bound via TourStepType.ComponentID for validating anchor hygiene, step count, outcome goals, and accessibility before publishing a tour.",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "FunctionalRequirements": "Presents an interactive author readiness checklist covering semantic anchor selection, concise step count (<= 5 steps), outcome Goal definition, and WCAG 2.2 AA review. Allows authors to inspect dynamic criteria passed via data.checks or check off each item interactively, showing live completion progress and enabling a 'Confirm Readiness & Continue' action that emits callbacks.OnEvent('completeStep', { allReady: true, checkedItems }).",
+      "TechnicalDesign": "Self-contained React ComponentSpec widget accepting data (checks override, heading), step, and callbacks. Manages per-item completion via useState, renders semantic checkboxes with accessible labels and progress bar using --mj-* CSS custom properties, and triggers callbacks.OnEvent('completeStep', payload) when all readiness checks pass.",
+      "Specification": "@file:spec/tour-interactive-readiness-check.spec.json"
+    },
+    "primaryKey": {
+      "ID": "87F243DD-DB98-43A0-84FF-8EBF2B7F2229"
+    }
+  }
+]

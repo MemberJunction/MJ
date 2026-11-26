@@ -9,14 +9,19 @@ import {
     type EdgeWorkerReply,
     type EdgeWorkerRequest,
 } from '@memberjunction/ng-conversations';
+import type { IMetadataProvider } from '@memberjunction/core';
+import { TourEngine } from '@memberjunction/core-entities';
 import type { SearchService } from '@memberjunction/ng-search';
 import type { ComposerSuggestionRequest } from '@memberjunction/ng-composer';
+import type { TourDefinition } from '@memberjunction/tours-runtime';
 import {
     OmnibarSemanticIndexService,
     type OmnibarSemanticEntry,
 } from './omnibar-semantic-index.service';
 import { OmnibarSearchProvider } from './providers/omnibar-search.provider';
+import { OmnibarToursProvider } from './providers/omnibar-tours.provider';
 import { GetOmnibarNavPayload } from './omnibar-provider';
+import type { ExplorerTourHost } from '../tours/explorer-tour-host.service';
 
 /** Domain-clustered 32-dim semantic vectors (captures synonyms like unpaid->invoices, merge->duplicate, manage->agent). */
 const SEMANTIC_CONCEPTS: Array<{ Terms: string[]; Dims: number[] }> = [
@@ -157,6 +162,26 @@ const SAMPLE_ENTRIES: OmnibarSemanticEntry[] = [
         Nav: { kind: 'app', appId: 'app-crm', appName: 'CRM' },
         SearchText: 'CRM application: customers, pipeline deals, and sales accounts',
     },
+    {
+        Key: 'tour:workflow-automation',
+        Kind: 'tour',
+        Group: 'Guided Tours',
+        Title: 'Workflow Automation Basics',
+        Description: 'Automation · Schedule recurring workflow tasks · ~3 min',
+        Icon: 'fa-solid fa-route',
+        Nav: { kind: 'tour', tourKey: 'workflow-automation' },
+        SearchText: 'Workflow Automation Basics (workflow-automation) guided tour Automation: Schedule recurring workflow tasks',
+    },
+    {
+        Key: 'tour-step:workflow-automation:schedule-job',
+        Kind: 'tour',
+        Group: 'Guided Tour Steps',
+        Title: 'Workflow Automation Basics → Schedule Jobs',
+        Description: 'Configure recurring automation jobs and tasks on a schedule.',
+        Icon: 'fa-solid fa-location-crosshairs',
+        Nav: { kind: 'tour', tourKey: 'workflow-automation', startAtStepKey: 'schedule-job' },
+        SearchText: 'Workflow Automation Basics step Schedule Jobs: Configure recurring automation jobs and tasks on a schedule.',
+    },
 ];
 
 describe('OmnibarSemanticIndexService & Offline Semantic Omnibar (Stage 6C.2)', () => {
@@ -269,5 +294,91 @@ describe('OmnibarSemanticIndexService & Offline Semantic Omnibar (Stage 6C.2)', 
         });
         expect(previewSearchSpy).toHaveBeenCalledTimes(1);
         expect(results.some((r) => r.id === 'Invoices:inv-100')).toBe(true);
+    });
+
+    it('collects Guided Tours & Step deep links from TourEngine and surfaces FilterKinds=["tour"] results in OmnibarToursProvider', async () => {
+        const sampleTour: TourDefinition = {
+            ID: 'tour-wf-1',
+            TourKey: 'workflow-automation',
+            Name: 'Workflow Automation Basics',
+            Description: 'Automate recurring tasks and jobs.',
+            ApplicationName: 'Automation',
+            EstimatedMinutes: 3,
+            Status: 'Active',
+            Steps: [
+                {
+                    StepKey: 'schedule-job',
+                    Sequence: 1,
+                    StepType: 'Spotlight',
+                    Title: 'Schedule Jobs',
+                    Body: 'Configure recurring automation jobs and tasks on a schedule.',
+                    Placement: 'bottom',
+                    Mode: 'Show',
+                    OnMissing: 'Skip',
+                    IsOptional: false,
+                    Configuration: {},
+                    Completion: { Checks: [{ Type: 'NextButton' }] },
+                },
+            ],
+            Paths: [],
+        };
+
+        const mockTourEngine = {
+            Loaded: true,
+            GetTours: vi.fn().mockResolvedValue([sampleTour]),
+        } as unknown as TourEngine;
+        vi.spyOn(TourEngine, 'GetProviderInstance').mockReturnValue(mockTourEngine);
+
+        const mockProvider = { Entities: [] } as unknown as IMetadataProvider;
+        const collected = await OmnibarSemanticIndexService.Instance.CollectMetadataEntries({
+            Provider: mockProvider,
+        });
+
+        const wholeTourEntry = collected.find((e) => e.Key === 'tour:workflow-automation');
+        const stepEntry = collected.find((e) => e.Key === 'tour-step:workflow-automation:schedule-job');
+        expect(wholeTourEntry).toBeDefined();
+        expect(wholeTourEntry?.Kind).toBe('tour');
+        expect(stepEntry).toBeDefined();
+        expect(stepEntry?.Kind).toBe('tour');
+        expect(stepEntry?.Nav).toEqual({
+            kind: 'tour',
+            tourKey: 'workflow-automation',
+            startAtStepKey: 'schedule-job',
+        });
+
+        EdgeAIWorkerHost.Instance.SetPortFactoryForTesting(() => new OmnibarFakePort());
+        await OmnibarSemanticIndexService.Instance.BuildOrRefreshIndex({
+            ExplicitEntries: SAMPLE_ENTRIES,
+        });
+
+        const tourOnly = await OmnibarSemanticIndexService.Instance.Query('workflow automation schedule', {
+            FilterKinds: ['tour'],
+            MaxResults: 5,
+        });
+        expect(tourOnly.Suggestions.length).toBeGreaterThanOrEqual(2);
+        expect(tourOnly.Suggestions.every((s) => s.type === 'tour')).toBe(true);
+        expect(
+            tourOnly.Suggestions.some(
+                (s) =>
+                    GetOmnibarNavPayload(s)?.kind === 'tour' &&
+                    (GetOmnibarNavPayload(s) as Extract<ReturnType<typeof GetOmnibarNavPayload>, { kind: 'tour' }>).startAtStepKey === 'schedule-job',
+            ),
+        ).toBe(true);
+
+        const toursProvider = new OmnibarToursProvider();
+        toursProvider.Attach({
+            TourHost: {
+                GetEligibleTours: vi.fn().mockResolvedValue([{ Tour: sampleTour }]),
+                GetLearningPathSummaries: vi.fn().mockResolvedValue([]),
+            } as unknown as ExplorerTourHost,
+        });
+
+        const merged = await toursProvider.GetSuggestions({
+            Query: 'how do I schedule recurring workflow jobs',
+            MaxResults: 9,
+            ContextUser: null,
+            Provider: null,
+        });
+        expect(merged.some((m) => m.id === 'tour-step:workflow-automation:schedule-job')).toBe(true);
     });
 });

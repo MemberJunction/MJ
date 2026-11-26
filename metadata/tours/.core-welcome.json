@@ -1,0 +1,427 @@
+[
+  {
+    "fields": {
+      "Name": "Welcome to MemberJunction",
+      "TourKey": "core.welcome",
+      "Description": "A quick orientation covering the application switcher, global Omnibar search, workspace tracks, and the tours launcher.",
+      "ApplicationID": null,
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 100,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User chooses a starting track and learns how to navigate apps, search, and revisit tours."
+      },
+      "StartLocation": {
+        "Application": "Home"
+      },
+      "Configuration": {
+        "localizations": {
+          "es": {
+            "name": "Bienvenido a MemberJunction",
+            "description": "Una orientación rápida sobre el selector de aplicaciones, la búsqueda Omnibar, las rutas de trabajo y el lanzador de recorridos."
+          }
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "1619DA7E-6119-49A9-85DD-683E2B788B40"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "welcome-card",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Welcome to MemberJunction",
+            "Body": "Take two minutes to see how applications, global search, and workspace tracks fit together.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Show me around",
+              "SecondaryButtonText": "Not now",
+              "ShowProgress": true,
+              "localizations": {
+                "es": {
+                  "Title": "Bienvenido a MemberJunction",
+                  "Body": "Tómate dos minutos para conocer las aplicaciones, la búsqueda global y tus espacios de trabajo.",
+                  "NextButtonText": "Empezar"
+                }
+              }
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9CF718C9-4552-48A2-A921-E8C03FF60111"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "app-switcher",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Switch Between Applications",
+            "Body": "Open the application switcher anytime to move between Home, Data Explorer, Dashboards, Lists, Integrations, and domain apps.",
+            "Configuration": {
+              "ShowProgress": true,
+              "AllowTargetClick": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.app-switcher"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "D47009CC-33BA-4A05-B626-F261ED046465"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "omnibar",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Search Anything with the Omnibar",
+            "Body": "Search records, saved views, dashboards, files, or launch guided tours directly from the Omnibar.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.omnibar"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "63A146D0-C904-469E-95FE-3750D63F0FD9"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "choose-track",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Choice",
+            "Title": "Choose Your Starting Track",
+            "Body": "Pick what you want to explore first — each track highlights the tools built for that workflow.",
+            "Configuration": {
+              "Question": "Where would you like to focus first?",
+              "Options": [
+                {
+                  "Key": "explore-data",
+                  "Label": "Explore Data & Views",
+                  "Description": "Browse entities, smart filters, saved views, and record relationships in Data Explorer."
+                },
+                {
+                  "Key": "dashboards-pins",
+                  "Label": "Dashboards & Pinned Workspaces",
+                  "Description": "Pin key dashboards, views, and records to Home for one-click daily access."
+                },
+                {
+                  "Key": "automate-admin",
+                  "Label": "Automate & Govern",
+                  "Description": "Orchestrate workflows, scheduled jobs, lists, and platform governance."
+                }
+              ]
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "FBBAC994-69A1-41C3-AF70-B8CE5BB847DE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "track-explore-data",
+            "Sequence": 5,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Track: Explore Data & Views",
+            "Body": "Launch **Data Explorer** from your apps to filter records with smart filters, switch seamlessly between Grid, Card, and Timeline modes, save reusable User Views, and inspect related records.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.home.apps"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "92AAB033-5A99-4CE6-9160-75BFCB2D92F5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "track-dashboards-pins",
+            "Sequence": 6,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Track: Pin Dashboards & Workspaces",
+            "Body": "Your **Pinned** section keeps daily tools one click away. Open any dashboard, saved view, or record and choose **Pin to Home** from the User Menu to add it directly here.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.home.pinned"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "4AE0BBB8-8BA1-49DB-8F24-0417CDF824ED"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "track-automate-monitor",
+            "Sequence": 7,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Track: Automate & Monitor",
+            "Body": "Track background jobs, scheduled list refreshes, workflow completions, and platform alerts right from **Notifications & Activity** in the top bar.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.notifications"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "E017A919-AAD7-4650-B327-3D497579A721"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "revisit-tours",
+            "Sequence": 8,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Revisit Tours & Learning Paths Anytime",
+            "Body": "Open your User Avatar Menu and choose **Tours** anytime to browse **For This Screen**, **All Apps**, and **Paths**.",
+            "Configuration": {
+              "ShowProgress": true,
+              "NextButtonText": "Finish"
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.user-menu"
+            },
+            "Placement": "Bottom",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "027F51A5-6611-48AB-88A1-46906466728D"
+          }
+        }
+      ],
+      "MJ: Tour Step Paths": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "FBBAC994-69A1-41C3-AF70-B8CE5BB847DE",
+            "ToStepID": "92AAB033-5A99-4CE6-9160-75BFCB2D92F5",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "explore-data"
+                }
+              ]
+            },
+            "Label": "Explore Data",
+            "Priority": 100,
+            "Sequence": 1,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "D3FF8CD4-A87D-4B96-AB49-42119575DCC8"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "FBBAC994-69A1-41C3-AF70-B8CE5BB847DE",
+            "ToStepID": "4AE0BBB8-8BA1-49DB-8F24-0417CDF824ED",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "dashboards-pins"
+                }
+              ]
+            },
+            "Label": "Dashboards & Pins",
+            "Priority": 90,
+            "Sequence": 2,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "8079C666-7E44-4293-8508-C27B5153530F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "FBBAC994-69A1-41C3-AF70-B8CE5BB847DE",
+            "ToStepID": "E017A919-AAD7-4650-B327-3D497579A721",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "automate-admin"
+                }
+              ]
+            },
+            "Label": "Automate & Govern",
+            "Priority": 80,
+            "Sequence": 3,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "CA9BF501-8446-4426-A334-9DCE51CCBC50"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "FBBAC994-69A1-41C3-AF70-B8CE5BB847DE",
+            "ToStepID": "92AAB033-5A99-4CE6-9160-75BFCB2D92F5",
+            "Condition": null,
+            "Label": "Default Track",
+            "Priority": 0,
+            "Sequence": 4,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "C9249498-75ED-4306-88CA-B9CB76F34040"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "92AAB033-5A99-4CE6-9160-75BFCB2D92F5",
+            "ToStepID": "027F51A5-6611-48AB-88A1-46906466728D",
+            "Condition": null,
+            "Label": "To Summary",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "A3476858-C98C-40B5-A119-97FB2CBE8F46"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "4AE0BBB8-8BA1-49DB-8F24-0417CDF824ED",
+            "ToStepID": "027F51A5-6611-48AB-88A1-46906466728D",
+            "Condition": null,
+            "Label": "To Summary",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "4873676C-FF7A-4CEF-A47C-BD17CA91D989"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "E017A919-AAD7-4650-B327-3D497579A721",
+            "ToStepID": "027F51A5-6611-48AB-88A1-46906466728D",
+            "Condition": null,
+            "Label": "To Summary",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "7AC54073-69AD-4CA3-95AC-DF7721EF89E1"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Home"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 100,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "388D88B4-ACA0-4BAA-8764-0D2F41BC262B"
+          }
+        }
+      ]
+    }
+  }
+]

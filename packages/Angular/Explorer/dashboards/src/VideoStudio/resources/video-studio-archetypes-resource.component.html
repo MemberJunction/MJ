@@ -4,6 +4,7 @@
       Title="Archetypes"
       Icon="fa-solid fa-layer-group"
       Subtitle="Reusable beat templates, duration ranges, and pacing rules for video productions"
+      data-mj-tour-anchor="video.archetypes-header"
     >
     <div meta>
       <mj-stat-badge
@@ -23,6 +24,7 @@
         mjButton
         Variant="primary"
         data-testid="new-archetype-button"
+        data-mj-tour-anchor="video.new-archetype"
         (click)="OpenNewArchetypeEditor()"
       >
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
@@ -138,7 +140,7 @@
               (Action)="ResetFiltersAndSearch()"
             ></mj-empty-state>
           } @else {
-            <div class="vs-archetypes-grid" data-testid="archetypes-grid">
+            <div class="vs-archetypes-grid" data-testid="archetypes-grid" data-mj-tour-anchor="video.archetypes-grid">
               @for (arch of FilteredArchetypes; track arch.ID) {
                 <article
                   class="vs-archetype-card"

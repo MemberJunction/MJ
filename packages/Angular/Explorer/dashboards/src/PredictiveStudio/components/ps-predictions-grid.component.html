@@ -1,6 +1,6 @@
-<div class="ps-pred-grid-host" [style.height]="Height">
+<div class="ps-pred-grid-host" [style.height]="Height" data-mj-tour-anchor="ps.predictions-grid">
   <!-- ───────── TOOLBAR ───────── -->
-  <div class="pg-toolbar">
+  <div class="pg-toolbar" data-mj-tour-anchor="ps.predictions-toolbar">
     <div class="pg-toolbar-left">
       <div class="pg-search-box">
         <i class="fa-solid fa-magnifying-glass"></i>
@@ -17,7 +17,7 @@
         }
       </div>
 
-      <div class="pg-tier-filters">
+      <div class="pg-tier-filters" data-mj-tour-anchor="ps.predictions-bands">
         <button
           type="button"
           class="pg-tier-btn"
@@ -90,7 +90,7 @@
   }
 
   <!-- ───────── MAIN VIEW CONTAINER ───────── -->
-  <div class="pg-view-container">
+  <div class="pg-view-container" data-mj-tour-anchor="ps.predictions-results">
     @if (IsLoading) {
       <mj-loading text="Loading predictions..." size="medium"></mj-loading>
     } @else if (LoadError) {
@@ -379,7 +379,7 @@
         </div>
 
         <!-- Explainability: Local Feature Drivers -->
-        <div class="pg-detail-drivers-wrap">
+        <div class="pg-detail-drivers-wrap" data-mj-tour-anchor="ps.predictions-drivers">
           <div class="ps-section-title">
             <i class="fa-solid fa-lightbulb" style="color:var(--mj-status-warning)"></i> Factors behind this score (associations, not causes)
           </div>

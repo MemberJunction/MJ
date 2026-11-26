@@ -7,6 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationUtility, MentionContent, SpecialContentToken } from '@memberjunction/ai-core-plus';
+import { TourSessionGuideMode, TourSignals } from '@memberjunction/tours-runtime';
 
 /**
  * Radio button filter options for notification read status
@@ -95,6 +96,17 @@ interface UserRoutineResourceConfig {
   routineId: string;
   runId?: string;
   conversationId?: string;
+}
+
+/**
+ * Configuration written by tour notifications ("What's new" / "Start Tour For User")
+ * so clicking the notification launches the target guided tour.
+ */
+interface TourResourceConfig {
+  type: 'tour';
+  tourKey: string;
+  guideMode?: TourSessionGuideMode;
+  startAtStepKey?: string;
 }
 
 /**
@@ -860,6 +872,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       if (this.parseUserRoutineConfig(notification)) {
         return true;
       }
+      if (this.parseTourConfig(notification)) {
+        return true;
+      }
     }
 
     const info = this.NotificationUrl(notification);
@@ -1069,6 +1084,9 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
         return;
       }
       if (this.navigateToUserRoutine(notification)) {
+        return;
+      }
+      if (this.navigateToTour(notification)) {
         return;
       }
       if (this.navigateToHandoffConsole(notification)) {
@@ -1286,6 +1304,33 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
       chatApp.ID,
       { queryParams: { ...navConfig } }
     );
+    return true;
+  }
+
+  /** The tour config of a notification, or null when not a tour launch notification. */
+  private parseTourConfig(notification: MJUserNotificationEntity): TourResourceConfig | null {
+    if (!notification.ResourceConfiguration || notification.ResourceConfiguration.trim().length === 0) {
+      return null;
+    }
+    const config = SafeJSONParse<TourResourceConfig>(notification.ResourceConfiguration);
+    if (!config || config.type?.trim().toLowerCase() !== 'tour' || !config.tourKey) {
+      return null;
+    }
+    return config;
+  }
+
+  /** Launches a guided tour when a `{ type: 'tour', tourKey }` notification is clicked. */
+  private navigateToTour(notification: MJUserNotificationEntity): boolean {
+    const config = this.parseTourConfig(notification);
+    if (!config) {
+      return false;
+    }
+    TourSignals.Instance.Emit('core.tour.launchRequest', {
+      tourKey: config.tourKey,
+      mode: config.guideMode,
+      startAtStepKey: config.startAtStepKey,
+      launchSource: 'Notification',
+    });
     return true;
   }
 

@@ -1,0 +1,941 @@
+[
+  {
+    "fields": {
+      "Name": "Actions Catalog, Parameters & Execution Logs",
+      "TourKey": "actions.catalog-test",
+      "Description": "Explore hierarchical MJ: Actions, strongly-typed input/output parameters, interactive test harness runs, and MJ: Action Execution Logs.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Actions",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User explores Actions catalog, parameters, test harness, and execution logs."
+      },
+      "StartLocation": {
+        "Application": "Actions",
+        "NavItem": "ActionsOverviewResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "3A0FA7F6-A1F9-4200-A0A9-E1275341F52E"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "actions-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Actions Catalog & Execution Engine",
+            "Body": "**MJ: Actions** package reusable business logic with typed parameters so AI agents, workflows, and scheduled jobs invoke the exact same audited operations.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Actions",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Actions",
+              "NavItemKey": "ActionsOverviewResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "E969E555-5FF6-468F-9F53-87C97EF7E94F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "actions-categories-tree",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Hierarchical MJ: Actions Categories",
+            "Body": "Browse **MJ: Actions** by hierarchical category in the tree panel, filter by Active or AI-generated type, or create new categories and custom actions.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "actions.explorer.tree"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Actions",
+              "NavItemKey": "ActionExplorerResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2D282220-DE5C-4853-8908-79647FDA434D"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "actions-params-test-harness",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Typed Parameters & Test Harness Runs",
+            "Body": "Each action defines strongly-typed input and output parameters. Select **Run** on any action card or row here to launch the **Action Test Harness** and inspect live results.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "actions.explorer.catalog"
+            },
+            "Placement": "Left",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "33A4F2E0-A7E8-4447-B9E7-04CBDDA265BE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "actions-execution-logs",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Auditing MJ: Action Execution Logs",
+            "Body": "Every test harness, workflow, and agent invocation writes to **MJ: Action Execution Logs** with parameters, result codes, and durations — or continue to **Declarative Workflows & Run Traces**.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "workflows.builder-runs"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Actions",
+              "NavItemKey": "ActionsMonitorResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "4F9B2C3A-302E-40A0-A8D4-B9D474A0FBE1"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Actions"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3009AFB9-FF4F-4099-A653-4E3D481422EF"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Declarative Workflows & Run Traces",
+      "TourKey": "workflows.builder-runs",
+      "Description": "Learn how declarative Workflows combine event and schedule triggers, multi-step orchestration, retry policies, and run trace inspection.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Workflows",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User explores Workflows triggers, multi-step orchestration, retry policies, and run traces."
+      },
+      "StartLocation": {
+        "Application": "Workflows",
+        "NavItem": "WorkflowsResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "69FD04A5-A20F-485C-954B-EB6CC453011F"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "workflows-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Declarative Multi-Step Workflows",
+            "Body": "Build repeatable, deterministic pipelines across MJ Actions, AI agents, and conditional paths — the same steps, the same route, every time.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Workflows",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Workflows",
+              "NavItemKey": "WorkflowsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "AD76F1E5-305B-4A75-A63C-ADC246770F7F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "workflows-triggers-orchestration",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Event & Schedule Triggers + Orchestration",
+            "Body": "Author multi-step workflow graphs triggered by entity events, schedules, or webhooks, passing strongly-typed outputs between each step.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "WorkflowsResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9573A07A-FCA6-405A-9BAE-DC7C0A5F12B8"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "workflows-retries-traces",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Retry Policies & Run Trace Inspection",
+            "Body": "Attach per-step retry policies for transient failures and open **Runs** to inspect step-by-step execution timelines, input/output payloads, and error traces.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "WorkflowRunsResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Workflows",
+              "NavItemKey": "WorkflowRunsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "24DBA4F0-856E-43C9-9872-92F68CDE2FBF"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "workflows-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Workflow Orchestration Ready",
+            "Body": "Continue to **Scheduled Jobs, Cron Locks & History** to see how recurring schedules trigger workflows and actions safely across workers.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "scheduling.jobs-activity"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C043115F-D9AA-4853-AABE-8ABB84D4C33D"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Workflows"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9635B0F6-970D-45BA-9A74-5CFC555ACAA0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Scheduled Jobs, Cron Locks & History",
+      "TourKey": "scheduling.jobs-activity",
+      "Description": "Manage MJ: Scheduled Jobs with distributed lock safety, timezone-aware cron expressions, and execution history trends.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Scheduling",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews Scheduled Jobs, distributed lock safety, cron schedules, and execution history."
+      },
+      "StartLocation": {
+        "Application": "Scheduling",
+        "NavItem": "SchedulingDashboardResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "8AFD1CA2-64BA-4BF7-ADD1-D7953DCB9863"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "scheduling-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Scheduled Jobs & Cron Orchestration",
+            "Body": "Coordinate recurring background jobs across agents, actions, and workflows with timezone-aware cron schedules and distributed lock protection.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Scheduling",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Scheduling",
+              "NavItemKey": "SchedulingDashboardResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2394BEEC-857E-43C6-9C55-A65A15326F23"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "scheduling-locks-health",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "System Health & Distributed Lock Safety",
+            "Body": "Monitor active **MJ: Scheduled Jobs**, 7-day failures, and distributed locks here. Stale locks prevent overlapping runs across clustered workers and can be released safely if a node exits.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "scheduling.overview.health"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "5C7975CE-9E46-4CE5-91F7-D03A0D4F7E4E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "scheduling-cron-history",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Timezone-Aware Cron & Execution History",
+            "Body": "Switch to **Jobs** to create or pause timezone-aware cron schedules, and use **Activity** to inspect run trends, durations, and error details.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "scheduling.tabs"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "D08079F1-9427-443E-885B-24017BCFBA94"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "scheduling-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Scheduling Operations Covered",
+            "Body": "Continue to **Durable Work Queues & Dead-Letter Replay** to manage asynchronous partitioned queues and dead-letter recovery.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "scheduling.work-queue"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8E64F173-8283-451B-9FE8-5903EF70823A"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Scheduling"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EC178C67-78EF-4F10-B895-6E3708F9C875"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Durable Work Queues & Dead-Letter Replay",
+      "TourKey": "scheduling.work-queue",
+      "Description": "Operate the durable Work Queue: inspect live topic/subscription throughput, diagnose and replay dead letters, or tune concurrency and ordered partition keys.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Work Queue",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "Operator reviews Work Queue throughput, dead-letter replay, or partition tuning."
+      },
+      "StartLocation": {
+        "Application": "Work Queue",
+        "NavItem": "WorkQueueDashboard"
+      }
+    },
+    "primaryKey": {
+      "ID": "3D3C3171-FA02-4845-9760-5F00AA7FBB46"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "wq-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Durable Work Queue Operations",
+            "Body": "Operate durable topics, subscriptions, ordered FIFO partition keys, and dead-letter recovery across your MemberJunction transports.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Work Queue",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Work Queue"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "EEFBED25-D058-4DEF-8745-329744F26A5E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "wq-throughput-overview",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Queue Throughput, Workers & Partitions",
+            "Body": "Monitor pending counts, in-flight deliveries, dead-lettered items, and blocked FIFO partition keys grouped by transport and subscription.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "scheduling.work-queue.body"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "AC1D2F1F-6FA0-42F3-A642-2C6A2B0D24AC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "wq-operational-task-choice",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Choice",
+            "Title": "What Operational Task Do You Need?",
+            "Body": "Choose the Work Queue operational track that matches what you want to do next.",
+            "Configuration": {
+              "Question": "Which Work Queue operational task would you like to walk through?",
+              "Options": [
+                {
+                  "Key": "dead-letters",
+                  "Label": "Inspect & Replay Dead Letters",
+                  "Description": "Diagnose exhausted retries, inspect error payloads, and safely replay or discard failed items."
+                },
+                {
+                  "Key": "partition-tuning",
+                  "Label": "Tune Concurrency & Queue Types",
+                  "Description": "Configure max concurrency, backoff curves, and ordered partition keys per queue type."
+                }
+              ]
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "A6AE784D-1156-4F42-8651-979603D9E44E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "wq-dead-letters-task",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Task: Diagnosing & Replaying Dead Letters",
+            "Body": "Select the **Dead Letters** tab here to filter failed deliveries by subscription, expand the full payload and `LastError` trace, and safely replay or discard items after fixing the root cause.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "scheduling.work-queue.tabs"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "F91FA098-51F9-482F-9BE0-75ACFCE6221B"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "wq-partition-tuning-task",
+            "Sequence": 5,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Task: Queue Types, Retries & Partition Keys",
+            "Body": "Open **Partitions** here to inspect and unblock Ordered FIFO keys, use **Bindings** to validate transport mappings, and tune max concurrency and backoff curves on **MJ: Work Queue Subscriptions**.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "scheduling.work-queue.tabs"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "0486D105-4EBF-4957-ABB5-78637DBF3E0A"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "wq-health-summary",
+            "Sequence": 6,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Alerting & Work Queue Health",
+            "Body": "Keep an eye on the header badges for dead-lettered spikes and blocked partition keys — or continue to **Communication Providers, Templates & Compliance**.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "comm.providers-templates"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "0BD6A5DC-D727-4832-983C-144D61DB7AA6"
+          }
+        }
+      ],
+      "MJ: Tour Step Paths": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "A6AE784D-1156-4F42-8651-979603D9E44E",
+            "ToStepID": "F91FA098-51F9-482F-9BE0-75ACFCE6221B",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "dead-letters"
+                }
+              ]
+            },
+            "Label": "Inspect & Replay Dead Letters",
+            "Priority": 100,
+            "Sequence": 1,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "5525F952-92B9-4308-BA0F-D3A41C16E17C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "A6AE784D-1156-4F42-8651-979603D9E44E",
+            "ToStepID": "0486D105-4EBF-4957-ABB5-78637DBF3E0A",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "partition-tuning"
+                }
+              ]
+            },
+            "Label": "Tune Concurrency & Queue Types",
+            "Priority": 90,
+            "Sequence": 2,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "BAAF1132-7C99-4B29-884D-B4AFF1FB79A5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "A6AE784D-1156-4F42-8651-979603D9E44E",
+            "ToStepID": "F91FA098-51F9-482F-9BE0-75ACFCE6221B",
+            "Condition": null,
+            "Label": "Default: Dead Letters",
+            "Priority": 0,
+            "Sequence": 3,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "AD009224-3CED-4BF2-835F-3161869B32CE"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "F91FA098-51F9-482F-9BE0-75ACFCE6221B",
+            "ToStepID": "0BD6A5DC-D727-4832-983C-144D61DB7AA6",
+            "Condition": null,
+            "Label": "Continue to Summary",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "65ECA2E3-D36C-4A0E-A4F7-CCB8A68DF433"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Work Queue"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D5794D80-8590-41C7-9770-4D8A4ADA5E92"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Communication Providers, Templates & Compliance",
+      "TourKey": "comm.providers-templates",
+      "Description": "Configure email, SMS, and transactional providers, author Nunjucks MJ: Templates, enforce compliance opt-out gates, and audit delivery logs.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Communication",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User explores communication providers, Nunjucks templates, compliance opt-out gates, and delivery logs."
+      },
+      "StartLocation": {
+        "Application": "Communication",
+        "NavItem": "CommunicationMonitorResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "7997FE64-713D-40BA-88D3-B31A95400580"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "comm-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Unified Communications & Compliance",
+            "Body": "Manage outbound email, SMS, and transactional providers, author Nunjucks **MJ: Templates**, enforce compliance opt-out gates, and audit every delivery.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Communication",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Communication",
+              "NavItemKey": "CommunicationMonitorResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "3F9256AB-8231-4DD4-B728-F8B7917A9386"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "comm-providers",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Email, SMS & Transactional Providers",
+            "Body": "Open **Providers** to configure SendGrid, AWS SES, Twilio, Microsoft Graph, and enterprise mailbox scope boundaries with centralized credentials.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "CommunicationProvidersResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Communication",
+              "NavItemKey": "CommunicationProvidersResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6FBA4A95-EDAF-4E40-B64D-CF9CCE311A87"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "comm-templates-compliance",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Nunjucks MJ: Templates & Compliance Gates",
+            "Body": "Author reusable **MJ: Templates** with Nunjucks expressions and preview data, while **Compliance & Admin** enforces opt-out preferences and suppression lists before send.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "CommunicationTemplatesResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Prepare": {
+              "ApplicationName": "Communication",
+              "NavItemKey": "CommunicationTemplatesResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "1FC6649C-5BE1-4CAD-89F5-C38B43863CDA"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "comm-delivery-logs",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Delivery Audit Logs & Runs",
+            "Body": "Inspect **Logs** and **Runs** to trace provider payloads, recipient statuses, bounce reasons, and full outbound communication audit history.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish"
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Communication",
+              "NavItemKey": "CommunicationLogsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "FFA43732-1263-4ABC-A9B9-4C2685538738"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Communication"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "548414B1-692F-451F-91D2-81ECE128951D"
+          }
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,298 @@
+[
+  {
+    "fields": {
+      "Name": "Brand Kits & Reusable Scene Archetypes",
+      "TourKey": "video.brand-kits",
+      "Description": "Establish brand palettes, typography, logos, and intros/outros with Brand Kits, and standardize narrative pacing with parameterized Video Archetypes.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Video Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Video Studio",
+        "Description": "User reviews Brand Kits and reusable Video Archetypes in Video Studio."
+      },
+      "StartLocation": {
+        "Application": "Video Studio"
+      }
+    },
+    "primaryKey": {
+      "ID": "D4117C34-12B5-4414-AA91-582D00AF2F37"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "brand-kits-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Consistent Brand Identity for Video",
+            "Body": "MJ: Brand Kits and MJ: Video Archetypes work together so every generated video follows your colors, typography, intros/outros, and narrative pacing automatically.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Brand Kits",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Video Studio",
+              "DriverClass": "VideoStudioBrandKitsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "C33D581C-62B8-4F23-8DCB-27CA7F3FA28F"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "brand-palettes-typography",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Palettes, Typography & Logos",
+            "Body": "Create or edit a Brand Kit to configure color swatches, typography, logos, soundtrack defaults, and generation policies per company or workspace.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "video.new-brand-kit"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "5A5C66EA-FCAE-4159-9A9C-3D91307A1280"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "reusable-scene-archetypes",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Reusable Scene Archetypes & Beat Templates",
+            "Body": "Switch to Archetypes to browse shipped narrative templates or clone one into a custom archetype with parameterized beats, intros/outros, and pacing rules.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "VideoStudioArchetypesResource",
+              "DriverClass": "VideoStudioArchetypesResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "322F13DB-45E3-4B24-8472-0DBB3FB1E7E5"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "archetype-pacing-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Parameterized Beats & Data Bindings",
+            "Body": "Each beat in an archetype carries duration bounds, cut cadence targets, and optional saved-query data bindings so productions adapt to live metrics cleanly.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Next: Storyboards & Render",
+              "NextTourKey": "video.productions-render",
+              "LearningPathKey": "video.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6F96453A-CBEE-4B1D-9BA5-A3B5C63BC744"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video Storyboards & Render Pipeline",
+      "TourKey": "video.productions-render",
+      "Description": "Compose production briefs and storyboards, bind saved-query data and brand assets, and inspect versioned cloud render outputs.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Video Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Video Studio",
+        "Description": "User explores the Productions gallery, Production Brief composer, and render output viewer."
+      },
+      "StartLocation": {
+        "Application": "Video Studio"
+      }
+    },
+    "primaryKey": {
+      "ID": "40F6DB79-E18A-43DF-94AD-5F02FF789EE5"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "productions-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "From Brief to Rendered Video",
+            "Body": "Video Studio guides productions from an initial topic brief through beat-by-beat storyboard composition, data and asset binding, and cloud video rendering.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Productions",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Video Studio",
+              "DriverClass": "VideoStudioProductionsResource"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6F8A47C9-73AA-432C-A152-642667ED259D"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "start-production-brief",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Starting a Production & Scene Timing",
+            "Body": "Click New production to open the Video Studio drawer, pick an archetype, target aspect ratios, duration bounds, voiceover/captions, and a Brand Kit.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "video.new-production"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8E2929EC-6A7A-4036-A42C-8A6AF8FA75CD"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "storyboard-and-asset-bindings",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Storyboard Review & Asset Bindings",
+            "Body": "Select any production card in the gallery to inspect its storyboard beats, saved-query data bindings, version history, and shareable preview.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "video.productions-workspace"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "D59A2CC2-A698-44B1-A0D4-1C8FDDB6A858"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "cloud-render-output",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Cloud Render Pipeline & Versioned Outputs",
+            "Body": "Each render stores an immutable MJ: Artifact Version so you can preview rendered MP4s, iterate in conversation without losing prior cuts, and share approved versions.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish Path",
+              "LearningPathKey": "video.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "A9FA472E-C57D-4DFF-AB01-7A6690E4EBB5"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Video Studio"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B556E301-C9FA-4B0E-9699-1563B3C86B92"
+          }
+        }
+      ]
+    }
+  }
+]

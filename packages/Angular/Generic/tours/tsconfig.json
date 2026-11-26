@@ -1,0 +1,16 @@
+{
+  "extends": "../../../../tsconfig.angular.json",
+  "compilerOptions": {
+    "outDir": "./dist"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "src/__tests__",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ]
+}

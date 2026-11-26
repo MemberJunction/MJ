@@ -13,7 +13,7 @@
         </div>
 
         <!-- Pinned Section: collapses to its header (title, Add Pin / Dashboards / Edit, or Done) -->
-        <mj-accordion-panel class="pinned-section" [Bare]="true" [TitleIconMuted]="true" [HeadingLevel]="2" [FlushBody]="true"
+        <mj-accordion-panel class="pinned-section" data-mj-tour-anchor="core.home.pinned" [Bare]="true" [TitleIconMuted]="true" [HeadingLevel]="2" [FlushBody]="true"
             [Expanded]="PinnedExpanded" (ExpandedChange)="OnPinnedExpandedChange($event)">
           <ng-template mjAccordionTitle>
             <span class="pinned-title"><i class="fa-solid fa-thumbtack" aria-hidden="true"></i> Pinned</span>
@@ -195,7 +195,7 @@
         </mj-accordion-panel>
 
         <!-- My applications -->
-        <section class="apps-section">
+        <section class="apps-section" data-mj-tour-anchor="core.home.apps">
           <h2 class="section-title">My applications</h2>
           <div class="apps-grid">
             @for (appData of AppsDisplayData; track TrackByApp($index, appData)) {

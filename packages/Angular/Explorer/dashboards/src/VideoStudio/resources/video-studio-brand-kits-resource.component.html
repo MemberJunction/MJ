@@ -4,6 +4,7 @@
       Title="Brand Kits"
       Icon="fa-solid fa-palette"
       Subtitle="Configure palettes, typography, logos, soundtracks, and generation policies for video productions"
+      data-mj-tour-anchor="video.brand-kits-header"
     >
     <div meta>
       <mj-stat-badge
@@ -23,6 +24,7 @@
         mjButton
         Variant="primary"
         data-testid="new-brand-kit-button"
+        data-mj-tour-anchor="video.new-brand-kit"
         (click)="CreateNewBrandKit()"
       >
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
@@ -101,7 +103,7 @@
           <span>{{ DeleteError }}</span>
         </div>
       }
-      <div class="vs-brand-kits-grid" data-testid="brand-kits-grid">
+      <div class="vs-brand-kits-grid" data-testid="brand-kits-grid" data-mj-tour-anchor="video.brand-kits-grid">
         @for (kit of FilteredBrandKits; track kit.ID) {
           <article
             class="vs-brand-kit-card"

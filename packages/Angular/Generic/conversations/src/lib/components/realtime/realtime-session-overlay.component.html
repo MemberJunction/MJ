@@ -2,9 +2,60 @@
   <div class="call-overlay"
        [class.call-overlay--hidden]="Hidden"
        [class.call-overlay--review]="IsReviewing"
+       [class.call-overlay--bar]="!IsReviewing && Ui.chrome === 'bar'"
        [class.board-focus]="ChannelFocusMode"
        role="region" [attr.aria-label]="IsReviewing ? 'Past session review' : 'Live voice session'">
 
+    @if (!IsReviewing && Ui.chrome === 'bar') {
+      <div class="call-bar">
+        <mj-realtime-agent-orb class="call-bar__orb" [State]="HeroOrbState(state)"></mj-realtime-agent-orb>
+        <div class="call-bar__body">
+          <div class="call-bar__top">
+            <span class="call-bar__agent">{{ AgentName }}</span>
+            <mj-audio-meter class="call-bar__meter" [Level]="BarAudioLevel" [Settings]="BarMeterSettings"></mj-audio-meter>
+          </div>
+          <div class="call-bar__caption" [title]="BarCaptionOrStatus(state)">{{ BarCaptionOrStatus(state) }}</div>
+        </div>
+        <div class="call-bar__actions">
+          <ng-content select="[mjRealtimeBarActions]"></ng-content>
+          <mj-media-controls
+            Size="sm"
+            [ShowMicrophone]="true"
+            [ShowCamera]="false"
+            [ShowShare]="false"
+            [ShowDeviceMenu]="false"
+            [MicrophoneOn]="!Muted"
+            (MicrophoneToggled)="OnBarMicrophoneToggled($event)">
+          </mj-media-controls>
+          @if (ShowExpandButton) {
+            <button
+              type="button"
+              mjButton
+              Shape="circle"
+              Size="sm"
+              Variant="secondary"
+              AriaLabel="Open full Sage view"
+              title="Open full Sage view"
+              (click)="ExpandRequested.emit()">
+              <i class="fa-solid fa-up-right-and-down-left-from-center" aria-hidden="true"></i>
+            </button>
+          }
+          @if (Ui.showEnd) {
+            <button
+              type="button"
+              mjButton
+              Shape="circle"
+              Size="sm"
+              Variant="danger"
+              AriaLabel="Stop voice guide"
+              title="Stop voice guide"
+              (click)="OnEndCall()">
+              <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            </button>
+          }
+        </div>
+      </div>
+    } @else {
     <!-- PROGRESSIVE DISCLOSURE (the console that grows with you — Redesign A Progressive):
          level 0 is PURE AUDIO (the hero orb owns the main column; no thread, no composer;
          the strip's Details control peeks at the panels on demand); level 1 reveals the
@@ -347,6 +398,7 @@
         (Confirmed)="OnCameraCheckConfirmed()"
         (Declined)="OnCameraCheckDeclined()">
       </mj-realtime-camera-check-card>
+    }
     }
 
   </div>

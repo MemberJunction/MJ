@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "Name": "Guided Tours",
+      "Description": "Operations for Guided Tours: batched run and step telemetry recording, server predicate evaluation, embed-surface tour delivery, guest run claiming on sign-in, and version snapshotting.",
+      "ParentID": null
+    },
+    "primaryKey": {
+      "ID": "F6E02450-5542-446E-A404-700237CA00C1"
+    }
+  }
+]

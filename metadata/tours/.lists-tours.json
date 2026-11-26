@@ -1,0 +1,331 @@
+[
+  {
+    "fields": {
+      "Name": "Static & Dynamic Lists",
+      "TourKey": "lists.create-refresh",
+      "Description": "Learn how to create static record lists, link dynamic lists to saved User Views or Queries, and monitor manual or scheduled refreshes.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Lists",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Lists",
+        "Description": "User learns static vs dynamic lists, filtering, sharing, and scheduled refresh monitoring."
+      },
+      "StartLocation": {
+        "Application": "Lists",
+        "NavItem": "ListsBrowseResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "76373950-5119-4604-BB4F-86482432A019"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "lists-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Organize Records with Lists",
+            "Body": "Group records from any entity into manually curated **static lists** or self-updating **dynamic lists** backed by saved views and queries.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Lists",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "518BFA8F-9583-41B5-8CBE-B383419677FF"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "lists-new-list",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Create Static & Dynamic Lists",
+            "Body": "Click **New List** to create a list for any entity, or add records directly from Data Explorer. Link a list to a saved **User View** or **Query** in its settings to keep membership updated automatically.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "lists.browse.new-list"
+            },
+            "Prepare": {
+              "ApplicationName": "Lists",
+              "DriverClass": "ListsBrowseResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "680DAE51-2F1C-44A9-8DD9-1560E1BD1866"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "lists-toolbar-refresh",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Filter, Refresh & Share Lists",
+            "Body": "Search and filter lists by entity, owner, or tags here. Use the **Refreshes** view to trigger manual refreshes, inspect scheduled **User Routines**, or review source-change alerts — and share lists with teammates anytime.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "lists.browse.toolbar"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8E86325C-5992-4718-9D15-DDBAA0432404"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "lists-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Next: Compare & Compose Lists",
+            "Body": "Once you have two or more lists or views for the same entity, use **Operations** to visualize overlaps with Venn diagrams and compose targeted segments.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "NextTourKey": "lists.set-operations",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8306A155-0AC7-4195-A9E2-6DD71817C1FD"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Lists"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ED8434CB-7418-42AB-93E9-76626074D17F"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Venn Operations & Bulk Actions",
+      "TourKey": "lists.set-operations",
+      "Description": "Compare up to four lists or saved views with interactive Venn diagrams, compute Union/Intersection/Difference segments, and export or launch Bulk Operations.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Lists",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "AppName": "Lists",
+        "NavItemKey": "ListsOperationsResource",
+        "Description": "User explores List Operations Venn diagram comparisons, set composition, and downstream bulk actions."
+      },
+      "StartLocation": {
+        "Application": "Lists",
+        "NavItem": "ListsOperationsResource"
+      }
+    },
+    "primaryKey": {
+      "ID": "79896AF4-596B-43DB-A438-2C7448BD46DF"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "ops-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Visual Set Operations on Lists",
+            "Body": "Compare static lists and dynamic User Views side by side, explore overlaps interactively, and turn any resulting segment into a reusable list.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Set Operations",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9DF5B2A1-DD9E-4DAA-BF1E-B41C2C5261BB"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "ops-operands",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Pick 2–4 Lists or Views to Compare",
+            "Body": "Filter by entity and add between two and four lists or saved **Views** as operands. Quick Operations become active as soon as at least two operands are selected.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "lists.operations.operands"
+            },
+            "Prepare": {
+              "ApplicationName": "Lists",
+              "NavItemKey": "ListsOperationsResource",
+              "DriverClass": "ListsOperationsResource"
+            },
+            "Placement": "Right",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "E3233231-786C-4042-89B6-FBD7EB55C712"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "ops-venn",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Interactive Venn Union, Intersection & Difference",
+            "Body": "Click any overlap or exclusive region in the Venn diagram to preview records, or run **Union**, **Intersection**, or **Difference** and save the result into a new or existing target list.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "lists.operations.venn"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "51F6592A-362F-4DCA-8479-80154660E0FA"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "ops-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Export Results or Launch Bulk Operations",
+            "Body": "Export any selected segment to Excel, CSV, or JSON from the Results panel — or save it as a list and target it in the **Bulk Operations** app to preview and apply field rules across your records.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "4E436CD7-5930-4BD4-873D-8A3B2D9B407B"
+          }
+        }
+      ],
+      "MJ: Tour Prerequisites": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "PrerequisiteType": "Tour",
+            "RequiredTourID": "@lookup:MJ: Tours.TourKey=lists.create-refresh",
+            "Strength": "Recommended",
+            "Sequence": 1
+          },
+          "primaryKey": {
+            "ID": "FDC522C2-C24C-49F3-B692-4516B4FDD384"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Lists"
+            },
+            "Delivery": "Beacon",
+            "CooldownDays": 30,
+            "Priority": 70,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DF8B754D-3680-4098-A66E-9404F2F19AEE"
+          }
+        }
+      ]
+    }
+  }
+]

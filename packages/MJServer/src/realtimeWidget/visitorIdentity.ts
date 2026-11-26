@@ -25,10 +25,17 @@
  */
 
 import { CompositeKey, RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
-import type { MJConversationEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
+import type {
+  MJConversationEntity,
+  MJAIAgentNoteEntity,
+  MJTourRunEntity,
+  MJTourRunStepEntity,
+} from '@memberjunction/core-entities';
 
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
 const AGENT_NOTES_ENTITY = 'MJ: AI Agent Notes';
+const TOUR_RUNS_ENTITY = 'MJ: Tour Runs';
+const TOUR_RUN_STEPS_ENTITY = 'MJ: Tour Run Steps';
 
 /** A resolved polymorphic identity: the entity the visitor maps to, and that record's id. */
 export interface ResolvedVisitorIdentity {
@@ -138,9 +145,55 @@ async function loadVisitorConversations(
 }
 
 /**
+ * RV4 helper for Guided Tours: re-attributes anonymous `MJ: Tour Runs` rows (`UserID IS NULL`)
+ * matching `visitorKey` (optionally scoped to `surfaceId`) to the resolved MJ `userId`.
+ * Best-effort; returns count of claimed runs.
+ */
+export async function ClaimGuestTourRuns(args: {
+  visitorKey: string;
+  userId: string;
+  surfaceId?: string;
+  contextUser: UserInfo;
+}): Promise<number> {
+  try {
+    const escapedVk = args.visitorKey.replace(/'/g, "''");
+    let filter = `UserID IS NULL AND VisitorKey = '${escapedVk}'`;
+    if (args.surfaceId) {
+      filter += ` AND SurfaceID = '${args.surfaceId.replace(/'/g, "''")}'`;
+    }
+    const rv = new RunView();
+    const res = await rv.RunView<MJTourRunEntity>(
+      {
+        EntityName: TOUR_RUNS_ENTITY,
+        ExtraFilter: filter,
+        ResultType: 'entity_object',
+      },
+      args.contextUser,
+    );
+    if (!res.Success || (res.Results ?? []).length === 0) {
+      return 0;
+    }
+    let claimed = 0;
+    for (const run of res.Results ?? []) {
+      run.UserID = args.userId;
+      if (await run.Save()) {
+        claimed++;
+      } else {
+        LogError(`[VisitorIdentity] failed to claim guest TourRun ${run.ID}: ${run.LatestResult?.CompleteMessage ?? 'unknown'}`);
+      }
+    }
+    return claimed;
+  } catch (e) {
+    LogError(`[VisitorIdentity] ClaimGuestTourRuns failed: ${e instanceof Error ? e.message : String(e)}`);
+    return 0;
+  }
+}
+
+/**
  * Promotes a visitor's anonymous trail to a resolved identity (RV4): stamps the resolved pair on every
  * conversation sharing the visitor's key in this application, then re-keys the visitor's anonymous
- * recap notes (those filed under `(MJ: Conversations, conversationId)`) onto the resolved pair. Idempotent
+ * recap notes (those filed under `(MJ: Conversations, conversationId)`) onto the resolved pair. When the
+ * resolved identity is a `Users` record, also claims matching guest `MJ: Tour Runs` rows. Idempotent
  * and best-effort — already-resolved conversations are skipped; per-record save failures are logged, not thrown.
  *
  * @returns the number of conversations stamped (0 when nothing matched the key).
@@ -153,6 +206,15 @@ export async function MergeVisitorIdentity(args: {
   provider: IMetadataProvider;
 }): Promise<number> {
   try {
+    const usersEntityId = args.provider.EntityByName('Users')?.ID;
+    if (usersEntityId && usersEntityId.toLowerCase() === args.identity.entityId.toLowerCase()) {
+      await ClaimGuestTourRuns({
+        visitorKey: args.visitorKey,
+        userId: args.identity.recordId,
+        contextUser: args.contextUser,
+      });
+    }
+
     const conversations = await loadVisitorConversations(args.visitorKey, args.applicationId, args.contextUser);
     if (conversations.length === 0) {
       return 0;
@@ -234,72 +296,122 @@ async function rekeyAnonymousNotes(
  * "Forget me" (RV5): archives the visitor's auto-generated memory and severs the cookie linkage.
  * Archives every auto-generated note whose `SourceConversationID` is one of the visitor's conversations
  * (so it reaps recaps whether they're still anonymous-scoped or already merged onto a resolved record —
- * without touching unrelated memory on a shared resolved record), then clears `VisitorKey` on those
- * conversations so neither the cookie nor a resolved pair re-resolves the trail. Best-effort.
+ * without touching unrelated memory on a shared resolved record), clears `VisitorKey` on those
+ * conversations, and forgets matching `MJ: Tour Runs` (deleting anonymous guest runs & step logs where
+ * `UserID IS NULL`, or clearing `VisitorKey` on claimed runs). Best-effort.
  *
  * @returns a summary of what was archived/cleared.
  */
 export async function ForgetVisitor(args: {
   visitorKey: string;
-  applicationId: string;
+  applicationId?: string;
+  surfaceId?: string;
   contextUser: UserInfo;
   provider: IMetadataProvider;
-}): Promise<{ notesArchived: number; conversationsCleared: number }> {
+}): Promise<{ notesArchived: number; conversationsCleared: number; tourRunsCleared: number; tourRunsDeleted: number }> {
   let notesArchived = 0;
   let conversationsCleared = 0;
+  let tourRunsCleared = 0;
+  let tourRunsDeleted = 0;
   try {
-    const conversations = await loadVisitorConversations(args.visitorKey, args.applicationId, args.contextUser);
-    if (conversations.length === 0) {
-      return { notesArchived, conversationsCleared };
-    }
-    const inList = conversations.map((c) => `'${c.ID.replace(/'/g, "''")}'`).join(', ');
+    const conversations = args.applicationId
+      ? await loadVisitorConversations(args.visitorKey, args.applicationId, args.contextUser)
+      : [];
+    if (conversations.length > 0) {
+      const inList = conversations.map((c) => `'${c.ID.replace(/'/g, "''")}'`).join(', ');
 
-    // Archive the visitor's auto-generated recaps, keyed by source conversation (scope-agnostic).
-    const rv = new RunView();
-    const notes = await rv.RunView<MJAIAgentNoteEntity>(
+      // Archive the visitor's auto-generated recaps, keyed by source conversation (scope-agnostic).
+      const rv = new RunView();
+      const notes = await rv.RunView<MJAIAgentNoteEntity>(
+        {
+          EntityName: AGENT_NOTES_ENTITY,
+          ExtraFilter: `IsAutoGenerated = 1 AND SourceConversationID IN (${inList}) AND Status != 'Archived'`,
+          ResultType: 'entity_object',
+        },
+        args.contextUser,
+      );
+      if (notes.Success) {
+        for (const note of notes.Results ?? []) {
+          note.Status = 'Archived';
+          if (await note.Save()) {
+            notesArchived++;
+          } else {
+            LogError(`[VisitorIdentity] failed to archive note ${note.ID}: ${note.LatestResult?.CompleteMessage ?? 'unknown'}`);
+          }
+        }
+      } else {
+        LogError(`[VisitorIdentity] failed to load notes for forget: ${notes.ErrorMessage}`);
+      }
+
+      // Sever the cookie linkage: clear VisitorKey so the key no longer resolves these conversations.
+      for (const convo of conversations) {
+        convo.VisitorKey = null;
+        if (await convo.Save()) {
+          conversationsCleared++;
+        } else {
+          LogError(`[VisitorIdentity] failed to clear VisitorKey on conversation ${convo.ID}: ${convo.LatestResult?.CompleteMessage ?? 'unknown'}`);
+        }
+      }
+    }
+
+    // Forget matching MJ: Tour Runs rows: delete guest-only runs (with child steps) and clear VisitorKey on claimed runs.
+    const rvRuns = new RunView();
+    const escapedVk = args.visitorKey.replace(/'/g, "''");
+    const runFilter = args.surfaceId
+      ? `VisitorKey = '${escapedVk}' AND SurfaceID = '${args.surfaceId.replace(/'/g, "''")}'`
+      : `VisitorKey = '${escapedVk}'`;
+    const runsRes = await rvRuns.RunView<MJTourRunEntity>(
       {
-        EntityName: AGENT_NOTES_ENTITY,
-        ExtraFilter: `IsAutoGenerated = 1 AND SourceConversationID IN (${inList}) AND Status != 'Archived'`,
+        EntityName: TOUR_RUNS_ENTITY,
+        ExtraFilter: runFilter,
         ResultType: 'entity_object',
       },
       args.contextUser,
     );
-    if (notes.Success) {
-      for (const note of notes.Results ?? []) {
-        note.Status = 'Archived';
-        if (await note.Save()) {
-          notesArchived++;
+    if (runsRes.Success && (runsRes.Results ?? []).length > 0) {
+      for (const run of runsRes.Results ?? []) {
+        if (run.UserID == null) {
+          const stepsRes = await rvRuns.RunView<MJTourRunStepEntity>(
+            {
+              EntityName: TOUR_RUN_STEPS_ENTITY,
+              ExtraFilter: `TourRunID = '${run.ID.replace(/'/g, "''")}'`,
+              ResultType: 'entity_object',
+            },
+            args.contextUser,
+          );
+          if (stepsRes.Success) {
+            for (const step of stepsRes.Results ?? []) {
+              await step.Delete();
+            }
+          }
+          if (await run.Delete()) {
+            tourRunsDeleted++;
+          }
         } else {
-          LogError(`[VisitorIdentity] failed to archive note ${note.ID}: ${note.LatestResult?.CompleteMessage ?? 'unknown'}`);
+          run.VisitorKey = null;
+          if (await run.Save()) {
+            tourRunsCleared++;
+          }
         }
       }
-    } else {
-      LogError(`[VisitorIdentity] failed to load notes for forget: ${notes.ErrorMessage}`);
     }
 
-    // Sever the cookie linkage: clear VisitorKey so the key no longer resolves these conversations.
-    for (const convo of conversations) {
-      convo.VisitorKey = null;
-      if (await convo.Save()) {
-        conversationsCleared++;
-      } else {
-        LogError(`[VisitorIdentity] failed to clear VisitorKey on conversation ${convo.ID}: ${convo.LatestResult?.CompleteMessage ?? 'unknown'}`);
-      }
-    }
-
-    LogStatus(`[VisitorIdentity] forgot visitor ${args.visitorKey}: archived ${notesArchived} note(s), cleared ${conversationsCleared} conversation link(s)`);
+    LogStatus(
+      `[VisitorIdentity] forgot visitor ${args.visitorKey}: archived ${notesArchived} note(s), cleared ${conversationsCleared} conversation link(s), deleted ${tourRunsDeleted} guest tour run(s), cleared ${tourRunsCleared} claimed tour run link(s)`,
+    );
   } catch (e) {
     LogError(`[VisitorIdentity] forgetVisitor failed: ${e instanceof Error ? e.message : String(e)}`);
   }
-  return { notesArchived, conversationsCleared };
+  return { notesArchived, conversationsCleared, tourRunsCleared, tourRunsDeleted };
 }
 
 /** @deprecated Use {@link ForgetVisitor}. */
 export async function forgetVisitor(args: {
   visitorKey: string;
-  applicationId: string;
+  applicationId?: string;
+  surfaceId?: string;
   contextUser: UserInfo;
   provider: IMetadataProvider;
-}): Promise<{ notesArchived: number; conversationsCleared: number }> {
+}): Promise<{ notesArchived: number; conversationsCleared: number; tourRunsCleared: number; tourRunsDeleted: number }> {
   return ForgetVisitor(args);
 }

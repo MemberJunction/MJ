@@ -19,7 +19,7 @@
  */
 import type { MJTaskEntity } from '@memberjunction/core-entities';
 import { TaskNode, type TaskGraphSpec, type TaskGraphSpecNode, type TaskNodeBase } from './task-graph-spec';
-import type { GraphNodePosition } from './graph-layout';
+import type { GraphNodePosition } from '@memberjunction/graph';
 import type { TaskGraphNodeConfigMap, TaskGraphNodeKind } from './task-graph-spec';
 
 /**

@@ -70,6 +70,7 @@ const DEFERRALS = [
   // The element spec (realtime-widget.element.dom.test.ts) mounts both on every test.
   [/\/realtime-widget\/src\/__tests__\/stub-overlay\.component\.ts$/, "test double, not shipped"],
   [/\/widget-global-styles\.component\.ts$/, "renders nothing; carries the global style layer only"],
+  [/\/tour-global-styles\.component\.ts$/, "renders nothing; carries the global style layer only"],
 ];
 const deferralReason = (rel) => (DEFERRALS.find(([re]) => re.test(rel)) || [])[1] || "";
 

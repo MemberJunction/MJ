@@ -86,9 +86,11 @@ describe('attribute and property coercion', () => {
   });
 
   describe('chrome and theme', () => {
-    it('accepts orb and console (case-insensitively) and falls back to auto', () => {
+    it('accepts orb, console, and bar (case-insensitively) and falls back to auto', () => {
       expect(ReadChrome('ORB')).toBe('orb');
       expect(ReadChrome('console')).toBe('console');
+      expect(ReadChrome('BAR')).toBe('bar');
+      expect(ReadChrome('bar')).toBe('bar');
       expect(ReadChrome('weird')).toBe('auto');
       expect(ReadChrome(null)).toBe('auto');
     });

@@ -23,6 +23,9 @@ import { NormalizeOrigin } from '../requestOrigin.js';
  */
 export const WIDGET_SESSION_RESOURCE_TYPE = 'Widget Session';
 
+/** The magic-link resource-scope `resourceType` used for a standalone `MJ: Tour Surfaces` guest session. */
+export const TOUR_SURFACE_RESOURCE_TYPE = 'Tour Surface';
+
 /** Why a guest-session mint was rejected. Drives the HTTP status in the router. */
 export type WidgetMintErrorCode =
     | 'not_found'
@@ -44,6 +47,12 @@ export type WidgetMintErrorCode =
  */
 export const WIDGET_GUEST_ROLE_NAME = 'Widget Guest';
 
+/**
+ * Isolated baseline role for standalone `MJ: Tour Surfaces` guest sessions (`Tour Guest` has zero
+ * entity CRUD and interacts strictly via `Tours.GetSurfaceTours` and `Tours.RecordEvents`).
+ */
+export const TOUR_GUEST_ROLE_NAME = 'Tour Guest';
+
 /** Which roles, beyond {@link WIDGET_GUEST_ROLE_NAME}, a deployment allows a widget to hand to an anonymous guest. */
 export interface GuestRolePolicy {
   /** Role names (case-insensitive) the deployment has opted in, normally `magicLink.grantableRoleNames`. */
@@ -53,6 +62,44 @@ export interface GuestRolePolicy {
 /** Pure check: may a widget grant `roleName` to an anonymous guest under `policy`? See {@link WIDGET_GUEST_ROLE_NAME}. */
 export function IsIsolatedGuestRole(roleName: string | null | undefined, policy: GuestRolePolicy): boolean {
   return IsRoleGrantable(roleName, WIDGET_GUEST_ROLE_NAME, policy.GrantableRoleNames);
+}
+
+/**
+ * Pure check: may a `Tour Surface` grant `roleName` to an anonymous guest under `policy`?
+ * Allows {@link TOUR_GUEST_ROLE_NAME}, {@link WIDGET_GUEST_ROLE_NAME} (for linked widget surfaces),
+ * or any role explicitly opted into `policy.GrantableRoleNames`.
+ */
+export function IsIsolatedTourSurfaceGuestRole(roleName: string | null | undefined, policy: GuestRolePolicy): boolean {
+  return IsRoleGrantable(roleName, TOUR_GUEST_ROLE_NAME, [WIDGET_GUEST_ROLE_NAME, ...policy.GrantableRoleNames]);
+}
+
+/** The minimal tour-surface shape needed by pure mint eligibility validation. */
+export interface SurfaceMintEligibilityInput {
+  Status: string;
+  AllowedOrigins: string | null;
+  AuthStrategy?: string | null;
+}
+
+/**
+ * Pure eligibility check for a `MJ: Tour Surfaces` guest mint: the surface must be `Active`,
+ * must allow guest authentication (`Guest` or `Either`), and the request `Origin` must be on
+ * the surface's `AllowedOrigins` allowlist.
+ */
+export function EvaluateTourSurfaceMint(
+  surface: SurfaceMintEligibilityInput,
+  requestOrigin: string | null | undefined,
+): { ok: boolean; errorCode?: WidgetMintErrorCode } {
+  if (surface.Status.trim().toLowerCase() !== 'active') {
+    return { ok: false, errorCode: 'disabled' };
+  }
+  const authStrategy = (surface.AuthStrategy ?? 'Guest').trim().toLowerCase();
+  if (authStrategy === 'mj user') {
+    return { ok: false, errorCode: 'disabled' };
+  }
+  if (!IsOriginAllowed(requestOrigin, ParseAllowedOrigins(surface.AllowedOrigins))) {
+    return { ok: false, errorCode: 'origin_not_allowed' };
+  }
+  return { ok: true };
 }
 
 /** The minimal widget-instance shape the pure validators need (a subset of the entity). */
@@ -284,6 +331,50 @@ export function BuildWidgetGuestClaims(args: {
     claims.mj_last_conversation_id = args.returningVisitor.lastConversationId;
     claims.mj_linked_entity_id = args.returningVisitor.linkedEntityId;
     claims.mj_linked_record_id = args.returningVisitor.linkedRecordId;
+  }
+  return claims;
+}
+
+/**
+ * Builds the guest-session JWT claims for a standalone `MJ: Tour Surfaces` guest visitor
+ * (without a linked `MJ: Conversation Widget Instances` record). Uses `resourceType = 'Tour Surface'`
+ * and `resourceId = surfaceId` so `Tours.GetSurfaceTours` and `Tours.RecordEvents` enforce
+ * surface isolation purely from signed claims.
+ */
+export function BuildSurfaceGuestClaims(args: {
+  issuer: string;
+  audience: string;
+  surfaceId: string;
+  sessionId: string;
+  anonymousEmail: string;
+  applicationId?: string;
+  guestRoleName: string;
+  nowSeconds: number;
+  ttlSeconds: number;
+  sessionStartedAtSeconds?: number;
+  proofKeyThumbprint?: string;
+  visitorKey?: string;
+}): MagicLinkJWTClaims {
+  const claims = BuildSessionClaims({
+    issuer: args.issuer,
+    audience: args.audience,
+    inviteId: args.sessionId,
+    email: args.anonymousEmail,
+    applicationId: args.applicationId ?? '',
+    roleName: args.guestRoleName,
+    anonymous: true,
+    sessionId: args.sessionId,
+    resourceType: TOUR_SURFACE_RESOURCE_TYPE,
+    resourceId: args.surfaceId,
+    nowSeconds: args.nowSeconds,
+    ttlSeconds: args.ttlSeconds,
+  });
+  claims.mj_sid_iat = args.sessionStartedAtSeconds ?? args.nowSeconds;
+  if (args.proofKeyThumbprint) {
+    claims.cnf = { jkt: args.proofKeyThumbprint };
+  }
+  if (args.visitorKey) {
+    claims.mj_visitor_key = args.visitorKey;
   }
   return claims;
 }

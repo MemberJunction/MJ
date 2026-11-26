@@ -37,6 +37,7 @@
     "@memberjunction/global": "6.3.0-edge.2",
     "@memberjunction/interactive-component-types": "6.3.0-edge.2",
     "@memberjunction/theme-engine": "6.3.0-edge.2",
+    "@memberjunction/tours-runtime": "6.3.0-edge.2",
     "rxjs": "^7.8.2",
     "zod": "^3.25.0"
   },

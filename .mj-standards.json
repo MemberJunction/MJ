@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/@memberjunction/standards/schema/mj-standards.schema.json",
-  "StandardsVersion": "6.2.0",
+  "StandardsVersion": "6.3.0",
   "Checks": {
     "ui-layers": {
       "Severity": "error",
@@ -98,6 +98,30 @@
           "V202611030307__v6.2.x__Diagnostic_Bundles.sql",
           "V202611040751__v6.3.x__Document_Sequence_Counter.sql",
           "V202611062303__v6.3.x__EntityFieldValue_OrganicKey_Source.sql"
+        ]
+      }
+    },
+    "tour-anchors": {
+      "Severity": "error",
+      "Roots": [
+        "metadata",
+        "packages"
+      ],
+      "Options": {
+        "allowedPrefixes": [
+          "core.",
+          "admin.",
+          "builder.",
+          "ai.",
+          "kh.",
+          "testing.",
+          "ps.",
+          "video.",
+          "lists.",
+          "actions.",
+          "workflows.",
+          "scheduling.",
+          "comm."
         ]
       }
     }

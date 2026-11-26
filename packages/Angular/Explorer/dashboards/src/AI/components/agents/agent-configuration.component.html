@@ -1,6 +1,7 @@
 <mj-page-layout>
   <!-- Header -->
   <mj-page-header
+    data-mj-tour-anchor="ai.agents.header"
     Title="Agents"
     Icon="fa-solid fa-robot">
     <!-- X-of-Y filtered count earns its meta spot per chrome conventions §2. -->
@@ -56,7 +57,7 @@
   </mj-page-header>
 
   <!-- Main Content (no sidebar — filters live in the popover above) -->
-  <mj-page-body [Flex]="true">
+  <mj-page-body [Flex]="true" data-mj-tour-anchor="ai.agents.body">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">

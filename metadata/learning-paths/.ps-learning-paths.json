@@ -1,0 +1,55 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Mastery",
+      "PathKey": "ps.mastery",
+      "Description": "End-to-end learning path covering problem framing, leakage-safe feature pipelines, training experiments, champion model promotion, and live prediction explainability.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Predictive Studio",
+      "Status": "Active",
+      "Configuration": {
+        "AllowSkipOptional": true,
+        "ShowNextConcreteStep": true
+      }
+    },
+    "primaryKey": {
+      "ID": "AB7DDB7A-A80B-4231-B171-1205A89FE506"
+    },
+    "relatedEntities": {
+      "MJ: Tour Learning Path Tour Links": [
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=ps.problem-pipelines",
+            "Sequence": 1,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "2D9C3815-16AD-48DD-9437-A624370C1E9E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=ps.training-compare",
+            "Sequence": 2,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "B6FBDBBA-11AE-4475-BB70-7022EAF0D884"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@lookup:MJ: Tours.TourKey=ps.serving-explainability",
+            "Sequence": 3,
+            "IsRequired": true,
+            "TourLearningPathID": "@parent:ID"
+          },
+          "primaryKey": {
+            "ID": "DDCF2865-EF69-49C2-9BC6-A203482E6C05"
+          }
+        }
+      ]
+    }
+  }
+]

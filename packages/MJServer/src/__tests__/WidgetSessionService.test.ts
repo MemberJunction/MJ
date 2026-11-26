@@ -680,3 +680,186 @@ describe('WidgetSessionService — RefreshGuestSession re-applies every mint che
     });
   });
 });
+
+describe('WidgetSessionService — TourSurface DB-resolved sessions (CodeQL #925/#926)', () => {
+  const SURFACE_ID = 'aaaaaaaa-2222-4222-8222-222222222222';
+  const DISABLED_SURFACE_ID = 'bbbbbbbb-3333-4333-8333-333333333333';
+  const WIDGET_GUEST_ROLE_ID = '00000000-0000-4000-8000-000000000099';
+  const TOUR_ORIGIN = 'https://tours.acme.com';
+
+  let key: ProofOfPossessionKey;
+
+  beforeEach(async () => {
+    key = await CreateProofOfPossessionKey();
+    MagicLinkKeyManager.Instance.Initialize();
+    mockUsers.length = 0;
+    mockUsers.push({ ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E', Email: 'system@system.org', IsActive: true });
+    runViewMock.mockReset();
+    runViewMock.mockImplementation(async (params: { EntityName?: string; ExtraFilter?: string }) => {
+      const f = params.ExtraFilter ?? '';
+      if (params.EntityName === 'MJ: Tour Surfaces') {
+        if (f.includes('ts_surface_only')) {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: SURFACE_ID,
+                SurfaceKey: 'docs.tours',
+                PublicKey: 'ts_surface_only',
+                Status: 'Active',
+                AllowedOrigins: `["${TOUR_ORIGIN}"]`,
+                AuthStrategy: 'Guest',
+                GuestRoleID: WIDGET_GUEST_ROLE_ID,
+                ConversationWidgetInstanceID: null,
+                RateLimitPerMinute: 30,
+                VisitorRetentionDays: 30,
+              },
+            ],
+          };
+        }
+        if (f.includes('ts_surface_disabled')) {
+          return {
+            Success: true,
+            Results: [
+              {
+                ID: DISABLED_SURFACE_ID,
+                SurfaceKey: 'docs.disabled',
+                PublicKey: 'ts_surface_disabled',
+                Status: 'Disabled',
+                AllowedOrigins: `["${TOUR_ORIGIN}"]`,
+                AuthStrategy: 'Guest',
+                GuestRoleID: WIDGET_GUEST_ROLE_ID,
+                ConversationWidgetInstanceID: null,
+                RateLimitPerMinute: 30,
+                VisitorRetentionDays: 30,
+              },
+            ],
+          };
+        }
+      }
+      return { Success: true, Results: [] };
+    });
+  });
+
+  it('mints a TourSurface session via surfaceKey and verifies Tour Surface claims', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+    const minted = await service.MintGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      visitorKey: 'visitor_surface_key_1234',
+      ProofKey: key.PublicJwk,
+    });
+
+    expect(minted.success).toBe(true);
+    expect(minted.surfaceId).toBe(SURFACE_ID);
+    expect(minted.surfaceKey).toBe('docs.tours');
+    expect(minted.visitorKey).toBe('visitor_surface_key_1234');
+    expect(minted.token).toBeDefined();
+
+    const publicKey = createPublicKey({ key: MagicLinkKeyManager.Instance.GetJWKS().keys[0] as object, format: 'jwk' });
+    const decoded = jwt.verify(minted.token!, publicKey, { algorithms: ['RS256'], audience: 'mj-magic-link' }) as jwt.JwtPayload;
+    expect(decoded.mj_scopes?.[0]?.resourceType).toBe('Tour Surface');
+    expect(decoded.mj_scopes?.[0]?.resourceId).toBe(SURFACE_ID);
+    expect(decoded.mj_visitor_key).toBe('visitor_surface_key_1234');
+  });
+
+  it('resolves a ts_* key passed as widgetKey via DB lookup', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+    const minted = await service.MintGuestSession({
+      widgetKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      ProofKey: key.PublicJwk,
+    });
+
+    expect(minted.success).toBe(true);
+    expect(minted.surfaceId).toBe(SURFACE_ID);
+  });
+
+  it('refuses disallowed origins and disabled TourSurface targets', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+
+    const badOrigin = await service.MintGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: 'https://evil.example',
+    });
+    expect(badOrigin).toMatchObject({ success: false, errorCode: 'origin_not_allowed' });
+
+    const disabled = await service.MintGuestSession({
+      surfaceKey: 'ts_surface_disabled',
+      origin: TOUR_ORIGIN,
+    });
+    expect(disabled).toMatchObject({ success: false, errorCode: 'disabled' });
+  });
+
+  it('enforces DPoP proof verification on TourSurface RefreshGuestSession and preserves mj_sid', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+    const minted = await service.MintGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      visitorKey: 'visitor_surface_key_1234',
+      ProofKey: key.PublicJwk,
+    });
+    expect(minted.success).toBe(true);
+
+    const validRefreshed = await service.RefreshGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      visitorKey: 'visitor_surface_key_1234',
+      BearerToken: minted.token,
+      Proof: await proofFor(key, minted.token!),
+    });
+    expect(validRefreshed.success).toBe(true);
+    expect(validRefreshed.sessionId).toBe(minted.sessionId);
+    expect(validRefreshed.surfaceId).toBe(SURFACE_ID);
+
+    const missingProof = await service.RefreshGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      BearerToken: minted.token,
+    });
+    expect(missingProof).toMatchObject({ success: false, errorCode: 'not_found' });
+
+    const attackerKey = await CreateProofOfPossessionKey();
+    const wrongProof = await service.RefreshGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      BearerToken: minted.token,
+      Proof: await proofFor(attackerKey, minted.token!),
+    });
+    expect(wrongProof).toMatchObject({ success: false, errorCode: 'not_found' });
+
+    const invalidToken = await service.RefreshGuestSession({
+      surfaceKey: 'ts_surface_only',
+      origin: TOUR_ORIGIN,
+      BearerToken: 'not-a-jwt',
+      Proof: await proofFor(key, 'not-a-jwt'),
+    });
+    expect(invalidToken).toMatchObject({ success: false, errorCode: 'not_found' });
+  });
+
+  it('rejects unknown surface keys and keys longer than 150 characters without querying the DB', async () => {
+    const service = new WidgetSessionService('https://mj.example.com', makeConfig());
+
+    const unknown = await service.MintGuestSession({
+      surfaceKey: 'ts_unknown',
+      origin: TOUR_ORIGIN,
+    });
+    expect(unknown).toMatchObject({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' });
+    expect(runViewMock).toHaveBeenCalledTimes(1);
+
+    runViewMock.mockClear();
+    const oversized = await service.MintGuestSession({
+      surfaceKey: `ts_${'a'.repeat(160)}`,
+      origin: TOUR_ORIGIN,
+    });
+    expect(oversized).toMatchObject({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' });
+    expect(runViewMock).not.toHaveBeenCalled();
+
+    const unknownRefresh = await service.RefreshGuestSession({
+      surfaceKey: 'ts_unknown',
+      origin: TOUR_ORIGIN,
+      BearerToken: 'anything',
+    });
+    expect(unknownRefresh).toMatchObject({ success: false, errorCode: 'not_found', error: 'Unknown widget key.' });
+  });
+});

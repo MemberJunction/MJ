@@ -10,7 +10,9 @@ import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SearchService, SearchScopeInfo } from '@memberjunction/ng-search';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { Subscription, firstValueFrom, skip } from 'rxjs';
+import { TourSessionGuideMode } from '@memberjunction/tours-runtime';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
+import { ExplorerTourHost } from '../tours/explorer-tour-host.service';
 import {
     DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarProvider,
 } from './omnibar-provider';
@@ -68,6 +70,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
     private search = inject(SearchService);
     private paletteService = inject(CommandPaletteService);
     private fileOpen = inject(FileOpenService);
+    private tourHost = inject(ExplorerTourHost, { optional: true });
 
     @ViewChild('paletteInput') private inputRef?: ElementRef<HTMLInputElement>;
 
@@ -465,6 +468,13 @@ export class OmnibarPaletteComponent implements OnDestroy {
             case 'view':
                 this.navigation.OpenView(nav.viewId, nav.viewName);
                 break;
+            case 'tour':
+                void this.tourHost?.StartTour(nav.tourKey, {
+                    Mode: nav.guideMode as TourSessionGuideMode | undefined,
+                    LaunchSource: nav.learningPathKey ? 'Learning Path' : 'Omnibar',
+                    StartAtStepKey: nav.startAtStepKey,
+                });
+                break;
         }
         this.Close();
     }
@@ -520,6 +530,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
             Apps: this.appManager,
             PaletteService: this.paletteService,
             Navigation: this.navigation,
+            TourHost: this.tourHost ?? undefined,
         };
         for (const provider of this.providers) {
             provider.Attach(context);

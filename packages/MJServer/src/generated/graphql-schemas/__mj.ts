@@ -18,7 +18,7 @@ import { mj_core_schema } from '../../config.js';
 
 
 
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRhythmTemplateEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionRecordingShardEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentSuggestionEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAgentChannelParticipantEntity, MJAgentChannelEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactGuestShareLinkEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactWorkingStateEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBrandKitAssetEntity, MJBrandKitEntity, MJCalendarEventLinkEntity, MJCalendarSyncStateEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommentTypeEntity, MJCommentEntity, MJCommunicationActivityEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationComplianceRegimeJurisdictionEntity, MJCommunicationComplianceRegimeRuleEntity, MJCommunicationComplianceRegimeEntity, MJCommunicationComplianceRuleTypeEntity, MJCommunicationConsentAuditLogEntity, MJCommunicationEndpointPrincipalEntity, MJCommunicationEndpointEntity, MJCommunicationLogEntity, MJCommunicationPreferenceEntity, MJCommunicationPrincipalPreferenceEntity, MJCommunicationPrincipalEntity, MJCommunicationProviderEventEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunChunkEntity, MJCommunicationRunEntity, MJCommunicationSenderPermissionEntity, MJCommunicationSenderTypeEntity, MJCommunicationSenderEntity, MJCommunicationSendingDomainEntity, MJCommunicationSuppressionPolicyEntity, MJCommunicationSuppressionEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationObjectFieldEntity, MJCompanyIntegrationObjectEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationBranchEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationTypeEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDiagnosticBundleEntity, MJDiagnosticSenderRegistrationEntity, MJDiagnosticSessionChunkEntity, MJDiagnosticSessionEntity, MJDocumentSequenceCounterEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAlternateBaseViewEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEntityUniqueKeyEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFieldSuggestionEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJGraphAuthorityTierEntity, MJGraphConceptTypeEntity, MJGraphConceptEntity, MJGraphEdgeProviderEntity, MJGraphEdgeTypeEndpointEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, MJGraphTypeEntity, MJGraphEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJJurisdictionMemberEntity, MJJurisdictionEntity, MJKnowledgeHubSavedSearchEntity, MJvwLatestFeatureValuesEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLMonitoringResultEntity, MJMLOutputBindingEntity, MJMLPredictionUnitEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedNotificationConfigEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJVideoArchetypeEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRhythmTemplateEntity, MJAIAgentRubricEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionRecordingShardEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentSuggestionEntity, MJAIAgentTypeEntity, MJAIAgentUserPolicyEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAgentChannelParticipantEntity, MJAgentChannelEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactGuestShareLinkEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactWorkingStateEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBrandKitAssetEntity, MJBrandKitEntity, MJCalendarEventLinkEntity, MJCalendarSyncStateEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommentTypeEntity, MJCommentEntity, MJCommunicationActivityEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationComplianceRegimeJurisdictionEntity, MJCommunicationComplianceRegimeRuleEntity, MJCommunicationComplianceRegimeEntity, MJCommunicationComplianceRuleTypeEntity, MJCommunicationConsentAuditLogEntity, MJCommunicationEndpointPrincipalEntity, MJCommunicationEndpointEntity, MJCommunicationLogEntity, MJCommunicationPreferenceEntity, MJCommunicationPrincipalPreferenceEntity, MJCommunicationPrincipalEntity, MJCommunicationProviderEventEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunChunkEntity, MJCommunicationRunEntity, MJCommunicationSenderPermissionEntity, MJCommunicationSenderTypeEntity, MJCommunicationSenderEntity, MJCommunicationSendingDomainEntity, MJCommunicationSuppressionPolicyEntity, MJCommunicationSuppressionEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationObjectFieldEntity, MJCompanyIntegrationObjectEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationBranchEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationTypeEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDiagnosticBundleEntity, MJDiagnosticSenderRegistrationEntity, MJDiagnosticSessionChunkEntity, MJDiagnosticSessionEntity, MJDocumentSequenceCounterEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAlternateBaseViewEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormContributionEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEntityUniqueKeyEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFeaturePipelineTypeEntity, MJFeaturePipelineVersionEntity, MJFeatureValueCacheEntity, MJFeatureValueEntity, MJFieldSuggestionEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJGraphAuthorityTierEntity, MJGraphConceptTypeEntity, MJGraphConceptEntity, MJGraphEdgeProviderEntity, MJGraphEdgeTypeEndpointEntity, MJGraphEdgeTypeEntity, MJGraphEdgeEntity, MJGraphTypeEntity, MJGraphEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJInteractionEventEntity, MJInteractionLinkEntity, MJInteractionOfferEntity, MJInteractionEntity, MJJurisdictionMemberEntity, MJJurisdictionEntity, MJKnowledgeHubSavedSearchEntity, MJvwLatestFeatureValuesEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLEvaluationProtocolEntity, MJMLModelPublishRecordEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLMonitoringResultEntity, MJMLOutputBindingEntity, MJMLPredictionUnitEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMeetingParticipantEntity, MJMeetingEntity, MJNumberPoolEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJPhoneNumberEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordCloneLogItemEntity, MJRecordCloneLogEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRubricBandEntity, MJRubricCategoryEntity, MJRubricCriterionEntity, MJRubricCriterionLevelEntity, MJRubricEvaluationScoreEntity, MJRubricEvaluationEntity, MJRubricScaleLevelEntity, MJRubricScaleEntity, MJRubricVersionEntity, MJRubricEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedNotificationConfigEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJTourLearningPathTourLinkEntity, MJTourLearningPathEntity, MJTourOverrideEntity, MJTourPrerequisiteEntity, MJTourRunStepEntity, MJTourRunEntity, MJTourStepPathEntity, MJTourStepTypeEntity, MJTourStepEntity, MJTourSurfaceTourEntity, MJTourSurfaceEntity, MJTourTriggerEntity, MJTourVersionEntity, MJTourEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJVideoArchetypeEntity, MJViewTypeEntity, MJWebSearchProviderEntity, MJWorkQueueDeduplicationEntity, MJWorkQueueDeliveryEntity, MJWorkQueueMessageEntity, MJWorkQueueSubscriptionEntity, MJWorkQueueTopicEntity, MJWorkQueueTransportEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -110595,6 +110595,3378 @@ export class MJThemeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Themes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Learning Path Tour Links
+//****************************************************************************
+@ObjectType({ description: "Membership join table linking Learning Paths to ordered Guided Tours." })
+export class MJTourLearningPathTourLink_ {
+    @Field({description: "Unique identifier of the learning path membership row."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Parent learning path."}) 
+    @MaxLength(36)
+    TourLearningPathID?: string;
+        
+    @Field({nullable: true, description: "Member tour included in the learning path."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Display and progression order of this tour within the learning path."}) 
+    Sequence?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, this tour is mandatory and cannot be skipped in the checklist."}) 
+    IsRequired?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    TourLearningPath?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Learning Path Tour Links
+//****************************************************************************
+@InputType()
+export class CreateMJTourLearningPathTourLinkInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourLearningPathID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Learning Path Tour Links
+//****************************************************************************
+@InputType()
+export class UpdateMJTourLearningPathTourLinkInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourLearningPathID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsRequired?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Learning Path Tour Links
+//****************************************************************************
+@ObjectType()
+export class RunMJTourLearningPathTourLinkViewResult {
+    @Field(() => [MJTourLearningPathTourLink_])
+    Results: MJTourLearningPathTourLink_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourLearningPathTourLink_)
+export class MJTourLearningPathTourLinkResolver extends ResolverBase {
+    @Query(() => RunMJTourLearningPathTourLinkViewResult)
+    async RunMJTourLearningPathTourLinkViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourLearningPathTourLinkViewResult)
+    async RunMJTourLearningPathTourLinkViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourLearningPathTourLinkViewResult)
+    async RunMJTourLearningPathTourLinkDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Learning Path Tour Links';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourLearningPathTourLink_, { nullable: true })
+    async MJTourLearningPathTourLink(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourLearningPathTourLink_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Learning Path Tour Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourLearningPathTourLinks')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Learning Path Tour Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Learning Path Tour Links', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourLearningPathTourLink_)
+    async CreateMJTourLearningPathTourLink(
+        @Arg('input', () => CreateMJTourLearningPathTourLinkInput) input: CreateMJTourLearningPathTourLinkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Learning Path Tour Links', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourLearningPathTourLink_)
+    async UpdateMJTourLearningPathTourLink(
+        @Arg('input', () => UpdateMJTourLearningPathTourLinkInput) input: UpdateMJTourLearningPathTourLinkInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Learning Path Tour Links', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourLearningPathTourLink_)
+    async DeleteMJTourLearningPathTourLink(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Learning Path Tour Links', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Learning Paths
+//****************************************************************************
+@ObjectType({ description: "A curated sequence of guided tours rendered as a user onboarding checklist on Home and in the tour launcher." })
+export class MJTourLearningPath_ {
+    @Field({description: "Unique identifier of the learning path."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Display title of the learning path."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Stable unique key identifying the learning path (for example mj.essentials)."}) 
+    @MaxLength(150)
+    PathKey?: string;
+        
+    @Field({nullable: true, description: "Summary of the curriculum and who it is designed for."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "Owning MJ Application. NULL indicates a framework-wide learning path."}) 
+    @MaxLength(36)
+    ApplicationID?: string;
+        
+    @Field({nullable: true, description: "CompositeFilter JSON expression restricting which users see this learning path."}) 
+    AudienceFilter?: string;
+        
+    @Field({nullable: true, description: "Lifecycle status of the learning path: Draft, Active, or Retired."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "JSON ILearningPathConfiguration holding localizations, icon, and checklist presentation options."}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Application?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Learning Paths
+//****************************************************************************
+@InputType()
+export class CreateMJTourLearningPathInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    PathKey?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
+
+    @Field({ nullable: true })
+    AudienceFilter: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Learning Paths
+//****************************************************************************
+@InputType()
+export class UpdateMJTourLearningPathInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    PathKey?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
+
+    @Field({ nullable: true })
+    AudienceFilter?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Learning Paths
+//****************************************************************************
+@ObjectType()
+export class RunMJTourLearningPathViewResult {
+    @Field(() => [MJTourLearningPath_])
+    Results: MJTourLearningPath_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourLearningPath_)
+export class MJTourLearningPathResolver extends ResolverBase {
+    @Query(() => RunMJTourLearningPathViewResult)
+    async RunMJTourLearningPathViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourLearningPathViewResult)
+    async RunMJTourLearningPathViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourLearningPathViewResult)
+    async RunMJTourLearningPathDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Learning Paths';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourLearningPath_, { nullable: true })
+    async MJTourLearningPath(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourLearningPath_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Learning Paths', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourLearningPaths')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Learning Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Learning Paths', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourLearningPath_)
+    async CreateMJTourLearningPath(
+        @Arg('input', () => CreateMJTourLearningPathInput) input: CreateMJTourLearningPathInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Learning Paths', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourLearningPath_)
+    async UpdateMJTourLearningPath(
+        @Arg('input', () => UpdateMJTourLearningPathInput) input: UpdateMJTourLearningPathInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Learning Paths', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourLearningPath_)
+    async DeleteMJTourLearningPath(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Learning Paths', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Overrides
+//****************************************************************************
+@ObjectType({ description: "Host-admin customizations layered over shipped tours at Global, Role, or User scope without modifying upgradeable tour records." })
+export class MJTourOverride_ {
+    @Field({description: "Unique identifier of the tour override."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Tour being customized by this override."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field({nullable: true, description: "Specificity scope of the override: Global, Role, or User."}) 
+    @MaxLength(20)
+    Scope?: string;
+        
+    @Field({nullable: true, description: "Target MJ Role when Scope is Role."}) 
+    @MaxLength(36)
+    RoleID?: string;
+        
+    @Field({nullable: true, description: "Target MJ User when Scope is User."}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Tie-breaker precedence when multiple overrides apply at the same scope."}) 
+    Precedence?: number;
+        
+    @Field({nullable: true, description: "Whether this override record is Active or Disabled."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Optional CompositeFilter JSON overriding Tour.AudienceFilter for this scope."}) 
+    AudienceFilter?: string;
+        
+    @Field({nullable: true, description: "Optional JSON ITourLaunchPolicy overriding Tour.LaunchPolicy for this scope."}) 
+    LaunchPolicy?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, suppresses this tour completely for the targeted scope."}) 
+    IsDisabled?: boolean;
+        
+    @Field({nullable: true, description: "Optional JSON overrides for tour configuration settings at this scope."}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Role?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Overrides
+//****************************************************************************
+@InputType()
+export class CreateMJTourOverrideInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    RoleID: string | null;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Precedence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AudienceFilter: string | null;
+
+    @Field({ nullable: true })
+    LaunchPolicy: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDisabled?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Overrides
+//****************************************************************************
+@InputType()
+export class UpdateMJTourOverrideInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    Scope?: string;
+
+    @Field({ nullable: true })
+    RoleID?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Precedence?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AudienceFilter?: string | null;
+
+    @Field({ nullable: true })
+    LaunchPolicy?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDisabled?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Overrides
+//****************************************************************************
+@ObjectType()
+export class RunMJTourOverrideViewResult {
+    @Field(() => [MJTourOverride_])
+    Results: MJTourOverride_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourOverride_)
+export class MJTourOverrideResolver extends ResolverBase {
+    @Query(() => RunMJTourOverrideViewResult)
+    async RunMJTourOverrideViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourOverrideViewResult)
+    async RunMJTourOverrideViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourOverrideViewResult)
+    async RunMJTourOverrideDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Overrides';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourOverride_, { nullable: true })
+    async MJTourOverride(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourOverride_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Overrides', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourOverrides')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Overrides', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Overrides', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourOverride_)
+    async CreateMJTourOverride(
+        @Arg('input', () => CreateMJTourOverrideInput) input: CreateMJTourOverrideInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Overrides', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourOverride_)
+    async UpdateMJTourOverride(
+        @Arg('input', () => UpdateMJTourOverrideInput) input: UpdateMJTourOverrideInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Overrides', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourOverride_)
+    async DeleteMJTourOverride(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Overrides', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Prerequisites
+//****************************************************************************
+@ObjectType({ description: "Prerequisite rule that must be satisfied (Required) or is suggested (Recommended) before a user takes a tour." })
+export class MJTourPrerequisite_ {
+    @Field({description: "Unique identifier of the tour prerequisite."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Tour that declares this prerequisite."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field({nullable: true, description: "Kind of prerequisite: Tour, Role, Authorization, Application, or Data."}) 
+    @MaxLength(30)
+    PrerequisiteType?: string;
+        
+    @Field({nullable: true, description: "When PrerequisiteType is Tour, the FK to the required prior tour."}) 
+    @MaxLength(36)
+    RequiredTourID?: string;
+        
+    @Field({nullable: true, description: "JSON condition specifying the role, authorization, application, or data predicate to evaluate."}) 
+    Condition?: string;
+        
+    @Field({nullable: true, description: "Enforcement strength: Required blocks eligibility until met; Recommended prompts or summarizes the prior tour."}) 
+    @MaxLength(20)
+    Strength?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Evaluation and display order among prerequisites for the tour."}) 
+    Sequence?: number;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    RequiredTour?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Prerequisites
+//****************************************************************************
+@InputType()
+export class CreateMJTourPrerequisiteInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    PrerequisiteType?: string;
+
+    @Field({ nullable: true })
+    RequiredTourID: string | null;
+
+    @Field({ nullable: true })
+    Condition: string | null;
+
+    @Field({ nullable: true })
+    Strength?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Prerequisites
+//****************************************************************************
+@InputType()
+export class UpdateMJTourPrerequisiteInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    PrerequisiteType?: string;
+
+    @Field({ nullable: true })
+    RequiredTourID?: string | null;
+
+    @Field({ nullable: true })
+    Condition?: string | null;
+
+    @Field({ nullable: true })
+    Strength?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Prerequisites
+//****************************************************************************
+@ObjectType()
+export class RunMJTourPrerequisiteViewResult {
+    @Field(() => [MJTourPrerequisite_])
+    Results: MJTourPrerequisite_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourPrerequisite_)
+export class MJTourPrerequisiteResolver extends ResolverBase {
+    @Query(() => RunMJTourPrerequisiteViewResult)
+    async RunMJTourPrerequisiteViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourPrerequisiteViewResult)
+    async RunMJTourPrerequisiteViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourPrerequisiteViewResult)
+    async RunMJTourPrerequisiteDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Prerequisites';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourPrerequisite_, { nullable: true })
+    async MJTourPrerequisite(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourPrerequisite_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Prerequisites', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourPrerequisites')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Prerequisites', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Prerequisites', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourPrerequisite_)
+    async CreateMJTourPrerequisite(
+        @Arg('input', () => CreateMJTourPrerequisiteInput) input: CreateMJTourPrerequisiteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Prerequisites', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourPrerequisite_)
+    async UpdateMJTourPrerequisite(
+        @Arg('input', () => UpdateMJTourPrerequisiteInput) input: UpdateMJTourPrerequisiteInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Prerequisites', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourPrerequisite_)
+    async DeleteMJTourPrerequisite(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Prerequisites', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Run Steps
+//****************************************************************************
+@ObjectType({ description: "Per-step execution telemetry for a Tour Run, capturing timing, outcome, anchor-resolution rung, and agent question count." })
+export class MJTourRunStep_ {
+    @Field({description: "Unique identifier of the tour run step telemetry record."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Parent tour run."}) 
+    @MaxLength(36)
+    TourRunID?: string;
+        
+    @Field({nullable: true, description: "StepKey from the pinned Tour Version."}) 
+    @MaxLength(100)
+    StepKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Ordinal sequence of this step visit within the run (supports revisiting steps)."}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: "Timestamp when the user entered this step."}) 
+    EnteredAt?: Date;
+        
+    @Field({nullable: true, description: "Timestamp when the user exited or completed this step."}) 
+    ExitedAt?: Date;
+        
+    @Field({nullable: true, description: "How the step concluded: Completed, Skipped, Already Known, Done By Agent, Anchor Missing, or Dismissed."}) 
+    @MaxLength(30)
+    Outcome?: string;
+        
+    @Field({nullable: true, description: "Which anchor ladder rung resolved the target element: Registered, Semantic, Role, Selector, None, or Failed."}) 
+    @MaxLength(20)
+    AnchorResolution?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Number of off-path questions the user asked an agent while on this step."}) 
+    QuestionCount?: number;
+        
+    @Field({nullable: true, description: "Optional JSON diagnostics such as missing-anchor reason or completion evidence details."}) 
+    Details?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Run Steps
+//****************************************************************************
+@InputType()
+export class CreateMJTourRunStepInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourRunID?: string;
+
+    @Field({ nullable: true })
+    StepKey?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    EnteredAt?: Date;
+
+    @Field({ nullable: true })
+    ExitedAt: Date | null;
+
+    @Field({ nullable: true })
+    Outcome: string | null;
+
+    @Field({ nullable: true })
+    AnchorResolution: string | null;
+
+    @Field(() => Int, { nullable: true })
+    QuestionCount?: number;
+
+    @Field({ nullable: true })
+    Details: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Run Steps
+//****************************************************************************
+@InputType()
+export class UpdateMJTourRunStepInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourRunID?: string;
+
+    @Field({ nullable: true })
+    StepKey?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    EnteredAt?: Date;
+
+    @Field({ nullable: true })
+    ExitedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Outcome?: string | null;
+
+    @Field({ nullable: true })
+    AnchorResolution?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    QuestionCount?: number;
+
+    @Field({ nullable: true })
+    Details?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Run Steps
+//****************************************************************************
+@ObjectType()
+export class RunMJTourRunStepViewResult {
+    @Field(() => [MJTourRunStep_])
+    Results: MJTourRunStep_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourRunStep_)
+export class MJTourRunStepResolver extends ResolverBase {
+    @Query(() => RunMJTourRunStepViewResult)
+    async RunMJTourRunStepViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourRunStepViewResult)
+    async RunMJTourRunStepViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourRunStepViewResult)
+    async RunMJTourRunStepDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Run Steps';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourRunStep_, { nullable: true })
+    async MJTourRunStep(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourRunStep_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Run Steps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourRunSteps')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Run Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Run Steps', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourRunStep_)
+    async CreateMJTourRunStep(
+        @Arg('input', () => CreateMJTourRunStepInput) input: CreateMJTourRunStepInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Run Steps', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourRunStep_)
+    async UpdateMJTourRunStep(
+        @Arg('input', () => UpdateMJTourRunStepInput) input: UpdateMJTourRunStepInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Run Steps', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourRunStep_)
+    async DeleteMJTourRunStep(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Run Steps', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Runs
+//****************************************************************************
+@ObjectType({ description: "Progress ledger for one attempt of a guided tour by an authenticated MJ user or an external-surface guest visitor, pinned to a specific TourVersion." })
+export class MJTourRun_ {
+    @Field({description: "Unique identifier of the tour run."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Authenticated MJ user taking the tour. NULL for unauthenticated guest visitors."}) 
+    @MaxLength(36)
+    UserID?: string;
+        
+    @Field({nullable: true, description: "Guest visitor identifier (or mj_sid fallback when returning-visitor memory is off) from verified surface JWT claims."}) 
+    @MaxLength(100)
+    VisitorKey?: string;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: Tour Surfaces when the run occurred on an external or embed surface."}) 
+    @MaxLength(36)
+    SurfaceID?: string;
+        
+    @Field({nullable: true, description: "Tour being executed."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field({nullable: true, description: "Pinned immutable Tour Version snapshot this run executes against."}) 
+    @MaxLength(36)
+    TourVersionID?: string;
+        
+    @Field({nullable: true, description: "Current lifecycle status of the run: Pending, In Progress, Completed, Dismissed, Snoozed, Abandoned, or Failed."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Active guidance modality for this run: Visual, Chat, or Voice."}) 
+    @MaxLength(20)
+    GuideMode?: string;
+        
+    @Field({nullable: true, description: "ClassFactory key of the BaseTourDirector driving the session (for example Visual, Chat, Voice, Verify, Recorder)."}) 
+    @MaxLength(100)
+    DirectorType?: string;
+        
+    @Field({nullable: true, description: "StepKey of the step currently active in this run."}) 
+    @MaxLength(100)
+    CurrentStepKey?: string;
+        
+    @Field({nullable: true, description: "JSON array of ITourRunPathEntry recording the ordered steps visited and their outcomes."}) 
+    PathTaken?: string;
+        
+    @Field({nullable: true, description: "Entry point that initiated the run: Launcher, Omnibar, Agent, Trigger, Notification, Link, Learning Path, or Empty State."}) 
+    @MaxLength(30)
+    LaunchSource?: string;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: AI Agent Runs when an agent initiated this tour run."}) 
+    @MaxLength(36)
+    LaunchedByAgentRunID?: string;
+        
+    @Field({nullable: true, description: "Timestamp when the user or visitor actually started the run (NULL while Pending)."}) 
+    StartedAt?: Date;
+        
+    @Field({nullable: true, description: "Timestamp when the tour run reached Completed status."}) 
+    CompletedAt?: Date;
+        
+    @Field({nullable: true, description: "Timestamp when the tour's outcome Goal was verified as met."}) 
+    GoalMetAt?: Date;
+        
+    @Field({nullable: true, description: "Timestamp until which a Snoozed run should not be re-offered."}) 
+    SnoozedUntil?: Date;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: Conversations linking a Chat-guided run to its conversation thread."}) 
+    @MaxLength(36)
+    ConversationID?: string;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: AI Agent Sessions linking a Voice-guided run to its realtime session."}) 
+    @MaxLength(36)
+    AgentSessionID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, this run represents a holdout assignment (suppressed offer) for goal-lift measurement."}) 
+    IsHoldout?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Surface?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    LaunchedByAgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Conversation?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Runs
+//****************************************************************************
+@InputType()
+export class CreateMJTourRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
+    VisitorKey: string | null;
+
+    @Field({ nullable: true })
+    SurfaceID: string | null;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    TourVersionID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    GuideMode?: string;
+
+    @Field({ nullable: true })
+    DirectorType?: string;
+
+    @Field({ nullable: true })
+    CurrentStepKey: string | null;
+
+    @Field({ nullable: true })
+    PathTaken: string | null;
+
+    @Field({ nullable: true })
+    LaunchSource?: string;
+
+    @Field({ nullable: true })
+    LaunchedByAgentRunID: string | null;
+
+    @Field({ nullable: true })
+    StartedAt: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field({ nullable: true })
+    GoalMetAt: Date | null;
+
+    @Field({ nullable: true })
+    SnoozedUntil: Date | null;
+
+    @Field({ nullable: true })
+    ConversationID: string | null;
+
+    @Field({ nullable: true })
+    AgentSessionID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsHoldout?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJTourRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
+
+    @Field({ nullable: true })
+    VisitorKey?: string | null;
+
+    @Field({ nullable: true })
+    SurfaceID?: string | null;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    TourVersionID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    GuideMode?: string;
+
+    @Field({ nullable: true })
+    DirectorType?: string;
+
+    @Field({ nullable: true })
+    CurrentStepKey?: string | null;
+
+    @Field({ nullable: true })
+    PathTaken?: string | null;
+
+    @Field({ nullable: true })
+    LaunchSource?: string;
+
+    @Field({ nullable: true })
+    LaunchedByAgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    StartedAt?: Date | null;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    GoalMetAt?: Date | null;
+
+    @Field({ nullable: true })
+    SnoozedUntil?: Date | null;
+
+    @Field({ nullable: true })
+    ConversationID?: string | null;
+
+    @Field({ nullable: true })
+    AgentSessionID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsHoldout?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJTourRunViewResult {
+    @Field(() => [MJTourRun_])
+    Results: MJTourRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourRun_)
+export class MJTourRunResolver extends ResolverBase {
+    @Query(() => RunMJTourRunViewResult)
+    async RunMJTourRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourRunViewResult)
+    async RunMJTourRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourRunViewResult)
+    async RunMJTourRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourRun_, { nullable: true })
+    async MJTourRun(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourRuns')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Runs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourRun_)
+    async CreateMJTourRun(
+        @Arg('input', () => CreateMJTourRunInput) input: CreateMJTourRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourRun_)
+    async UpdateMJTourRun(
+        @Arg('input', () => UpdateMJTourRunInput) input: UpdateMJTourRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourRun_)
+    async DeleteMJTourRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Runs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Step Paths
+//****************************************************************************
+@ObjectType({ description: "Directed branching edge between two steps in a tour. Linear tours need no path rows and advance by TourStep.Sequence." })
+export class MJTourStepPath_ {
+    @Field({description: "Unique identifier of the tour step path."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Parent tour containing both endpoints."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field({nullable: true, description: "Source step where this edge originates."}) 
+    @MaxLength(36)
+    FromStepID?: string;
+        
+    @Field({nullable: true, description: "Target step this edge transitions to."}) 
+    @MaxLength(36)
+    ToStepID?: string;
+        
+    @Field({nullable: true, description: "CompositeFilter JSON or choice-key condition evaluated against session context to decide whether this edge is taken."}) 
+    Condition?: string;
+        
+    @Field({nullable: true, description: "Human-readable label for this branch edge in Tour Studio and Choice steps."}) 
+    @MaxLength(255)
+    Label?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Evaluation priority when multiple outgoing edges match."}) 
+    Priority?: number;
+        
+    @Field(() => Int, {nullable: true, description: "Display order of this outgoing edge in editors and Choice lists."}) 
+    Sequence?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, this edge is taken when no conditional sibling edge matches."}) 
+    IsDefault?: boolean;
+        
+    @Field({nullable: true, description: "JSON ITourStepPathConfiguration holding localizations and extensible edge metadata."}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    FromStep?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    ToStep?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Step Paths
+//****************************************************************************
+@InputType()
+export class CreateMJTourStepPathInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    FromStepID?: string;
+
+    @Field({ nullable: true })
+    ToStepID?: string;
+
+    @Field({ nullable: true })
+    Condition: string | null;
+
+    @Field({ nullable: true })
+    Label: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Step Paths
+//****************************************************************************
+@InputType()
+export class UpdateMJTourStepPathInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    FromStepID?: string;
+
+    @Field({ nullable: true })
+    ToStepID?: string;
+
+    @Field({ nullable: true })
+    Condition?: string | null;
+
+    @Field({ nullable: true })
+    Label?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Step Paths
+//****************************************************************************
+@ObjectType()
+export class RunMJTourStepPathViewResult {
+    @Field(() => [MJTourStepPath_])
+    Results: MJTourStepPath_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourStepPath_)
+export class MJTourStepPathResolver extends ResolverBase {
+    @Query(() => RunMJTourStepPathViewResult)
+    async RunMJTourStepPathViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourStepPathViewResult)
+    async RunMJTourStepPathViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourStepPathViewResult)
+    async RunMJTourStepPathDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Step Paths';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourStepPath_, { nullable: true })
+    async MJTourStepPath(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourStepPath_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Step Paths', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourStepPaths')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Step Paths', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Step Paths', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourStepPath_)
+    async CreateMJTourStepPath(
+        @Arg('input', () => CreateMJTourStepPathInput) input: CreateMJTourStepPathInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Step Paths', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourStepPath_)
+    async UpdateMJTourStepPath(
+        @Arg('input', () => UpdateMJTourStepPathInput) input: UpdateMJTourStepPathInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Step Paths', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourStepPath_)
+    async DeleteMJTourStepPath(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Step Paths', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Step Types
+//****************************************************************************
+@ObjectType({ description: "Registry of guided tour step types (visual primitives and app-extended step plugins). Each row names the logic DriverClass, optional Angular/host RendererClass, optional runtime ComponentID, and JSON ConfigSchema." })
+export class MJTourStepType_ {
+    @Field({description: "Unique identifier of the tour step type."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Unique name of the step type (for example Spotlight, Action, Beacon, Modal, Banner, Choice, Media, EmbeddedComponent, AskAgent)."}) 
+    @MaxLength(100)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Author-facing description of how this step type presents and behaves."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "ClassFactory key of the BaseTourStepType logic subclass in @memberjunction/tours-runtime or an app package."}) 
+    @MaxLength(255)
+    DriverClass?: string;
+        
+    @Field({nullable: true, description: "ClassFactory key of the BaseTourStepRenderer UI subclass. When NULL, resolution falls back to the step type Name."}) 
+    @MaxLength(255)
+    RendererClass?: string;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: Components enabling zero-deploy runtime ComponentSpec interactive step types."}) 
+    @MaxLength(36)
+    ComponentID?: string;
+        
+    @Field({nullable: true, description: "JSON Schema describing the Configuration object accepted by steps of this type, used by Tour Studio and server validation."}) 
+    ConfigSchema?: string;
+        
+    @Field({nullable: true, description: "Comma-separated list of supported step execution modes (Show, Guide, Do)."}) 
+    @MaxLength(100)
+    SupportedModes?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, Chat and Voice agent directors can explain or drive steps of this type."}) 
+    IsAgentCapable?: boolean;
+        
+    @Field({nullable: true, description: "Font Awesome icon class displayed for this step type in Tour Studio."}) 
+    @MaxLength(100)
+    Icon?: string;
+        
+    @Field({nullable: true, description: "Lifecycle status of the step type: Active, Deprecated, or Disabled."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(500)
+    Component?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Step Types
+//****************************************************************************
+@InputType()
+export class CreateMJTourStepTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    RendererClass: string | null;
+
+    @Field({ nullable: true })
+    ComponentID: string | null;
+
+    @Field({ nullable: true })
+    ConfigSchema: string | null;
+
+    @Field({ nullable: true })
+    SupportedModes?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAgentCapable?: boolean;
+
+    @Field({ nullable: true })
+    Icon: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Step Types
+//****************************************************************************
+@InputType()
+export class UpdateMJTourStepTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    RendererClass?: string | null;
+
+    @Field({ nullable: true })
+    ComponentID?: string | null;
+
+    @Field({ nullable: true })
+    ConfigSchema?: string | null;
+
+    @Field({ nullable: true })
+    SupportedModes?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAgentCapable?: boolean;
+
+    @Field({ nullable: true })
+    Icon?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Step Types
+//****************************************************************************
+@ObjectType()
+export class RunMJTourStepTypeViewResult {
+    @Field(() => [MJTourStepType_])
+    Results: MJTourStepType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourStepType_)
+export class MJTourStepTypeResolver extends ResolverBase {
+    @Query(() => RunMJTourStepTypeViewResult)
+    async RunMJTourStepTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourStepTypeViewResult)
+    async RunMJTourStepTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourStepTypeViewResult)
+    async RunMJTourStepTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Step Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourStepType_, { nullable: true })
+    async MJTourStepType(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourStepType_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Step Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourStepTypes')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Step Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Step Types', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourStepType_)
+    async CreateMJTourStepType(
+        @Arg('input', () => CreateMJTourStepTypeInput) input: CreateMJTourStepTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Step Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourStepType_)
+    async UpdateMJTourStepType(
+        @Arg('input', () => UpdateMJTourStepTypeInput) input: UpdateMJTourStepTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Step Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourStepType_)
+    async DeleteMJTourStepType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Step Types', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Steps
+//****************************************************************************
+@ObjectType({ description: "An editable draft step within a guided tour: step type, copy, anchor descriptor, prepare actions, completion checks, and agent notes." })
+export class MJTourStep_ {
+    @Field({description: "Unique identifier of the tour step."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Parent tour this step belongs to."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field({nullable: true, description: "Stable key identifying this step within its tour (referenced by TourRun.CurrentStepKey and TourRunStep.StepKey)."}) 
+    @MaxLength(100)
+    StepKey?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Default linear display order of the step when no explicit Tour Step Paths override traversal."}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: "FK to MJ: Tour Step Types determining the visual primitive or plugin behavior."}) 
+    @MaxLength(36)
+    StepTypeID?: string;
+        
+    @Field({nullable: true, description: "Optional per-step ClassFactory key overriding the step type's DriverClass for this single step."}) 
+    @MaxLength(255)
+    DriverClass?: string;
+        
+    @Field({nullable: true, description: "Step heading displayed to the user."}) 
+    @MaxLength(500)
+    Title?: string;
+        
+    @Field({nullable: true, description: "Markdown step body supporting MJ template expressions."}) 
+    Body?: string;
+        
+    @Field({nullable: true, description: "JSON ITourStepConfiguration validated against the step type's ConfigSchema, plus localizations."}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: "JSON ITourAnchor descriptor specifying how to locate the target UI element (registered key, semantic anchor, role, or selector fallback)."}) 
+    Anchor?: string;
+        
+    @Field({nullable: true, description: "Preferred popover placement relative to the anchor: Auto, Top, Bottom, Left, Right, or Center."}) 
+    @MaxLength(30)
+    Placement?: string;
+        
+    @Field({nullable: true, description: "Step interaction mode: Show (explain), Guide (wait for user action), or Do (agent executes with per-mutation confirmation)."}) 
+    @MaxLength(20)
+    Mode?: string;
+        
+    @Field({nullable: true, description: "JSON ITourStepPrepare describing cross-screen navigation or make-visible actions executed before the step renders."}) 
+    Prepare?: string;
+        
+    @Field({nullable: true, description: "JSON ITourCompletion defining the checks that mark this step done."}) 
+    Completion?: string;
+        
+    @Field({nullable: true, description: "JSON condition or check specification evaluated to skip the step automatically when its outcome is already satisfied."}) 
+    SkipWhen?: string;
+        
+    @Field({nullable: true, description: "Fallback behavior if the step anchor cannot be resolved: Skip, Center, Stall, or Agent Recover."}) 
+    @MaxLength(20)
+    OnMissing?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, the user or agent may skip this step without blocking tour completion."}) 
+    IsOptional?: boolean;
+        
+    @Field({nullable: true, description: "Agent-only grounding context and cautions supplied to Chat and Voice directors, not shown in visual popovers."}) 
+    GuideNotes?: string;
+        
+    @Field({nullable: true, description: "Optional concise script tailored for Voice director narration (mirrored as text for accessibility)."}) 
+    VoiceScript?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    StepType?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Steps
+//****************************************************************************
+@InputType()
+export class CreateMJTourStepInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    StepKey?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    StepTypeID?: string;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    Body: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    Anchor: string | null;
+
+    @Field({ nullable: true })
+    Placement?: string;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    Prepare: string | null;
+
+    @Field({ nullable: true })
+    Completion: string | null;
+
+    @Field({ nullable: true })
+    SkipWhen: string | null;
+
+    @Field({ nullable: true })
+    OnMissing?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsOptional?: boolean;
+
+    @Field({ nullable: true })
+    GuideNotes: string | null;
+
+    @Field({ nullable: true })
+    VoiceScript: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Steps
+//****************************************************************************
+@InputType()
+export class UpdateMJTourStepInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    StepKey?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    StepTypeID?: string;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    Title?: string;
+
+    @Field({ nullable: true })
+    Body?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    Anchor?: string | null;
+
+    @Field({ nullable: true })
+    Placement?: string;
+
+    @Field({ nullable: true })
+    Mode?: string;
+
+    @Field({ nullable: true })
+    Prepare?: string | null;
+
+    @Field({ nullable: true })
+    Completion?: string | null;
+
+    @Field({ nullable: true })
+    SkipWhen?: string | null;
+
+    @Field({ nullable: true })
+    OnMissing?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsOptional?: boolean;
+
+    @Field({ nullable: true })
+    GuideNotes?: string | null;
+
+    @Field({ nullable: true })
+    VoiceScript?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Steps
+//****************************************************************************
+@ObjectType()
+export class RunMJTourStepViewResult {
+    @Field(() => [MJTourStep_])
+    Results: MJTourStep_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourStep_)
+export class MJTourStepResolver extends ResolverBase {
+    @Query(() => RunMJTourStepViewResult)
+    async RunMJTourStepViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourStepViewResult)
+    async RunMJTourStepViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourStepViewResult)
+    async RunMJTourStepDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Steps';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourStep_, { nullable: true })
+    async MJTourStep(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourStep_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Steps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourSteps')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Steps', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourStep_)
+    async CreateMJTourStep(
+        @Arg('input', () => CreateMJTourStepInput) input: CreateMJTourStepInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Steps', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourStep_)
+    async UpdateMJTourStep(
+        @Arg('input', () => UpdateMJTourStepInput) input: UpdateMJTourStepInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Steps', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourStep_)
+    async DeleteMJTourStep(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Steps', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Surface Tours
+//****************************************************************************
+@ObjectType({ description: "Many-to-many assignment of guided tours to external Tour Surfaces, with ordering and optional per-surface start location overrides." })
+export class MJTourSurfaceTour_ {
+    @Field({description: "Unique identifier of the surface-tour assignment."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Target Tour Surface."}) 
+    @MaxLength(36)
+    SurfaceID?: string;
+        
+    @Field({nullable: true, description: "Tour assigned to run on the surface."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, this tour is the default entry tour for the surface."}) 
+    IsDefault?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: "Display and evaluation order of this tour on the surface."}) 
+    Sequence?: number;
+        
+    @Field({nullable: true, description: "Optional JSON ITourStartLocation overriding Tour.StartLocation specifically for this surface."}) 
+    StartLocationOverride?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Surface?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Surface Tours
+//****************************************************************************
+@InputType()
+export class CreateMJTourSurfaceTourInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    SurfaceID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    StartLocationOverride: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Surface Tours
+//****************************************************************************
+@InputType()
+export class UpdateMJTourSurfaceTourInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    SurfaceID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field({ nullable: true })
+    StartLocationOverride?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Surface Tours
+//****************************************************************************
+@ObjectType()
+export class RunMJTourSurfaceTourViewResult {
+    @Field(() => [MJTourSurfaceTour_])
+    Results: MJTourSurfaceTour_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourSurfaceTour_)
+export class MJTourSurfaceTourResolver extends ResolverBase {
+    @Query(() => RunMJTourSurfaceTourViewResult)
+    async RunMJTourSurfaceTourViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourSurfaceTourViewResult)
+    async RunMJTourSurfaceTourViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourSurfaceTourViewResult)
+    async RunMJTourSurfaceTourDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Surface Tours';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourSurfaceTour_, { nullable: true })
+    async MJTourSurfaceTour(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourSurfaceTour_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Surface Tours', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourSurfaceTours')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Surface Tours', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Surface Tours', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourSurfaceTour_)
+    async CreateMJTourSurfaceTour(
+        @Arg('input', () => CreateMJTourSurfaceTourInput) input: CreateMJTourSurfaceTourInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Surface Tours', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourSurfaceTour_)
+    async UpdateMJTourSurfaceTour(
+        @Arg('input', () => UpdateMJTourSurfaceTourInput) input: UpdateMJTourSurfaceTourInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Surface Tours', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourSurfaceTour_)
+    async DeleteMJTourSurfaceTour(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Surface Tours', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Surfaces
+//****************************************************************************
+@ObjectType({ description: "External or non-Explorer host surface where guided tours run (custom Angular portal, public web page, or mobile app), with origin allowlists, guest identity, and optional widget link." })
+export class MJTourSurface_ {
+    @Field({description: "Unique identifier of the tour surface."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Display name of the tour surface."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Stable unique key identifying this surface."}) 
+    @MaxLength(150)
+    SurfaceKey?: string;
+        
+    @Field({nullable: true, description: "Notes describing where this surface is mounted and what tours it hosts."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "Host platform category: MJ Angular App, Web Page, or Mobile App."}) 
+    @MaxLength(30)
+    SurfaceType?: string;
+        
+    @Field({nullable: true, description: "Publishable key embedded in client script tags or <mj-tour-host> elements to identify this surface."}) 
+    @MaxLength(150)
+    PublicKey?: string;
+        
+    @Field({nullable: true, description: "JSON array or newline-delimited list of allowed CORS/embed origins for this surface."}) 
+    AllowedOrigins?: string;
+        
+    @Field({nullable: true, description: "Authentication strategy accepted on this surface: MJ User, Guest, or Either."}) 
+    @MaxLength(20)
+    AuthStrategy?: string;
+        
+    @Field({nullable: true, description: "Isolated MJ Role used when minting guest sessions for this surface (for example Tour Guest)."}) 
+    @MaxLength(36)
+    GuestRoleID?: string;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: Conversation Widget Instances providing an embedded chat or voice guide that shares the guest session."}) 
+    @MaxLength(36)
+    ConversationWidgetInstanceID?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Maximum guest session and telemetry requests permitted per minute per client."}) 
+    RateLimitPerMinute?: number;
+        
+    @Field(() => Int, {nullable: true, description: "Optional retention period in days for returning-visitor tour memory on this surface. NULL disables expiration."}) 
+    VisitorRetentionDays?: number;
+        
+    @Field({nullable: true, description: "Surface lifecycle status: Active, Disabled, or Retired."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "Extensible JSON settings for this surface."}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    GuestRole?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    ConversationWidgetInstance?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Surfaces
+//****************************************************************************
+@InputType()
+export class CreateMJTourSurfaceInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    SurfaceKey?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    SurfaceType?: string;
+
+    @Field({ nullable: true })
+    PublicKey?: string;
+
+    @Field({ nullable: true })
+    AllowedOrigins: string | null;
+
+    @Field({ nullable: true })
+    AuthStrategy?: string;
+
+    @Field({ nullable: true })
+    GuestRoleID: string | null;
+
+    @Field({ nullable: true })
+    ConversationWidgetInstanceID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerMinute?: number;
+
+    @Field(() => Int, { nullable: true })
+    VisitorRetentionDays: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Surfaces
+//****************************************************************************
+@InputType()
+export class UpdateMJTourSurfaceInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    SurfaceKey?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    SurfaceType?: string;
+
+    @Field({ nullable: true })
+    PublicKey?: string;
+
+    @Field({ nullable: true })
+    AllowedOrigins?: string | null;
+
+    @Field({ nullable: true })
+    AuthStrategy?: string;
+
+    @Field({ nullable: true })
+    GuestRoleID?: string | null;
+
+    @Field({ nullable: true })
+    ConversationWidgetInstanceID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    RateLimitPerMinute?: number;
+
+    @Field(() => Int, { nullable: true })
+    VisitorRetentionDays?: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Surfaces
+//****************************************************************************
+@ObjectType()
+export class RunMJTourSurfaceViewResult {
+    @Field(() => [MJTourSurface_])
+    Results: MJTourSurface_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourSurface_)
+export class MJTourSurfaceResolver extends ResolverBase {
+    @Query(() => RunMJTourSurfaceViewResult)
+    async RunMJTourSurfaceViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourSurfaceViewResult)
+    async RunMJTourSurfaceViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourSurfaceViewResult)
+    async RunMJTourSurfaceDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Surfaces';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourSurface_, { nullable: true })
+    async MJTourSurface(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourSurface_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Surfaces', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourSurfaces')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Surfaces', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Surfaces', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourSurface_)
+    async CreateMJTourSurface(
+        @Arg('input', () => CreateMJTourSurfaceInput) input: CreateMJTourSurfaceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Surfaces', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourSurface_)
+    async UpdateMJTourSurface(
+        @Arg('input', () => UpdateMJTourSurfaceInput) input: UpdateMJTourSurfaceInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Surfaces', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourSurface_)
+    async DeleteMJTourSurface(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Surfaces', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Triggers
+//****************************************************************************
+@ObjectType({ description: "Trigger rule specifying when and how a tour is offered, beaconed, notified, or auto-launched." })
+export class MJTourTrigger_ {
+    @Field({description: "Unique identifier of the tour trigger."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Tour offered when this trigger fires."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field({nullable: true, description: "Open ClassFactory key of the BaseTourTrigger plugin (for example FirstVisit, EntityFormOpened, Signal, AppUpgraded, Struggle, Schedule, AgentSuggested, or custom app triggers)."}) 
+    @MaxLength(100)
+    TriggerType?: string;
+        
+    @Field({nullable: true, description: "JSON ITourTriggerConfiguration holding trigger-specific matching criteria."}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: "How the triggered tour is surfaced: Offer, Beacon, Notification, or Auto."}) 
+    @MaxLength(20)
+    Delivery?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Minimum number of days before this trigger may fire again for the same user or visitor."}) 
+    CooldownDays?: number;
+        
+    @Field(() => Int, {nullable: true, description: "Priority used when multiple triggers fire concurrently."}) 
+    Priority?: number;
+        
+    @Field({nullable: true, description: "Operational status of the trigger: Active, Paused, or Disabled."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Triggers
+//****************************************************************************
+@InputType()
+export class CreateMJTourTriggerInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    TriggerType?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    Delivery?: string;
+
+    @Field(() => Int, { nullable: true })
+    CooldownDays: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Triggers
+//****************************************************************************
+@InputType()
+export class UpdateMJTourTriggerInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field({ nullable: true })
+    TriggerType?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    Delivery?: string;
+
+    @Field(() => Int, { nullable: true })
+    CooldownDays?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Triggers
+//****************************************************************************
+@ObjectType()
+export class RunMJTourTriggerViewResult {
+    @Field(() => [MJTourTrigger_])
+    Results: MJTourTrigger_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourTrigger_)
+export class MJTourTriggerResolver extends ResolverBase {
+    @Query(() => RunMJTourTriggerViewResult)
+    async RunMJTourTriggerViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourTriggerViewResult)
+    async RunMJTourTriggerViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourTriggerViewResult)
+    async RunMJTourTriggerDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Triggers';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourTrigger_, { nullable: true })
+    async MJTourTrigger(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourTrigger_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Triggers', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourTriggers')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Triggers', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Triggers', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourTrigger_)
+    async CreateMJTourTrigger(
+        @Arg('input', () => CreateMJTourTriggerInput) input: CreateMJTourTriggerInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Triggers', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourTrigger_)
+    async UpdateMJTourTrigger(
+        @Arg('input', () => UpdateMJTourTriggerInput) input: UpdateMJTourTriggerInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Triggers', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourTrigger_)
+    async DeleteMJTourTrigger(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Triggers', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tour Versions
+//****************************************************************************
+@ObjectType({ description: "Immutable published snapshot of a tour definition (steps, paths, goal, start location, configuration) pinned by Tour Runs so upgrades do not corrupt active runs." })
+export class MJTourVersion_ {
+    @Field({description: "Unique identifier of the published tour version."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Parent tour this snapshot belongs to."}) 
+    @MaxLength(36)
+    TourID?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Monotonically increasing version number per tour, starting at 1."}) 
+    VersionNumber?: number;
+        
+    @Field({nullable: true, description: "SHA-256 hash of the canonical tour definition used to avoid minting duplicate snapshots on idempotent saves."}) 
+    @MaxLength(128)
+    ContentHash?: string;
+        
+    @Field({nullable: true, description: "JSON ITourVersionDefinition containing the immutable snapshot of steps, paths, goal, start location, and configuration."}) 
+    Definition?: string;
+        
+    @Field({nullable: true, description: "Timestamp when this version snapshot was published."}) 
+    PublishedAt?: Date;
+        
+    @Field({nullable: true, description: "User who published this version snapshot, or NULL when published by automated sync."}) 
+    @MaxLength(36)
+    PublishedByUserID?: string;
+        
+    @Field({nullable: true, description: "Human-readable summary of changes in this version."}) 
+    ChangeSummary?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Tour?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    PublishedByUser?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Versions
+//****************************************************************************
+@InputType()
+export class CreateMJTourVersionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field(() => Int, { nullable: true })
+    VersionNumber?: number;
+
+    @Field({ nullable: true })
+    ContentHash: string | null;
+
+    @Field({ nullable: true })
+    Definition?: string;
+
+    @Field({ nullable: true })
+    PublishedAt?: Date;
+
+    @Field({ nullable: true })
+    PublishedByUserID: string | null;
+
+    @Field({ nullable: true })
+    ChangeSummary: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tour Versions
+//****************************************************************************
+@InputType()
+export class UpdateMJTourVersionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    TourID?: string;
+
+    @Field(() => Int, { nullable: true })
+    VersionNumber?: number;
+
+    @Field({ nullable: true })
+    ContentHash?: string | null;
+
+    @Field({ nullable: true })
+    Definition?: string;
+
+    @Field({ nullable: true })
+    PublishedAt?: Date;
+
+    @Field({ nullable: true })
+    PublishedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    ChangeSummary?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tour Versions
+//****************************************************************************
+@ObjectType()
+export class RunMJTourVersionViewResult {
+    @Field(() => [MJTourVersion_])
+    Results: MJTourVersion_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTourVersion_)
+export class MJTourVersionResolver extends ResolverBase {
+    @Query(() => RunMJTourVersionViewResult)
+    async RunMJTourVersionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourVersionViewResult)
+    async RunMJTourVersionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourVersionViewResult)
+    async RunMJTourVersionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tour Versions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTourVersion_, { nullable: true })
+    async MJTourVersion(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTourVersion_ | null> {
+        this.CheckUserReadPermissions('MJ: Tour Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTourVersions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tour Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tour Versions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTourVersion_)
+    async CreateMJTourVersion(
+        @Arg('input', () => CreateMJTourVersionInput) input: CreateMJTourVersionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tour Versions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTourVersion_)
+    async UpdateMJTourVersion(
+        @Arg('input', () => UpdateMJTourVersionInput) input: UpdateMJTourVersionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tour Versions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTourVersion_)
+    async DeleteMJTourVersion(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tour Versions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Tours
+//****************************************************************************
+@ObjectType({ description: "A guided tour definition: metadata, audience, launch policy, default guide mode, outcome goal, start location, and published version pointer." })
+export class MJTour_ {
+    @Field({description: "Unique identifier of the tour."}) 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: "Human-readable title of the tour shown in launchers, omnibar, and Tour Studio."}) 
+    @MaxLength(255)
+    Name?: string;
+        
+    @Field({nullable: true, description: "Stable namespaced key identifying the tour (for example core.welcome or sales.first-deal)."}) 
+    @MaxLength(150)
+    TourKey?: string;
+        
+    @Field({nullable: true, description: "Summary of what the user accomplishes by taking this tour."}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: "Owning MJ Application. NULL indicates a framework core tour."}) 
+    @MaxLength(36)
+    ApplicationID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, this tour is eligible to run in MJ-authenticated hosts (Explorer and MJ-connected apps)."}) 
+    RunInAuthenticatedHosts?: boolean;
+        
+    @Field({nullable: true, description: "Tour lifecycle status: Draft, Active, or Retired."}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field({nullable: true, description: "FK to the currently published immutable snapshot in MJ: Tour Versions."}) 
+    @MaxLength(36)
+    CurrentVersionID?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Estimated completion time in minutes shown to users before starting."}) 
+    EstimatedMinutes?: number;
+        
+    @Field({nullable: true, description: "CompositeFilter JSON expression restricting which users or contexts are eligible for this tour."}) 
+    AudienceFilter?: string;
+        
+    @Field({nullable: true, description: "JSON ITourLaunchPolicy governing offering, auto-launch, interruption-budget bypass, and holdout percentage."}) 
+    LaunchPolicy?: string;
+        
+    @Field(() => Int, {nullable: true, description: "Relative priority used to break ties when multiple eligible tours compete for the interruption budget."}) 
+    Priority?: number;
+        
+    @Field({nullable: true, description: "Comma-separated tag-group names for per-group offer throttling."}) 
+    @MaxLength(500)
+    ThrottleTags?: string;
+        
+    @Field({nullable: true, description: "Default guidance mode when launching this tour: Visual, Chat, Voice, or User Choice."}) 
+    @MaxLength(20)
+    DefaultGuideMode?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: "When 1, steps marked Mode = Do may execute confirmed agent mutations (subject to hard-banned action guards)."}) 
+    AllowAgentActions?: boolean;
+        
+    @Field({nullable: true, description: "Optional FK to MJ: AI Agents specifying the agent that guides this tour in Chat/Voice mode. NULL uses the app or instance default."}) 
+    @MaxLength(36)
+    GuideAgentID?: string;
+        
+    @Field({nullable: true, description: "Optional ClassFactory key of a BaseTourDriver subclass for tour-level logic. NULL uses the Default driver."}) 
+    @MaxLength(255)
+    DriverClass?: string;
+        
+    @Field({nullable: true, description: "Optional ClassFactory key of a BaseTourPresenter subclass (for example Overlay, SidePanel, or Embedded). NULL uses Overlay."}) 
+    @MaxLength(255)
+    PresenterClass?: string;
+        
+    @Field({nullable: true, description: "JSON ITourGoal defining the real-world outcome measured to evaluate goal conversion for this tour."}) 
+    Goal?: string;
+        
+    @Field({nullable: true, description: "JSON ITourStartLocation specifying where to navigate or which context is required when starting this tour."}) 
+    StartLocation?: string;
+        
+    @Field({nullable: true, description: "Optional Open App or release version tag used to surface What's New offers when an app upgrades."}) 
+    @MaxLength(50)
+    VersionTag?: string;
+        
+    @Field({nullable: true, description: "JSON ITourConfiguration holding localizations and extensible tour-level UI/runtime options."}) 
+    Configuration?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Application?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    GuideAgent?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tours
+//****************************************************************************
+@InputType()
+export class CreateMJTourInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    TourKey?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RunInAuthenticatedHosts?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    CurrentVersionID: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EstimatedMinutes: number | null;
+
+    @Field({ nullable: true })
+    AudienceFilter: string | null;
+
+    @Field({ nullable: true })
+    LaunchPolicy: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    ThrottleTags: string | null;
+
+    @Field({ nullable: true })
+    DefaultGuideMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowAgentActions?: boolean;
+
+    @Field({ nullable: true })
+    GuideAgentID: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
+
+    @Field({ nullable: true })
+    PresenterClass: string | null;
+
+    @Field({ nullable: true })
+    Goal: string | null;
+
+    @Field({ nullable: true })
+    StartLocation: string | null;
+
+    @Field({ nullable: true })
+    VersionTag: string | null;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Tours
+//****************************************************************************
+@InputType()
+export class UpdateMJTourInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    TourKey?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    ApplicationID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    RunInAuthenticatedHosts?: boolean;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    CurrentVersionID?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    EstimatedMinutes?: number | null;
+
+    @Field({ nullable: true })
+    AudienceFilter?: string | null;
+
+    @Field({ nullable: true })
+    LaunchPolicy?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    ThrottleTags?: string | null;
+
+    @Field({ nullable: true })
+    DefaultGuideMode?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    AllowAgentActions?: boolean;
+
+    @Field({ nullable: true })
+    GuideAgentID?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
+
+    @Field({ nullable: true })
+    PresenterClass?: string | null;
+
+    @Field({ nullable: true })
+    Goal?: string | null;
+
+    @Field({ nullable: true })
+    StartLocation?: string | null;
+
+    @Field({ nullable: true })
+    VersionTag?: string | null;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Tours
+//****************************************************************************
+@ObjectType()
+export class RunMJTourViewResult {
+    @Field(() => [MJTour_])
+    Results: MJTour_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJTour_)
+export class MJTourResolver extends ResolverBase {
+    @Query(() => RunMJTourViewResult)
+    async RunMJTourViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourViewResult)
+    async RunMJTourViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJTourViewResult)
+    async RunMJTourDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Tours';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJTour_, { nullable: true })
+    async MJTour(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJTour_ | null> {
+        this.CheckUserReadPermissions('MJ: Tours', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwTours')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tours', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Tours', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJTour_)
+    async CreateMJTour(
+        @Arg('input', () => CreateMJTourInput) input: CreateMJTourInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Tours', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJTour_)
+    async UpdateMJTour(
+        @Arg('input', () => UpdateMJTourInput) input: UpdateMJTourInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Tours', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJTour_)
+    async DeleteMJTour(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Tours', key, options, provider, userPayload, pubSub);
     }
     
 }

@@ -19,23 +19,21 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    SelectOutgoingEdges,
-    type GraphEdge,
-    type GraphNode,
-    type IConditionEvaluator,
-    type IGraphRepository,
-} from '../task-graph/graph-traversal-engine';
-import { CompileFlowToTaskGraph, type FlowCompilerPath, type FlowCompilerStep } from '../task-graph/flow-graph-compiler';
-import {
     ComputeEligibleTasks,
     ComputeSkipCascade,
     ConfirmSkipSeeds,
     ResolveExclusiveGroups,
+    SelectOutgoingEdges,
     type EvaluatedEdge,
+    type GraphEdge,
+    type GraphNode,
+    type IConditionEvaluator,
+    type IGraphRepository,
     type TaskGraphEdge,
     type TaskGraphNode,
     type TaskGraphNodeStatus,
-} from '../task-graph/graph-algorithms';
+} from '@memberjunction/graph';
+import { CompileFlowToTaskGraph, type FlowCompilerPath, type FlowCompilerStep } from '../task-graph/flow-graph-compiler';
 import { NormalizeDependency } from '../task-graph/task-graph-spec';
 
 // ── fixtures ────────────────────────────────────────────────────────────────

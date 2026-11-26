@@ -8,11 +8,11 @@
  *
  * @module @memberjunction/task-graph
  */
+import type { EdgeConditionOutcome } from '@memberjunction/graph';
 import {
     DecisionReferencesIn,
     ResolveDecisionStepAnswers,
     type BudgetCostEvent,
-    type EdgeConditionOutcome,
     type ForEachEnqueueOperation,
     type GraphDecisions,
     type HeldDecisionAnswer,

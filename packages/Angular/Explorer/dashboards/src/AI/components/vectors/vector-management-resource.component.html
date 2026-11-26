@@ -1,6 +1,7 @@
 @if (!HideToolbar) {
   <mj-page-layout>
     <mj-page-header
+      data-mj-tour-anchor="ai.vectors.header"
       Title="Vector Management"
       Icon="fa-solid fa-cubes"
       Subtitle="Vector index health, embeddings, and entity sync status">
@@ -39,7 +40,7 @@
     <!-- Main Content Area: Table + Sidebar -->
     <div class="content-area">
       <!-- Entity Sync Table -->
-      <div class="sync-table-panel">
+      <div class="sync-table-panel" data-mj-tour-anchor="ai.vectors.sync-table">
         <div class="panel-header">
           <h3 class="panel-title">
             <i class="fa-solid fa-table-list"></i>
@@ -128,7 +129,7 @@
       </div>
 
       <!-- Sidebar Panels -->
-      <div class="sidebar">
+      <div class="sidebar" data-mj-tour-anchor="ai.vectors.sidebar">
         <!-- Vector DB Health -->
         <div class="sidebar-card">
           <h4 class="sidebar-title">

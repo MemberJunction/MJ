@@ -1,0 +1,29 @@
+{
+  "name": "@memberjunction/graph",
+  "type": "module",
+  "version": "6.3.0-edge.2",
+  "description": "Zero-dependency directed graph traversal, DAG algorithms, cycle detection, and layered Sugiyama layout for MemberJunction",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "mjUILayer": "runtime",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {},
+  "devDependencies": {
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

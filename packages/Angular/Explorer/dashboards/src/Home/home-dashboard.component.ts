@@ -1,11 +1,19 @@
-import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, ElementRef, inject } from '@angular/core';
+import { Component, AfterViewInit, OnDestroy, ChangeDetectorRef, ViewChild, ChangeDetectionStrategy, ElementRef, inject, Inject, Optional } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration, IsDashboardEntity, SafeDetectChanges, BuildDashboardPinInput } from '@memberjunction/ng-shared';
 import { ResourceTypeForEntity } from '@memberjunction/ng-shared-generic';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView, PermissionConstrainedError, LogError } from '@memberjunction/core';
-import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
+import {
+  ResourceData,
+  MJUserFavoriteEntity,
+  MJUserNotificationEntity,
+  UserInfoEngine,
+  DashboardEngine,
+  UserViewEngine,
+  QueryEngine,
+} from '@memberjunction/core-entities';
 import type { MJDashboardEntity } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';

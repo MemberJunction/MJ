@@ -17,6 +17,7 @@ import { ReadableStatusValuesCheck } from './checks/readable-status-values.js';
 import { MigrationStringCollationCheck } from './checks/migration-string-collation.js';
 import { AgentSkillGovernanceCheck } from './checks/agent-skill-governance.js';
 import { LimitsLiteralsCheck } from './checks/limits-literals.js';
+import { TourAnchorsCheck } from './checks/tour-anchors.js';
 
 /**
  * Every registered standard.
@@ -38,6 +39,7 @@ export const STANDARD_CHECKS: readonly StandardCheck[] = [
     MigrationStringCollationCheck,
     AgentSkillGovernanceCheck,
     LimitsLiteralsCheck,
+    TourAnchorsCheck,
 ];
 
 /** Look up a check by its config key. */

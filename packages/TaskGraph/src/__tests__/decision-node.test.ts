@@ -15,10 +15,17 @@ import { describe, it, expect, vi } from 'vitest';
 import { UserInfo, type RunViewParams } from '@memberjunction/core';
 import type { MJTaskDependencyEntity, MJTaskEntity } from '@memberjunction/core-entities';
 import {
-    CompileFlowToTaskGraph,
-    CONDITION_ROOTS,
     ComputeEligibleTasks,
     ComputeTasksToBlock,
+    ResolveExclusiveGroups,
+    type EdgeConditionOutcome,
+    type EvaluatedEdge,
+    type TaskGraphEdge,
+    type TaskGraphNode,
+} from '@memberjunction/graph';
+import {
+    CompileFlowToTaskGraph,
+    CONDITION_ROOTS,
     DecisionAnswerConfidence,
     NormalizeDependency,
     ValidateTaskGraphSpec,
@@ -26,14 +33,9 @@ import {
     type FlowCompilerStep,
     DecisionHoldReason,
     NO_DECISIONS,
-    ResolveExclusiveGroups,
     TaskNode,
-    type EdgeConditionOutcome,
-    type EvaluatedEdge,
     type GraphDecisions,
     type TaskGraphDecisionAnswer,
-    type TaskGraphEdge,
-    type TaskGraphNode,
     type TaskGraphNodeConfigMap,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';

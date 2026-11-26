@@ -1,6 +1,7 @@
 <div class="app-switcher-container" [class.loading]="isLoading">
   <div class="app-switcher-button"
     #trigger
+    data-mj-tour-anchor="core.shell.app-switcher"
     [mjClickable]="TriggerAriaLabel"
     testId="app-switcher-trigger"
     [attr.aria-haspopup]="'dialog'"

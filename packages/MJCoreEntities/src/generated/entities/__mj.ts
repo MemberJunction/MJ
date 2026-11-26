@@ -455,6 +455,20 @@ import type {
   MJTestTypeEntityType,
   MJTestEntityType,
   MJThemeEntityType,
+  MJTourLearningPathTourLinkEntityType,
+  MJTourLearningPathEntityType,
+  MJTourOverrideEntityType,
+  MJTourPrerequisiteEntityType,
+  MJTourRunStepEntityType,
+  MJTourRunEntityType,
+  MJTourStepPathEntityType,
+  MJTourStepTypeEntityType,
+  MJTourStepEntityType,
+  MJTourSurfaceTourEntityType,
+  MJTourSurfaceEntityType,
+  MJTourTriggerEntityType,
+  MJTourVersionEntityType,
+  MJTourEntityType,
   MJUserApplicationEntityEntityType,
   MJUserApplicationEntityType,
   MJUserFavoriteEntityType,
@@ -123044,6 +123058,4562 @@ export class MJThemeEntity extends BaseEntity<MJThemeEntityType> {
     }
     set LoginScreenDraft(value: string | null) {
         this.Set('LoginScreenDraft', value);
+    }
+}
+
+
+/**
+ * MJ: Tour Learning Path Tour Links - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourLearningPathTourLink
+ * * Base View: vwTourLearningPathTourLinks
+ * * @description Membership join table linking Learning Paths to ordered Guided Tours.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Learning Path Tour Links')
+export class MJTourLearningPathTourLinkEntity extends BaseEntity<MJTourLearningPathTourLinkEntityType> {
+    /**
+    * Loads the MJ: Tour Learning Path Tour Links record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Learning Path Tour Links record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourLearningPathTourLinkEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the learning path membership row.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourLearningPathID
+    * * Display Name: Tour Learning Path
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Learning Paths (vwTourLearningPaths.ID)
+    * * Description: Parent learning path.
+    */
+    get TourLearningPathID(): string {
+        return this.Get('TourLearningPathID');
+    }
+    set TourLearningPathID(value: string) {
+        this.Set('TourLearningPathID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Member tour included in the learning path.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and progression order of this tour within the learning path.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsRequired
+    * * Display Name: Is Required
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, this tour is mandatory and cannot be skipped in the checklist.
+    */
+    get IsRequired(): boolean {
+        return this.Get('IsRequired');
+    }
+    set IsRequired(value: boolean) {
+        this.Set('IsRequired', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: TourLearningPath
+    * * Display Name: Tour Learning Path
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TourLearningPath(): string | null {
+        return this.Get('TourLearningPath');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+}
+
+
+/**
+ * Learning path configuration and localization overrides stored on `MJ: Tour Learning Paths.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display overrides for a learning path. */
+export interface MJTourLearningPathEntity_ILearningPathLocalization {
+    /** Localized learning path title. */
+    name?: string;
+    /** Localized learning path description. */
+    description?: string;
+}
+
+/** TourLearningPath.Configuration — localizations and checklist presentation options. */
+export interface MJTourLearningPathEntity_ILearningPathConfiguration {
+    /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourLearningPathEntity_ILearningPathLocalization>;
+    /** Font Awesome icon class displayed on the learning-path checklist card. */
+    icon?: string;
+    /** Whether this learning path renders on the Explorer Home checklist card. */
+    showOnHome?: boolean;
+    /** Whether this learning path appears inside the Tours & Help launcher. */
+    showInLauncher?: boolean;
+    /** When true, tours must be completed in `TourLearningPathTourLink.Sequence` order. */
+    enforceOrder?: boolean;
+    /** Optional badge label awarded upon completing all required tours in the path. */
+    completionBadge?: string;
+    /** Extensible learning-path settings. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tour Learning Paths - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourLearningPath
+ * * Base View: vwTourLearningPaths
+ * * @description A curated sequence of guided tours rendered as a user onboarding checklist on Home and in the tour launcher.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Learning Paths')
+export class MJTourLearningPathEntity extends BaseEntity<MJTourLearningPathEntityType> {
+
+  /**
+  * Related records: MJ: Tour Learning Path Tour Links
+  *
+  * Loads, validates and persists as one unit with this MJ: Tour Learning Paths record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tour Learning Paths → MJ: Tour Learning Path Tour Links' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Learning Path Tour Links', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Learning Path Tour Links', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly LearningPathTours = this.DeclareRelatedRecords<MJTourLearningPathTourLinkEntity>({
+      Name: 'LearningPathTours',
+        RelatedEntity: 'MJ: Tour Learning Path Tour Links',
+        RelatedEntityJoinField: 'TourLearningPathID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+    /**
+    * Loads the MJ: Tour Learning Paths record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Learning Paths record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourLearningPathEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the learning path.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display title of the learning path.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: PathKey
+    * * Display Name: Path Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable unique key identifying the learning path (for example mj.essentials).
+    */
+    get PathKey(): string {
+        return this.Get('PathKey');
+    }
+    set PathKey(value: string) {
+        this.Set('PathKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary of the curriculum and who it is designed for.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Owning MJ Application. NULL indicates a framework-wide learning path.
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: AudienceFilter
+    * * Display Name: Audience Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: CompositeFilter JSON expression restricting which users see this learning path.
+    */
+    get AudienceFilter(): string | null {
+        return this.Get('AudienceFilter');
+    }
+    set AudienceFilter(value: string | null) {
+        this.Set('AudienceFilter', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Retired
+    * * Description: Lifecycle status of the learning path: Draft, Active, or Retired.
+    */
+    get Status(): 'Active' | 'Draft' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Draft' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourLearningPathEntity_ILearningPathConfiguration
+    * * Description: JSON ILearningPathConfiguration holding localizations, icon, and checklist presentation options.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourLearningPathEntity_ILearningPathConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourLearningPathEntity_ILearningPathConfiguration | null {
+        return this.GetJSONFieldObject<MJTourLearningPathEntity_ILearningPathConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourLearningPathEntity_ILearningPathConfiguration | null) {
+        this.SetJSONFieldObject<MJTourLearningPathEntity_ILearningPathConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
+    }
+}
+
+
+/**
+ * MJ: Tour Overrides - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourOverride
+ * * Base View: vwTourOverrides
+ * * @description Host-admin customizations layered over shipped tours at Global, Role, or User scope without modifying upgradeable tour records.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Overrides')
+export class MJTourOverrideEntity extends BaseEntity<MJTourOverrideEntityType> {
+    /**
+    * Loads the MJ: Tour Overrides record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Overrides record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourOverrideEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour override.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour being customized by this override.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: Scope
+    * * Display Name: Scope
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Global
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Global
+    *   * Role
+    *   * User
+    * * Description: Specificity scope of the override: Global, Role, or User.
+    */
+    get Scope(): 'Global' | 'Role' | 'User' {
+        return this.Get('Scope');
+    }
+    set Scope(value: 'Global' | 'Role' | 'User') {
+        this.Set('Scope', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Target MJ Role when Scope is Role.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Target MJ User when Scope is User.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Precedence
+    * * Display Name: Precedence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Tie-breaker precedence when multiple overrides apply at the same scope.
+    */
+    get Precedence(): number {
+        return this.Get('Precedence');
+    }
+    set Precedence(value: number) {
+        this.Set('Precedence', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Whether this override record is Active or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: AudienceFilter
+    * * Display Name: Audience Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional CompositeFilter JSON overriding Tour.AudienceFilter for this scope.
+    */
+    get AudienceFilter(): string | null {
+        return this.Get('AudienceFilter');
+    }
+    set AudienceFilter(value: string | null) {
+        this.Set('AudienceFilter', value);
+    }
+
+    /**
+    * * Field Name: LaunchPolicy
+    * * Display Name: Launch Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON ITourLaunchPolicy overriding Tour.LaunchPolicy for this scope.
+    */
+    get LaunchPolicy(): string | null {
+        return this.Get('LaunchPolicy');
+    }
+    set LaunchPolicy(value: string | null) {
+        this.Set('LaunchPolicy', value);
+    }
+
+    /**
+    * * Field Name: IsDisabled
+    * * Display Name: Is Disabled
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, suppresses this tour completely for the targeted scope.
+    */
+    get IsDisabled(): boolean {
+        return this.Get('IsDisabled');
+    }
+    set IsDisabled(value: boolean) {
+        this.Set('IsDisabled', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON overrides for tour configuration settings at this scope.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Tour Prerequisites - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourPrerequisite
+ * * Base View: vwTourPrerequisites
+ * * @description Prerequisite rule that must be satisfied (Required) or is suggested (Recommended) before a user takes a tour.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Prerequisites')
+export class MJTourPrerequisiteEntity extends BaseEntity<MJTourPrerequisiteEntityType> {
+    /**
+    * Loads the MJ: Tour Prerequisites record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Prerequisites record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourPrerequisiteEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour prerequisite.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour that declares this prerequisite.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: PrerequisiteType
+    * * Display Name: Prerequisite Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Application
+    *   * Authorization
+    *   * Data
+    *   * Role
+    *   * Tour
+    * * Description: Kind of prerequisite: Tour, Role, Authorization, Application, or Data.
+    */
+    get PrerequisiteType(): 'Application' | 'Authorization' | 'Data' | 'Role' | 'Tour' {
+        return this.Get('PrerequisiteType');
+    }
+    set PrerequisiteType(value: 'Application' | 'Authorization' | 'Data' | 'Role' | 'Tour') {
+        this.Set('PrerequisiteType', value);
+    }
+
+    /**
+    * * Field Name: RequiredTourID
+    * * Display Name: Required Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: When PrerequisiteType is Tour, the FK to the required prior tour.
+    */
+    get RequiredTourID(): string | null {
+        return this.Get('RequiredTourID');
+    }
+    set RequiredTourID(value: string | null) {
+        this.Set('RequiredTourID', value);
+    }
+
+    /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON condition specifying the role, authorization, application, or data predicate to evaluate.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
+    * * Field Name: Strength
+    * * Display Name: Strength
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Required
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Recommended
+    *   * Required
+    * * Description: Enforcement strength: Required blocks eligibility until met; Recommended prompts or summarizes the prior tour.
+    */
+    get Strength(): 'Recommended' | 'Required' {
+        return this.Get('Strength');
+    }
+    set Strength(value: 'Recommended' | 'Required') {
+        this.Set('Strength', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Evaluation and display order among prerequisites for the tour.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: RequiredTour
+    * * Display Name: Required Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RequiredTour(): string | null {
+        return this.Get('RequiredTour');
+    }
+}
+
+
+/**
+ * MJ: Tour Run Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourRunStep
+ * * Base View: vwTourRunSteps
+ * * @description Per-step execution telemetry for a Tour Run, capturing timing, outcome, anchor-resolution rung, and agent question count.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Run Steps')
+export class MJTourRunStepEntity extends BaseEntity<MJTourRunStepEntityType> {
+    /**
+    * Loads the MJ: Tour Run Steps record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Run Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourRunStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour run step telemetry record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourRunID
+    * * Display Name: Tour Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Runs (vwTourRuns.ID)
+    * * Description: Parent tour run.
+    */
+    get TourRunID(): string {
+        return this.Get('TourRunID');
+    }
+    set TourRunID(value: string) {
+        this.Set('TourRunID', value);
+    }
+
+    /**
+    * * Field Name: StepKey
+    * * Display Name: Step Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: StepKey from the pinned Tour Version.
+    */
+    get StepKey(): string {
+        return this.Get('StepKey');
+    }
+    set StepKey(value: string) {
+        this.Set('StepKey', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordinal sequence of this step visit within the run (supports revisiting steps).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: EnteredAt
+    * * Display Name: Entered At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the user entered this step.
+    */
+    get EnteredAt(): Date {
+        return this.Get('EnteredAt');
+    }
+    set EnteredAt(value: Date) {
+        this.Set('EnteredAt', value);
+    }
+
+    /**
+    * * Field Name: ExitedAt
+    * * Display Name: Exited At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the user exited or completed this step.
+    */
+    get ExitedAt(): Date | null {
+        return this.Get('ExitedAt');
+    }
+    set ExitedAt(value: Date | null) {
+        this.Set('ExitedAt', value);
+    }
+
+    /**
+    * * Field Name: Outcome
+    * * Display Name: Outcome
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Already Known
+    *   * Anchor Missing
+    *   * Completed
+    *   * Dismissed
+    *   * Done By Agent
+    *   * Skipped
+    * * Description: How the step concluded: Completed, Skipped, Already Known, Done By Agent, Anchor Missing, or Dismissed.
+    */
+    get Outcome(): 'Already Known' | 'Anchor Missing' | 'Completed' | 'Dismissed' | 'Done By Agent' | 'Skipped' | null {
+        return this.Get('Outcome');
+    }
+    set Outcome(value: 'Already Known' | 'Anchor Missing' | 'Completed' | 'Dismissed' | 'Done By Agent' | 'Skipped' | null) {
+        this.Set('Outcome', value);
+    }
+
+    /**
+    * * Field Name: AnchorResolution
+    * * Display Name: Anchor Resolution
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Failed
+    *   * None
+    *   * Registered
+    *   * Role
+    *   * Selector
+    *   * Semantic
+    * * Description: Which anchor ladder rung resolved the target element: Registered, Semantic, Role, Selector, None, or Failed.
+    */
+    get AnchorResolution(): 'Failed' | 'None' | 'Registered' | 'Role' | 'Selector' | 'Semantic' | null {
+        return this.Get('AnchorResolution');
+    }
+    set AnchorResolution(value: 'Failed' | 'None' | 'Registered' | 'Role' | 'Selector' | 'Semantic' | null) {
+        this.Set('AnchorResolution', value);
+    }
+
+    /**
+    * * Field Name: QuestionCount
+    * * Display Name: Question Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of off-path questions the user asked an agent while on this step.
+    */
+    get QuestionCount(): number {
+        return this.Get('QuestionCount');
+    }
+    set QuestionCount(value: number) {
+        this.Set('QuestionCount', value);
+    }
+
+    /**
+    * * Field Name: Details
+    * * Display Name: Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON diagnostics such as missing-anchor reason or completion evidence details.
+    */
+    get Details(): string | null {
+        return this.Get('Details');
+    }
+    set Details(value: string | null) {
+        this.Set('Details', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * Entry in the ordered step-traversal array stored on `MJ: Tour Runs.PathTaken`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** TourRun.PathTaken element (`JSONTypeIsArray: true`) — one visited step in a tour run. */
+export interface MJTourRunEntity_ITourRunPathEntry {
+    /** `StepKey` of the step visited. */
+    StepKey: string;
+    /** ISO-8601 timestamp when the user entered the step. */
+    EnteredAt: string;
+    /** ISO-8601 timestamp when the user exited the step. */
+    ExitedAt?: string;
+    /** Step completion outcome recorded on exit. */
+    Outcome?: 'Completed' | 'Skipped' | 'Already Known' | 'Done By Agent' | 'Anchor Missing' | 'Dismissed';
+    /** Selected choice key when the step was a `Choice` step. */
+    ChoiceKey?: string;
+}
+
+/**
+ * MJ: Tour Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourRun
+ * * Base View: vwTourRuns
+ * * @description Progress ledger for one attempt of a guided tour by an authenticated MJ user or an external-surface guest visitor, pinned to a specific TourVersion.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Runs')
+export class MJTourRunEntity extends BaseEntity<MJTourRunEntityType> {
+
+  /**
+  * Related records: MJ: Tour Run Steps
+  *
+  * Loads, validates and persists as one unit with this MJ: Tour Runs record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tour Runs → MJ: Tour Run Steps' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Steps = this.DeclareRelatedRecords<MJTourRunStepEntity>({
+      Name: 'Steps',
+        RelatedEntity: 'MJ: Tour Run Steps',
+        RelatedEntityJoinField: 'TourRunID',
+        OrderBy: 'Sequence ASC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+        Sequence: { Field: 'Sequence', From: 1 },
+  });
+
+    /**
+    * Loads the MJ: Tour Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour run.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Authenticated MJ user taking the tour. NULL for unauthenticated guest visitors.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: VisitorKey
+    * * Display Name: Visitor Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Guest visitor identifier (or mj_sid fallback when returning-visitor memory is off) from verified surface JWT claims.
+    */
+    get VisitorKey(): string | null {
+        return this.Get('VisitorKey');
+    }
+    set VisitorKey(value: string | null) {
+        this.Set('VisitorKey', value);
+    }
+
+    /**
+    * * Field Name: SurfaceID
+    * * Display Name: Surface ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Surfaces (vwTourSurfaces.ID)
+    * * Description: Optional FK to MJ: Tour Surfaces when the run occurred on an external or embed surface.
+    */
+    get SurfaceID(): string | null {
+        return this.Get('SurfaceID');
+    }
+    set SurfaceID(value: string | null) {
+        this.Set('SurfaceID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour being executed.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: TourVersionID
+    * * Display Name: Tour Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Versions (vwTourVersions.ID)
+    * * Description: Pinned immutable Tour Version snapshot this run executes against.
+    */
+    get TourVersionID(): string {
+        return this.Get('TourVersionID');
+    }
+    set TourVersionID(value: string) {
+        this.Set('TourVersionID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: In Progress
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Abandoned
+    *   * Completed
+    *   * Dismissed
+    *   * Failed
+    *   * In Progress
+    *   * Pending
+    *   * Snoozed
+    * * Description: Current lifecycle status of the run: Pending, In Progress, Completed, Dismissed, Snoozed, Abandoned, or Failed.
+    */
+    get Status(): 'Abandoned' | 'Completed' | 'Dismissed' | 'Failed' | 'In Progress' | 'Pending' | 'Snoozed' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Abandoned' | 'Completed' | 'Dismissed' | 'Failed' | 'In Progress' | 'Pending' | 'Snoozed') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: GuideMode
+    * * Display Name: Guide Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Visual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Chat
+    *   * Visual
+    *   * Voice
+    * * Description: Active guidance modality for this run: Visual, Chat, or Voice.
+    */
+    get GuideMode(): 'Chat' | 'Visual' | 'Voice' {
+        return this.Get('GuideMode');
+    }
+    set GuideMode(value: 'Chat' | 'Visual' | 'Voice') {
+        this.Set('GuideMode', value);
+    }
+
+    /**
+    * * Field Name: DirectorType
+    * * Display Name: Director Type
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Visual
+    * * Description: ClassFactory key of the BaseTourDirector driving the session (for example Visual, Chat, Voice, Verify, Recorder).
+    */
+    get DirectorType(): string {
+        return this.Get('DirectorType');
+    }
+    set DirectorType(value: string) {
+        this.Set('DirectorType', value);
+    }
+
+    /**
+    * * Field Name: CurrentStepKey
+    * * Display Name: Current Step Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: StepKey of the step currently active in this run.
+    */
+    get CurrentStepKey(): string | null {
+        return this.Get('CurrentStepKey');
+    }
+    set CurrentStepKey(value: string | null) {
+        this.Set('CurrentStepKey', value);
+    }
+
+    /**
+    * * Field Name: PathTaken
+    * * Display Name: Path Taken
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: Array<MJTourRunEntity_ITourRunPathEntry>
+    * * Description: JSON array of ITourRunPathEntry recording the ordered steps visited and their outcomes.
+    */
+    get PathTaken(): string | null {
+        return this.Get('PathTaken');
+    }
+    set PathTaken(value: string | null) {
+        this.Set('PathTaken', value);
+    }
+
+    /**
+    * Typed accessor for PathTaken — a live view of the parsed JSON as Array<MJTourRunEntity_ITourRunPathEntry>.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying PathTaken field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PathTakenObject(): Array<MJTourRunEntity_ITourRunPathEntry> | null {
+        return this.GetJSONFieldObject<Array<MJTourRunEntity_ITourRunPathEntry>>('PathTaken');
+    }
+    set PathTakenObject(value: Array<MJTourRunEntity_ITourRunPathEntry> | null) {
+        this.SetJSONFieldObject<Array<MJTourRunEntity_ITourRunPathEntry>>('PathTaken', value);
+    }
+
+    /**
+    * * Field Name: LaunchSource
+    * * Display Name: Launch Source
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent
+    *   * Empty State
+    *   * Launcher
+    *   * Learning Path
+    *   * Link
+    *   * Notification
+    *   * Omnibar
+    *   * Trigger
+    * * Description: Entry point that initiated the run: Launcher, Omnibar, Agent, Trigger, Notification, Link, Learning Path, or Empty State.
+    */
+    get LaunchSource(): 'Agent' | 'Empty State' | 'Launcher' | 'Learning Path' | 'Link' | 'Notification' | 'Omnibar' | 'Trigger' {
+        return this.Get('LaunchSource');
+    }
+    set LaunchSource(value: 'Agent' | 'Empty State' | 'Launcher' | 'Learning Path' | 'Link' | 'Notification' | 'Omnibar' | 'Trigger') {
+        this.Set('LaunchSource', value);
+    }
+
+    /**
+    * * Field Name: LaunchedByAgentRunID
+    * * Display Name: Launched By Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional FK to MJ: AI Agent Runs when an agent initiated this tour run.
+    */
+    get LaunchedByAgentRunID(): string | null {
+        return this.Get('LaunchedByAgentRunID');
+    }
+    set LaunchedByAgentRunID(value: string | null) {
+        this.Set('LaunchedByAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the user or visitor actually started the run (NULL while Pending).
+    */
+    get StartedAt(): Date | null {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date | null) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the tour run reached Completed status.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: GoalMetAt
+    * * Display Name: Goal Met At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the tour's outcome Goal was verified as met.
+    */
+    get GoalMetAt(): Date | null {
+        return this.Get('GoalMetAt');
+    }
+    set GoalMetAt(value: Date | null) {
+        this.Set('GoalMetAt', value);
+    }
+
+    /**
+    * * Field Name: SnoozedUntil
+    * * Display Name: Snoozed Until
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp until which a Snoozed run should not be re-offered.
+    */
+    get SnoozedUntil(): Date | null {
+        return this.Get('SnoozedUntil');
+    }
+    set SnoozedUntil(value: Date | null) {
+        this.Set('SnoozedUntil', value);
+    }
+
+    /**
+    * * Field Name: ConversationID
+    * * Display Name: Conversation ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversations (vwConversations.ID)
+    * * Description: Optional FK to MJ: Conversations linking a Chat-guided run to its conversation thread.
+    */
+    get ConversationID(): string | null {
+        return this.Get('ConversationID');
+    }
+    set ConversationID(value: string | null) {
+        this.Set('ConversationID', value);
+    }
+
+    /**
+    * * Field Name: AgentSessionID
+    * * Display Name: Agent Session ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
+    * * Description: Optional FK to MJ: AI Agent Sessions linking a Voice-guided run to its realtime session.
+    */
+    get AgentSessionID(): string | null {
+        return this.Get('AgentSessionID');
+    }
+    set AgentSessionID(value: string | null) {
+        this.Set('AgentSessionID', value);
+    }
+
+    /**
+    * * Field Name: IsHoldout
+    * * Display Name: Is Holdout
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this run represents a holdout assignment (suppressed offer) for goal-lift measurement.
+    */
+    get IsHoldout(): boolean {
+        return this.Get('IsHoldout');
+    }
+    set IsHoldout(value: boolean) {
+        this.Set('IsHoldout', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Surface
+    * * Display Name: Surface
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Surface(): string | null {
+        return this.Get('Surface');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: LaunchedByAgentRun
+    * * Display Name: Launched By Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LaunchedByAgentRun(): string | null {
+        return this.Get('LaunchedByAgentRun');
+    }
+
+    /**
+    * * Field Name: Conversation
+    * * Display Name: Conversation
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Conversation(): string | null {
+        return this.Get('Conversation');
+    }
+}
+
+
+/**
+ * Branch edge configuration and localization overrides stored on `MJ: Tour Step Paths.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display overrides for a branch edge. */
+export interface MJTourStepPathEntity_ITourStepPathLocalization {
+    /** Localized branch edge label. */
+    label?: string;
+}
+
+/** TourStepPath.Configuration — localizations and extensible edge metadata. */
+export interface MJTourStepPathEntity_ITourStepPathConfiguration {
+    /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourStepPathEntity_ITourStepPathLocalization>;
+    /** Choice option key matched when originating from a `Choice` step. */
+    choiceKey?: string;
+    /** Marks this branch as optional in graph evaluation. */
+    isOptional?: boolean;
+    /** Extensible edge settings for custom `BaseTourDriver` routing. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tour Step Paths - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourStepPath
+ * * Base View: vwTourStepPaths
+ * * @description Directed branching edge between two steps in a tour. Linear tours need no path rows and advance by TourStep.Sequence.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Step Paths')
+export class MJTourStepPathEntity extends BaseEntity<MJTourStepPathEntityType> {
+    /**
+    * Loads the MJ: Tour Step Paths record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Step Paths record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourStepPathEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour step path.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Parent tour containing both endpoints.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: FromStepID
+    * * Display Name: From Step
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Steps (vwTourSteps.ID)
+    * * Description: Source step where this edge originates.
+    */
+    get FromStepID(): string {
+        return this.Get('FromStepID');
+    }
+    set FromStepID(value: string) {
+        this.Set('FromStepID', value);
+    }
+
+    /**
+    * * Field Name: ToStepID
+    * * Display Name: To Step
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Steps (vwTourSteps.ID)
+    * * Description: Target step this edge transitions to.
+    */
+    get ToStepID(): string {
+        return this.Get('ToStepID');
+    }
+    set ToStepID(value: string) {
+        this.Set('ToStepID', value);
+    }
+
+    /**
+    * * Field Name: Condition
+    * * Display Name: Condition
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: CompositeFilter JSON or choice-key condition evaluated against session context to decide whether this edge is taken.
+    */
+    get Condition(): string | null {
+        return this.Get('Condition');
+    }
+    set Condition(value: string | null) {
+        this.Set('Condition', value);
+    }
+
+    /**
+    * * Field Name: Label
+    * * Display Name: Label
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable label for this branch edge in Tour Studio and Choice steps.
+    */
+    get Label(): string | null {
+        return this.Get('Label');
+    }
+    set Label(value: string | null) {
+        this.Set('Label', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Evaluation priority when multiple outgoing edges match.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display order of this outgoing edge in editors and Choice lists.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this edge is taken when no conditional sibling edge matches.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepPathEntity_ITourStepPathConfiguration
+    * * Description: JSON ITourStepPathConfiguration holding localizations and extensible edge metadata.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourStepPathEntity_ITourStepPathConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourStepPathEntity_ITourStepPathConfiguration | null {
+        return this.GetJSONFieldObject<MJTourStepPathEntity_ITourStepPathConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourStepPathEntity_ITourStepPathConfiguration | null) {
+        this.SetJSONFieldObject<MJTourStepPathEntity_ITourStepPathConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: FromStep
+    * * Display Name: From Step
+    * * SQL Data Type: nvarchar(500)
+    */
+    get FromStep(): string | null {
+        return this.Get('FromStep');
+    }
+
+    /**
+    * * Field Name: ToStep
+    * * Display Name: To Step
+    * * SQL Data Type: nvarchar(500)
+    */
+    get ToStep(): string | null {
+        return this.Get('ToStep');
+    }
+}
+
+
+/**
+ * MJ: Tour Step Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourStepType
+ * * Base View: vwTourStepTypes
+ * * @description Registry of guided tour step types (visual primitives and app-extended step plugins). Each row names the logic DriverClass, optional Angular/host RendererClass, optional runtime ComponentID, and JSON ConfigSchema.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Step Types')
+export class MJTourStepTypeEntity extends BaseEntity<MJTourStepTypeEntityType> {
+    /**
+    * Loads the MJ: Tour Step Types record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Step Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourStepTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour step type.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name of the step type (for example Spotlight, Action, Beacon, Modal, Banner, Choice, Media, EmbeddedComponent, AskAgent).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Author-facing description of how this step type presents and behaves.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory key of the BaseTourStepType logic subclass in @memberjunction/tours-runtime or an app package.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: RendererClass
+    * * Display Name: Renderer Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: ClassFactory key of the BaseTourStepRenderer UI subclass. When NULL, resolution falls back to the step type Name.
+    */
+    get RendererClass(): string | null {
+        return this.Get('RendererClass');
+    }
+    set RendererClass(value: string | null) {
+        this.Set('RendererClass', value);
+    }
+
+    /**
+    * * Field Name: ComponentID
+    * * Display Name: Component ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Components (vwComponents.ID)
+    * * Description: Optional FK to MJ: Components enabling zero-deploy runtime ComponentSpec interactive step types.
+    */
+    get ComponentID(): string | null {
+        return this.Get('ComponentID');
+    }
+    set ComponentID(value: string | null) {
+        this.Set('ComponentID', value);
+    }
+
+    /**
+    * * Field Name: ConfigSchema
+    * * Display Name: Config Schema
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON Schema describing the Configuration object accepted by steps of this type, used by Tour Studio and server validation.
+    */
+    get ConfigSchema(): string | null {
+        return this.Get('ConfigSchema');
+    }
+    set ConfigSchema(value: string | null) {
+        this.Set('ConfigSchema', value);
+    }
+
+    /**
+    * * Field Name: SupportedModes
+    * * Display Name: Supported Modes
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: Show,Guide
+    * * Description: Comma-separated list of supported step execution modes (Show, Guide, Do).
+    */
+    get SupportedModes(): string {
+        return this.Get('SupportedModes');
+    }
+    set SupportedModes(value: string) {
+        this.Set('SupportedModes', value);
+    }
+
+    /**
+    * * Field Name: IsAgentCapable
+    * * Display Name: Is Agent Capable
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, Chat and Voice agent directors can explain or drive steps of this type.
+    */
+    get IsAgentCapable(): boolean {
+        return this.Get('IsAgentCapable');
+    }
+    set IsAgentCapable(value: boolean) {
+        this.Set('IsAgentCapable', value);
+    }
+
+    /**
+    * * Field Name: Icon
+    * * Display Name: Icon
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class displayed for this step type in Tour Studio.
+    */
+    get Icon(): string | null {
+        return this.Get('Icon');
+    }
+    set Icon(value: string | null) {
+        this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Lifecycle status of the step type: Active, Deprecated, or Disabled.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Component
+    * * Display Name: Component
+    * * SQL Data Type: nvarchar(500)
+    */
+    get Component(): string | null {
+        return this.Get('Component');
+    }
+}
+
+
+/**
+ * Step-level configuration and localization overrides stored on `MJ: Tour Steps.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display and narration overrides for a tour step. */
+export interface MJTourStepEntity_ITourStepLocalization {
+    /** Localized step heading. */
+    title?: string;
+    /** Localized Markdown step body. */
+    body?: string;
+    /** Localized voice narration script. */
+    voiceScript?: string;
+    /** Localized primary Next/Continue button label. */
+    nextLabel?: string;
+    /** Localized CTA label for Modal or Banner steps. */
+    ctaLabel?: string;
+}
+
+/** Selectable option rendered by `Choice` steps. */
+export interface MJTourStepEntity_ITourStepChoiceOption {
+    /** Stable key exposed to `TourStepPath` conditions. */
+    key: string;
+    /** Display label of the choice. */
+    label: string;
+    /** Optional supporting explanation shown under the label. */
+    description?: string;
+    /** Optional Font Awesome icon class. */
+    icon?: string;
+    /** Marks the correct answer when `choiceMode` is `'knowledgeCheck'`. */
+    isCorrect?: boolean;
+    /** Optional explanation shown after selecting this answer in knowledge-check mode. */
+    feedback?: string;
+}
+
+/** Single slide in a multi-image `Media` carousel step. */
+export interface MJTourStepEntity_ITourMediaSlide {
+    /** Image or video URL. */
+    mediaUrl: string;
+    /** Accessible alternative text describing the slide. */
+    altText: string;
+    /** Optional caption displayed below the slide. */
+    caption?: string;
+}
+
+/** TourStep.Configuration — typed options for the 9 standard step primitives, localizations, and custom step plugins. */
+export interface MJTourStepEntity_ITourStepConfiguration {
+    /** Locale-keyed copy overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourStepEntity_ITourStepLocalization>;
+    /** Explicit opt-in permitting a CSS `Selector` anchor fallback without failing the `tour-anchors` gate. */
+    tourAnchorsAllowSelector?: boolean;
+
+    // --- Spotlight ---
+    /** Padding in pixels around the spotlight SVG cutout. */
+    spotlightPadding?: number;
+    /** Border radius in pixels of the spotlight SVG cutout. */
+    spotlightRadius?: number;
+    /** Whether clicks inside the spotlight cutout pass through to the target element. */
+    allowInteraction?: boolean;
+    /** Additional registered anchor keys highlighted alongside the primary anchor. */
+    additionalAnchors?: string[];
+    /** Custom label for the Next button. */
+    nextLabel?: string;
+    /** Custom label for the Back button. */
+    backLabel?: string;
+
+    // --- Action ---
+    /** Short imperative instruction telling the user what action to perform. */
+    actionPrompt?: string;
+    /** Displays a waiting spinner/indicator while awaiting a background `Signal` or `EntityEvent`. */
+    showWaitingIndicator?: boolean;
+    /** Label shown beside the waiting indicator. */
+    waitingLabel?: string;
+    /** Automatically advances to the next step as soon as completion checks satisfy (default true). */
+    autoAdvanceOnComplete?: boolean;
+
+    // --- Beacon ---
+    /** Anchor corner or position for the pulsing beacon dot. */
+    beaconPosition?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'center';
+    /** Pulse animation duration in milliseconds (capped at 5000 ms for WCAG 2.2.2). */
+    beaconPulseDurationMs?: number;
+    /** Accessible label on the beacon trigger button. */
+    beaconLabel?: string;
+
+    // --- Modal ---
+    /** Visual variant of a Modal step: welcome card, announcement, or end-of-tour checkpoint recap. */
+    modalVariant?: 'welcome' | 'announcement' | 'checkpoint';
+    /** Primary call-to-action button label on Modal or Banner steps. */
+    ctaLabel?: string;
+    /** Optional follow-on tour key offered from a checkpoint Modal. */
+    nextTourKey?: string;
+    /** Optional learning path key linked from a checkpoint Modal. */
+    learningPathKey?: string;
+    /** Optional hero Font Awesome icon class for Modal cards. */
+    heroIcon?: string;
+
+    // --- Banner ---
+    /** Semantic color tone for a Banner step. */
+    bannerTone?: 'info' | 'success' | 'warning' | 'accent';
+    /** Whether a Banner step includes a dismiss button. */
+    dismissible?: boolean;
+    /** Optional destination URL opened by a Banner CTA button. */
+    ctaUrl?: string;
+
+    // --- Choice ---
+    /** Choices rendered by a `Choice` step (2-4 answers recommended). */
+    choices?: MJTourStepEntity_ITourStepChoiceOption[];
+    /** Whether `Choice` acts as a pathway branch selector or a knowledge check with feedback. */
+    choiceMode?: 'branch' | 'knowledgeCheck';
+    /** Displays immediate feedback after answer selection in `knowledgeCheck` mode. */
+    showFeedback?: boolean;
+
+    // --- Media ---
+    /** Media format rendered by `Media` steps. */
+    mediaType?: 'video' | 'image' | 'carousel';
+    /** Source URL for video or image media. */
+    mediaUrl?: string;
+    /** Required WebVTT captions track URL for video media. */
+    captionsUrl?: string;
+    /** Required inline transcript/captions text when `captionsUrl` is omitted. */
+    captionsText?: string;
+    /** Optional poster image URL for video media. */
+    posterUrl?: string;
+    /** Required accessible alt text for image media. */
+    altText?: string;
+    /** Slide list when `mediaType` is `'carousel'`. */
+    slides?: MJTourStepEntity_ITourMediaSlide[];
+
+    // --- EmbeddedComponent ---
+    /** Optional `MJ: Components` ID rendered inside an `EmbeddedComponent` step. */
+    componentId?: string;
+    /** Inline `ComponentSpec` definition rendered via `<mj-react-component>` when no `componentId` is set. */
+    componentSpec?: Record<string, unknown>;
+    /** Input properties bound into the embedded component host. */
+    hostProps?: Record<string, unknown>;
+    /** Event name emitted by the embedded component to complete the step. */
+    completeEvent?: string;
+
+    // --- AskAgent ---
+    /** Seeded prompt sent to Sage when entering an `AskAgent` step. */
+    agentPrompt?: string;
+    /** Preferred modality when opening the agent bridge from `AskAgent`. */
+    preferredMode?: 'Chat' | 'Voice';
+    /** Automatically submits `agentPrompt` when the step opens. */
+    autoSendPrompt?: boolean;
+    /** Requires explicit `AgentConfirmed` tool call before advancing. */
+    requireConfirmation?: boolean;
+
+    /** Extensible properties for custom `BaseTourStepType` plugins. */
+    [key: string]: unknown;
+}
+
+/**
+ * Anchor descriptor stored on `MJ: Tour Steps.Anchor`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Standard anchor resolution strategies shipped in `@memberjunction/tours-runtime` and `@memberjunction/ng-tours`. */
+export type MJTourStepEntity_StandardTourAnchorStrategy =
+    | 'Registered'
+    | 'FormField'
+    | 'FormSection'
+    | 'FormRailGroup'
+    | 'FormToolbarAction'
+    | 'NavItem'
+    | 'RailPage'
+    | 'AppSwitcher'
+    | 'GridColumn'
+    | 'Omnibar'
+    | 'ChatComposer'
+    | 'Role'
+    | 'Selector';
+
+/** Anchor resolution strategy key, including custom ClassFactory-registered app resolvers. */
+export type MJTourStepEntity_TourAnchorStrategy = MJTourStepEntity_StandardTourAnchorStrategy | (string & {});
+
+/** TourStep.Anchor — describes how to locate a UI target element and optional fallback anchors. */
+export interface MJTourStepEntity_ITourAnchor {
+    /** Resolution strategy key registered with `BaseTourAnchorResolver`. */
+    Strategy: MJTourStepEntity_TourAnchorStrategy;
+    /** Registered anchor key (`data-mj-tour-anchor`) or nav/rail/toolbar action key. */
+    Key?: string;
+    /** Entity name for semantic form/grid resolvers; supports `{{Context.Record.EntityName}}`. */
+    Entity?: string;
+    /** Field name for `FormField` or `GridColumn` resolvers. */
+    Field?: string;
+    /** Section key for `FormSection` resolvers. */
+    Section?: string;
+    /** Rail group key for `FormRailGroup` resolvers. */
+    RailGroup?: string;
+    /** Toolbar action key for `FormToolbarAction` resolvers. */
+    Action?: string;
+    /** Application name or ID for `NavItem` or `RailPage` resolvers. */
+    Application?: string;
+    /** Nav item `DriverClass` for stable `NavItem` resolution. */
+    DriverClass?: string;
+    /** Accessible ARIA role for `Role` resolvers. */
+    Role?: string;
+    /** Accessible name for `Role` resolvers. */
+    Name?: string;
+    /** CSS selector fallback for `Selector` resolvers (last resort; flagged by `tour-anchors` unless opted in). */
+    Selector?: string;
+    /** Optional ancestor region or CSS scope disambiguating matching elements. */
+    Scope?: string;
+    /** Maximum milliseconds to wait for the anchor to appear in the DOM (default 5000). */
+    TimeoutMs?: number;
+    /** Additional registered anchor keys to spotlight simultaneously with the primary target. */
+    AdditionalKeys?: string[];
+    /** Additional full anchor descriptors to spotlight simultaneously with the primary target. */
+    AdditionalAnchors?: MJTourStepEntity_ITourAnchor[];
+    /** Ordered fallback descriptors tried when the primary strategy does not resolve. */
+    Fallbacks?: MJTourStepEntity_ITourAnchor[];
+    /** Custom resolver options for app-specific `BaseTourAnchorResolver` plugins. */
+    Options?: Record<string, unknown>;
+}
+
+/**
+ * Pre-render navigation and make-visible actions stored on `MJ: Tour Steps.Prepare`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Single ordered action inside a step's `Prepare` phase. */
+export interface MJTourStepEntity_ITourPrepareAction {
+    /** Prepare action kind executed before the step resolves its anchor and renders. */
+    Type:
+        | 'SwitchApp'
+        | 'OpenNavItem'
+        | 'OpenRailPage'
+        | 'OpenRecord'
+        | 'NavigateUrl'
+        | 'SwitchRailGroup'
+        | 'ExpandSection'
+        | 'EmitSignal'
+        | 'Wait';
+    /** Application name or ID. */
+    Application?: string;
+    /** Nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Rail page `Id`. */
+    RailPage?: string;
+    /** Form rail group key. */
+    RailGroup?: string;
+    /** Form section key. */
+    Section?: string;
+    /** Entity name for `OpenRecord`. */
+    Entity?: string;
+    /** Record ID for `OpenRecord` (supports template expressions). */
+    RecordID?: string;
+    /** Destination URL for `NavigateUrl`. */
+    Url?: string;
+    /** Signal name for `EmitSignal`. */
+    Signal?: string;
+    /** Delay in milliseconds for `Wait`. */
+    DurationMs?: number;
+    /** Query parameters applied during navigation. */
+    QueryParams?: Record<string, string>;
+}
+
+/** TourStep.Prepare — cross-screen movement and UI reveal executed before step rendering. */
+export interface MJTourStepEntity_ITourStepPrepare {
+    /** Shorthand: target MJ Application to switch to. */
+    Application?: string;
+    /** Shorthand: target nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Shorthand: target rail page `Id`. */
+    RailPage?: string;
+    /** Shorthand: form rail group key to activate. */
+    RailGroup?: string;
+    /** Shorthand: form section key to expand. */
+    Section?: string;
+    /** Shorthand: entity name to open. */
+    Entity?: string;
+    /** Shorthand: record ID to open. */
+    RecordID?: string;
+    /** Shorthand: URL to navigate to on web hosts. */
+    Url?: string;
+    /** Query parameters applied during navigation. */
+    QueryParams?: Record<string, string>;
+    /** Whether to wait for the step anchor to register after prepare completes. */
+    WaitForAnchor?: boolean;
+    /** Maximum milliseconds to wait for anchor registration after prepare. */
+    WaitTimeoutMs?: number;
+    /** Custom polite live-region announcement (WCAG 4.1.3) spoken before the step renders. */
+    Announcement?: string;
+    /** Explicit ordered list of prepare actions when a step needs multiple setup moves. */
+    Actions?: MJTourStepEntity_ITourPrepareAction[];
+}
+
+/**
+ * Completion specification stored on `MJ: Tour Steps.Completion`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Standard completion check keys registered with `BaseTourCompletionCheck`. */
+export type MJTourStepEntity_StandardTourCompletionCheckType =
+    | 'NextButton'
+    | 'AnchorInteraction'
+    | 'Navigation'
+    | 'Signal'
+    | 'EntityEvent'
+    | 'FieldState'
+    | 'ServerPredicate'
+    | 'AgentConfirmed'
+    | 'All'
+    | 'Any';
+
+/** Completion check key, including custom ClassFactory-registered app checks. */
+export type MJTourStepEntity_TourCompletionCheckType = MJTourStepEntity_StandardTourCompletionCheckType | (string & {});
+
+/** Leaf predicate within a portable MJ filter expression. */
+export interface MJTourStepEntity_ITourCompletionSimpleFilter {
+    field: string;
+    operator: string;
+    value?: string | number | boolean | string[] | number[] | null;
+}
+
+/** Portable MJ CompositeFilter tree for `EntityEvent`, `FieldState`, and `Signal` checks. */
+export interface MJTourStepEntity_ITourCompletionFilter {
+    logic: 'and' | 'or';
+    filters: Array<MJTourStepEntity_ITourCompletionSimpleFilter | MJTourStepEntity_ITourCompletionFilter>;
+}
+
+/** Single completion check evaluated by `TourSession`. */
+export interface MJTourStepEntity_ITourCompletionCheck {
+    /** Check plugin key registered with `BaseTourCompletionCheck`. */
+    Type: MJTourStepEntity_TourCompletionCheckType;
+    /** DOM event for `AnchorInteraction` checks. */
+    Event?: 'click' | 'focus' | 'change' | 'input' | 'submit';
+    /** Signal name for `Signal` checks (emitted via `TourSignals.Emit`). */
+    Signal?: string;
+    /** Optional filter over signal payload properties. */
+    SignalFilter?: MJTourStepEntity_ITourCompletionFilter;
+    /** Entity name for `EntityEvent`, `FieldState`, or `HasRecords` checks. */
+    Entity?: string;
+    /** Entity write action for `EntityEvent` checks. */
+    Action?: 'Save' | 'Delete' | 'Create' | 'Update';
+    /** Field name for `FieldState` checks. */
+    Field?: string;
+    /** CompositeFilter evaluated against entity record, form field, or signal payload. */
+    Filter?: MJTourStepEntity_ITourCompletionFilter;
+    /** Route or URL pattern for `Navigation` checks. */
+    RoutePattern?: string;
+    /** Target application name or ID for `Navigation` checks. */
+    Application?: string;
+    /** Target nav item key or DriverClass for `Navigation` checks. */
+    NavItem?: string;
+    /** Server predicate ClassFactory key for `ServerPredicate` checks (`HasRecords`, `QueryReturnsRows`, `AuthorizationHeld`, etc.). */
+    Predicate?: string;
+    /** Parameters passed to `ServerPredicate` or custom completion check plugins. */
+    Params?: Record<string, unknown>;
+    /** Nested checks for `All` and `Any` combinators. */
+    Checks?: MJTourStepEntity_ITourCompletionCheck[];
+}
+
+/** TourStep.Completion — declares what satisfies and advances a step. */
+export interface MJTourStepEntity_ITourCompletion {
+    /** Checks evaluated to mark the step complete. */
+    Checks: MJTourStepEntity_ITourCompletionCheck[];
+    /** Combinator across top-level `Checks` (default `'All'`). */
+    Mode?: 'All' | 'Any';
+    /** Optional custom label for the `NextButton` control. */
+    NextLabel?: string;
+    /** Whether the user may manually click Next even when another check is pending. */
+    AllowManualAdvance?: boolean;
+}
+
+/**
+ * MJ: Tour Steps - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourStep
+ * * Base View: vwTourSteps
+ * * @description An editable draft step within a guided tour: step type, copy, anchor descriptor, prepare actions, completion checks, and agent notes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Steps')
+export class MJTourStepEntity extends BaseEntity<MJTourStepEntityType> {
+    /**
+    * Loads the MJ: Tour Steps record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Steps record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourStepEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour step.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Parent tour this step belongs to.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: StepKey
+    * * Display Name: Step Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Stable key identifying this step within its tour (referenced by TourRun.CurrentStepKey and TourRunStep.StepKey).
+    */
+    get StepKey(): string {
+        return this.Get('StepKey');
+    }
+    set StepKey(value: string) {
+        this.Set('StepKey', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Default linear display order of the step when no explicit Tour Step Paths override traversal.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: StepTypeID
+    * * Display Name: Step Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Step Types (vwTourStepTypes.ID)
+    * * Description: FK to MJ: Tour Step Types determining the visual primitive or plugin behavior.
+    */
+    get StepTypeID(): string {
+        return this.Get('StepTypeID');
+    }
+    set StepTypeID(value: string) {
+        this.Set('StepTypeID', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional per-step ClassFactory key overriding the step type's DriverClass for this single step.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Step heading displayed to the user.
+    */
+    get Title(): string {
+        return this.Get('Title');
+    }
+    set Title(value: string) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Body
+    * * Display Name: Body
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Markdown step body supporting MJ template expressions.
+    */
+    get Body(): string | null {
+        return this.Get('Body');
+    }
+    set Body(value: string | null) {
+        this.Set('Body', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourStepConfiguration
+    * * Description: JSON ITourStepConfiguration validated against the step type's ConfigSchema, plus localizations.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourStepEntity_ITourStepConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourStepEntity_ITourStepConfiguration | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourStepConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourStepEntity_ITourStepConfiguration | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourStepConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Anchor
+    * * Display Name: Anchor
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourAnchor
+    * * Description: JSON ITourAnchor descriptor specifying how to locate the target UI element (registered key, semantic anchor, role, or selector fallback).
+    */
+    get Anchor(): string | null {
+        return this.Get('Anchor');
+    }
+    set Anchor(value: string | null) {
+        this.Set('Anchor', value);
+    }
+
+    /**
+    * Typed accessor for Anchor — a live view of the parsed JSON as MJTourStepEntity_ITourAnchor.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Anchor field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get AnchorObject(): MJTourStepEntity_ITourAnchor | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourAnchor>('Anchor');
+    }
+    set AnchorObject(value: MJTourStepEntity_ITourAnchor | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourAnchor>('Anchor', value);
+    }
+
+    /**
+    * * Field Name: Placement
+    * * Display Name: Placement
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Auto
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Bottom
+    *   * Center
+    *   * Left
+    *   * Right
+    *   * Top
+    * * Description: Preferred popover placement relative to the anchor: Auto, Top, Bottom, Left, Right, or Center.
+    */
+    get Placement(): 'Auto' | 'Bottom' | 'Center' | 'Left' | 'Right' | 'Top' {
+        return this.Get('Placement');
+    }
+    set Placement(value: 'Auto' | 'Bottom' | 'Center' | 'Left' | 'Right' | 'Top') {
+        this.Set('Placement', value);
+    }
+
+    /**
+    * * Field Name: Mode
+    * * Display Name: Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Guide
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Do
+    *   * Guide
+    *   * Show
+    * * Description: Step interaction mode: Show (explain), Guide (wait for user action), or Do (agent executes with per-mutation confirmation).
+    */
+    get Mode(): 'Do' | 'Guide' | 'Show' {
+        return this.Get('Mode');
+    }
+    set Mode(value: 'Do' | 'Guide' | 'Show') {
+        this.Set('Mode', value);
+    }
+
+    /**
+    * * Field Name: Prepare
+    * * Display Name: Prepare Actions
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourStepPrepare
+    * * Description: JSON ITourStepPrepare describing cross-screen navigation or make-visible actions executed before the step renders.
+    */
+    get Prepare(): string | null {
+        return this.Get('Prepare');
+    }
+    set Prepare(value: string | null) {
+        this.Set('Prepare', value);
+    }
+
+    /**
+    * Typed accessor for Prepare — a live view of the parsed JSON as MJTourStepEntity_ITourStepPrepare.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Prepare field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get PrepareObject(): MJTourStepEntity_ITourStepPrepare | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourStepPrepare>('Prepare');
+    }
+    set PrepareObject(value: MJTourStepEntity_ITourStepPrepare | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourStepPrepare>('Prepare', value);
+    }
+
+    /**
+    * * Field Name: Completion
+    * * Display Name: Completion Checks
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourStepEntity_ITourCompletion
+    * * Description: JSON ITourCompletion defining the checks that mark this step done.
+    */
+    get Completion(): string | null {
+        return this.Get('Completion');
+    }
+    set Completion(value: string | null) {
+        this.Set('Completion', value);
+    }
+
+    /**
+    * Typed accessor for Completion — a live view of the parsed JSON as MJTourStepEntity_ITourCompletion.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Completion field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get CompletionObject(): MJTourStepEntity_ITourCompletion | null {
+        return this.GetJSONFieldObject<MJTourStepEntity_ITourCompletion>('Completion');
+    }
+    set CompletionObject(value: MJTourStepEntity_ITourCompletion | null) {
+        this.SetJSONFieldObject<MJTourStepEntity_ITourCompletion>('Completion', value);
+    }
+
+    /**
+    * * Field Name: SkipWhen
+    * * Display Name: Skip When
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON condition or check specification evaluated to skip the step automatically when its outcome is already satisfied.
+    */
+    get SkipWhen(): string | null {
+        return this.Get('SkipWhen');
+    }
+    set SkipWhen(value: string | null) {
+        this.Set('SkipWhen', value);
+    }
+
+    /**
+    * * Field Name: OnMissing
+    * * Display Name: On Missing
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Center
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Agent Recover
+    *   * Center
+    *   * Skip
+    *   * Stall
+    * * Description: Fallback behavior if the step anchor cannot be resolved: Skip, Center, Stall, or Agent Recover.
+    */
+    get OnMissing(): 'Agent Recover' | 'Center' | 'Skip' | 'Stall' {
+        return this.Get('OnMissing');
+    }
+    set OnMissing(value: 'Agent Recover' | 'Center' | 'Skip' | 'Stall') {
+        this.Set('OnMissing', value);
+    }
+
+    /**
+    * * Field Name: IsOptional
+    * * Display Name: Is Optional
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, the user or agent may skip this step without blocking tour completion.
+    */
+    get IsOptional(): boolean {
+        return this.Get('IsOptional');
+    }
+    set IsOptional(value: boolean) {
+        this.Set('IsOptional', value);
+    }
+
+    /**
+    * * Field Name: GuideNotes
+    * * Display Name: Guide Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Agent-only grounding context and cautions supplied to Chat and Voice directors, not shown in visual popovers.
+    */
+    get GuideNotes(): string | null {
+        return this.Get('GuideNotes');
+    }
+    set GuideNotes(value: string | null) {
+        this.Set('GuideNotes', value);
+    }
+
+    /**
+    * * Field Name: VoiceScript
+    * * Display Name: Voice Script
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional concise script tailored for Voice director narration (mirrored as text for accessibility).
+    */
+    get VoiceScript(): string | null {
+        return this.Get('VoiceScript');
+    }
+    set VoiceScript(value: string | null) {
+        this.Set('VoiceScript', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: StepType
+    * * Display Name: Step Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StepType(): string | null {
+        return this.Get('StepType');
+    }
+}
+
+
+/**
+ * Start location and context requirements stored on `MJ: Tours.StartLocation`
+ * and `MJ: Tour Surface Tours.StartLocationOverride`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Tour.StartLocation / TourSurfaceTour.StartLocationOverride — navigation target and context preconditions. */
+export interface MJTourSurfaceTourEntity_ITourStartLocation {
+    /** Target MJ Application name or ID. */
+    Application?: string;
+    /** Target nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Target Explorer resource type (for example `'Records'`, `'Dashboards'`, `'Custom'`). */
+    ResourceType?: string;
+    /** Target entity name when opening a record or entity view. */
+    Entity?: string;
+    /** Optional specific record ID to open. */
+    RecordID?: string;
+    /** Destination URL for web or external-surface hosts. */
+    Url?: string;
+    /** URL pattern restricting where the tour starts on web hosts. */
+    UrlPattern?: string;
+    /** When true, the tour requires an already-open record in the active host context. */
+    RequiresOpenRecord?: boolean;
+    /** Restricts contextual tours to an open record of the specified entity name. */
+    RequiresEntity?: string;
+    /** Query parameters applied when navigating to the start location. */
+    QueryParams?: Record<string, string>;
+}
+
+/**
+ * MJ: Tour Surface Tours - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourSurfaceTour
+ * * Base View: vwTourSurfaceTours
+ * * @description Many-to-many assignment of guided tours to external Tour Surfaces, with ordering and optional per-surface start location overrides.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Surface Tours')
+export class MJTourSurfaceTourEntity extends BaseEntity<MJTourSurfaceTourEntityType> {
+    /**
+    * Loads the MJ: Tour Surface Tours record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Surface Tours record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourSurfaceTourEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the surface-tour assignment.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SurfaceID
+    * * Display Name: Surface
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Surfaces (vwTourSurfaces.ID)
+    * * Description: Target Tour Surface.
+    */
+    get SurfaceID(): string {
+        return this.Get('SurfaceID');
+    }
+    set SurfaceID(value: string) {
+        this.Set('SurfaceID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour assigned to run on the surface.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this tour is the default entry tour for the surface.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display and evaluation order of this tour on the surface.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: StartLocationOverride
+    * * Display Name: Start Location Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourSurfaceTourEntity_ITourStartLocation
+    * * Description: Optional JSON ITourStartLocation overriding Tour.StartLocation specifically for this surface.
+    */
+    get StartLocationOverride(): string | null {
+        return this.Get('StartLocationOverride');
+    }
+    set StartLocationOverride(value: string | null) {
+        this.Set('StartLocationOverride', value);
+    }
+
+    /**
+    * Typed accessor for StartLocationOverride — a live view of the parsed JSON as MJTourSurfaceTourEntity_ITourStartLocation.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying StartLocationOverride field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get StartLocationOverrideObject(): MJTourSurfaceTourEntity_ITourStartLocation | null {
+        return this.GetJSONFieldObject<MJTourSurfaceTourEntity_ITourStartLocation>('StartLocationOverride');
+    }
+    set StartLocationOverrideObject(value: MJTourSurfaceTourEntity_ITourStartLocation | null) {
+        this.SetJSONFieldObject<MJTourSurfaceTourEntity_ITourStartLocation>('StartLocationOverride', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Surface
+    * * Display Name: Surface Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Surface(): string | null {
+        return this.Get('Surface');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+}
+
+
+/**
+ * MJ: Tour Surfaces - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourSurface
+ * * Base View: vwTourSurfaces
+ * * @description External or non-Explorer host surface where guided tours run (custom Angular portal, public web page, or mobile app), with origin allowlists, guest identity, and optional widget link.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Surfaces')
+export class MJTourSurfaceEntity extends BaseEntity<MJTourSurfaceEntityType> {
+
+  /**
+  * Related records: MJ: Tour Surface Tours
+  *
+  * Loads, validates and persists as one unit with this MJ: Tour Surfaces record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tour Surfaces → MJ: Tour Surface Tours' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Surface Tours', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Surface Tours', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly SurfaceTours = this.DeclareRelatedRecords<MJTourSurfaceTourEntity>({
+      Name: 'SurfaceTours',
+        RelatedEntity: 'MJ: Tour Surface Tours',
+        RelatedEntityJoinField: 'SurfaceID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+    /**
+    * Loads the MJ: Tour Surfaces record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Surfaces record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourSurfaceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour surface.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Display name of the tour surface.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: SurfaceKey
+    * * Display Name: Surface Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable unique key identifying this surface.
+    */
+    get SurfaceKey(): string {
+        return this.Get('SurfaceKey');
+    }
+    set SurfaceKey(value: string) {
+        this.Set('SurfaceKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Notes describing where this surface is mounted and what tours it hosts.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SurfaceType
+    * * Display Name: Surface Type
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Web Page
+    * * Value List Type: List
+    * * Possible Values 
+    *   * MJ Angular App
+    *   * Mobile App
+    *   * Web Page
+    * * Description: Host platform category: MJ Angular App, Web Page, or Mobile App.
+    */
+    get SurfaceType(): 'MJ Angular App' | 'Mobile App' | 'Web Page' {
+        return this.Get('SurfaceType');
+    }
+    set SurfaceType(value: 'MJ Angular App' | 'Mobile App' | 'Web Page') {
+        this.Set('SurfaceType', value);
+    }
+
+    /**
+    * * Field Name: PublicKey
+    * * Display Name: Public Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Publishable key embedded in client script tags or <mj-tour-host> elements to identify this surface.
+    */
+    get PublicKey(): string {
+        return this.Get('PublicKey');
+    }
+    set PublicKey(value: string) {
+        this.Set('PublicKey', value);
+    }
+
+    /**
+    * * Field Name: AllowedOrigins
+    * * Display Name: Allowed Origins
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array or newline-delimited list of allowed CORS/embed origins for this surface.
+    */
+    get AllowedOrigins(): string | null {
+        return this.Get('AllowedOrigins');
+    }
+    set AllowedOrigins(value: string | null) {
+        this.Set('AllowedOrigins', value);
+    }
+
+    /**
+    * * Field Name: AuthStrategy
+    * * Display Name: Auth Strategy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Guest
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Either
+    *   * Guest
+    *   * MJ User
+    * * Description: Authentication strategy accepted on this surface: MJ User, Guest, or Either.
+    */
+    get AuthStrategy(): 'Either' | 'Guest' | 'MJ User' {
+        return this.Get('AuthStrategy');
+    }
+    set AuthStrategy(value: 'Either' | 'Guest' | 'MJ User') {
+        this.Set('AuthStrategy', value);
+    }
+
+    /**
+    * * Field Name: GuestRoleID
+    * * Display Name: Guest Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    * * Description: Isolated MJ Role used when minting guest sessions for this surface (for example Tour Guest).
+    */
+    get GuestRoleID(): string | null {
+        return this.Get('GuestRoleID');
+    }
+    set GuestRoleID(value: string | null) {
+        this.Set('GuestRoleID', value);
+    }
+
+    /**
+    * * Field Name: ConversationWidgetInstanceID
+    * * Display Name: Conversation Widget Instance ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Widget Instances (vwConversationWidgetInstances.ID)
+    * * Description: Optional FK to MJ: Conversation Widget Instances providing an embedded chat or voice guide that shares the guest session.
+    */
+    get ConversationWidgetInstanceID(): string | null {
+        return this.Get('ConversationWidgetInstanceID');
+    }
+    set ConversationWidgetInstanceID(value: string | null) {
+        this.Set('ConversationWidgetInstanceID', value);
+    }
+
+    /**
+    * * Field Name: RateLimitPerMinute
+    * * Display Name: Rate Limit Per Minute
+    * * SQL Data Type: int
+    * * Default Value: 60
+    * * Description: Maximum guest session and telemetry requests permitted per minute per client.
+    */
+    get RateLimitPerMinute(): number {
+        return this.Get('RateLimitPerMinute');
+    }
+    set RateLimitPerMinute(value: number) {
+        this.Set('RateLimitPerMinute', value);
+    }
+
+    /**
+    * * Field Name: VisitorRetentionDays
+    * * Display Name: Visitor Retention Days
+    * * SQL Data Type: int
+    * * Description: Optional retention period in days for returning-visitor tour memory on this surface. NULL disables expiration.
+    */
+    get VisitorRetentionDays(): number | null {
+        return this.Get('VisitorRetentionDays');
+    }
+    set VisitorRetentionDays(value: number | null) {
+        this.Set('VisitorRetentionDays', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Retired
+    * * Description: Surface lifecycle status: Active, Disabled, or Retired.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Extensible JSON settings for this surface.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: GuestRole
+    * * Display Name: Guest Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get GuestRole(): string | null {
+        return this.Get('GuestRole');
+    }
+
+    /**
+    * * Field Name: ConversationWidgetInstance
+    * * Display Name: Conversation Widget Instance
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ConversationWidgetInstance(): string | null {
+        return this.Get('ConversationWidgetInstance');
+    }
+}
+
+
+/**
+ * Trigger configuration stored on `MJ: Tour Triggers.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** TourTrigger.Configuration — matching criteria for standard and custom `BaseTourTrigger` plugins. */
+export interface MJTourTriggerEntity_ITourTriggerConfiguration {
+    /** URL pattern matched by `FirstVisit` or route-scoped triggers on web hosts. */
+    UrlPattern?: string;
+    /** MJ Application name or ID matched by `FirstVisit` or `AppUpgraded`. */
+    Application?: string;
+    /** Nav item `Key` or `DriverClass` matched on first visit. */
+    NavItem?: string;
+    /** Entity name matched by `EntityFormOpened`. */
+    Entity?: string;
+    /** Form mode matched by `EntityFormOpened`. */
+    Mode?: 'Create' | 'Edit' | 'View' | 'Any';
+    /** Signal name matched by `Signal` triggers. */
+    Signal?: string;
+    /** Optional filter over signal payload properties. */
+    SignalFilter?: Record<string, unknown>;
+    /** Minimum Open App / release version matched by `AppUpgraded`. */
+    MinVersion?: string;
+    /** Explicit `VersionTag` matched by `AppUpgraded`. */
+    VersionTag?: string;
+    /** High-signal struggle indicators monitored by `Struggle` triggers. */
+    StruggleSignals?: Array<'RepeatedValidationFailure' | 'HowDoISearch'>;
+    /** Consecutive failure count threshold for `Struggle` triggers. */
+    FailureThreshold?: number;
+    /** Delay in milliseconds before surfacing the trigger offer. */
+    DelayMs?: number;
+    /** Cron schedule expression for `Schedule` triggers. */
+    CronExpression?: string;
+    /** Contextual hint for `AgentSuggested` triggers. */
+    PromptHint?: string;
+    /** Extensible properties for custom `BaseTourTrigger` plugins. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tour Triggers - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourTrigger
+ * * Base View: vwTourTriggers
+ * * @description Trigger rule specifying when and how a tour is offered, beaconed, notified, or auto-launched.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Triggers')
+export class MJTourTriggerEntity extends BaseEntity<MJTourTriggerEntityType> {
+    /**
+    * Loads the MJ: Tour Triggers record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Triggers record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourTriggerEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour trigger.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Tour offered when this trigger fires.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: TriggerType
+    * * Display Name: Trigger Type
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Open ClassFactory key of the BaseTourTrigger plugin (for example FirstVisit, EntityFormOpened, Signal, AppUpgraded, Struggle, Schedule, AgentSuggested, or custom app triggers).
+    */
+    get TriggerType(): string {
+        return this.Get('TriggerType');
+    }
+    set TriggerType(value: string) {
+        this.Set('TriggerType', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourTriggerEntity_ITourTriggerConfiguration
+    * * Description: JSON ITourTriggerConfiguration holding trigger-specific matching criteria.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourTriggerEntity_ITourTriggerConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourTriggerEntity_ITourTriggerConfiguration | null {
+        return this.GetJSONFieldObject<MJTourTriggerEntity_ITourTriggerConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourTriggerEntity_ITourTriggerConfiguration | null) {
+        this.SetJSONFieldObject<MJTourTriggerEntity_ITourTriggerConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: Delivery
+    * * Display Name: Delivery
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Offer
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Auto
+    *   * Beacon
+    *   * Notification
+    *   * Offer
+    * * Description: How the triggered tour is surfaced: Offer, Beacon, Notification, or Auto.
+    */
+    get Delivery(): 'Auto' | 'Beacon' | 'Notification' | 'Offer' {
+        return this.Get('Delivery');
+    }
+    set Delivery(value: 'Auto' | 'Beacon' | 'Notification' | 'Offer') {
+        this.Set('Delivery', value);
+    }
+
+    /**
+    * * Field Name: CooldownDays
+    * * Display Name: Cooldown Days
+    * * SQL Data Type: int
+    * * Description: Minimum number of days before this trigger may fire again for the same user or visitor.
+    */
+    get CooldownDays(): number | null {
+        return this.Get('CooldownDays');
+    }
+    set CooldownDays(value: number | null) {
+        this.Set('CooldownDays', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Priority used when multiple triggers fire concurrently.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Paused
+    * * Description: Operational status of the trigger: Active, Paused, or Disabled.
+    */
+    get Status(): 'Active' | 'Disabled' | 'Paused' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled' | 'Paused') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+}
+
+
+/**
+ * Immutable published tour snapshot stored on `MJ: Tour Versions.Definition`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Immutable snapshot of a single `TourStep` at publish time. */
+export interface MJTourVersionEntity_ITourVersionStepSnapshot {
+    /** Original `TourStep.ID` at publish time. */
+    ID: string;
+    /** Stable step key within the tour. */
+    StepKey: string;
+    /** Linear sequence order. */
+    Sequence: number;
+    /** Step type ID (`MJ: Tour Step Types`). */
+    StepTypeID: string;
+    /** Step type name resolved at publish time (for example `'Spotlight'`). */
+    StepTypeName: string;
+    /** Step type `DriverClass` resolved at publish time. */
+    StepTypeDriverClass: string;
+    /** Optional step type `RendererClass`. */
+    StepTypeRendererClass?: string | null;
+    /** Optional step type `ComponentID` for runtime `ComponentSpec` step types. */
+    StepTypeComponentID?: string | null;
+    /** Optional per-step `DriverClass` override. */
+    DriverClass?: string | null;
+    /** Step heading. */
+    Title: string;
+    /** Markdown step body. */
+    Body?: string | null;
+    /** Parsed `ITourStepConfiguration` object. */
+    Configuration?: Record<string, unknown> | null;
+    /** Parsed `ITourAnchor` object. */
+    Anchor?: Record<string, unknown> | null;
+    /** Popover placement. */
+    Placement: 'Auto' | 'Top' | 'Bottom' | 'Left' | 'Right' | 'Center';
+    /** Step interaction mode. */
+    Mode: 'Show' | 'Guide' | 'Do';
+    /** Parsed `ITourStepPrepare` object. */
+    Prepare?: Record<string, unknown> | null;
+    /** Parsed `ITourCompletion` object. */
+    Completion?: Record<string, unknown> | null;
+    /** Parsed `SkipWhen` condition object. */
+    SkipWhen?: Record<string, unknown> | null;
+    /** Missing-anchor fallback behavior. */
+    OnMissing: 'Skip' | 'Center' | 'Stall' | 'Agent Recover';
+    /** Whether the step may be skipped. */
+    IsOptional: boolean;
+    /** Agent-only grounding notes. */
+    GuideNotes?: string | null;
+    /** Voice narration script. */
+    VoiceScript?: string | null;
+}
+
+/** Immutable snapshot of a single `TourStepPath` edge at publish time. */
+export interface MJTourVersionEntity_ITourVersionStepPathSnapshot {
+    /** Original `TourStepPath.ID` at publish time. */
+    ID: string;
+    /** Source step ID. */
+    FromStepID: string;
+    /** Source `StepKey`. */
+    FromStepKey: string;
+    /** Target step ID. */
+    ToStepID: string;
+    /** Target `StepKey`. */
+    ToStepKey: string;
+    /** Parsed branch condition (CompositeFilter or choice key). */
+    Condition?: Record<string, unknown> | string | null;
+    /** Branch edge label. */
+    Label?: string | null;
+    /** Evaluation priority. */
+    Priority: number;
+    /** Display sequence. */
+    Sequence: number;
+    /** Whether this edge is the default fallback branch. */
+    IsDefault: boolean;
+    /** Parsed `ITourStepPathConfiguration` object. */
+    Configuration?: Record<string, unknown> | null;
+}
+
+/** TourVersion.Definition — self-contained immutable tour definition pinned by `TourRun`. */
+export interface MJTourVersionEntity_ITourVersionDefinition {
+    /** Stable namespaced tour key. */
+    TourKey: string;
+    /** Tour title at publish time. */
+    Name: string;
+    /** Tour summary description at publish time. */
+    Description?: string | null;
+    /** Estimated completion minutes. */
+    EstimatedMinutes?: number | null;
+    /** Default guidance mode. */
+    DefaultGuideMode: 'Visual' | 'Chat' | 'Voice' | 'User Choice';
+    /** Whether confirmed Do-mode agent actions are permitted. */
+    AllowAgentActions: boolean;
+    /** Optional tour-level `DriverClass`. */
+    DriverClass?: string | null;
+    /** Optional tour-level `PresenterClass`. */
+    PresenterClass?: string | null;
+    /** Parsed `ITourGoal` object. */
+    Goal?: Record<string, unknown> | null;
+    /** Parsed `ITourStartLocation` object. */
+    StartLocation?: Record<string, unknown> | null;
+    /** Parsed `ITourConfiguration` object. */
+    Configuration?: Record<string, unknown> | null;
+    /** Ordered snapshot of all tour steps. */
+    Steps: MJTourVersionEntity_ITourVersionStepSnapshot[];
+    /** Snapshot of all tour branching paths. */
+    Paths: MJTourVersionEntity_ITourVersionStepPathSnapshot[];
+}
+
+/**
+ * MJ: Tour Versions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TourVersion
+ * * Base View: vwTourVersions
+ * * @description Immutable published snapshot of a tour definition (steps, paths, goal, start location, configuration) pinned by Tour Runs so upgrades do not corrupt active runs.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tour Versions')
+export class MJTourVersionEntity extends BaseEntity<MJTourVersionEntityType> {
+    /**
+    * Loads the MJ: Tour Versions record from the database
+    * @param ID: string - primary key value to load the MJ: Tour Versions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourVersionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the published tour version.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TourID
+    * * Display Name: Tour
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tours (vwTours.ID)
+    * * Description: Parent tour this snapshot belongs to.
+    */
+    get TourID(): string {
+        return this.Get('TourID');
+    }
+    set TourID(value: string) {
+        this.Set('TourID', value);
+    }
+
+    /**
+    * * Field Name: VersionNumber
+    * * Display Name: Version Number
+    * * SQL Data Type: int
+    * * Description: Monotonically increasing version number per tour, starting at 1.
+    */
+    get VersionNumber(): number {
+        return this.Get('VersionNumber');
+    }
+    set VersionNumber(value: number) {
+        this.Set('VersionNumber', value);
+    }
+
+    /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(128)
+    * * Description: SHA-256 hash of the canonical tour definition used to avoid minting duplicate snapshots on idempotent saves.
+    */
+    get ContentHash(): string | null {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string | null) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: Definition
+    * * Display Name: Definition
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourVersionEntity_ITourVersionDefinition
+    * * Description: JSON ITourVersionDefinition containing the immutable snapshot of steps, paths, goal, start location, and configuration.
+    */
+    get Definition(): string {
+        return this.Get('Definition');
+    }
+    set Definition(value: string) {
+        this.Set('Definition', value);
+    }
+
+    /**
+    * Typed accessor for Definition — a live view of the parsed JSON as MJTourVersionEntity_ITourVersionDefinition.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Definition field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DefinitionObject(): MJTourVersionEntity_ITourVersionDefinition {
+        return this.GetJSONFieldObject<MJTourVersionEntity_ITourVersionDefinition>('Definition')!;
+    }
+    set DefinitionObject(value: MJTourVersionEntity_ITourVersionDefinition) {
+        this.SetJSONFieldObject<MJTourVersionEntity_ITourVersionDefinition>('Definition', value);
+    }
+
+    /**
+    * * Field Name: PublishedAt
+    * * Display Name: Published At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this version snapshot was published.
+    */
+    get PublishedAt(): Date {
+        return this.Get('PublishedAt');
+    }
+    set PublishedAt(value: Date) {
+        this.Set('PublishedAt', value);
+    }
+
+    /**
+    * * Field Name: PublishedByUserID
+    * * Display Name: Published By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who published this version snapshot, or NULL when published by automated sync.
+    */
+    get PublishedByUserID(): string | null {
+        return this.Get('PublishedByUserID');
+    }
+    set PublishedByUserID(value: string | null) {
+        this.Set('PublishedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ChangeSummary
+    * * Display Name: Change Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable summary of changes in this version.
+    */
+    get ChangeSummary(): string | null {
+        return this.Get('ChangeSummary');
+    }
+    set ChangeSummary(value: string | null) {
+        this.Set('ChangeSummary', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tour
+    * * Display Name: Tour Reference
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tour(): string | null {
+        return this.Get('Tour');
+    }
+
+    /**
+    * * Field Name: PublishedByUser
+    * * Display Name: Published By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get PublishedByUser(): string | null {
+        return this.Get('PublishedByUser');
+    }
+}
+
+
+/**
+ * Launch and throttling policy stored on `MJ: Tours.LaunchPolicy` and `MJ: Tour Overrides.LaunchPolicy`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Tour.LaunchPolicy / TourOverride.LaunchPolicy — controls offering, throttling, and holdouts. */
+export interface MJTourEntity_ITourLaunchPolicy {
+    /** Whether eligible triggers may auto-start the tour without user click (use sparingly for critical flows). */
+    AutoLaunch?: boolean;
+    /** Whether the tour may be proactively offered (banner/orb/beacon) rather than launch-on-demand only. */
+    OfferByDefault?: boolean;
+    /** Whether the tour appears in the shell Tours & Help launcher. */
+    AllowLauncher?: boolean;
+    /** Whether the tour is searchable in the Explorer omnibar. */
+    AllowOmnibar?: boolean;
+    /** Whether beacon triggers for this tour are enabled. */
+    AllowBeacons?: boolean;
+    /** Maximum times this tour may be offered to a single user across sessions. */
+    MaxOffersPerUser?: number;
+    /** Cooldown in days after a user dismisses or completes an offer. */
+    CooldownDays?: number;
+    /** Critical-bypass flag allowing an offer to ignore the global interruption budget. */
+    BypassBudget?: boolean;
+    /** Smart delay in milliseconds waiting for user inactivity before surfacing an unrequested offer. */
+    SmartDelayMs?: number;
+    /** Suppresses unrequested offers while any form on screen has unsaved edits (default true). */
+    SuppressWhenDirtyForm?: boolean;
+    /** Suppresses unrequested offers while a modal dialog is open (default true). */
+    SuppressWhenDialogOpen?: boolean;
+    /** Percentage (0-100) of eligible users placed into a holdout group for goal-lift measurement. */
+    HoldoutPercentage?: number;
+    /** Requires explicit user consent once per tour before cross-screen `Prepare` navigation runs. */
+    RequireNavigationConsent?: boolean;
+    /** Restricts which guide modes are permitted for this tour. */
+    AllowedDirections?: Array<'Visual' | 'Chat' | 'Voice'>;
+}
+
+/**
+ * Goal definition stored on `MJ: Tours.Goal`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Leaf predicate within a portable MJ filter expression. */
+export interface MJTourEntity_ITourGoalSimpleFilter {
+    field: string;
+    operator: string;
+    value?: string | number | boolean | string[] | number[] | null;
+}
+
+/** Portable MJ CompositeFilter tree for goal outcome verification. */
+export interface MJTourEntity_ITourGoalFilter {
+    logic: 'and' | 'or';
+    filters: Array<MJTourEntity_ITourGoalSimpleFilter | MJTourEntity_ITourGoalFilter>;
+}
+
+/** Tour.Goal — real-world outcome measured to evaluate goal conversion rather than step completion alone. */
+export interface MJTourEntity_ITourGoal {
+    /** Outcome mechanism evaluated to credit the tour's goal. */
+    Type: 'EntityEvent' | 'ServerPredicate' | 'Signal' | 'Navigation' | 'TourCompleted' | 'None' | (string & {});
+    /** Human-readable description of the target outcome shown in Tour Studio analytics. */
+    Description?: string;
+    /** Entity name observed for `EntityEvent` goals. */
+    Entity?: string;
+    /** Entity action observed for `EntityEvent` goals. */
+    Action?: 'Save' | 'Delete' | 'Create' | 'Update';
+    /** CompositeFilter matching the target record or payload. */
+    Filter?: MJTourEntity_ITourGoalFilter;
+    /** Server predicate key evaluated for `ServerPredicate` goals. */
+    Predicate?: string;
+    /** Parameters passed to the server predicate. */
+    PredicateParams?: Record<string, unknown>;
+    /** Signal name observed for `Signal` goals. */
+    Signal?: string;
+    /** Route or URL pattern observed for `Navigation` goals. */
+    RoutePattern?: string;
+    /** Attribution window in days after tour start for goal-conversion reporting. */
+    WindowDays?: number;
+}
+
+/**
+ * Start location and context requirements stored on `MJ: Tours.StartLocation`
+ * and `MJ: Tour Surface Tours.StartLocationOverride`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Tour.StartLocation / TourSurfaceTour.StartLocationOverride — navigation target and context preconditions. */
+export interface MJTourEntity_ITourStartLocation {
+    /** Target MJ Application name or ID. */
+    Application?: string;
+    /** Target nav item `Key` or `DriverClass`. */
+    NavItem?: string;
+    /** Target Explorer resource type (for example `'Records'`, `'Dashboards'`, `'Custom'`). */
+    ResourceType?: string;
+    /** Target entity name when opening a record or entity view. */
+    Entity?: string;
+    /** Optional specific record ID to open. */
+    RecordID?: string;
+    /** Destination URL for web or external-surface hosts. */
+    Url?: string;
+    /** URL pattern restricting where the tour starts on web hosts. */
+    UrlPattern?: string;
+    /** When true, the tour requires an already-open record in the active host context. */
+    RequiresOpenRecord?: boolean;
+    /** Restricts contextual tours to an open record of the specified entity name. */
+    RequiresEntity?: string;
+    /** Query parameters applied when navigating to the start location. */
+    QueryParams?: Record<string, string>;
+}
+
+/**
+ * Tour-level configuration and localization overrides stored on `MJ: Tours.Configuration`.
+ *
+ * This file is the JSONType source. EntityField.JSONTypeDefinition stores it
+ * verbatim, and CodeGen emits it inline, so it cannot import another file.
+ */
+
+/** Locale-specific display overrides for a tour. */
+export interface MJTourEntity_ITourLocalization {
+    /** Localized tour title. */
+    name?: string;
+    /** Localized tour summary description. */
+    description?: string;
+}
+
+/** Tour.Configuration — localizations and extensible tour-level UI/runtime options. */
+export interface MJTourEntity_ITourConfiguration {
+    /** Locale-keyed overrides (BCP 47 tags such as `'es'`, `'fr-CA'`). */
+    localizations?: Record<string, MJTourEntity_ITourLocalization>;
+    /** Whether the Back button is available during visual playback (default true). */
+    allowBack?: boolean;
+    /** Whether step progress ("2 of 5") is displayed (default true). */
+    showProgress?: boolean;
+    /** Whether the user can dismiss the tour mid-flight (default true). */
+    showDismiss?: boolean;
+    /** Whether the "Ask Sage about this step" action is displayed on steps. */
+    showAskAgent?: boolean;
+    /** Presenter-specific options passed to `BaseTourPresenter` (Overlay, SidePanel, Embedded, or custom). */
+    presenterOptions?: Record<string, unknown>;
+    /** CSS custom-property token overrides applied to this tour's Light DOM root. */
+    themeOverrides?: Record<string, string>;
+    /** Extensible tour-level settings for custom drivers or presenters. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: Tours - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Tour
+ * * Base View: vwTours
+ * * @description A guided tour definition: metadata, audience, launch policy, default guide mode, outcome goal, start location, and published version pointer.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tours')
+export class MJTourEntity extends BaseEntity<MJTourEntityType> {
+
+  /**
+  * Related records: MJ: Tour Overrides
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Overrides' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Overrides = this.DeclareRelatedRecords<MJTourOverrideEntity>({
+      Name: 'Overrides',
+        RelatedEntity: 'MJ: Tour Overrides',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Precedence DESC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+  });
+
+
+  /**
+  * Related records: MJ: Tour Versions
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Versions' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Versions', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Versions', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Versions = this.DeclareRelatedRecords<MJTourVersionEntity>({
+      Name: 'Versions',
+        RelatedEntity: 'MJ: Tour Versions',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'VersionNumber DESC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Tour Learning Path Tour Links
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Learning Path Tour Links' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Learning Path Tour Links', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Learning Path Tour Links', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly LearningPathLinks = this.DeclareRelatedRecords<MJTourLearningPathTourLinkEntity>({
+      Name: 'LearningPathLinks',
+        RelatedEntity: 'MJ: Tour Learning Path Tour Links',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Tour Surface Tours
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Surface Tours' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Surface Tours', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Surface Tours', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly SurfaceTours = this.DeclareRelatedRecords<MJTourSurfaceTourEntity>({
+      Name: 'SurfaceTours',
+        RelatedEntity: 'MJ: Tour Surface Tours',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Tour Prerequisites
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Prerequisites' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Prerequisites', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Prerequisites', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Prerequisites = this.DeclareRelatedRecords<MJTourPrerequisiteEntity>({
+      Name: 'Prerequisites',
+        RelatedEntity: 'MJ: Tour Prerequisites',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Tour Triggers
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Triggers' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Triggers', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Triggers', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Triggers = this.DeclareRelatedRecords<MJTourTriggerEntity>({
+      Name: 'Triggers',
+        RelatedEntity: 'MJ: Tour Triggers',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Priority DESC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Tour Step Paths
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Step Paths' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Step Paths', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Step Paths', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly StepPaths = this.DeclareRelatedRecords<MJTourStepPathEntity>({
+      Name: 'StepPaths',
+        RelatedEntity: 'MJ: Tour Step Paths',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+
+  /**
+  * Related records: MJ: Tour Steps
+  *
+  * Loads, validates and persists as one unit with this MJ: Tours record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Tours → MJ: Tour Steps' relationship; edit that row, not this file.
+  * **Source: cache.** Records come from whichever loaded BaseEngine already caches
+  * 'MJ: Tour Steps', discovered via BaseEngineRegistry — zero queries. Falls back to a
+  * database load when no loaded engine offers it.
+  * **These are the engine's own entity instances, not copies.** Do not modify them: you would be
+  * mutating shared cached state that other holders can see.
+  * **Read-only.** Add/Create/Remove/Clear throw, the collection contributes nothing to a save,
+  * and it never reports Dirty.
+  * **Lazy.** Reading Items POPULATES the collection as a side effect and flips IsLoaded. If no
+  * loaded engine caches 'MJ: Tour Steps', reading it THROWS rather than returning an
+  * empty array — a lazy declaration asserts that such an engine exists.
+  */
+  public readonly Steps = this.DeclareRelatedRecords<MJTourStepEntity>({
+      Name: 'Steps',
+        RelatedEntity: 'MJ: Tour Steps',
+        RelatedEntityJoinField: 'TourID',
+        OrderBy: 'Sequence ASC',
+        Load: 'lazy',
+        Source: 'cache',
+  });
+
+    /**
+    * Loads the MJ: Tours record from the database
+    * @param ID: string - primary key value to load the MJ: Tours record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTourEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Unique identifier of the tour.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Human-readable title of the tour shown in launchers, omnibar, and Tour Studio.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: TourKey
+    * * Display Name: Tour Key
+    * * SQL Data Type: nvarchar(150)
+    * * Description: Stable namespaced key identifying the tour (for example core.welcome or sales.first-deal).
+    */
+    get TourKey(): string {
+        return this.Get('TourKey');
+    }
+    set TourKey(value: string) {
+        this.Set('TourKey', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Summary of what the user accomplishes by taking this tour.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: ApplicationID
+    * * Display Name: Application ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Applications (vwApplications.ID)
+    * * Description: Owning MJ Application. NULL indicates a framework core tour.
+    */
+    get ApplicationID(): string | null {
+        return this.Get('ApplicationID');
+    }
+    set ApplicationID(value: string | null) {
+        this.Set('ApplicationID', value);
+    }
+
+    /**
+    * * Field Name: RunInAuthenticatedHosts
+    * * Display Name: Run In Authenticated Hosts
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, this tour is eligible to run in MJ-authenticated hosts (Explorer and MJ-connected apps).
+    */
+    get RunInAuthenticatedHosts(): boolean {
+        return this.Get('RunInAuthenticatedHosts');
+    }
+    set RunInAuthenticatedHosts(value: boolean) {
+        this.Set('RunInAuthenticatedHosts', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Draft
+    *   * Retired
+    * * Description: Tour lifecycle status: Draft, Active, or Retired.
+    */
+    get Status(): 'Active' | 'Draft' | 'Retired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Draft' | 'Retired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CurrentVersionID
+    * * Display Name: Current Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tour Versions (vwTourVersions.ID)
+    * * Description: FK to the currently published immutable snapshot in MJ: Tour Versions.
+    */
+    get CurrentVersionID(): string | null {
+        return this.Get('CurrentVersionID');
+    }
+    set CurrentVersionID(value: string | null) {
+        this.Set('CurrentVersionID', value);
+    }
+
+    /**
+    * * Field Name: EstimatedMinutes
+    * * Display Name: Estimated Minutes
+    * * SQL Data Type: int
+    * * Description: Estimated completion time in minutes shown to users before starting.
+    */
+    get EstimatedMinutes(): number | null {
+        return this.Get('EstimatedMinutes');
+    }
+    set EstimatedMinutes(value: number | null) {
+        this.Set('EstimatedMinutes', value);
+    }
+
+    /**
+    * * Field Name: AudienceFilter
+    * * Display Name: Audience Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: CompositeFilter JSON expression restricting which users or contexts are eligible for this tour.
+    */
+    get AudienceFilter(): string | null {
+        return this.Get('AudienceFilter');
+    }
+    set AudienceFilter(value: string | null) {
+        this.Set('AudienceFilter', value);
+    }
+
+    /**
+    * * Field Name: LaunchPolicy
+    * * Display Name: Launch Policy
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourLaunchPolicy
+    * * Description: JSON ITourLaunchPolicy governing offering, auto-launch, interruption-budget bypass, and holdout percentage.
+    */
+    get LaunchPolicy(): string | null {
+        return this.Get('LaunchPolicy');
+    }
+    set LaunchPolicy(value: string | null) {
+        this.Set('LaunchPolicy', value);
+    }
+
+    /**
+    * Typed accessor for LaunchPolicy — a live view of the parsed JSON as MJTourEntity_ITourLaunchPolicy.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying LaunchPolicy field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get LaunchPolicyObject(): MJTourEntity_ITourLaunchPolicy | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourLaunchPolicy>('LaunchPolicy');
+    }
+    set LaunchPolicyObject(value: MJTourEntity_ITourLaunchPolicy | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourLaunchPolicy>('LaunchPolicy', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Relative priority used to break ties when multiple eligible tours compete for the interruption budget.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: ThrottleTags
+    * * Display Name: Throttle Tags
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Comma-separated tag-group names for per-group offer throttling.
+    */
+    get ThrottleTags(): string | null {
+        return this.Get('ThrottleTags');
+    }
+    set ThrottleTags(value: string | null) {
+        this.Set('ThrottleTags', value);
+    }
+
+    /**
+    * * Field Name: DefaultGuideMode
+    * * Display Name: Default Guide Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Visual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Chat
+    *   * User Choice
+    *   * Visual
+    *   * Voice
+    * * Description: Default guidance mode when launching this tour: Visual, Chat, Voice, or User Choice.
+    */
+    get DefaultGuideMode(): 'Chat' | 'User Choice' | 'Visual' | 'Voice' {
+        return this.Get('DefaultGuideMode');
+    }
+    set DefaultGuideMode(value: 'Chat' | 'User Choice' | 'Visual' | 'Voice') {
+        this.Set('DefaultGuideMode', value);
+    }
+
+    /**
+    * * Field Name: AllowAgentActions
+    * * Display Name: Allow Agent Actions
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, steps marked Mode = Do may execute confirmed agent mutations (subject to hard-banned action guards).
+    */
+    get AllowAgentActions(): boolean {
+        return this.Get('AllowAgentActions');
+    }
+    set AllowAgentActions(value: boolean) {
+        this.Set('AllowAgentActions', value);
+    }
+
+    /**
+    * * Field Name: GuideAgentID
+    * * Display Name: Guide Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    * * Description: Optional FK to MJ: AI Agents specifying the agent that guides this tour in Chat/Voice mode. NULL uses the app or instance default.
+    */
+    get GuideAgentID(): string | null {
+        return this.Get('GuideAgentID');
+    }
+    set GuideAgentID(value: string | null) {
+        this.Set('GuideAgentID', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory key of a BaseTourDriver subclass for tour-level logic. NULL uses the Default driver.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: PresenterClass
+    * * Display Name: Presenter Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Optional ClassFactory key of a BaseTourPresenter subclass (for example Overlay, SidePanel, or Embedded). NULL uses Overlay.
+    */
+    get PresenterClass(): string | null {
+        return this.Get('PresenterClass');
+    }
+    set PresenterClass(value: string | null) {
+        this.Set('PresenterClass', value);
+    }
+
+    /**
+    * * Field Name: Goal
+    * * Display Name: Goal
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourGoal
+    * * Description: JSON ITourGoal defining the real-world outcome measured to evaluate goal conversion for this tour.
+    */
+    get Goal(): string | null {
+        return this.Get('Goal');
+    }
+    set Goal(value: string | null) {
+        this.Set('Goal', value);
+    }
+
+    /**
+    * Typed accessor for Goal — a live view of the parsed JSON as MJTourEntity_ITourGoal.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Goal field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get GoalObject(): MJTourEntity_ITourGoal | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourGoal>('Goal');
+    }
+    set GoalObject(value: MJTourEntity_ITourGoal | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourGoal>('Goal', value);
+    }
+
+    /**
+    * * Field Name: StartLocation
+    * * Display Name: Start Location
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourStartLocation
+    * * Description: JSON ITourStartLocation specifying where to navigate or which context is required when starting this tour.
+    */
+    get StartLocation(): string | null {
+        return this.Get('StartLocation');
+    }
+    set StartLocation(value: string | null) {
+        this.Set('StartLocation', value);
+    }
+
+    /**
+    * Typed accessor for StartLocation — a live view of the parsed JSON as MJTourEntity_ITourStartLocation.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying StartLocation field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get StartLocationObject(): MJTourEntity_ITourStartLocation | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourStartLocation>('StartLocation');
+    }
+    set StartLocationObject(value: MJTourEntity_ITourStartLocation | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourStartLocation>('StartLocation', value);
+    }
+
+    /**
+    * * Field Name: VersionTag
+    * * Display Name: Version Tag
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Optional Open App or release version tag used to surface What's New offers when an app upgrades.
+    */
+    get VersionTag(): string | null {
+        return this.Get('VersionTag');
+    }
+    set VersionTag(value: string | null) {
+        this.Set('VersionTag', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJTourEntity_ITourConfiguration
+    * * Description: JSON ITourConfiguration holding localizations and extensible tour-level UI/runtime options.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * Typed accessor for Configuration — a live view of the parsed JSON as MJTourEntity_ITourConfiguration.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Configuration field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get ConfigurationObject(): MJTourEntity_ITourConfiguration | null {
+        return this.GetJSONFieldObject<MJTourEntity_ITourConfiguration>('Configuration');
+    }
+    set ConfigurationObject(value: MJTourEntity_ITourConfiguration | null) {
+        this.SetJSONFieldObject<MJTourEntity_ITourConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Application
+    * * Display Name: Application
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Application(): string | null {
+        return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: GuideAgent
+    * * Display Name: Guide Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GuideAgent(): string | null {
+        return this.Get('GuideAgent');
     }
 }
 

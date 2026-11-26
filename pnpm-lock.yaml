@@ -540,6 +540,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.2
         version: link:../../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../../Graph
       '@memberjunction/rubrics':
         specifier: 6.3.0-edge.2
         version: link:../../Rubrics/Engine
@@ -789,6 +792,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.2
         version: link:../../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../../Graph
       '@memberjunction/templates-base-types':
         specifier: 6.3.0-edge.2
         version: link:../../Templates/base-types
@@ -4708,12 +4714,18 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.3.0-edge.2
         version: link:../Generic/shared
+      '@memberjunction/ng-tours':
+        specifier: 6.3.0-edge.2
+        version: link:../Generic/tours
       '@memberjunction/rubrics-base':
         specifier: 6.3.0-edge.2
         version: link:../../Rubrics/Base
       '@memberjunction/tag-engine-base':
         specifier: 6.3.0-edge.2
         version: link:../../AI/Knowledge/TagEngineBase
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../Tours/Runtime
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -4821,9 +4833,15 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.3.0-edge.2
         version: link:../Generic/shared
+      '@memberjunction/ng-tours':
+        specifier: 6.3.0-edge.2
+        version: link:../Generic/tours
       '@memberjunction/rubrics-base':
         specifier: 6.3.0-edge.2
         version: link:../../Rubrics/Base
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../Tours/Runtime
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -5157,6 +5175,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.2
         version: link:../../../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Graph
       '@memberjunction/graphql-dataprovider':
         specifier: 6.3.0-edge.2
         version: link:../../../GraphQLDataProvider
@@ -5301,6 +5322,9 @@ importers:
       '@memberjunction/ng-testing':
         specifier: 6.3.0-edge.2
         version: link:../../Generic/Testing
+      '@memberjunction/ng-tours':
+        specifier: 6.3.0-edge.2
+        version: link:../../Generic/tours
       '@memberjunction/ng-trees':
         specifier: 6.3.0-edge.2
         version: link:../../Generic/trees
@@ -5337,6 +5361,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.3.0-edge.2
         version: link:../../../ThemeEngine
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Tours/Runtime
       '@memberjunction/video-studio-core':
         specifier: 6.3.0-edge.2
         version: link:../../../AI/VideoStudio/Core
@@ -5547,6 +5574,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.3.0-edge.2
         version: link:../../../ThemeEngine
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Tours/Runtime
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -5749,6 +5779,12 @@ importers:
       '@memberjunction/ng-shared-generic':
         specifier: 6.3.0-edge.2
         version: link:../../Generic/shared
+      '@memberjunction/ng-tabstrip':
+        specifier: 6.3.0-edge.2
+        version: link:../../Generic/tab-strip
+      '@memberjunction/ng-tours':
+        specifier: 6.3.0-edge.2
+        version: link:../../Generic/tours
       '@memberjunction/ng-ui-components':
         specifier: 6.3.0-edge.2
         version: link:../../Generic/ui-components
@@ -5764,6 +5800,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.3.0-edge.2
         version: link:../../../ThemeEngine
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Tours/Runtime
       angular-split:
         specifier: ^20.0.0
         version: 20.0.0(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
@@ -10208,6 +10247,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.2
         version: link:../../../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Graph
       '@memberjunction/ng-base-types':
         specifier: 6.3.0-edge.2
         version: link:../base-types
@@ -10353,6 +10395,103 @@ importers:
       vitest:
         specifier: ^4.0.18
         version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Angular/Generic/tours:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.3.0-edge.2
+        version: link:../../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.3.0-edge.2
+        version: link:../../../MJCoreEntities
+      '@memberjunction/global':
+        specifier: 6.3.0-edge.2
+        version: link:../../../MJGlobal
+      '@memberjunction/graphql-dataprovider':
+        specifier: 6.3.0-edge.2
+        version: link:../../../GraphQLDataProvider
+      '@memberjunction/interactive-component-types':
+        specifier: 6.3.0-edge.2
+        version: link:../../../InteractiveComponents
+      '@memberjunction/ng-base-forms':
+        specifier: 6.3.0-edge.2
+        version: link:../base-forms
+      '@memberjunction/ng-base-types':
+        specifier: 6.3.0-edge.2
+        version: link:../base-types
+      '@memberjunction/ng-react':
+        specifier: 6.3.0-edge.2
+        version: link:../react
+      '@memberjunction/ng-shared-generic':
+        specifier: 6.3.0-edge.2
+        version: link:../shared
+      '@memberjunction/ng-ui-components':
+        specifier: 6.3.0-edge.2
+        version: link:../ui-components
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Tours/Runtime
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+      tslib:
+        specifier: ^2.8.1
+        version: 2.8.1
+    devDependencies:
+      '@angular/animations':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@angular/cdk':
+        specifier: 21.2.14
+        version: 21.2.14(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/common':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/compiler':
+        specifier: 21.2.22
+        version: 21.2.22
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      '@angular/core':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/elements':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/forms':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
+      '@angular/platform-browser':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@babel/core':
+        specifier: 7.29.7
+        version: 7.29.7
+      '@fortawesome/fontawesome-free':
+        specifier: 6.7.2
+        version: 6.7.2
+      '@memberjunction/ng-test-utils':
+        specifier: 6.3.0-edge.2
+        version: link:../test-utils
+      axe-core:
+        specifier: ^4.12.1
+        version: 4.12.1
+      esbuild:
+        specifier: 0.28.1
+        version: 0.28.1
+      jsdom:
+        specifier: 26.1.0
+        version: 26.1.0
+      sass:
+        specifier: ^1.97.3
+        version: 1.97.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      zone.js:
+        specifier: ^0.16.0
+        version: 0.16.0
 
   packages/Angular/Generic/trees:
     dependencies:
@@ -12497,6 +12636,18 @@ importers:
         specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/Graph:
+    devDependencies:
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/GraphQLDataProvider:
     dependencies:
       '@memberjunction/actions-base':
@@ -13297,6 +13448,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.3.0-edge.2
         version: link:../ThemeEngine
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../Tours/Runtime
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -14309,6 +14463,9 @@ importers:
       '@memberjunction/theme-engine':
         specifier: 6.3.0-edge.2
         version: link:../ThemeEngine
+      '@memberjunction/tours-server':
+        specifier: 6.3.0-edge.2
+        version: link:../Tours/Server
       '@memberjunction/version-history':
         specifier: 6.3.0-edge.2
         version: link:../VersionHistory
@@ -16517,6 +16674,12 @@ importers:
       '@memberjunction/testing-integration':
         specifier: 6.3.0-edge.2
         version: link:../TestingFramework/testing-integration
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../Tours/Runtime
+      '@memberjunction/tours-server':
+        specifier: 6.3.0-edge.2
+        version: link:../Tours/Server
       '@memberjunction/video-studio':
         specifier: 6.3.0-edge.2
         version: link:../AI/VideoStudio/Engine
@@ -16809,6 +16972,12 @@ importers:
       '@memberjunction/testing-engine':
         specifier: 6.3.0-edge.2
         version: link:../TestingFramework/Engine
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../Tours/Runtime
+      '@memberjunction/tours-server':
+        specifier: 6.3.0-edge.2
+        version: link:../Tours/Server
       '@memberjunction/video-studio':
         specifier: 6.3.0-edge.2
         version: link:../AI/VideoStudio/Engine
@@ -16895,6 +17064,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.2
         version: link:../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../Graph
       '@memberjunction/notifications':
         specifier: 6.3.0-edge.2
         version: link:../Communication/notifications
@@ -17592,6 +17764,90 @@ importers:
     devDependencies:
       typescript:
         specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/Tours/Runtime:
+    dependencies:
+      '@memberjunction/core':
+        specifier: 6.3.0-edge.2
+        version: link:../../MJCore
+      '@memberjunction/global':
+        specifier: 6.3.0-edge.2
+        version: link:../../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../../Graph
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Tours/Server:
+    dependencies:
+      '@memberjunction/actions':
+        specifier: 6.3.0-edge.2
+        version: link:../../Actions/Engine
+      '@memberjunction/actions-base':
+        specifier: 6.3.0-edge.2
+        version: link:../../Actions/Base
+      '@memberjunction/core':
+        specifier: 6.3.0-edge.2
+        version: link:../../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.3.0-edge.2
+        version: link:../../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.3.0-edge.2
+        version: link:../../GenericDatabaseProvider
+      '@memberjunction/global':
+        specifier: 6.3.0-edge.2
+        version: link:../../MJGlobal
+      '@memberjunction/graph':
+        specifier: 6.3.0-edge.2
+        version: link:../../Graph
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../Runtime
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.10.0)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/Tours/examples/angular-host:
+    dependencies:
+      '@angular/common':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
+      '@angular/core':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/platform-browser':
+        specifier: ^21.2.22
+        version: 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
+      '@memberjunction/ng-tours':
+        specifier: 6.3.0-edge.2
+        version: link:../../../Angular/Generic/tours
+      '@memberjunction/tours-runtime':
+        specifier: 6.3.0-edge.2
+        version: link:../../Runtime
+      rxjs:
+        specifier: ^7.8.2
+        version: 7.8.2
+    devDependencies:
+      '@angular/compiler-cli':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
+      typescript:
+        specifier: 5.9.3
         version: 5.9.3
 
   packages/UnitTesting:

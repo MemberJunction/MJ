@@ -36,7 +36,9 @@ export class MJRoleFormComponent extends BaseFormComponent {
             { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false },
             { sectionKey: 'mJEntityFieldPermissions', sectionName: 'Entity Field Permissions', isExpanded: false },
             { sectionKey: 'mJEntityFormContributions', sectionName: 'Entity Form Contributions', isExpanded: false },
-            { sectionKey: 'mJCommunicationSenderPermissions', sectionName: 'Communication Sender Permissions', isExpanded: false }
+            { sectionKey: 'mJCommunicationSenderPermissions', sectionName: 'Communication Sender Permissions', isExpanded: false },
+            { sectionKey: 'mJTourOverrides', sectionName: 'Tour Overrides', isExpanded: false },
+            { sectionKey: 'mJTourSurfaces', sectionName: 'Tour Surfaces', isExpanded: false }
         ]);
     }
 }

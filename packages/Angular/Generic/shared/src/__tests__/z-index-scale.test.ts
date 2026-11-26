@@ -22,10 +22,23 @@ describe('design tokens: z-index scale', () => {
     return scale;
   }
 
-  it('publishes a drawer rung and a dialog rung', () => {
+  it('publishes all overlay band z-index rungs including Guided Tours', () => {
     const scale = zScale();
-    expect(scale.has('--mj-z-drawer')).toBe(true);
-    expect(scale.has('--mj-z-dialog')).toBe(true);
+    const expectedTokens = [
+      '--mj-z-drawer',
+      '--mj-z-tour-popover',
+      '--mj-z-dialog',
+      '--mj-z-mobile-chrome',
+      '--mj-z-window',
+      '--mj-z-dialog-service',
+      '--mj-z-confirm-service',
+      '--mj-z-tour-modal',
+      '--mj-z-omnibar',
+      '--mj-z-notification-toast',
+    ];
+    for (const token of expectedTokens) {
+      expect(scale.has(token), `expected ${token} to be declared in _tokens.scss`).toBe(true);
+    }
   });
 
   it('stacks the dialog ABOVE the drawer, so a modal opened from a slide panel is reachable', () => {
@@ -34,6 +47,29 @@ describe('design tokens: z-index scale', () => {
     const dialog = scale.get('--mj-z-dialog') ?? Number.NaN;
     // The panel itself sits one above its backdrop (calc(drawer + 1)), so the dialog needs real headroom.
     expect(dialog).toBeGreaterThan(drawer + 1);
+  });
+
+  it('enforces the overlay z-index ladder ordering invariants', () => {
+    const scale = zScale();
+    const orderedRungs = [
+      '--mj-z-drawer',
+      '--mj-z-tour-popover',
+      '--mj-z-dialog',
+      '--mj-z-mobile-chrome',
+      '--mj-z-window',
+      '--mj-z-dialog-service',
+      '--mj-z-confirm-service',
+      '--mj-z-tour-modal',
+      '--mj-z-omnibar',
+      '--mj-z-notification-toast',
+    ];
+    for (let i = 0; i < orderedRungs.length - 1; i++) {
+      const lowerName = orderedRungs[i];
+      const upperName = orderedRungs[i + 1];
+      const lower = scale.get(lowerName) ?? Number.NaN;
+      const upper = scale.get(upperName) ?? Number.NaN;
+      expect(upper, `expected ${upperName} (${upper}) > ${lowerName} (${lower})`).toBeGreaterThan(lower);
+    }
   });
 
   it('keeps every rung a distinct integer (two surfaces on one number is an undocumented tie)', () => {

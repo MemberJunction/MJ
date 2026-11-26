@@ -33,6 +33,7 @@
     "@memberjunction/core-entities": "6.3.0-edge.2",
     "@memberjunction/generic-database-provider": "6.3.0-edge.2",
     "@memberjunction/global": "6.3.0-edge.2",
+    "@memberjunction/graph": "6.3.0-edge.2",
     "@memberjunction/rubrics": "6.3.0-edge.2",
     "@memberjunction/search-engine": "6.3.0-edge.2",
     "@memberjunction/storage": "6.3.0-edge.2",

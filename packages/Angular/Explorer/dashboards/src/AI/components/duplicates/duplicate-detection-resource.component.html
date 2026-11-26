@@ -1,5 +1,6 @@
 <mj-page-layout>
   <mj-page-header
+    data-mj-tour-anchor="kh.duplicates.header"
     Title="Record Duplicates"
     Icon="fa-solid fa-clone"
     Subtitle="Find and merge near-duplicate entity records using semantic similarity">
@@ -46,7 +47,7 @@
 
     <!-- Threshold Controls (when entity doc selected) -->
     @if (SelectedDocumentThresholds) {
-        <div class="threshold-controls">
+        <div class="threshold-controls" data-mj-tour-anchor="kh.duplicates.thresholds">
             <div class="threshold-slider-group">
                 <label class="threshold-label">
                     <i class="fa-solid fa-adjust"></i>
@@ -99,7 +100,7 @@
     }
 
     <!-- KPI Strip -->
-    <div class="kpi-strip">
+    <div class="kpi-strip" data-mj-tour-anchor="kh.duplicates.kpi-strip">
         <div class="kpi-card">
             <div class="kpi-value">{{ TotalGroupCount }}</div>
             <div class="kpi-label">Total Groups</div>

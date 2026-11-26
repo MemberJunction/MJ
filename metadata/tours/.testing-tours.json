@@ -1,0 +1,596 @@
+[
+  {
+    "fields": {
+      "Name": "Test Suites, Cases & Evaluation Modes",
+      "TourKey": "testing.suites-cases",
+      "Description": "Learn how MemberJunction organizes test suites and cases, and choose between deterministic schema/SQL oracles and weighted rubric scoring.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Testing",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 80,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Testing",
+        "Description": "User explores test suites, evaluation modes, and execution workflows in Testing."
+      },
+      "StartLocation": {
+        "Application": "Testing"
+      }
+    },
+    "primaryKey": {
+      "ID": "7DE79D61-C3E2-44E7-ADAD-5AEF0A640E22"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "testing-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Continuous Evaluation & Testing",
+            "Body": "Keep AI agents, prompts, and workflows reliable by combining repeatable MJ: Tests, grouped MJ: Test Suites, and multi-oracle scoring.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Testing",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Testing"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "3CB67DDD-59B3-4F2E-9CA9-772D2F01EAEB"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "suites-and-cases",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Organizing Test Suites & Cases",
+            "Body": "Switch between Overview, Explorer, Runs, Analytics, and Review here to browse MJ: Test Suites, inspect individual test cases, and launch runs.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "testing.tabs"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B288EF53-4725-4F42-9CE4-DF5D285F9B8C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "evaluation-strategy-choice",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Choice",
+            "Title": "Choose an Evaluation Strategy",
+            "Body": "Pick the evaluation mode you want to explore next — deterministic checks or multi-criteria rubrics.",
+            "Configuration": {
+              "Question": "Which evaluation strategy fits the test cases you want to run?",
+              "Options": [
+                {
+                  "Key": "deterministic",
+                  "Label": "Deterministic Schema & Output Checks",
+                  "Description": "Exact JSON schema validation, SQL state assertions, and latency/cost budgets."
+                },
+                {
+                  "Key": "rubric-judge",
+                  "Label": "Multi-Criteria Rubric Scoring",
+                  "Description": "Weighted rubric criteria evaluating accuracy, grounding, tone, and completeness."
+                }
+              ]
+            },
+            "Placement": "Center",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "948295AB-5983-4BE5-A0CE-C8C903CAE47E"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "deterministic-oracles",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Strategy: Deterministic Oracles & Guardrails",
+            "Body": "Use deterministic oracles for strict JSON schema checks, expected SQL state assertions, and hard cost or latency budgets that fail fast on regressions.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "testing.eval-mode"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "57C41154-B2D4-4339-A9A1-E27F3174808B"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "rubric-criteria-scales",
+            "Sequence": 5,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Strategy: Weighted Rubric Criteria & Scales",
+            "Body": "Pair open-ended agent responses with weighted Rubric Criteria and standardized scales so LLM evaluators and human reviewers score consistently.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "testing.workspace"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "2397488C-E83E-45EE-BDD0-30B68388C777"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "running-suites-summary",
+            "Sequence": 6,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Running Suites Locally & in CI",
+            "Body": "Trigger single cases or full MJ: Test Suites right from Explorer and Runs, or schedule automated regression runs in CI to block regressions before release.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Next: Rubrics & Calibration",
+              "NextTourKey": "testing.rubrics-calibration",
+              "LearningPathKey": "testing.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B8B43B9B-7AEF-4085-80E2-AA0F0EBC1109"
+          }
+        }
+      ],
+      "MJ: Tour Step Paths": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "948295AB-5983-4BE5-A0CE-C8C903CAE47E",
+            "ToStepID": "57C41154-B2D4-4339-A9A1-E27F3174808B",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "deterministic"
+                }
+              ]
+            },
+            "Label": "Deterministic Schema & Output Checks",
+            "Priority": 100,
+            "Sequence": 1,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "064828FE-CD73-4924-A02D-14F9DE00832D"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "948295AB-5983-4BE5-A0CE-C8C903CAE47E",
+            "ToStepID": "2397488C-E83E-45EE-BDD0-30B68388C777",
+            "Condition": {
+              "logic": "and",
+              "filters": [
+                {
+                  "field": "lastChoiceKey",
+                  "operator": "eq",
+                  "value": "rubric-judge"
+                }
+              ]
+            },
+            "Label": "Multi-Criteria Rubric Scoring",
+            "Priority": 90,
+            "Sequence": 2,
+            "IsDefault": false
+          },
+          "primaryKey": {
+            "ID": "E8E699FB-0C47-42D3-A50E-AA3BDDD51640"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "948295AB-5983-4BE5-A0CE-C8C903CAE47E",
+            "ToStepID": "57C41154-B2D4-4339-A9A1-E27F3174808B",
+            "Condition": null,
+            "Label": "Default: Deterministic Oracles",
+            "Priority": 0,
+            "Sequence": 3,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "844A4354-42D6-4595-B009-5E6B23EE2E90"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "FromStepID": "57C41154-B2D4-4339-A9A1-E27F3174808B",
+            "ToStepID": "B8B43B9B-7AEF-4085-80E2-AA0F0EBC1109",
+            "Condition": null,
+            "Label": "Continue to Summary",
+            "Priority": 10,
+            "Sequence": 1,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "DDA6E0BB-C417-444B-AEB1-4A18DE412874"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Testing"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "77ACC429-5B4E-45A8-BF9D-CDB014953C74"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rubrics, Scales & Human Calibration",
+      "TourKey": "testing.rubrics-calibration",
+      "Description": "Design structured rubrics and scoring scales, calibrate automated judges with human review feedback, and monitor scoring drift over time.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Rubrics",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Rubrics",
+        "Description": "User inspects Rubrics catalog, scales, human calibration, and drift tracking."
+      },
+      "StartLocation": {
+        "Application": "Rubrics"
+      }
+    },
+    "primaryKey": {
+      "ID": "C522FD9B-AD76-4DD6-940F-E03036B08501"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "rubrics-catalog",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Authoring Structured MJ: Rubrics",
+            "Body": "Use the Rubrics workspace to define versioned MJ: Rubrics organized by category, with immutable published snapshots that keep historical evaluations reproducible.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Rubrics",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Rubrics"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "6C17E316-673D-451D-96B6-C0002251BD81"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "rubric-criteria-and-scales",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Weighted Rubric Criteria & Reusable Scales",
+            "Body": "Open any rubric to structure weighted Rubric Criteria trees, and visit Scales to configure level or numeric scales shared across evaluations.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "RubricScalesResource",
+              "DriverClass": "RubricScalesResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "3B8C2459-456A-4318-888A-89DBA1981161"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "human-feedback-calibration",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Calibrating Evaluators with Human Feedback",
+            "Body": "Compare human reviewer ratings from MJ: Test Run Feedbacks against AI judge scores per criterion to align prompt weights and scoring descriptions.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "RubricsResource",
+              "DriverClass": "RubricsResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "5296ECD8-6C83-419B-A850-BDBADAB96E4D"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "rubric-drift-monitoring",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Monitoring Rubric Drift Over Time",
+            "Body": "Track cohort disagreement and criterion failure trends in the Drift view so you catch evaluator drift before it distorts suite pass rates.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Next: Analytics & Gates",
+              "NextTourKey": "testing.analytics-gates",
+              "LearningPathKey": "testing.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "00B68055-6B5F-4D81-9212-56EEDA427C11"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Rubrics"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "130228C4-241C-4321-AF4F-B1016FCB108C"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Regression Gates & Run Provenance",
+      "TourKey": "testing.analytics-gates",
+      "Description": "Trace MJ: Test Suite Runs across commits and model versions, inspect score distributions and cost/latency diffs, and enforce release quality gates.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Testing",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 3,
+      "Priority": 70,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Application": "Testing",
+        "Description": "User reviews run provenance, version analytics, and release quality gates."
+      },
+      "StartLocation": {
+        "Application": "Testing"
+      }
+    },
+    "primaryKey": {
+      "ID": "D5567A4C-F40B-4201-8777-631D345E07C8"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "suite-runs-provenance",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Full Provenance with MJ: Test Suite Runs",
+            "Body": "Every execution records MJ: Test Suite Runs and child MJ: Test Runs with exact git commit hashes, prompt versions, and agent configuration snapshots.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Inspect Analytics",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Prepare": {
+              "ApplicationName": "Testing"
+            },
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "08CACC48-6A54-4F59-9669-6542F0FC0A36"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "score-distributions",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Score Distributions Across Model Versions",
+            "Body": "Open the Analytics view to compare pass-rate trends and score distributions side by side across model upgrades and prompt revisions.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "NavItemKey": "TestingAnalyticsResource",
+              "DriverClass": "TestingAnalyticsResource"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8F5F567F-1F45-4A27-AD45-0AB5BE243DB9"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "cost-latency-diffs",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Tracking Cost & Latency Diffs",
+            "Body": "Drill into Runs and version comparisons to spot token-cost spikes or tail-latency regressions alongside quality deltas before shipping.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "testing.workspace"
+            },
+            "Placement": "Top",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "B9BFA8A7-668A-41BD-B979-A3E747F70EF6"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "release-quality-gates",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Enforcing Release Quality Gates",
+            "Body": "Set minimum pass-rate thresholds and maximum cost/latency ceilings on your suites so regressions fail pull requests automatically.",
+            "Configuration": {
+              "Variant": "summary",
+              "PrimaryButtonText": "Finish Path",
+              "LearningPathKey": "testing.mastery",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "8E74EB1D-BF3A-49D0-9710-1B8BD371FEA9"
+          }
+        }
+      ]
+    }
+  }
+]

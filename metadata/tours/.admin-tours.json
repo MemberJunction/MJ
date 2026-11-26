@@ -1,0 +1,169 @@
+[
+  {
+    "fields": {
+      "Name": "Manage Guided Tours",
+      "TourKey": "admin.tours",
+      "Description": "Admin orientation to Tour Studio: managing overrides without editing shipped metadata, assigning learning paths, and reviewing goal analytics.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Tour Studio",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 2,
+      "Priority": 75,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "AudienceFilter": {
+        "logic": "and",
+        "filters": [
+          {
+            "field": "user.Roles",
+            "operator": "contains",
+            "value": "Developer"
+          }
+        ]
+      },
+      "Goal": {
+        "Type": "EntityEvent",
+        "Entity": "MJ: Tour Overrides",
+        "Event": "Save",
+        "Description": "Admin reviews Tour Studio governance or creates an override/learning path assignment."
+      },
+      "StartLocation": {
+        "Application": "Tour Studio",
+        "NavItem": "TourStudioDashboard"
+      }
+    },
+    "primaryKey": {
+      "ID": "9EEA280A-CECE-4867-B431-3969B0836F22"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "admin-welcome",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Guided Tours Administration",
+            "Body": "Use Tour Studio to govern triggers, assign role-based learning paths, and inspect anchor health and goal conversion rates.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Explore Governance",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "9D87F3A4-5193-4F3E-94AF-9BDE823D386C"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "launcher-anchor",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "User Tour Launcher",
+            "Body": "Open the **User Avatar Menu** and select **Tours** to browse **For This Screen**, **All Apps**, and **Paths** anytime without cluttering the Home screen.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.user-menu"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "CE6A9E58-3B51-4BD1-AA17-CB4C26911DDC"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "studio-workspace",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Overrides Survive Upgrades",
+            "Body": "Customize shipped tours through MJ: Tour Overrides (Global, Role, or User scope) instead of mutating shipped definitions.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "NavItem",
+              "DriverClass": "TourStudioDashboard"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "510E5ADC-8779-4C22-BB8A-B17415C7E797"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "admin-summary",
+            "Sequence": 4,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Banner",
+            "Title": "Check Tour Notifications & Preferences",
+            "Body": "Assign learning paths to roles via Actions or Tour Studio to automatically deliver clickable Tour notifications.",
+            "Configuration": {
+              "Tone": "info",
+              "CtaText": "Finish",
+              "Dismissible": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.notifications"
+            },
+            "Placement": "Bottom",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "13DF8C5E-2676-4852-AD92-93DD6054E591"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Tour Studio"
+            },
+            "Delivery": "Offer",
+            "CooldownDays": 30,
+            "Priority": 75,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "80BF707D-CE28-4C13-A8A8-64482D5DBFFC"
+          }
+        }
+      ]
+    }
+  }
+]

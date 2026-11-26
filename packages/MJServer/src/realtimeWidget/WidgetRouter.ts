@@ -114,22 +114,32 @@ export function createWidgetHandler(publicUrl: string, config: WidgetConfig): { 
   return CreateWidgetHandler(publicUrl, config);
 }
 
-/** Reads the `widgetKey` from a parsed JSON body, or '' when absent (used to key the dynamic limiter). */
+/** Reads `surfaceKey` or `widgetKey` from a parsed JSON body, or '' when absent (used to key the dynamic limiter). */
 function readWidgetKey(req: Request): string {
-  const body = (req.body ?? {}) as { widgetKey?: string };
+  const body = (req.body ?? {}) as { widgetKey?: string; surfaceKey?: string };
+  const surfaceKey = typeof body.surfaceKey === 'string' ? body.surfaceKey.trim() : '';
+  if (surfaceKey) {
+    return surfaceKey;
+  }
   return typeof body.widgetKey === 'string' ? body.widgetKey.trim() : '';
 }
 
 /** Handles "forget me" (RV5) — parses the body, calls the service, maps the status. */
 async function handleForget(service: WidgetSessionService, req: Request, res: Response): Promise<void> {
-  const body = (req.body ?? {}) as { widgetKey?: string; visitorKey?: string };
+  const body = (req.body ?? {}) as { widgetKey?: string; surfaceKey?: string; visitorKey?: string };
   const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
+  const surfaceKey = typeof body.surfaceKey === 'string' ? body.surfaceKey : '';
   const visitorKey = typeof body.visitorKey === 'string' ? body.visitorKey : '';
-  if (!widgetKey) {
-    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+  if (!widgetKey && !surfaceKey) {
+    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey or surfaceKey is required.' });
     return;
   }
-  const result = await service.ForgetVisitor({ WidgetKey: widgetKey, VisitorKey: visitorKey, origin: req.get('origin') ?? undefined });
+  const result = await service.ForgetVisitor({
+    WidgetKey: widgetKey || undefined,
+    SurfaceKey: surfaceKey || undefined,
+    VisitorKey: visitorKey,
+    origin: req.get('origin') ?? undefined,
+  });
   res.status(result.success ? 200 : result.errorCode === 'server_error' ? 500 : 403).json(result);
 }
 
@@ -143,15 +153,17 @@ async function handleResolveIdentity(service: WidgetSessionService, req: Request
     res.status(401).json({ success: false, errorCode: 'server_error', error: 'Authentication required.' });
     return;
   }
-  const body = (req.body ?? {}) as { widgetKey?: string; visitorKey?: string };
+  const body = (req.body ?? {}) as { widgetKey?: string; surfaceKey?: string; visitorKey?: string };
   const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
+  const surfaceKey = typeof body.surfaceKey === 'string' ? body.surfaceKey : '';
   const visitorKey = typeof body.visitorKey === 'string' ? body.visitorKey : '';
-  if (!widgetKey) {
-    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+  if (!widgetKey && !surfaceKey) {
+    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey or surfaceKey is required.' });
     return;
   }
   const result = await service.ResolveVisitorIdentity({
-    WidgetKey: widgetKey,
+    WidgetKey: widgetKey || undefined,
+    SurfaceKey: surfaceKey || undefined,
     VisitorKey: visitorKey,
     VerifiedEmail: verifiedUser.Email,
     origin: req.get('origin') ?? undefined,
@@ -186,10 +198,17 @@ function extractBearerToken(authHeader: string | undefined): string | undefined 
 
 /** Shared mint/refresh handler — parses the request, calls the service, maps the status. */
 async function handleMint(service: WidgetSessionService, req: Request, res: Response, refresh: boolean): Promise<void> {
-  const body = (req.body ?? {}) as { widgetKey?: string; hostAssertion?: string; visitorKey?: string; proofKey?: unknown };
-  const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey : '';
-  if (!widgetKey) {
-    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey is required.' });
+  const body = (req.body ?? {}) as {
+    widgetKey?: string;
+    surfaceKey?: string;
+    hostAssertion?: string;
+    visitorKey?: string;
+    proofKey?: unknown;
+  };
+  const widgetKey = typeof body.widgetKey === 'string' ? body.widgetKey.trim() : '';
+  const surfaceKey = typeof body.surfaceKey === 'string' ? body.surfaceKey.trim() : '';
+  if (!widgetKey && !surfaceKey) {
+    res.status(400).json({ success: false, errorCode: 'not_found', error: 'widgetKey or surfaceKey is required.' });
     return;
   }
   // The service validates the key's shape (ToProofPublicJwk) and refuses anything that is not a public P-256 JWK.
@@ -204,7 +223,8 @@ async function handleMint(service: WidgetSessionService, req: Request, res: Resp
 
   const origin = req.get('origin') ?? undefined;
   const input = {
-    widgetKey,
+    widgetKey: widgetKey || undefined,
+    surfaceKey: surfaceKey || undefined,
     origin,
     hostAssertion: typeof body.hostAssertion === 'string' ? body.hostAssertion : undefined,
     visitorKey: typeof body.visitorKey === 'string' ? body.visitorKey : undefined,

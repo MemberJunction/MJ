@@ -1,0 +1,37 @@
+{
+  "name": "Tour Interactive Readiness Check",
+  "title": "Interactive Tour Readiness Check",
+  "description": "Interactive pre-publish tour readiness checklist bound via TourStepType.ComponentID for validating anchors, step count, outcome Goal, and WCAG 2.2 AA accessibility.",
+  "type": "other",
+  "location": "embedded",
+  "functionalRequirements": "Displays a pre-publish readiness checklist for tour authors covering semantic anchors, concise step count, concrete Goal criteria, and accessibility checks. Allows authors to toggle each check and click Confirm Readiness & Continue, emitting callbacks.OnEvent('completeStep', { allReady: true, checkedItems }).",
+  "technicalDesign": "React component receiving data, step, and callbacks props. Uses useState hooks directly from the MJ sandbox runtime, styled with --mj-* design tokens and safe fallbacks, tracks checked item state, computes readiness ratio, and triggers callbacks.OnEvent('completeStep', payload) on confirmation.",
+  "dataRequirements": {
+    "mode": "none",
+    "description": "Operates on optional InputProps/data passed from the step configuration or TourStepType defaults."
+  },
+  "properties": [
+    {
+      "name": "title",
+      "type": "string",
+      "description": "Checklist header text",
+      "required": false,
+      "defaultValue": "Pre-Publish Tour Readiness Check"
+    },
+    {
+      "name": "checks",
+      "type": "array",
+      "description": "Optional list of readiness check descriptors { id, label }",
+      "required": false
+    }
+  ],
+  "events": [
+    {
+      "name": "completeStep",
+      "description": "Emitted when all readiness criteria are confirmed by the author"
+    }
+  ],
+  "dependencies": [],
+  "code": "@file:../code/tour-interactive-readiness-check.js",
+  "usageExample": "<TourInteractiveReadinessCheck data={{ title: 'Publish Readiness' }} callbacks={{ OnEvent: (type, payload) => console.log(type, payload) }} />"
+}

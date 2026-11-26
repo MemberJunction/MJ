@@ -1,0 +1,10 @@
+{
+  "entity": "MJ: Tours",
+  "filePattern": "**/.*.json",
+  "overrides": [
+    {
+      "folder": "tours",
+      "fields": ["Status"]
+    }
+  ]
+}

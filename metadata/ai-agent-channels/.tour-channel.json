@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "Name": "Tour",
+      "Description": "Headless voice-director channel for Guided Tours: streams active tour step state and visible accessible UI anchors to the realtime co-agent and routes highlight, goToStep, and prepareStep verbs to the active TourSession without rendering a tab surface.",
+      "ServerPluginClass": "ClientOnlyChannelServer",
+      "ClientPluginClass": "TourChannel",
+      "TransportType": "PubSub",
+      "IsActive": true,
+      "IsHeadless": true,
+      "UIConfig": {
+        "DisplayName": "Guided Tour",
+        "GroupName": "System",
+        "Icon": "fa-solid fa-route",
+        "Color": "--mj-brand-primary"
+      }
+    },
+    "primaryKey": {
+      "ID": "9E42D7C5-18B3-4E56-91A2-4C8F03D6A912"
+    }
+  }
+]

@@ -1,0 +1,128 @@
+[
+  {
+    "fields": {
+      "Name": "Make Home Yours",
+      "TourKey": "core.home",
+      "Description": "Discover your Home learning paths checklist, quick pins, and recent workspace history.",
+      "ApplicationID": "@lookup:MJ: Applications.Name=Home",
+      "RunInAuthenticatedHosts": true,
+      "Status": "Draft",
+      "EstimatedMinutes": 1,
+      "Priority": 90,
+      "DefaultGuideMode": "Visual",
+      "AllowAgentActions": false,
+      "Goal": {
+        "Type": "Navigation",
+        "Description": "User reviews Home learning paths and dashboard navigation."
+      },
+      "StartLocation": {
+        "Application": "Home"
+      }
+    },
+    "primaryKey": {
+      "ID": "DDECD630-C040-4796-8D64-1E411799AD6F"
+    },
+    "relatedEntities": {
+      "MJ: Tour Steps": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "home-intro",
+            "Sequence": 1,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Modal",
+            "Title": "Your Home Workspace",
+            "Body": "Home brings together your pinned favorites, recent work, and guided learning paths.",
+            "Configuration": {
+              "Variant": "welcome",
+              "PrimaryButtonText": "Continue",
+              "ShowProgress": true
+            },
+            "Placement": "Center",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "A8493B78-BAE2-40DB-BAD8-44DAB61B2862"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "pinned-resources",
+            "Sequence": 2,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Pin Your Go-To Dashboards & Views",
+            "Body": "Pin dashboards, saved views, queries, and quick actions into named groups so your daily tools are always one click away.",
+            "Configuration": {
+              "ShowProgress": true
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.home.pinned"
+            },
+            "Placement": "Bottom",
+            "Mode": "Guide",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "0B04A770-FF7B-403A-A5E0-476AEA292AD4"
+          }
+        },
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "StepKey": "user-menu-tours",
+            "Sequence": 3,
+            "StepTypeID": "@lookup:MJ: Tour Step Types.Name=Spotlight",
+            "Title": "Tours & Learning Paths Anytime",
+            "Body": "Open your profile menu and select **Tours** whenever you want to explore guided walkthroughs or track multi-tour learning paths across apps.",
+            "Configuration": {
+              "ShowProgress": true,
+              "NextButtonText": "Done"
+            },
+            "Anchor": {
+              "Strategy": "Registered",
+              "Key": "core.shell.user-menu"
+            },
+            "Placement": "Bottom",
+            "Mode": "Show",
+            "Completion": {
+              "Type": "NextButton"
+            },
+            "OnMissing": "Center",
+            "IsOptional": false
+          },
+          "primaryKey": {
+            "ID": "BC9F69B3-4EFF-4649-8BC0-917113325C83"
+          }
+        }
+      ],
+      "MJ: Tour Triggers": [
+        {
+          "fields": {
+            "TourID": "@parent:ID",
+            "TriggerType": "FirstVisit",
+            "Configuration": {
+              "Application": "Home"
+            },
+            "Delivery": "Beacon",
+            "CooldownDays": 14,
+            "Priority": 80,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2A9FA1F1-328E-44D3-8340-B178E43E6CFA"
+          }
+        }
+      ]
+    }
+  }
+]

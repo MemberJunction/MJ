@@ -1,0 +1,36 @@
+{
+  "name": "@memberjunction/tours-server",
+  "type": "module",
+  "version": "6.3.0-edge.2",
+  "description": "MemberJunction Guided Tours server package — entity subclasses, Remote Operations, server predicates, tour publishing/version snapshotting, and AI Agent Actions",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/global": "6.3.0-edge.2",
+    "@memberjunction/core": "6.3.0-edge.2",
+    "@memberjunction/core-entities": "6.3.0-edge.2",
+    "@memberjunction/actions-base": "6.3.0-edge.2",
+    "@memberjunction/actions": "6.3.0-edge.2",
+    "@memberjunction/generic-database-provider": "6.3.0-edge.2",
+    "@memberjunction/tours-runtime": "6.3.0-edge.2",
+    "@memberjunction/graph": "6.3.0-edge.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

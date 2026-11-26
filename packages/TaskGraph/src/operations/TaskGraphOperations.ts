@@ -36,7 +36,8 @@ import {
     type TaskGraphRetryInput,
     type TaskGraphStatusOutput,
 } from '@memberjunction/core-entities';
-import { ComputeParentRollup, type TaskGraphDispatchMode, type TaskGraphInvocationEnvelope, type TaskGraphNodeStatus, type TaskGraphSpec } from '@memberjunction/ai-core-plus';
+import { ComputeParentRollup, type TaskGraphNodeStatus } from '@memberjunction/graph';
+import type { TaskGraphDispatchMode, TaskGraphInvocationEnvelope, TaskGraphSpec } from '@memberjunction/ai-core-plus';
 import { ClampReinvokeDepth, TaskGraphService, TaskGraphSubmitContext } from '../TaskGraphService';
 import { LoadWorkflowDraftOperation } from './WorkflowDraftOperation';
 import { LoadTaskGraphDebugOperations, AuthorizeGraphControl, GraphOfTask } from './TaskGraphDebugOperations';

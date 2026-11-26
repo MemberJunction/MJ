@@ -51,6 +51,19 @@ import {
 import { SetReadinessBeacon } from './readiness-beacon';
 import { FindDashboardTabForUrl, OpenDashboardForUrl, ParseAppDashboardUrl } from './dashboard-tab-for-url';
 import { ApplyDeepLinkToRestoredWorkspace } from './deep-link-workspace';
+import {
+  DEFAULT_TOUR_PREFERENCES,
+  ExplorerAppTourGroup,
+  ExplorerLearningPathSummary,
+  ExplorerTourHost,
+} from '../tours/explorer-tour-host.service';
+import {
+  TourDefinition,
+  TourPreferences,
+  TourSessionGuideMode,
+  TourSessionView,
+} from '@memberjunction/tours-runtime';
+import type { MJTourHostComponent, TourPendingOffer } from '@memberjunction/ng-tours';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -838,7 +851,27 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private reactAdapter = inject(AngularAdapterService);
   private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
   private readonly shellChromePolicyService = inject(ShellChromePolicyService, { optional: true });
+  private readonly tourHost = inject(ExplorerTourHost, { optional: true });
+  @ViewChild('tourHostCmp') private tourHostComponent?: MJTourHostComponent;
   public DiagnosticDialogOpen = false;
+
+  // Guided Tours & Help launcher state
+  public ToursMenuOpen = false;
+  public ToursLoading = false;
+  public ActiveTourView: TourSessionView | null = null;
+  public SuggestedTours: Array<{ Tour: TourDefinition; RecommendedPrerequisites?: string[] }> = [];
+  public AllAppTourGroups: ExplorerAppTourGroup[] = [];
+  public ToursPopoverTab: 'screen' | 'all' | 'paths' = 'screen';
+  public LauncherLearningPaths: ExplorerLearningPathSummary[] = [];
+  public TourPrefs: TourPreferences = { ...DEFAULT_TOUR_PREFERENCES };
+  public readonly TourGuideModeOptions: TourSessionGuideMode[] = ['Visual', 'Chat', 'Voice'];
+  public TourVoiceGuideAvailable = false;
+  public TourVoiceGuideActive = false;
+  public PendingTourOffer: TourPendingOffer | null = null;
+
+  public get TourVoiceAgentName(): string {
+    return this.tourHost?.TourVoiceAgentName ?? 'Sage';
+  }
 
   constructor(
     private appManager: ApplicationManager,
@@ -877,6 +910,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.workspaceManager.Provider = providerForServices;
     this.DeveloperModeService.Provider = providerForServices;
     this.startupValidationService.Provider = providerForServices;
+    this.tourHost?.SetProvider(providerForServices);
     if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
 
     // Initialize theme immediately so loading UI shows correct colors from the start
@@ -1016,6 +1050,31 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     // Diagnostics capture runs in memory until this status arrives; a status with capture off stops it
     void this.diagnosticsService?.LoadServerStatus();
+
+    if (this.tourHost) {
+      this.tourHost.SetProvider(md);
+      this.TourPrefs = this.tourHost.GetPreferences();
+      this.TourVoiceGuideAvailable = this.tourHost.IsVoiceGuideAvailable;
+      this.subscriptions.push(
+        this.tourHost.ActiveSessionView$.pipe(takeUntil(this.destroy$)).subscribe((view) => {
+          this.ActiveTourView = view;
+          this.cdr.markForCheck();
+        }),
+        this.tourHost.VoiceGuideActive$.pipe(takeUntil(this.destroy$)).subscribe((active) => {
+          this.TourVoiceGuideActive = active;
+          this.cdr.markForCheck();
+        }),
+        this.tourHost.PendingOffer$.pipe(takeUntil(this.destroy$)).subscribe((offer) => {
+          this.PendingTourOffer = offer;
+          this.cdr.markForCheck();
+        }),
+        this.tourHost.Location$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+          if (this.ToursMenuOpen) {
+            void this.RefreshToursLauncher();
+          }
+        }),
+      );
+    }
 
     // Check the current URL to determine if we're loading from a URL-based navigation
     const currentUrl = this.router.url;
@@ -2617,6 +2676,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   ngAfterViewInit(): void {
     // Layout initialization happens in TabContainerComponent
+    this.tourHost?.AttachTourHostComponent(this.tourHostComponent);
+  }
+
+  public OnTourHostSessionChanged(): void {
+    this.tourHost?.SyncFromTourHostComponent();
   }
 
   /**
@@ -3275,24 +3339,45 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return this.SkipToMainContent(event);
   }
 
+  private removeUserMenuOutsideListener: (() => void) | null = null;
+
   /**
    * Toggle user menu visibility
    */
   ToggleUserMenu(event: Event): void {
     event.stopPropagation();
+    this.ToursMenuOpen = false;
+    this.clearUserMenuOutsideListener();
     this.UserMenuVisible = !this.UserMenuVisible;
 
     if (this.UserMenuVisible) {
-      // Close menu when clicking outside. CAPTURE phase so clicks whose
+      // Close menu when clicking outside .user-menu. CAPTURE phase so clicks whose
       // bubbling something stopped (e.g. the origin crumb's GL-focus
-      // stoppers) still dismiss the menu.
-      const closeHandler = () => {
+      // stoppers) still dismiss the menu, while clicks inside .user-menu reach their item handler.
+      const closeHandler = (clickEvent: Event) => {
+        const target = clickEvent.target as HTMLElement | null;
+        if (target?.closest?.('.user-menu')) {
+          return;
+        }
         this.UserMenuVisible = false;
+        this.clearUserMenuOutsideListener();
+        this.cdr.markForCheck();
+      };
+      this.removeUserMenuOutsideListener = () => {
         document.removeEventListener('click', closeHandler, true);
       };
       setTimeout(() => {
-        document.addEventListener('click', closeHandler, true);
+        if (this.UserMenuVisible && this.removeUserMenuOutsideListener) {
+          document.addEventListener('click', closeHandler, true);
+        }
       }, 0);
+    }
+  }
+
+  private clearUserMenuOutsideListener(): void {
+    if (this.removeUserMenuOutsideListener) {
+      this.removeUserMenuOutsideListener();
+      this.removeUserMenuOutsideListener = null;
     }
   }
 
@@ -3393,6 +3478,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   async OnUserMenuItemClick(itemId: string): Promise<void> {
     if (!this.userMenu) return;
+    this.clearUserMenuOutsideListener();
+
+    if (itemId === 'tours-and-help') {
+      this.OpenToursFromMenu();
+      return;
+    }
 
     if (!this.ShowAdminMenuItems) {
       const targetItem = this.userMenu.GetMenuItems().find(i => i.id === itemId);
@@ -3478,6 +3569,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         avatarUrl: this.UserImageURL || null,
         avatarIconClass: this.UserIconClass || null
       });
+      return;
+    }
+
+    if (result.message === 'tours-and-help') {
+      this.OpenToursFromMenu();
       return;
     }
 
@@ -3993,6 +4089,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
+      if (event.key === 'Escape' && this.ToursMenuOpen) {
+          this.ToursMenuOpen = false;
+          this.cdr.markForCheck();
+          return;
+      }
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (!isCtrlOrCmd) {
@@ -4153,13 +4254,159 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return this.ClearFinishedActivity();
   }
 
-  /** Close the Activity drawer when clicking anywhere outside it. */
-  @HostListener('document:click')
-  onDocumentClickCloseActivity(): void {
-    if (this.ActivityOpen) {
+  /** Close the Activity drawer or Tours & Help popover when clicking anywhere outside them. */
+  @HostListener('document:click', ['$event'])
+  onDocumentClickCloseActivity(event?: Event): void {
+    const target = event?.target as HTMLElement | null;
+    let changed = false;
+    if (this.ActivityOpen && !target?.closest?.('.activity-indicator')) {
       this.ActivityOpen = false;
+      changed = true;
+    }
+    if (
+      this.ToursMenuOpen &&
+      !target?.closest?.('.user-menu') &&
+      !target?.closest?.('.user-context-menu') &&
+      !target?.closest?.('.tours-launcher-popover') &&
+      !target?.closest?.('.tours-launcher-btn')
+    ) {
+      this.ToursMenuOpen = false;
+      changed = true;
+    }
+    if (changed) {
       this.cdr.detectChanges();
     }
+  }
+
+  // ========================================
+  // GUIDED TOURS & HELP LAUNCHER
+  // ========================================
+
+  public ToggleToursMenu(event: MouseEvent): void {
+    event.stopPropagation();
+    this.ActivityOpen = false;
+    this.UserMenuVisible = false;
+    this.ToursMenuOpen = !this.ToursMenuOpen;
+    if (this.ToursMenuOpen) {
+      this.ToursPopoverTab = 'screen';
+      void this.RefreshToursLauncher();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OpenToursFromMenu(initialTab: 'screen' | 'all' | 'paths' = 'screen'): void {
+    this.ActivityOpen = false;
+    this.UserMenuVisible = false;
+    this.ToursMenuOpen = true;
+    this.ToursPopoverTab = initialTab;
+    void this.RefreshToursLauncher();
+    this.cdr.detectChanges();
+  }
+
+  public CloseToursMenu(): void {
+    if (this.ToursMenuOpen) {
+      this.ToursMenuOpen = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public SetToursPopoverTab(tab: 'screen' | 'all' | 'paths'): void {
+    this.ToursPopoverTab = tab;
+    this.cdr.markForCheck();
+  }
+
+  public async RefreshToursLauncher(): Promise<void> {
+    if (!this.tourHost) {
+      return;
+    }
+    this.ToursLoading = true;
+    this.TourVoiceGuideAvailable = this.tourHost.IsVoiceGuideAvailable;
+    this.TourPrefs = this.tourHost.GetPreferences();
+    this.cdr.markForCheck();
+    try {
+      const [suggested, allGroups, paths] = await Promise.all([
+        this.tourHost.GetEligibleTours(true),
+        this.tourHost.GetAllToursByApplication(),
+        this.tourHost.GetLearningPathSummaries(),
+      ]);
+      this.SuggestedTours = suggested.slice(0, 8);
+      this.AllAppTourGroups = allGroups;
+      this.LauncherLearningPaths = paths;
+      if (this.SuggestedTours.length === 0 && this.AllAppTourGroups.length > 0 && this.ToursPopoverTab === 'screen') {
+        this.ToursPopoverTab = 'all';
+      }
+    } catch {
+      this.SuggestedTours = [];
+      this.AllAppTourGroups = [];
+      this.LauncherLearningPaths = [];
+    } finally {
+      this.ToursLoading = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  public StartLauncherTour(tourKey: string): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    void this.tourHost?.StartTour(tourKey, { LaunchSource: 'Launcher' });
+  }
+
+  public ResumeLauncherTour(): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    void this.tourHost?.ResumeActiveTour();
+  }
+
+  public PauseLauncherTour(): void {
+    void this.tourHost?.PauseActiveTour();
+  }
+
+  public StopLauncherTour(): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    void this.tourHost?.StopActiveTour('User stopped from Tours & Help menu');
+  }
+
+  public ToggleTourOffersPref(): void {
+    this.TourPrefs = { ...this.TourPrefs, OffersEnabled: !this.TourPrefs.OffersEnabled };
+    this.tourHost?.SavePreferences(this.TourPrefs);
+    this.cdr.markForCheck();
+  }
+
+  public ToggleTourBeaconsPref(): void {
+    this.TourPrefs = { ...this.TourPrefs, ShowBeacons: !this.TourPrefs.ShowBeacons };
+    this.tourHost?.SavePreferences(this.TourPrefs);
+    this.cdr.markForCheck();
+  }
+
+  public SetPreferredGuideMode(mode: TourSessionGuideMode): void {
+    this.TourPrefs = { ...this.TourPrefs, PreferredGuideMode: mode };
+    this.tourHost?.SavePreferences(this.TourPrefs);
+    this.cdr.markForCheck();
+  }
+
+  public OpenToursOmnibar(): void {
+    this.ToursMenuOpen = false;
+    this.cdr.markForCheck();
+    if (this.UseOmnibar) {
+      this.OpenOmnibar('?');
+    }
+  }
+
+  public OnTourVoiceGuideRequested(enabled: boolean): void {
+    void this.tourHost?.RequestVoiceGuide(enabled);
+  }
+
+  public OnExpandTourVoiceOverlay(): void {
+    this.tourHost?.ExpandVoiceOverlay();
+  }
+
+  public OnTourOfferAccepted(tourKey: string): void {
+    void this.tourHost?.AcceptPendingOffer(tourKey);
+  }
+
+  public OnTourOfferDismissed(tourKey: string): void {
+    this.tourHost?.DismissPendingOffer(tourKey);
   }
 
   showNotifications(): void {  // case-violation-ok-legacy-back-compat: the PascalCase name is already taken in this scope

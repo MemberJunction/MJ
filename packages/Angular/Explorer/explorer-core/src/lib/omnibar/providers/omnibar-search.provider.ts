@@ -6,6 +6,7 @@ import type { SearchResultItem } from '@memberjunction/ng-search';
 import { OmnibarProvider, OMNIBAR_NAV_KEY, OmnibarNavPayload } from '../omnibar-provider';
 import { CanOpenInDashboardTab, DashboardMatchLike, DashboardMatchSplit, SplitDashboardMatches } from '../omnibar-dashboard-matches';
 import { OmnibarSemanticIndexService } from '../omnibar-semantic-index.service';
+import { ExtractHowDoIQuery } from './omnibar-tours.provider';
 
 /** Most dashboard rows in the results: name matches and description or category matches together. */
 const MAX_DASHBOARD_ROWS = 3;
@@ -52,18 +53,27 @@ export class OmnibarSearchProvider extends OmnibarProvider {
             return [];
         }
 
+        const howDoI = ExtractHowDoIQuery(query);
+
         const dashboards = this.dashboardSuggestions(query, request);
         const semanticSuggestions = await this.semanticMetadataSuggestions(query, request.MaxResults);
+        const tourMatches = await this.tourSuggestions(howDoI.IsHowDoI ? howDoI.Needle : query);
         const isOffline = this.isOfflineMode();
 
-        if (!search && semanticSuggestions.length === 0 && dashboards.NameMatches.length === 0 && dashboards.DescriptionOrCategoryMatches.length === 0) {
+        if (
+            !search &&
+            semanticSuggestions.length === 0 &&
+            dashboards.NameMatches.length === 0 &&
+            dashboards.DescriptionOrCategoryMatches.length === 0 &&
+            tourMatches.length === 0
+        ) {
             return [];
         }
 
         const localMerged = this.mergeLocalSuggestions(
             dashboards.NameMatches,
             semanticSuggestions,
-            dashboards.DescriptionOrCategoryMatches
+            [...dashboards.DescriptionOrCategoryMatches, ...tourMatches]
         );
 
         // Offline / client-only mode: return local semantic + cached dashboard matches with zero PreviewSearch GraphQL calls
@@ -80,6 +90,7 @@ export class OmnibarSearchProvider extends OmnibarProvider {
             const remoteSuggestions = (response.Success ? response.Results : []).map((item) => this.toSuggestion(item));
             const combined = this.dedupeSuggestions([
                 ...dashboards.NameMatches,
+                ...tourMatches,
                 ...remoteSuggestions,
                 ...semanticSuggestions,
                 ...dashboards.DescriptionOrCategoryMatches,
@@ -108,6 +119,42 @@ export class OmnibarSearchProvider extends OmnibarProvider {
             dashboards.DescriptionOrCategoryMatches
         );
         return merged.slice(0, Math.max(1, request.MaxResults - 1));
+    }
+
+    private async tourSuggestions(query: string): Promise<MentionSuggestion[]> {
+        const tourHost = this.context.TourHost;
+        if (!tourHost || query.length < 2) {
+            return [];
+        }
+        try {
+            const q = query.toLowerCase();
+            const eligible = await tourHost.GetEligibleTours();
+            const matched = eligible
+                .filter(({ Tour }) =>
+                    Tour.Name.toLowerCase().includes(q) ||
+                    (Tour.Description ?? '').toLowerCase().includes(q) ||
+                    Tour.TourKey.toLowerCase().includes(q)
+                )
+                .slice(0, 3);
+            return matched.map(({ Tour }) => {
+                const nav: OmnibarNavPayload = {
+                    kind: 'tour',
+                    tourKey: Tour.TourKey,
+                    guideMode: Tour.DefaultGuideMode,
+                };
+                return {
+                    type: 'tour',
+                    id: `tour:${Tour.TourKey}`,
+                    name: Tour.Name,
+                    displayName: Tour.Name,
+                    description: Tour.Description ?? `${Tour.Steps.length} steps`,
+                    icon: 'fa-solid fa-route',
+                    data: { [OMNIBAR_NAV_KEY]: nav, group: 'Guided Tours' },
+                };
+            });
+        } catch {
+            return [];
+        }
     }
 
     private isOfflineMode(): boolean {

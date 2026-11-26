@@ -22,7 +22,7 @@
  * @module @memberjunction/task-graph
  */
 import { IMetadataProvider, DatabaseProviderBase, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
-import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/ai-core-plus';
+import { TERMINAL_TASK_GRAPH_STATUSES, type TerminalTaskGraphStatus } from '@memberjunction/graph';
 import { MachineTaskSQL } from './task-predicates';
 import { ReconciliationEvent } from './types';
 

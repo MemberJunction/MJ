@@ -13,6 +13,11 @@
 
 import { RegisterClass, SafeExpressionEvaluator, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
+    SelectOutgoingEdges,
+    type ConditionHold,
+    type IConditionEvaluator,
+} from '@memberjunction/graph';
+import {
     CollectDecisionStepKeys,
     DecisionHoldReason,
     DecisionReferencesIn,
@@ -20,15 +25,12 @@ import {
     ReadFlowDecisionStepConfiguration,
     ResolveDecisionState,
     ResolveDecisionStepAnswers,
-    SelectOutgoingEdges,
     ValidateTaskGraphSpec,
     type AgentDecisionAnswerSummary,
-    type ConditionHold,
     type DecisionStepAnswers,
     type FlowCompileResult,
     type FlowDecisionStepConfiguration,
     type GraphDecisions,
-    type IConditionEvaluator,
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';

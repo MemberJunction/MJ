@@ -121,7 +121,7 @@ export function ReadChannelInputs(value: unknown): Record<string, JSONObject> {
 
 export function ReadChrome(value: unknown): WidgetChrome {
   const text = ReadString(value)?.toLowerCase();
-  return text === 'orb' || text === 'console' ? text : 'auto';
+  return text === 'orb' || text === 'console' || text === 'bar' ? text : 'auto';
 }
 
 /** `on`/`off`/`ask`; anything else is the default, `ask`. */

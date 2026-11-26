@@ -146,6 +146,8 @@
     "@memberjunction/templates": "6.3.0-edge.2",
     "@memberjunction/testing-engine": "6.3.0-edge.2",
     "@memberjunction/testing-engine-base": "6.3.0-edge.2",
+    "@memberjunction/theme-engine": "6.3.0-edge.2",
+    "@memberjunction/tours-server": "6.3.0-edge.2",
     "@memberjunction/version-history": "6.3.0-edge.2",
     "@memberjunction/work-queue-core": "6.3.0-edge.2",
     "@memberjunction/work-queue-engine": "6.3.0-edge.2",
@@ -174,6 +176,7 @@
     "graphql-ws": "^5.14.0",
     "jsonwebtoken": "9.0.3",
     "jwks-rsa": "^3.2.2",
+    "lib0": "^0.2.99",
     "lru-cache": "^11.2.5",
     "mssql": "^12.2.0",
     "ora": "^8.0.1",
@@ -184,11 +187,9 @@
     "typedi": "^0.10.0",
     "uuid": "^13.0.0",
     "ws": "^8.19.0",
-    "lib0": "^0.2.99",
     "y-protocols": "^1.0.6",
     "yjs": "^13.6.24",
-    "zod": "^3.25.0",
-    "@memberjunction/theme-engine": "6.3.0-edge.2"
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@memberjunction/conversations-runtime": "6.3.0-edge.2",

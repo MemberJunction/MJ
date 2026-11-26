@@ -87,6 +87,23 @@ MemberJunction uses a comprehensive CSS custom property (design token) system de
 | `--mj-logo-wordmark` | Full logo with text |
 | `--mj-logo-color` | Loading spinner fill color |
 
+### Overlay Z-Index Ladder
+
+Never invent raw `z-index` numbers for overlay surfaces — always use the tokenized overlay rungs from `_tokens.scss` in ascending stacking order:
+
+| Token | Value | Purpose |
+|---|---|---|
+| `--mj-z-drawer` | `1000` | Slide-in drawer backdrop (panel sits at `calc(var(--mj-z-drawer) + 1)`) |
+| `--mj-z-tour-popover` | `1150` | Non-modal Guided Tour `Action` / `Beacon` popovers (above drawers & bespoke panels up to ~1101, below dialogs so popovers never obscure modals — WCAG 2.4.11) |
+| `--mj-z-dialog` | `1200` | `<mj-dialog>` modal backdrop (reachable even when launched from a drawer) |
+| `--mj-z-mobile-chrome` | `9999` | Mobile navigation drawer and bottom sheets |
+| `--mj-z-window` | `10000` | Floating `<mj-window>` containers |
+| `--mj-z-dialog-service` | `10001` | Imperative `MJDialogService` overlays |
+| `--mj-z-confirm-service` | `20000` | Imperative `MJConfirmService` confirmation dialogs |
+| `--mj-z-tour-modal` | `50000` | Modal Guided Tour `Spotlight` / `Modal` backdrop and card (above service dialogs/confirms, below omnibar and notification toasts) |
+| `--mj-z-omnibar` | `99999` | Command palette / omnibar search overlay |
+| `--mj-z-notification-toast` | `100000` | Global notification toasts |
+
 ## Common Hex → Token Mappings
 
 When migrating or reviewing code, use these mappings:
