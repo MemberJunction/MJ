@@ -3316,7 +3316,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->39f5161c28<!-- /gen:head -->
+- Head: <!-- gen:head -->41aca02a7d<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3576,6 +3576,10 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   through turbo at load 36. Outside §2.7; reported to the controller.
 - **Merged the PR branch** `ps/pr-5-agent-fp-input` @ `aebd2c4707` (items 4 and 5, D5-51) into the sub-branch
   as `e22e29a1f8` (no conflicts), per the controller, before the push.
+- **Merged the PR branch again** @ `020d86e373` (item 6) as `41aca02a7d`, no conflicts. Pre-push fast tier
+  `20261126-195157-15346`: red only `ai-agents` `DocumentToolLibrary.test.ts` R10-7 (time-budgeted grep, load 51–91;
+  10/10 alone twice). `20261126-212600-93631` (mirror lock held, one mirror at a time): red only
+  `sqlserver-dataprovider` `spCreateRecordChangeContract.test.ts` 30 s timeout at load 61; alone 2/2 (31.4 s file).
 - **LLM spend (§2.4 query, `RunAt >= 2026-11-26T09:20Z` on `MJ_PS_PR5_claude2`):** 166 prompt runs, **$0.191346**,
   464,078 tokens — all CodeGen's own LLM steps (93 `CodeGen: Check Constraint Parser` $0.182770, 1 Form Layout
   $0.003792, 1 Smart Field $0.004784) and 71 `Vector Sync Embedding` runs at $0 from MJAPI start. No agent run.
