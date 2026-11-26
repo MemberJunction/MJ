@@ -3499,11 +3499,12 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   | `RefusalKindOracle.evaluate` absent metadata check (`!FindEntityInfo(provider.Entities, 'MJ: Agent Decision Log')`) | Bypassed check (`&& false`) | Attack 8 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 8: treats missing MJ: Agent Decision Log...` — message regex `/0 rows\|not present\|absent/i` mismatch) | Yes (15/15 passed) |
 
 - **LLM spend:** `$0.00` (no database assigned to A7a; no LLM calls).
-- **Owed, not done by A7a (D5-A7a-1):** `PS_PR=5 tools/ps-env.sh mj sync push --dir=metadata --ci` on a fresh database
+- **Owed, not done by A7a (D5-A7a-1, D5-51):** `PS_PR=5 tools/ps-env.sh mj sync push --dir=metadata --ci` on a fresh database
   (including the §6 Exit `SELECT COUNT(*) FROM __mj.vwTests WHERE TypeID = <PS eval type>` check) and
   `ci-mirror --tier full` for A7a's files are owed and run at wave-1 integration on `MJ_PS_PR5_claudeint` by the
-  controller (no database or `.env.MJ_PS_PR5_*` is provisioned for DB-free wave-1 A7a).
-- **Rulings this milestone:** `D5-A7a-1` (controller ruling: DB-free A7a exit scope; `mj sync push` and `ci-mirror --tier full` owed at wave-1 integration on `MJ_PS_PR5_claudeint`).
+  controller (no database or `.env.MJ_PS_PR5_*` is provisioned for DB-free wave-1 A7a, and per controller ruling D5-51
+  `ci-mirror --tier full` runs once per integration, alone on the machine, rather than per milestone).
+- **Rulings this milestone:** `D5-A7a-1` (controller ruling: DB-free A7a exit scope; `mj sync push` and `ci-mirror --tier full` owed at wave-1 integration on `MJ_PS_PR5_claudeint`), `D5-51` (controller ruling: full-tier `ci-mirror` runs only at integration; milestone exit uses `milestone-exit`, touched-package unit tests, attack/exit checks, and `ci-mirror --tier fast`).
 
 ## 12. Refresh log (append-only)
 
