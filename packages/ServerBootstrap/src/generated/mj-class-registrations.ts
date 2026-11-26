@@ -1473,9 +1473,10 @@ import {
     RecordProcessRunNowServerOperation,
 } from '@memberjunction/record-set-processor';
 
-// @memberjunction/content-pipeline (23 classes)
+// @memberjunction/content-pipeline (25 classes)
 import {
     ArchiveExtractor,
+    BrowserLoginAccessDriver,
     CredentialAccessDriver,
     DeleteContentItemStage,
     DeleteStage,
@@ -1484,6 +1485,7 @@ import {
     EmbedContentItemStage,
     EmbedStage,
     ExtractStage,
+    FormLoginAccessDriver,
     GraphStage,
     HeadlessPageRenderer,
     HtmlExtractor,
@@ -3069,6 +3071,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RecordProcessResumeRunServerOperation,
     RecordProcessRunNowServerOperation,
     ArchiveExtractor,
+    BrowserLoginAccessDriver,
     CredentialAccessDriver,
     DeleteContentItemStage,
     DeleteStage,
@@ -3077,6 +3080,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     EmbedContentItemStage,
     EmbedStage,
     ExtractStage,
+    FormLoginAccessDriver,
     GraphStage,
     HeadlessPageRenderer,
     HtmlExtractor,
@@ -3260,12 +3264,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AgentEvalDriver,
     DecisionEvalDriver,
     PromptEvalDriver,
-    RubricCalibrationTestDriver,
-    ComputerUseAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    RubricCalibrationTestDriver,
+    ComputerUseAction,
     ComputerUseTestDriver,
     DecisionFeaturePipelineDriver,
     FeaturePipelineGoldenSetDriver,
@@ -3464,12 +3468,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
-    ScopedSearchAction,
-    SearchAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    ScopedSearchAction,
+    SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -3570,7 +3574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1482;
+export const CLASS_REGISTRATIONS_COUNT = 1484;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

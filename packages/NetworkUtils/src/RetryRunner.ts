@@ -53,6 +53,11 @@ export interface RetryHooks {
      * a retry passes through the same gate the first attempt did instead of bypassing it.
      */
     BeforeRetry?: (attempt: number, error: unknown) => Promise<void> | void;
+    /**
+     * The wait primitive between attempts. Default: a plain timer. A caller passes its own to make the wait
+     * abortable (a crawl told to stop) or deterministic (tests).
+     */
+    Sleep?: (ms: number) => Promise<void>;
 }
 
 /**
@@ -98,7 +103,7 @@ export async function WithRetry<T>(
                 onRetry(attempt, err, delayMs);
             }
 
-            await sleep(delayMs);
+            await (hooks?.Sleep ?? sleep)(delayMs);
             await hooks?.BeforeRetry?.(attempt, err);
         }
     }

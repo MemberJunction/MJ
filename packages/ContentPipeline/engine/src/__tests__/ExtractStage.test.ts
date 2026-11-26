@@ -245,6 +245,75 @@ describe('ExtractStage — an artifact that expands into other items', () => {
         expect(record.Children).toHaveLength(0);
     });
 
+    it("applies a single block's Fields to the record itself, each at its own confidence, skipping nulls", async () => {
+        stubFetch('<html>body</html>');
+        const published = new Date('2024-05-01T00:00:00Z');
+        blocks = {
+            Blocks: [
+                {
+                    Text: 'an article',
+                    Title: 'Block title',
+                    Fields: [
+                        { Field: 'Date', Value: published, Confidence: 7 },
+                        { Field: 'Decorator', Value: 'Journal of X, vol. 3', Confidence: 5 },
+                        { Field: 'ContentType', Value: null, Confidence: 9 },
+                    ],
+                },
+            ],
+        };
+        const record = itemAt('https://x.test/page.html');
+        await new ExtractStage().Run(record, contextWith());
+
+        expect(record.Get('Text')).toBe('an article');
+        expect(record.Get('Title')).toBe('Block title');
+        expect(record.GetField('Date')).toMatchObject({ Value: published, Confidence: 7, SetBy: 'Extract.Block' });
+        expect(record.GetField('Decorator')).toMatchObject({ Value: 'Journal of X, vol. 3', Confidence: 5, SetBy: 'Extract.Block' });
+        expect(record.GetField('ContentType')).toBeUndefined();
+        expect(record.Children).toHaveLength(0);
+    });
+
+    it('lets a Fields date compete on confidence with another stage, and replace an earlier Extract', async () => {
+        stubFetch('<html>body</html>');
+        const listed = new Date('2020-01-01T00:00:00Z');
+        const read = new Date('2024-05-01T00:00:00Z');
+        blocks = { Blocks: [{ Text: 'an article', Fields: [{ Field: 'Date', Value: read, Confidence: 4 }] }] };
+
+        const fromDiscover = itemAt('https://x.test/page.html');
+        fromDiscover.Propose('Date', listed, 5, 'Discover.RSS');
+        await new ExtractStage().Run(fromDiscover, contextWith());
+        expect(fromDiscover.Get('Date')).toBe(listed);
+
+        // As loaded from the database: last run's Extract value, not changed in this run.
+        const reextracted = itemAt('https://x.test/page.html');
+        reextracted.Restore('Date', listed, 9, 'Extract.Block');
+        await new ExtractStage().Run(reextracted, contextWith());
+        expect(reextracted.Get('Date')).toBe(read);
+    });
+
+    it('keeps block.Title over a Fields Title of equal confidence, and yields to a more confident one', async () => {
+        stubFetch('<html>body</html>');
+        blocks = { Blocks: [{ Text: 'x', Title: 'Block title', TitleConfidence: 6, Fields: [{ Field: 'Title', Value: 'Fields title', Confidence: 6 }] }] };
+        const tie = itemAt('https://x.test/page.html');
+        await new ExtractStage().Run(tie, contextWith());
+        expect(tie.Get('Title')).toBe('Block title');
+
+        blocks = { Blocks: [{ Text: 'x', Title: 'Block title', TitleConfidence: 6, Fields: [{ Field: 'Title', Value: 'Fields title', Confidence: 8 }] }] };
+        const stronger = itemAt('https://x.test/page.html');
+        await new ExtractStage().Run(stronger, contextWith());
+        expect(stronger.Get('Title')).toBe('Fields title');
+    });
+
+    it('still gives a container child its Fields as listing data, and leaves the container without them', async () => {
+        stubFetch('<html>body</html>');
+        const published = new Date('2024-05-01T00:00:00Z');
+        blocks = { Blocks: [{ Text: 'first', Key: 'a', Fields: [{ Field: 'Date', Value: published, Confidence: 4 }] }, { Text: 'second', Key: 'b' }] };
+        const record = itemAt('https://x.test/bundle.html');
+        await new ExtractStage().Run(record, contextWith());
+
+        expect(record.Get('Date')).toBeNull();
+        expect(record.Children[0].GetField('Date')).toMatchObject({ Value: published, SetBy: 'Listing.Block' });
+    });
+
     it('gives a split child its PARENT date, not the moment of the split', async () => {
         stubFetch('<html>body</html>');
         const authored = new Date('2020-01-01T00:00:00Z');

@@ -4,8 +4,8 @@
  * @module @memberjunction/content-pipeline
  */
 
-import { HttpGet } from '@memberjunction/network-utils';
-import { AccessArtifact } from '@memberjunction/content-pipeline-base';
+import { HttpGet, HttpHead } from '@memberjunction/network-utils';
+import { AccessArtifact, AccessHeadersFor } from '@memberjunction/content-pipeline-base';
 
 /** What to fetch. */
 export interface FetchRequest {
@@ -14,6 +14,13 @@ export interface FetchRequest {
     SourceURL?: string;
     /** The run's session for the source, if it has one. */
     Access?: AccessArtifact | null;
+    /** The `User-Agent` to send (`Configuration.Website.UserAgent`). Extract always sets one (`ResolveWebFetchSettings` defaults it). */
+    UserAgent?: string;
+    /**
+     * The most bytes to read (`Configuration.Website.MaxResponseBytes`). A body past it fails the fetch while it is
+     * read, as a lasting error (the item will not get smaller). Unset: no limit.
+     */
+    MaxBytes?: number;
     Signal: AbortSignal;
 }
 
@@ -34,16 +41,40 @@ export async function FetchContent(request: FetchRequest): Promise<FetchResponse
     const access = SessionApplies(request) ? request.Access : null;
     const response = await HttpGet<ArrayBuffer>(request.URL, {
         ResponseType: 'arraybuffer',
-        ValidateUrl: true,
-        StripHeadersOnCrossOriginRedirect: true,
-        Signal: request.Signal,
-        Headers: access?.Headers ? { ...access.Headers } : undefined,
-        Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
+        ...requestOptions(request, access),
+        MaxResponseBytes: request.MaxBytes,
     });
     return {
         Content: new Uint8Array(response.Data),
         ContentType: response.Headers['content-type'],
         ResolvedURL: response.Url || request.URL,
+    };
+}
+
+/**
+ * What a HEAD says an address serves, without downloading it: its content type, or undefined when the server does
+ * not answer HEAD (some refuse it) or does not say. Used to keep a PDF away from a page renderer.
+ */
+export async function ProbeContentType(request: FetchRequest): Promise<string | undefined> {
+    const access = SessionApplies(request) ? request.Access : null;
+    try {
+        const response = await HttpHead(request.URL, { ...requestOptions(request, access), ThrowOnError: false });
+        return response.Ok ? response.Headers['content-type'] : undefined;
+    } catch {
+        return undefined;
+    }
+}
+
+/** The SSRF guard, the signal, the User-Agent and the session (when it belongs on this URL): its headers for this URL's origin. */
+function requestOptions(request: FetchRequest, access: AccessArtifact | null | undefined) {
+    const headers = AccessHeadersFor(access, request.URL);
+    return {
+        ValidateUrl: true,
+        StripHeadersOnCrossOriginRedirect: true,
+        Signal: request.Signal,
+        UserAgent: request.UserAgent,
+        Headers: headers,
+        Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
     };
 }
 

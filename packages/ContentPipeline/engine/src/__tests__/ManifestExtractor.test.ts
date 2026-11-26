@@ -60,6 +60,7 @@ describe('reading delimited text', () => {
     });
 
     it('reads tab-separated text and drops empty lines', () => {
+        expect(ParseDelimited('a,b\n1,2\n3,4', ',', 1)).toEqual([['a', 'b']]);
         expect(ParseDelimited('a\tb\n\n1\t2', '\t')).toEqual([
             ['a', 'b'],
             ['1', '2'],
@@ -116,6 +117,110 @@ describe('the manifest extractor', () => {
         await expect(new ManifestExtractor().Extract(request(MANIFEST, OPTIONS, { Signal: controller.signal }))).rejects.toThrow(
             /manifest extraction stopped/,
         );
+    });
+});
+
+describe('the manifest extractor deciding from the header', () => {
+    const DATASET = 'Region,Revenue\nNorth,100\nSouth,"1,200"';
+    const BETTY: ManifestOptions = {
+        DetectByHeader: true,
+        DetectionColumns: ['ContentLink', 'ContentText', 'UserLink'],
+        LinkColumn: 'ContentLink',
+        FallbackLinkColumns: ['UserLink'],
+        TextColumn: 'ContentText',
+        TitleColumn: 'Title',
+        KeyColumns: [['UserLink', 'Title'], 'UserLink', 'Title'],
+        KeyAsURL: true,
+    };
+
+    it('reads a dataset as one document, as the plain-text read would, when detection is on', async () => {
+        const result = await new ManifestExtractor().Extract(request(DATASET, { ...OPTIONS, DetectByHeader: true }));
+
+        expect(result).toEqual({ Blocks: [{ Text: DATASET }], IsFallback: true });
+    });
+
+    it('needs no row limit to read a dataset as a document', async () => {
+        const result = await new ManifestExtractor().Extract(request(DATASET, { ...OPTIONS, DetectByHeader: true }, { Tuning: { MaxArchiveMembers: null } }));
+        expect(result.Blocks).toHaveLength(1);
+    });
+
+    it('reads nothing from a dataset whose bytes are not plausible text', async () => {
+        const garbage = String.fromCharCode(...Array.from({ length: 40 }, (_, i) => i % 8));
+        const result = await new ManifestExtractor().Extract(request(garbage, { ...OPTIONS, DetectByHeader: true }));
+        expect(result.Blocks).toEqual([]);
+    });
+
+    it('still expands a manifest when detection is on and the header has the link or text column', async () => {
+        const result = await new ManifestExtractor().Extract(request(MANIFEST, { ...OPTIONS, DetectByHeader: true }));
+        expect(result.IsContainer).toBe(true);
+        expect(result.Blocks).toHaveLength(3);
+    });
+
+    it('with detection off, a dataset is still read as a manifest and fails on the missing columns, as before', async () => {
+        await expect(new ManifestExtractor().Extract(request(DATASET, OPTIONS))).rejects.toThrow(/no column named 'link', 'Body'/);
+    });
+
+    it('detects by the explicit detection columns, not the link and text columns, when they are given', async () => {
+        const byOther = { ...OPTIONS, DetectByHeader: true, DetectionColumns: ['UserLink'] };
+        const notManifest = await new ManifestExtractor().Extract(request(MANIFEST, byOther));
+        expect(notManifest.IsContainer).toBeUndefined();
+        expect(notManifest.Blocks).toHaveLength(1);
+
+        const manifest = await new ManifestExtractor().Extract(request('Title,userlink\nGuide,https://x.test/g', { ...BETTY }));
+        expect(manifest.IsContainer).toBe(true);
+        expect(manifest.Blocks[0]).toMatchObject({ URL: 'https://x.test/g', Text: '' });
+    });
+
+    it('treats configured columns the header lacks as empty when detection is on', async () => {
+        const result = await new ManifestExtractor().Extract(request('ContentText\nJust text', BETTY));
+        expect(result.Blocks).toEqual([expect.objectContaining({ Text: 'Just text', URL: undefined, Key: 'row-1' })]);
+    });
+
+    it('fetches a row without text from its fallback link, but never gives a text row a fallback link', async () => {
+        const csv = ['ContentLink,UserLink,ContentText,Title', ',https://x.test/page,,Page', ',https://x.test/page,Body,Section'].join('\n');
+        const result = await new ManifestExtractor().Extract(request(csv, { ...BETTY, KeyAsURL: false }));
+
+        expect(result.Blocks[0]).toMatchObject({ URL: 'https://x.test/page', Text: '' });
+        expect(result.Blocks[1]).toMatchObject({ URL: undefined, Text: 'Body', Key: 'https://x.test/page | Section' });
+    });
+
+    it("identifies rows by Betty's rule: ContentLink, else UserLink, else UserLink | Title for a text row, else Title", async () => {
+        const csv = [
+            'ContentLink,UserLink,ContentText,Title',
+            'https://x.test/doc.pdf,https://x.test/landing,,Doc',
+            ',https://x.test/landing,,Landing',
+            ',https://x.test/landing,Inline text,Inline',
+            ',,Bare text,Bare',
+        ].join('\n');
+        const result = await new ManifestExtractor().Extract(request(csv, BETTY));
+
+        expect(result.Blocks.map((b) => b.URL)).toEqual([
+            'https://x.test/doc.pdf',
+            'https://x.test/landing',
+            'https://x.test/landing | Inline',
+            'Bare',
+        ]);
+    });
+
+    it('tries key columns in order and skips a composite with a missing part or a column the header lacks', async () => {
+        const options: ManifestOptions = { TextColumn: 'Body', KeyColumns: ['Missing', ['Area', 'Code'], 'Code'] };
+        const result = await new ManifestExtractor().Extract(request('Body,Area,Code\nA,North,7\nB,,8\nC,,', options));
+
+        expect(result.Blocks.map((b) => b.Key)).toEqual(['North | 7', '8', 'row-3']);
+        expect(result.Blocks.every((b) => b.URL === undefined)).toBe(true); // KeyAsURL off: the URL comes from the manifest
+    });
+
+    it('joins a composite key with the configured separator, and prefers KeyColumn to KeyColumns', async () => {
+        const csv = 'Body,ID,Area,Code\nA,,North,7\nB,P-2,South,8';
+        const result = await new ManifestExtractor().Extract(
+            request(csv, { TextColumn: 'Body', KeyColumn: 'ID', KeyColumns: [['Area', 'Code']], KeySeparator: '/' }),
+        );
+        expect(result.Blocks.map((b) => b.Key)).toEqual(['North/7', 'P-2']);
+    });
+
+    it('never makes a bare position a URL, even with KeyAsURL', async () => {
+        const result = await new ManifestExtractor().Extract(request('Body\nA', { TextColumn: 'Body', KeyAsURL: true }));
+        expect(result.Blocks[0]).toMatchObject({ URL: undefined, Key: 'row-1' });
     });
 });
 
@@ -221,6 +326,35 @@ describe('Extract expanding a manifest', () => {
 
         expect(record.Children).toHaveLength(0);
         expect(String(record.Get('Text'))).toContain('Annual Report'); // read as plain text, a dataset
+    });
+
+    it('with header detection, reads a dataset as the document itself and a manifest as its rows', async () => {
+        const detect = { ...RUN, ExtractorOptions: { Manifest: { ...OPTIONS, DetectByHeader: true } } };
+        fetchContent.mockResolvedValue({ Content: new TextEncoder().encode('Region,Revenue\nNorth,100'), ResolvedURL: undefined });
+        const dataset = manifestItem();
+
+        const outcome = await new ExtractStage().Run(dataset, contextWith(detect));
+
+        expect(outcome.Status).toBe('Complete');
+        expect(dataset.Children).toHaveLength(0);
+        expect(dataset.Get('Text')).toBe('Region,Revenue\nNorth,100');
+
+        fetchContent.mockResolvedValue({ Content: new TextEncoder().encode(MANIFEST), ResolvedURL: undefined });
+        const manifest = manifestItem();
+        await new ExtractStage().Run(manifest, contextWith(detect));
+        expect(manifest.Children).toHaveLength(3);
+    });
+
+    it('gives a keyed text row the manifest URL plus its key, or the key itself with KeyAsURL', async () => {
+        fetchContent.mockResolvedValue({ Content: new TextEncoder().encode('Body,UserLink,Title\nText,https://x.test/l,T'), ResolvedURL: undefined });
+        const keyed = { TextColumn: 'Body', KeyColumns: [['UserLink', 'Title']] };
+        const plain = manifestItem();
+        await new ExtractStage().Run(plain, contextWith({ ...RUN, ExtractorOptions: { Manifest: keyed } }));
+        expect(plain.Children[0].Identity.EphemeralID).toBe('https://x.test/manifest.csv#https://x.test/l | T');
+
+        const asURL = manifestItem();
+        await new ExtractStage().Run(asURL, contextWith({ ...RUN, ExtractorOptions: { Manifest: { ...keyed, KeyAsURL: true } } }));
+        expect(asURL.Children[0].Identity.EphemeralID).toBe('https://x.test/l | T');
     });
 
     it('records manifest row fields as listing data so high-confidence titles survive the linked document Extract', async () => {

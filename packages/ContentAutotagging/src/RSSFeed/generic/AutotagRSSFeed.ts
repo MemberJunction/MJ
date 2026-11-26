@@ -7,7 +7,7 @@ import { RSSItem } from './RSS.types';
 import { HttpGet, HttpHead } from '@memberjunction/network-utils';
 import crypto from 'crypto';
 import Parser from 'rss-parser';
-import { AccessArtifact, ConfidenceScale, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
+import { AccessArtifact, AccessHeadersFor, ConfidenceScale, DiscoverRequest, DiscoveredItem } from '@memberjunction/content-pipeline-base';
 
 /**
  * Autotag provider for RSS and Atom feeds. Parses feed items, follows article
@@ -304,7 +304,7 @@ export class AutotagRSSFeed extends AutotagBase {
             ValidateUrl: validateUrl,
             StripHeadersOnCrossOriginRedirect: true,
             Signal: signal,
-            Headers: access?.Headers ? { ...access.Headers } : undefined,
+            Headers: AccessHeadersFor(access, url),
             Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
         });
         const feed = await new Parser().parseString(Data);

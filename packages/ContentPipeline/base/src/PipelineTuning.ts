@@ -5,12 +5,19 @@
  * @module @memberjunction/content-pipeline-base
  */
 
+import { DEFAULT_EMPTY_PAGE_TEXT_CHARS } from './render/BasePageRenderer.js';
+
 /** The knobs a run may override. All optional. */
 export interface PipelineTuning {
     /** How often Discover reports progress, in items. Default 25. */
     ProgressEveryItems?: number;
     /** Share of a last-resort plain-text read that must be printable, 0–1. Default 0.85. */
     MinimumPrintableRatio?: number;
+    /**
+     * Below this many characters of visible text, an HTML page counts as an empty shell its scripts fill in: the
+     * `WhenEmpty` render policy renders it. Default 200.
+     */
+    EmptyPageTextChars?: number;
     /** Most characters an extractor returns for one block. Unset means no limit. */
     MaxBlockCharacters?: number;
     /** Most members an archive tree may unpack into. No default: an archive is refused rather than unpacked unbounded. */
@@ -54,6 +61,7 @@ export type ResolvedPipelineTuning = Required<
 export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMembers' | 'MaxArchiveBytes' | 'DiscoverWalkBudgetMs'> = {
     ProgressEveryItems: 25,
     MinimumPrintableRatio: 0.85,
+    EmptyPageTextChars: DEFAULT_EMPTY_PAGE_TEXT_CHARS,
     MaxBlockCharacters: null,
     MaxArchiveDepth: 3,
     MaxSyncRemovalShare: 0.5,
@@ -61,6 +69,11 @@ export const DefaultPipelineTuning: Omit<ResolvedPipelineTuning, 'MaxArchiveMemb
     RetryBackoffBaseMs: 60_000,
     RetryBackoffMaxMs: 3_600_000,
 };
+
+/** Whether a configured value sets anything: not null, undefined or a blank string. */
+export function IsSetValue(value: unknown): boolean {
+    return value !== undefined && value !== null && !(typeof value === 'string' && value.trim().length === 0);
+}
 
 /**
  * Read a run's tuning, merging one or more configuration objects from lowest precedence to highest
@@ -75,22 +88,28 @@ export function ResolveTuning(...configurations: (Readonly<Record<string, unknow
         }
         const optionsObj = configuration.Options as Record<string, unknown> | undefined;
         const candidate = (configuration.Tuning ?? optionsObj?.Tuning) as PipelineTuning | undefined;
-        if (candidate && typeof candidate === 'object') {
-            Object.assign(raw, candidate);
+        if (candidate && typeof candidate === 'object' && !Array.isArray(candidate)) {
+            // Only what a layer actually sets: a null or blank value leaves the layers below to decide.
+            for (const [key, value] of Object.entries(candidate)) {
+                if (IsSetValue(value)) {
+                    (raw as Record<string, unknown>)[key] = value;
+                }
+            }
         }
     }
     return {
-        ProgressEveryItems: positiveInteger(raw.ProgressEveryItems) ?? DefaultPipelineTuning.ProgressEveryItems,
+        ProgressEveryItems: PositiveInteger(raw.ProgressEveryItems) ?? DefaultPipelineTuning.ProgressEveryItems,
         MinimumPrintableRatio: ratio(raw.MinimumPrintableRatio) ?? DefaultPipelineTuning.MinimumPrintableRatio,
-        MaxBlockCharacters: positiveInteger(raw.MaxBlockCharacters),
-        MaxArchiveMembers: positiveInteger(raw.MaxArchiveMembers),
-        MaxArchiveBytes: positiveInteger(raw.MaxArchiveBytes),
-        MaxArchiveDepth: positiveInteger(raw.MaxArchiveDepth) ?? DefaultPipelineTuning.MaxArchiveDepth,
+        EmptyPageTextChars: PositiveInteger(raw.EmptyPageTextChars) ?? DefaultPipelineTuning.EmptyPageTextChars,
+        MaxBlockCharacters: PositiveInteger(raw.MaxBlockCharacters),
+        MaxArchiveMembers: PositiveInteger(raw.MaxArchiveMembers),
+        MaxArchiveBytes: PositiveInteger(raw.MaxArchiveBytes),
+        MaxArchiveDepth: PositiveInteger(raw.MaxArchiveDepth) ?? DefaultPipelineTuning.MaxArchiveDepth,
         MaxSyncRemovalShare: ratio(raw.MaxSyncRemovalShare) ?? DefaultPipelineTuning.MaxSyncRemovalShare,
         ClockSkewOverlapMs: nonNegativeInteger(raw.ClockSkewOverlapMs) ?? DefaultPipelineTuning.ClockSkewOverlapMs,
-        RetryBackoffBaseMs: positiveInteger(raw.RetryBackoffBaseMs) ?? DefaultPipelineTuning.RetryBackoffBaseMs,
-        RetryBackoffMaxMs: positiveInteger(raw.RetryBackoffMaxMs) ?? DefaultPipelineTuning.RetryBackoffMaxMs,
-        DiscoverWalkBudgetMs: positiveInteger(raw.DiscoverWalkBudgetMs),
+        RetryBackoffBaseMs: PositiveInteger(raw.RetryBackoffBaseMs) ?? DefaultPipelineTuning.RetryBackoffBaseMs,
+        RetryBackoffMaxMs: PositiveInteger(raw.RetryBackoffMaxMs) ?? DefaultPipelineTuning.RetryBackoffMaxMs,
+        DiscoverWalkBudgetMs: PositiveInteger(raw.DiscoverWalkBudgetMs),
     };
 }
 
@@ -109,7 +128,8 @@ export function RetryDelayMs(retryCount: number, tuning: RetryBackoff): number {
     return Math.min(tuning.RetryBackoffBaseMs * 2 ** doublings, max);
 }
 
-function positiveInteger(value: unknown): number | null {
+/** A positive number, floored to an integer, else null: how a configured count or duration is read. */
+export function PositiveInteger(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 

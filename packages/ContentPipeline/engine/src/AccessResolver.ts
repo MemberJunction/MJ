@@ -28,25 +28,16 @@ import {
     AccessProbeResult,
     AccessRequest,
     BaseAccessDriver,
+    ConfiguredPath,
+    ConfiguredValue,
     DEFAULT_ACCESS_ROLE,
+    NonEmptyString,
+    SourceLayers,
 } from '@memberjunction/content-pipeline-base';
 import { ContentSourceConfigurationResolver, ResolvedSourceConfiguration } from './ContentSourceConfigurationResolver.js';
 
 /** The registered key of {@link CredentialAccessDriver}. */
 export const CREDENTIAL_ACCESS_DRIVER = 'Credential';
-
-/** How a source's Configuration names its access driver and maps roles to credentials. */
-interface AccessConfiguration {
-    /** Overrides the Content Source Type's driver for this one source. */
-    AccessDriverKey?: string;
-    /**
-     * Role → the `MJ: Credentials` record to open that role's session with, by name or id.
-     *
-     * A mapping, never a secret. This is in Configuration rather than in ContentSourceParam rows
-     * because those are documented as legacy.
-     */
-    AccessCredentials?: Record<string, string>;
-}
 
 /** A session held for the life of a run. */
 interface CachedSession {
@@ -286,15 +277,7 @@ export class AccessResolver {
         resolved: ResolvedSourceConfiguration,
         role: string,
     ): Promise<Readonly<Record<string, unknown>>> {
-        const runAccess = this.runConfiguration as AccessConfiguration;
-        const sourceAccess = resolved.Configuration as AccessConfiguration;
-        const settingsAccess = resolved.Settings as AccessConfiguration;
-        const typeAccess = resolved.TypeConfiguration as AccessConfiguration;
-        const reference =
-            runAccess.AccessCredentials?.[role] ??
-            sourceAccess.AccessCredentials?.[role] ??
-            settingsAccess.AccessCredentials?.[role] ??
-            typeAccess.AccessCredentials?.[role];
+        const reference = NonEmptyString(ConfiguredPath(SourceLayers(resolved, this.runConfiguration), ['AccessCredentials', role]));
         if (!reference) {
             return {};
         }
@@ -318,22 +301,11 @@ export class AccessResolver {
     }
 
     /**
-     * Unified precedence order:
-     * Run `Configuration.AccessDriverKey` → Content Source `Configuration.AccessDriverKey` → Content Source Type `Configuration.AccessDriverKey`.
+     * `AccessDriverKey`, which overrides the Content Source Type's driver: run, then source, then its settings, then the
+     * source type (the pipeline's one precedence order, `ConfiguredValue`).
      */
     private driverKeyFor(resolved: ResolvedSourceConfiguration): string | null {
-        const fromRun = (this.runConfiguration as AccessConfiguration).AccessDriverKey;
-        if (typeof fromRun === 'string' && fromRun.length > 0) {
-            return fromRun;
-        }
-        const own =
-            (resolved.Configuration as AccessConfiguration).AccessDriverKey ??
-            (resolved.Settings as AccessConfiguration).AccessDriverKey;
-        if (typeof own === 'string' && own.length > 0) {
-            return own;
-        }
-        const fromType = resolved.TypeConfiguration.AccessDriverKey;
-        return typeof fromType === 'string' && fromType.length > 0 ? fromType : null;
+        return NonEmptyString(ConfiguredValue(SourceLayers(resolved, this.runConfiguration), 'AccessDriverKey')) ?? null;
     }
 
     /** Whether an artifact has passed its expiry. */

@@ -368,10 +368,38 @@ export type SafeFetchInit = RequestInit & {
      * Redirects are followed by hand here, so the browser rule that strips `Authorization` on a
      * cross-origin hop does not apply — the caller's headers go wherever the chain leads. A caller
      * sending credentials (an API key, a session cookie) sets this so a source that redirects to a
-     * third party cannot collect them.
+     * third party cannot collect them. Headers an {@link SafeFetchInit.OnRedirect} hook returns for a
+     * hop are that hook's choice for the hop's URL and are sent as given.
      */
     StripHeadersOnCrossOriginRedirect?: boolean;
+    /**
+     * Called at each redirect hop, before it is followed (the next URL is checked like every hop, before it is fetched), with the hop's
+     * response, its URL and the next one. It returns what the next request changes, or nothing to send it as before:
+     * e.g. the cookies the hop set, or a POST turned into a GET after a 303. Throwing stops the chain.
+     */
+    OnRedirect?: (hop: RedirectHop) => RedirectChange | undefined;
 };
+
+/** One redirect a {@link SafeFetch} is about to follow. */
+export interface RedirectHop {
+    /** The redirect response: its status and headers (its body is already released). */
+    Response: Response;
+    /** The URL that answered with the redirect. */
+    From: URL;
+    /** Where it points, resolved (checked by the SSRF guard before it is fetched). */
+    To: URL;
+    /** The method the next request would use. */
+    Method: string;
+}
+
+/** What the next request of a redirect chain changes. */
+export interface RedirectChange {
+    Method?: string;
+    /** The next request's body; `null` drops it. */
+    Body?: BodyInit | null;
+    /** The next request's headers, replacing the previous ones. */
+    Headers?: Record<string, string>;
+}
 
 /**
  * A drop-in replacement for `fetch` that is safe against SSRF. **This is the function to reach for**
@@ -423,19 +451,22 @@ export type SafeFetchInit = RequestInit & {
  */
 export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<Response> {
     const maxRedirects = init?.MaxRedirects ?? 5;
-    const { MaxRedirects: _ignored, StripHeadersOnCrossOriginRedirect: stripOnCrossOrigin, ...fetchInit } = init ?? {};
+    const { MaxRedirects: _ignored, StripHeadersOnCrossOriginRedirect: stripOnCrossOrigin, OnRedirect: onRedirect, ...fetchInit } = init ?? {};
     let originalOrigin: string | null = null;
 
     let currentUrl = rawUrl;
     let redirectCount = 0;
+    // Headers the OnRedirect hook chose for this hop are its decision for that URL, not the caller's to strip.
+    let headersFromHook = false;
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
         const validated = await AssertPublicUrl(currentUrl);
         originalOrigin ??= validated.origin;
-        if (stripOnCrossOrigin && validated.origin !== originalOrigin) {
+        if (stripOnCrossOrigin && validated.origin !== originalOrigin && !headersFromHook) {
             delete fetchInit.headers;
         }
+        headersFromHook = false;
         const response = await fetch(validated.href, { ...fetchInit, redirect: "manual" });
 
         if (!REDIRECT_STATUS_CODES.has(response.status)) {
@@ -448,14 +479,23 @@ export async function SafeFetch(rawUrl: string, init?: SafeFetchInit): Promise<R
             return response;
         }
 
+        // Release the intermediate response body first, so a bad Location or a hook that throws leaks no socket.
+        void response.body?.cancel();
         if (redirectCount >= maxRedirects) {
-            void response.body?.cancel();
             throw new Error(`Exceeded maximum of ${maxRedirects} redirects while fetching ${rawUrl}`);
         }
 
-        // Release the intermediate response body before following the next hop.
-        void response.body?.cancel();
+        const next = new URL(location, validated);
+        if (onRedirect) {
+            const change: RedirectChange = onRedirect({ Response: response, From: validated, To: next, Method: fetchInit.method ?? "GET" }) ?? {};
+            if (change.Method !== undefined) fetchInit.method = change.Method;
+            if (change.Body !== undefined) fetchInit.body = change.Body;
+            if (change.Headers !== undefined) {
+                fetchInit.headers = change.Headers;
+                headersFromHook = true;
+            }
+        }
         redirectCount++;
-        currentUrl = new URL(location, validated).href;
+        currentUrl = next.href;
     }
 }

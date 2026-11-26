@@ -68,6 +68,13 @@ export interface DiscoverRequest {
     Parameters: Readonly<Record<string, string>>;
     /** The source's full parsed `Configuration`. */
     Configuration: Readonly<Record<string, unknown>>;
+    /**
+     * The run's `Configuration` (a Record Process run's options), which outranks the source's. Absent when the walk
+     * was not started by a run. See {@link SourceConfigurationLayers}.
+     */
+    RunConfiguration?: Readonly<Record<string, unknown>>;
+    /** The Content Source Type's `Configuration`, which the source's own settings outrank. */
+    TypeConfiguration?: Readonly<Record<string, unknown>>;
     /** The run's session for this source, or null when it needs none. */
     Access?: AccessArtifact | null;
     /**

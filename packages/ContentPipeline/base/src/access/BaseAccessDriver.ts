@@ -23,8 +23,8 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { ResolveRegistered } from '../ResolveRegistered.js';
 
 /** What a driver is told in order to open a session. */
 export interface AccessRequest {
@@ -77,14 +77,77 @@ export interface AccessArtifact {
      */
     Origins?: readonly string[];
     /**
+     * Headers that differ by origin, keyed by origin (`https://host[:port]`), sent with {@link Headers} to that origin
+     * only. A login session's cookies travel here: each origin gets exactly the cookies RFC 6265 sends it, so a
+     * host-only or `Secure` cookie never reaches another origin. Read through {@link AccessHeadersFor}.
+     */
+    OriginHeaders?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+    /**
      * When this stops being valid.
      *
      * The resolver renews on expiry rather than on failure, so a long run does not discover its
      * token died by getting a 401 on record four hundred.
      */
     ExpiresAt?: Date;
-    /** Anything the driver's own fetcher needs that the generic shape cannot express. */
+    /**
+     * Anything the driver's own fetcher needs that the generic shape cannot express. A browser session that is
+     * not cookie-only puts its {@link SessionStorageState} under {@link ACCESS_STORAGE_STATE_EXTENSION}; the
+     * Headless renderer restores it per render.
+     */
     Extensions?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * The headers a session sends to `url`: its {@link AccessArtifact.Headers} plus, for the URL's origin, its
+ * {@link AccessArtifact.OriginHeaders}. Undefined when there are none. Call it only once the session is known to
+ * belong on the URL (its origin is one of the session's).
+ */
+export function AccessHeadersFor(access: AccessArtifact | null | undefined, url: string): Record<string, string> | undefined {
+    if (!access) {
+        return undefined;
+    }
+    let origin: string | null = null;
+    try {
+        origin = new URL(url).origin;
+    } catch {
+        origin = null;
+    }
+    const perOrigin = origin && access.OriginHeaders && Object.hasOwn(access.OriginHeaders, origin) ? access.OriginHeaders[origin] : undefined;
+    if (!access.Headers && !perOrigin) {
+        return undefined;
+    }
+    return { ...(access.Headers ?? {}), ...(perOrigin ?? {}) };
+}
+
+/** The {@link AccessArtifact.Extensions} key a browser session's {@link SessionStorageState} travels under. */
+export const ACCESS_STORAGE_STATE_EXTENSION = 'StorageState';
+
+/** One cookie of a {@link SessionStorageState} (Playwright's `storageState` shape). */
+export interface SessionStorageCookie {
+    Name: string;
+    Value: string;
+    Domain: string;
+    Path: string;
+    /** Unix time in seconds; -1 for a session cookie. */
+    Expires: number;
+    HttpOnly: boolean;
+    Secure: boolean;
+    SameSite: 'Strict' | 'Lax' | 'None';
+}
+
+/**
+ * A signed-in browser's state, for a site whose session is not cookie-only (a token in `localStorage`): its
+ * cookies and each origin's `localStorage`. Captured by a browser login, restored into each rendered page.
+ */
+export interface SessionStorageState {
+    Cookies: SessionStorageCookie[];
+    Origins: { Origin: string; LocalStorage: { Name: string; Value: string }[] }[];
+}
+
+/** The {@link SessionStorageState} an artifact carries, or null when it carries none (or something else under the key). */
+export function SessionStorageStateOf(artifact: AccessArtifact | null | undefined): SessionStorageState | null {
+    const state = artifact?.Extensions?.[ACCESS_STORAGE_STATE_EXTENSION] as SessionStorageState | undefined;
+    return state && Array.isArray(state.Cookies) && Array.isArray(state.Origins) ? state : null;
 }
 
 /** What a connectivity test concluded. */
@@ -148,14 +211,7 @@ export abstract class BaseAccessDriver {
 
     /** Resolve a registered driver by key, returning null rather than a hollow base instance. */
     public static Resolve(key: string): BaseAccessDriver | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAccessDriver>(
-            BaseAccessDriver,
-            key.trim(),
-        );
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BaseAccessDriver>(BaseAccessDriver, key);
     }
 }
 

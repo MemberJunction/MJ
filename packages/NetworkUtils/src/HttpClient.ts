@@ -18,7 +18,8 @@
  * wherever the URL is caller-controlled.
  */
 
-import { SafeFetch } from "./SSRFGuard.js";
+import { SafeFetch, SafeFetchInit } from "./SSRFGuard.js";
+import { CharsetOfContentType } from "./Charset.js";
 
 /** HTTP methods supported by {@link HttpRequest}. */
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS";
@@ -66,8 +67,13 @@ export interface HttpResponse<T = unknown> {
     Status: number;
     /** HTTP status text. */
     StatusText: string;
-    /** Response headers, lower-cased keys. */
+    /** Response headers, lower-cased keys. A repeated header is one comma-joined value; see {@link SetCookies}. */
     Headers: Record<string, string>;
+    /**
+     * Each `Set-Cookie` header on its own. They cannot be read from {@link Headers}: repeated headers are joined with
+     * commas there, and a cookie's `Expires` date holds a comma of its own. Always set by {@link HttpRequest}.
+     */
+    SetCookies?: string[];
     /** The final URL the response came from (after any redirects). */
     Url: string;
     /** True when `Status` is in the 2xx range. */
@@ -135,6 +141,21 @@ export interface HttpRequestConfig {
      * for axios's `auth` option. An explicit `Authorization` header takes precedence.
      */
     BasicAuth?: { Username: string; Password: string };
+    /**
+     * The `User-Agent` header to send. An explicit `User-Agent` in `Headers` takes precedence. Unset:
+     * the runtime's own (`node`).
+     */
+    UserAgent?: string;
+    /**
+     * The most bytes of response body to read. A body past it is refused WHILE it is read (and on a
+     * `Content-Length` that already says so), with an {@link HttpError} whose `IsTooLarge` is true, so a
+     * huge or endlessly streaming answer never sits in memory whole. An error answer (not 2xx) past it is not
+     * refused for its size: it gets no body (`Data` null) and keeps its status. Applies to the `text`, `json`,
+     * `arraybuffer` and `blob` response types; a `stream` is the caller's to bound. Unset: no limit.
+     */
+    MaxResponseBytes?: number;
+    /** With `ValidateUrl`, called at each redirect hop before it is followed (see `SafeFetchInit.OnRedirect`). */
+    OnRedirect?: SafeFetchInit["OnRedirect"];
 }
 
 /**
@@ -180,6 +201,8 @@ export class HttpError extends Error {
     public readonly IsTimeout: boolean;
     /** True when the caller's own `Signal` aborted the request — the `axios.isCancel` equivalent. */
     public readonly IsCancelled: boolean;
+    /** True when the response body was refused for passing the request's `MaxResponseBytes`. */
+    public readonly IsTooLarge: boolean;
 
     constructor(
         message: string,
@@ -192,6 +215,7 @@ export class HttpError extends Error {
             Method: HttpMethod;
             IsTimeout?: boolean;
             IsCancelled?: boolean;
+            IsTooLarge?: boolean;
         }
     ) {
         super(message);
@@ -204,6 +228,7 @@ export class HttpError extends Error {
         this.Method = details.Method;
         this.IsTimeout = details.IsTimeout ?? false;
         this.IsCancelled = details.IsCancelled ?? false;
+        this.IsTooLarge = details.IsTooLarge ?? false;
     }
 }
 
@@ -358,8 +383,69 @@ export async function DrainResponseBody(response: Response): Promise<void> {
     }
 }
 
-/** Reads and interprets a response body per the requested {@link HttpResponseType}. */
-async function ReadBody(response: Response, responseType: HttpResponseType): Promise<unknown> {
+/** Thrown inside {@link ReadBodyCapped} when a body passes its cap; turned into an {@link HttpError} by the caller. */
+class ResponseTooLargeError extends Error {
+    constructor(public readonly MaxBytes: number) {
+        super(`Response body exceeded ${MaxBytes} bytes`);
+        this.name = "ResponseTooLargeError";
+    }
+}
+
+/**
+ * A response body's bytes, refused past `maxBytes` WHILE READING. Checking a length after
+ * `arrayBuffer()` is no cap: `Content-Length` is optional and, under compression, describes the compressed
+ * size, so a small gzip inflates to gigabytes before any check runs.
+ */
+async function ReadBodyCapped(response: Response, maxBytes: number): Promise<ArrayBuffer> {
+    const declared = Number(response.headers.get("content-length") ?? 0);
+    if (declared > maxBytes) {
+        await DrainResponseBody(response);
+        throw new ResponseTooLargeError(maxBytes);
+    }
+    if (!response.body) {
+        return new ArrayBuffer(0);
+    }
+    const reader = response.body.getReader();
+    const parts: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) {
+            break;
+        }
+        total += value.byteLength;
+        if (total > maxBytes) {
+            await reader.cancel().catch(() => undefined);
+            throw new ResponseTooLargeError(maxBytes);
+        }
+        parts.push(value);
+    }
+    const buffer = new ArrayBuffer(total);
+    const bytes = new Uint8Array(buffer);
+    let offset = 0;
+    for (const part of parts) {
+        bytes.set(part, offset);
+        offset += part.byteLength;
+    }
+    return buffer;
+}
+
+/** Reads and interprets a response body per the requested {@link HttpResponseType}, refusing more than `maxBytes` when set. */
+async function ReadBody(response: Response, responseType: HttpResponseType, maxBytes?: number): Promise<unknown> {
+    if (maxBytes !== undefined && maxBytes >= 0 && responseType !== "none" && responseType !== "stream") {
+        const bytes = await ReadBodyCapped(response, maxBytes);
+        switch (responseType) {
+            case "arraybuffer":
+                return bytes;
+            case "blob":
+                return new Blob([bytes], { type: response.headers.get("content-type") ?? "" });
+            case "text":
+                return new TextDecoder(CharsetOfContentType(response.headers.get("content-type")) ?? "utf-8").decode(bytes);
+            case "json":
+            default:
+                return ParseJsonText(new TextDecoder("utf-8").decode(bytes));
+        }
+    }
     switch (responseType) {
         case "none":
             await response.body?.cancel();
@@ -373,19 +459,38 @@ async function ReadBody(response: Response, responseType: HttpResponseType): Pro
         case "text":
             return await response.text();
         case "json":
-        default: {
-            const text = await response.text();
-            if (text.length === 0) {
-                return null;
-            }
-            try {
-                return JSON.parse(text);
-            } catch {
-                // Not JSON despite the request — hand back the raw text rather than throwing,
-                // which matches how axios behaves when a server mislabels its content type.
-                return text;
-            }
+        default:
+            return ParseJsonText(await response.text());
+    }
+}
+
+/**
+ * The response's body per {@link ReadBody}. An ERROR answer (not 2xx) past `maxBytes` gives no body (null) instead of
+ * failing as too large: its status is what the caller acts on, and a large error page from a 503 or a 429 must stay a
+ * 503 or a 429 (worth retrying), not become a too-large refusal. Only a successful answer past the cap is refused.
+ */
+async function ReadResponseData(response: Response, responseType: HttpResponseType, maxBytes?: number): Promise<unknown> {
+    try {
+        return await ReadBody(response, responseType, maxBytes);
+    } catch (error) {
+        if (error instanceof ResponseTooLargeError && !response.ok) {
+            return null;
         }
+        throw error;
+    }
+}
+
+/** A JSON body's value; an empty body is null, and text that is not JSON is handed back as it is. */
+function ParseJsonText(text: string): unknown {
+    if (text.length === 0) {
+        return null;
+    }
+    try {
+        return JSON.parse(text);
+    } catch {
+        // Not JSON despite the request — hand back the raw text rather than throwing,
+        // which matches how axios behaves when a server mislabels its content type.
+        return text;
     }
 }
 
@@ -430,6 +535,9 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
     const url = ResolveUrl(config);
 
     const headers: Record<string, string> = { ...config.Headers };
+    if (config.UserAgent && !Object.keys(headers).some((k) => k.toLowerCase() === "user-agent")) {
+        headers["User-Agent"] = config.UserAgent;
+    }
 
     if (config.BasicAuth) {
         const hasAuthHeader = Object.keys(headers).some((k) => k.toLowerCase() === "authorization");
@@ -474,6 +582,7 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
                 signal: controller.signal,
                 MaxRedirects: maxRedirects,
                 StripHeadersOnCrossOriginRedirect: config.StripHeadersOnCrossOriginRedirect,
+                OnRedirect: config.OnRedirect,
             });
         } else {
             response = await fetch(url, {
@@ -487,13 +596,14 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
 
         const responseHeaders = HeadersToRecord(response.headers);
         // HEAD responses have no body, and a caller asking for JSON should not get a parse attempt.
-        const data = method === "HEAD" ? null : await ReadBody(response, responseType);
+        const data = method === "HEAD" ? null : await ReadResponseData(response, responseType, config.MaxResponseBytes);
 
         const result: HttpResponse<T> = {
             Data: data as T,
             Status: response.status,
             StatusText: response.statusText,
             Headers: responseHeaders,
+            SetCookies: response.headers.getSetCookie(),
             Url: response.url || url,
             Ok: response.status >= 200 && response.status < 300,
         };
@@ -518,6 +628,9 @@ export async function HttpRequest<T = unknown>(config: HttpRequestConfig): Promi
     } catch (error) {
         if (error instanceof HttpError) {
             throw error;
+        }
+        if (error instanceof ResponseTooLargeError) {
+            throw new HttpError(`Response from ${url} exceeded ${error.MaxBytes} bytes`, { Url: url, Method: method, IsTooLarge: true });
         }
         const aborted = controller.signal.aborted;
         const isCancelled = aborted && config.Signal?.aborted === true;

@@ -35,7 +35,9 @@
     "@memberjunction/record-set-processor-base": "6.3.0-edge.2",
     "@memberjunction/storage": "6.3.0-edge.2",
     "@memberjunction/tag-engine": "6.3.0-edge.2",
-    "jszip": "^3.10.1"
+    "cheerio": "^1.2.0",
+    "jszip": "^3.10.1",
+    "tough-cookie": "^6.0.0"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

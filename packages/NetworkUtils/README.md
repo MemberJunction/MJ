@@ -435,9 +435,37 @@ To test the guard itself, mock `node:dns` so a hostname resolves wherever you ne
 | `IsCancellationError` | `(e: unknown) => boolean` | Replaces `isCancel` |
 | `BuildQueryString` | `(query: Record<string, HttpQueryValue>) => string` | Query serialization |
 
+### Retry, rate limiting and content types
+
+Shared by the integration engine, the content pipeline's website crawl and anything else that talks to a rate-limited
+or unfamiliar server (moved here from `@memberjunction/integration-engine` and `@memberjunction/document-parsing`):
+
+| Export | Purpose |
+|---|---|
+| `ParseRetryAfterValue` / `ExtractRetryAfterFromError` | A `Retry-After` value in ms (delay-seconds or HTTP-date, capped at `MAX_HONORED_RETRY_AFTER_MS`), from a header or a thrown error |
+| `WithRetry(op, config, isRetryable, onRetry, hooks)` | Exponential backoff with jitter; `hooks.DelayForError` lets a `Retry-After` set the wait, `hooks.BeforeRetry` re-gates a retry, `hooks.Sleep` makes the wait abortable or fake |
+| `RateLimiter` | An adaptive token bucket per key (AIMD): `Acquire(key)`, `ReportThrottle(key, retryAfterMs)`, `ReportSuccess(key)`; injectable clock and sleep |
+| `IsTextContentType`, `IsPdfContentType`, `IsWordContentType`, `IsSpreadsheetContentType`, `IsImageContentType`, `IsDocumentContentType` | What a `Content-Type` means, in one place |
+
+`SafeFetch` (and `HttpRequest` with `ValidateUrl`) takes an `OnRedirect(hop)` hook: it sees each redirect before it is
+followed (the next hop is still checked by the SSRF guard) and may change the next request's method, body and
+headers, e.g. to carry a login's cookies or turn a POST into a GET after a 303.
+
+### Charsets
+
+| Export | Signature | Purpose |
+|---|---|---|
+| `CharsetOfContentType` | `(contentType) => string \| null` | The charset a `Content-Type` names, when `TextDecoder` knows it |
+| `KnownCharset` | `(label) => string \| null` | A charset label's canonical name, or null when unknown |
+
 ### Types
 
 `HttpMethod`, `HttpResponseType`, `HttpQueryValue`, `HttpResponse<T>`, `HttpRequestConfig`, `HttpClientOptions`.
+
+`HttpRequestConfig` also takes `UserAgent` (an explicit `User-Agent` header wins) and `MaxResponseBytes` (a successful
+body past it is refused while it is read, `HttpError.IsTooLarge`; an error answer past it keeps its status, with no
+body). `HttpResponse.SetCookies` lists each `Set-Cookie` header on its own (`Headers` joins repeats with commas, and a
+cookie's `Expires` date has one of its own).
 
 ## Security Considerations
 

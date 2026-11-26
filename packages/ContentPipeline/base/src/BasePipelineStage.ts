@@ -4,10 +4,10 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { StageContext, StageOutcome } from './Stage.types.js';
 import { WorkingRecord } from './WorkingRecord.js';
 import { WellKnownField, WorkingRecordEntity } from './WorkingRecord.types.js';
+import { ResolveRegistered } from './ResolveRegistered.js';
 
 /** What a stage reads and writes. Advisory: nothing enforces it. */
 export interface StageDeclaration {
@@ -96,10 +96,6 @@ export abstract class BasePipelineStage {
      * hollow base instance on an unknown key, which would make a typo in a Record Process silently do nothing.
      */
     public static Resolve(name: string): BasePipelineStage | null {
-        if (!name || name.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePipelineStage>(BasePipelineStage, name.trim());
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BasePipelineStage>(BasePipelineStage, name);
     }
 }

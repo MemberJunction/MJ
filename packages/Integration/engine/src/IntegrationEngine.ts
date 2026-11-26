@@ -38,7 +38,7 @@ import type {
     PostSyncSchemaPromotionCallback,
 } from './types.js';
 import { ClassifyError, IsRetryableError } from './types.js';
-import { WithRetry } from './RetryRunner.js';
+import { WithRetry } from '@memberjunction/network-utils';
 import { DecideKeylessRefusal, DescribeKeylessRefusal, MissingKeyFieldNames, type KeyFieldLike } from './KeylessRecordGuard.js';
 import { WithTimeout, OperationTimeoutError, DEFAULT_OPERATION_TIMEOUTS } from './BaseIntegrationConnector.js';
 import { ConnectorFactory } from './ConnectorFactory.js';
@@ -58,7 +58,7 @@ import { DetachString } from './DetachString.js';
 import { ComputeExcludedSourceNames } from './SyncDirectives.js';
 import { DescribeUnbindableFieldMaps, FindUnbindableFieldMaps } from './FieldMapValidation.js';
 import { PartitionRecords, PartitionRollupHash, DiffPartitions, PartitionKeyForIdentity } from './HashDiff.js';
-import { RateLimiter } from './RateLimiter.js';
+import { RateLimiter } from '@memberjunction/network-utils';
 import { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 import { mostRecentWinner, type RecencyWinner } from './ConflictRecency.js';
 import { IntegrationProgressEmitter } from '@memberjunction/integration-progress-artifacts';

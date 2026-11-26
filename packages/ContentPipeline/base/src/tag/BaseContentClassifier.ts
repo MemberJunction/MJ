@@ -9,8 +9,8 @@
  * @module @memberjunction/content-pipeline-base
  */
 
-import { MJGlobal } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { ResolveRegistered } from '../ResolveRegistered.js';
 
 /** What a classifier is given. */
 export interface ClassifyRequest {
@@ -84,13 +84,6 @@ export abstract class BaseContentClassifier {
 
     /** Resolve a registered classifier by key, returning null rather than a hollow base instance. */
     public static Resolve(key: string): BaseContentClassifier | null {
-        if (!key || key.trim().length === 0) {
-            return null;
-        }
-        const result = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseContentClassifier>(
-            BaseContentClassifier,
-            key.trim(),
-        );
-        return result.Resolved ? result.Instance : null;
+        return ResolveRegistered<BaseContentClassifier>(BaseContentClassifier, key);
     }
 }

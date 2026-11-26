@@ -45,6 +45,13 @@ and confidence scale (`Confidence`) through one precedence order, from most spec
 4. **Content Source Type / Content Type** (`ContentSourceType.Configuration` / `ContentType.Configuration`)
 5. **File Type / Default** (`ContentFileType.ExtractorKey`, capability detection, or the built-in default)
 
+Settings read from a source's own layers (web settings, access, `Tuning`, ...) use one order, implemented once in
+`ConfigurationLayers.ts` (`ConfiguredValue`, `ConfiguredPath`, `MergedWebsiteConfiguration`, `TuningFor`, `SourceLayers`):
+run, then source, then its `SourceSpecificConfiguration`, then the source type. A Discover driver gets the run's and
+the type's configuration on `DiscoverRequest.RunConfiguration` / `TypeConfiguration`. Every registered driver class
+(stages, access drivers, extractors, classifiers, synthesizers, renderers, render policies) is resolved by key
+through `ResolveRegistered`.
+
 ## The stage contract
 
 A stage extends `BasePipelineStage` and registers under its name; adding one is writing a class, never
@@ -83,7 +90,13 @@ future Record Set Processing → Work Queue bridge is an adapter, not a change t
   filtering, `SupportsExhaustiveWalk` for orphan sync, custom `Columns`, and per-item `Request` recipes)
   and Extract (`Fetch`).
 - **Extractors** (`extract/BaseContentExtractor.ts`): turn bytes into one or more text blocks, registered
-  by key and chosen by the extractor cascade.
+  by key and chosen by the extractor cascade. A single document's block `Fields` (its `Date`, `Decorator`) apply to
+  the item; a container's go to its children. `ExtractRequest.ContentType` carries the served content type (for a
+  text document's charset).
+- **Page renderers and render policies** (`render/`): `BasePageRenderer` loads a page as a browser builds it
+  (`PageRenderer`); `BasePageRenderPolicy` decides when (`PageRenderMode`: `Always` or `WhenEmpty`), with `IsDocumentContentType` (network-utils), `RendersAfterRefusal` and `LooksLikeEmptyPage`
+  (`Tuning.EmptyPageTextChars`). An `AccessArtifact` may carry a browser's `SessionStorageState`
+  (`Extensions.StorageState`) for a renderer to restore.
 - **Classifiers** (`tag/BaseContentClassifier.ts`): turn extracted text and an active taxonomy into tag
   observations and summary proposals, registered by key (`ManagedPrompt` by default).
 - **Graph overlay & concept synthesis** (`graph/`):

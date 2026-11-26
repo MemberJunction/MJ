@@ -51,6 +51,25 @@ outside a server, call `RegisterPipelineWorkType()` and `LoadContentPipelineStag
 Every stage resolves its settings in the same precedence order:
 **Item override → Run `Configuration` (`Options`) → Content Source → Content Source Type / Content Type → File Type / Default**.
 
+## Reading the web
+
+Web settings (`PageRenderer`, `PageRenderMode`, `PageRendererOptions`, `Website.*`) resolve through
+`ResolveWebFetchSettings` (in `content-pipeline-base`): run, then source, then its `SourceSpecificConfiguration`,
+then the source type, the same in Extract and the website crawl. This package provides:
+
+- **`HeadlessPageRenderer`** (`PageRenderer: 'Headless'`): Playwright Chromium with every request and redirect hop
+  checked by the SSRF guard, the session restored per page, and `PageRendererOptions` honoured. Launch arguments come
+  from `MJ_HEADLESS_CHROMIUM_ARGS` (or `HeadlessPageRenderer.LaunchArgs`).
+- **`FormLoginAccessDriver`** (`AccessDriverKey: 'FormLogin'`) and **`BrowserLoginAccessDriver`**
+  (`'BrowserLogin'`): sign in to a members-only site and hand the session on as cookies (and, for a browser login,
+  the browser's storage state for the session's origins). `LoginSession.ts` holds what they share; cookies are kept in a `tough-cookie` jar, and a form login's redirects go through `HttpRequest`'s SSRF-checked `OnRedirect` hook.
+- **`HtmlExtractor`** (charset from the BOM, the served `Content-Type`, then `<meta charset>`; `ExtractorOptions.Html.TitleSelector`)
+  and **`ManifestExtractor`** (`DetectByHeader`, `FallbackLinkColumns`, `KeyColumns`, `KeyAsURL`).
+
+When a page is rendered is the source's `BasePageRenderPolicy` (`PageRenderMode`, in `content-pipeline-base`).
+An extractor reading a single document may return its `Date` and `Decorator` as block `Fields`; Extract applies them
+to the item. Details: the guide's Stage 2.
+
 ## Hydrate and commit
 
 `WorkingRecordHydrator` and `WorkingRecordCommitter` are the only code that touches the database.

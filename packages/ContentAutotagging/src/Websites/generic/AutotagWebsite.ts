@@ -2,17 +2,56 @@ import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { ContentSourceTypeParamValue } from '../../Engine/generic/content.types';
 import { RunBudget } from '../../Engine/generic/RunBudget';
-import { RegisterClass, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global';
+import { RegisterClass, NormalizeUUID, FilterByUUIDs, IsPlainObject } from '@memberjunction/global';
 import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
-import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
+import {
+    MJContentSourceEntity,
+    MJContentItemEntity,
+    MJContentSourceEntity_IContentSourceConfiguration,
+    MJContentSourceEntity_IContentSourceWebsiteConfiguration,
+} from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
 import { HttpGet, HttpHead } from '@memberjunction/network-utils';
-import { BasePageRenderer, DiscoverRequest, DiscoveredItem, DiscoverWalkEnd } from '@memberjunction/content-pipeline-base';
-import { CrawlFetchers, CrawlFound, CrawlPage, DecodeCrawlState, WebsiteCrawl } from './WebsiteCrawl';
+import {
+    AccessHeadersFor,
+    BasePageRenderer,
+    BasePageRenderPolicy,
+    DiscoverConfigurationLayers,
+    DiscoverRequest,
+    DiscoveredItem,
+    DiscoverWalkEnd,
+    MergedWebsiteConfiguration,
+    ResolvedPipelineTuning,
+    SourceConfigurationLayers,
+    TuningFor,
+    ResolveWebFetchSettings,
+    WebFetchSettings,
+} from '@memberjunction/content-pipeline-base';
+import { CrawlFetchers, CrawlFound, CrawlOptions, DecodeCrawlState, WebsiteCrawl } from './WebsiteCrawl';
+import { CrawlScopeOptions } from './CrawlScope';
+import { WebsiteCrawlFetchers } from './WebsiteCrawlFetchers';
 import { URL } from 'url';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
+
+/** The `Website` settings a walk reads (`IContentSourceWebsiteConfiguration`), merged across the configuration layers. */
+type WebsiteSettings = MJContentSourceEntity_IContentSourceWebsiteConfiguration;
+
+/** The pause between pages when the source sets no `Website.CrawlDelayMs`: one request a second, to be polite. */
+const DEFAULT_CRAWL_DELAY_MS = 1000;
+
+/** The crawl settings a source may also set at the top of its settings (`SourceSpecificConfiguration`), not under `Website`. */
+const FLAT_CRAWL_SETTINGS = ['MaxDepth', 'URLPattern', 'RootURL', 'CrawlSitesInLowerLevelDomain', 'CrawlOtherSitesInTopLevelDomain'] as const;
+
+/** The HTTP options the crawl sends with a request to one URL. */
+interface CrawlRequestHttpOptions {
+    ValidateUrl?: boolean;
+    StripHeadersOnCrossOriginRedirect?: boolean;
+    Signal?: AbortSignal;
+    Headers?: Record<string, string>;
+    Query?: Record<string, string>;
+}
 
 @RegisterClass(AutotagBase, 'AutotagWebsite')
 export class AutotagWebsite extends AutotagBase {
@@ -338,55 +377,120 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
-    private activeDiscoverRequest?: DiscoverRequest;
+    /**
+     * A walk's crawl settings: the defaults, then the source type's declared defaults, then the merged `Website` of
+     * every layer (which wins; the source's flat settings are part of it, see {@link DiscoverCrawlLayers}).
+     */
+    private configureDiscoverCrawl(website: WebsiteSettings, typeDefaults: Map<string, ContentSourceTypeParamValue>): void {
+        this.applyDefaultCrawlSettings();
+        this.overlayCrawlParamsFromMap(typeDefaults);
+        this.applyWebsiteConfig(website);
+    }
 
     /**
      * Crawl the site for the pipeline, yielding each page found for Extract to fetch and hash (see
      * {@link WebsiteCrawl}): breadth-first within the root URL and pattern, optionally seeded from the site's
      * sitemaps, with pages loaded through the source's page renderer when it names one. A walk with a deadline
      * stops between pages and returns a resume token, and the next walk carries on from it.
+     *
+     * Everything a walk uses is resolved from its own request, never kept on the instance, so walks of different
+     * sources on one instance cannot hand one another their session or settings.
      */
     public async *Discover(request: DiscoverRequest): AsyncGenerator<DiscoveredItem, DiscoverWalkEnd | void, undefined> {
-        const configuration = request.Configuration as MJContentSourceEntity_IContentSourceConfiguration;
-        this.configureCrawl(configuration.Website, new Map(Object.entries(request.Parameters)));
-        const website = configuration.Website ?? {};
-        const crawl = new WebsiteCrawl(
-            {
-                SeedURL: request.URL,
-                RootURL: this.RootURL ?? this.getBasePath(request.URL),
-                Pattern: this.URLPattern ? new RegExp(this.URLPattern) : /.*/,
-                MaxDepth: this.MaxDepth,
-                FollowLinks: this.CrawlSitesInLowerLevelDomain,
-                SiblingFanOut: this.CrawlOtherSitesInTopLevelDomain,
-                UseSitemaps: website.UseSitemaps === true,
-                SitemapURLs: website.SitemapURLs,
-                MaxPages: website.MaxPages ?? null,
-                DelayMs: typeof website.CrawlDelayMs === 'number' && website.CrawlDelayMs >= 0 ? website.CrawlDelayMs : 1000,
-                Since: request.Since ?? null,
-                Deadline: request.Deadline ?? null,
-                Signal: request.Signal,
-            },
-            this.crawlFetchers(request, configuration.PageRenderer, website.RenderTimeoutMs),
-        );
-        this.activeDiscoverRequest = request;
-        try {
-            const run = crawl.Run(this.usableResumeToken(request));
-            for (;;) {
-                const next = await run.next();
-                if (next.done) {
-                    const end = next.value as { ResumeToken?: string };
-                    return end.ResumeToken ? { ResumeToken: end.ResumeToken } : undefined;
-                }
-                const found = next.value as CrawlFound;
-                // A sitemap page carries its own lastmod; any other page is asked over HTTP.
-                if (request.Since && !found.LastModified && (await this.isUnmodifiedSince(found.URL, request.Since))) {
-                    continue;
-                }
-                yield { URL: found.URL };
+        // Every setting resolves as Extract resolves it: run, then source, then its settings, then the source type.
+        const layers = DiscoverCrawlLayers(request);
+        const website = MergedWebsiteConfiguration(layers) as WebsiteSettings;
+        this.configureDiscoverCrawl(website, this.typeDefaultCrawlParams(request));
+        const tuning = TuningFor(layers);
+        const crawl = this.CreateCrawl(this.crawlOptions(request, website), this.CreateCrawlFetchers(request, ResolveWebFetchSettings(layers), tuning));
+        const run = crawl.Run(this.usableResumeToken(request));
+        for (;;) {
+            const next = await run.next();
+            if (next.done) {
+                const end = next.value as { ResumeToken?: string };
+                return end.ResumeToken ? { ResumeToken: end.ResumeToken } : undefined;
             }
-        } finally {
-            this.activeDiscoverRequest = undefined;
+            // The crawl has fetched each page and left out those unchanged since `Since` (by `Last-Modified`, or a
+            // sitemap's `lastmod`), so no page is asked about again here.
+            const found = next.value as CrawlFound;
+            yield { URL: found.URL };
         }
+    }
+
+    /**
+     * The crawl settings the source type's declared defaults filled into `request.Parameters` (a setting the source
+     * left empty): the lowest layer, below every `Website` setting. What the source's settings set themselves is a
+     * layer of {@link DiscoverCrawlLayers}, ranked with the others.
+     */
+    private typeDefaultCrawlParams(request: DiscoverRequest): Map<string, ContentSourceTypeParamValue> {
+        const own = SettingsOf(request);
+        const defaults = new Map<string, ContentSourceTypeParamValue>();
+        for (const key of FLAT_CRAWL_SETTINGS) {
+            const value = request.Parameters[key];
+            if (value !== undefined && IsUnset(own?.[key])) {
+                defaults.set(key, value);
+            }
+        }
+        return defaults;
+    }
+
+    /**
+     * The crawl a walk runs. A product overrides it to run its own {@link WebsiteCrawl} subclass (its own link
+     * reading, scope or politeness) with the options and fetchers this driver resolved.
+     */
+    protected CreateCrawl(options: CrawlOptions, fetchers: CrawlFetchers): WebsiteCrawl {
+        return new WebsiteCrawl(options, fetchers);
+    }
+
+    /**
+     * How the crawl reads pages and sitemaps (see {@link WebsiteCrawlFetchers}): through the source's page renderer as
+     * its render policy decides, else over HTTP with the SSRF guard and the session applied to its own origins. A
+     * product overrides it to read the web its own way (another fetcher, a proxy).
+     */
+    protected CreateCrawlFetchers(request: DiscoverRequest, web: WebFetchSettings, tuning: ResolvedPipelineTuning): CrawlFetchers {
+        const renderer = web.PageRenderer ? BasePageRenderer.Resolve(web.PageRenderer) : null;
+        if (web.PageRenderer && !renderer) {
+            throw new Error(`PageRenderer '${web.PageRenderer}' is not registered. Check that the package registering it has been loaded.`);
+        }
+        const sourceOrigin = this.originOf(request.URL);
+        return new WebsiteCrawlFetchers({
+            HttpOptions: (url) => this.buildCrawlHttpOptions(url, request),
+            Renderer: renderer,
+            RenderPolicy: BasePageRenderPolicy.Resolve(web.PageRenderMode),
+            EmptyPageTextChars: tuning.EmptyPageTextChars,
+            RenderOptions: web.PageRendererOptions,
+            RenderTimeoutMs: web.RenderTimeoutMs,
+            RenderAccess: (url) => ({
+                Access: this.sessionAppliesToUrl(request, url) ? request.Access : null,
+                AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : sourceOrigin ? [sourceOrigin] : [],
+            }),
+            UserAgent: web.UserAgent,
+            MaxResponseBytes: web.MaxResponseBytes,
+            Signal: request.Signal,
+        });
+    }
+
+    /** The crawl's options: this driver's crawl settings (after `configureCrawl`) and the walk's. */
+    private crawlOptions(request: DiscoverRequest, website: WebsiteSettings): CrawlOptions {
+        return {
+            ...this.scopeOptions(website),
+            Concurrency: website.Concurrency,
+            CheckLeafPages: website.CheckLeafPages,
+            Politeness: website.RateLimit,
+            SeedURL: request.URL,
+            RootURL: this.RootURL ?? this.getBasePath(request.URL),
+            Pattern: this.URLPattern ? new RegExp(this.URLPattern) : /.*/,
+            MaxDepth: this.MaxDepth,
+            FollowLinks: this.CrawlSitesInLowerLevelDomain,
+            SiblingFanOut: this.CrawlOtherSitesInTopLevelDomain,
+            UseSitemaps: website.UseSitemaps === true,
+            SitemapURLs: website.SitemapURLs,
+            MaxPages: website.MaxPages ?? null,
+            DelayMs: typeof website.CrawlDelayMs === 'number' && website.CrawlDelayMs >= 0 ? website.CrawlDelayMs : DEFAULT_CRAWL_DELAY_MS,
+            Since: request.Since ?? null,
+            Deadline: request.Deadline ?? null,
+            Signal: request.Signal,
+        };
     }
 
     /** The resume token, when it is one this crawler wrote; otherwise the walk starts again from the seed. */
@@ -403,83 +507,36 @@ export class AutotagWebsite extends AutotagBase {
         }
     }
 
+    /** The crawl's URL-normalization, trap and include/exclude settings, as the source set them. */
+    private scopeOptions(website: WebsiteSettings): CrawlScopeOptions {
+        return {
+            MergeWwwAndScheme: website.MergeWwwAndScheme,
+            StripTrackingParams: website.StripTrackingParams,
+            StripQueryParams: website.StripQueryParams,
+            DedupCanonical: website.DedupCanonical,
+            DedupRedirects: website.DedupRedirects,
+            LoopLimit: website.LoopLimit,
+            SkipCalendarPaths: website.SkipCalendarPaths,
+            IncludePatterns: website.IncludePatterns,
+            ExcludePatterns: website.ExcludePatterns,
+        };
+    }
+
     /**
-     * How the crawl reads pages and sitemaps. Pages go through the source's page renderer when it names one;
-     * otherwise, like sitemaps, over HTTP with the SSRF guard and the session applied to its own origins.
+     * The HTTP options a walk's request to `url` gets: SSRF-guarded, signal-aware, and with the walk's session only
+     * for its own origins (its headers for that origin: `AccessHeadersFor`). Without a walk (the legacy `Autotag`
+     * crawl), none.
      */
-    private crawlFetchers(request: DiscoverRequest, rendererKey: string | undefined, renderTimeoutMs: number | undefined): CrawlFetchers {
-        const renderer = rendererKey ? BasePageRenderer.Resolve(rendererKey) : null;
-        if (rendererKey && !renderer) {
-            throw new Error(`PageRenderer '${rendererKey}' is not registered. Check that the package registering it has been loaded.`);
-        }
-        const text = async (url: string): Promise<string | null> => {
-            try {
-                const response = await HttpGet<string>(url, { ResponseType: 'text', ThrowOnError: false, ...this.buildCrawlHttpOptions(url) });
-                return response.Status === 200 && typeof response.Data === 'string' ? response.Data : null;
-            } catch {
-                return null;
-            }
-        };
-        const page = async (url: string): Promise<CrawlPage | null> => {
-            try {
-                if (renderer) {
-                    const sourceOrigin = this.originOf(request.URL);
-                    const rendered = await renderer.Render({
-                        URL: url,
-                        Access: this.sessionAppliesToUrl(request, url) ? request.Access : null,
-                        AccessOrigins: request.Access?.Origins?.length ? request.Access.Origins : sourceOrigin ? [sourceOrigin] : [],
-                        TimeoutMs: renderTimeoutMs,
-                        Signal: request.Signal,
-                    });
-                    return { Html: rendered.Html, FinalURL: rendered.FinalURL, Status: rendered.Status };
-                }
-                const html = await text(url);
-                return html === null ? null : { Html: html, FinalURL: url, Status: 200 };
-            } catch (error) {
-                LogStatus(`AutotagWebsite: could not read ${url}: ${error instanceof Error ? error.message : String(error)}`);
-                return null;
-            }
-        };
-        return { Page: page, Text: text };
-    }
-
-    /** True when HTTP HEAD returns a valid `Last-Modified` header at or before `since`. */
-    private async isUnmodifiedSince(url: string, since: Date): Promise<boolean> {
-        try {
-            const response = await HttpHead(url, {
-                Timeout: 10000,
-                ThrowOnError: false,
-                ...this.buildCrawlHttpOptions(url),
-            });
-            const lastModified = response?.Headers?.['last-modified'] ?? response?.Headers?.['Last-Modified'];
-            if (!lastModified) {
-                return false;
-            }
-            const parsed = new Date(lastModified);
-            return !Number.isNaN(parsed.getTime()) && parsed.getTime() <= since.getTime();
-        } catch {
-            return false;
-        }
-    }
-
-    /** Build SSRF-guarded, signal-aware, same-origin-scoped HTTP options when crawling under Discover. */
-    private buildCrawlHttpOptions(url: string): {
-        ValidateUrl?: boolean;
-        StripHeadersOnCrossOriginRedirect?: boolean;
-        Signal?: AbortSignal;
-        Headers?: Record<string, string>;
-        Query?: Record<string, string>;
-    } {
-        const req = this.activeDiscoverRequest;
-        if (!req) {
+    private buildCrawlHttpOptions(url: string, request?: DiscoverRequest): CrawlRequestHttpOptions {
+        if (!request) {
             return {};
         }
-        const access = this.sessionAppliesToUrl(req, url) ? req.Access : null;
+        const access = this.sessionAppliesToUrl(request, url) ? request.Access : null;
         return {
             ValidateUrl: true,
             StripHeadersOnCrossOriginRedirect: true,
-            Signal: req.Signal,
-            Headers: access?.Headers ? { ...access.Headers } : undefined,
+            Signal: request.Signal,
+            Headers: AccessHeadersFor(access, url),
             Query: access?.QueryParameters ? { ...access.QueryParameters } : undefined,
         };
     }
@@ -957,4 +1014,56 @@ export class AutotagWebsite extends AutotagBase {
     protected async delay(ms: number) {
         return new Promise( resolve => setTimeout(resolve, ms) );
     }
+}
+
+/**
+ * A walk's configuration layers ({@link DiscoverConfigurationLayers}) with the crawl settings a source writes at the top
+ * of its settings (`SourceSpecificConfiguration.MaxDepth`, not `.Website.MaxDepth`) moved under the settings layer's
+ * `Website`, so they rank where that layer ranks: below the run's and the source's own `Configuration.Website`, above
+ * the source type's. A value under the settings' own `Website` wins over the same flat one.
+ */
+export function DiscoverCrawlLayers(request: DiscoverRequest): SourceConfigurationLayers {
+    const layers = DiscoverConfigurationLayers(request);
+    const settings = layers.Settings;
+    if (!settings) {
+        return layers;
+    }
+    const flat: Record<string, unknown> = {};
+    for (const key of FLAT_CRAWL_SETTINGS) {
+        const value = CoerceCrawlSetting(key, settings[key]);
+        if (value !== undefined) {
+            flat[key] = value;
+        }
+    }
+    const nested = IsPlainObject(settings.Website) ? (settings.Website as Record<string, unknown>) : {};
+    return { ...layers, Settings: { ...settings, Website: { ...flat, ...nested } } };
+}
+
+/** The source's own settings (`SourceSpecificConfiguration`), before any type default was filled in. */
+function SettingsOf(request: DiscoverRequest): Readonly<Record<string, unknown>> | undefined {
+    return DiscoverConfigurationLayers(request).Settings;
+}
+
+/** A flat crawl setting as `Website` types it (a form saves numbers and booleans as strings); undefined when unset or unreadable. */
+function CoerceCrawlSetting(key: (typeof FLAT_CRAWL_SETTINGS)[number], value: unknown): number | boolean | string | undefined {
+    if (IsUnset(value)) {
+        return undefined;
+    }
+    if (key === 'MaxDepth') {
+        const n = typeof value === 'number' ? value : Number(String(value).trim());
+        return Number.isFinite(n) ? n : undefined;
+    }
+    if (key === 'CrawlSitesInLowerLevelDomain' || key === 'CrawlOtherSitesInTopLevelDomain') {
+        if (typeof value === 'boolean') {
+            return value;
+        }
+        const text = String(value).trim().toLowerCase();
+        return text === 'true' || text === '1' || text === 'yes';
+    }
+    return typeof value === 'string' ? value.trim() : undefined;
+}
+
+/** Unset as the configuration layers read it: null, undefined or a blank string. */
+function IsUnset(value: unknown): boolean {
+    return value === undefined || value === null || (typeof value === 'string' && value.trim().length === 0);
 }

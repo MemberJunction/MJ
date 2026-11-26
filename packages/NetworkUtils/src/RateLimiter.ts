@@ -79,7 +79,9 @@ interface Bucket {
     frozenUntilMs: number;
 }
 
+/** Ceiling rate when the caller sets none: ten calls a second, a modest pace most APIs and sites allow. */
 const DEFAULT_TOKENS_PER_SEC = 10;
+/** Multiplicative decrease on a throttle: halve the rate, as TCP congestion control does (AIMD). */
 const DEFAULT_BACKOFF_FACTOR = 0.5;
 
 /**

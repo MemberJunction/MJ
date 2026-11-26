@@ -11553,6 +11553,9 @@ importers:
       '@memberjunction/global':
         specifier: 6.3.0-edge.2
         version: link:../../MJGlobal
+      '@memberjunction/network-utils':
+        specifier: 6.3.0-edge.2
+        version: link:../../NetworkUtils
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -11620,12 +11623,18 @@ importers:
       '@memberjunction/tag-engine':
         specifier: 6.3.0-edge.2
         version: link:../../AI/Knowledge/TagEngine
+      cheerio:
+        specifier: ^1.2.0
+        version: 1.2.0
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
       playwright:
         specifier: '>=1.48.0'
         version: 1.58.1
+      tough-cookie:
+        specifier: ^6.0.0
+        version: 6.0.0
     devDependencies:
       '@types/node':
         specifier: 24.10.11
@@ -12687,6 +12696,9 @@ importers:
       '@memberjunction/integration-progress-artifacts':
         specifier: 6.3.0-edge.2
         version: link:../progress-artifacts
+      '@memberjunction/network-utils':
+        specifier: 6.3.0-edge.2
+        version: link:../../NetworkUtils
     devDependencies:
       tsc-alias:
         specifier: ^1.8.16

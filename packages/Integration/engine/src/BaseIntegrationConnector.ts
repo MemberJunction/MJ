@@ -26,7 +26,7 @@ import type {
     OnProgressCallback,
 } from './types.js';
 import { ClassifyError } from './types.js';
-import { ExtractRetryAfterFromError } from './RetryAfter.js';
+import { ExtractRetryAfterFromError } from '@memberjunction/network-utils';
 import {
     DiscoverFromStream,
     PickKeyFromStats,
