@@ -3443,6 +3443,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - Rulings this milestone: D5-45 (seed texts and worlds), D5-46 (the CLI user, §2.2 step), D5-47 (what counts as
   first-ranked for the shipped agent; attack 4 and A7b attack 1 reworded).
 - 2026-11-26 — controller: owner-batch item 4 (LiveKitNative avatar decoder, output-side `-threads 1`, root cause by `-debug_ts`) merged from `--item4`; allowlist line added. Wave-1 rules D5-48 (each implementer commits its attack list red first, no separate attacker) and D5-49 (additive one-line barrel exports allowed in any wave-1 sub-branch; identical changeset bytes; controller regenerates both at integration).
+- 2026-11-26 — controller: merged `ps/pr-5-agent-fp-input--item4` into the PR branch.
 
 ## 12. Refresh log (append-only)
 
