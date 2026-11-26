@@ -62,10 +62,12 @@ export function ScrubHarnessSecrets(
         }
     }
 
+    // safe-replace: constant placeholder, no $ sequences
     scrubbed = scrubbed.replace(
         /\b(Password|Pwd)\s*=\s*([^;'"\s]+)/gi,
         `$1=${HARNESS_REDACTED_SECRET_PLACEHOLDER}`,
     );
+    // safe-replace: constant placeholder, no $ sequences
     scrubbed = scrubbed.replace(
         /([a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^:@/\s]+:)([^@/\s]+)(@)/g,
         `$1${HARNESS_REDACTED_SECRET_PLACEHOLDER}$3`,
@@ -77,10 +79,12 @@ export function ScrubHarnessSecrets(
             return `${leading}${flag} ${HARNESS_REDACTED_SECRET_PLACEHOLDER}`;
         },
     );
+    // safe-replace: constant placeholder, no $ sequences
     scrubbed = scrubbed.replace(
         /\b([A-Z0-9_]*(?:PASSWORD|PASSWD|SECRET|API_KEY|TOKEN|PRIVATE_KEY)[A-Z0-9_]*)\s*=\s*([^\r\n]+)/g,
         `$1=${HARNESS_REDACTED_SECRET_PLACEHOLDER}`,
     );
+    // safe-replace: constant placeholder, no $ sequences
     scrubbed = scrubbed.replace(
         /\b(?:ghp_[A-Za-z0-9_]{16,}|ghs_[A-Za-z0-9_]{16,}|github_pat_[A-Za-z0-9_]{16,}|sk-[A-Za-z0-9_-]{16,}|AIza[A-Za-z0-9_-]{20,})\b/g,
         HARNESS_REDACTED_SECRET_PLACEHOLDER,

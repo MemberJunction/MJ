@@ -911,6 +911,7 @@ export class HarnessAgentBase extends BaseAgent {
         this.adapter = null;
         this.sandboxHandle = null;
         this.sandboxProvider = null;
+        this.sessionEnvironment = {};
         this.turnIndex = 0;
     }
 
