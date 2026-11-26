@@ -88265,6 +88265,10 @@ export class MJQuery_ {
     @MaxLength(100)
     DefinitionFingerprint?: string;
         
+    @Field({nullable: true, description: "The user who owns this query: who created it, unless a holder of the Queries: Approve authorization reassigned it. Set by the server on create. A user whose only query grant is the UI role updates and deletes only queries they own. Queries that existed before this column got their creator from Record Changes, or the system user when none was recorded."}) 
+    @MaxLength(36)
+    OwnerUserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -88284,6 +88288,10 @@ export class MJQuery_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     ApprovedByUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    OwnerUser?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -88397,6 +88405,9 @@ export class CreateMJQueryInput {
     @Field({ nullable: true })
     DefinitionFingerprint: string | null;
 
+    @Field({ nullable: true })
+    OwnerUserID?: string;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -88508,6 +88519,9 @@ export class UpdateMJQueryInput {
 
     @Field({ nullable: true })
     DefinitionFingerprint?: string | null;
+
+    @Field({ nullable: true })
+    OwnerUserID?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

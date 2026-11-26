@@ -1,13 +1,15 @@
 /**
  * `CreateQueryExtended` / `UpdateQueryExtended`: a query-permission row that is not saved or not
- * deleted fails the mutation with the entity's own reason, instead of reporting success.
+ * deleted fails the mutation with the entity's own reason, instead of reporting success. Replacing a
+ * query's permissions needs Create and Delete on `MJ: Query Permissions`, checked before anything is
+ * written, and the stored rows are loaded and deleted as the caller.
  *
  * The provider is a stub; permission rows are stubs whose Save / Delete report failure on demand.
  */
 import 'reflect-metadata';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { RunViewParams } from '@memberjunction/core';
-import { QueryEngine } from '@memberjunction/core-entities';
+import type { RunViewParams, UserInfo } from '@memberjunction/core';
+import { QUERY_PERMISSIONS_REFUSAL } from '@memberjunction/core-entities';
 
 vi.mock('type-graphql', () => {
     const decoratorFactory = (..._args: unknown[]) => (..._decorated: unknown[]) => undefined;
@@ -67,11 +69,22 @@ class StubRecord {
 
 let failPermissionSave: boolean;
 let permissionWrites: string[];
+/** The caller's Create and Delete on `MJ: Query Permissions`. */
+let permissionGrants: { CanCreate: boolean; CanDelete: boolean };
+/** The stored permission rows a load of `MJ: Query Permissions` returns. */
+let storedPermissions: Array<ReturnType<typeof storedPermission>>;
+/** The user each load of `MJ: Query Permissions` ran as. */
+let permissionLoadUsers: Array<UserInfo | undefined>;
 
 const provider = {
     async GetEntityObject(entityName: string): Promise<StubRecord> { return new StubRecord(entityName); },
-    async RunView(_params: RunViewParams) {
-        return { Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
+    EntityByName(_name: string) {
+        return { GetUserPermisions: () => permissionGrants };
+    },
+    async RunView(params: RunViewParams, contextUser?: UserInfo) {
+        const results = params.EntityName === 'MJ: Query Permissions' ? storedPermissions : [];
+        if (params.EntityName === 'MJ: Query Permissions') permissionLoadUsers.push(contextUser);
+        return { Success: true, Results: results, RowCount: results.length, TotalRowCount: results.length, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' };
     },
     async RunViews(params: RunViewParams[]) {
         return params.map(() => ({ Success: true, Results: [], RowCount: 0, TotalRowCount: 0, ExecutionTime: 0, ErrorMessage: '', UserViewRunID: '' }));
@@ -84,20 +97,22 @@ const context = {
 } as unknown as AppContext;
 const pubSub = { publish: async () => undefined } as unknown as Parameters<MJQueryResolverExtended['CreateQueryExtended']>[2];
 
-/** A stored permission row whose Delete fails with the entity's reason. */
-function undeletablePermission() {
+/** A stored permission row; its Delete fails with the entity's reason when `deletes` is false. */
+function storedPermission(deletes: boolean) {
     return {
         RoleID: ROLE,
         LatestResult: { Message: 'Delete refused by row-level security', CompleteMessage: 'Delete refused by row-level security' },
-        Delete: async () => false,
+        Delete: async () => { if (deletes) permissionWrites.push('MJ: Query Permissions:delete'); return deletes; },
     };
 }
 
 beforeEach(() => {
     failPermissionSave = false;
     permissionWrites = [];
+    permissionGrants = { CanCreate: true, CanDelete: true };
+    storedPermissions = [];
+    permissionLoadUsers = [];
     vi.restoreAllMocks();
-    vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ GetQueryPermissions: () => [] } as unknown as QueryEngine);
 });
 
 describe('query permission writes report their failures', () => {
@@ -121,12 +136,65 @@ describe('query permission writes report their failures', () => {
     });
 
     it('an update whose old permission row is not deleted fails with the reason and saves no new row', async () => {
-        vi.spyOn(QueryEngine, 'Instance', 'get').mockReturnValue({ GetQueryPermissions: () => [undeletablePermission()] } as unknown as QueryEngine);
+        storedPermissions = [storedPermission(false)];
         const input = Object.assign(new UpdateQuerySystemUserInput(), { ID: QUERY_ID, Permissions: [{ RoleID: ROLE }] });
         const result = await new MJQueryResolverExtended().UpdateQueryExtended(input, context, pubSub);
 
         expect(result.Success).toBe(false);
         expect(result.ErrorMessage).toBe(`Failed to update query permissions: Failed to delete the query permission for role ${ROLE}: Delete refused by row-level security`);
         expect(permissionWrites).not.toContain('MJ: Query Permissions:save');
+    });
+});
+
+describe('replacing a query\'s permissions', () => {
+    it('is refused, before anything is written, for a caller without Create and Delete on MJ: Query Permissions', async () => {
+        permissionGrants = { CanCreate: false, CanDelete: false };
+        storedPermissions = [storedPermission(true)];
+        const input = Object.assign(new UpdateQuerySystemUserInput(), { ID: QUERY_ID, Permissions: [{ RoleID: ROLE }] });
+        const result = await new MJQueryResolverExtended().UpdateQueryExtended(input, context, pubSub);
+
+        expect(result).toEqual({ Success: false, ErrorMessage: QUERY_PERMISSIONS_REFUSAL });
+        expect(permissionWrites).toEqual([]);
+        expect(permissionLoadUsers).toEqual([]);
+    });
+
+    it.each([
+        ['Create only', { CanCreate: true, CanDelete: false }],
+        ['Delete only', { CanCreate: false, CanDelete: true }],
+    ])('is refused for a caller with %s', async (_label, grants) => {
+        permissionGrants = grants;
+        const input = Object.assign(new UpdateQuerySystemUserInput(), { ID: QUERY_ID, Permissions: [{ RoleID: ROLE }] });
+        const result = await new MJQueryResolverExtended().UpdateQueryExtended(input, context, pubSub);
+
+        expect(result).toEqual({ Success: false, ErrorMessage: QUERY_PERMISSIONS_REFUSAL });
+        expect(permissionWrites).toEqual([]);
+    });
+
+    it('is refused for that caller even when the update changes nothing else', async () => {
+        permissionGrants = { CanCreate: false, CanDelete: false };
+        const input = Object.assign(new UpdateQuerySystemUserInput(), { ID: QUERY_ID, Permissions: [] });
+        const result = await new MJQueryResolverExtended().UpdateQueryExtended(input, context, pubSub);
+
+        expect(result).toEqual({ Success: false, ErrorMessage: QUERY_PERMISSIONS_REFUSAL });
+        expect(permissionWrites).toEqual([]);
+    });
+
+    it('loads the stored rows as the caller and deletes them before saving the new ones', async () => {
+        storedPermissions = [storedPermission(true)];
+        const input = Object.assign(new UpdateQuerySystemUserInput(), { ID: QUERY_ID, Permissions: [{ RoleID: ROLE }] });
+        const result = await new MJQueryResolverExtended().UpdateQueryExtended(input, context, pubSub);
+
+        expect(result.ErrorMessage ?? '').toBe('');
+        expect(permissionLoadUsers).toEqual([context.userPayload.userRecord]);
+        expect(permissionWrites).toEqual(['MJ: Queries:save', 'MJ: Query Permissions:delete', 'MJ: Query Permissions:save']);
+    });
+
+    it('does not check the permission grant for an update that leaves the permissions alone', async () => {
+        permissionGrants = { CanCreate: false, CanDelete: false };
+        const input = Object.assign(new UpdateQuerySystemUserInput(), { ID: QUERY_ID, Name: 'Revenue' });
+        const result = await new MJQueryResolverExtended().UpdateQueryExtended(input, context, pubSub);
+
+        expect(result.ErrorMessage).not.toBe(QUERY_PERMISSIONS_REFUSAL);
+        expect(permissionWrites).toEqual(['MJ: Queries:save']);
     });
 });

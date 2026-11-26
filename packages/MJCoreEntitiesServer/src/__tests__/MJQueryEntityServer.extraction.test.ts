@@ -65,6 +65,8 @@ vi.mock('@memberjunction/core-entities', async (importOriginal) => {
         public get ProviderToUse() { return this.Provider; }
         public get RunViewProviderToUse() { return this.Provider; }
         public GetFieldByName(name: string): { Dirty: boolean } { return { Dirty: name === 'SQL' ? this.SQLDirty : false }; }
+        /** The save rules read single fields this way (the owner, cache validation SQL); these tests change only SQL. */
+        public FieldIsDirty(name: string): boolean { return name === 'SQL' ? this.SQLDirty : false; }
         public GetPlatformSQL(_platform: DatabasePlatform): string | null { return this.SQL; }
         public BuildCategoryPath(): string { return ''; }
         public async Save(): Promise<boolean> {

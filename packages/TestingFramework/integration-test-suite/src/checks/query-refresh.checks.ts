@@ -25,8 +25,9 @@
  *    foreign key is ON DELETE SET NULL), and a re-bind links it again. A disposable MJ: Entity
  *    Fields row stands in for the dropped column: a CodeGen column drop is not used, because it
  *    fails on the (EntityID, Sequence) unique index when it renumbers the remaining fields;
- *  - QR16: a caller who may read but not update MJ: Queries is refused exactly like one with no
- *    grant, single (dry run included) and bulk.
+ *  - QR16: a caller who may read MJ: Queries and update only the queries it owns, with no write on
+ *    their derived rows (the UI role), is refused exactly like one with no grant, single (dry run
+ *    included) and bulk.
  *
  * The checks run in array order: the schema changes come last. For QR4 one MJ: Companies field
  * carries an all-Allow field permission row (field-level security stays off, so nothing is
@@ -35,7 +36,7 @@
  * check stopped early, and drops `mjit_rebind`.
  */
 import { randomUUID } from 'node:crypto';
-import { UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { EntityPermissionType, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { DatabasePlatform, EntityInfo } from '@memberjunction/core';
 import type { MJEntityFieldPermissionEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import {
@@ -647,14 +648,19 @@ async function checkQr15DeletedEntityFieldIsCleared(ctx: IntegrationCheckContext
 // ─── QR16: partial CRUD is refused like no grant ────────────────────────────
 
 /**
- * A caller who may read MJ: Queries but not update it (the UI role) is refused exactly like a
- * caller with no grant: a single refresh, dry run included, reads like a missing query's refusal;
- * a bulk run reports the query NotPermitted and a missing ID Unavailable. Nothing is written.
+ * A caller who may read MJ: Queries and update only the queries it owns, with no Create, Update or
+ * Delete on the rows a refresh rewrites (the UI role), is refused exactly like a caller with no
+ * grant: a single refresh, dry run included, reads like a missing query's refusal; a bulk run
+ * reports the query NotPermitted and a missing ID Unavailable. Nothing is written.
  */
 async function checkQr16ReadOnlyCallerIsRefused(ctx: IntegrationCheckContext): Promise<void> {
     const reader = readOnlyUser(ctx, noGrantUser());
-    const queries = requireEntity(ctx, 'MJ: Queries').GetUserPermisions(reader);
-    AssertEqual(`${String(queries?.CanRead)}:${String(queries?.CanUpdate)}`, 'true:false', 'QR16: the reader may read MJ: Queries but not update it');
+    const queryEntity = requireEntity(ctx, 'MJ: Queries');
+    const queries = queryEntity.GetUserPermisions(reader);
+    const unfiltered = queryEntity.UserExemptFromRowLevelSecurity(reader, EntityPermissionType.Update);
+    AssertEqual(`${String(queries?.CanRead)}:${String(unfiltered)}`, 'true:false', 'QR16: the reader may read MJ: Queries, and a row filter narrows any update to its own queries');
+    const fields = requireEntity(ctx, 'MJ: Query Fields').GetUserPermisions(reader);
+    AssertEqual(String(!!fields?.CanCreate && !!fields?.CanUpdate && !!fields?.CanDelete), 'false', 'QR16: the reader may not write the rows a refresh rewrites');
     const star = queryOf('Star');
     const missingID = randomUUID().toUpperCase();
     const before = await SnapshotQueryRows(ctx, BUNDLE, [star.ID]);
@@ -690,7 +696,7 @@ export const QueryRefreshChecks: NamedCheck[] = [
     { Id: `${BUNDLE}.QR13`, Name: "QR13: dropping the view a query reads records Error with the server's message and keeps the SQL and fields", Fn: checkQr13DroppedViewRecordsError },
     { Id: `${BUNDLE}.QR14`, Name: 'QR14: a column going NOT NULL with a type change updates IsNullable and the type, and reports both', Fn: checkQr14NullabilityChange },
     { Id: `${BUNDLE}.QR15`, Name: 'QR15: deleting the entity field a query field points at nulls the link (ON DELETE SET NULL); a re-bind re-links it', Fn: checkQr15DeletedEntityFieldIsCleared },
-    { Id: `${BUNDLE}.QR16`, Name: 'QR16: a caller who may read but not update MJ: Queries is refused like a caller with no grant, single and bulk', Fn: checkQr16ReadOnlyCallerIsRefused },
+    { Id: `${BUNDLE}.QR16`, Name: 'QR16: a caller who may read MJ: Queries but not write what a refresh rewrites is refused like a caller with no grant, single and bulk', Fn: checkQr16ReadOnlyCallerIsRefused },
 ];
 
 for (const check of QueryRefreshChecks) {

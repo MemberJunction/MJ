@@ -3,7 +3,7 @@ import { CodeEditorComponent } from '@memberjunction/ng-code-editor';
 import { Subject } from 'rxjs';
 import { GroupByUUID, IndexByUUID, RegisterClass , UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
-import { Metadata, CompositeKey, RunQuery, RunQueryResult } from '@memberjunction/core';
+import { Metadata, CompositeKey, EntityPermissionType, RunQuery, RunQueryResult } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
 import { ResourceData, UserInfoEngine, MJQueryEntityExtended, MJQueryCategoryEntity, QueryEngine, ParseQuerySaveMessage, UserCanApproveQueries } from '@memberjunction/core-entities';
 import type { QueryDiagnosticLine } from '@memberjunction/core-entities';
@@ -1598,11 +1598,54 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
             : (message?.trim() || 'Save failed. Please check your inputs and try again.');
     }
 
-    /** True when the current user has permission to edit queries. */
-    public get CanEditQuery(): boolean {
+    /**
+     * True when the current user may edit every query: Update on `MJ: Queries` that no row filter
+     * narrows. The bulk refreshes, which write every query they cover, need this.
+     */
+    public get CanEditAllQueries(): boolean {
         const entity = this.metadata.EntityByName('MJ: Queries');
-        if (!entity || !this.metadata.CurrentUser) return false;
-        return entity.GetUserPermisions(this.metadata.CurrentUser).CanUpdate;
+        const user = this.metadata.CurrentUser;
+        if (!entity || !user) return false;
+        return entity.GetUserPermisions(user).CanUpdate && entity.UserExemptFromRowLevelSecurity(user, EntityPermissionType.Update);
+    }
+
+    /**
+     * True when the current user may edit this query: every query, or, when a row filter narrows
+     * their Update (the UI role's "UI: Own Queries"), the ones they own. The server checks the
+     * filter on every save; this only decides which edit buttons to show.
+     */
+    public CanEditQuery(query: MJQueryEntityExtended): boolean {
+        if (this.CanEditAllQueries) return true;
+        const entity = this.metadata.EntityByName('MJ: Queries');
+        const user = this.metadata.CurrentUser;
+        if (!entity || !user || !entity.GetUserPermisions(user).CanUpdate) return false;
+        return UUIDsEqual(query.OwnerUserID, user.ID);
+    }
+
+    /**
+     * The child entities a metadata refresh rewrites. The server refuses a refresh unless the user
+     * has Create, Update and Delete on each (`UserCanRefreshQueries`), so the buttons ask the same.
+     */
+    private static readonly REFRESH_CHILD_ENTITIES = ['MJ: Query Fields', 'MJ: Query Parameters', 'MJ: Query Entities', 'MJ: Query Dependencies'];
+
+    /** Whether the current user may write every row a metadata refresh rewrites. */
+    private get canWriteRefreshRows(): boolean {
+        const user = this.metadata.CurrentUser;
+        if (!user) return false;
+        return QueryBrowserResourceComponent.REFRESH_CHILD_ENTITIES.every(name => {
+            const permissions = this.metadata.EntityByName(name)?.GetUserPermisions(user);
+            return !!permissions && permissions.CanCreate && permissions.CanUpdate && permissions.CanDelete;
+        });
+    }
+
+    /** True when the current user may refresh the metadata of every query (the bulk refreshes). */
+    public get CanRefreshAllQueries(): boolean {
+        return this.CanEditAllQueries && this.canWriteRefreshRows;
+    }
+
+    /** True when the current user may refresh this query's metadata. */
+    public CanRefreshQuery(query: MJQueryEntityExtended): boolean {
+        return this.CanEditQuery(query) && this.canWriteRefreshRows;
     }
 
     // ========================================

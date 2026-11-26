@@ -33,8 +33,24 @@ import { QueryEngine } from '../engines/QueryEngine';
  */
 export type ApprovalState = 'Current' | 'NotApproved' | 'Stale';
 
+/**
+ * A query's material fields on its own row: what decides what it runs. The fingerprint covers
+ * these with the query's dialect and parameter rows.
+ */
+export const QUERY_DEFINITION_FIELD_NAMES = ['SQL', 'UsesTemplate', 'ExternalDataSourceID'] as const;
+
+/**
+ * A query's fields that decide what other queries compose when they reference it. Composition
+ * resolves `{{query:"Category/Name"}}` by path when the composing query runs, and only a
+ * `Reusable` query can be composed, so renaming or moving an Approved query, or making it
+ * reusable, changes what other Approved queries run. These are not in the fingerprint (a rename
+ * does not change what the query itself runs), but a change to them by a user who does not hold
+ * `Queries: Approve` returns an Approved query to Pending, like a definition change.
+ */
+export const QUERY_COMPOSITION_FIELD_NAMES = ['Name', 'CategoryID', 'Reusable'] as const;
+
 /** A query's material fields. */
-export type QueryDefinitionFields = Pick<MJQueryEntity, 'SQL' | 'UsesTemplate' | 'ExternalDataSourceID'>;
+export type QueryDefinitionFields = Pick<MJQueryEntity, typeof QUERY_DEFINITION_FIELD_NAMES[number]>;
 
 /** A query's child rows that are part of its definition: dialect variants and the parameter contract. */
 export interface QueryDefinitionRows {
@@ -195,6 +211,22 @@ export const QUERY_APPROVAL_REFUSAL =
  */
 export const QUERY_VALIDATION_SQL_REFUSAL =
     `Setting a query's cache validation SQL needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization. Save it without one, and someone who holds it can add it.`;
+
+/** Why the server refused a save that changes who owns an existing query. */
+export const QUERY_OWNER_REFUSAL =
+    `Changing who owns a query needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization.`;
+
+/**
+ * Why the server refused to delete a query that other records use: another query composes it, or
+ * another user's list is sourced from it. Deleting it would remove the composing queries'
+ * dependency rows and unlink those lists, records the deleting user could not write themselves.
+ */
+export const QUERY_DELETE_IN_USE_REFUSAL =
+    `This query is used by other queries or by other users' lists, so deleting it needs the '${APPROVE_QUERIES_AUTHORIZATION}' authorization.`;
+
+/** Why the server refused to replace a query's role permissions. */
+export const QUERY_PERMISSIONS_REFUSAL =
+    `Changing which roles may run a query needs Create and Delete permission on MJ: Query Permissions.`;
 
 /**
  * Whether this user may approve queries: they hold {@link APPROVE_QUERIES_AUTHORIZATION}, directly

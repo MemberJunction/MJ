@@ -142,7 +142,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
             { sectionKey: 'mJUserViewsApprovedByUserID', sectionName: 'User Views (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJDashboardsApprovedByUserID', sectionName: 'Dashboards (Approved By User ID)', isExpanded: false },
-            { sectionKey: 'mJQueries', sectionName: 'Queries', isExpanded: false },
+            { sectionKey: 'mJQueriesApprovedByUserID', sectionName: 'Queries (Approved By User ID)', isExpanded: false },
             { sectionKey: 'mJComponents', sectionName: 'Components', isExpanded: false },
             { sectionKey: 'mJAIBridgeAgentIdentities', sectionName: 'AI Bridge Agent Identities', isExpanded: false },
             { sectionKey: 'mJConversationsResolvedByUserID', sectionName: 'Conversations (Resolved By User)', isExpanded: false },
@@ -158,7 +158,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
             { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressionsRevokedByUserID', sectionName: 'Communication Suppressions (Revoked By User ID)', isExpanded: false },
-            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false }
+            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false },
+            { sectionKey: 'mJQueriesOwnerUserID', sectionName: 'Queries (Owner)', isExpanded: false }
         ]);
     }
 }

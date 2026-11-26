@@ -6,8 +6,11 @@
       "Type": "Allow",
       "CanRead": true,
       "CanCreate": true,
-      "CanUpdate": false,
-      "CanDelete": false
+      "CanUpdate": true,
+      "CanDelete": true,
+      "CreateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Queries",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Queries",
+      "DeleteRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Queries"
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: Queries&RoleID=@lookup:MJ: Roles.Name=UI&Type=Allow?create"

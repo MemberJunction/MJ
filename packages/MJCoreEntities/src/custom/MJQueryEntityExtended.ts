@@ -115,6 +115,22 @@ export class MJQueryEntityExtended extends MJQueryEntity {
         OnRemove: 'delete',
     });
 
+    /**
+     * A new query is owned by the current user. The server sets the owner of every query it creates
+     * from the user saving it anyway; this default lets a client read it before the save.
+     */
+    public override NewRecord(): boolean {
+        const result = super.NewRecord();
+        if (result) {
+            const currentUserID = this.ActiveUser?.ID;
+            if (currentUserID) {
+                this.OwnerUserID = currentUserID;
+                this.GetFieldByName('OwnerUserID')?.ResetNeverSetFlag();
+            }
+        }
+        return result;
+    }
+
     // ─── Child Relationship Getters (read-through from QueryEngine) ─────────────
 
     /** All field definitions for this query */

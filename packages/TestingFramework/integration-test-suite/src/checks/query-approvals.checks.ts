@@ -14,8 +14,8 @@
  */
 import { EntityPermissionType, Metadata, RunQuery, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import type { EntitySaveOptions, IRunQueryProvider, RunQueryParams, RunQueryResult } from '@memberjunction/core';
-import { GetQueryApprovalStateAsync, QueryEngine, UserCanApproveQueries } from '@memberjunction/core-entities';
-import type { MJQueryEntity, MJQueryParameterEntity } from '@memberjunction/core-entities';
+import { GetQueryApprovalStateAsync, QUERY_DELETE_IN_USE_REFUSAL, QueryEngine, UserCanApproveQueries } from '@memberjunction/core-entities';
+import type { MJQueryEntity, MJQueryParameterEntity, MJQueryPermissionEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { IntegrationCheckContext, NamedCheck } from '@memberjunction/testing-integration';
@@ -149,9 +149,65 @@ async function storedStatus(queryID: string, user: UserInfo): Promise<string | n
     return result.Results[0].Status;
 }
 
+/** The query's owner as stored, bypassing every cache. */
+async function storedOwner(queryID: string, user: UserInfo): Promise<string | null> {
+    const result = await new RunView().RunView<{ OwnerUserID: string | null }>({
+        EntityName: 'MJ: Queries', ExtraFilter: `ID='${EscapeSQLString(queryID)}'`,
+        Fields: ['OwnerUserID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    Assert(result.Success && result.Results.length === 1, `query ${queryID} did not read back: ${result.ErrorMessage}`);
+    return result.Results[0].OwnerUserID;
+}
+
+/** An active user other than the harness user, to own a query the UI user does not. */
+async function anotherUserID(ctx: IntegrationCheckContext): Promise<string> {
+    const result = await new RunView().RunView<{ ID: string }>({
+        EntityName: 'MJ: Users', ExtraFilter: `IsActive = 1 AND ID <> '${EscapeSQLString(ctx.User.ID)}'`,
+        Fields: ['ID'], ResultType: 'simple', MaxRows: 1,
+    }, ctx.User);
+    Assert(result.Success && result.Results.length === 1, `another active user is required to own a query and was not found: ${result.ErrorMessage}`);
+    return result.Results[0].ID;
+}
+
+/** The ID of a role, by name (case-insensitive). */
+function roleID(ctx: IntegrationCheckContext, name: string): string {
+    const role = ctx.Provider.Roles.find(r => r.Name?.trim().toLowerCase() === name.toLowerCase());
+    Assert(!!role, `the '${name}' role is required and was not found`);
+    return role!.ID;
+}
+
+/** Shares a query with a role, as the holder (an `MJ: Query Permissions` row). */
+async function sharePermission(ctx: IntegrationCheckContext, queryID: string, roleIDToShare: string): Promise<void> {
+    const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+    const permission = await md.GetEntityObject<MJQueryPermissionEntity>('MJ: Query Permissions', ctx.User);
+    permission.QueryID = queryID;
+    permission.RoleID = roleIDToShare;
+    await saveOrThrow(permission, `sharing query ${queryID} with role ${roleIDToShare}`);
+}
+
+/** A query's permission rows as stored, loaded as `user`. */
+async function storedPermissions(queryID: string, user: UserInfo): Promise<MJQueryPermissionEntity[]> {
+    const result = await new RunView().RunView<MJQueryPermissionEntity>({
+        EntityName: 'MJ: Query Permissions', ExtraFilter: `QueryID='${EscapeSQLString(queryID)}'`,
+        ResultType: 'entity_object', BypassCache: true,
+    }, user);
+    Assert(result.Success, `the permissions of ${queryID} did not read back: ${result.ErrorMessage}`);
+    return result.Results;
+}
+
+/** How many queries compose this one, as stored. */
+async function storedDependentCount(queryID: string, user: UserInfo): Promise<number> {
+    const result = await new RunView().RunView<{ ID: string }>({
+        EntityName: 'MJ: Query Dependencies', ExtraFilter: `DependsOnQueryID='${EscapeSQLString(queryID)}'`,
+        Fields: ['ID'], ResultType: 'simple', BypassCache: true,
+    }, user);
+    Assert(result.Success, `the dependents of ${queryID} did not read back: ${result.ErrorMessage}`);
+    return result.Results.length;
+}
+
 /**
- * Reloads a fixture query as the holder and keeps that copy for teardown: the UI role has no
- * Delete on queries, so a copy the UI user saved could not delete itself.
+ * Reloads a fixture query as the holder and keeps that copy for teardown, so teardown deletes every
+ * fixture the same way whichever user saved it.
  */
 async function adoptAsHolder(ctx: IntegrationCheckContext, name: string, queryID: string): Promise<MJQueryEntity> {
     const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
@@ -323,7 +379,7 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             Assert(await asHolder.Load(draft.ID), `the draft ${draft.ID} did not load for the holder`);
             asHolder.Status = 'Approved';
             await saveOrThrow(asHolder, 'approving the draft as a holder', FixtureQuerySaveOptions());
-            // Teardown deletes as the holder: the UI role has no Delete on queries.
+            // Teardown deletes as the holder.
             fixtures!.Queries.set('IT120 UI Draft', asHolder);
             Assert(UUIDsEqual(asHolder.ApprovedByUserID, ctx.User.ID), `the approver must be the holder — got ${asHolder.ApprovedByUserID}`);
             AssertEqual(await storedStatus(draft.ID, ctx.User), 'Approved', 'the holder\'s approval must be stored');
@@ -402,6 +458,116 @@ export const QueryApprovalsChecks: NamedCheck[] = [
             Assert(checked.success, `the cache check must succeed: ${checked.errorMessage}`);
             AssertEqual(checked.results[0]?.status, 'no_validation', "a draft's validation SQL must not be used by a cache check");
             AssertEqual(checked.results[0]?.results?.length, 3, 'the draft must return its rows from the normal run');
+        }
+    },
+    {
+        Id: 'query-approvals.QA9',
+        Name: "QA9: a UI user owns the queries they create, edits and deletes only those, and an owner's edit to an Approved query goes back to Pending",
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const otherUserID = await anotherUserID(ctx);
+
+            // A new query is owned by the user saving it, whatever owner a UI user names.
+            const draft = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            draft.Name = 'IT120 UI Owned Draft';
+            draft.CategoryID = fixtures!.Category.ID;
+            draft.SQL = `SELECT N FROM ${ROWS}`;
+            draft.Status = 'Pending';
+            draft.OwnerUserID = otherUserID;
+            await saveOrThrow(draft, 'saving a draft as the UI user', FixtureQuerySaveOptions());
+            fixtures!.Queries.set('IT120 UI Owned Draft', draft);
+            Assert(UUIDsEqual(await storedOwner(draft.ID, ctx.User), ui.ID), 'a UI user\'s new query must be stored as theirs');
+
+            // The owner edits their own draft; giving it away is refused.
+            draft.SQL = `SELECT N FROM ${ROWS} WHERE N > 1`;
+            await saveOrThrow(draft, 'editing the UI user\'s own draft', FixtureQuerySaveOptions());
+            draft.OwnerUserID = otherUserID;
+            AssertEqual(await draft.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to give their query away');
+            Assert(UUIDsEqual(await storedOwner(draft.ID, ctx.User), ui.ID), 'a refused change of owner must leave the owner as stored');
+
+            // Someone else's query: readable, but the UI user can neither edit nor delete it.
+            const theirs = await createQuery('IT120 Another User\'s Query', `SELECT N FROM ${ROWS}`, ctx.User);
+            theirs.OwnerUserID = otherUserID;
+            await saveOrThrow(theirs, 'reassigning a query to another user as a holder', FixtureQuerySaveOptions());
+            const theirsAsUI = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            Assert(await theirsAsUI.Load(theirs.ID), 'the UI user must be able to read another user\'s query');
+            theirsAsUI.Description = 'edited by someone who does not own it';
+            AssertEqual(await theirsAsUI.Save(FixtureQuerySaveOptions()), false, 'a UI user must not be able to edit another user\'s query');
+            AssertEqual(await theirsAsUI.Delete(), false, 'a UI user must not be able to delete another user\'s query');
+
+            // A holder approves the UI user's query; the owner's edit to its SQL saves it as Pending.
+            const approved = await adoptAsHolder(ctx, 'IT120 UI Owned Draft', draft.ID);
+            approved.Status = 'Approved';
+            await saveOrThrow(approved, 'approving the UI user\'s query as a holder', FixtureQuerySaveOptions());
+            const edited = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            Assert(await edited.Load(draft.ID), 'the owner must be able to load their approved query');
+            edited.SQL = `SELECT N FROM ${ROWS} WHERE N = 3`;
+            await saveOrThrow(edited, 'editing the SQL of an approved query as its owner', FixtureQuerySaveOptions());
+            AssertEqual(await storedStatus(draft.ID, ctx.User), 'Pending', 'an owner\'s change to an approved query\'s SQL must save it as Pending');
+
+            // The owner deletes their own query.
+            Assert(await edited.Delete(), `the owner must be able to delete their own query: ${edited.LatestResult?.CompleteMessage}`);
+            fixtures!.Queries.delete('IT120 UI Owned Draft');
+            const gone = await new RunView().RunView({ EntityName: 'MJ: Queries', ExtraFilter: `ID='${EscapeSQLString(draft.ID)}'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true }, ctx.User);
+            AssertEqual(gone.Results?.length, 0, 'the deleted query must be gone');
+        }
+    },
+    {
+        Id: 'query-approvals.QA10',
+        Name: "QA10: a UI user can't change which roles may run a query (another user's or their own) or delete a query another query composes, and an owner's rename of an Approved query goes back to Pending",
+        // UpdateQueryExtended replaces a query's role list only for a caller with Create and Delete on
+        // MJ: Query Permissions, and deletes the stored rows as that caller (MJServer's
+        // QuerySystemUserResolver.permissions.test.ts covers the resolver). This pins what that
+        // relies on in the real metadata and database: the UI role has neither grant, and a UI
+        // user's delete of a stored permission row is refused.
+        Fn: async (ctx) => {
+            const ui = uiOnlyUser(ctx);
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
+            const uiRole = roleID(ctx, 'UI');
+
+            // Another user's query, shared with the UI role.
+            const theirs = await createQuery('IT120 Shared With UI', `SELECT N FROM ${ROWS}`, ctx.User);
+            theirs.OwnerUserID = await anotherUserID(ctx);
+            await saveOrThrow(theirs, 'reassigning a query to another user as a holder', FixtureQuerySaveOptions());
+            await sharePermission(ctx, theirs.ID, uiRole);
+
+            // The UI user's own query, which a holder approved, made reusable and shared with the UI role.
+            const ownDraft = await createQuery('IT120 UI Owned Shared', `SELECT N FROM ${ROWS}`, ui);
+            const own = await adoptAsHolder(ctx, 'IT120 UI Owned Shared', ownDraft.ID);
+            own.Status = 'Approved';
+            own.Reusable = true;
+            await saveOrThrow(own, 'approving the UI user\'s query as a reusable query', FixtureQuerySaveOptions());
+            await sharePermission(ctx, own.ID, uiRole);
+
+            // The resolver's gate: the UI role may neither create nor delete permission rows.
+            const grants = ctx.Provider.EntityByName('MJ: Query Permissions')?.GetUserPermisions(ui);
+            AssertEqual(`${grants?.CanCreate}:${grants?.CanDelete}`, 'false:false', 'the UI role must have neither Create nor Delete on MJ: Query Permissions');
+
+            // Deleting the stored rows as the UI user is refused for both queries, and leaves them as stored.
+            for (const query of [theirs, own]) {
+                const rows = await storedPermissions(query.ID, ui);
+                AssertEqual(rows.length, 1, `the UI user must be able to read the role list of '${query.Name}'`);
+                AssertEqual(await rows[0].Delete(), false, `a UI user must not be able to delete a role permission of '${query.Name}'`);
+                const kept = await storedPermissions(query.ID, ctx.User);
+                Assert(kept.length === 1 && UUIDsEqual(kept[0].RoleID, uiRole), `a refused delete must leave the role list of '${query.Name}' as stored`);
+            }
+
+            // A holder's query composes the UI user's query; the owner can't delete it.
+            await RefreshRenderQueries(ctx.User);
+            const catPath = QueryEngine.Instance.Queries.find(q => UUIDsEqual(q.ID, own.ID))?.CategoryPath?.replace(/^\/|\/$/g, '') ?? fixtures!.Category.Name;
+            await createQuery('IT120 Composes UI Query', `SELECT c.N FROM {{query:"${catPath}/IT120 UI Owned Shared"}} c`, ctx.User);
+            Assert(await storedDependentCount(own.ID, ctx.User) > 0, 'fixture invalid: the composing query must have a dependency row on the UI user\'s query');
+            const ownAsUI = await md.GetEntityObject<MJQueryEntity>('MJ: Queries', ui);
+            Assert(await ownAsUI.Load(own.ID), 'the owner must be able to load their query');
+            AssertEqual(await ownAsUI.Delete(), false, 'the owner must not be able to delete a query another query composes');
+            AssertEqual(ownAsUI.LatestResult?.Message, QUERY_DELETE_IN_USE_REFUSAL, 'the refusal must say why');
+            Assert(await storedDependentCount(own.ID, ctx.User) > 0, 'a refused delete must leave the composing query\'s dependency row');
+
+            // The owner renames their Approved query; it goes back to Pending.
+            ownAsUI.Name = 'IT120 UI Owned Shared Renamed';
+            await saveOrThrow(ownAsUI, 'renaming an approved query as its owner', FixtureQuerySaveOptions());
+            AssertEqual(await storedStatus(own.ID, ctx.User), 'Pending', 'an owner\'s rename of an approved query must save it as Pending');
         }
     }
 ];
