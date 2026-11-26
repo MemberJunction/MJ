@@ -88,7 +88,8 @@ interface ImpersonationFixture {
     readonly operatorRoleId: string;
     readonly operatorRoleName: string;
     readonly uiRoleId: string;
-    readonly adminRoleId: string;
+    readonly protectedRoleId: string;
+    readonly protectedRoleName: string;
     readonly authId: string;
     readonly actor: UserInfo;
     readonly target: UserInfo;
@@ -205,10 +206,11 @@ async function deleteFixtureAuditLogs(ctx: IntegrationCheckContext, userIds: rea
     }
     const rv = RunView.FromMetadataProvider(ctx.Provider);
     const inClause = userIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const lowerInClause = userIds.map((id) => `'${EscapeSQLString(id.toLowerCase())}'`).join(',');
     const rows = await rv.RunView<{ ID: string }>(
         {
             EntityName: 'MJ: Audit Logs',
-            ExtraFilter: `UserID IN (${inClause}) OR RecordID IN (${inClause})`,
+            ExtraFilter: `UserID IN (${inClause}) OR LOWER(RecordID) IN (${lowerInClause})`,
             Fields: ['ID'],
             ResultType: 'simple',
         },
@@ -255,21 +257,27 @@ async function withImpersonationFixture(
         (a) => a.Name?.trim().toLowerCase() === USER_IMPERSONATION_AUTHORIZATION_NAME.toLowerCase()
     );
     if (!auth) {
-        SkipCheck(`Seeded authorization '${USER_IMPERSONATION_AUTHORIZATION_NAME}' not present — push metadata/authorizations`);
-        return;
+        throw new Error(
+            `Seeded authorization '${USER_IMPERSONATION_AUTHORIZATION_NAME}' not present — push metadata/authorizations`
+        );
     }
     const uiRole = dbProvider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'ui');
-    const adminRole = dbProvider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'administrator');
-    if (!uiRole || !adminRole) {
-        SkipCheck("Seeded 'UI' or 'Administrator' role not present");
-        return;
+    // Fresh MJ databases seed 'UI', 'Developer', and 'Integration' (and some deployments also seed 'Administrator');
+    // all three of Administrator/Developer/Integration are immutable baseline protectedTargetRoles.
+    const protectedRole =
+        dbProvider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'administrator') ??
+        dbProvider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'developer') ??
+        dbProvider.Roles.find((r) => r.Name?.trim().toLowerCase() === 'integration');
+    if (!uiRole || !protectedRole) {
+        throw new Error(
+            "Seeded 'UI' and a baseline protected role ('Administrator', 'Developer', or 'Integration') must be present"
+        );
     }
 
     const engine = GetAPIKeyEngine();
     await engine.Config(true, ctx.User);
     if (!engine.Applications.some((a) => a.Name === 'MJAPI' && a.IsActive)) {
-        SkipCheck("Seeded active 'MJAPI' API Application not present");
-        return;
+        throw new Error("Seeded active 'MJAPI' API Application must be present");
     }
 
     EnsureImpersonationDataHooksRegistered();
@@ -331,16 +339,16 @@ async function withImpersonationFixture(
             roles: [{ RoleID: uiRole.ID, RoleName: uiRole.Name }],
         });
         const protectedAdmin = await createUserWithRoles(ctx, cleanup, {
-            name: `IT194 Admin ${runTag}`,
-            email: `it194-admin-${runTag}@integration.test`,
+            name: `IT194 Protected ${runTag}`,
+            email: `it194-protected-${runTag}@integration.test`,
             type: 'User',
-            roles: [{ RoleID: adminRole.ID, RoleName: adminRole.Name }],
+            roles: [{ RoleID: protectedRole!.ID, RoleName: protectedRole!.Name }],
         });
         const ownerTarget = await createUserWithRoles(ctx, cleanup, {
             name: `IT194 Owner ${runTag}`,
             email: `it194-owner-${runTag}@integration.test`,
             type: 'Owner',
-            roles: [{ RoleID: uiRole.ID, RoleName: uiRole.Name }],
+            roles: [{ RoleID: uiRole!.ID, RoleName: uiRole!.Name }],
         });
         const peerImpersonator = await createUserWithRoles(ctx, cleanup, {
             name: `IT194 Peer ${runTag}`,
@@ -357,9 +365,10 @@ async function withImpersonationFixture(
             runTag,
             operatorRoleId,
             operatorRoleName,
-            uiRoleId: uiRole.ID,
-            adminRoleId: adminRole.ID,
-            authId: auth.ID,
+            uiRoleId: uiRole!.ID,
+            protectedRoleId: protectedRole!.ID,
+            protectedRoleName: protectedRole!.Name,
+            authId: auth!.ID,
             actor,
             target,
             ungrantedCaller,
@@ -478,9 +487,9 @@ export const UserImpersonationChecks: NamedCheck[] = [
                 });
 
                 await RunWithImpersonationSession(session, async () => {
-                    // Allowed read works
+                    // Allowed read works (UI role holds CanRead=1 on MJ: Applications in baseline seed)
                     const allowedRead = await rv.RunView<{ ID: string }>(
-                        { EntityName: 'MJ: Entities', Fields: ['ID'], MaxRows: 3, ResultType: 'simple' },
+                        { EntityName: 'MJ: Applications', Fields: ['ID'], MaxRows: 3, ResultType: 'simple' },
                         sessionTarget
                     );
                     Assert(allowedRead.Success, `Allowed read as impersonated target failed: ${allowedRead.ErrorMessage}`);
@@ -495,8 +504,8 @@ export const UserImpersonationChecks: NamedCheck[] = [
                     }
                     Assert(forbiddenThrew, 'Forbidden entity MJ: Credentials must be refused during impersonation');
 
-                    // Write attempt refused at DataHook + Apollo GraphQL layer
-                    const fakeWrite = await dbProvider.GetEntityObject('MJ: Entities', sessionTarget);
+                    // Write attempt refused at DataHook + Apollo GraphQL layer (even on MJ: Dashboards where UI holds full CRUD)
+                    const fakeWrite = await dbProvider.GetEntityObject('MJ: Dashboards', sessionTarget);
                     const saveVerdict = ImpersonationPreSaveHook(fakeWrite, sessionTarget);
                     Assert(typeof saveVerdict === 'string', 'BaseEntity Save must be refused in ViewAs mode');
                     const deleteVerdict = ImpersonationPreDeleteHook(fakeWrite, sessionTarget);
@@ -588,9 +597,9 @@ export const UserImpersonationChecks: NamedCheck[] = [
                 AssertEqual(chainRes.Success, false, 'Impersonation-key chaining must be refused');
                 AssertEqual(chainRes.ResultCode, 'FORBIDDEN_IMPERSONATION_CHAIN', 'Chaining must return FORBIDDEN_IMPERSONATION_CHAIN');
 
-                // 5-8. Protected-role target (Administrator), Owner target, self, peer impersonator -> FORBIDDEN_TARGET
+                // 5-8. Protected-role target (Administrator/Developer/Integration), Owner target, self, peer impersonator -> FORBIDDEN_TARGET
                 for (const [label, targetId] of [
-                    ['protected-role Administrator', fx.protectedAdmin.ID],
+                    [`protected-role ${fx.protectedRoleName}`, fx.protectedAdmin.ID],
                     ['Owner', fx.ownerTarget.ID],
                     ['self', fx.actor.ID],
                     ['peer impersonator', fx.peerImpersonator.ID],
@@ -773,25 +782,17 @@ export const UserImpersonationChecks: NamedCheck[] = [
 
                 // 2. Failed audit write must fail closed (AUDIT_LOG_FAILED) and rollback/delete the newly minted key row!
                 const failingAuditProvider = new Proxy(dbProvider, {
-                    get(targetObj, prop, receiver) {
+                    get(targetObj, prop) {
                         if (prop === 'GetEntityObject') {
                             return async (entityName: string, contextUser?: UserInfo) => {
                                 const entity = await targetObj.GetEntityObject(entityName, contextUser);
                                 if (entityName === 'MJ: Audit Logs') {
-                                    return new Proxy(entity, {
-                                        get(eTarget, eProp, eReceiver) {
-                                            if (eProp === 'Save') {
-                                                return async () => false;
-                                            }
-                                            const v = Reflect.get(eTarget, eProp, eReceiver);
-                                            return typeof v === 'function' ? v.bind(eTarget) : v;
-                                        },
-                                    });
+                                    entity.Save = async () => false;
                                 }
                                 return entity;
                             };
                         }
-                        const val = Reflect.get(targetObj, prop, receiver);
+                        const val = Reflect.get(targetObj, prop, targetObj);
                         return typeof val === 'function' ? val.bind(targetObj) : val;
                     },
                 }) as DatabaseProviderBase;
@@ -876,11 +877,11 @@ export const UserImpersonationChecks: NamedCheck[] = [
                     // 2. Normal user session (no impersonation) passes DataHooks and RunView cleanly
                     AssertEqual(GetImpersonationSession(fx.target), null, `Normal session must not carry impersonation marker (feature=${flagState})`);
                     const readRes = await rv.RunView<{ ID: string }>(
-                        { EntityName: 'MJ: Entities', Fields: ['ID'], MaxRows: 2, ResultType: 'simple' },
+                        { EntityName: 'MJ: Applications', Fields: ['ID'], MaxRows: 2, ResultType: 'simple' },
                         fx.target
                     );
                     Assert(readRes.Success, `Normal RunView must succeed with feature=${flagState}: ${readRes.ErrorMessage}`);
-                    const probeEntity = await dbProvider.GetEntityObject('MJ: Entities', fx.target);
+                    const probeEntity = await dbProvider.GetEntityObject('MJ: Dashboards', fx.target);
                     AssertEqual(ImpersonationPreSaveHook(probeEntity, fx.target), true, `Normal PreSaveHook must pass with feature=${flagState}`);
                     AssertEqual(ImpersonationPreDeleteHook(probeEntity, fx.target), true, `Normal PreDeleteHook must pass with feature=${flagState}`);
                 }

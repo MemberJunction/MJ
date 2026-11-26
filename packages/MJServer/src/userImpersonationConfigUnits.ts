@@ -14,10 +14,11 @@ export const USER_IMPERSONATION_MAX_TTL_MINUTES = 60;
  * Baseline privileged role names whose holders may NEVER be listed or impersonated.
  * Deployments may configure `userImpersonation.protectedTargetRoles` to extend this baseline;
  * `ResolveUserImpersonationConfig` always unions configured roles with `DEFAULT_PROTECTED_TARGET_ROLES`
- * so `Administrator`, `Developer`, and `Integration` can never be weakened or removed.
+ * so `Administrator`, `Agent Administrator`, `Developer`, and `Integration` can never be weakened or removed.
  */
 export const DEFAULT_PROTECTED_TARGET_ROLES: readonly string[] = Object.freeze([
     'Administrator',
+    'Agent Administrator',
     'Developer',
     'Integration',
 ]);
@@ -49,7 +50,7 @@ const strictBooleanOrDefaultFalse = z
  *   `User Impersonation: Act As (Allow Writes)`).
  * - `defaultTtlMinutes`: `15` minutes (clamped to `5..60`).
  * - `maxTtlMinutes`: `60` minutes hard ceiling (configurable downward to `5..60`).
- * - `protectedTargetRoles`: defaults to `['Administrator', 'Developer', 'Integration']`.
+ * - `protectedTargetRoles`: defaults to `['Administrator', 'Agent Administrator', 'Developer', 'Integration']`.
  */
 export const UserImpersonationConfigSchema = z.object({
     enabled: strictBooleanOrDefaultFalse,

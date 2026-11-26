@@ -1692,18 +1692,18 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
     });
 
     describe('8. Items 4 & 5 — Protected Roles Baseline Union & Live Role/Auth Query Fail-Closed', () => {
-        it('always unions configured protectedTargetRoles with Administrator, Developer, and Integration', () => {
+        it('always unions configured protectedTargetRoles with Administrator, Agent Administrator, Developer, and Integration', () => {
             const emptyOverride = ResolveUserImpersonationConfig({ protectedTargetRoles: [] });
             expect(emptyOverride.protectedTargetRoles).toEqual(
-                expect.arrayContaining(['Administrator', 'Developer', 'Integration'])
+                expect.arrayContaining(['Administrator', 'Agent Administrator', 'Developer', 'Integration'])
             );
 
             const customOverride = ResolveUserImpersonationConfig({ protectedTargetRoles: ['HR'] });
             expect(customOverride.protectedTargetRoles).toEqual(
-                expect.arrayContaining(['Administrator', 'Developer', 'Integration', 'HR'])
+                expect.arrayContaining(['Administrator', 'Agent Administrator', 'Developer', 'Integration', 'HR'])
             );
 
-            for (const baselineRole of ['Administrator', 'Developer', 'Integration']) {
+            for (const baselineRole of ['Administrator', 'Agent Administrator', 'Developer', 'Integration']) {
                 const decision = EvaluateTargetImpersonationEligibility(
                     {
                         ID: TARGET_USER_ID,

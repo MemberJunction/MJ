@@ -33,7 +33,7 @@ User impersonation enforces six independent server + client security layers:
      - Is `Owner` (`Type = 'Owner'`),
      - Is inactive (`IsActive = false`),
      - Is the caller themselves (`TargetUserID === ActorUserID`),
-     - Holds any role in `protectedTargetRoles` — **always unioned with the immutable baseline** `['Administrator', 'Developer', 'Integration']` (configuration can only *add* protected roles, never remove baseline protection),
+     - Holds any role in `protectedTargetRoles` — **always unioned with the immutable baseline** `['Administrator', 'Agent Administrator', 'Developer', 'Integration']` (configuration can only *add* protected roles, never remove baseline protection),
      - Holds `Allow` on `User Impersonation` or `User Impersonation: Act As (Allow Writes)` (peer impersonators can never impersonate one another).
    - Verified **live against the database (`BypassCache: true`)**, failing closed on any role or authorization query failure (never treating a failed query as "zero roles"), cross-checked with `UserCache`, and re-verified on **every incoming request** in `context.ts` (`GetUserPayload`, single-lookup validation, fail-closed on lookup failure) to defeat mid-session promotion TOCTOU races.
    - Also refuses `System` user callers (`userPayload.isSystemUser`) from invoking impersonation control-plane operations.
@@ -125,7 +125,7 @@ module.exports = {
     allowWrites: false,         // keep false in production! env override: MJ_USER_IMPERSONATION_ALLOW_WRITES
     defaultTtlMinutes: 15,      // 5..60
     maxTtlMinutes: 60,          // 5..60
-    protectedTargetRoles: ['Administrator', 'Developer', 'Integration'],
+    protectedTargetRoles: ['Administrator', 'Agent Administrator', 'Developer', 'Integration'],
   },
 };
 ```

@@ -1624,7 +1624,7 @@ export class UserImpersonationResolver extends ResolverBase {
         const auditRes = await rv.RunView<{ ID?: string; UserID?: string | null; RecordID?: string | null; Details?: string | null }>(
             {
                 EntityName: 'MJ: Audit Logs',
-                ExtraFilter: `AuditLogTypeID = '${EscapeSQLString(startedTypeId)}' AND UserID = '${EscapeSQLString(expectedActorUserId)}' AND RecordID = '${EscapeSQLString(expectedTargetUserId)}' AND Status = 'Success'`,
+                ExtraFilter: `AuditLogTypeID = '${EscapeSQLString(startedTypeId)}' AND UserID = '${EscapeSQLString(expectedActorUserId)}' AND LOWER(RecordID) = '${EscapeSQLString(NormalizeUUID(expectedTargetUserId))}' AND Status = 'Success'`,
                 Fields: ['ID', 'UserID', 'RecordID', 'Details'],
                 BypassCache: true,
                 ResultType: 'simple',
