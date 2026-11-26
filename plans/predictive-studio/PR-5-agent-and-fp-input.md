@@ -3353,7 +3353,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->1<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->1<!-- /gen:checks -->
-- Head: <!-- gen:head -->d5955b48e7<!-- /gen:head -->
+- Head: <!-- gen:head -->54e77fa63d<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3630,6 +3630,9 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   regex over 815 migrations, A2's file 0 ms); changeset (`@memberjunction/sqlserver-dataprovider` added) and §10 by
   `pr-body.mjs`. **Owed: G0.2** (`W2 -> C1.1`) timed out twice at 1,800 s under load; the controller runs it on a quiet
   machine at integration (controller ruling).
+- 2026-11-26 — A2: merged `ps/pr-5-agent-fp-input` @ `35d05d5ba0` (`no-status-writes.test.ts` builds its program once
+  in `beforeAll`; the push had gone red only on its two 60 s scan timeouts under load); changeset unchanged, §10 by
+  `pr-body.mjs`.
 
 ## 12. Refresh log (append-only)
 
