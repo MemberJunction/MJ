@@ -288,6 +288,10 @@ packages/MJServer/src/resolvers/RunAIAgentResolver.ts  (D-091 item 3)
 packages/MJServer/src/__tests__/RunAIAgentResolver.requestAnswers.test.ts  (D-091 item 3)
 packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts  (D-091 item 3)
 packages/AI/Agents/src/__tests__/agent-request-resume-branch.test.ts  (D-091 item 3)
+# Owner-batch item 4: the avatar decoder's held frames under load (controller, 2026-11-26)
+packages/AI/RealtimeBridge/Providers/LiveKitNative/**  (D-091 item 4)
+# Owner-batch item 5: graphql-ws dispose() rejections left unhandled (controller, 2026-11-26)
+packages/GraphQLDataProvider/**  (D-091 item 5)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3235,6 +3239,17 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    not start `resumeAgent`, and link `ResumingAgentRunID` after the run; every other message unchanged. Only the
    resolver holds the person's save and the chaining, and both run too late or not at all today — A2 (default if rejected: approval
    through the request dashboard/API only, and G4.1's chat-approval scenario re-planned).
+4. `packages/AI/RealtimeBridge/Providers/LiveKitNative/src/avatar-decoder-process.ts` (+ its two tests) — the avatar
+   video decoder's rawvideo encoder ran frame-threaded on the output side (no output `-threads`), so under load the last
+   2–10 frames of a burst stayed inside ffmpeg (`-debug_ts`: 96 frames in, 87 packets out); output-side `-threads 1`
+   returns every frame. Came in with `next` (`08a4cfc1f2`), surfaced by the full mirror at M0; ruled in under the
+   owner's 2026-11-26 statement; fixed by the controller (`03aff70e2d`), 355/355 with file parallelism.
+5. `packages/GraphQLDataProvider/src/{graphQLDataProvider.ts,SharedTabKernelProtocol.ts}` (+ tests) — graphql-ws
+   `dispose()` is async and rejects when a connect attempt fails; both call sites dropped the promise, so a failed
+   handshake became an unhandled rejection (vitest exit 1, intermittent). Both now catch it; the fallback test uses the
+   fake WS. Fixed by the controller (`cd85616747`), 10/10 runs clean. Wave-1 rule D5-51: the full-tier mirror runs once
+   per integration, alone on the machine — four concurrent full mirrors drove load to 50–130 and timed out CPU-heavy
+   tests (`ng-entity-viewer` aggregate-expression, MJServer delete tests) with no code cause.
 
 ## 10. PR description draft
 
@@ -3477,6 +3492,8 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   Node 24 (the baseline worktree) already has the right binary.
 - Rulings this milestone: D5-45 (seed texts and worlds), D5-46 (the CLI user, §2.2 step), D5-47 (what counts as
   first-ranked for the shipped agent; attack 4 and A7b attack 1 reworded).
+- 2026-11-26 — controller: owner-batch item 4 (LiveKitNative avatar decoder, output-side `-threads 1`, root cause by `-debug_ts`) merged from `--item4`; allowlist line added. Wave-1 rules D5-48 (each implementer commits its attack list red first, no separate attacker) and D5-49 (additive one-line barrel exports allowed in any wave-1 sub-branch; identical changeset bytes; controller regenerates both at integration).
+- 2026-11-26 — controller: merged `ps/pr-5-agent-fp-input--item4` into the PR branch.
 
 ### 2026-11-26 — effective-dated Feature Value writes — B1
 

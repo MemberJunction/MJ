@@ -5,9 +5,11 @@
  * reports an exit it did not ask for. A crash ends the child, never MJAPI.
  *
  * The arguments keep latency low without dropping input: one decoder thread (frame threading adds a frame of delay per
- * thread), `-flags low_delay`, minimal probing (`-probesize 32 -analyzeduration 0`), output flushed per packet, and
- * frame timing passed through (`-fps_mode passthrough` from ffmpeg 5.1, `-vsync passthrough` before it). Never
- * `-fflags nobuffer`: it dropped packets read from a pipe.
+ * thread), one rawvideo encoder thread on the output (it is frame-threaded too, one worker per core by default, and a
+ * frame-threaded encoder hands a packet back only when the next frame is sent, so under load the last frames of a
+ * burst waited inside ffmpeg until more input came), `-flags low_delay`, minimal probing (`-probesize 32
+ * -analyzeduration 0`), output flushed per packet, and frame timing passed through (`-fps_mode passthrough` from
+ * ffmpeg 5.1, `-vsync passthrough` before it). Never `-fflags nobuffer`: it dropped packets read from a pipe.
  *
  * @module @memberjunction/ai-bridge-livekit-native
  */
@@ -22,6 +24,9 @@ const FPS_MODE_VERSION: FfmpegVersion = { Major: 5, Minor: 1, Text: '5.1' };
 /** How much of a decoder's stderr is kept for the log, in characters. */
 const STDERR_TAIL_CHARS = 2048;
 
+/** One encoder thread on the output: see the module comment for why the rawvideo encoder must not be frame-threaded. */
+const SINGLE_THREAD_OUTPUT_ARGS: readonly string[] = ['-threads', '1'];
+
 /** Arguments every avatar decoder starts with: quiet, no keyboard, one thread, minimal probing of its input. */
 const COMMON_INPUT_ARGS: readonly string[] = ['-hide_banner', '-nostdin', '-loglevel', 'error', '-threads', '1', '-probesize', '32', '-analyzeduration', '0'];
 
@@ -31,13 +36,14 @@ export function FfmpegTakesFpsMode(version: FfmpegVersion): boolean {
 }
 
 /**
- * The video decoder: H.264 Annex B on stdin, raw I420 frames on stdout, one per access unit in order.
+ * The video decoder: H.264 Annex B on stdin, raw I420 frames on stdout, one per access unit in order, each as soon as
+ * its unit is in (no frame waits for later input).
  *
  * @param version The ffmpeg release, which decides the frame-timing flag.
  */
 export function AvatarVideoDecoderArgs(version: FfmpegVersion): string[] {
     const passthrough = FfmpegTakesFpsMode(version) ? ['-fps_mode', 'passthrough'] : ['-vsync', 'passthrough'];
-    return [...COMMON_INPUT_ARGS, '-flags', 'low_delay', '-f', 'h264', '-i', 'pipe:0', ...passthrough, '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-flush_packets', '1', 'pipe:1'];
+    return [...COMMON_INPUT_ARGS, '-flags', 'low_delay', '-f', 'h264', '-i', 'pipe:0', ...SINGLE_THREAD_OUTPUT_ARGS, ...passthrough, '-f', 'rawvideo', '-pix_fmt', 'yuv420p', '-flush_packets', '1', 'pipe:1'];
 }
 
 /**
