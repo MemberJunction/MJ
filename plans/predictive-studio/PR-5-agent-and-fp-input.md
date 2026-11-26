@@ -3467,6 +3467,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - 2026-11-26 — controller: merged `ps/pr-5-agent-fp-input--item4` into the PR branch.
 - 2026-11-26 — controller: owner-batch item 6 (MJServer delete tests' in-test dynamic import), static imports; 10/10 tests, 3 ms each. ci-mirror now takes a machine-wide lock for every tier (plans `87364bf`).
 - 2026-11-26 — controller: owner-batch item 7 (SQLServerDataProvider contract test prefilter); 2/2 pass.
+- 2026-11-26 — controller: `Engine/src/registry/__tests__/no-status-writes.test.ts` builds its R0 program once (cached per roots, in `beforeAll` with a 300 s setup timeout) instead of once per test inside a 60 s test timeout; 6/6, the scans 0.9 s and 0.5 s. D5-52: a sub-branch push runs the fast tier on its own packages only, against the PR branch (`ci-mirror --own`).
 
 ## 12. Refresh log (append-only)
 

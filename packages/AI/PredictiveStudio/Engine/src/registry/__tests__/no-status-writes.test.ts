@@ -117,8 +117,26 @@ export class StatusAssignments {
     };
   }
 
-  /** One type-checked program over the candidates under `roots`. */
+  /** Programs already built, by their roots: each costs tens of seconds over Predictive Studio plus Angular. */
+  private static readonly builtPrograms = new Map<string, ScanProgram>();
+
+  /** Builds (once) the program over `roots`, so a test's `beforeAll` can pay for it outside any test's timeout. */
+  public static Prepare(roots: readonly string[]): void {
+    StatusAssignments.build(roots);
+  }
+
+  /** One type-checked program over the candidates under `roots`, built once per distinct set of roots. */
   private static build(roots: readonly string[]): ScanProgram {
+    const key = roots.join('\u0000');
+    const cached = StatusAssignments.builtPrograms.get(key);
+    if (cached !== undefined) return cached;
+    const scan = StatusAssignments.buildProgram(roots);
+    StatusAssignments.builtPrograms.set(key, scan);
+    return scan;
+  }
+
+  /** Type-checks the candidates under `roots`. */
+  private static buildProgram(roots: readonly string[]): ScanProgram {
     const repo = StatusAssignments.RepositoryRoot();
     const candidates = roots.flatMap((r) => StatusAssignments.Candidates(path.resolve(repo, r)));
     const program = ts.createProgram(candidates, StatusAssignments.EngineCompilerOptions(repo));
@@ -262,13 +280,21 @@ export class StatusAssignments {
   }
 }
 
+/** The two scanned trees; their program is built once, in `beforeAll`. */
+const R0_ROOTS: readonly string[] = ['packages/AI/PredictiveStudio', 'packages/Angular'];
+
+/** Building the R0 program takes 15-30 s alone and more under load; it is setup, not a test (D5-52 follow-up). */
+const PROGRAM_BUILD_TIMEOUT_MS = 300_000;
+
 describe('R0 one publish function: no Status write outside the lifecycle gate (static scan)', () => {
+  beforeAll(() => StatusAssignments.Prepare(R0_ROOTS), PROGRAM_BUILD_TIMEOUT_MS);
+
   it('finds no Status assignment to an ML model outside the lifecycle gate', () => {
-    expect(StatusAssignments.Scan(['packages/AI/PredictiveStudio', 'packages/Angular'], { Allow: ['registry/lifecycle-gate.ts'] })).toEqual([]);
+    expect(StatusAssignments.Scan(R0_ROOTS, { Allow: ['registry/lifecycle-gate.ts'] })).toEqual([]);
   }, 60_000);
 
   it('reports (does not fail on) Set / SetMany / Object.assign calls that write an ML model\'s Status outside the lifecycle gate', () => {
-    const calls = StatusAssignments.ScanCalls(['packages/AI/PredictiveStudio', 'packages/Angular'], { Allow: ['registry/lifecycle-gate.ts'] });
+    const calls = StatusAssignments.ScanCalls(R0_ROOTS, { Allow: ['registry/lifecycle-gate.ts'] });
     for (const c of calls) console.warn(`R0 report (not a failure): ${c.File}:${c.Line} ${c.Form}`);
     expect(Array.isArray(calls)).toBe(true);
   }, 60_000);
