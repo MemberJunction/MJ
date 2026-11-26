@@ -2864,6 +2864,76 @@ describe('ConversationEngine', () => {
             expect(String(batch[2].ExtraFilter)).toContain(`Direction='Output'`);
         });
 
+        it('omits MJ: Conversation Detail Ratings from peripheral RunViews when user lacks CanRead permission', async () => {
+            enqueuePageAndProbe(createWindowRows([2, 1]), false);
+
+            const originalProvider = engine.ProviderToUse;
+            const restrictedProvider = {
+                Entities: [
+                    {
+                        Name: 'MJ: Conversation Detail Ratings',
+                        GetUserPermisions: () => ({ CanRead: false }),
+                    },
+                ],
+            };
+            Object.defineProperty(engine, 'ProviderToUse', {
+                configurable: true,
+                get: () => restrictedProvider,
+            });
+
+            try {
+                const result = await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+                expect(runViewsBatchLog).toHaveLength(1);
+                const batch = runViewsBatchLog[0];
+                expect(batch.map(p => p.EntityName)).toEqual([
+                    'MJ: AI Agent Runs',
+                    'MJ: Conversation Detail Artifacts',
+                ]);
+                expect(result.RatingsByDetailId.size).toBe(0);
+            } finally {
+                Object.defineProperty(engine, 'ProviderToUse', {
+                    configurable: true,
+                    get: () => originalProvider,
+                });
+            }
+        });
+
+        it('includes MJ: Conversation Detail Ratings in peripheral RunViews when user has CanRead permission', async () => {
+            enqueuePageAndProbe(createWindowRows([1]), false);
+
+            const originalProvider = engine.ProviderToUse;
+            const permittedProvider = {
+                Entities: [
+                    {
+                        Name: 'MJ: Conversation Detail Ratings',
+                        GetUserPermisions: () => ({ CanRead: true }),
+                    },
+                ],
+            };
+            Object.defineProperty(engine, 'ProviderToUse', {
+                configurable: true,
+                get: () => permittedProvider,
+            });
+
+            try {
+                await engine.LoadDetailWindow({ ConversationID: 'conv-1' }, contextUser);
+
+                expect(runViewsBatchLog).toHaveLength(1);
+                const batch = runViewsBatchLog[0];
+                expect(batch.map(p => p.EntityName)).toEqual([
+                    'MJ: AI Agent Runs',
+                    'MJ: Conversation Detail Ratings',
+                    'MJ: Conversation Detail Artifacts',
+                ]);
+            } finally {
+                Object.defineProperty(engine, 'ProviderToUse', {
+                    configurable: true,
+                    get: () => originalProvider,
+                });
+            }
+        });
+
         it('rebuilds artifact cards from the junction, version, and artifact rows', async () => {
             enqueuePageAndProbe(createWindowRows([1]), false);
             // Peripheral batch: agent runs, ratings, then one artifact junction row.

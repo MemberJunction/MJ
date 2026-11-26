@@ -356,6 +356,14 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
     if (!this.ConversationDetailId) return;
     try {
       const md = this.ProviderToUse;
+      const user = this.CurrentUser ?? md.CurrentUser;
+      const entities = md.Entities;
+      if (Array.isArray(entities) && entities.length > 0 && user) {
+        const ratingEntity = entities.find((e) => e.Name === this.RatingEntityName);
+        if (!ratingEntity?.GetUserPermisions(user)?.CanRead) {
+          return;
+        }
+      }
       const entity = await md.GetEntityObject<LoadableRatingEntity>(this.RatingEntityName);
       const loaded = await entity.Load(this.ConversationDetailId);
       if (loaded) {

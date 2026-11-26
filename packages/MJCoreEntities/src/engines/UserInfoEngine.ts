@@ -256,9 +256,16 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       },
     ];
 
-    await super.Load(configs, provider, forceRefresh, contextUser);
+    const previousLoadedUserId = this._loadedForUserId;
     if (isClientSide || forceRefresh || !this._loadedForUserId) {
       this._loadedForUserId = userId;
+    }
+
+    try {
+      await super.Load(configs, provider, forceRefresh, contextUser);
+    } catch (error) {
+      this._loadedForUserId = previousLoadedUserId;
+      throw error;
     }
   }
 

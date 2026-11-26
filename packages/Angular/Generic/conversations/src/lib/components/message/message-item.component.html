@@ -2,7 +2,8 @@
      [attr.data-message-id]="message.ID"
      [style.--mj-handoff-target]="HandedOffFrom ? TargetAccentVar : null"
      [style.--mj-handoff-source]="HandedOffFrom ? HandedOffFromAccentVar : null"
-     (click)="onMessageBubbleClick($event)">
+     (click)="onMessageBubbleClick($event)"
+     (keydown)="OnMessageBubbleKeydown($event)">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage"
          [class.avatar-has-image]="isAIMessage && effectiveAssistantAvatarUrl !== null">
@@ -514,6 +515,20 @@
             [isConversationOwner]="isConversationOwner"
             (commandExecuted)="onCommandExecuted($event)">
           </mj-actionable-commands>
+        }
+
+        <!-- Cited Sources Footer Bar (AI messages with citations; replaceable via mjChatSlot="citedSources") -->
+        @if (IsAIMessage && ShowCitedSources && CitedSources.length > 0) {
+          @if (CitedSourcesTemplate) {
+            <ng-container *ngTemplateOutlet="CitedSourcesTemplate; context: GetCitedSourcesTemplateContext()"></ng-container>
+          } @else {
+            <mj-cited-sources-bar
+              [Provider]="Provider"
+              [Citations]="CitedSources"
+              [PillTemplate]="CitedSourcePillTemplate"
+              (CitationClicked)="OnCitedSourceClicked($event)">
+            </mj-cited-sources-bar>
+          }
         }
       }
 

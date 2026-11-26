@@ -29,6 +29,7 @@ import {
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction modules
+import { AvatarStudioModule } from '@memberjunction/ng-avatar-studio';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ArtifactsModule } from '@memberjunction/ng-artifacts';
@@ -51,6 +52,7 @@ import { LoadComposerPlugins } from './composer-plugins/load-composer-plugins';
 
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
+import { CitedSourcesBarComponent } from './components/message/cited-sources-bar.component';
 import { AgentHandoffCardComponent } from './components/message/agent-handoff-card.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
@@ -258,6 +260,7 @@ const COMPONENTS = [
     MJStatBadgeComponent,
     MJRefreshButtonComponent,
     ContainerDirectivesModule,
+    AvatarStudioModule,
     CodeEditorModule,
     ArtifactsModule,
     TestingModule,
@@ -290,7 +293,8 @@ const COMPONENTS = [
     RealtimeInteractiveComponentSurfaceComponent,
     RealtimeArtifactWorkspaceSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
-    AgentHandoffCardComponent
+    AgentHandoffCardComponent,
+    CitedSourcesBarComponent
   ],
   exports: [
     ...COMPONENTS,
@@ -315,7 +319,8 @@ const COMPONENTS = [
     RemoteBrowserSurfaceComponent,
     RealtimeMediaSurfaceComponent,
     RealtimeEvidencePlaybackComponent,
-    AgentHandoffCardComponent
+    AgentHandoffCardComponent,
+    CitedSourcesBarComponent
   ]
 })
 export class ConversationsModule {}

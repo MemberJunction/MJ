@@ -127,6 +127,7 @@ import type {
   IMJChatAgentPresenceComponent,
   MJChatAgentPresenceState,
   IMJChatEmptyStateComponent,
+  MJChatCitationTransform,
 } from '../slots/slot-interfaces';
 import {
   BeforeAgentTurnEventArgs,
@@ -581,6 +582,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
   /** Show the per-message thumbs rating control on completed AI messages. */
   @Input() ShowMessageRating = true;
+
+  /** Show the Cited Sources footer bar beneath AI messages containing citations. */
+  @Input() ShowCitedSources = true;
+
+  /** Transform inline `[[Entity|ID|Label]]` and `@{type:"record",...}` citations into clickable chips. */
+  @Input() EnableInlineCitations = true;
+
+  /** Optional per-message callback to filter, reorder, relabel, or append custom citations. */
+  @Input() CitationTransform?: MJChatCitationTransform;
 
   /** @deprecated Use {@link ShowMessageRating}. */
   @Input() set showMessageRating(value: ConversationChatAreaComponent['ShowMessageRating']) {

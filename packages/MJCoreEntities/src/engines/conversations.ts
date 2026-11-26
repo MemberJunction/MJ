@@ -926,6 +926,50 @@ export interface UserAvatarInfo {
 }
 
 /**
+ * Structural shape of a single parsed message citation, assignment-compatible with
+ * `MessageCitation` in `@memberjunction/ai-core-plus` (which depends on this package
+ * and therefore cannot be imported here without creating a package cycle).
+ */
+export interface CachedMessageCitation {
+    Index: number;
+    Kind: 'record' | 'url' | 'artifact';
+    EntityName?: string;
+    RecordID?: string;
+    Keys?: Record<string, string | number>;
+    DisplayName: string;
+    Url?: string;
+    ArtifactID?: string;
+    RawToken: string;
+}
+
+/**
+ * Structural shape of a single citation occurrence in a message, assignment-compatible
+ * with `MessageCitationOccurrence` in `@memberjunction/ai-core-plus`.
+ */
+export interface CachedMessageCitationOccurrence {
+    StartIndex: number;
+    EndIndex: number;
+    Syntax: 'wiki' | 'mention';
+    RawToken: string;
+    Citation: CachedMessageCitation;
+}
+
+/**
+ * Structural shape of parsed citation metadata, assignment-compatible with
+ * `ParsedCitationsResult` in `@memberjunction/ai-core-plus`.
+ */
+export interface CachedParsedCitationsResult {
+    Citations: CachedMessageCitation[];
+    Occurrences: CachedMessageCitationOccurrence[];
+}
+
+/** Memoized citation parse entry paired with the exact raw message string it was derived from. */
+export interface CachedMessageCitationsEntry {
+    RawText: string;
+    Parsed: CachedParsedCitationsResult;
+}
+
+/**
  * Cached data for a single conversation's details (messages) and peripheral data.
  * Populated by the efficient GetConversationComplete query in one round-trip.
  */
@@ -942,6 +986,8 @@ export interface ConversationDetailCache {
     RatingsByDetailId: Map<string, RatingJSON[]>;
     /** Parsed artifacts keyed by conversation detail ID */
     ArtifactsByDetailId: Map<string, ArtifactJSON[]>;
+    /** Memoized parsed inline citations keyed by normalized conversation detail ID */
+    CitationsByDetailId?: Map<string, CachedMessageCitationsEntry>;
     /** Timestamp of when this cache entry was populated */
     LoadedAt: Date;
     /**
@@ -1393,6 +1439,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
     /** Detail cache keyed by normalized conversation ID */
     private _detailCache = new Map<string, ConversationDetailCache>();
+
+    /**
+     * Automatic-GC citation memoization cache keyed by `MJConversationDetailEntity` instance.
+     * Avoids arbitrary size caps while guaranteeing O(1) hits across Angular CD cycles.
+     */
+    private _detailCitationWeakCache = new WeakMap<object, CachedMessageCitationsEntry>();
 
     /** Track the environment ID used for the last load */
     private _lastEnvironmentId: string | null = null;
@@ -4132,21 +4184,46 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return emptyWindowPeripherals();
         }
 
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const md = this.ProviderToUse;
+        const rv = RunView.FromMetadataProvider(md);
         const byDetail = detailIdInFilter(detailIds);
-        const [runsResult, ratingsResult, junctionsResult] = await rv.RunViews<
-            MJAIAgentRunEntity | MJConversationDetailRatingEntityType | MJConversationDetailArtifactEntityType
-        >([
+        const entities = md.Entities;
+        const canReadRatings = Array.isArray(entities) && entities.length > 0
+            ? Boolean(
+                entities
+                    .find(e => e.Name === 'MJ: Conversation Detail Ratings')
+                    ?.GetUserPermisions(contextUser)?.CanRead
+            )
+            : true;
+
+        const views: Array<{
+            EntityName: string;
+            ExtraFilter: string;
+            OrderBy?: string;
+            ResultType: 'entity_object' | 'simple';
+        }> = [
             { EntityName: 'MJ: AI Agent Runs', ExtraFilter: byDetail, ResultType: 'entity_object' },
-            { EntityName: 'MJ: Conversation Detail Ratings', ExtraFilter: byDetail, ResultType: 'simple' },
-            // Direction='Output' mirrors GetConversationComplete — input artifacts aren't shown.
-            {
-                EntityName: 'MJ: Conversation Detail Artifacts',
-                ExtraFilter: `${byDetail} AND Direction='Output'`,
-                OrderBy: '__mj_CreatedAt ASC',
-                ResultType: 'simple'
-            }
-        ], contextUser);
+        ];
+        const ratingsIndex = canReadRatings ? views.length : -1;
+        if (canReadRatings) {
+            views.push({ EntityName: 'MJ: Conversation Detail Ratings', ExtraFilter: byDetail, ResultType: 'simple' });
+        }
+        const junctionsIndex = views.length;
+        // Direction='Output' mirrors GetConversationComplete — input artifacts aren't shown.
+        views.push({
+            EntityName: 'MJ: Conversation Detail Artifacts',
+            ExtraFilter: `${byDetail} AND Direction='Output'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            ResultType: 'simple'
+        });
+
+        const results = await rv.RunViews<
+            MJAIAgentRunEntity | MJConversationDetailRatingEntityType | MJConversationDetailArtifactEntityType
+        >(views, contextUser);
+
+        const runsResult = results[0];
+        const ratingsResult = ratingsIndex >= 0 ? results[ratingsIndex] : undefined;
+        const junctionsResult = results[junctionsIndex];
 
         const runs = (runsResult?.Success ? runsResult.Results : []) as MJAIAgentRunEntity[];
         const ratings = (ratingsResult?.Success ? ratingsResult.Results : []) as MJConversationDetailRatingEntityType[];
@@ -5446,6 +5523,86 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     }
 
     // ========================================================================
+    // CITATION MEMOIZATION CACHE (ZERO RUNVIEW CALLS)
+    // ========================================================================
+
+    /**
+     * Returns memoized parsed citations for a conversation detail row without issuing any
+     * `RunView` or network calls.
+     *
+     * Uses a two-tier lifecycle-safe cache with zero arbitrary size caps:
+     * 1. A `WeakMap` keyed by the `MJConversationDetailEntity` instance — O(1) hit across
+     *    Angular change-detection cycles with automatic GC when unreferenced.
+     * 2. When the detail belongs to a conversation currently cached in `_detailCache`, a
+     *    per-conversation `CitationsByDetailId` map keyed by normalized `detail.ID` — O(1) hit
+     *    across Overlay ↔ Full Chat Workspace switches even when a fresh entity instance is
+     *    hydrated for the same row, automatically evicted on `InvalidateConversation`,
+     *    `ClearCache`, or detail save/delete events.
+     */
+    public GetOrComputeMessageCitations<T extends CachedParsedCitationsResult>(
+        detail: Pick<MJConversationDetailEntity, 'ID' | 'ConversationID'> | null | undefined,
+        messageText: string,
+        parseFn: (text: string) => T
+    ): T {
+        const text = messageText ?? '';
+        if (detail && typeof detail === 'object') {
+            const weakHit = this._detailCitationWeakCache.get(detail);
+            if (weakHit && weakHit.RawText === text) {
+                return weakHit.Parsed as T;
+            }
+        }
+
+        const convKey = detail?.ConversationID ? NormalizeUUID(detail.ConversationID) : null;
+        const detailKey = detail?.ID ? NormalizeUUID(detail.ID) : null;
+        const cachedConv = convKey ? this._detailCache.get(convKey) : undefined;
+        if (cachedConv && detailKey) {
+            const detailHit = cachedConv.CitationsByDetailId?.get(detailKey);
+            if (detailHit && detailHit.RawText === text) {
+                if (detail && typeof detail === 'object') {
+                    this._detailCitationWeakCache.set(detail, detailHit);
+                }
+                return detailHit.Parsed as T;
+            }
+        }
+
+        const parsed = parseFn(text);
+        const entry: CachedMessageCitationsEntry = {
+            RawText: text,
+            Parsed: parsed,
+        };
+
+        if (detail && typeof detail === 'object') {
+            this._detailCitationWeakCache.set(detail, entry);
+        }
+        if (cachedConv && detailKey) {
+            if (!cachedConv.CitationsByDetailId) {
+                cachedConv.CitationsByDetailId = new Map<string, CachedMessageCitationsEntry>();
+            }
+            cachedConv.CitationsByDetailId.set(detailKey, entry);
+        }
+
+        return parsed;
+    }
+
+    /**
+     * Evicts any memoized citation parse entry for a specific conversation detail row.
+     */
+    public InvalidateMessageCitations(
+        detail: Pick<MJConversationDetailEntity, 'ID' | 'ConversationID'> | null | undefined
+    ): void {
+        if (!detail) {
+            return;
+        }
+        if (typeof detail === 'object') {
+            this._detailCitationWeakCache.delete(detail);
+        }
+        if (detail.ConversationID && detail.ID) {
+            const cachedConv = this._detailCache.get(NormalizeUUID(detail.ConversationID));
+            cachedConv?.CitationsByDetailId?.delete(NormalizeUUID(detail.ID));
+        }
+    }
+
+    // ========================================================================
     // CACHE MANAGEMENT
     // ========================================================================
 
@@ -5467,6 +5624,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         this._conversations$.next([]);
         this._projects$.next([]);
         this._detailCache.clear();
+        this._detailCitationWeakCache = new WeakMap<object, CachedMessageCitationsEntry>();
         this._sharedByByConversationId.clear();
         this._explicitSharedConversationIds.clear();
         this._lastEnvironmentId = null;
@@ -5851,9 +6009,15 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         const cached = this._detailCache.get(key);
         if (!cached) return true;
 
+        const detailKey = NormalizeUUID(id);
         if (action === 'save') {
+            cached.CitationsByDetailId?.delete(detailKey);
+            if (entity) {
+                this._detailCitationWeakCache.delete(entity);
+            }
             const existingIdx = cached.Details.findIndex(d => UUIDsEqual(d.ID, id));
             if (existingIdx >= 0) {
+                this._detailCitationWeakCache.delete(cached.Details[existingIdx]);
                 // For local events, use the entity directly; for remote, update fields in place
                 if (entity) {
                     cached.Details[existingIdx] = entity;
@@ -5872,6 +6036,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         } else if (action === 'delete') {
             cached.Details = cached.Details.filter(d => !UUIDsEqual(d.ID, id));
             cached.AgentRunsByDetailId.delete(id);
+            cached.CitationsByDetailId?.delete(detailKey);
         }
 
         return true;

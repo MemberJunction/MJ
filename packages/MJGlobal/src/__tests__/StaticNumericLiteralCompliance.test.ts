@@ -294,7 +294,6 @@ const UNDOCUMENTED_STATIC_NUMERIC_BASELINE: Record<string, number> = {
     'Angular/Generic/base-forms/src/lib/panel-slot/collect-form-contribution-registrations.ts': 1,
     'Angular/Generic/base-forms/src/lib/preview-popover/record-preview-popover.component.ts': 2,
     'Angular/Generic/brand-kits/src/lib/brand-kit-creator/brand-kit-creator.component.ts': 1,
-    'Angular/Generic/conversations/src/lib/components/agent/agent-instance-editor-modal.component.ts': 1,
     'Angular/Generic/conversations/src/lib/components/library/library-remote-drive-pane.component.ts': 2,
     'Angular/Generic/conversations/src/lib/components/message/message-list.component.ts': 1,
     'Angular/Generic/conversations/src/lib/components/overlay/chat-overlay.component.ts': 6,

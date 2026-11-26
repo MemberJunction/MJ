@@ -10,7 +10,7 @@ The widget exposes three layers of extension:
 
 | Surface | What it lets you do |
 |---|---|
-| **8 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected), or above the composer with `composerExtra`. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
+| **10 named slots** (`mjChatSlot` directive) | Replace the `header`, `emptyState`, `agentPresence`, `messageRenderer`, `messageExtra`, `citedSources`, `citedSourcePill`, or `demonstrationSurface` regions with your own templates — or ADD to the default header with `headerActions` (renders inside the default header's action strip, after the stock buttons; suppressed when a full `header` replacement is projected), or above the composer with `composerExtra`. Three consumption modes: project an ad-hoc template, wrap the exported default for containment, or subclass the default. |
 | **Before/After cancelable events** | `(beforeAgentTurn)`, `(beforeToolInvoked)`, `(beforeResponseFormSubmitted)` let you observe AND veto (`event.Cancel = true`) before the action runs. `(beforeAgentTurn)` fires once per agent turn, before any reply row exists, and can also send the turn to another agent (`event.RedirectAgentId`). Plus informational `(sessionStarted)` / `(sessionChannelStateChanged)` / `(sessionEnded)` for realtime lifecycle. |
 | **`--mj-chat-*` design tokens** | Override bubble colors, composer chrome, character accents, and voice-state hues via standard CSS custom-property overrides. Defaults adapt to dark mode through semantic `--mj-*` tokens. |
 
@@ -132,6 +132,8 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `showAgentRunDetails` | The per-message agent run-details section — the expander header AND its grid (run ID, step/token counts, **$ cost**) — developer/observability data most end-user surfaces hide. The gear button that opens the panel is itself hidden when nothing would be left in it (no run details, no associated tasks, and no delete/pin/rating overflow), so an end-user surface gets no dead control rather than one that opens an empty popup |
 | `showReactions` | The per-message reaction buttons (like / comment) |
 | `showMessageRating` | The per-message thumbs rating control |
+| `ShowCitedSources` | The bottom Cited Sources footer bar (`<mj-cited-sources-bar>`) beneath AI messages containing citations |
+| `EnableInlineCitations` | Transforming inline `[[EntityName|RecordID|DisplayName]]` and `@{type:"record",...}` tokens into clickable inline citation chips inside message text |
 | `allowPinning` | Message pinning (per-message pin button, header pin chip, pinned-messages panel) |
 | `allowMessageEdit` | The per-message edit button (owner's own messages) |
 | `allowMessageDelete` | The per-message delete button (owner's own messages) |
@@ -257,6 +259,56 @@ White-label hosts can brand the AI side of the message feed through the componen
 These complement `agentCharacterConfig`, which drives only the `agentPresence` strip — the two inputs extend the same identity into every message bubble. Runtime changes propagate to already-rendered messages (branding configs that resolve after first render, per-conversation persona switches), and a broken/whitespace avatar URL degrades to the agent icon rather than a broken-image glyph.
 
 **Scope — what the override deliberately does NOT cover:** the run-details expander header and its record link (they describe the *real* agent's diagnostics), the role tooltip (the agent record's `Description`), and realtime session cards. Hosts needing those surfaces hidden from end users gate them with `showAgentRunDetails` / their own chrome rather than relabeling internal data.
+
+#### Citations & Cited Sources
+
+AI messages support inline record citations (`[[EntityName|RecordID|DisplayName]]`, 2-part `[[EntityName|RecordID]]`, composite keys `[[Entity|Key1=Val1;Key2=Val2|Label]]`, and `@{type:"record",...}` mentions) plus a collapsible `<mj-cited-sources-bar>` footer. Parsing is memoized in `ConversationEngine` (`WeakMap` + per-conversation detail cache, zero `RunView` calls), and entity icons resolve synchronously from in-memory metadata.
+
+Downstream applications can customize every layer without forking:
+
+| Input / Slot | Default | Purpose |
+|---|---|---|
+| `[ShowCitedSources]` | `true` | Toggle the bottom Cited Sources footer bar beneath AI messages |
+| `[EnableInlineCitations]` | `true` | Toggle rendering inline `[[Entity|ID|Label]]` tokens as clickable inline chips |
+| `[CitationTransform]` | `undefined` | `(citations: readonly MessageCitation[], message: MJConversationDetailEntity) => readonly MessageCitation[]` — filter, reorder, relabel, or append custom external URL, artifact, or domain-record citations per message |
+| `mjChatSlot="citedSources"` | `<mj-cited-sources-bar>` | Replace the entire footer bar. Context (`IMJChatCitedSourcesContext`): `$implicit` / `citations`, `message`, `openCitation(citation)` |
+| `mjChatSlot="citedSourcePill"` | Default pill button | Replace individual source pills while keeping the bar's header, wrapping layout, and `"+K more"` / `"Show less"` overflow toggle. Context (`IMJChatCitedSourcePillContext`): `$implicit` / `citation`, `icon`, `title`, `open(event?)` |
+
+```html
+<mj-conversation-chat-area
+  [conversationId]="conversationId"
+  [ShowCitedSources]="true"
+  [EnableInlineCitations]="true"
+  [CitationTransform]="enrichCitations">
+
+  <!-- Option A: customize individual source pills while keeping overflow collapse -->
+  <ng-template mjChatSlot="citedSourcePill" let-citation let-icon="icon" let-open="open">
+    <button type="button" class="my-source-pill" (click)="open($event)">
+      <i [class]="icon"></i>
+      <span>{{ citation.DisplayName }}</span>
+    </button>
+  </ng-template>
+
+  <!-- Option B: replace the entire Cited Sources bar -->
+  <!--
+  <ng-template mjChatSlot="citedSources" let-citations let-message="message" let-openCitation="openCitation">
+    <my-custom-sources [Citations]="citations" [Message]="message" (Open)="openCitation($event)" />
+  </ng-template>
+  -->
+</mj-conversation-chat-area>
+```
+
+**Citation CSS Custom Properties** (all default to semantic `--mj-*` design tokens and adapt automatically to light/dark themes):
+
+| CSS Variable | Default Semantic Token | Applies To |
+|---|---|---|
+| `--mj-cited-sources-bg` | `var(--mj-bg-surface-sunken)` | Cited Sources footer container background |
+| `--mj-cited-sources-border` | `var(--mj-border-subtle, var(--mj-border-default))` | Cited Sources footer container border |
+| `--mj-cited-sources-radius` | `var(--mj-radius-md, 8px)` | Cited Sources footer container border-radius |
+| `--mj-cited-source-pill-bg` | `var(--mj-bg-surface-card, var(--mj-bg-surface))` | Individual source pill background |
+| `--mj-cited-source-pill-border` | `var(--mj-border-default)` | Individual source pill border |
+| `--mj-citation-chip-bg` | `var(--mj-brand-primary)` | Inline citation chip background inside message body |
+| `--mj-citation-chip-color` | `var(--mj-text-inverse)` | Inline citation chip text/icon color |
 
 ### Chat Overlay
 

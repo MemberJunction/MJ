@@ -251,6 +251,10 @@ class StubAlertComponent {
 }
 
 import { AgentInstanceEditorModalComponent } from './agent-instance-editor-modal.component';
+import {
+  MjAvatarPickerTriggerComponent,
+  MjAvatarStudioComponent,
+} from '@memberjunction/ng-avatar-studio';
 
 interface StubAgentPersonaRecord {
   AgentID: string;
@@ -512,7 +516,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
   it('renders progressive create mode with collapsed details, adaptive searchable template picker, vibe-to-voice pairing, and saves derived instance', async () => {
     const provider = buildStubProvider(alice);
     const fixture = renderComponentFixture(AgentInstanceEditorModalComponent, {
-      imports: [CommonModule, FormsModule],
+      imports: [CommonModule, FormsModule, MjAvatarStudioComponent, MjAvatarPickerTriggerComponent],
       declarations: [
         AgentInstanceEditorModalComponent,
         StubDialogComponent,
@@ -641,7 +645,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
   it('generates, iteratively refines, undoes, and gracefully handles errors in the inline AI Avatar Studio', async () => {
     const provider = buildStubProvider(alice);
     const fixture = renderComponentFixture(AgentInstanceEditorModalComponent, {
-      imports: [CommonModule, FormsModule],
+      imports: [CommonModule, FormsModule, MjAvatarStudioComponent, MjAvatarPickerTriggerComponent],
       declarations: [
         AgentInstanceEditorModalComponent,
         StubDialogComponent,
@@ -709,15 +713,15 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       fixture.detectChanges();
 
       // 1. Clicking the 68x68 avatar button overlays the entire dialog with Avatar Studio
-      expect(el.querySelector('.aie-avatar-studio')).toBeNull();
-      (el.querySelector('.aie-avatar-trigger') as HTMLButtonElement).click();
+      expect(el.querySelector('mj-avatar-studio')).toBeNull();
+      (el.querySelector('.mjas-trigger') as HTMLButtonElement).click();
       await settle(fixture);
-      expect(el.querySelector('.aie-avatar-studio--overlay')).not.toBeNull();
+      expect(el.querySelector('mj-avatar-studio')).not.toBeNull();
       // Main form inputs are hidden while Avatar Studio overlays the dialog
       expect(el.querySelector('#aie-instance-name')).toBeNull();
 
       // Prompt textarea is multiline and pre-populated with rich agent context + style
-      const promptTextarea = el.querySelector('#aie-avatar-prompt') as HTMLTextAreaElement;
+      const promptTextarea = el.querySelector('#mjas-avatar-prompt') as HTMLTextAreaElement;
       expect(promptTextarea).not.toBeNull();
       expect(promptTextarea.tagName).toBe('TEXTAREA');
       expect(promptTextarea.value).toContain('"Pepper" (Chief of Staff)');
@@ -726,14 +730,14 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       expect(promptTextarea.value).toContain('3D Clay Mascot');
 
       // Clicking another style preset before manual edit updates the contextual prompt
-      const cyberChip = Array.from(el.querySelectorAll('.aie-studio-generate-bar .aie-chip')).find((b) =>
+      const cyberChip = Array.from(el.querySelectorAll('.mjas-generate-bar .mjas-chip')).find((b) =>
         b.textContent?.includes('Cyberpunk Bot')
       ) as HTMLButtonElement | undefined;
       expect(cyberChip).toBeDefined();
       cyberChip!.click();
       fixture.detectChanges();
-      expect(comp.AvatarPrompt).toContain('Cyberpunk Bot');
-      expect(comp.AvatarPrompt).toContain('"Pepper"');
+      expect(comp.AvatarStudioRef?.AvatarPrompt).toContain('Cyberpunk Bot');
+      expect(comp.AvatarStudioRef?.AvatarPrompt).toContain('"Pepper"');
 
       // 2. Generate Avatar via Generate Image action (index-keyed object ResultData shape from ActionResolver.RunAction)
       mockState.runActionQueue.push({
@@ -761,7 +765,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       promptTextarea.dispatchEvent(new Event('input'));
       fixture.detectChanges();
 
-      const genBtn = el.querySelector('.aie-studio-generate-btn') as HTMLButtonElement | null;
+      const genBtn = el.querySelector('.mjas-generate-btn') as HTMLButtonElement | null;
       expect(genBtn).not.toBeNull();
       genBtn!.click();
       await settle(fixture);
@@ -779,7 +783,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       // Downscaled to 128x128 WebP data URI
       expect(drawImageSpy).toHaveBeenCalledWith(expect.anything(), 0, 0, 1024, 1024, 0, 0, 128, 128);
       expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-1');
-      expect(el.querySelector('.aie-refine-box')).not.toBeNull();
+      expect(el.querySelector('.mjas-refine-box')).not.toBeNull();
 
       // 3. Iterative AI Refinement passes BOTH Prompt AND raw base64 SourceImage ({ Params: [...] } shape)
       mockState.runActionQueue.push({
@@ -805,14 +809,14 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         RunParams: null,
       });
 
-      const refineInput = el.querySelector('#aie-avatar-refine-input') as HTMLTextAreaElement;
+      const refineInput = el.querySelector('#mjas-avatar-refine-input') as HTMLTextAreaElement;
       expect(refineInput).not.toBeNull();
       expect(refineInput.tagName).toBe('TEXTAREA');
       refineInput.value = 'Add glasses and teal background';
       refineInput.dispatchEvent(new Event('input'));
       fixture.detectChanges();
 
-      const refineBtn = Array.from(el.querySelectorAll('.aie-refine-box button')).find((b) =>
+      const refineBtn = Array.from(el.querySelectorAll('.mjas-refine-box button')).find((b) =>
         b.textContent?.includes('Refine')
       ) as HTMLButtonElement | undefined;
       expect(refineBtn).toBeDefined();
@@ -826,7 +830,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       // Must pass raw base64 without data:image/...;base64, prefix so BaseImageGenerator.normalizeImageInput decodes cleanly
       expect(editParams.find((p) => p.Name === 'SourceImage')?.Value).toBe('Zmlyc3QtYXZhdGFyLXBuZw==');
       expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-2');
-      expect(comp.AvatarHistory).toHaveLength(2);
+      expect(comp.AvatarHistoryCount).toBe(2);
 
       // 4. Undo steps back to the first generated avatar
       const undoBtn = Array.from(el.querySelectorAll('.aie-studio-footer button')).find((b) =>
@@ -846,10 +850,10 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
         Params: [],
         RunParams: null,
       });
-      await comp.GenerateAvatar();
+      await comp.AvatarStudioRef!.GenerateAvatar();
       fixture.detectChanges();
 
-      expect(comp.AvatarErrorMessage).toContain('No active image generator API key configured');
+      expect(comp.AvatarStudioRef?.ErrorMessage).toContain('No active image generator API key configured');
       expect(mockState.notifications).toHaveLength(1);
       expect(mockState.notifications[0].style).toBe('warning');
       expect(mockState.notifications[0].message).toContain('No active image generator API key configured');
@@ -861,7 +865,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
       expect(doneBtn).toBeDefined();
       doneBtn!.click();
       fixture.detectChanges();
-      expect(el.querySelector('.aie-avatar-studio')).toBeNull();
+      expect(el.querySelector('mj-avatar-studio')).toBeNull();
       expect(el.querySelector('#aie-instance-name')).not.toBeNull();
       expect(comp.LogoURL).toBe('data:image/webp;base64,d2VicC1hdmF0YXItMTI4-1');
     } finally {
@@ -874,7 +878,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
   it('emits ChatToOnboard with the selected template and closes the modal', async () => {
     const provider = buildStubProvider(alice);
     const fixture = renderComponentFixture(AgentInstanceEditorModalComponent, {
-      imports: [CommonModule, FormsModule],
+      imports: [CommonModule, FormsModule, MjAvatarStudioComponent, MjAvatarPickerTriggerComponent],
       declarations: [
         AgentInstanceEditorModalComponent,
         StubDialogComponent,
@@ -937,7 +941,7 @@ describe('AgentInstanceEditorModalComponent (DOM)', () => {
     );
     const provider = buildStubProvider(alice);
     const fixture = renderComponentFixture(AgentInstanceEditorModalComponent, {
-      imports: [CommonModule, FormsModule],
+      imports: [CommonModule, FormsModule, MjAvatarStudioComponent, MjAvatarPickerTriggerComponent],
       declarations: [
         AgentInstanceEditorModalComponent,
         StubDialogComponent,

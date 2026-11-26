@@ -8,6 +8,7 @@ import {
   OnChanges,
   Output,
   SimpleChanges,
+  ViewChild,
   inject,
 } from '@angular/core';
 import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
@@ -24,19 +25,16 @@ import {
   IAgentInstantiationConfig,
   IAgentPersonalityPreset,
   MJAIAgentEntityExtended,
-  MediaOutput,
   ParseAgentInstantiationConfig,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
-
-export interface CuratedAgentIconOption {
-  IconClass: string;
-  Label: string;
-}
+import {
+  type AvatarChangeEvent,
+  type AvatarPromptBuilder,
+  MjAvatarStudioComponent,
+} from '@memberjunction/ng-avatar-studio';
+import { UUIDsEqual } from '@memberjunction/global';
 
 export interface AgentVibeOption {
   Key: string;
@@ -47,64 +45,6 @@ export interface AgentVibeOption {
   SpeakingStyle: string;
   DefaultPersonaName: string;
 }
-
-export type AvatarStudioTab = 'ai' | 'icon' | 'upload';
-
-type RunActionParamsList = NonNullable<Parameters<GraphQLActionClient['RunAction']>[1]>;
-
-interface ActionOutputParamLike {
-  Name?: string;
-  Type?: string;
-  Value?: MediaOutput[] | string | number | boolean | object | null;
-}
-
-interface ActionResultPayloadWithParams {
-  Params?: ActionOutputParamLike[];
-}
-
-type ActionResultPayload =
-  | ActionOutputParamLike[]
-  | ActionResultPayloadWithParams
-  | Record<string, ActionOutputParamLike>
-  | null
-  | undefined;
-
-const GENERATE_IMAGE_ACTION_NAME = 'Generate Image';
-const GENERATE_IMAGE_FALLBACK_ID = '048FF309-C2CD-44D8-8A8E-8C771ADA8284';
-const AVATAR_CANVAS_SIZE = 128;
-const AVATAR_REFINE_PNG_SIZE = 256;
-const AVATAR_WEBP_QUALITY = 0.85;
-const MAX_AVATAR_HISTORY = 10;
-
-const DEFAULT_ICON_OPTIONS: readonly CuratedAgentIconOption[] = [
-  { IconClass: 'fa-solid fa-pepper-hot', Label: 'Pepper' },
-  { IconClass: 'fa-solid fa-bolt', Label: 'Bolt' },
-  { IconClass: 'fa-solid fa-chess-knight', Label: 'Strategist' },
-  { IconClass: 'fa-solid fa-compass', Label: 'Compass' },
-  { IconClass: 'fa-solid fa-brain', Label: 'Brain' },
-  { IconClass: 'fa-solid fa-rocket', Label: 'Rocket' },
-  { IconClass: 'fa-solid fa-wand-magic-sparkles', Label: 'Sparkles' },
-  { IconClass: 'fa-solid fa-shield-halved', Label: 'Shield' },
-  { IconClass: 'fa-solid fa-microscope', Label: 'Research' },
-  { IconClass: 'fa-solid fa-database', Label: 'Data' },
-  { IconClass: 'fa-solid fa-chart-line', Label: 'Analytics' },
-  { IconClass: 'fa-solid fa-feather-pointed', Label: 'Writer' },
-];
-
-const AVATAR_STYLE_PRESETS: readonly string[] = [
-  '3D Clay Mascot',
-  'Minimal Geometric',
-  'Flat Vector Badge',
-  'Cyberpunk Bot',
-  'Watercolor Portrait',
-];
-
-const AVATAR_QUICK_REFINEMENTS: readonly string[] = [
-  'Add sleek glasses',
-  'Make background teal',
-  'Warm gold accent rim',
-  'Cleaner minimalist flat style',
-];
 
 const DEFAULT_VIBE_OPTIONS: readonly AgentVibeOption[] = [
   {
@@ -196,10 +136,12 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   /** Emitted when the modal closes without saving. */
   @Output() Closed = new EventEmitter<void>();
 
-  public readonly IconOptions = DEFAULT_ICON_OPTIONS;
   public readonly CoordinationModeOptions = COORDINATION_MODES;
-  public readonly AvatarStylePresets = AVATAR_STYLE_PRESETS;
-  public readonly AvatarQuickRefinements = AVATAR_QUICK_REFINEMENTS;
+  public readonly AvatarPromptBuilderFn: AvatarPromptBuilder = (style: string) =>
+    this.BuildContextualAvatarPrompt(style);
+
+  @ViewChild(MjAvatarStudioComponent)
+  public AvatarStudioRef?: MjAvatarStudioComponent;
 
   public InstantiableTemplates: MJAIAgentEntityExtended[] = [];
   public ActivePersonas: MJAIPersonaEntity[] = [];
@@ -214,18 +156,9 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   public SelectedTemplateCategory = 'All';
   public AdvancedExpanded = false;
 
-  // Full-dialog overlay AI Avatar Studio state
+  // Full-dialog overlay Avatar Studio state (delegated to @memberjunction/ng-avatar-studio)
   public AvatarStudioOpen = false;
-  public AvatarStudioTab: AvatarStudioTab = 'ai';
-  public AvatarPrompt = '';
-  public SelectedAvatarStyle = '3D Clay Mascot';
-  public AvatarRefinePrompt = '';
   public IsGeneratingAvatar = false;
-  public AvatarErrorMessage: string | null = null;
-  public AvatarHistory: string[] = [];
-  private avatarPromptEditedByUser = false;
-  private lastGeneratedPngSource: { dataUri: string; pngBase64: string } | null = null;
-  private cachedGenerateImageActionId: string | null = null;
 
   // Core form state
   public SelectedBaseAgentId = '';
@@ -233,7 +166,6 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   public Description = '';
   public IconClass = 'fa-solid fa-pepper-hot';
   public LogoURL = '';
-  public AvatarPreviewError = false;
   public SelectedPersonaId: string | null = null;
   public Tone = '';
   public SpeakingStyle = '';
@@ -452,29 +384,21 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     );
   }
 
-  public get PreviewAvatarUrl(): string | null {
-    if (this.AvatarPreviewError) {
-      return null;
-    }
-    const trimmed = this.LogoURL.trim();
-    return trimmed.length > 0 ? trimmed : null;
-  }
-
   public get HasImageAvatar(): boolean {
-    return this.PreviewAvatarUrl !== null;
+    return this.LogoURL.trim().length > 0;
   }
 
-  public get AvatarStatusLabel(): string {
-    const url = this.PreviewAvatarUrl;
-    if (!url) {
-      return 'Icon mode';
-    }
-    if (url.startsWith('data:image/')) {
-      const kb = (Math.round((url.length / 1024) * 10) / 10).toFixed(1);
-      const fmt = url.startsWith('data:image/webp') ? 'WebP' : 'Image';
-      return `128×128 ${fmt} · ${kb} KB`;
-    }
-    return 'Custom URL';
+  public get StudioSubjectName(): string {
+    return (
+      this.InstanceName.trim() ||
+      this.EditingAgent?.Name?.trim() ||
+      this.SelectedBaseAgent?.Name?.trim() ||
+      'Your Personal Agent'
+    );
+  }
+
+  public get AvatarHistoryCount(): number {
+    return this.AvatarStudioRef?.HistoryCount ?? 0;
   }
 
   private get aiEngine(): AIEngineBase {
@@ -546,47 +470,22 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   public OpenAvatarStudio(): void {
     this.AvatarStudioOpen = true;
     this.TemplatePickerOpen = false;
-    this.AvatarErrorMessage = null;
-    if (!this.SelectedAvatarStyle) {
-      this.SelectedAvatarStyle = '3D Clay Mascot';
-    }
-    if (!this.AvatarPrompt.trim() || !this.avatarPromptEditedByUser) {
-      this.AvatarPrompt = this.BuildContextualAvatarPrompt(this.SelectedAvatarStyle);
-      this.avatarPromptEditedByUser = false;
-    }
     this.cdr.markForCheck();
   }
 
   public CloseAvatarStudio(): void {
     this.AvatarStudioOpen = false;
-    this.AvatarErrorMessage = null;
     this.cdr.markForCheck();
   }
 
-  public OnAvatarPromptUserInput(): void {
-    this.avatarPromptEditedByUser = this.AvatarPrompt.trim().length > 0;
-  }
-
-  public RefreshAvatarPromptFromAgent(): void {
-    const style = this.SelectedAvatarStyle || '3D Clay Mascot';
-    this.SelectedAvatarStyle = style;
-    this.AvatarPrompt = this.BuildContextualAvatarPrompt(style);
-    this.avatarPromptEditedByUser = false;
+  public OnAvatarStudioChange(event: AvatarChangeEvent): void {
+    this.LogoURL = event.ImageUrl;
+    this.IconClass = event.IconClass;
     this.cdr.markForCheck();
   }
 
-  public SetAvatarStudioTab(tab: AvatarStudioTab): void {
-    this.AvatarStudioTab = tab;
-    this.AvatarErrorMessage = null;
-    this.cdr.markForCheck();
-  }
-
-  public SelectAvatarStylePreset(style: string): void {
-    this.SelectedAvatarStyle = this.SelectedAvatarStyle === style ? '' : style;
-    if (!this.avatarPromptEditedByUser || !this.AvatarPrompt.trim()) {
-      this.AvatarPrompt = this.BuildContextualAvatarPrompt(this.SelectedAvatarStyle || 'Minimal Geometric');
-      this.avatarPromptEditedByUser = false;
-    }
+  public OnAvatarGeneratingChange(isGenerating: boolean): void {
+    this.IsGeneratingAvatar = isGenerating;
     this.cdr.markForCheck();
   }
 
@@ -595,106 +494,18 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     this.cdr.markForCheck();
   }
 
-  public SelectIcon(iconClass: string): void {
-    if (this.LogoURL.trim().length > 0) {
-      this.pushAvatarHistory(this.LogoURL);
-      this.LogoURL = '';
-      this.AvatarPreviewError = false;
-      this.lastGeneratedPngSource = null;
-    }
-    this.IconClass = iconClass;
-    this.cdr.markForCheck();
-  }
-
   public ClearAvatarImage(): void {
-    if (this.LogoURL.trim().length > 0) {
-      this.pushAvatarHistory(this.LogoURL);
+    if (this.AvatarStudioRef) {
+      this.AvatarStudioRef.ClearAvatarImage();
+    } else if (this.LogoURL.trim().length > 0) {
       this.LogoURL = '';
-      this.AvatarPreviewError = false;
-      this.lastGeneratedPngSource = null;
-      this.AvatarErrorMessage = null;
-      this.cdr.markForCheck();
     }
+    this.cdr.markForCheck();
   }
 
   public UndoAvatar(): void {
-    if (this.AvatarHistory.length === 0) {
-      return;
-    }
-    const previous = this.AvatarHistory[this.AvatarHistory.length - 1];
-    this.AvatarHistory = this.AvatarHistory.slice(0, -1);
-    this.LogoURL = previous;
-    this.AvatarPreviewError = false;
-    this.lastGeneratedPngSource = null;
-    this.AvatarErrorMessage = null;
+    this.AvatarStudioRef?.Undo();
     this.cdr.markForCheck();
-  }
-
-  public OnLogoUrlChanged(): void {
-    this.AvatarPreviewError = false;
-    this.lastGeneratedPngSource = null;
-    this.cdr.markForCheck();
-  }
-
-  public async GenerateAvatar(): Promise<void> {
-    if (this.IsGeneratingAvatar) {
-      return;
-    }
-    const promptToUse = this.composeGenerationPrompt();
-    if (!this.AvatarPrompt.trim()) {
-      this.AvatarPrompt = promptToUse;
-    }
-    await this.runAvatarImageAction(promptToUse, null);
-  }
-
-  public async RefineAvatar(): Promise<void> {
-    const refineInstruction = this.AvatarRefinePrompt.trim();
-    if (this.IsGeneratingAvatar || !this.HasImageAvatar || !refineInstruction) {
-      return;
-    }
-    const sourceImage = await this.buildSourceImageForEdit();
-    if (!sourceImage) {
-      this.notifyAvatarFailure('Could not prepare the current avatar image for refinement.');
-      return;
-    }
-    await this.runAvatarImageAction(refineInstruction, sourceImage);
-    if (!this.AvatarErrorMessage) {
-      this.AvatarRefinePrompt = '';
-      this.cdr.markForCheck();
-    }
-  }
-
-  public ApplyQuickRefinement(instruction: string): void {
-    this.AvatarRefinePrompt = instruction;
-    this.cdr.markForCheck();
-    void this.RefineAvatar();
-  }
-
-  public async OnAvatarFileSelected(event: Event): Promise<void> {
-    const input = event.target instanceof HTMLInputElement ? event.target : null;
-    const file = input?.files?.[0];
-    if (!file) {
-      return;
-    }
-    if (!file.type.startsWith('image/')) {
-      this.notifyAvatarFailure('Please select an image file (PNG, JPG, WebP, or GIF).', 'warning');
-      if (input) {
-        input.value = '';
-      }
-      return;
-    }
-    try {
-      const rawDataUrl = await this.readFileAsDataUrl(file);
-      const downscaled = await this.downscaleImageToAvatarDataUrl(rawDataUrl);
-      this.applyNewAvatarDataUrl(downscaled, null);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.notifyAvatarFailure(`Could not process uploaded image: ${msg}`);
-    } finally {
-      if (input) {
-        input.value = '';
-      }
-    }
   }
 
   public SelectPersona(persona: MJAIPersonaEntity): void {
@@ -899,20 +710,12 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     this.IsLoading = true;
     this.ErrorMessage = null;
     this.ConfirmArchiveOpen = false;
-    this.AvatarPreviewError = false;
     this.ShowAllPersonas = false;
     this.TemplatePickerOpen = false;
     this.TemplateSearchText = '';
     this.SelectedTemplateCategory = 'All';
     this.AvatarStudioOpen = false;
-    this.AvatarStudioTab = 'ai';
-    this.AvatarPrompt = '';
-    this.SelectedAvatarStyle = '3D Clay Mascot';
-    this.AvatarRefinePrompt = '';
-    this.AvatarErrorMessage = null;
-    this.AvatarHistory = [];
-    this.avatarPromptEditedByUser = false;
-    this.lastGeneratedPngSource = null;
+    this.IsGeneratingAvatar = false;
     this.cdr.markForCheck();
 
     try {
@@ -1071,20 +874,6 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     return null;
   }
 
-  private composeGenerationPrompt(): string {
-    const manual = this.AvatarPrompt.trim();
-    if (!manual) {
-      return this.BuildContextualAvatarPrompt(this.SelectedAvatarStyle || '3D Clay Mascot');
-    }
-    if (
-      this.SelectedAvatarStyle &&
-      !manual.toLowerCase().includes(this.SelectedAvatarStyle.toLowerCase())
-    ) {
-      return `${manual} Visual style: ${this.SelectedAvatarStyle}. Square avatar icon, centered, no text.`;
-    }
-    return manual;
-  }
-
   /**
    * Synthesizes a rich, agent-aware avatar generation prompt combining the agent's name,
    * base template domain, custom role/focus, personality/tone, standing instructions cues,
@@ -1122,7 +911,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
       segments.push(`Specialties: ${this.truncateContextSnippet(standing, 120)}.`);
     }
 
-    const chosenStyle = (styleOverride ?? this.SelectedAvatarStyle).trim() || '3D Clay Mascot';
+    const chosenStyle = (styleOverride ?? '3D Clay Mascot').trim() || '3D Clay Mascot';
     segments.push(
       `Visual style: ${chosenStyle}. Centered square avatar icon with expressive character/motif matching this role, clean contrasting background, crisp at 128x128px, no text, no letters, no watermarks.`
     );
@@ -1136,253 +925,6 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
       return singleLine;
     }
     return `${singleLine.slice(0, maxLen - 1).trimEnd()}…`;
-  }
-
-  private async runAvatarImageAction(prompt: string, sourceImage: string | null): Promise<void> {
-    this.IsGeneratingAvatar = true;
-    this.AvatarErrorMessage = null;
-    this.cdr.markForCheck();
-
-    try {
-      const actionId = await this.resolveGenerateImageActionId();
-      const params: RunActionParamsList = [
-        { Name: 'Prompt', Value: prompt, Type: 'Input' },
-        { Name: 'NumberOfImages', Value: '1', Type: 'Input' },
-        { Name: 'Size', Value: '1024x1024', Type: 'Input' },
-        { Name: 'OutputFormat', Value: 'base64', Type: 'Input' },
-      ];
-      if (sourceImage) {
-        params.push({ Name: 'SourceImage', Value: sourceImage, Type: 'Input' });
-      }
-
-      const client = new GraphQLActionClient(this.ProviderToUse as GraphQLDataProvider);
-      const result = await client.RunAction(actionId, params);
-
-      if (!result.Success) {
-        const reason = result.Message?.trim() || 'Image generation model is unavailable or not configured.';
-        this.notifyAvatarFailure(reason, 'warning');
-        return;
-      }
-
-      const media = this.extractFirstMediaOutput(result.Result as ActionResultPayload);
-      if (!media) {
-        this.notifyAvatarFailure(
-          'Image generation completed but returned no image data. Check your image model configuration.',
-          'warning'
-        );
-        return;
-      }
-
-      const sourceDataUrl = media.data
-        ? `data:${media.mimeType || 'image/png'};base64,${media.data}`
-        : (media.url ?? '');
-      if (!sourceDataUrl) {
-        this.notifyAvatarFailure('Returned image payload contained neither base64 data nor a URL.', 'warning');
-        return;
-      }
-
-      const avatarDataUrl = await this.downscaleImageToAvatarDataUrl(sourceDataUrl);
-      const rawPngBase64 =
-        media.data && (!media.mimeType || media.mimeType.toLowerCase().includes('png'))
-          ? media.data
-          : null;
-      this.applyNewAvatarDataUrl(avatarDataUrl, rawPngBase64);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      this.notifyAvatarFailure(`Could not generate avatar: ${msg}`);
-      LogError(`AgentInstanceEditorModal.runAvatarImageAction: ${msg}`);
-    } finally {
-      this.IsGeneratingAvatar = false;
-      this.cdr.markForCheck();
-    }
-  }
-
-  private async resolveGenerateImageActionId(): Promise<string> {
-    if (this.cachedGenerateImageActionId) {
-      return this.cachedGenerateImageActionId;
-    }
-    try {
-      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-      const res = await rv.RunView<{ ID: string }>({
-        EntityName: 'MJ: Actions',
-        ExtraFilter: `Name = '${EscapeSQLString(GENERATE_IMAGE_ACTION_NAME)}'`,
-        Fields: ['ID'],
-        MaxRows: 1,
-        SkipTotalRowCount: true,
-        ResultType: 'simple',
-      });
-      if (res.Success && res.Results && res.Results.length > 0 && res.Results[0]?.ID) {
-        this.cachedGenerateImageActionId = res.Results[0].ID;
-        return this.cachedGenerateImageActionId;
-      }
-    } catch {
-      // Fall back to the shipped canonical Generate Image action ID
-    }
-    this.cachedGenerateImageActionId = GENERATE_IMAGE_FALLBACK_ID;
-    return this.cachedGenerateImageActionId;
-  }
-
-  private extractFirstMediaOutput(payload: ActionResultPayload): MediaOutput | null {
-    if (!payload) {
-      return null;
-    }
-    const outputParams: ActionOutputParamLike[] = Array.isArray(payload)
-      ? payload
-      : Array.isArray((payload as ActionResultPayloadWithParams).Params)
-        ? ((payload as ActionResultPayloadWithParams).Params ?? [])
-        : Object.values(payload).filter(
-            (v): v is ActionOutputParamLike => Boolean(v && typeof v === 'object' && 'Name' in v)
-          );
-    const imagesParam = outputParams.find(
-      (p) => typeof p?.Name === 'string' && p.Name.trim().toLowerCase() === 'images'
-    );
-    if (!imagesParam || imagesParam.Value == null) {
-      return null;
-    }
-    let rawImages: MediaOutput[] = [];
-    if (Array.isArray(imagesParam.Value)) {
-      rawImages = imagesParam.Value;
-    } else if (typeof imagesParam.Value === 'string') {
-      try {
-        const parsed = JSON.parse(imagesParam.Value) as MediaOutput[];
-        if (Array.isArray(parsed)) {
-          rawImages = parsed;
-        }
-      } catch {
-        return null;
-      }
-    }
-    const first = rawImages.find(
-      (item) => Boolean(item && (item.data?.trim() || item.url?.trim()))
-    );
-    return first ?? null;
-  }
-
-  private async buildSourceImageForEdit(): Promise<string | null> {
-    const current = this.LogoURL.trim();
-    if (!current) {
-      return null;
-    }
-    if (this.lastGeneratedPngSource && this.lastGeneratedPngSource.dataUri === current) {
-      return this.lastGeneratedPngSource.pngBase64;
-    }
-    if (current.startsWith('http://') || current.startsWith('https://')) {
-      return current;
-    }
-    if (current.startsWith('data:image/')) {
-      const pngDataUrl = await this.convertDataUrlToPngBase64(current);
-      if (pngDataUrl) {
-        return pngDataUrl;
-      }
-      return this.stripDataUrlPrefix(current);
-    }
-    return current;
-  }
-
-  private stripDataUrlPrefix(dataUrl: string): string {
-    const commaIdx = dataUrl.indexOf(',');
-    return commaIdx >= 0 ? dataUrl.slice(commaIdx + 1) : dataUrl;
-  }
-
-  private async convertDataUrlToPngBase64(dataUrl: string): Promise<string | null> {
-    if (typeof document === 'undefined' || typeof Image === 'undefined') {
-      return null;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = AVATAR_REFINE_PNG_SIZE;
-    canvas.height = AVATAR_REFINE_PNG_SIZE;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return null;
-    }
-    try {
-      const img = await this.loadHtmlImage(dataUrl);
-      ctx.drawImage(img, 0, 0, AVATAR_REFINE_PNG_SIZE, AVATAR_REFINE_PNG_SIZE);
-      const pngUri = canvas.toDataURL('image/png');
-      return pngUri.startsWith('data:image/png;base64,')
-        ? this.stripDataUrlPrefix(pngUri)
-        : null;
-    } catch {
-      return null;
-    }
-  }
-
-  private async downscaleImageToAvatarDataUrl(sourceUrl: string): Promise<string> {
-    if (typeof document === 'undefined' || typeof Image === 'undefined') {
-      return sourceUrl;
-    }
-    const canvas = document.createElement('canvas');
-    canvas.width = AVATAR_CANVAS_SIZE;
-    canvas.height = AVATAR_CANVAS_SIZE;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) {
-      return sourceUrl;
-    }
-    const img = await this.loadHtmlImage(sourceUrl);
-    const width = img.naturalWidth || img.width || AVATAR_CANVAS_SIZE;
-    const height = img.naturalHeight || img.height || AVATAR_CANVAS_SIZE;
-    const side = Math.min(width, height);
-    const sx = Math.max(0, Math.floor((width - side) / 2));
-    const sy = Math.max(0, Math.floor((height - side) / 2));
-
-    ctx.clearRect(0, 0, AVATAR_CANVAS_SIZE, AVATAR_CANVAS_SIZE);
-    ctx.drawImage(img, sx, sy, side, side, 0, 0, AVATAR_CANVAS_SIZE, AVATAR_CANVAS_SIZE);
-
-    const webp = canvas.toDataURL('image/webp', AVATAR_WEBP_QUALITY);
-    if (webp && webp.startsWith('data:image/webp')) {
-      return webp;
-    }
-    const png = canvas.toDataURL('image/png');
-    return png && png.startsWith('data:image/') ? png : sourceUrl;
-  }
-
-  private loadHtmlImage(src: string): Promise<HTMLImageElement> {
-    return new Promise<HTMLImageElement>((resolve, reject) => {
-      const img = new Image();
-      if (src.startsWith('http://') || src.startsWith('https://')) {
-        img.crossOrigin = 'anonymous';
-      }
-      img.onload = () => resolve(img);
-      img.onerror = () => reject(new Error('Failed to decode avatar image.'));
-      img.src = src;
-    });
-  }
-
-  private readFileAsDataUrl(file: File): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          resolve(reader.result);
-        } else {
-          reject(new Error('Unsupported file reader output.'));
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read uploaded image file.'));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  private pushAvatarHistory(previousUrl: string): void {
-    const next = [...this.AvatarHistory, previousUrl];
-    this.AvatarHistory = next.length > MAX_AVATAR_HISTORY ? next.slice(next.length - MAX_AVATAR_HISTORY) : next;
-  }
-
-  private applyNewAvatarDataUrl(dataUrl: string, rawPngBase64: string | null): void {
-    this.pushAvatarHistory(this.LogoURL);
-    this.LogoURL = dataUrl;
-    this.AvatarPreviewError = false;
-    this.AvatarErrorMessage = null;
-    this.lastGeneratedPngSource = rawPngBase64
-      ? { dataUri: dataUrl, pngBase64: rawPngBase64 }
-      : null;
-    this.cdr.markForCheck();
-  }
-
-  private notifyAvatarFailure(message: string, severity: 'warning' | 'error' = 'error'): void {
-    this.AvatarErrorMessage = message;
-    MJNotificationService.Instance?.CreateSimpleNotification(message, severity, 5000);
-    this.cdr.markForCheck();
   }
 
   private updateSiblingCount(): void {

@@ -17,6 +17,7 @@
 
 import type { EventEmitter } from '@angular/core';
 import type { MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import type { MessageCitation } from '@memberjunction/ai-core-plus';
 
 /** State surfaced to the agent-presence slot for visualization. */
 export type MJChatAgentPresenceState = 'idle' | 'listening' | 'thinking' | 'speaking';
@@ -141,5 +142,54 @@ export interface IMJChatDemonstrationSurfaceComponent {
  */
 export interface IMJChatMessageRendererComponent {
     /** The conversation detail row to render. */
-    Message: import('@memberjunction/core-entities').MJConversationDetailEntity | null;
+    Message: MJConversationDetailEntity | null;
+}
+
+/**
+ * Optional transform callback that lets downstream applications filter, reorder,
+ * relabel, or append custom external/structured citations per message without
+ * forking the conversations widget.
+ */
+export type MJChatCitationTransform = (
+    citations: readonly MessageCitation[],
+    message: MJConversationDetailEntity
+) => readonly MessageCitation[];
+
+/**
+ * Template CONTEXT for the `citedSources` slot — replaces the entire
+ * `<mj-cited-sources-bar>` footer beneath AI messages that have citations.
+ *
+ * Project via:
+ * `<ng-template mjChatSlot="citedSources" let-citations let-message="message" let-openCitation="openCitation">`
+ */
+export interface IMJChatCitedSourcesContext {
+    /** Resolved (post-transform) citations for this message. */
+    $implicit: readonly MessageCitation[];
+    /** Named alias for `$implicit`. */
+    citations: readonly MessageCitation[];
+    /** The conversation detail row these citations belong to. */
+    message: MJConversationDetailEntity;
+    /** Triggers the widget's built-in open handler for a citation (record, artifact, or URL). */
+    openCitation: (citation: MessageCitation) => void;
+}
+
+/**
+ * Template CONTEXT for the `citedSourcePill` slot — customizes each individual
+ * source pill inside `<mj-cited-sources-bar>` while keeping the bar's header,
+ * wrapping layout, and `"+K more"` / `"Show less"` overflow toggle intact.
+ *
+ * Project via:
+ * `<ng-template mjChatSlot="citedSourcePill" let-citation let-icon="icon" let-title="title" let-open="open">`
+ */
+export interface IMJChatCitedSourcePillContext {
+    /** The citation rendered by this pill. */
+    $implicit: MessageCitation;
+    /** Named alias for `$implicit`. */
+    citation: MessageCitation;
+    /** Resolved Font Awesome icon class (from `EntityInfo.Icon` or citation kind fallback). */
+    icon: string;
+    /** Accessible title / tooltip label for the citation. */
+    title: string;
+    /** Triggers the bar's click handler (stops event propagation and emits `CitationClicked`). */
+    open: (event?: Event) => void;
 }
