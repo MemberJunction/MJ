@@ -3460,7 +3460,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 
 ### 2026-11-26 — The agent eval suite, authored (no LLM spend) — A7a
 
-- **Branch:** `ps/pr-5-agent-fp-input--A7a` (from `origin/ps/pr-5-agent-fp-input` @ `261546a083`; red attack-list commit `e5ff4548dc`).
+- **Branch:** `ps/pr-5-agent-fp-input--A7a` (from `origin/ps/pr-5-agent-fp-input` @ `261546a083`; red attack-list commit `e5ff4548dc`; merged `ps/pr-5-agent-fp-input` @ `aebd2c4707` for D-091 item 4 & item 5).
 - **What landed:**
   - Self-contained `packages/AI/PredictiveStudio/Engine/src/agent-eval/` importing only `@memberjunction/core`,
     `@memberjunction/core-entities`, `@memberjunction/global`, `@memberjunction/testing-engine`, and `node:*` (zero
@@ -3504,6 +3504,9 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   - `PS_PR=5 PS_ENV_FILE=.../.env.MJ_PS_PR5_claudeint .../ps-env.sh pnpm mj sync validate --dir=metadata` (read-only
     against `MJ_PS_PR5_claudeint`, D5-A7a-1) -> exit 0 (`Files: 874`, `Entities: 7182`, `Errors: 0`, `Warnings: 1377`
     best-practice on pre-existing files; 0 warnings/errors on A7a's 4 metadata files).
+  - `node /Users/arieglazier/repos/ps-rebuild-plans/tools/milestone-exit.mjs --plan ... --milestone A7a` (at `77bec97c21`) -> `# checks 22 · failed 0` (`cmd:build` + all 3 touched-package tests + all 9 guards).
+  - `CI=true node /Users/arieglazier/repos/ps-rebuild-plans/tools/ci-mirror.mjs --mj ... --tier fast --pr 5` (at `77bec97c21`) -> `summary: ok (12 passed)` (`20261126-183634-43737`).
+  - Merged `ps/pr-5-agent-fp-input` (`aebd2c4707`, carrying D-091 item 4 LiveKitNative `-threads 1` and item 5 GraphQLDataProvider WS fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input`; re-verifying `milestone-exit` and fast tier via pre-push hook.
 - **Mutation table (ruling S1):**
 
   | Guard | Mutation | Red attack | Restored |
