@@ -254,6 +254,12 @@ packages/ServerBootstrap/src/generated/mj-class-registrations.ts
 packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts
 packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts
 packages/Angular/BootstrapLite/src/generated/mj-class-registrations.ts
+# The other tracked mj:manifest outputs (council F-037)
+packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts
+packages/AI/A2AServer/src/generated/class-registrations-manifest.ts
+packages/AI/MCPServer/src/generated/class-registrations-manifest.ts
+packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts
+src/generated/class-registrations-manifest.ts
 # The lockfile: A7a adds @memberjunction/testing-engine to the PS Engine (§9 D5-19)
 pnpm-lock.yaml
 # Records
@@ -2598,7 +2604,13 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 
 ## 11. Progress and handoff log (append-only; newest at the bottom)
 
-No sessions yet. The first entry is written by the kickoff session (M0) using `templates/handoff-entry.md`.
+### 2026-11-25 — kickoff complete; plan PR open — kickoff agent (Claude Opus 5.5)
+
+- Draft PR #6966 opened from `ps/pr-5-agent-fp-input` (`72e521cc4c`, the plan of record), pushed through the installed pre-push hook: milestone-exit 22 checks ok, `ci-mirror --tier fast` 12/12 ok.
+- `origin/next` moved to `d214248682` (2 commits) between the refresh and the branch cut; `check-anchors` at `d214248682`: `ok 91 · moved 0 · changed 0 · missing 0`. The branch is cut from `d214248682`.
+- Header `Status` set to `ready` (the refresh and tier upgrade are done).
+- Next: M0 (three implementer databases from clean, baseline on the D-092 routing, §2.4 cost re-measure). The MJ copy of this entry rides M0's first commit.
+- Kickoff code review r1 (council `xhczg6`, 8 findings F-031…F-038, all confirmed and fixed): plans-repo tools `882a363`/`cb7e898` (mirror MJAPI port and integration.yml flags, MJAPI stop, `merge-next` throw handling, `milestone-exit` plan resolution and contract enumeration), and here §11 moved out of §12 and the allowlist now lists every tracked `mj:manifest` output. The MJ copy carries this §11 entry from this commit on (the pre-push `handoff-recency` check requires it on the PR branch).
 
 ## 12. Refresh log (append-only)
 
