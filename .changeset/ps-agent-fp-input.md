@@ -3,6 +3,7 @@
 "@memberjunction/core": minor
 "@memberjunction/graphql-dataprovider": minor
 "@memberjunction/predictive-studio": minor
+"@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
 ---

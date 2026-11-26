@@ -3279,7 +3279,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->c020f31c4d<!-- /gen:head -->
+- Head: <!-- gen:head -->ef641d95a0<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3515,6 +3515,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   - `node /Users/arieglazier/repos/ps-rebuild-plans/tools/milestone-exit.mjs --plan ... --milestone A7a` (at `77bec97c21`) -> `# checks 22 · failed 0` (`cmd:build` + all 3 touched-package tests + all 9 guards).
   - `CI=true node /Users/arieglazier/repos/ps-rebuild-plans/tools/ci-mirror.mjs --mj ... --tier fast --pr 5` (at `77bec97c21`) -> `summary: ok (12 passed)` (`20261126-183634-43737`).
   - Merged `ps/pr-5-agent-fp-input` (`aebd2c4707`, carrying D-091 item 4 LiveKitNative `-threads 1` and item 5 GraphQLDataProvider WS fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input`; re-verifying `milestone-exit` and fast tier via pre-push hook.
+  - Merged `ps/pr-5-agent-fp-input` (`020d86e373`, carrying D-091 item 6 MJServer delete-test timeout fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input` (`ef641d95a0`); regenerated §10 and changeset with `pr-body.mjs`; fast tier re-run via pre-push hook.
 - **Mutation table (ruling S1):**
 
   | Guard | Mutation | Red attack | Restored |
