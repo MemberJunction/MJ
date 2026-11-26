@@ -8,6 +8,7 @@ import { configInfo } from '../config.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { GetImpersonationSession } from '../auth/impersonationGuard.js';
 import { RunQueryResultType } from './QueryResolver.js';
 import { ClampAdhocTimeoutSeconds } from './adhocTimeout.js';
 
@@ -68,6 +69,9 @@ export class AdhocQueryResolver extends ResolverBase {
         // filter to narrow, so the only correct answer for such a principal is no.
         if (IsScopeLimitedPrincipal(context.userPayload?.userRecord)) {
             return this.buildErrorResult('Ad-hoc SQL execution is not permitted for scope-limited sessions.');
+        }
+        if (GetImpersonationSession(context.userPayload) !== null) {
+            return this.buildErrorResult('Ad-hoc SQL execution is not permitted during user impersonation sessions.');
         }
         const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false, purpose: 'adhoc' });
         if (!provider) {

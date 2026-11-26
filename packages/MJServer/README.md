@@ -124,6 +124,9 @@ MJServer uses a layered configuration system with the following priority (highes
 | `MJ_COMMS_HMAC_SECRET` | Secret that signs and verifies Communications V2 click-tracking links and open pixels. Long random value, identical on every instance. Unset: links are not rewritten, `/comms/click` rejects every request, and open pixels are unsigned — see [Communications V2](#communications-v2) | (optional) |
 | `COMMUNICATION_VENDOR_WEBHOOK_KEY__SENDGRID` | SendGrid Event Webhook public verification key for `POST /comms/webhooks/sendgrid`. Unset: that route answers `401` | (optional) |
 | `MJ_COMMS_PREFERENCE_ELEMENT_SRC` | URL of the `<mj-comms-preference-center>` element bundle used by `GET /comms/preferences/:token` | bundle from `@memberjunction/ng-communications`, else the built-in page |
+| `MJ_ENABLE_USER_IMPERSONATION` | Infrastructure opt-in for Generic User Impersonation (`'true'` enables; `'false'` emergency kill switch overrides `mj.config.cjs`) — see [User Impersonation](#user-impersonation) | `false` |
+| `MJ_USER_IMPERSONATION_ALLOW_WRITES` | Opt-in allowing triple-gated `ActAs` write mode when `MJ_ENABLE_USER_IMPERSONATION=true` and caller holds direct `User Impersonation: Act As (Allow Writes)` | `false` |
+| `MJ_USER_IMPERSONATION_MAX_TTL_MINUTES` | Upper TTL bound (minutes, clamped to `5..60`) for temporary impersonation API keys | `60` |
 
 ### Configuration File (`mj.config.cjs`)
 
@@ -585,6 +588,30 @@ The server supports two types of API key authentication:
 - Authenticates as the system user with elevated privileges
 - Used for server-to-server communication
 
+### User Impersonation
+
+`UserImpersonationResolver` (`src/resolvers/UserImpersonationResolver.ts`) and `src/auth/impersonationGuard.ts` provide a built-in, 6-layer fail-closed control plane that lets explicitly authorized operators temporarily inspect the application as an eligible end user (**server-enforced Read-Only `ViewAs` by default**) without signing out of their IdP session.
+
+| GraphQL Operation | Kind | Purpose |
+|---|---|---|
+| `MJCanImpersonateUsers` | Query | Returns `{ CanImpersonate, CanImpersonateWithWrites, AuthorizationName, WriteAuthorizationName, DefaultTTLMinutes, MaxTTLMinutes, ResultCode, Message }` |
+| `MJListImpersonatableUsers(input)` | Query | Lists eligible active non-privileged users (live DB `BypassCache: true`, failing closed on role/authorization query errors) excluding `System`, `Owner`, `protectedTargetRoles`, peer impersonators, and self |
+| `MJStartUserImpersonation(input)` | Mutation | Requires an active `MJAPI` application row, revokes prior actor keys (plus a post-mint cross-replica sibling sweep), mints a narrow-scoped key (`MJ-Impersonation:v1:<RO\|RW>:<actorUUID>:<targetUUID>`, default `15` min TTL, clamped to `5..60` min, bound to `MJAPI`, `Priority=1000` `IsDeny` rules, **never `full_access`**), persists mandatory fail-closed audit log (`AUDIT_LOG_FAILED` rolls back and deletes the key), and returns `{ RawApiKey, APIKeyID, ExpiresAt, Mode, ReadOnly, TargetUser }` |
+| `MJEndUserImpersonation(input)` | Mutation | Verifies a resolver-minted `User Impersonation Started` audit record, closes active impersonation WebSocket connections (`4403`), deletes `MJ: API Key Scopes` & `MJ: API Key Applications`, revokes via `APIKeyEngine.RevokeAPIKey()` (retaining the revoked `MJ: API Keys` row for forensic linkage), and logs `User Impersonation Ended` (remains operational even when `MJ_ENABLE_USER_IMPERSONATION=false` for incident response) |
+
+**Security invariants (fail-closed):**
+
+- **Dual-key kill switch (off by default everywhere)**: Requires **BOTH** `MJ_ENABLE_USER_IMPERSONATION=true` (`userImpersonation.enabled: true`, default `false`) **AND** an explicit `Allow` grant on **`User Impersonation`** (`0` roles granted by default).
+- **Server-enforced Read-Only (`ViewAs`) by default + synchronous CRUD-only `ActAs`**: Apollo `CreateImpersonationApolloPlugin` (`didResolveOperation`), WebSocket `ValidateImpersonationWebSocketSubscribe` (`onSubscribe`, failing closed if the AST cannot be resolved) plus `RunGraphQLOperationWithImpersonationSession` wrapping WebSocket `execute` and `subscribe`, default-deny `CreateImpersonationHttpGuardMiddleware` (allowing only exact `GRAPHQL_ROOT_PATH` and `/api/v1/*` — permitting only `GET`/`HEAD`/`OPTIONS` and `POST /api/v1/views/*` in `ViewAs` while refusing `POST /api/v1/queries/run`, server extensions, `/realtime/*`, `/oauth/*`, `/magic-link/*`, and `/widget/*`), `@RefuseImpersonationSessions()` resolver guards, and request-scoped `AsyncLocalStorage` + `PreSave`/`PreDelete`/`PreRunView` DataHooks enforce read-only in `ViewAs` and refuse side-effecting `@Query` resolvers, actions, AI agents/prompts, remote operations, templates, work-queue enqueueing, and durable background job writes even in `ActAs`.
+- **Anti-escalation & live target ceiling**: Hard-blocks `System`, `Owner`, inactive accounts, self, `Administrator`/`Agent Administrator`/`Developer`/`Integration` (always unioned with any custom `protectedTargetRoles` so config can only tighten, never weaken), and peer `User Impersonation` holders — checked live against the DB (`BypassCache: true`) at mint time and re-verified on every request in `context.ts` (single-lookup key validation, fail-closed on lookup failure).
+- **Reserved key-label & field protection**: `MJ-Impersonation:` key labels can only be minted inside `UserImpersonationResolver`; `APIKeyResolver.CreateAPIKey` and `ImpersonationPreSaveHook` reject creating, renaming/stripping `Label`, modifying `ExpiresAt` or `UserID`, or reactivating/changing `Status` to anything other than `'Revoked'` on `MJ-Impersonation:` keys outside the server mint path (while preserving `LastUsedAt` updates and keeping standard `RevokeAPIKey` / `Status = 'Revoked'` incident-response revocation working for any authorized caller).
+- **Sensitive-entity & private conversation isolation**: Blocks reading and writing API keys/scopes/applications, credentials, company integrations, MCP servers, encryption keys, OAuth caches/clients/tokens, audit logs, record changes, communication logs/preferences, users (except own `CurrentUser` bootstrap), roles, authorizations, ACL/RLS/entity/query/resource permissions, public/guest links, magic links, list invitations, and any entity with un-decryptable encrypted or secret-named fields across scopes, DataHooks, `ResolverBase`, SQL subqueries, `AdhocQueryResolver`, `QueryResolver` (failing closed on unknown or oversized queries and transitively inspecting composed query dependencies via a linear-time scanner), `DatasetResolver`, `SearchEntitiesResolver`, and `EntityRecordNameResolver`.
+- **Mandatory fail-closed audit trail & actor attribution**: Captures `actorUserId`, `targetUserId`, `apiKeyId`, `mode`, `readOnly`, `ttlMinutes`, `expiresAt`, `ipAddress`, and `userAgent` (never `RawApiKey`), rate-limits and truncates `Denied` audit entries, preserves revoked key rows for forensic FK joins, and attributes `ActAs` writes in both `MJ: Record Changes` (`ChangesDescription`) and `MJ: Audit Logs` (`Details.impersonation`).
+- **Multi-replica / per-process limits**: The per-actor mint serialization lock (`actorMintLocks`), the `Denied` audit sliding-window rate limiter, and the active WebSocket close registry (`CloseImpersonationWebSockets`) are **per-process** in-memory structures. Multi-replica deployments rely on the post-mint database sibling sweep (revoking keys concurrently minted on peer replicas), live/cached DB revocation checks on incoming HTTP requests and WebSocket `onSubscribe`, and the short TTL ceiling (`5..60` min).
+- **API Key Header Redaction Warning**: User API keys (including impersonation keys) are accepted on **both** `X-API-Key` and `x-mj-user-api-key` HTTP headers (and `connectionParams` for `graphql-ws`). Operators configuring reverse proxies, WAFs, APM agents, or HTTP log scrubbers **must redact both `x-api-key` and `x-mj-user-api-key`** (as well as `x-mj-api-key` and `authorization`).
+
+See the full end-to-end guide in [guides/USER_IMPERSONATION_GUIDE.md](../../guides/USER_IMPERSONATION_GUIDE.md).
+
 ### Scope-Based Authorization
 
 API keys are subject to a two-level scope evaluation: the application ceiling (maximum allowed scopes for MJAPI, MCP Server, etc.) and the individual key's assigned scopes.
@@ -661,6 +688,7 @@ The server includes resolvers for the following domains:
 | `DatasetResolver` | Dataset operations |
 | `UserViewResolver` | User view management |
 | `UserResolver` | User profile operations |
+| `UserImpersonationResolver` | Authorization-gated temporary user impersonation (`MJCanImpersonateUsers`, `MJListImpersonatableUsers`, `MJStartUserImpersonation`, `MJEndUserImpersonation`) — see [User Impersonation](#user-impersonation) and [USER_IMPERSONATION_GUIDE.md](../../guides/USER_IMPERSONATION_GUIDE.md) |
 | `UserFavoriteResolver` | Favorite record management |
 | `MergeRecordsResolver` | `MergeRecords` mutation (requires `AllowRecordMerge` on the entity; API keys need the `entity:merge` scope), plus `GetEntityDependencies` / `GetRecordDependencies` queries. See the [Duplicate Management Guide](../../guides/DUPLICATE_MANAGEMENT_GUIDE.md). |
 | `SyncDataResolver` / `SyncRolesUsersResolver` | Data synchronization |

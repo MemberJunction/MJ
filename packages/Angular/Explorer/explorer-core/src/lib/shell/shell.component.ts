@@ -32,6 +32,7 @@ import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } fro
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMenuDivider, ApplicationInfoRef } from '../user-menu';
+import { MJUserImpersonationService } from '../user-impersonation';
 import { MJUserEntity, InstanceConfigEngine, InteractiveFormsEngine, UserInfoEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
@@ -838,6 +839,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private reactAdapter = inject(AngularAdapterService);
   private diagnosticsService = inject(MJDiagnosticsService, { optional: true });
   private readonly shellChromePolicyService = inject(ShellChromePolicyService, { optional: true });
+  private readonly impersonationService = inject(MJUserImpersonationService, { optional: true });
   public DiagnosticDialogOpen = false;
 
   constructor(
@@ -3340,7 +3342,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       availableThemes: this.themeService.AvailableThemes,
       appliedTheme: this.themeService.AppliedTheme,
       feedbackEnabled,
-      showAdminMenuItems: this.ShowAdminMenuItems
+      showAdminMenuItems: this.ShowAdminMenuItems,
+      canImpersonate: this.impersonationService?.CanImpersonate ?? false,
+      isImpersonating: this.impersonationService?.IsImpersonating ?? false
     };
 
     // Initialize menu
@@ -3377,6 +3381,23 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.refreshMenuElements();
       this.cdr.detectChanges();
     });
+
+    // Subscribe to user impersonation capability & active session changes
+    if (this.impersonationService) {
+      this.impersonationService.State$.pipe(
+        takeUntil(this.destroy$)
+      ).subscribe((state) => {
+        if (this.userMenu) {
+          this.userMenu.UpdateContext({
+            canImpersonate: state.canImpersonate,
+            isImpersonating: state.activeTarget !== null
+          });
+        }
+        this.refreshMenuElements();
+        this.cdr.detectChanges();
+      });
+      void this.impersonationService.CheckCanImpersonate();
+    }
   }
 
   /**
@@ -3478,6 +3499,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         avatarUrl: this.UserImageURL || null,
         avatarIconClass: this.UserIconClass || null
       });
+      return;
+    }
+
+    if (result.message === 'view-as-user') {
+      this.UserMenuVisible = false;
+      this.impersonationService?.OpenDialog();
+      return;
+    }
+
+    if (result.message === 'exit-impersonation') {
+      this.UserMenuVisible = false;
+      await this.impersonationService?.ExitImpersonation();
       return;
     }
 

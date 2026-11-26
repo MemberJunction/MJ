@@ -10,7 +10,8 @@ import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { z } from 'zod';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 @InputType()
@@ -177,6 +178,7 @@ export class ReportResolver extends ResolverBase {
    * run as the authenticated user, so a preview returns and a send merges only rows and fields that
    * user may read. The view's client-supplied clauses get the same screen as a RunView request.
    */
+  @RefuseImpersonationSessions()
   @Query(() => RunEntityCommunicationResultType)
   async RunEntityCommunicationByViewID(
     @Arg('entityID', () => String) entityID: string,
@@ -188,6 +190,7 @@ export class ReportResolver extends ResolverBase {
     @Arg('includeProcessedMessages', () => Boolean) includeProcessedMessages: boolean,
     @Ctx() { userPayload, providers }: AppContext
   ): Promise<RunEntityCommunicationResultType> {
+    AssertNotImpersonationSession(userPayload, 'RunEntityCommunicationByViewID');
     // Check API key scope authorization for communication send
     await this.CheckAPIKeyScopeAuthorization('communication:send', entityID, userPayload);
 

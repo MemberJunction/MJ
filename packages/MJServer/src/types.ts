@@ -3,6 +3,7 @@ import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
 import { GetSystemUser } from './auth/index.js';
+import type { ImpersonationSessionInfo } from './auth/impersonationGuard.js';
 import type { MagicLinkScopeEntry } from './auth/magicLink/types.js';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 
@@ -26,6 +27,13 @@ export type UserPayload = {
   apiKeyId?: string;
   /** SHA-256 hash of the MJ API key (used for scope authorization) */
   apiKeyHash?: string;
+  /** Expiration timestamp in epoch milliseconds (`APIKey.ExpiresAt.getTime()`) when authenticated via an expiring MJ API key. */
+  apiKeyExpiresAtMs?: number;
+  /**
+   * Immutable server-stamped impersonation session metadata when authenticated via a temporary
+   * `MJ-Impersonation:` API key. Never populated from client input.
+   */
+  impersonationSession?: ImpersonationSessionInfo;
   /**
    * The IdP's OIDC `email_verified` assertion from the verified JWT, when present.
    * Three-state: `true` (IdP vouched for the email), `false` (IdP explicitly says the email is
@@ -91,6 +99,19 @@ export type AppContext = {
    * must fail closed on it.
    */
   RequestOrigin?: string;
+
+  /**
+   * Caller `User-Agent` HTTP header when available (HTTP requests only; absent on WebSocket contexts).
+   * Recorded in security audit logs (e.g., `User Impersonation Started` / `Denied`).
+   */
+  UserAgent?: string;
+
+  /**
+   * True when the raw HTTP request included an `x-api-key` or `x-mj-user-api-key` header.
+   * Used as a defense-in-depth anti-smuggling check on control-plane resolvers so dual-header
+   * requests (`Authorization: Bearer ...` + `x-api-key: ...`) can never reach impersonation APIs.
+   */
+  HasRawApiKeyHeader?: boolean;
 };
 
 export class ProviderInfo {

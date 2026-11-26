@@ -4,6 +4,7 @@
  */
 
 import type { APIKeyActingContext, APIKeyRowFilterBinding } from '@memberjunction/core';
+import type { MJAPIKeyEntity } from '@memberjunction/core-entities';
 
 // =========================================================================
 // API KEY GENERATION AND MANAGEMENT INTERFACES
@@ -91,12 +92,17 @@ export interface APIKeyValidationResult {
     User?: import('@memberjunction/core').UserInfo;
     /** The API key ID if valid */
     APIKeyId?: string;
-    /**
-     * The SHA-256 hash of the validated API key.
+    /** The SHA-256 hash of the validated API key.
      * Provided so callers can use it for subsequent Authorize() calls
      * without re-hashing the raw key.
      */
     APIKeyHash?: string;
+    /**
+     * The validated `MJ: API Keys` entity record returned from the single hash lookup
+     * performed during `ValidateAPIKey`. Callers can inspect `Label`, `ExpiresAt`, etc.
+     * directly without a second lookup or TOCTOU race.
+     */
+    APIKey?: MJAPIKeyEntity;
     /** Error message if invalid */
     Error?: string;
 }

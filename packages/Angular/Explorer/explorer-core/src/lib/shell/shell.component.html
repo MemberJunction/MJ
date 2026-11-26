@@ -6,6 +6,9 @@
   <!-- Diagnostic Recording Banner — inside the clipped shell container so its Stop control is visible -->
   <mj-diagnostic-recording-banner></mj-diagnostic-recording-banner>
 
+  <!-- Active User Impersonation Banner — rendered only while viewing as another user -->
+  <mj-user-impersonation-banner></mj-user-impersonation-banner>
+
   <!-- Header -->
   <header class="shell-header">
     <!-- MJ Logo -->
@@ -462,3 +465,6 @@
   [IsVisible]="DiagnosticDialogOpen"
   (Closed)="DiagnosticDialogOpen = false">
 </mj-diagnostic-report-problem-dialog>
+
+<!-- Generic User Impersonation Dialog ("View As User...") -->
+<mj-user-impersonation-dialog></mj-user-impersonation-dialog>

@@ -44,6 +44,7 @@ import {
     ResolveSendGridWebhookVerificationKey,
     type CommsActivityWorkPayload,
 } from '../rest/CommsWebhookHandler.js';
+import { GetActiveRequestImpersonationSession } from '../auth/impersonationGuard.js';
 
 /** Handler key (and topic name) for chunked V2 sends. */
 export const COMMS_DISPATCH_HANDLER_KEY = 'comms.dispatch';
@@ -115,6 +116,11 @@ export function ConfigureCommsV2WorkQueue(
 
     const enqueueWork = workQueueEnabled
         ? async (taskType: string, payload: object) => {
+            if (GetActiveRequestImpersonationSession()) {
+                throw new Error(
+                    `Enqueueing asynchronous work-queue task '${taskType}' is prohibited during user impersonation sessions because background execution outlives the impersonation key TTL.`
+                );
+            }
             if (WorkQueueEngine.Instance.Topics.length === 0) {
                 await WorkQueueEngine.Instance.Config(false, CommunicationEngine.Instance.ContextUser);
             }

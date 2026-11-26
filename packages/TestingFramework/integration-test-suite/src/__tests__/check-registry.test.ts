@@ -143,6 +143,7 @@ import { DocsSemanticGraphChecks } from '../checks/docs-semantic-graph.checks';
 import { RunViewFeatureChecks } from '../checks/runview-features.checks';
 import { WorkBusCoreChecks } from '../checks/work-bus-core.checks';
 import { IntegrationSchemaPipelineChecks } from '../checks/integration-schema-pipeline.checks';
+import { UserImpersonationChecks } from '../checks/user-impersonation.checks';
 import { GeminiDecisionsChecks } from '../checks/gemini-decisions.checks';
 
 const makeCheck = (id: string): NamedCheck => ({ Id: id, Name: id, Fn: async () => { /* pass */ } });
@@ -352,6 +353,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         ['transaction-group-concurrency-client', TransactionGroupConcurrencyClientChecks, 4], // TGC1-TGC4 optimistic concurrency for transaction groups across two GraphQL sessions: a stale overlapping update refuses the group, non-overlapping and converging updates commit, SkipOldValuesCheck is honored (IT173)
         ['integration-schema-pipeline', IntegrationSchemaPipelineChecks, 5], // ISP1-ISP5 live SQL native typing, key capping, Soft PK/FK/Organic Key auto-indexing, and ADD COLUMN descriptions (IT165)
         ['gemini-decisions', GeminiDecisionsChecks, 8], // GD1-GD8 Gemini Decision 1 catalog, ClassFactory, guarded Google & OpenRouter runner calls, bound credentials, block_reason & 400/403 failover, and Default Decision ordering (IT175)
+        ['user-impersonation', UserImpersonationChecks, 5], // UI1-UI5 end-to-end grant/enable/mint/read/refused-write/end, all 8 refusals, HTTP/WS expiry, Started/Ended/Denied audit + failed-audit rollback, normal session/API-key regression (IT194)
     ];
 
     for (const [prefix, checks, expectedCount] of bundles) {
@@ -678,6 +680,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'transaction-groups': 6,
         'transaction-groups-batched': 5,
         'user-elevation': 5,
+        'user-impersonation': 5,
         'user-routines': 18,
         'video-data-snapshot': 3,
         'video-generation-cost': 2,
@@ -714,7 +717,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(292);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(293);
     });
 });
 

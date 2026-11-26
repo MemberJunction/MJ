@@ -34,7 +34,8 @@ import { StatusUpdateOwnerID } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
 import { ResolveWidgetGuestRunContext, ElevateUserPayload } from '../realtimeWidget/widgetGuestElevation.js';
-import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { AuthorizeConversationTurn } from '../realtimeSessions/sessionAccess.js';
 import { IsTrustedAgentRunCaller } from './agent-run-data-guard.js';
@@ -777,6 +778,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Supports fire-and-forget mode to avoid Azure proxy timeouts on long-running agent executions.
      */
     @RefuseScopeLimitedPrincipals()
+    @RefuseImpersonationSessions()
     @Mutation(() => AIAgentRunResult)
     async RunAIAgent(
         @Arg('agentId') agentId: string,
@@ -804,6 +806,7 @@ export class RunAIAgentResolver extends ResolverBase {
         /** JSON `{ paused?: boolean }` — start-paused for a Flow agent that submits a graph. */
         @Arg('taskGraphDebug', { nullable: true }) taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
+        AssertNotImpersonationSession(userPayload, 'RunAIAgent');
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
 
@@ -1207,6 +1210,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * @param agentId - The agent to execute
      * @param maxHistoryMessages - Maximum number of history messages to include (default: 20)
      */
+    @RefuseImpersonationSessions()
     @Mutation(() => AIAgentRunResult)
     async RunAIAgentFromConversationDetail(
         @Arg('userMessageId') userMessageId: string,
@@ -1243,6 +1247,7 @@ export class RunAIAgentResolver extends ResolverBase {
          *  Checked to be a branch of the conversation whose path holds `userMessageId`. */
         @Arg('replyBranchId', { nullable: true }) replyBranchId?: string
     ): Promise<AIAgentRunResult> {
+        AssertNotImpersonationSession(userPayload, 'RunAIAgentFromConversationDetail');
         const p = GetReadWriteProvider(providers);
         const currentUser = this.GetUserFromPayload(userPayload);
 
@@ -1539,6 +1544,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * new agent run to resume execution with the human's input.
      */
     @RefuseScopeLimitedPrincipals()
+    @RefuseImpersonationSessions()
     @Mutation(() => AIAgentRunResult)
     async RespondToAgentRequest(
         @Arg('requestId') requestId: string,
@@ -1548,6 +1554,7 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('responseData', { nullable: true }) responseData?: string,
         @Arg('resumeAgent', { nullable: true }) resumeAgent?: boolean
     ): Promise<AIAgentRunResult> {
+        AssertNotImpersonationSession(userPayload, 'RespondToAgentRequest');
         const startTime = Date.now();
         try {
             const currentUser = this.GetUserFromPayload(userPayload);
@@ -1619,6 +1626,7 @@ export class RunAIAgentResolver extends ResolverBase {
      * Updates RequestForUserID and sends a notification to the new assignee.
      */
     @RefuseScopeLimitedPrincipals()
+    @RefuseImpersonationSessions()
     @Mutation(() => AIAgentRunResult)
     async ReassignAgentRequest(
         @Arg('requestId') requestId: string,
@@ -1626,6 +1634,7 @@ export class RunAIAgentResolver extends ResolverBase {
         @Ctx() { userPayload, providers }: AppContext,
         @Arg('note', { nullable: true }) note?: string
     ): Promise<AIAgentRunResult> {
+        AssertNotImpersonationSession(userPayload, 'ReassignAgentRequest');
         const startTime = Date.now();
         try {
             const currentUser = this.GetUserFromPayload(userPayload);

@@ -8,7 +8,7 @@ import {
   PotentialDuplicateResult,
 } from '@memberjunction/core';
 import { AppContext } from '../types.js';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolverBase } from '../generic/ResolverBase.js';
 
 import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes.js';
 import { GetReadOnlyProvider } from '../util.js';
@@ -70,7 +70,7 @@ export class PotentialDuplicateResponseType extends PotentialDuplicateResponse {
 
 @RefuseScopeLimitedPrincipals()
 @Resolver(PotentialDuplicateResponseType)
-export class DuplicateRecordResolver {
+export class DuplicateRecordResolver extends ResolverBase {
   @Query(() => PotentialDuplicateResponseType)
   async GetRecordDuplicates(
     @Ctx() { dataSource, userPayload, providers }: AppContext,
@@ -78,7 +78,7 @@ export class DuplicateRecordResolver {
   ): Promise<PotentialDuplicateResponseType> {
     const md = GetReadOnlyProvider(providers);
 
-    const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
+    const user = this.GetUserFromPayload(userPayload);
     if (!user) {
       throw new Error(`User ${userPayload.email} not found in UserCache`);
     }
