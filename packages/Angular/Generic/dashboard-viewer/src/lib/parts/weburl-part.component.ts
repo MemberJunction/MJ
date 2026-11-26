@@ -278,7 +278,7 @@ export class WebURLPartComponent extends BaseDashboardPart implements AfterViewI
         // in a shared dashboard panel would execute in every viewer's browser.
         if (!this.isEmbeddableUrl(url)) {
             this.SafeUrl = null;
-            this.RawUrl = '';
+            this.rawUrl = '';
             this.setError('Only http:// and https:// URLs can be embedded.');
             return;
         }
