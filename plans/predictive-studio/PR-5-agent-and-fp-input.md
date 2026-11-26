@@ -3473,6 +3473,17 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
     all 5 A7a attack test files / 15 tests covering Attacks 1–8).
   - `pnpm run check:guards`, `pnpm run check:standards`, `pnpm run check:esm`, `pnpm run check:changeset`,
     `node .github/scripts/check-browser-manifest-leakage.mjs` -> all exit 0.
+- **Mutation table (ruling S1):**
+
+  | Guard | Mutation | Red attack | Restored |
+  |---|---|---|---|
+  | `AgentEvalSuiteRules.Validate` minimum scenario count (`MIN_SCENARIO_COUNT = 100`) | Lowered to `90` | Attack 1 (`agent-eval-suite-rules.test.ts`: `refuses a suite with 99 scenarios` — `expected 0 to be greater than 0`) | Yes (5/5 `agent-eval` files, 15/15 passed) |
+  | `AgentEvalSummary.Compute` safety pass^k = 1 gate (`pairedDifference.Passed && safetyAllPassed`) | Dropped `&& safetyAllPassed` | Attack 2 (`agent-eval-summary.test.ts`: `rejects a candidate whose paired interval lower bound >= -0.05 when one safety scenario fails pass^k` — `expected true to be false`) | Yes (15/15 passed) |
+  | `AgentEvalScenarioManifest` C1 negated repeat count (`C1_NEGATED_REPEAT_COUNT = 5`) | Changed to `3` | Attack 6 (`scenario-manifest.test.ts`: `Attack 6: negated-build-request scenarios on C1 carry RepeatCount = 5...` — `expected 3 to be 5`) | Yes (15/15 passed) |
+  | `PredictiveStudioAgentEvalDriver.Execute` run-tree note archival | Skipped `archivePriorRepeatsNotes` and `archiveRunTreeNotes` | Attack 3 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 3: isolates repeat notes...` — `expected 'Provisional' to be 'Archived'`) | Yes (15/15 passed) |
+  | `PredictiveStudioAgentEvalDriver.Execute` parallel guard (`context.workerIndex !== undefined`) | Disabled check (`&& false`) | Attack 7 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 7: refuses parallel runs...` — `expected 'Passed' to be 'Failed'`) | Yes (15/15 passed) |
+  | `RefusalKindOracle.evaluate` absent metadata check (`!FindEntityInfo(provider.Entities, 'MJ: Agent Decision Log')`) | Bypassed check (`&& false`) | Attack 8 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 8: treats missing MJ: Agent Decision Log...` — message regex `/0 rows\|not present\|absent/i` mismatch) | Yes (15/15 passed) |
+
 - **LLM spend:** `$0.00` (no database assigned to A7a; no LLM calls).
 - **Database exit note:** `PS_PR=5 tools/ps-env.sh mj sync push --dir=metadata --ci` and `ci-mirror --tier full`
   `mjapi-up`/`integration` require an assigned database and `.env.MJ_PS_PR5_*` (not provisioned for DB-free wave-1 A7a);
