@@ -469,7 +469,7 @@
             "MaxCostPerRun": 0.01,
             "MaxTokensPerRun": 1000,
             "MaxIterationsPerRun": 10,
-            "MaxTimePerRun": 600,
+            "MaxTimePerRun": 623,
             "AllowMemoryWrite": false
           },
           "primaryKey": {
