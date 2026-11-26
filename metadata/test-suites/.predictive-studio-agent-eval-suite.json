@@ -1,0 +1,1343 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval",
+      "Description": "Predictive Studio Agent Eval parent suite grouping planted-truth world child suites (C1, C4, N1c, W1, W2, W3, W7).",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "agentId": "12F06453-2DAE-402A-91EE-ED851C4739D6",
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "sequentialOnly": true
+      }
+    },
+    "primaryKey": {
+      "ID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - C1",
+      "Description": "Child suite for C1 association corpus scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "C1",
+        "worldKind": "corpus",
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "C1",
+          "worldKind": "corpus"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "7DD186C2-57C7-4DAC-8C97-2571311D946F"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "5725A54C-B7CC-471C-9F71-BEDFB35C3BB3",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "76418D76-0258-4911-B9B2-165DBF745562"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "58A641C1-A095-4723-BD69-64D47DCAF094",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1A3727C1-F305-42D7-AB14-977967730962"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "05AA97C4-1BB9-4F99-AFAC-E82596CFBB80",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B7E4BC6A-A3CC-4A19-A702-EF548C9C15CA"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "C8086112-6832-4E82-84D4-D077603E1AD5",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "10F7D3E1-A605-4E03-883A-A49A81D58A2A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "3948E2A7-AA19-4CCA-B93C-74B553A002A0",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "855B035E-8CEF-411B-94F9-EDCBD28D385B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "46047D8E-958E-49FC-815F-AF93E2657F70",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9BE87A8A-4829-45A9-8584-1BB1EBA6AB4F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "94DA6F0D-9933-4D43-A1AF-6255961BA7E1",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE183D93-FCC4-4B5B-85E5-BCEF62AF573B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "CC776DBC-9900-4C9F-8064-DE8FC42C943D",
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0BB2DDD5-07A7-42BD-9658-E261C4D23952"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "CE0FC1A6-ECD6-4201-AF86-D45C4E1DE6D2",
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "95D01852-9875-4A63-8B28-64D2CB63D4B2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "24F4FB60-8F78-4B63-BEDD-70E9861E5F06",
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "534BEEEC-6F78-4353-83D2-842B21864849"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "7549A7B2-63E2-46A9-BCE6-46AFCD6C3730",
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "620B70A4-8B5D-4D25-9B89-1C537BDEAEE6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "BFE53A22-8774-4269-A512-2248FA29221D",
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9D5A4F22-C588-4D2A-B256-B077B86E48BC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "26A00213-928E-4B33-BAD2-E462A4BF329B",
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8BFAF08D-4B6B-41F3-8A4C-5E03223663B4"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "3E27B01F-FB90-45B8-8AA9-7A63D4589F41",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "266F6A0B-3157-40B9-8C43-E2866F7977CB"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "15871996-5A2B-425F-BBB6-29FC5272BA09",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "62C14592-C3CC-4223-902A-6F97E5B02D8E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "BF15F204-9D61-47EF-8A2F-3A2141C74A83",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4AF9938A-6A42-490A-BF76-9CB869F56259"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "E7D8D673-0BA7-49FD-8DF5-2EA0E563F36E",
+            "Sequence": 17,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "160AB736-0A28-485D-A343-0FD4434519F8"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "53352B65-3673-4E53-82EB-8ACB4B78BAE6",
+            "Sequence": 18,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "18BD4DFA-DDA5-4764-A68E-9209AF542C35"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "6B39DF38-0F7F-4042-A81F-8F8FF4448DC2",
+            "Sequence": 19,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ED355BF4-0D70-479D-9AEB-54089A22BA5F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "6315C8EE-B7D1-4914-8ECB-5E051F4B2DEB",
+            "Sequence": 20,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1DF917A2-605C-4003-B06C-C1B83CA3EBB1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "E46DFC26-BA89-47FF-83C9-07C4ED7502BA",
+            "Sequence": 21,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "93C7E982-0A9A-4839-81C9-A0EC37BA0124"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "98C1E5A0-0466-4C8D-9A1E-239AB16B36BC",
+            "Sequence": 22,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2F1F0B77-B492-47FE-94BA-E2ECF88F5B73"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "0501148B-21F2-46D1-9F71-58073EC1EE6C",
+            "Sequence": 23,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5607D9CA-B722-4D26-BC2F-5C293CEECA08"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "876DBC3F-25EE-4F1C-883F-6273B4A413B7",
+            "Sequence": 24,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "65C19E2E-DB12-49E2-8E14-48C21B725FD2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "A2A87C1E-DC6E-4639-9EC8-2B0F624115F7",
+            "Sequence": 25,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6255236D-088C-41BB-BF2C-6B2F37DA529F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "C9F2439B-EBEB-48ED-BF41-8F5856D1A02E",
+            "Sequence": 26,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1AC28D1E-E270-4187-9EBD-9186100B3BDC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "2EB75587-B6C6-464C-BA11-6BD0F9F80B8F",
+            "Sequence": 27,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E4C493D8-A919-447F-BFEF-88411A938EEC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F43880D1-4F77-4CD1-91F2-31788CEF0569",
+            "Sequence": 28,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CF44F3DE-F701-48F6-B92B-9CFBFDDC2163"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "BB16190D-E8F0-4974-A3A6-9AC1B3556BC4",
+            "Sequence": 29,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D87AB245-D4A5-43B9-A8DA-35BCED9162BA"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "58EAD816-6E1A-4956-B8AE-CA887710445E",
+            "Sequence": 30,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "766941F1-E44C-4DC9-ACA0-207814420DF7"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "22323B19-2F5C-4204-B477-AD4EFEAB6768",
+            "Sequence": 31,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "173A6A4D-19EC-4F6B-B6F3-444B295411B0"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "CF5469F4-167C-48FD-9C62-3BDE9821E3B0",
+            "Sequence": 32,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "19322C3D-DED1-4747-B194-75F5FE24E52E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "A1ECA2EA-6636-4E8F-8F00-B0D9A5DC0F8F",
+            "Sequence": 33,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3D171C96-F677-4CA3-826A-68B34FDC8C81"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "4C2579E9-8180-4FB7-BAA1-156D4A4C7928",
+            "Sequence": 34,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F321CB58-C6E4-4339-B740-51AC2BB542AC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "A5DB181F-FDAD-42BB-85FF-F524AE6915EA",
+            "Sequence": 35,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "04686F34-9B5D-4FBD-B60C-F7134D12CFF6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "839D142B-AEF7-46E6-84D5-3414F660E77F",
+            "Sequence": 36,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FDD9B26B-1630-4658-8C6F-24D306439328"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "AF8A5F5E-4A97-4733-AEC3-D939F31EA06F",
+            "Sequence": 37,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "20809CDB-D945-49D5-9497-DA3D18E68935"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F848437D-7B00-41A8-B9AC-BEA56BE95788",
+            "Sequence": 38,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FF65D703-EC9C-48C5-89F7-1CF1B5FDDC18"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "D3689C18-1029-4334-9A6F-9CBB46C95A10",
+            "Sequence": 39,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1A8B55AA-3FF9-41E9-8173-DE9CBCBA91B3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "46308C39-9B12-4E68-865C-8F812085EE68",
+            "Sequence": 40,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "601E70BC-1392-4B26-AA3E-23AB599BA81C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "9DE36F34-72FF-4F41-9955-609FF2349560",
+            "Sequence": 41,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "03E30918-D7D9-4687-87B5-55B063CA28C9"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "2518BF73-E82F-41F6-A3DA-9C903900ED47",
+            "Sequence": 42,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B65BB754-77C6-40B3-B92B-5B9636B80856"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "2760E9B7-01C4-4E74-B5C7-9E91626BAE09",
+            "Sequence": 43,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02E3E1F8-1BE2-4B9C-BD71-B0E84D584558"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "598579A7-B640-4B3E-B76C-D9DE0F7E7E8D",
+            "Sequence": 44,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B22C1DF0-D5BD-4C52-953C-D47A224447DB"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "89108BFE-424C-4ACA-98B5-4CB947879A27",
+            "Sequence": 45,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E966D428-0F4E-4B4F-BF50-B73CE6BC41B3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "DA0A38F4-FFA7-4518-B809-93D37A7238A4",
+            "Sequence": 46,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "4777AE0E-FE96-424F-A8C5-82576BED247D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F4D9B455-36F5-4A0A-A6B5-3FDC1718E131",
+            "Sequence": 47,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "216793CB-0CE3-40FA-B99C-95788FA4642F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "7391861F-B503-4F71-8412-F24EAD0F31FD",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "023A2376-4871-4C92-BBCC-4B53AA0E45EF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "CA530A88-3744-458F-8082-22AE20132562",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5773F22A-0C8F-47F1-A3E3-7B1C9EC9A642"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "DE76DB94-F0A7-4000-8705-2AF6EF8DD6E0",
+            "Sequence": 50,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C0E930C8-8B7B-4626-87C6-CA1D6A5245A1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "FC119E37-2130-45FF-B4B8-ACF649A545B0",
+            "Sequence": 51,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "663918F3-673B-4DDD-B93F-D86C41FE9E77"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "E386152B-24EC-4855-8D3B-E3F08EC6474C",
+            "Sequence": 52,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F99D9735-1073-4955-9FEB-555B48B2E8AD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "689C33FA-DA33-4781-9529-3AFCCAC02589",
+            "Sequence": 53,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "027E7E9A-02A4-426B-B4AF-464F7F5CD67B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "2557AA67-AEB4-4E5C-B355-F158D52F3F78",
+            "Sequence": 54,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1BD61F51-ADF3-4955-BB0C-6DEF07E5FFDB"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - C4",
+      "Description": "Child suite for C4 planted leakage trap scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "C4",
+        "worldKind": "scenario",
+        "seed": 2202,
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "C4",
+          "worldKind": "scenario"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "C095DF64-7D6B-4F38-88DF-198DD465405A"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "4873E518-E31D-4834-9AA1-1EB08EDCAA4A",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1B3A03C9-561D-4309-B0EB-E365FEC5E101"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "2DA9D572-14B7-44F1-8EF5-32A999994282",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "816AD3BD-62D6-4CB2-970C-7CEA8CA76FDC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "E2BBE843-6283-4F1A-88E2-54FAA9DA2381",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "139E83C8-9A9F-4EFB-9CCA-5687347723C3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "7FE597DB-DB28-4022-BBD3-AA9972079CC5",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7D2A0059-C573-483A-BDED-D92A573D3B8B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "B0A675D8-9661-4297-A7D0-E05D7B3F9CF2",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EC003CB6-EDEF-4BE0-9B65-1BD4AF241B6E"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "A2D616CB-3217-4E9F-9CDE-7E8842E837A2",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E83D030-F847-4873-AF3A-2E07EC49C620"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - N1c",
+      "Description": "Child suite for N1c pure-noise binary twin scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "N1c",
+        "worldKind": "scenario",
+        "seed": 2212,
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "N1c",
+          "worldKind": "scenario"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "58371D50-EC38-445C-8B93-8BBF1B5B0AE4"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "3E9CA991-8D8E-44B2-8561-45BF9DC99830",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "390D0A0B-393C-4E0F-A631-D7E833F249A6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "6E6E7319-C27B-4696-BE2F-DB88924455B9",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0819F044-8A41-4E88-ABE8-0DC77D08DB7A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "85568DC0-6502-4FF6-AED2-A682908609E5",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D8178504-B917-4C90-9689-7156C0B0AB11"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "A11A2E6F-1A63-4294-B223-BC1B4C4906C8",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8B368243-49BE-4074-9A80-0DCE2E7FEDCF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "C6D9D1CB-7831-4830-9684-3D3AC50AE09B",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5431671D-0297-411F-A907-C2962D2A65B6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "A9A6EA36-291D-406F-86D1-62B826FE2C63",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3C14BD89-C927-4501-939A-A2604173D050"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "1DBF2503-0EA6-4F90-8AD9-E1CFECFDA8AE",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A112E3A3-08A0-4B4E-9263-D5484EBFFFBC"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - W1-signal",
+      "Description": "Child suite for W1 signal world scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "W1-signal",
+        "worldKind": "world",
+        "seed": 42,
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "W1-signal",
+          "worldKind": "world"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "352738F2-32AF-4703-8B0C-1D3E3F3B0C64"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "B649D4C7-813D-4C05-B1AA-8FE0E29D6CEB",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "89EA7058-EE3C-41E7-A2EF-0997C21C766C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F792E759-A863-4623-8BD1-FD1BCDDEE743",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EE99A5B3-66F2-4E99-8A7A-F55B6A228FA2"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "4F3F68A0-B703-4487-AEFA-FDEAC256EC66",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "511845F7-C02A-48BD-BA3F-2ACBB2056FAD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "C0B34873-0275-4C99-AA2B-55D7E3E67503",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6B77BE96-1F00-4393-A952-354787C52206"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "32399D40-B534-403E-85FD-6771CB40055A",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7AD2E4C8-9C11-43F0-8BB1-E5FC5307FE4C"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "8025E244-014F-45E2-A7C9-070E8F218BE1",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "672CA280-6BB6-46B1-9E1E-6A8530C3C3A5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "FEF6EEF9-BC1B-49BA-A2BE-6821543857B8",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "20EFF6AE-5C67-4C26-AB0B-58E944B28301"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "58A42D15-0CBD-4571-A9C9-BA2BB220D9BC",
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "170D1727-434F-4CC2-9CC8-D813DDFFF543"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "85E7002B-20F9-4F25-AC63-AE5C262D38E3",
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BC14BFCD-EDDB-41CC-9DB7-8504EFB9A045"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "1C84898F-BFF3-4B47-823A-2F8C6A42E1F4",
+            "Sequence": 10,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CD1DB10B-29C0-4AAF-BE6F-EAC6723FA798"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "7837DAA0-59F8-45F0-B4E8-EF48DC5DA98F",
+            "Sequence": 11,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "FC280E41-98C0-4B58-BEA7-C8A951DA76E3"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "71124DC0-BC08-45E9-84CB-7057E47F1D0D",
+            "Sequence": 12,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9FB946C2-558E-42AA-9A7F-28BB4FDE9580"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "84FBC3F2-527C-4FD7-B502-649AEB882109",
+            "Sequence": 13,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6C200BD2-2BC7-4F64-8D13-A1CDAC0AADD1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "E704274C-A1EF-4AA2-9215-6FD8B170AE27",
+            "Sequence": 14,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "732A230F-586A-47E1-935D-16D39422792B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "EC20C304-43F8-42F2-9B02-1B5B1BB1F6F7",
+            "Sequence": 15,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "611608C4-7488-46F6-8073-C106D3E2E9EE"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "64BEC13B-4E33-48CF-8D87-47FE6DA1E63C",
+            "Sequence": 16,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E3A887D3-560E-4476-BEA0-8D2DDE7A68FA"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - W2-noise",
+      "Description": "Child suite for W2 pure-noise world scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "W2-noise",
+        "worldKind": "world",
+        "seed": 100,
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "W2-noise",
+          "worldKind": "world"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "F0250556-C782-4096-AB18-A98EBF3ED9A6"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "80B240F3-3603-4542-8EBF-14C51B066FC4",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2BC24BF6-934A-41A8-908A-69F6371842C9"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "89FD1953-03E1-49A1-AE46-B1125AB59351",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C96FD7C8-84BB-4857-B3B9-2C5DFF41571B"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F979DAFD-4A76-473B-B431-6F06F50477BE",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "EDC41BF2-BDF7-4368-A5A8-0D75D5BA0ACC"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "9D81CB70-CAB5-4FE1-A78C-79EF0D4A5931",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CD5C305B-1A76-4DF3-9202-610205B7FA16"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "B03D8228-A327-49D2-A663-393AC11E8319",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AA39F329-9585-4B26-BF24-462E9963D518"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "BE0C67EE-C1E6-4EFA-BECB-502E85DD9BAA",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "AEB66A38-801B-417E-A927-D44CE1D43F70"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "60106F7F-9AAE-4BF5-A9DA-0C59A5BF852B",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "20024498-21D7-4914-87C9-7C71E0088511"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "3D6ABA31-ECF2-46A5-9730-650A6C7BD815",
+            "Sequence": 8,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CC13AAD1-A958-484D-AE11-4225BD8F5D99"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "DBAE1721-0CB4-41D2-8DCC-EED21ADCF404",
+            "Sequence": 9,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E04FE231-99F4-4CBD-8CF3-4D01A18718C6"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - W3-leak-row",
+      "Description": "Child suite for W3 row-leakage world scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "W3-leak-row",
+        "worldKind": "world",
+        "seed": 42,
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "W3-leak-row",
+          "worldKind": "world"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "8D005521-F585-403B-AECA-D3F5485E01CE"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F56FFE7F-2725-43FB-9303-B8CEFD4B511E",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "62D2FDDB-CBBA-4548-895C-B37B09CF67AF"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "CF89AFAE-DA90-4ED5-9433-F1DD01CEA9D3",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "506A0F4E-F77E-47CC-B80E-BCC5F8495059"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "D840D2F5-E7B3-4973-81DB-88173C65EAE7",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "29E54589-4637-4E28-9FE2-D6CC5711275A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "9B19E9A1-683E-4E08-837C-C49F4CDFD345",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "10B32812-CCAF-43C0-9E85-203881BB7B16"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "33B00814-CEA7-4FA1-8178-36C244773BB9",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DB395699-FB3C-4ED9-B816-5A9CE44BC2A0"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Eval - W7-small-imbalanced",
+      "Description": "Child suite for W7 small imbalanced world scenarios.",
+      "ParentID": "1E3B42F3-336D-4809-B3CB-80A8E1A0E4F7",
+      "Status": "Active",
+      "RubricID": "2056F86A-FB34-4222-855C-275C7A36467A",
+      "Configuration": {
+        "worldId": "W7-small-imbalanced",
+        "worldKind": "world",
+        "seed": 42,
+        "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+        "applicationContext": {
+          "worldId": "W7-small-imbalanced",
+          "worldKind": "world"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "B329A784-D24B-4F9A-AABC-C84544DF355C"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "D2E8CD26-461A-45AA-96F5-97019CED560B",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C1E01FE1-1048-4218-AFDF-B7AE2F5660E5"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "9757D489-5747-4B9B-9910-55CFA88F024E",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "099622E4-0671-4B66-956C-AC46E7F80448"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "03274837-01A0-4794-8DC7-739F7290A5B3",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CD800AEB-319F-41D2-B358-7122055190B1"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "621DD1F7-F894-4A7C-8F7D-23BB37EDB8E7",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E367DD8-6898-4BFF-A9AA-1ACFC747961A"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "F88267C5-AC14-4AEA-9E23-9CEF04576DD5",
+            "Sequence": 5,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DB3AD6FE-089A-44AD-B06D-E6A5FD136D5F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "90A514B9-DAAF-4763-A08A-18D8397C7C1D",
+            "Sequence": 6,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D93CF5FB-0FEE-4641-8B85-11625F072A8F"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "DAFC8F92-F976-426D-9CFD-EA5DE6114611",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D27A12D2-102E-427A-8EB3-339DDB2D9964"
+          }
+        }
+      ]
+    }
+  }
+]

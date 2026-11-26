@@ -14,7 +14,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:integration": "vitest run --config vitest.integration.config.ts"
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "agent-eval:generate": "pnpm run build && node dist/agent-eval/scenario-manifest.js"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
@@ -36,6 +37,7 @@
     "@memberjunction/scheduling-base-types": "6.3.0-edge.2",
     "@memberjunction/scheduling-engine": "6.3.0-edge.2",
     "@memberjunction/storage": "6.3.0-edge.2",
+    "@memberjunction/testing-engine": "6.3.0-edge.2",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

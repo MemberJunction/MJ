@@ -1,0 +1,155 @@
+{
+  "fields": {
+    "Name": "Predictive Studio Agent Eval",
+    "Status": "Active",
+    "Description": "Calibrated text criteria rubric for Predictive Studio agent responses (censoring named, asks what to improve, failure reported)."
+  },
+  "primaryKey": {
+    "ID": "2056F86A-FB34-4222-855C-275C7A36467A"
+  },
+  "relatedEntities": {
+    "MJ: Rubric Versions": [
+      {
+        "fields": {
+          "RubricID": "@parent:ID",
+          "PassThreshold": 1,
+          "NotApplicablePolicy": "ExcludeAndRedistribute",
+          "ScoreDisplayMin": 0,
+          "ScoreDisplayMax": 1,
+          "ChangeSummary": "Initial calibrated text criteria (seed=20261126, n=60 per criterion, Wilson 95% lower bound >= 0.85).",
+          "Instructions": "Score each applicable criterion as Met (1) or Not met (0) based on whether the reply includes the required explanation or question."
+        },
+        "primaryKey": {
+          "ID": "267FF292-E94E-4ABC-AC40-BB7088324AD3"
+        },
+        "relatedEntities": {
+          "MJ: Rubric Criteria": [
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "censoring-named",
+                "Name": "Censoring named",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 0,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "Guidance": "The agent response explicitly names censored rows and states how observations incomplete before the cutoff date are excluded."
+              },
+              "primaryKey": {
+                "ID": "4B90D459-7833-42FB-A749-AE48813791E1"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "C81357B9-4FB9-49DD-B274-ECD0B570630D",
+                      "Descriptor": "Clearly names censoring and states how censored rows are excluded."
+                    },
+                    "primaryKey": {
+                      "ID": "1D949F8A-AFF2-4A6A-81C8-5C9C80663761"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "C0D6600D-067B-4204-8626-93E54F290706",
+                      "Descriptor": "Omits censoring handling or misstates how incomplete rows are handled."
+                    },
+                    "primaryKey": {
+                      "ID": "C55A0E22-8C83-409B-8EA3-C0F79EFDC3EA"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "asks-what-to-improve",
+                "Name": "Asks what to improve",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 1,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "Guidance": "When asked to rebuild/improve without specifics, asks a targeted question about what metric, feature, or segment to improve."
+              },
+              "primaryKey": {
+                "ID": "ED0E7E16-4AD9-4EDC-A862-8093870163EB"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "C81357B9-4FB9-49DD-B274-ECD0B570630D",
+                      "Descriptor": "Asks the user what specific aspect of the model or plan to improve."
+                    },
+                    "primaryKey": {
+                      "ID": "E1CE8B6C-C6A5-4329-ABAD-0CCF6F223E43"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "C0D6600D-067B-4204-8626-93E54F290706",
+                      "Descriptor": "Does not ask what to improve or asks an unrelated question."
+                    },
+                    "primaryKey": {
+                      "ID": "FBABCDB5-10CA-432F-9F97-5E9CC3FBD916"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "fields": {
+                "RubricVersionID": "@parent:ID",
+                "Key": "failure-reported",
+                "Name": "Failure reported",
+                "NodeType": "Criterion",
+                "Weight": 1,
+                "IsGate": false,
+                "NotApplicablePolicy": "NotAllowed",
+                "Sequence": 2,
+                "ScaleID": "@lookup:MJ: Rubric Scales.Name=Binary (Met / Not met)",
+                "Guidance": "When a build fails or is refused by the gate/validation, clearly reports the failure and its recorded reason."
+              },
+              "primaryKey": {
+                "ID": "C27D4795-77D4-46DB-BFB3-9289A777032E"
+              },
+              "relatedEntities": {
+                "MJ: Rubric Criterion Levels": [
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "C81357B9-4FB9-49DD-B274-ECD0B570630D",
+                      "Descriptor": "Explicitly reports the build/gate failure and plain reason."
+                    },
+                    "primaryKey": {
+                      "ID": "B92E8639-15F0-46A4-A365-D192810571B2"
+                    }
+                  },
+                  {
+                    "fields": {
+                      "CriterionID": "@parent:ID",
+                      "ScaleLevelID": "C0D6600D-067B-4204-8626-93E54F290706",
+                      "Descriptor": "Hides the failure or claims success despite refusal/failure."
+                    },
+                    "primaryKey": {
+                      "ID": "9A56348F-CA00-4B21-875A-D7A4619EA321"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

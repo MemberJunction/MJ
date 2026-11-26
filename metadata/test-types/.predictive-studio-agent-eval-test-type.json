@@ -1,0 +1,12 @@
+{
+  "fields": {
+    "Name": "Predictive Studio Agent Eval",
+    "Description": "Evaluates Predictive Studio agents sequentially with run-tree memory isolation, world setup, and deterministic ML safety oracles.",
+    "DriverClass": "PredictiveStudioAgentEvalDriver",
+    "Status": "Active",
+    "VariablesSchema": "@file:schemas/agent-eval-variables.schema.json"
+  },
+  "primaryKey": {
+    "ID": "CC01A322-8A79-43A8-AF81-77BEEB2FC550"
+  }
+}

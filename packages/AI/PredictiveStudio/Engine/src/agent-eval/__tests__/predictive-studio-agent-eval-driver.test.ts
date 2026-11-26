@@ -304,7 +304,7 @@ function MakeContext(
       TestSuiteRunID: fixtures?.SuiteRunID ?? 'suite-run-1',
     } as unknown as MJTestRunEntity,
     contextUser: MakeUser(),
-    options: workerIndex !== undefined ? { parallel: true } : {},
+    options: {},
     oracleRegistry: new Map(),
     workerIndex,
     fixtures,
