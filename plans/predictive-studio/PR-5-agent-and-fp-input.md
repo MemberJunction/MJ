@@ -3340,7 +3340,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->1<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->1<!-- /gen:checks -->
-- Head: <!-- gen:head -->740e3c50c8<!-- /gen:head -->
+- Head: <!-- gen:head -->3a61e8849a<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3594,8 +3594,12 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - **D5-51 (controller):** the full-tier mirror runs once per integration, alone, by the controller; this milestone's
   exit is milestone-exit, the touched packages' tests, the attacks and Exit checks, and `ci-mirror --tier fast` (below).
 - **Left for the controller (generated, never owned, §6.0 rule 4):** the four `mj-class-registrations.ts` manifests
-  (`MJMLBuildApprovalClaimEntity` added; left uncommitted); the sql-parser shipped goldens over the merged corpus
-  (D5-A2-12).
+  are committed as the build regenerated them (`MJMLBuildApprovalClaimEntity` added), for the controller to regenerate
+  over the merged wave; the sql-parser shipped goldens over the merged corpus (D5-A2-12); the changeset and §10 by
+  `pr-body.mjs` after the merge.
+- **milestone-exit** (at load 79): 35 checks, 3 failed — `changeset-file` (the merge's packages; regenerated above) and
+  three tests over their timeouts from load: Engine `no-status-writes.test.ts` (60 s) and MJServer
+  `queued-task-graph-and-enqueue-fanout.test.ts`, `unified-agent-artifacts-e2e.test.ts`; alone → 6/6 and 15/15 passed.
 - **Environment notes:** MJExplorer's gitignored `src/environments/environment*.ts` are absent from a fresh worktree
   (the fast mirror's build fails on `Could not resolve "../environments/environment"`); copied from the main checkout.
   `mj sync push --dir=metadata-optional/integration-test --include=tests` rewrote the `sync` blocks of 25 files and
