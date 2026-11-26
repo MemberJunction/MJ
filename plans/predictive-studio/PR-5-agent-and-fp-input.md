@@ -288,6 +288,8 @@ packages/AI/Agents/src/MJAIAgentRequestEntityServer.ts  (D-091 item 3)
 packages/AI/Agents/src/__tests__/agent-request-resume-branch.test.ts  (D-091 item 3)
 # Owner-batch item 4: the avatar decoder's held frames under load (controller, 2026-11-26)
 packages/AI/RealtimeBridge/Providers/LiveKitNative/**  (D-091 item 4)
+# Owner-batch item 5: graphql-ws dispose() rejections left unhandled (controller, 2026-11-26)
+packages/GraphQLDataProvider/**  (D-091 item 5)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3200,6 +3202,12 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    2–10 frames of a burst stayed inside ffmpeg (`-debug_ts`: 96 frames in, 87 packets out); output-side `-threads 1`
    returns every frame. Came in with `next` (`08a4cfc1f2`), surfaced by the full mirror at M0; ruled in under the
    owner's 2026-11-26 statement; fixed by the controller (`03aff70e2d`), 355/355 with file parallelism.
+5. `packages/GraphQLDataProvider/src/{graphQLDataProvider.ts,SharedTabKernelProtocol.ts}` (+ tests) — graphql-ws
+   `dispose()` is async and rejects when a connect attempt fails; both call sites dropped the promise, so a failed
+   handshake became an unhandled rejection (vitest exit 1, intermittent). Both now catch it; the fallback test uses the
+   fake WS. Fixed by the controller (`cd85616747`), 10/10 runs clean. Wave-1 rule D5-51: the full-tier mirror runs once
+   per integration, alone on the machine — four concurrent full mirrors drove load to 50–130 and timed out CPU-heavy
+   tests (`ng-entity-viewer` aggregate-expression, MJServer delete tests) with no code cause.
 
 ## 10. PR description draft
 
