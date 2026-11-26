@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"IsReadOnly":true,"Reason":null},
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/predictive-studio-lock-model.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"IsReadOnly":true,"Reason":null},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"IsReadOnly":true,"Reason":null},

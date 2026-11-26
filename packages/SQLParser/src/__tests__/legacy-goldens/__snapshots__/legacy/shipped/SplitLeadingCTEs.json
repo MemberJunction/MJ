@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": null,
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": null,
   "shipped/SQL/list-conversation-detail-feedback.sql": null,
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": null,
   "shipped/SQL/predictive-studio-lock-model.sql": null,
   "shipped/SQL/predictive-studio-lock-pipeline.sql": null,
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": null,

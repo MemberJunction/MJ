@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": [{"$slice":[0,1200]},{"$slice":[1203,1294]},{"$slice":[1297,1388]},{"$slice":[1391,1468]},{"$slice":[1471,1546]},{"$slice":[1549,1633]},{"$slice":[1636,2011]}],
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": [{"$slice":[0,1504]},{"$slice":[1507,1600]},{"$slice":[1603,1696]},{"$slice":[1699,1778]},{"$slice":[1781,1858]},{"$slice":[1861,1947]},{"$slice":[1950,2364]}],
   "shipped/SQL/list-conversation-detail-feedback.sql": [{"$slice":[0,2291]},{"$slice":[2294,2385]},{"$slice":[2388,2479]},{"$slice":[2482,2559]},{"$slice":[2562,2637]},{"$slice":[2640,2724]},{"$slice":[2727,3134]}],
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": [{"$slice":[0,884]}],
   "shipped/SQL/predictive-studio-lock-model.sql": [{"$slice":[0,821]}],
   "shipped/SQL/predictive-studio-lock-pipeline.sql": [{"$slice":[0,844]}],
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": [{"$slice":[0,978]}],

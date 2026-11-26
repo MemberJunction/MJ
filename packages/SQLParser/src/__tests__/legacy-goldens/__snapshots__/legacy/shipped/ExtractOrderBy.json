@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,2011]}},
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"orderByClause":"cd.\"__mj_UpdatedAt\" DESC","sqlWithoutOrder":{"$slice":[0,2329]}},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"orderByClause":"cd.__mj_UpdatedAt DESC","sqlWithoutOrder":{"$slice":[0,3101]}},
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,884]}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,821]}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,844]}},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"orderByClause":null,"sqlWithoutOrder":{"$slice":[0,978]}},

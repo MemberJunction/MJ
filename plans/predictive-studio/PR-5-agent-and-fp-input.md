@@ -279,6 +279,8 @@ packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts
 src/generated/class-registrations-manifest.ts
 # The lockfile: A7a adds @memberjunction/testing-engine to the PS Engine (§9 D5-19)
 pnpm-lock.yaml
+# Caller maintenance: shipped Query SQL files join sql-parser's shipped golden corpus (§9 D5-B1-5, D5-A2-12)
+packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-A2-12)
 # Owner-approved non-PS items (§9 owner batch, 2026-11-26)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
@@ -3225,6 +3227,13 @@ Record every decision taken in §9 and, when it changes another plan's interface
   `MaxTokensPerRun` 1,000 and `MaxIterationsPerRun` 10 are floors that never bind (the tree tracker refuses at
   `>=` the cap, so 0 would refuse every run), and `MaxTimePerRun` is 10× its first measured build (A2's G4.1 build, §11).
   · DD-5's rule has no value for an agent with no LLM use. · NULL caps (the outcome A1 exists to remove).
+- D5-A2-12 · 2026-11-26 · Caller maintenance of A2's own change (D-082, as D5-B1-5): the new
+  `metadata/queries/SQL/predictive-studio-lock-agent-session.sql` joins `@memberjunction/sql-parser`'s 'shipped'
+  legacy-golden corpus, so its 29 shipped snapshots gain one entry each (`vitest run -u src/__tests__/legacy-goldens`:
+  29 files, +29 −0, every added line names that file; no existing entry changed). Allowlist line
+  `packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-A2-12)`; the controller
+  regenerates the shipped goldens once over the merged corpus at integration. · The fast mirror's `test` step went red
+  only in `@memberjunction/sql-parser` (29 golden tests, the missing entry). · Leaving the new Query out of the corpus.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
