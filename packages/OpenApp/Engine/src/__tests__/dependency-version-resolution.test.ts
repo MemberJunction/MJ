@@ -33,11 +33,25 @@ vi.mock('../github/github-client.js', () => ({
 }));
 
 import { ResolveDependencyVersion } from '../install/install-orchestrator.js';
-import { ListGitHubReleases, ListGitHubTags } from '../github/github-client.js';
+import { FetchManifestFromGitHub, ListGitHubReleases, ListGitHubTags } from '../github/github-client.js';
 
 type Release = { TagName: string; PreRelease: boolean; Draft: boolean; CreatedAt: string };
 function release(tag: string, draft = false): Release {
     return { TagName: tag, PreRelease: false, Draft: draft, CreatedAt: '2026-01-01T00:00:00Z' };
+}
+
+function makeManifest(version: string, mjVersionRange: string): string {
+    return JSON.stringify({
+        manifestVersion: 1,
+        name: 'dep-app',
+        displayName: 'Dep App',
+        description: 'Dependency app for version resolution tests',
+        version,
+        publisher: { name: 'Acme' },
+        repository: 'https://github.com/Acme/Dep',
+        mjVersionRange,
+        packages: {},
+    });
 }
 
 const REPO = 'https://github.com/Acme/Dep';
@@ -94,5 +108,51 @@ describe('ResolveDependencyVersion (B26)', () => {
     it('rejects an invalid semver range', async () => {
         const r = await ResolveDependencyVersion(REPO, 'not-a-range!!', {});
         expect(r.ErrorMessage).toContain('not a valid semver');
+    });
+
+    it('matches -edge.N prerelease tags against >=5.53.0 <7.0.0', async () => {
+        vi.mocked(ListGitHubTags).mockResolvedValue(['5.68.0', '6.3.0-edge.3', '7.0.0-edge.0']);
+        const r = await ResolveDependencyVersion(REPO, '>=5.53.0 <7.0.0', {});
+        expect(r.Version).toBe('6.3.0-edge.3');
+        expect(r.ErrorMessage).toBeUndefined();
+    });
+
+    it('skips tags whose mjVersionRange is incompatible with MJVersion (6.3.0-edge.2 skips <6.3.0 and picks <7.0.0)', async () => {
+        vi.mocked(ListGitHubTags).mockResolvedValue(['v5.68.0', 'v5.67.0']);
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (_repo, version) => {
+            if (version === '5.68.0') {
+                return { Success: true, ManifestJSON: makeManifest('5.68.0', '>=5.0.0 <6.3.0') };
+            }
+            if (version === '5.67.0') {
+                return { Success: true, ManifestJSON: makeManifest('5.67.0', '>=5.0.0 <7.0.0') };
+            }
+            return { Success: false, ErrorMessage: `unexpected version ${version}` };
+        });
+
+        const r = await ResolveDependencyVersion(REPO, '>=5.53.0 <7.0.0', {}, undefined, '6.3.0-edge.2');
+        expect(r.Version).toBe('5.67.0');
+        expect(r.ErrorMessage).toBeUndefined();
+    });
+
+    it('prefers stable releases when MJVersion is stable, falling back to prerelease only if no stable is compatible', async () => {
+        vi.mocked(ListGitHubTags).mockResolvedValue(['6.3.0-edge.3', '6.2.0']);
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (_repo, version) => ({
+            Success: true,
+            ManifestJSON: makeManifest(version ?? '6.2.0', '>=6.0.0 <7.0.0'),
+        }));
+
+        const r = await ResolveDependencyVersion(REPO, '>=5.53.0 <7.0.0', {}, undefined, '6.2.0');
+        expect(r.Version).toBe('6.2.0');
+    });
+
+    it('considers -edge.N tags first when MJVersion is itself a prerelease', async () => {
+        vi.mocked(ListGitHubTags).mockResolvedValue(['6.3.0-edge.3', '6.2.0']);
+        vi.mocked(FetchManifestFromGitHub).mockImplementation(async (_repo, version) => ({
+            Success: true,
+            ManifestJSON: makeManifest(version ?? '6.3.0-edge.3', '>=6.0.0 <7.0.0'),
+        }));
+
+        const r = await ResolveDependencyVersion(REPO, '>=5.53.0 <7.0.0', {}, undefined, '6.3.0-edge.3');
+        expect(r.Version).toBe('6.3.0-edge.3');
     });
 });

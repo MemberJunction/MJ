@@ -123,6 +123,16 @@ describe('CheckMJVersionCompatibility', () => {
             expect(result.Compatible).toBe(false);
             expect(result.Message).toContain('Invalid MJ version');
         });
+
+        it('should enforce an explicit prerelease floor on the same tuple (6.3.0-edge.1 vs >=6.3.0-edge.2 <7.0.0)', () => {
+            const result = CheckMJVersionCompatibility('6.3.0-edge.1', '>=6.3.0-edge.2 <7.0.0');
+            expect(result.Compatible).toBe(false);
+        });
+
+        it('should accept a prerelease meeting an explicit prerelease floor on the same tuple (6.3.0-edge.3 vs >=6.3.0-edge.2 <7.0.0)', () => {
+            const result = CheckMJVersionCompatibility('6.3.0-edge.3', '>=6.3.0-edge.2 <7.0.0');
+            expect(result.Compatible).toBe(true);
+        });
     });
 });
 
@@ -155,6 +165,38 @@ describe('CheckDependencyVersionCompatibility', () => {
     it('should reject invalid dependency range', () => {
         const result = CheckDependencyVersionCompatibility('1.0.0', 'garbage');
         expect(result.Compatible).toBe(false);
+    });
+
+    describe('prerelease (-edge.N) dependency versions', () => {
+        it('should accept 6.3.0-edge.3 for >=5.56.0 <7.0.0', () => {
+            const result = CheckDependencyVersionCompatibility('6.3.0-edge.3', '>=5.56.0 <7.0.0');
+            expect(result.Compatible).toBe(true);
+        });
+
+        it('should accept 6.3.0-edge.3 for >=0.1.0 <7.0.0', () => {
+            const result = CheckDependencyVersionCompatibility('6.3.0-edge.3', '>=0.1.0 <7.0.0');
+            expect(result.Compatible).toBe(true);
+        });
+
+        it('should reject 6.3.0-edge.3 for >=5.56.0 <6.0.0', () => {
+            const result = CheckDependencyVersionCompatibility('6.3.0-edge.3', '>=5.56.0 <6.0.0');
+            expect(result.Compatible).toBe(false);
+        });
+
+        it('should accept 6.3.0-edge.3 for >=6.3.0-edge.1 <7.0.0', () => {
+            const result = CheckDependencyVersionCompatibility('6.3.0-edge.3', '>=6.3.0-edge.1 <7.0.0');
+            expect(result.Compatible).toBe(true);
+        });
+
+        it('should reject 6.3.0-edge.3 for >=6.3.0-edge.4 <7.0.0 (same-tuple prerelease floor)', () => {
+            const result = CheckDependencyVersionCompatibility('6.3.0-edge.3', '>=6.3.0-edge.4 <7.0.0');
+            expect(result.Compatible).toBe(false);
+        });
+
+        it('should reject 7.0.0-edge.0 for <7.0.0', () => {
+            const result = CheckDependencyVersionCompatibility('7.0.0-edge.0', '<7.0.0');
+            expect(result.Compatible).toBe(false);
+        });
     });
 });
 

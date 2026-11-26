@@ -17,9 +17,11 @@ vi.mock('node:child_process', () => ({
     spawn: vi.fn(),
 }));
 
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import {
     RunPackageInstallAsync,
+    EnsurePnpmHoistNpmrc,
     ResolvePackageInstallTimeoutMs,
     IsDefaultNpmRegistry,
     DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS,
@@ -158,5 +160,77 @@ describe('DescribeUnresolvedPackages', () => {
         expect(text).toContain("mj app enable mj-bizapps-common");
         expect(text).toContain('Detail: pnpm install did not finish');
         expect(text).not.toMatch(/npm auth/i);
+    });
+});
+
+describe('EnsurePnpmHoistNpmrc & dev-workspace guard', () => {
+    const mockExistsSync = vi.mocked(existsSync);
+    const mockReadFileSync = vi.mocked(readFileSync);
+    const mockWriteFileSync = vi.mocked(writeFileSync);
+
+    it('writes shamefully-hoist=true to .npmrc when missing on a standalone pnpm workspace', async () => {
+        mockExistsSync.mockReturnValue(false);
+        mockReadFileSync.mockImplementation(() => {
+            const err = new Error('ENOENT: no such file or directory') as NodeJS.ErrnoException;
+            err.code = 'ENOENT';
+            throw err;
+        });
+        const pending = RunPackageInstallAsync('/repo', false, undefined, 'pnpm', 60_000);
+        child.emit('close', 0);
+        await pending;
+
+        expect(mockWriteFileSync).toHaveBeenCalledWith(
+            '/repo/.npmrc',
+            expect.stringContaining('shamefully-hoist=true'),
+            'utf-8',
+        );
+    });
+
+    it('appends shamefully-hoist=true when .npmrc exists without hoisting settings', () => {
+        mockExistsSync.mockImplementation((p) => String(p) === '/repo/.npmrc');
+        mockReadFileSync.mockReturnValue('@memberjunction:registry=https://registry.npmjs.org/\n');
+
+        const changed = EnsurePnpmHoistNpmrc('/repo');
+
+        expect(changed).toBe(true);
+        expect(mockWriteFileSync).toHaveBeenCalledWith(
+            '/repo/.npmrc',
+            expect.stringContaining('@memberjunction:registry=https://registry.npmjs.org/'),
+            'utf-8',
+        );
+        expect(mockWriteFileSync).toHaveBeenCalledWith(
+            '/repo/.npmrc',
+            expect.stringContaining('shamefully-hoist=true'),
+            'utf-8',
+        );
+    });
+
+    it('does not modify .npmrc when shamefully-hoist, node-linker=hoisted, or public-hoist-pattern[]=* is already present', () => {
+        for (const existing of [
+            'shamefully-hoist=true\n',
+            'node-linker=hoisted\n',
+            'public-hoist-pattern[]=*\n',
+        ]) {
+            mockWriteFileSync.mockClear();
+            mockExistsSync.mockImplementation((p) => String(p) === '/repo/.npmrc');
+            mockReadFileSync.mockReturnValue(existing);
+
+            expect(EnsurePnpmHoistNpmrc('/repo')).toBe(false);
+            expect(mockWriteFileSync).not.toHaveBeenCalled();
+        }
+    });
+
+    it('never touches .npmrc when repo is a member of an mj dev workspace (.mj-dev-workspace.json)', async () => {
+        mockExistsSync.mockImplementation((p) => {
+            const s = String(p);
+            return s === '/ws/.mj-dev-workspace.json' || s === '/ws/pnpm-workspace.yaml';
+        });
+        mockReadFileSync.mockReturnValue(JSON.stringify({ generatedBy: 'mj dev workspace', members: ['MJ'] }));
+
+        const pending = RunPackageInstallAsync('/ws/MJ', false, undefined, 'pnpm', 60_000);
+        child.emit('close', 0);
+        await pending;
+
+        expect(mockWriteFileSync).not.toHaveBeenCalled();
     });
 });

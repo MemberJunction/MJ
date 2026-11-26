@@ -45,7 +45,7 @@ import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
-import { ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
+import { ApplyImpersonationRefusalGuards, ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
@@ -206,6 +206,8 @@ export {
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 export * from './auth/actingContextResolver.js';
+export * from './auth/impersonationGuard.js';
+export * from './userImpersonationConfigUnits.js';
 // The context-user ladder (#4209). Public because `auth/exampleNewUserSubClass.ts` — the template
 // integrators are told to copy into their OWN package — resolves through it, and `package.json`
 // publishes only "."; without this the example compiles here and cannot be reused anywhere else.
@@ -324,6 +326,7 @@ export * from './resolvers/DuplicateEntryCheckResolver.js';
 export * from './resolvers/RunTestResolver.js';
 export * from './resolvers/SearchEntitiesResolver.js';
 export * from './resolvers/UserFavoriteResolver.js';
+export * from './resolvers/UserImpersonationResolver.js';
 export * from './resolvers/UserResolver.js';
 export * from './resolvers/UserViewResolver.js';
 export * from './resolvers/VersionHistoryResolver.js';
@@ -347,10 +350,19 @@ import { RegisterDataHook } from '@memberjunction/core';
 import { SetRestrictedFieldClassifierDecisionMode } from '@memberjunction/core-entities-server';
 import { SetTagMatchDecisionMode } from '@memberjunction/tag-engine';
 import { RegisterArtifactPostRunViewProtectedEntities } from './generic/RegisterArtifactProtectedEntities.js';
+import {
+  CreateImpersonationHttpGuardMiddleware,
+  EnsureImpersonationDataHooksRegistered,
+  RegisterImpersonationWebSocket,
+  RunGraphQLOperationWithImpersonationSession,
+  RunWithImpersonationSession,
+  ValidateImpersonationWebSocketSubscribe,
+} from './auth/impersonationGuard.js';
 import { RegisterServerArtifactFileBytesLoader } from './resolvers/ArtifactFileResolver.js';
 export { RegisterArtifactPostRunViewProtectedEntities };
 
 RegisterArtifactPostRunViewProtectedEntities();
+EnsureImpersonationDataHooksRegistered();
 RegisterServerArtifactFileBytesLoader();
 import { LoadSynthesizeArtifactFromSourcesOperation } from './operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { LoadArtifactComplianceAuditOperation } from './operations/ArtifactComplianceAuditHelper.js';
@@ -364,7 +376,7 @@ LoadArtifactGuestShareOperations();
 LoadCommsAdminOperations();
 import type { RequestHandler, ErrorRequestHandler } from 'express';
 import type { ApolloServerPlugin } from '@apollo/server';
-import type { GraphQLSchema } from 'graphql';
+import { execute, subscribe, type GraphQLSchema } from 'graphql';
 import { BaseServerMiddleware, ServerMiddlewareContext } from './middleware/BaseServerMiddleware.js';
 import { HumanTaskProviderDefaults, SuppressTaskGraphSubmission } from '@memberjunction/ai-core-plus';
 import { NotificationEngine } from '@memberjunction/notifications';
@@ -1214,6 +1226,7 @@ const setupComplete$ = new ReplaySubject(1);
       RegisterDataHook('PreSave', mw.PreSave.bind(mw));
   }
   RegisterArtifactPostRunViewProtectedEntities();
+  EnsureImpersonationDataHooksRegistered();
   RegisterServerArtifactFileBytesLoader();
   // The restricted-field check runs in MJCoreEntitiesServer, which reads no config of its own.
   SetRestrictedFieldClassifierDecisionMode(configInfo.decisions?.restrictedFieldClassifier);
@@ -1376,6 +1389,7 @@ const setupComplete$ = new ReplaySubject(1);
   // the dynamic paths, and middleware-contributed ones), and buildSchemaSync reads middleware
   // metadata, so this must run here.
   ApplyScopeLimitedPrincipalGuards();
+  ApplyImpersonationRefusalGuards();
 
   const tBuild = performance.now();
   const builtSchema = buildSchemaSync({
@@ -1480,8 +1494,9 @@ const setupComplete$ = new ReplaySubject(1);
   // conclude from the call site that no server-side heartbeat exists. Value unchanged.
   const WS_SERVER_KEEPALIVE_MS = 12_000;
 
-  // Track per-connection expiry timers so we can clean them up on close
+  // Track per-connection expiry timers and impersonation WS teardown hooks so we can clean them up on close or revocation
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
+  const impersonationWsDisposers = new WeakMap<object, () => void>();
 
   const serverCleanup = useServer<Record<string, unknown>, { userPayload: UserPayload }>(
     {
@@ -1496,35 +1511,66 @@ const setupComplete$ = new ReplaySubject(1);
           // instead of the quiet, routine 'Missing token' path. A WS client that connects
           // before its auth handshake (extremely common) must land on the quiet path.
           const token = ctx.connectionParams?.Authorization ? String(ctx.connectionParams.Authorization) : '';
-          // Carry API keys from connectionParams so API-key / MCP / Node clients can authenticate the socket
-          // (validated the same way as the HTTP x-mj-api-key / x-mj-user-api-key headers).
+          // Carry API keys from connectionParams so API-key / MCP / Node / impersonated Explorer clients can authenticate the socket
+          // (validated the same way as the HTTP x-mj-api-key / x-api-key / x-mj-user-api-key headers).
           const systemApiKey = ctx.connectionParams?.['x-mj-api-key'] ? String(ctx.connectionParams['x-mj-api-key']) : undefined;
-          const userApiKey = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']) : undefined;
+          const wsUserApiKeyPrimary = ctx.connectionParams?.['x-mj-user-api-key'] ? String(ctx.connectionParams['x-mj-user-api-key']).trim() : '';
+          const wsUserApiKeyAlt = ctx.connectionParams?.['x-api-key'] ? String(ctx.connectionParams['x-api-key']).trim() : '';
+          if (wsUserApiKeyPrimary && wsUserApiKeyAlt && wsUserApiKeyPrimary !== wsUserApiKeyAlt) {
+            throw new Error('Conflicting WebSocket user API key connectionParams');
+          }
+          const userApiKey = (wsUserApiKeyPrimary || wsUserApiKeyAlt) || undefined;
           const userPayload = await getUserPayload(token, undefined, dataSources, undefined, systemApiKey, userApiKey);
 
           // Store validated payload on the connection for use in context()
           ctx.extra.userPayload = userPayload;
 
-          // Schedule proactive socket close at token expiry so the client
-          // reconnects with a fresh token instead of spamming errors.
-          const decoded = jwt.decode(token.replace('Bearer ', ''));
-          if (decoded && typeof decoded !== 'string' && decoded.exp) {
-            const msUntilExpiry = decoded.exp * 1000 - Date.now();
-            if (msUntilExpiry > 0) {
-              const timer = setTimeout(() => {
-                console.log(`WebSocket token expiring — closing connection for ${userPayload.email}`);
-                // 4403 = Forbidden — retriable in graphql-ws, signals "get a new token"
-                // (4401 is reserved as fatal/"Unauthorized" in the graphql-ws protocol)
-                try {
-                  ctx.extra.socket.close(4403, 'Token expired');
-                } catch {
-                  // Socket may already be closed; benign
-                }
-              }, msUntilExpiry);
-              // Prevent the timer from keeping the process alive during shutdown
-              timer.unref();
-              expiryTimers.set(ctx, timer);
+          // Register active impersonation WebSocket so MJEndUserImpersonation closes it immediately.
+          if (userPayload.impersonationSession) {
+            const disposeWs = RegisterImpersonationWebSocket(userPayload.impersonationSession.apiKeyId, () => {
+              try {
+                ctx.extra.socket.close(4403, 'Impersonation session ended');
+              } catch {
+                // Socket may already be closed; benign
+              }
+            });
+            impersonationWsDisposers.set(ctx, disposeWs);
+          }
+
+          // Schedule proactive socket close at token OR expiring API key expiry so the client
+          // reconnects (or exits expired impersonation) instead of keeping stale subscriptions open.
+          const decoded = token ? jwt.decode(token.replace('Bearer ', '')) : null;
+          const jwtExpiresAtMs =
+            decoded && typeof decoded !== 'string' && typeof decoded.exp === 'number'
+              ? decoded.exp * 1000
+              : undefined;
+          const credentialExpiresAtMs =
+            jwtExpiresAtMs !== undefined && userPayload.apiKeyExpiresAtMs !== undefined
+              ? Math.min(jwtExpiresAtMs, userPayload.apiKeyExpiresAtMs)
+              : (jwtExpiresAtMs ?? userPayload.apiKeyExpiresAtMs);
+          if (credentialExpiresAtMs !== undefined) {
+            const msUntilExpiry = credentialExpiresAtMs - Date.now();
+            if (msUntilExpiry <= 0) {
+              const disposeEarly = impersonationWsDisposers.get(ctx);
+              if (disposeEarly) {
+                disposeEarly();
+                impersonationWsDisposers.delete(ctx);
+              }
+              return false;
             }
+            const timer = setTimeout(() => {
+              console.log(`WebSocket credential expiring — closing connection for ${userPayload.email}`);
+              // 4403 = Forbidden — retriable in graphql-ws, signals "get a new token"
+              // (4401 is reserved as fatal/"Unauthorized" in the graphql-ws protocol)
+              try {
+                ctx.extra.socket.close(4403, 'Token expired');
+              } catch {
+                // Socket may already be closed; benign
+              }
+            }, msUntilExpiry);
+            // Prevent the timer from keeping the process alive during shutdown
+            timer.unref();
+            expiryTimers.set(ctx, timer);
           }
 
           return true;
@@ -1536,6 +1582,17 @@ const setupComplete$ = new ReplaySubject(1);
           return false;
         }
       },
+      onSubscribe: async (ctx, msg) => {
+        return RunWithImpersonationSession(ctx.extra.userPayload?.impersonationSession, () =>
+          ValidateImpersonationWebSocketSubscribe(
+            ctx.extra.userPayload,
+            msg.payload?.query,
+            msg.payload?.operationName
+          )
+        );
+      },
+      execute: (args) => RunGraphQLOperationWithImpersonationSession(args, execute),
+      subscribe: (args) => RunGraphQLOperationWithImpersonationSession(args, subscribe),
       // context() now just reads the already-validated payload — no I/O, no logging
       context: async (ctx) => {
         // No RequestOrigin here: the upgrade request's Origin is not carried onto subscription contexts.
@@ -1547,6 +1604,11 @@ const setupComplete$ = new ReplaySubject(1);
         if (timer) {
           clearTimeout(timer);
           expiryTimers.delete(ctx);
+        }
+        const disposeWs = impersonationWsDisposers.get(ctx);
+        if (disposeWs) {
+          disposeWs();
+          impersonationWsDisposers.delete(ctx);
         }
       },
       onError: (_ctx, _message, errors) => {
@@ -1756,6 +1818,7 @@ const setupComplete$ = new ReplaySubject(1);
     console.warn(userEmailMapWarning);
   }
   app.use(CreateUnifiedAuthMiddleware(dataSources));
+  app.use(CreateImpersonationHttpGuardMiddleware(graphqlRootPath));
 
   // ─── Post-auth middleware from BaseServerMiddleware plugins ─────
   // Middleware here has access to the authenticated user via req.userPayload.

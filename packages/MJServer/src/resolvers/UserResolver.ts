@@ -1,6 +1,10 @@
-import { AppContext, Arg, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from '@memberjunction/server';
+import { AppContext, Arg, AuthorizationError, Ctx, Field, Int, ObjectType, PubSub, PubSubEngine, Query, Resolver } from '@memberjunction/server';
 import { IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import {
+  IsImpersonationSession,
+  WithImpersonationCurrentUserBootstrap,
+} from '../auth/impersonationGuard.js';
 import { MJUser_, MJUserRole_, MJUserResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';
 import {
@@ -46,11 +50,17 @@ export class UserResolver extends MJUserResolverBase {
       const userData = SessionUserFields(userRecord);
       console.log('CurrentUser (from userRecord)', userData.Email);
       const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
-      const mapped = await this.MapFieldNamesToCodeNames('MJ: Users', userData, userRecord, provider) as MJUser_;
-      return {
-        ...mapped,
-        Roles: await this.mapRolesFromUserInfo(userRecord.UserRoles ?? [], userRecord, userRecord, provider),
-      };
+      return WithImpersonationCurrentUserBootstrap(userRecord.ID, async () => {
+        const mapped = await this.MapFieldNamesToCodeNames('MJ: Users', userData, userRecord, provider) as MJUser_;
+        return {
+          ...mapped,
+          Roles: await this.mapRolesFromUserInfo(userRecord.UserRoles ?? [], userRecord, userRecord, provider),
+        };
+      });
+    }
+
+    if (IsImpersonationSession(context.userPayload)) {
+      throw new AuthorizationError('Impersonated session is missing its bound user record.');
     }
 
     const result = RequireLoadedUser(
@@ -66,6 +76,9 @@ export class UserResolver extends MJUserResolverBase {
 
   @Query(() => MJUser_)
   async UserByID(@Arg('ID', () => Int) ID: number, @Ctx() { providers, userPayload }: AppContext) {
+    if (IsImpersonationSession(userPayload)) {
+      throw new AuthorizationError("Direct 'MJ: Users' lookups are prohibited during user impersonation sessions.");
+    }
     await this.CheckAPIKeyScopeAuthorization('user:read', ID.toString(), userPayload);
 
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
@@ -75,6 +88,9 @@ export class UserResolver extends MJUserResolverBase {
 
   @Query(() => MJUser_)
   async UserByEmployeeID(@Arg('EmployeeID', () => Int) EmployeeID: number, @Ctx() { providers, userPayload }: AppContext) {
+    if (IsImpersonationSession(userPayload)) {
+      throw new AuthorizationError("Direct 'MJ: Users' lookups are prohibited during user impersonation sessions.");
+    }
     await this.CheckAPIKeyScopeAuthorization('user:read', EmployeeID.toString(), userPayload);
 
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})
@@ -84,6 +100,9 @@ export class UserResolver extends MJUserResolverBase {
 
   @Query(() => MJUser_)
   async UserByEmail(@Arg('Email', () => String) Email: string, @Ctx() { providers, userPayload }: AppContext) {
+    if (IsImpersonationSession(userPayload)) {
+      throw new AuthorizationError("Direct 'MJ: Users' lookups are prohibited during user impersonation sessions.");
+    }
     await this.CheckAPIKeyScopeAuthorization('user:read', Email, userPayload);
 
     const searchEmail = Email;

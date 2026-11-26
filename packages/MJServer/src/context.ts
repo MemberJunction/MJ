@@ -7,6 +7,12 @@ import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { GetSigningKeys, GetSystemUser, GetValidationOptions, VerifyUserRecord, ExtractUserInfoFromPayload } from './auth/index.js';
 import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+import {
+  EvaluateTargetImpersonationEligibility,
+  ParseImpersonationKeyLabel,
+  RunWithImpersonationSession,
+  StampImpersonationSession,
+} from './auth/impersonationGuard.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
 import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import {
@@ -36,6 +42,7 @@ import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunct
 import { PostgreSQLDataProvider, PostgreSQLProviderConfigData } from '@memberjunction/postgresql-dataprovider';
 import { Metadata, IsValidTimeZone, TIME_ZONE_HEADER } from '@memberjunction/core';
 import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
@@ -454,6 +461,77 @@ export const GetUserPayload = async (
         // BuildMagicLinkSessionUser — see sessionUserClone.ts).
         const userRecord = CloneUserForSessionContext(resolvedUser);
 
+        // Inspect the validated MJ: API Keys record directly from ValidateAPIKey (single lookup),
+        // falling back to ValidateKeyByHash ONLY when a mock/older engine omits APIKey — and
+        // strictly FAIL CLOSED when the key record cannot be read so an impersonation key can
+        // NEVER fall through as an unguarded regular API key on a revoke race or failed RunView.
+        let keyEntity = validationResult.APIKey;
+        if (!keyEntity) {
+          if (!validationResult.APIKeyHash) {
+            throw new AuthenticationError('Invalid API key');
+          }
+          const keyLookup = await apiKeyEngine.ValidateKeyByHash(validationResult.APIKeyHash, systemUser);
+          if (!keyLookup?.Valid || !keyLookup.APIKey) {
+            throw new AuthenticationError('Invalid API key');
+          }
+          keyEntity = keyLookup.APIKey;
+        }
+        const rawKeyExpiryMs = keyEntity.ExpiresAt ? new Date(keyEntity.ExpiresAt).getTime() : NaN;
+        const apiKeyExpiresAtMs = Number.isFinite(rawKeyExpiryMs) ? rawKeyExpiryMs : undefined;
+
+        const parsedImpersonation = ParseImpersonationKeyLabel(keyEntity.Label);
+        let impersonationSession: UserPayload['impersonationSession'] | undefined;
+        if (parsedImpersonation) {
+          if (
+            parsedImpersonation.format === 'v1' &&
+            parsedImpersonation.targetUserId &&
+            !UUIDsEqual(parsedImpersonation.targetUserId, userRecord.ID)
+          ) {
+            throw new AuthenticationError('Invalid API key');
+          }
+
+          // Mid-session TOCTOU protection: re-verify on every request that the target user has NOT
+          // been promoted to Owner, Administrator, Developer, Integration, or User Impersonation.
+          const md = Metadata.Provider; // global-provider-ok: pre-context auth path
+          const targetRoleNames = (userRecord.UserRoles ?? [])
+            .map((ur) => (ur.Role ?? '').trim())
+            .filter(Boolean);
+          const targetRoleIds = new Set(
+            (userRecord.UserRoles ?? [])
+              .map((ur) => (ur.RoleID ? NormalizeUUID(ur.RoleID) : ''))
+              .filter(Boolean)
+          );
+          const eligibility = EvaluateTargetImpersonationEligibility(
+            {
+              ID: userRecord.ID,
+              Name: userRecord.Name,
+              Email: userRecord.Email,
+              Type: userRecord.Type,
+              IsActive: userRecord.IsActive,
+              RoleNames: targetRoleNames,
+              RoleIDs: targetRoleIds,
+            },
+            {
+              actorUserId: parsedImpersonation.actorUserId,
+              systemUserId: systemUser?.ID ?? null,
+              authorizations: md?.Authorizations ?? [],
+              authorizationRoles: md?.AuthorizationRoles ?? [],
+            }
+          );
+          if (!eligibility.Eligible) {
+            throw new AuthenticationError('Impersonated target user is no longer eligible for impersonation');
+          }
+
+          impersonationSession = StampImpersonationSession(userRecord, {
+            apiKeyId: validationResult.APIKeyId,
+            mode: parsedImpersonation.mode,
+            readOnly: parsedImpersonation.readOnly,
+            actorUserId: parsedImpersonation.actorUserId,
+            targetUserId: userRecord.ID,
+            expiresAtMs: apiKeyExpiresAtMs,
+          });
+        }
+
         // Row-filter bindings for this key, rebuilt PER REQUEST from the
         // APIKeysEngineBase cache (staleness envelope = scopeCacheTTLMs, same
         // as scope enforcement). Consumed by
@@ -478,6 +556,8 @@ export const GetUserPayload = async (
           sessionId,
           apiKeyId: validationResult.APIKeyId,
           apiKeyHash: validationResult.APIKeyHash,
+          ...(apiKeyExpiresAtMs !== undefined ? { apiKeyExpiresAtMs } : {}),
+          ...(impersonationSession ? { impersonationSession } : {}),
         };
       }
 
@@ -720,6 +800,21 @@ function readTimeZoneHeader(req: IncomingMessage): string | undefined {
   return typeof value === 'string' && IsValidTimeZone(value) ? value : undefined;
 }
 
+function readSingleAuthHeader(req: IncomingMessage, headerName: string): string {
+  const raw = req.headers[headerName];
+  if (raw === undefined) {
+    return '';
+  }
+  if (Array.isArray(raw)) {
+    const distinct = Array.from(new Set(raw.map((v) => v.trim()).filter(Boolean)));
+    if (distinct.length > 1) {
+      throw new AuthenticationError(`Conflicting duplicate '${headerName}' headers`);
+    }
+    return distinct[0] ?? '';
+  }
+  return raw.trim();
+}
+
 function extractAuthInputs(req: IncomingMessage): {
   bearerToken: string;
   sessionId: string;
@@ -732,9 +827,14 @@ function extractAuthInputs(req: IncomingMessage): {
   const sessionIdRaw = req.headers['x-session-id'];
   const requestDomain = parseRequestHostname(req.headers.origin);
   const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
-  const bearerToken = req.headers.authorization ?? '';
-  const systemApiKey = String(req.headers['x-mj-api-key']);
-  const userApiKey = String(req.headers['x-api-key']);
+  const bearerToken = readSingleAuthHeader(req, 'authorization');
+  const systemApiKey = readSingleAuthHeader(req, 'x-mj-api-key');
+  const primaryUserApiKey = readSingleAuthHeader(req, 'x-api-key');
+  const altUserApiKey = readSingleAuthHeader(req, 'x-mj-user-api-key');
+  if (primaryUserApiKey && altUserApiKey && primaryUserApiKey !== altUserApiKey) {
+    throw new AuthenticationError('Conflicting user API key headers');
+  }
+  const userApiKey = primaryUserApiKey || altUserApiKey;
   const expressReq = req as e.Request;
 
   const requestContext: RequestContext = {
@@ -742,7 +842,7 @@ function extractAuthInputs(req: IncomingMessage): {
     method: expressReq.method || 'POST',
     operationName: undefined,
     ipAddress: expressReq.ip || expressReq.socket?.remoteAddress || undefined,
-    userAgent: req.headers['user-agent'] as string | undefined,
+    userAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
   };
 
   return {
@@ -805,11 +905,14 @@ export function CreateUnifiedAuthMiddleware(
       (req as unknown as Record<string, unknown>)['user'] = userPayload;
       (req as unknown as Record<string, unknown>)['mjUser'] = userPayload.userRecord;
 
-      if (typeof RunWithRequestSessionId === 'function') {
-        RunWithRequestSessionId(userPayload.sessionId, () => next());
-      } else {
-        next();
-      }
+      const proceed = (): void => {
+        if (typeof RunWithRequestSessionId === 'function') {
+          RunWithRequestSessionId(userPayload.sessionId, () => next());
+        } else {
+          next();
+        }
+      };
+      RunWithImpersonationSession(userPayload.impersonationSession, proceed);
     } catch (error) {
       if (error instanceof TokenExpiredError) {
         res.status(401).json({
@@ -911,6 +1014,13 @@ export const ContextFunction =
         materializedProviders.length = 0;
       });
 
+      const hasRawApiKeyHeader = Boolean(
+        (typeof req.headers['x-api-key'] === 'string' && req.headers['x-api-key'].trim()) ||
+        (Array.isArray(req.headers['x-api-key']) && req.headers['x-api-key'].length > 0) ||
+        (typeof req.headers['x-mj-user-api-key'] === 'string' && req.headers['x-mj-user-api-key'].trim()) ||
+        (Array.isArray(req.headers['x-mj-user-api-key']) && req.headers['x-mj-user-api-key'].length > 0)
+      );
+
       return {
         dataSource,
         dataSources,
@@ -918,6 +1028,8 @@ export const ContextFunction =
         providers,
         ClientIp: expressReq.ip,
         RequestOrigin: ReadRequestOrigin(req.headers.origin),
+        UserAgent: typeof req.headers['user-agent'] === 'string' ? req.headers['user-agent'] : undefined,
+        HasRawApiKeyHeader: hasRawApiKeyHeader,
       };
     };
   };

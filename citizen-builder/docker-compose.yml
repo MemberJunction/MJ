@@ -45,6 +45,8 @@ services:
       DB_USERNAME: "sa"
       DB_PASSWORD: "${DB_PASSWORD:-TestPassword123!}"
       DB_DATABASE: "${DB_DATABASE:-MemberJunction}"
+      DB_READ_ONLY_USERNAME: "${DB_READ_ONLY_USERNAME:-}"
+      DB_READ_ONLY_PASSWORD: "${DB_READ_ONLY_PASSWORD:-}"
       API_PORT: "${API_PORT:-4000}"
       EXPLORER_PORT: "${EXPLORER_PORT:-4202}"
       # Tells the entrypoint which MemberJunction release `mj install` must fetch
@@ -65,12 +67,21 @@ services:
       AI_VENDOR_API_KEY__MistralLLM: "${MISTRAL_API_KEY:-}"
       # Business Context Open App (More Cheese default or custom enterprise app)
       OPEN_APP_INSTALL_URL: "${OPEN_APP_INSTALL_URL:-https://github.com/MemberJunction/more-cheese}"
+      OPEN_APP_VERSION: "${OPEN_APP_VERSION:-}"
+      OPEN_APP_DEPS_FROM_HEAD: "${OPEN_APP_DEPS_FROM_HEAD:-}"
       GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4000/healthcheck >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 900s
     volumes:
       - mj-workspace:/workspace
       - ./metadata:/work/metadata
       - ./scripts:/work/scripts
       - ./dist:/work/dist
+      - ./CAPABILITIES.md:/work/CAPABILITIES.md
     entrypoint: ["/bin/bash", "/work/scripts/docker-entrypoint.sh"]
 
 volumes:

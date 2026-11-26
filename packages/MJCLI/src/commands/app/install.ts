@@ -45,7 +45,7 @@ Private repositories need a GitHub credential. GitHub returns 404 (not 403) for 
   };
 
   static flags = {
-    version: Flags.string({ description: 'Specific version to install (default: latest)' }),
+    version: Flags.string({ description: 'Specific version to install, or HEAD for default branch (default: latest compatible release)' }),
     verbose: Flags.boolean({ char: 'v', description: 'Show detailed output' }),
     'non-interactive': Flags.boolean({
       description: 'Skip interactive setup prompts; post-install hooks use environment variables / defaults (for CI/headless installs)',

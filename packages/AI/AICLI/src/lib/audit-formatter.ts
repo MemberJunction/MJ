@@ -136,7 +136,12 @@ export class AuditFormatter {
     output += chalk.bold('Performance Metrics:\n');
     output += `  Total Steps:    ${summary.stepCount}\n`;
     output += `  Total Tokens:   ${summary.totalTokens.toLocaleString()}\n`;
-    output += `  Estimated Cost: $${summary.estimatedCost.toFixed(4)}\n\n`;
+    const costLabel = summary.totalCost != null ? 'Actual Cost:   ' : 'Estimated Cost:';
+    output += `  ${costLabel} $${summary.estimatedCost.toFixed(4)}\n`;
+    if (summary.actionsUsed.length > 0) {
+      output += `  Actions Used:   ${summary.actionsUsed.join(', ')}\n`;
+    }
+    output += '\n';
 
     // Error Summary
     if (summary.hasErrors) {
@@ -200,7 +205,8 @@ export class AuditFormatter {
       ['Duration', `${(summary.duration / 1000).toFixed(2)}s`],
       ['Total Steps', summary.stepCount.toString()],
       ['Total Tokens', summary.totalTokens.toLocaleString()],
-      ['Est. Cost', `$${summary.estimatedCost.toFixed(4)}`],
+      [summary.totalCost != null ? 'Actual Cost' : 'Est. Cost', `$${summary.estimatedCost.toFixed(4)}`],
+      ...(summary.actionsUsed.length > 0 ? [['Actions Used', summary.actionsUsed.join(', ')]] : []),
     ];
 
     output += table([metadataHeaders, ...metadataRows]);
@@ -249,7 +255,11 @@ export class AuditFormatter {
     md += `## Performance Metrics\n`;
     md += `- **Total Steps**: ${summary.stepCount}\n`;
     md += `- **Total Tokens**: ${summary.totalTokens.toLocaleString()}\n`;
-    md += `- **Estimated Cost**: $${summary.estimatedCost.toFixed(4)}\n\n`;
+    md += `- **${summary.totalCost != null ? 'Actual Cost' : 'Estimated Cost'}**: $${summary.estimatedCost.toFixed(4)}\n`;
+    if (summary.actionsUsed.length > 0) {
+      md += `- **Actions Used**: ${summary.actionsUsed.join(', ')}\n`;
+    }
+    md += '\n';
 
     if (summary.hasErrors) {
       md += `## ⚠️ Errors Detected\n`;
@@ -360,6 +370,25 @@ export class AuditFormatter {
     output += this.formatJson(detail.output.raw);
     output += chalk.dim('─'.repeat(47)) + '\n\n';
 
+    if (detail.promptRun) {
+      output += chalk.bold('Prompt Run Details:\n');
+      if (detail.promptRun.model) output += `  Model:       ${detail.promptRun.model}\n`;
+      if (detail.promptRun.vendor) output += `  Vendor:      ${detail.promptRun.vendor}\n`;
+      if (detail.promptRun.systemPrompt) {
+        output += chalk.bold('\nSystem Prompt:\n');
+        output += chalk.dim('─'.repeat(47)) + '\n';
+        output += detail.promptRun.systemPrompt + '\n';
+        output += chalk.dim('─'.repeat(47)) + '\n';
+      }
+      if (detail.promptRun.messages) {
+        output += chalk.bold('\nMessages Sent to Provider:\n');
+        output += chalk.dim('─'.repeat(47)) + '\n';
+        output += this.formatJson(detail.promptRun.messages) + '\n';
+        output += chalk.dim('─'.repeat(47)) + '\n';
+      }
+      output += '\n';
+    }
+
     return output;
   }
 
@@ -409,6 +438,19 @@ export class AuditFormatter {
       md += `*Output truncated (${detail.output.tokenCount} tokens)*\n\n`;
     }
     md += `\`\`\`json\n${detail.output.raw}\n\`\`\`\n\n`;
+
+    if (detail.promptRun) {
+      md += `## Prompt Run Details\n`;
+      if (detail.promptRun.model) md += `- **Model**: ${detail.promptRun.model}\n`;
+      if (detail.promptRun.vendor) md += `- **Vendor**: ${detail.promptRun.vendor}\n`;
+      if (detail.promptRun.systemPrompt) {
+        md += `\n### System Prompt\n\`\`\`\n${detail.promptRun.systemPrompt}\n\`\`\`\n`;
+      }
+      if (detail.promptRun.messages) {
+        md += `\n### Messages\n\`\`\`json\n${detail.promptRun.messages}\n\`\`\`\n`;
+      }
+      md += '\n';
+    }
 
     return md;
   }

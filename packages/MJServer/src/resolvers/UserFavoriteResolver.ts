@@ -14,7 +14,6 @@ import {
   Query,
   Resolver,
 } from '@memberjunction/server';
-import { UserCache } from '@memberjunction/generic-database-provider';
 
 import { MJUserFavorite_, MJUserFavoriteResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';
@@ -121,7 +120,7 @@ export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
     const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
     const e = p.Entities.find((e) => UUIDsEqual(e.ID, params.EntityID));
-    const u = UserCache.Users.find((u) => UUIDsEqual(u.ID, userPayload.userRecord.ID));
+    const u = this.GetUserFromPayload(userPayload);
     if (e) {
       await p.SetRecordFavoriteStatus(params.UserID, e.Name, pk, params.IsFavorite, u);
       return {

@@ -88,6 +88,25 @@ export interface APIKeyActingContext {
 }
 
 /**
+ * Per-request server-stamped user impersonation context, carried on a cloned {@link UserInfo}
+ * so record-change tracking (`MJ: Record Changes`) and audit logs can permanently record the
+ * impersonating actor alongside the impersonated target user.
+ *
+ * TRUST BOUNDARY: populated strictly server-side from verified impersonation API keys;
+ * never a database/GraphQL field and never client-settable.
+ */
+export interface ImpersonationSessionContext {
+    /** Authenticated actor user ID who initiated the impersonation session (null for legacy keys). */
+    readonly ActorUserID: string | null;
+    /** Target user ID being impersonated. */
+    readonly TargetUserID: string;
+    /** `MJ: API Keys.ID` of the temporary impersonation key. */
+    readonly APIKeyID: string;
+    /** Impersonation execution mode (`'ViewAs'` read-only or `'ActAs'` write-enabled). */
+    readonly Mode: 'ViewAs' | 'ActAs';
+}
+
+/**
  * One API-key row-filter binding carried on {@link UserInfo}: for the named
  * entity and permission type, the referenced Row Level Security Filter applies
  * IN ADDITION TO (AND-composed with) role RLS — and independently of the
@@ -300,6 +319,21 @@ export class UserInfo extends BaseInfo {
     }
     public set APIKeyActingContext(value: APIKeyActingContext | undefined) {
         this._aPIKeyActingContext = value;
+    }
+
+    private _impersonationContext?: ImpersonationSessionContext = undefined;
+
+    /**
+     * Per-request impersonation attribution context stamped server-side onto cloned `UserInfo`
+     * instances for active impersonation sessions. Consumed by `DatabaseProviderBase.BuildRecordChangePayload`
+     * so `MJ: Record Changes` rows written during `ActAs` record both the target user and the
+     * impersonating actor. Not a DB/GraphQL field and never exposed to clients.
+     */
+    public get ImpersonationContext(): ImpersonationSessionContext | undefined {
+        return this._impersonationContext;
+    }
+    public set ImpersonationContext(value: ImpersonationSessionContext | undefined) {
+        this._impersonationContext = value;
     }
 
     private _aPIKeyRowFilters?: APIKeyRowFilterBinding[] = undefined;

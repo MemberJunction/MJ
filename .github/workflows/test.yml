@@ -1138,7 +1138,7 @@ jobs:
   esm-guard:
     name: Native-ESM import guard
     needs: build
-    timeout-minutes: 30
+    timeout-minutes: 45
     runs-on: ubuntu-latest
     permissions:
       contents: read

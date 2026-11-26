@@ -680,7 +680,8 @@ export class APIKeyEngine {
             IsValid: true,
             User: user,
             APIKeyId: apiKey.ID,
-            APIKeyHash: keyHash
+            APIKeyHash: keyHash,
+            APIKey: apiKey
         };
     }
 

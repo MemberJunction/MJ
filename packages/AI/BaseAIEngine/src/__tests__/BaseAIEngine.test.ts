@@ -1674,6 +1674,16 @@ describe('AIEngineBase', () => {
             expect(effective!.PersonaVendor?.APIName).toBe('alloy');
             expect(effective!.AgentPersona).toBeUndefined();
         });
+
+        it('returns null when agent has no AIAgentPersona records and allowModelFallback is false', () => {
+            set('_agentPersonas', []);
+
+            const effective = AIEngineBase.Instance.ResolveAgentPersona('a1', {
+                modelId: 'm1',
+                allowModelFallback: false,
+            });
+            expect(effective).toBeNull();
+        });
     });
 
     describe('GetUserRunnableAgentDirectory & ClearUserRunnableAgentDirectoryCache', () => {

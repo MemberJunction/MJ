@@ -21,6 +21,10 @@ import { SearchModule } from '@memberjunction/ng-search';
 import { MJDiagnosticsModule } from '@memberjunction/ng-diagnostics';
 // Marks the main content area as a panel a call can share on its own ("This panel").
 import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
+import {
+  UserImpersonationBannerComponent,
+  UserImpersonationDialogComponent,
+} from '../user-impersonation';
 
 @NgModule({
   declarations: [
@@ -47,7 +51,9 @@ import { SharePanelDirective } from '@memberjunction/ng-realtime-media';
     RecordsHubPillComponent,
     RecordBarComponent,
     RecordSwitcherSheetComponent,
-    SharePanelDirective
+    SharePanelDirective,
+    UserImpersonationBannerComponent,
+    UserImpersonationDialogComponent
   ],
   providers: [
     CommandPaletteService

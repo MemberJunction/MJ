@@ -1,8 +1,9 @@
-import { Arg, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
+import { Arg, AuthorizationError, Ctx, Field, Float, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { EntitySearchResult, SearchEntityParams } from '@memberjunction/core';
 import { AppContext } from '../types.js';
-import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetReadOnlyProvider } from '../util.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
+import { GetImpersonationSession, IsEntityForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
 
 /**
  * GraphQL surface for {@link Metadata.Provider.SearchEntity} / `SearchEntities`.
@@ -100,7 +101,7 @@ export class SearchEntitiesResponseType {
 const MAX_SEARCH_ENTITIES_BATCH_SIZE = 20;
 
 @Resolver(SearchEntitiesResponseType)
-export class SearchEntitiesResolver {
+export class SearchEntitiesResolver extends ResolverBase {
     @Query(() => SearchEntitiesResponseType)
     async SearchEntities(
         @Ctx() { providers, userPayload }: AppContext,
@@ -117,15 +118,24 @@ export class SearchEntitiesResolver {
             // Search is a pure read, so the read-write pool is a valid fallback. Without it, a server
             // with no read-only login configured gets `null` here and every search silently returns empty.
             const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-            const user = UserCache.Instance.Users.find(
-                (u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase()
-            );
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) {
                 return {
                     Success: false,
                     ErrorMessage: `User ${userPayload.email} not found`,
                     Groups: params.map(p => ({ EntityName: p.EntityName, Results: [] })),
                 };
+            }
+
+            if (GetImpersonationSession(userPayload) || GetImpersonationSession(user)) {
+                for (const p of params) {
+                    const entityMeta = md?.EntityByName?.(p.EntityName);
+                    if (IsEntityForbiddenDuringImpersonation(p.EntityName, user, entityMeta)) {
+                        throw new AuthorizationError(
+                            `Searching '${p.EntityName}' is prohibited during user impersonation sessions.`
+                        );
+                    }
+                }
             }
 
             const callParams: SearchEntityParams[] = params.map(p => ({

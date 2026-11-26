@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual, MJLruCache } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolverBase } from '../generic/ResolverBase.js';
 import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -176,10 +176,11 @@ const componentSpecCache = new MJLruCache<string, { specJson: string; hash: stri
 });
 
 @Resolver()
-export class ComponentRegistryExtendedResolver {
+export class ComponentRegistryExtendedResolver extends ResolverBase {
     private componentEngine = ComponentMetadataEngine.Instance;
 
     constructor() {
+        super();
         // No longer pre-initialize clients - create on demand
     }
 
@@ -214,7 +215,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<ComponentSpecWithHashType> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
             // Get registry from database by name
@@ -324,7 +325,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<RegistryComponentSearchResultType> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
             // If a specific registry is specified, use only that one
@@ -410,7 +411,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<ComponentDependencyTreeType | null> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
             // Get registry to find its ID for permission check
@@ -590,7 +591,7 @@ export class ComponentRegistryExtendedResolver {
     ): Promise<ComponentFeedbackResponse> {
         try {
             // Get user from cache
-            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            const user = this.GetUserFromPayload(userPayload);
             if (!user) {
                 return {
                     success: false,

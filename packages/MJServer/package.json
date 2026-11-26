@@ -35,6 +35,18 @@
     "./postgresql-pool-settings": {
       "types": "./dist/postgresqlPoolSettings.d.ts",
       "default": "./dist/postgresqlPoolSettings.js"
+    },
+    "./impersonation-guard": {
+      "types": "./dist/auth/impersonationGuard.d.ts",
+      "default": "./dist/auth/impersonationGuard.js"
+    },
+    "./user-impersonation-config": {
+      "types": "./dist/userImpersonationConfigUnits.d.ts",
+      "default": "./dist/userImpersonationConfigUnits.js"
+    },
+    "./user-impersonation-resolver": {
+      "types": "./dist/resolvers/UserImpersonationResolver.d.ts",
+      "default": "./dist/resolvers/UserImpersonationResolver.js"
     }
   },
   "scripts": {

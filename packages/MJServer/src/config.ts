@@ -10,6 +10,12 @@ import { ResolveServerRole, type ServerRole } from './serverRoleConfigUnits.js';
 import { NormalizeInviteOnlyUserHandling } from './auth/inviteOnlyPolicy.js';
 import { DEFAULT_ROUTE_RATE_LIMITS, type RouteRateLimitName } from './routeRateLimitConfigUnits.js';
 import {
+  RegisterServerUserImpersonationConfig,
+  UserImpersonationConfigSchema,
+  UserImpersonationDefaultsFromEnv,
+  type UserImpersonationConfig,
+} from './userImpersonationConfigUnits.js';
+import {
   AgentRunWatchdogDefaultsFromEnv,
   AgentRunWatchdogSchema,
   AgentSessionsDefaultsFromEnv,
@@ -1339,6 +1345,7 @@ export const LimitsConfigSchema = z.object({
 
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
+  userImpersonation: UserImpersonationConfigSchema.optional().default({}),
   magicLink: magicLinkSchema.optional().default({}),
   devAuth: devAuthSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
@@ -1421,6 +1428,7 @@ const configInfoSchema = z.object({
 export type { ServerRole };
 
 export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
+export type { UserImpersonationConfig };
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
@@ -1523,6 +1531,10 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     requireVerifiedEmail: false,
     verifiedEmailOptionalProviders: [],
   },
+
+  // User impersonation defaults — strictly OFF everywhere unless MJ_ENABLE_USER_IMPERSONATION='true'
+  // (or userImpersonation.enabled=true in mj.config.cjs) AND a role holds the User Impersonation authorization.
+  userImpersonation: UserImpersonationDefaultsFromEnv(process.env),
 
   // Database settings (with environment variable for cache refresh)
   databaseSettings: {
@@ -1748,6 +1760,10 @@ export function LoadConfig() {
   // When `limits` is omitted in mj.config.cjs, passing `null` clears any prior override so
   // LimitsConfigResolver falls back to DEFAULT_MJ_LIMITS_CONFIG.
   LimitsConfigResolver.Instance.RegisterMjConfigLimits(configParsing.data.limits ?? null);
+
+  // Register user impersonation configuration into the process-wide GlobalObjectStore slot so
+  // resolvers and auth guards can inspect it without pulling full DB config validation into unit tests.
+  RegisterServerUserImpersonationConfig(configParsing.data.userImpersonation);
 
   return configParsing.data;
 }
