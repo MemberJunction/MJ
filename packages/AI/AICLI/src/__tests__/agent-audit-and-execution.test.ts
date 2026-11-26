@@ -207,7 +207,7 @@ describe('AgentService execution logging and stdout suppression', () => {
         vi.restoreAllMocks();
     });
 
-    it('suppresses progress stdout when suppressProgress is true and records aiModelCalls + toolsUsed', async () => {
+    it('suppresses progress stdout when SuppressProgress is true and records aiModelCalls + toolsUsed', async () => {
         mocks.agentRunnerProgressToEmit = [
             { step: 'prompt_execution', message: 'Thinking...', metadata: { stepCount: 1 } },
             { step: 'action_execution', message: 'Running action', metadata: { stepCount: 2 } },
@@ -235,7 +235,7 @@ describe('AgentService execution logging and stdout suppression', () => {
         const stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
         const service = new AgentService();
-        const result = await service.ExecuteAgent('Skip', 'Hello', { suppressProgress: true });
+        const result = await service.ExecuteAgent('Skip', 'Hello', { SuppressProgress: true });
 
         expect(result.success).toBe(true);
         expect(stdoutSpy).not.toHaveBeenCalled();

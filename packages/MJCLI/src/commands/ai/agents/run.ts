@@ -111,7 +111,7 @@ export default class AgentsRun extends Command {
         const result = await service.executeAgent(flags.agent, resolvedPrompt!, {
           verbose: flags.verbose,
           timeout: flags.timeout,
-          suppressProgress: isJson,
+          SuppressProgress: isJson,
         });
 
         spinner?.stop();

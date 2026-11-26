@@ -15,7 +15,7 @@ export interface AgentExecutionOptions {
   timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   /** Suppresses stdout progress updates (e.g. when `--format json` requires pure JSON stdout). */
-  suppressProgress?: boolean;
+  SuppressProgress?: boolean;
 }
 
 export class AgentService {
@@ -179,7 +179,7 @@ Next steps:
       let lastProgressOutput = '';
       const callbacks = {
         onProgress: ((progress) => {
-          if (options.suppressProgress) {
+          if (options.SuppressProgress) {
             return;
           }
 
@@ -241,7 +241,7 @@ Next steps:
       // Suppress console output during agent execution unless verbose (and not suppressing stdout noise)
       // CLI executions always run Flow agents in-process ('inRun') so the caller receives the final result synchronously
       let executionResult: ExecuteAgentResult;
-      if (options.verbose && !options.suppressProgress) {
+      if (options.verbose && !options.SuppressProgress) {
         executionResult = await agentRunner.RunAgent({
           agent: agent,
           conversationMessages,
@@ -264,7 +264,7 @@ Next steps:
       const duration = Date.now() - startTime;
 
       // Clear any remaining progress output
-      if (lastProgressOutput && !options.verbose && !options.suppressProgress) {
+      if (lastProgressOutput && !options.verbose && !options.SuppressProgress) {
         process.stdout.write('\r' + ' '.repeat(lastProgressOutput.length) + '\r');
       }
 
