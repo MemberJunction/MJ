@@ -6096,6 +6096,18 @@ export class MarkdownArtifactViewerComponent
       return;
     }
     this.hasUncommittedDomInput = true;
+    this.emitLiveDraftContentFromDom();
+  }
+
+  private emitLiveDraftContentFromDom(): void {
+    if (!this.CanUserEdit || this.ViewMode !== 'edit') {
+      return;
+    }
+    const blocks = this.DocumentSegments.map((s) => s.RawMarkdown);
+    this.syncDirtySegmentsFromDomIntoBlocks(blocks);
+    const liveMarkdown =
+      blocks.length > 0 ? blocks.filter((b) => b.trim().length > 0).join('\n\n') : this.MarkdownContent;
+    this.DraftContentChanged.emit(liveMarkdown);
   }
 
   /**
@@ -7207,6 +7219,8 @@ export class MarkdownArtifactViewerComponent
         return;
       }
     }
+
+    this.emitLiveDraftContentFromDom();
 
     if (trimmed === '/' || /(?:^|\s)\/$/.test(text)) {
       this.ActiveSlashTargetSegmentID = seg.SegmentID;
@@ -9403,6 +9417,9 @@ export class MarkdownArtifactViewerComponent
       this.session.SetContent(this.MarkdownContent);
     }
     this.refreshParsedStructure();
+    if (!fromYjs) {
+      this.DraftContentChanged.emit(this.MarkdownContent);
+    }
     this.cdr.markForCheck();
   }
 

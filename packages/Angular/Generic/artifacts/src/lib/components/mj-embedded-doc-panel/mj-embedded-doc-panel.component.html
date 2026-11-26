@@ -38,7 +38,7 @@
           mjButton
           variant="primary"
           size="sm"
-          [disabled]="IsSavingVersion || IsLoading"
+          [disabled]="IsSavingVersion || IsLoading || !HasPendingChanges"
           data-testid="embedded-doc-save-version-btn"
           (click)="OnSaveVersion()"
         >
