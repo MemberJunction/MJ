@@ -3172,6 +3172,60 @@ Record every decision taken in §9 and, when it changes another plan's interface
   At `d214248682` the three planning sub-agents have `ModelSelectionMode = 'Agent Type'` and run on the Loop Agent
   Type's Gemini 3.5 Flash-Lite with no failover (F-AG-9), so the literal D-092 rule could count no baseline run (M0).
 
+- D5-A2-1 · 2026-11-26 · `AgentSessionLease.WithSessionLock(sessionRunId, work, ctx, options)` gains a fourth argument
+  `{ CurrentRunID; SessionRunIDs; Clock? }` and hands `work` the database clock; under the lock the session is held by
+  the live sibling run (`Status = 'Running'`, heard from within 10 min of `DbNow`) that **started first** (`StartedAt`,
+  then ID), so two runs that start together resolve to one with no write; a run with no `LastRunID` starts its own
+  session and takes no lock. · The contract's signature cannot tell the turn's own run from its siblings, and a holder
+  rule that needs a write would itself race. · A lease row (a new table and migration section).
+- D5-A2-2 · 2026-11-26 · CodeGen named the claim entity **`MJ: ML Build Approval Claims`** (table
+  `__mj.MLBuildApprovalClaim`, view `vwMLBuildApprovalClaims`, `TrackRecordChanges = 1` as generated). · Recorded as A2's
+  decision asks. · —
+- D5-A2-3 · 2026-11-26 · `BuildApprovalRefusal<TRequestStatus extends string>` is generic in `Core/src/agent-contracts.ts`;
+  the Engine binds it once, `AgentBuildApprovalRefusal = BuildApprovalRefusal<MJAIAgentRequestEntity['Status']>`
+  (`Engine/src/agent/control-path.ts`). · Core has no entity dependency (it is structural by design) and its
+  `package.json` is not A2's to change; the union still comes from the generated field. · Adding
+  `@memberjunction/core-entities` to Core (a lockfile change outside A2's ownership); a hand-copied status list.
+- D5-A2-4 · 2026-11-26 · D-090 rule 3's provenance comes from a PS `PreSave` hook, `BuildApprovalResolver.CheckAnsweringSave`
+  (registered from `$E/index.ts`): a save that answers the Model Development Agent's request keeps its responder only when
+  it is the person's own client save — inside a client CRUD boundary, not the MJ system user, not an API-key session (its
+  user carries `APIKeyRowFilters`); any other answering save (an API key, the system user, an agent run's Update Record as
+  the person) is recorded with `ResponseByUserID` NULL, so its Record Change says no person answered and `Resolve` refuses
+  `not-human`. Other agents' requests are untouched. · `MJ: Record Changes` record the saving user, not the transport, so
+  an API key or server code acting as the person would otherwise read as the person. · Changing the shared request server
+  subclass for every agent (outside item 3); trusting `ResponseSource`.
+- D5-A2-5 · 2026-11-26 · Rule 1 also requires the request to be the **first** request naming its Plan step. · A client may
+  copy the step's ID onto a row of its own; the agent's row is created by the Plan step itself, before anyone sees the
+  step. · Trusting `OriginatingAgentRunStepID` alone.
+- D5-A2-6 · 2026-11-26 · Item 3's plan answer rides from `RunAIAgentFromConversationDetail` to `executeAIAgent` on the
+  turn's reply row (`RunAIAgentResolver.TakePlanAnswer`, a `WeakMap` keyed by the reply the server created), not a new
+  positional parameter, on both the awaited and the fire-and-forget path. · Three existing resolver test files outside
+  A2's ownership pin argument positions from the end of those calls, and a conditional tuple spread does not type-check
+  against the optional parameters. · A new trailing parameter.
+- D5-A2-7 · 2026-11-26 · A complete plan not yet presented with its hash is presented by code in place of the prompt's
+  `Chat`, `Success` or `Plan` step — a terminal one included (it would end the run with no request) — with the prompt's
+  message on the card; a prompt step the gate replaces goes to the control path, not back to the prompt. · Found by the
+  runtime spot check: a run whose last prompt completed the plan and finished `Success` raised no request. · Presenting
+  only on `Retry` turns.
+- D5-A2-8 · 2026-11-26 · The Pipeline Builder's approval is the claim its parent orchestrator dispatched it under:
+  `BuildApprovalClaims.HeldApproval(payload.BuildClaimID, parentRun.ID, PlanHash(payload), …)` — a `claimed` claim taken
+  by that parent run for that plan, whose request is `Approved` with a responder. · A payload is caller-supplied (a
+  GraphQL `RunAIAgent` call can send one), so an approval in it grants nothing. · Passing the `BuildApproval` in the
+  payload.
+- D5-A2-9 · 2026-11-26 · The five removed Actions ship as `deleteRecord` entries in `.model-development-agent.json`
+  (`mj sync push` deletes the agent's Action rows; it deleted 5 on `MJ_PS_PR5_claude1`). · A record dropped from the file
+  is left in the database. · Deleting the rows in a migration (metadata ships as JSON).
+- D5-A2-10 · 2026-11-26 · G4.1 (`C1 -> C1.1`) runs on the **server** transport as the D5-46 person, who answers as their own
+  client save (`RunInClientCrudBoundary`, as `RespondToAgentRequest` does), on the truth suite's W1-signal world (D5-45's
+  C1 + W1 runs). The agent gate suite holds it alone: a server-transport bundle cannot follow the client-transport
+  dataset load in one process (#3251), so the datasets are loaded first (the Containment suite's first test, or
+  `mj test run "PS truth datasets: load and verify"`). · The client transport authenticates with an API key, which rule 3
+  refuses by design, so no client-transport run can approve. · The client transport.
+- D5-A2-11 · 2026-11-26 · Pipeline Builder caps (it uses no LLM; DD-5's 10× rule gives 0): `MaxCostPerRun` $0.01,
+  `MaxTokensPerRun` 1,000 and `MaxIterationsPerRun` 10 are floors that never bind (the tree tracker refuses at
+  `>=` the cap, so 0 would refuse every run), and `MaxTimePerRun` is 10× its first measured build (A2's G4.1 build, §11).
+  · DD-5's rule has no value for an agent with no LLM use. · NULL caps (the outcome A1 exists to remove).
+
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
 item becomes an allowlist line `<path>  (D-091 item <n>)`. **Items 1 and 2 approved by the owner 2026-11-26** ("shared

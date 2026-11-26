@@ -231,6 +231,24 @@ describe('attack 7: a failed build consumes the approval; a plain message after 
   });
 });
 
+describe('attack 15 (the orchestrator half): the build is dispatched only after this run took the claim', () => {
+  it('a claim another run already holds (consumed) → no Pipeline Builder dispatch, a plain reply', async () => {
+    claim.mockResolvedValueOnce({ kind: 'consumed', claimId: 'CL0' });
+    const o = new TestOrchestrator(facts({ Approval: APPROVAL }));
+    const s = await o.Next(params(), retry());
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(dispatchesBuilder(s)).toBe(false);
+    expect(settle).not.toHaveBeenCalled();
+  });
+  it('a claim taken → one dispatch naming that claim', async () => {
+    const o = new TestOrchestrator(facts({ Approval: APPROVAL }));
+    const s = await o.Next(params(), retry());
+    expect(claim).toHaveBeenCalledTimes(1);
+    expect(dispatchesBuilder(s)).toBe(true);
+    expect((s.newPayload as PredictiveStudioBuilderPayload).BuildClaimID).toBe('CL1');
+  });
+});
+
 describe('attack 16: an unfinished build is reported, never rebuilt', () => {
   it('a claimed claim whose run is dead: "did not finish", 0 claims', async () => {
     const o = new TestOrchestrator(facts({ Approval: { kind: 'consumed', claimId: 'CL1' }, Claim: { Outcome: 'claimed', ClaimingRunLive: false, BuildStarted: true, ErrorMessage: null } }));
