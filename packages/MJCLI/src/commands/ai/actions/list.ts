@@ -24,31 +24,34 @@ export default class ActionsList extends Command {
   };
 
   async run(): Promise<void> {
-    const { ActionService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    const { ActionService, OutputFormatter, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(ActionsList);
-    const spinner = ora();
+    const format = ResolveLegacyFormat({
+      Format: flags.format,
+      Legacy: flags.output as 'compact' | 'json' | 'table',
+      LegacyDefault: 'compact' as const,
+      LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+      Map: AI_FORMAT_MAP,
+    });
+    const spinner = format !== 'json' ? ora() : null;
 
     try {
-      spinner.start('Loading available actions...');
+      spinner?.start('Loading available actions...');
       const service = new ActionService();
       const actions = await service.listActions();
-      spinner.stop();
+      spinner?.stop();
 
-      const formatter = new OutputFormatter(ResolveLegacyFormat({
-        Format: flags.format,
-        Legacy: flags.output as 'compact' | 'json' | 'table',
-        LegacyDefault: 'compact' as const,
-        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-        Map: AI_FORMAT_MAP,
-      }));
+      const formatter = new OutputFormatter(format);
       this.log(formatter.formatActionList(actions));
-      
-      // Force exit after completion
-      process.exit(0);
     } catch (error) {
-      spinner.fail('Failed to load actions');
+      spinner?.fail('Failed to load actions');
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
+
+    await FlushStdout();
+    setImmediate(() => process.exit(0));
   }
 }

@@ -46,17 +46,18 @@ export default class ActionsRun extends Command {
   };
 
   async run(): Promise<void> {
-    const { ActionService, OutputFormatter, CloseMJProvider } = await import('@memberjunction/ai-cli');
+    const { ActionService, OutputFormatter, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(ActionsRun);
     const service = new ActionService();
-    const formatter = new OutputFormatter(ResolveLegacyFormat({
-        Format: flags.format,
-        Legacy: flags.output as 'compact' | 'json' | 'table',
-        LegacyDefault: 'compact' as const,
-        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-        Map: AI_FORMAT_MAP,
-      }));
+    const format = ResolveLegacyFormat({
+      Format: flags.format,
+      Legacy: flags.output as 'compact' | 'json' | 'table',
+      LegacyDefault: 'compact' as const,
+      LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+      Map: AI_FORMAT_MAP,
+    });
+    const formatter = new OutputFormatter(format);
 
     // Parse parameters
     const params: Record<string, string> = {};
@@ -70,6 +71,8 @@ export default class ActionsRun extends Command {
       }
     }
 
+    let exitCode = 0;
+    const spinner = !flags['dry-run'] && format !== 'json' ? ora() : null;
     try {
       if (flags['dry-run']) {
         // Route the dry run through the same formatter as a real run, so --format=json
@@ -77,8 +80,7 @@ export default class ActionsRun extends Command {
         this.log(formatter.formatActionDryRun(flags.name, params));
       } else {
         // Execute action
-        const spinner = ora();
-        spinner.start(`Executing action: ${flags.name}`);
+        spinner?.start(`Executing action: ${flags.name}`);
 
         const result = await service.executeAction(flags.name, {
           parameters: params,
@@ -86,18 +88,24 @@ export default class ActionsRun extends Command {
           timeout: flags.timeout
         });
 
-        spinner.stop();
+        spinner?.stop();
         this.log(formatter.formatActionResult(result));
 
         if (!result.success) {
-          this.exit(1);
+          exitCode = 1;
         }
-        setImmediate(() => process.exit(0));
       }
     } catch (error) {
+      spinner?.fail(`Failed to execute action: ${flags.name}`);
       this.error(error as Error);
     } finally {
       await CloseMJProvider().catch(() => {});
     }
+
+    await FlushStdout();
+    if (exitCode !== 0) {
+      this.exit(exitCode);
+    }
+    setImmediate(() => process.exit(0));
   }
 }

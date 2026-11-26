@@ -312,3 +312,107 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+
+  citizen-builder-smoke:
+    name: Citizen Builder Smoke Gate
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call' || github.event_name == 'schedule'
+    timeout-minutes: 25
+    runs-on: ubuntu-latest
+    env:
+      TURBO_CACHE_DIR: .turbo/cache
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.branch || github.sha }}
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - name: Set up node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Validate Citizen Builder template sync and shell syntax
+        run: |
+          node .github/scripts/check-citizen-builder-template.mjs --self-test
+          node .github/scripts/check-citizen-builder-template.mjs
+          bash -n citizen-builder/scripts/*.sh
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Restore turbo build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .turbo/cache
+          key: turbo-v1-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-v1-${{ runner.os }}-
+
+      - name: Build @memberjunction/cli
+        run: npx turbo run build --filter=@memberjunction/cli...
+
+      - name: Smoke test mj agent init and Tier 1 bundle packaging
+        run: |
+          SMOKE_ROOT="$(mktemp -d)"
+          trap 'rm -rf "$SMOKE_ROOT"' EXIT
+          SMOKE_WS="$SMOKE_ROOT/smoke-citizen-ws"
+
+          node packages/MJCLI/bin/run.js agent init "$SMOKE_WS" --no-start --skip-docker-check
+
+          # Assert scripts/*.sh have executable bit
+          sh_count=0
+          for script in "$SMOKE_WS"/scripts/*.sh; do
+            test -f "$script"
+            test -x "$script" || { echo "::error::$script is not executable"; exit 1; }
+            sh_count=$((sh_count + 1))
+          done
+          test "$sh_count" -gt 0 || { echo "::error::No scripts/*.sh found"; exit 1; }
+
+          # Assert .env pins MJ_VERSION and COMPOSE_PROJECT_NAME
+          CLI_VERSION="$(node -e "process.stdout.write(require('./packages/MJCLI/package.json').version)")"
+          grep -Fxq "MJ_VERSION=${CLI_VERSION}" "$SMOKE_WS/.env" || {
+            echo "::error::.env missing MJ_VERSION=${CLI_VERSION}"
+            exit 1
+          }
+          grep -Fxq "COMPOSE_PROJECT_NAME=mj-smoke-citizen-ws" "$SMOKE_WS/.env" || {
+            echo "::error::.env missing COMPOSE_PROJECT_NAME=mj-smoke-citizen-ws"
+            exit 1
+          }
+
+          # Assert Tier 1 bundle packaging includes .mj-sync.json files
+          cd "$SMOKE_WS"
+          mkdir -p dist
+          printf '# Customer Insight Specialist Manifest\nTier: Tier 1 (Declarative)\n' > AGENT_MANIFEST.md
+          zip -r "dist/customer-insight-package.zip" \
+            AGENT_MANIFEST.md \
+            metadata/.mj-sync.json \
+            metadata/agents/.mj-sync.json \
+            metadata/agents/.*customer-insight*.json \
+            metadata/prompts/.mj-sync.json \
+            metadata/prompts/.*customer-insight*.json \
+            metadata/prompts/templates/customer-insight*.md
+
+          ZIP_LISTING="$(python3 -m zipfile -l dist/customer-insight-package.zip)"
+          echo "$ZIP_LISTING"
+          for expected in \
+            "AGENT_MANIFEST.md" \
+            "metadata/.mj-sync.json" \
+            "metadata/agents/.mj-sync.json" \
+            "metadata/agents/.customer-insight-agent.json" \
+            "metadata/prompts/.mj-sync.json" \
+            "metadata/prompts/.customer-insight-prompt.json" \
+            "metadata/prompts/templates/customer-insight.template.md"; do
+            echo "$ZIP_LISTING" | grep -Fq "$expected" || {
+              echo "::error::Zip bundle missing $expected"
+              exit 1
+            }
+          done

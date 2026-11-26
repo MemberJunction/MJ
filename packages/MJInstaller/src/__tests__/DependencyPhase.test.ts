@@ -660,5 +660,45 @@ describe('DependencyPhase package-manager awareness', () => {
       );
       expect(hoistWrite).toBeDefined();
     });
+
+    it('writes .npmrc with shamefully-hoist=true for standalone pnpm distribution installs', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.WriteText.mockClear();
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+
+      const npmrcWrite = mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'));
+      expect(npmrcWrite).toBeDefined();
+      expect(String(npmrcWrite![1])).toContain('shamefully-hoist=true');
+    });
+
+    it('preserves existing .npmrc hoisting settings and skips .mj-dev-workspace.json workspaces', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.npmrc'));
+      mockFs.ReadText.mockResolvedValue('public-hoist-pattern[]=*\n');
+      mockFs.WriteText.mockClear();
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+      expect(mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'))).toBeUndefined();
+
+      mockFs.FileExists.mockImplementation(async (p: string) => p.endsWith('.mj-dev-workspace.json'));
+      mockFs.WriteText.mockClear();
+      await phase.Run(makeContext({ PackageManager: 'pnpm' }));
+      expect(mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'))).toBeUndefined();
+    });
+
+    it('does not write .npmrc under npm', async () => {
+      mockFs.DirectoryExists.mockResolvedValue(false);
+      mockFs.FileExists.mockResolvedValue(false);
+      mockFs.WriteText.mockClear();
+      mockRunner.Run.mockResolvedValue(ok());
+
+      await phase.Run(makeContext({ PackageManager: 'npm' }));
+
+      expect(mockFs.WriteText.mock.calls.find(([p]) => String(p).endsWith('.npmrc'))).toBeUndefined();
+    });
   });
 });

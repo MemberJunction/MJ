@@ -123,12 +123,12 @@ export class LocalAppSource implements OpenAppSource {
      * Copies the `.sql` files under `directory` into `targetDir`, keeping subfolders. Fails when the
      * folder is not at `version`, so files of one version never run as another.
      */
-    public async CopySqlDirectory(directory: string, version: string, targetDir: string): Promise<MigrationDownloadResult> {
+    public async CopySqlDirectory(directory: string, version: string | undefined, targetDir: string): Promise<MigrationDownloadResult> {
         const manifest = this.readManifest();
         if ('ErrorMessage' in manifest) {
             return { Success: false, ErrorMessage: manifest.ErrorMessage };
         }
-        if (NormalizeVersion(version) !== manifest.Version) {
+        if (version !== undefined && NormalizeVersion(version) !== manifest.Version) {
             return {
                 Success: false,
                 ErrorMessage: `Cannot read '${directory}' for version ${NormalizeVersion(version)}. ${this.describeOtherVersion(version, manifest.Version)} `

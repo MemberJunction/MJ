@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
+    LogStatus: vi.fn(),
     UserInfo: class {},
     BaseEngine: class {
         static getInstance<T>(): T { return new (this as never)() as T; }
@@ -125,7 +126,7 @@ vi.mock('@memberjunction/templates-base-types', () => ({
 // ============================================================================
 import { TemplateEngineServer, TemplateEntityLoader } from '../TemplateEngine';
 import { TemplateEmbedExtension } from '../extensions/TemplateEmbed.extension';
-import { LogError } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/core';
 
 interface EmbedParser { nextToken(): { value: string }; parseSignature(a: null, b: boolean): object; advanceAfterBlockEnd(name: string): void }
 interface EmbedNodes { CallExtensionAsync: new (ext: object, prop: string, args: object) => object }
@@ -535,6 +536,35 @@ describe('TemplateEngineServer', () => {
             // With SkipValidation=true and SuppressWarnings defaulting to false,
             // ValidateTemplateInput IS called for non-fatal warning logging
             expect(templateEntity.ValidateTemplateInput).toHaveBeenCalled();
+        });
+
+        it('should log non-fatal validation warnings via LogStatus rather than LogError', async () => {
+            vi.mocked(LogError).mockClear();
+            vi.mocked(LogStatus).mockClear();
+
+            const templateEntity = {
+                ID: 't-1',
+                Name: 'TestTemplate',
+                ValidateTemplateInput: vi.fn().mockReturnValue({
+                    Success: false,
+                    Errors: [{ Type: 'Failure', Message: 'Parameter userMessage is required' }],
+                }),
+                GetParametersForContent: vi.fn().mockReturnValue([]),
+            };
+            const templateContent = { ID: 'tc-1', TemplateText: 'Hello {{ name }}' };
+
+            const result = await engine.RenderTemplate(
+                templateEntity as never,
+                templateContent as never,
+                { name: 'World' },
+                true // SkipValidation
+            );
+
+            expect(result.Success).toBe(true);
+            expect(LogStatus).toHaveBeenCalledWith(
+                'Template validation warnings (non-fatal) for template "TestTemplate": Parameter userMessage is required'
+            );
+            expect(LogError).not.toHaveBeenCalled();
         });
 
         it('should suppress warnings when both SkipValidation and SuppressWarnings are true', async () => {

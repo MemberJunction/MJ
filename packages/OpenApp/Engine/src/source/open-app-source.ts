@@ -29,8 +29,8 @@ export interface OpenAppSource {
 
     /** Reads the app's `mj-app.json` at `version`, or at the latest default-branch content when no version is given. */
     FetchManifest(version?: string): Promise<ManifestFetchResult>;
-    /** Copies the `.sql` files under `directory`, at `version`, into `targetDir`. */
-    CopySqlDirectory(directory: string, version: string, targetDir: string): Promise<MigrationDownloadResult>;
+    /** Copies the `.sql` files under `directory`, at `version` (or default-branch content when undefined), into `targetDir`. */
+    CopySqlDirectory(directory: string, version: string | undefined, targetDir: string): Promise<MigrationDownloadResult>;
     /** Checks that `version` is published. */
     ValidateVersion(version: string): Promise<VersionValidationResult>;
     /** Returns the newest stable published version, or null when none is found. */

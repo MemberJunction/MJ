@@ -45,7 +45,7 @@ export class GitHubAppSource implements OpenAppSource {
         return FetchManifestFromGitHub(this.Locator, version, this.options, this.Subpath, this.appName);
     }
 
-    public CopySqlDirectory(directory: string, version: string, targetDir: string): Promise<MigrationDownloadResult> {
+    public CopySqlDirectory(directory: string, version: string | undefined, targetDir: string): Promise<MigrationDownloadResult> {
         return DownloadMigrations(this.Locator, version, directory, targetDir, this.options, this.Subpath, this.appName);
     }
 
@@ -63,12 +63,13 @@ export class GitHubAppSource implements OpenAppSource {
 
     /** Returns the non-draft release tags and the version tags, without a leading `v`, that are valid semver. */
     public async ListVersions(): Promise<string[]> {
+        const isMultiApp = Boolean(this.Subpath);
         const [releases, tags] = await Promise.all([
-            ListGitHubReleases(this.Locator, this.options),
+            isMultiApp ? Promise.resolve([]) : ListGitHubReleases(this.Locator, this.options),
             ListGitHubTags(this.Locator, this.options, this.Subpath, this.appName),
         ]);
-        const tagNames = [...releases.filter((r) => !r.Draft).map((r) => r.TagName), ...tags];
-        return tagNames.map((t) => t.replace(/^v/, '')).filter((v) => semver.valid(v) != null);
+        const tagNames = [...(releases ?? []).filter((r) => !r.Draft).map((r) => r.TagName), ...(tags ?? [])];
+        return [...new Set(tagNames.map((t) => t.replace(/^v/, '')).filter((v) => semver.valid(v) != null))];
     }
 
     /**

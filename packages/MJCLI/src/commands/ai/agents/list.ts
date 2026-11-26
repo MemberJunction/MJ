@@ -24,31 +24,34 @@ export default class AgentsList extends Command {
   };
 
   async run(): Promise<void> {
-    const { AgentService, OutputFormatter } = await import('@memberjunction/ai-cli');
+    const { AgentService, OutputFormatter, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const { flags, metadata } = await this.parse(AgentsList);
-    const spinner = ora();
+    const format = ResolveLegacyFormat({
+      Format: flags.format,
+      Legacy: flags.output as 'compact' | 'json' | 'table',
+      LegacyDefault: 'compact' as const,
+      LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+      Map: AI_FORMAT_MAP,
+    });
+    const spinner = format !== 'json' ? ora() : null;
 
     try {
-      spinner.start('Loading available agents...');
+      spinner?.start('Loading available agents...');
       const service = new AgentService();
       const agents = await service.listAgents();
-      spinner.stop();
+      spinner?.stop();
 
-      const formatter = new OutputFormatter(ResolveLegacyFormat({
-        Format: flags.format,
-        Legacy: flags.output as 'compact' | 'json' | 'table',
-        LegacyDefault: 'compact' as const,
-        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-        Map: AI_FORMAT_MAP,
-      }));
+      const formatter = new OutputFormatter(format);
       this.log(formatter.formatAgentList(agents));
-      
-      // Force exit after completion
-      process.exit(0);
     } catch (error) {
-      spinner.fail('Failed to load agents');
+      spinner?.fail('Failed to load agents');
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
+
+    await FlushStdout();
+    setImmediate(() => process.exit(0));
   }
 }

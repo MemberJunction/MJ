@@ -1,5 +1,14 @@
 import { Args, Command, Flags } from '@oclif/core';
-import { existsSync, mkdirSync, cpSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import * as net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +17,20 @@ import chalk from 'chalk';
 import ora from 'ora-classic';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+const LLM_API_KEY_VARS = [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
+  'GROQ_API_KEY',
+  'MISTRAL_API_KEY',
+] as const;
+
+interface ResolvedPorts {
+  apiPort: string;
+  dbPort: string;
+  explorerPort: string;
+}
 
 export default class AgentInit extends Command {
   static description =
@@ -19,6 +42,7 @@ export default class AgentInit extends Command {
     '<%= config.bin %> <%= command.id %>',
     '<%= config.bin %> <%= command.id %> ./my-agent-workspace',
     '<%= config.bin %> <%= command.id %> --no-start',
+    '<%= config.bin %> <%= command.id %> --start',
     '<%= config.bin %> <%= command.id %> --app https://github.com/BlueCypress/bc-sampledata',
   ];
 
@@ -38,7 +62,8 @@ export default class AgentInit extends Command {
     }),
     start: Flags.boolean({
       char: 's',
-      description: 'Start Docker containers and run bootstrap immediately after initialization (pass --no-start to skip).',
+      description:
+        'Start Docker containers and run bootstrap immediately after initialization (starts automatically when an LLM API key is configured; otherwise skips startup until you add one unless --start is passed; pass --no-start to always skip).',
       default: true,
       allowNo: true,
     }),
@@ -47,13 +72,13 @@ export default class AgentInit extends Command {
     }),
     'skip-docker-check': Flags.boolean({
       description:
-        'Skip the Docker availability check and assume Docker is running (the stack still starts unless --no-start is passed).',
+        'Skip the Docker availability check and assume Docker is running (the stack still starts when --start is passed or an LLM API key is configured, unless --no-start is passed).',
       default: false,
     }),
   };
 
   async run(): Promise<void> {
-    const { args, flags } = await this.parse(AgentInit);
+    const { args, flags, metadata } = await this.parse(AgentInit);
     const targetDir = path.resolve(process.cwd(), args.dir);
 
     this.log(chalk.bold.cyan('\n🚀 MemberJunction Citizen Agent Builder\n'));
@@ -89,13 +114,14 @@ export default class AgentInit extends Command {
     }
 
     // 5. Scaffold files
+    const envPath = path.join(targetDir, '.env');
     const spinner = ora('Scaffolding agent builder workspace...').start();
     try {
       cpSync(templateDir, targetDir, { recursive: true });
+      this.ensureExecutableScripts(path.join(targetDir, 'scripts'));
 
       // Create .env from .env.example if missing
       const envExamplePath = path.join(targetDir, '.env.example');
-      const envPath = path.join(targetDir, '.env');
       if (existsSync(envExamplePath) && !existsSync(envPath)) {
         copyFileSync(envExamplePath, envPath);
       }
@@ -108,11 +134,12 @@ export default class AgentInit extends Command {
 
         // Set a workspace-unique COMPOSE_PROJECT_NAME so multiple Citizen Builder workspaces on one
         // machine don't collide on Docker container/volume names.
-        const slug = path
-          .basename(targetDir)
-          .toLowerCase()
-          .replace(/[^a-z0-9_-]+/g, '-')
-          .replace(/^-+|-+$/g, '') || 'citizen';
+        const slug =
+          path
+            .basename(targetDir)
+            .toLowerCase()
+            .replace(/[^a-z0-9_-]+/g, '-')
+            .replace(/^-+|-+$/g, '') || 'citizen';
         this.upsertEnvValue(envPath, 'COMPOSE_PROJECT_NAME', `mj-${slug}`);
 
         // If a custom app URL was supplied, point the workspace at it
@@ -128,7 +155,7 @@ export default class AgentInit extends Command {
       this.error(errorMsg);
     }
 
-    // 6. Start Docker and bootstrap if requested and available
+    // 6. Check Docker resources & port conflicts
     if (!flags['skip-docker-check']) {
       if (dockerAvailable) {
         this.checkDockerMemory();
@@ -136,14 +163,76 @@ export default class AgentInit extends Command {
       await this.checkPortsAvailable(targetDir);
     }
 
-    if (flags.start && dockerAvailable) {
+    // 7. Start Docker only when explicitly requested with --start, or when an LLM API key is
+    //    already configured in .env or process.env (unless --no-start was passed).
+    const startExplicit = metadata.flags.start?.setFromDefault !== true;
+    const hasLlmKey = this.hasConfiguredLlmApiKey(envPath);
+    const shouldStart = startExplicit ? flags.start : hasLlmKey;
+
+    if (shouldStart && dockerAvailable) {
       this.startEnvironment(targetDir);
     } else {
       if (!dockerAvailable && !flags['skip-docker-check']) {
         this.printDockerInstallInstructions();
+      } else if (dockerAvailable && !startExplicit && !hasLlmKey) {
+        this.log(
+          chalk.yellow(
+            '\n⏸️  Skipping automatic Docker startup because no LLM API key is configured yet (pass --start to start anyway).'
+          )
+        );
       }
       this.printNextSteps(targetDir, dockerAvailable);
     }
+  }
+
+  private ensureExecutableScripts(scriptsDir: string): void {
+    if (!existsSync(scriptsDir)) {
+      return;
+    }
+    for (const entry of readdirSync(scriptsDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.sh')) {
+        chmodSync(path.join(scriptsDir, entry.name), 0o755);
+      }
+    }
+  }
+
+  private hasConfiguredLlmApiKey(envPath: string): boolean {
+    for (const key of LLM_API_KEY_VARS) {
+      if (process.env[key]?.trim()) {
+        return true;
+      }
+    }
+    if (!existsSync(envPath)) {
+      return false;
+    }
+    const content = readFileSync(envPath, 'utf8');
+    for (const key of LLM_API_KEY_VARS) {
+      const match = content.match(new RegExp(`^${key}=(.+)$`, 'm'));
+      if (match) {
+        const val = match[1].trim().replace(/^["']|["']$/g, '').trim();
+        if (val.length > 0) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private readPortsFromEnv(targetDir: string): ResolvedPorts {
+    let apiPort = '4000';
+    let dbPort = '1433';
+    let explorerPort = '4202';
+    const envPath = path.join(targetDir, '.env');
+    if (existsSync(envPath)) {
+      const content = readFileSync(envPath, 'utf8');
+      const apiMatch = content.match(/^API_PORT=(\d+)/m);
+      if (apiMatch) apiPort = apiMatch[1];
+      const dbMatch = content.match(/^DB_PORT=(\d+)/m);
+      if (dbMatch) dbPort = dbMatch[1];
+      const explorerMatch = content.match(/^EXPLORER_PORT=(\d+)/m);
+      if (explorerMatch) explorerPort = explorerMatch[1];
+    }
+    return { apiPort, dbPort, explorerPort };
   }
 
   private checkDockerMemory(): void {
@@ -154,39 +243,50 @@ export default class AgentInit extends Command {
         .toString()
         .trim();
       const memBytes = Number(memBytesRaw);
-      const minRecommendedBytes = 6 * 1024 * 1024 * 1024; // 6 GB
-      if (Number.isFinite(memBytes) && memBytes > 0 && memBytes < minRecommendedBytes) {
-        const memGb = (memBytes / (1024 * 1024 * 1024)).toFixed(1);
+      if (!Number.isFinite(memBytes) || memBytes <= 0) {
+        return;
+      }
+      const memGb = (memBytes / (1024 * 1024 * 1024)).toFixed(1);
+      const minRecommendedBytes = 8 * 1024 * 1024 * 1024; // 8 GB
+      const multiStackSafeBytes = 16 * 1024 * 1024 * 1024; // 16 GB
+
+      if (memBytes < minRecommendedBytes) {
         this.log(
           chalk.yellow(
-            `⚠️  Docker has ${memGb} GB RAM allocated. SQL Server + MJExplorer recommend at least 8 GB RAM in Docker Desktop settings.`
+            `⚠️  Docker has ${memGb} GB RAM allocated. SQL Server + MJAPI + MJExplorer recommend at least 8–12 GB RAM in Docker Desktop settings.`
           )
         );
+        return;
+      }
+
+      if (memBytes < multiStackSafeBytes) {
+        const runningRaw = execSync('docker ps -q', {
+          stdio: ['ignore', 'pipe', 'ignore'],
+        })
+          .toString()
+          .trim();
+        const runningContainers = runningRaw ? runningRaw.split(/\r?\n/).filter(Boolean) : [];
+        if (runningContainers.length > 0) {
+          this.log(
+            chalk.yellow(
+              `⚠️  Docker has ${memGb} GB RAM allocated and ${runningContainers.length} container(s) already running. Running multiple stacks in < 16 GB RAM may OOM-kill SQL Server or MJAPI (stop unused stacks with 'docker compose stop').`
+            )
+          );
+        }
       }
     } catch {
-      // Ignore if docker info format is unsupported
+      // Ignore if docker info / docker ps is unsupported
     }
   }
 
   private async checkPortsAvailable(targetDir: string): Promise<void> {
-    let apiPort = 4000;
-    let dbPort = 1433;
-    let explorerPort = 4202;
+    const { apiPort, dbPort, explorerPort } = this.readPortsFromEnv(targetDir);
     const envPath = path.join(targetDir, '.env');
-    if (existsSync(envPath)) {
-      const content = readFileSync(envPath, 'utf8');
-      const apiMatch = content.match(/^API_PORT=(\d+)/m);
-      if (apiMatch) apiPort = Number(apiMatch[1]);
-      const dbMatch = content.match(/^DB_PORT=(\d+)/m);
-      if (dbMatch) dbPort = Number(dbMatch[1]);
-      const explorerMatch = content.match(/^EXPLORER_PORT=(\d+)/m);
-      if (explorerMatch) explorerPort = Number(explorerMatch[1]);
-    }
 
     const portsToCheck: Array<{ port: number; envVar: string; label: string }> = [
-      { port: dbPort, envVar: 'DB_PORT', label: 'SQL Server' },
-      { port: apiPort, envVar: 'API_PORT', label: 'MJAPI' },
-      { port: explorerPort, envVar: 'EXPLORER_PORT', label: 'MJExplorer' },
+      { port: Number(dbPort), envVar: 'DB_PORT', label: 'SQL Server' },
+      { port: Number(apiPort), envVar: 'API_PORT', label: 'MJAPI' },
+      { port: Number(explorerPort), envVar: 'EXPLORER_PORT', label: 'MJExplorer' },
     ];
 
     for (const item of portsToCheck) {
@@ -352,19 +452,7 @@ export default class AgentInit extends Command {
       this.error(errorMsg);
     }
 
-    let apiPort = '4000';
-    let dbPort = '1433';
-    let explorerPort = '4202';
-    const envPath = path.join(targetDir, '.env');
-    if (existsSync(envPath)) {
-      const content = readFileSync(envPath, 'utf8');
-      const apiMatch = content.match(/^API_PORT=(\d+)/m);
-      if (apiMatch) apiPort = apiMatch[1];
-      const dbMatch = content.match(/^DB_PORT=(\d+)/m);
-      if (dbMatch) dbPort = dbMatch[1];
-      const explorerMatch = content.match(/^EXPLORER_PORT=(\d+)/m);
-      if (explorerMatch) explorerPort = explorerMatch[1];
-    }
+    const { apiPort, dbPort, explorerPort } = this.readPortsFromEnv(targetDir);
 
     this.log(chalk.bold.cyan('\n🎉 Your MemberJunction local instance is running!'));
     this.log(`   API Endpoint:    ${chalk.green(`http://localhost:${apiPort}`)}`);
@@ -389,6 +477,7 @@ export default class AgentInit extends Command {
   }
 
   private printNextSteps(targetDir: string, dockerAvailable: boolean): void {
+    const { apiPort, explorerPort } = this.readPortsFromEnv(targetDir);
     this.log(chalk.bold.white('\n📋 Next Steps:'));
     this.log(`1. Navigate to your workspace:\n   ${chalk.cyan(`cd ${path.relative(process.cwd(), targetDir) || '.'}`)}`);
     this.log(`2. Add your LLM API keys in ${chalk.yellow('.env')}`);
@@ -397,6 +486,9 @@ export default class AgentInit extends Command {
     } else {
       this.log(`3. Launch Docker Desktop and run:\n   ${chalk.cyan('docker compose up -d')}`);
     }
+    this.log(
+      `4. Once running, open MJExplorer at ${chalk.green(`http://localhost:${explorerPort}`)} (MJAPI: ${chalk.green(`http://localhost:${apiPort}`)})`
+    );
     this.printCodingAgentInstructions();
   }
 
