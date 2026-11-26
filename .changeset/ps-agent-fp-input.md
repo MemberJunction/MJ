@@ -13,6 +13,7 @@
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
 "@memberjunction/sql-parser": minor
+"@memberjunction/sqlserver-dataprovider": minor
 ---
 
 Predictive Studio PR 5: the agent as a drafter, and Feature Pipelines as a Predictive Studio input.
