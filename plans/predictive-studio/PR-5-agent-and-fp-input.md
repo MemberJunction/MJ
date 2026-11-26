@@ -3566,6 +3566,8 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   `V202611062330` (5.7 s), `V202605021056` (4.7 s), `V202602211553` (3.5 s), `V202605032116` (2.8 s); B1's migration
   costs 1 ms. The package passes alone (30 files passed, 3 skipped; 447/0/17); the file takes 7.4 s alone and 23.4 s
   through turbo at load 36. Outside §2.7; reported to the controller.
+- **Merged the PR branch** `ps/pr-5-agent-fp-input` @ `aebd2c4707` (items 4 and 5, D5-51) into the sub-branch
+  as `e22e29a1f8` (no conflicts), per the controller, before the push.
 - **LLM spend (§2.4 query, `RunAt >= 2026-11-26T09:20Z` on `MJ_PS_PR5_claude2`):** 166 prompt runs, **$0.191346**,
   464,078 tokens — all CodeGen's own LLM steps (93 `CodeGen: Check Constraint Parser` $0.182770, 1 Form Layout
   $0.003792, 1 Smart Field $0.004784) and 71 `Vector Sync Embedding` runs at $0 from MJAPI start. No agent run.
