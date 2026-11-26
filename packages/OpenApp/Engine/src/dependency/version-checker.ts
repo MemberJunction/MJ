@@ -53,11 +53,56 @@ export interface VersionCheckResult {
 }
 
 /**
+ * Checks whether `requiredRange` explicitly mentions a prerelease on the exact same
+ * `major.minor.patch` tuple as `parsed`. When it does (e.g. `>=6.3.0-edge.2 <7.0.0`
+ * evaluated against `6.3.0-edge.1`), coercing to `6.3.0` would wrongly bypass the
+ * caller's explicit prerelease floor/ceiling.
+ */
+function HasPrereleaseOnSameBaseTuple(parsed: semver.SemVer, requiredRange: string): boolean {
+    const range = new semver.Range(requiredRange);
+    return range.set.some((comparatorSet) =>
+        comparatorSet.some(
+            (comparator) =>
+                comparator.semver.prerelease.length > 0 &&
+                comparator.semver.major === parsed.major &&
+                comparator.semver.minor === parsed.minor &&
+                comparator.semver.patch === parsed.patch
+        )
+    );
+}
+
+/**
+ * Evaluates whether `version` satisfies `requiredRange`, falling back to base-tuple
+ * coercion (`6.3.0-edge.3` -> `6.3.0`) for prerelease versions unless `requiredRange`
+ * explicitly specifies a prerelease on the same `major.minor.patch` tuple.
+ */
+function EvaluateRangeWithPrerelease(
+    version: string,
+    requiredRange: string
+): { Satisfied: boolean; EvaluatedAsBase?: string } {
+    if (semver.satisfies(version, requiredRange, { includePrerelease: false })) {
+        return { Satisfied: true };
+    }
+
+    const parsed = semver.parse(version);
+    if (parsed && parsed.prerelease.length > 0 && !HasPrereleaseOnSameBaseTuple(parsed, requiredRange)) {
+        const baseVersion = `${parsed.major}.${parsed.minor}.${parsed.patch}`;
+        return {
+            Satisfied: semver.satisfies(baseVersion, requiredRange),
+            EvaluatedAsBase: baseVersion,
+        };
+    }
+
+    return { Satisfied: false };
+}
+
+/**
  * Checks whether the running MJ version satisfies an app's required range.
  *
  * Prerelease host versions (e.g. '6.2.0-edge.3') are evaluated as their base
  * release tuple ('6.2.0') so era-correct ranges accept prerelease dev hosts —
- * see {@link CoerceToBaseVersion} for the rationale.
+ * unless `requiredRange` explicitly mentions a prerelease on the same
+ * `major.minor.patch` tuple. See {@link CoerceToBaseVersion} for the rationale.
  *
  * @param mjVersion - The current MJ version (e.g., '4.3.1' or '6.2.0-edge.3')
  * @param requiredRange - The semver range from the manifest (e.g., '>=4.0.0 <5.0.0')
@@ -78,21 +123,15 @@ export function CheckMJVersionCompatibility(mjVersion: string, requiredRange: st
         };
     }
 
-    const baseVersion = CoerceToBaseVersion(mjVersion);
-    if (baseVersion === null) {
-        // Unreachable after the semver.valid guard above — surfaced explicitly
-        // rather than silently falling through, per the no-swallowed-errors rule.
-        return {
-            Compatible: false,
-            Message: `Invalid MJ version: '${mjVersion}' could not be parsed as semver`
-        };
-    }
-
-    if (semver.satisfies(baseVersion, requiredRange)) {
+    const evaluation = EvaluateRangeWithPrerelease(mjVersion, requiredRange);
+    if (evaluation.Satisfied) {
         return { Compatible: true };
     }
 
-    const evaluatedAs = baseVersion === mjVersion ? '' : ` (evaluated as ${baseVersion})`;
+    const evaluatedAs =
+        evaluation.EvaluatedAsBase && evaluation.EvaluatedAsBase !== mjVersion
+            ? ` (evaluated as ${evaluation.EvaluatedAsBase})`
+            : '';
     return {
         Compatible: false,
         Message: `MJ version ${mjVersion}${evaluatedAs} does not satisfy the required range '${requiredRange}'`
@@ -100,9 +139,13 @@ export function CheckMJVersionCompatibility(mjVersion: string, requiredRange: st
 }
 
 /**
- * Checks whether an installed app version satisfies a dependency's required range.
+ * Checks whether an installed or candidate app version satisfies a dependency's required range.
  *
- * @param installedVersion - The currently installed version (e.g., '2.1.0')
+ * Prerelease versions (e.g. '6.3.0-edge.3') are evaluated as their base release tuple
+ * ('6.3.0') against era ranges like `>=5.56.0 <7.0.0`, unless `requiredRange` explicitly
+ * specifies a prerelease on the same `major.minor.patch` tuple (e.g. `>=6.3.0-edge.4 <7.0.0`).
+ *
+ * @param installedVersion - The currently installed (or candidate) version (e.g., '2.1.0' or '6.3.0-edge.3')
  * @param requiredRange - The semver range required by the dependent app (e.g., '^2.0.0')
  * @returns Compatibility result with explanation if incompatible
  */
@@ -124,13 +167,18 @@ export function CheckDependencyVersionCompatibility(
         };
     }
 
-    if (semver.satisfies(installedVersion, requiredRange)) {
+    const evaluation = EvaluateRangeWithPrerelease(installedVersion, requiredRange);
+    if (evaluation.Satisfied) {
         return { Compatible: true };
     }
 
+    const evaluatedAs =
+        evaluation.EvaluatedAsBase && evaluation.EvaluatedAsBase !== installedVersion
+            ? ` (evaluated as ${evaluation.EvaluatedAsBase})`
+            : '';
     return {
         Compatible: false,
-        Message: `Installed version ${installedVersion} does not satisfy required range '${requiredRange}'`
+        Message: `Installed version ${installedVersion}${evaluatedAs} does not satisfy required range '${requiredRange}'`
     };
 }
 

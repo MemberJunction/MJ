@@ -153,6 +153,44 @@ export class ExecutionLogger {
     return this.LogError(error, category, context);
   }
 
+  /**
+   * Populate execution metrics (AI model calls, tools/actions used, sub-agents used)
+   * on the summary prior to calling {@link Finalize}.
+   */
+  public SetExecutionMetrics(metrics: {
+    aiModelCalls?: number;
+    toolsUsed?: string[];
+    subAgentsUsed?: string[];
+  }): void {
+    if (metrics.aiModelCalls != null) {
+      this.summary.aiModelCalls = metrics.aiModelCalls;
+    }
+    if (metrics.toolsUsed != null) {
+      this.summary.toolsUsed = [...metrics.toolsUsed];
+    }
+    if (metrics.subAgentsUsed != null) {
+      this.summary.subAgentsUsed = [...metrics.subAgentsUsed];
+    }
+  }
+
+  /** @deprecated Use {@link SetExecutionMetrics}. */
+  public setExecutionMetrics(metrics: {
+    aiModelCalls?: number;
+    toolsUsed?: string[];
+    subAgentsUsed?: string[];
+  }): void {
+    this.SetExecutionMetrics(metrics);
+  }
+
+  public GetSummary(): ExecutionSummary {
+    return {
+      ...this.summary,
+      toolsUsed: [...this.summary.toolsUsed],
+      subAgentsUsed: [...this.summary.subAgentsUsed],
+      errors: [...this.summary.errors],
+    };
+  }
+
   public Finalize(status: 'SUCCESS' | 'FAILED' | 'CANCELLED', finalResult?: any, error?: string): void {
     this.summary.endTime = new Date().toISOString();
     this.summary.duration = new Date(this.summary.endTime).getTime() - new Date(this.summary.startTime).getTime();

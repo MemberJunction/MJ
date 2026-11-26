@@ -1,7 +1,9 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { UserCache } from '@memberjunction/generic-database-provider';
+import { AuditAnalyzer } from '../lib/audit-analyzer';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { InitializeMJProvider } from '../lib/mj-provider';
 import { AgentInfo, ExecutionResult } from '../lib/output-formatter';
@@ -12,6 +14,8 @@ export interface AgentExecutionOptions {
   verbose?: boolean;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   timeout?: number;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   conversationMessages?: Array<{ role: 'user' | 'assistant'; content: string }>;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** Suppresses stdout progress updates (e.g. when `--format json` requires pure JSON stdout). */
+  suppressProgress?: boolean;
 }
 
 export class AgentService {
@@ -175,6 +179,10 @@ Next steps:
       let lastProgressOutput = '';
       const callbacks = {
         onProgress: ((progress) => {
+          if (options.suppressProgress) {
+            return;
+          }
+
           const stepIcons: Record<string, string> = {
             'initialization': '🚀',
             'validation': '✓',
@@ -230,10 +238,10 @@ Next steps:
         }) as AgentExecutionProgressCallback
       };
 
-      // Suppress console output during agent execution unless verbose
+      // Suppress console output during agent execution unless verbose (and not suppressing stdout noise)
       // CLI executions always run Flow agents in-process ('inRun') so the caller receives the final result synchronously
       let executionResult: ExecuteAgentResult;
-      if (options.verbose) {
+      if (options.verbose && !options.suppressProgress) {
         executionResult = await agentRunner.RunAgent({
           agent: agent,
           conversationMessages,
@@ -256,9 +264,11 @@ Next steps:
       const duration = Date.now() - startTime;
 
       // Clear any remaining progress output
-      if (lastProgressOutput && !options.verbose) {
+      if (lastProgressOutput && !options.verbose && !options.suppressProgress) {
         process.stdout.write('\r' + ' '.repeat(lastProgressOutput.length) + '\r');
       }
+
+      await this.populateExecutionMetrics(logger, executionResult);
 
       if (executionResult && executionResult.success) {
         // Get the result from Message field first, then FinalPayload if Message is empty or generic Flow completion text
@@ -472,6 +482,60 @@ This is typically a configuration or database setup issue.`);
     }
 
     return user;
+  }
+
+  private async populateExecutionMetrics(
+    logger: ExecutionLogger,
+    executionResult: ExecuteAgentResult | undefined
+  ): Promise<void> {
+    const agentRun = executionResult?.agentRun;
+    if (!agentRun) {
+      return;
+    }
+
+    let steps: ReadonlyArray<Pick<MJAIAgentRunStepEntity, 'StepType' | 'StepName' | 'InputData'>> =
+      agentRun.Steps ?? [];
+    if (steps.length === 0 && agentRun.ID) {
+      try {
+        const rv = new RunView();
+        const stepsRes = await rv.RunView<MJAIAgentRunStepEntity>(
+          {
+            EntityName: 'MJ: AI Agent Run Steps',
+            ExtraFilter: `AgentRunID = '${agentRun.ID}'`,
+            OrderBy: 'StepNumber',
+            ResultType: 'simple',
+          },
+          this.contextUser
+        );
+        if (stepsRes.Success && stepsRes.Results) {
+          steps = stepsRes.Results;
+        }
+      } catch {
+        // Best-effort step metrics lookup
+      }
+    }
+
+    const analyzer = new AuditAnalyzer();
+    const promptStepsCount = steps.filter((s) => s.StepType === 'Prompt').length;
+    const totalTokens = agentRun.TotalTokensUsed ?? agentRun.TotalTokensUsedRollup ?? 0;
+    const promptIterations = agentRun.TotalPromptIterations ?? 0;
+    const aiModelCalls =
+      promptStepsCount > 0
+        ? promptStepsCount
+        : promptIterations > 0
+          ? promptIterations
+          : totalTokens > 0
+            ? 1
+            : 0;
+
+    const toolsUsed = analyzer.ExtractActionNames(steps, true);
+    const subAgentsUsed = analyzer.ExtractSubAgentNames(steps);
+
+    logger.SetExecutionMetrics({
+      aiModelCalls,
+      toolsUsed,
+      subAgentsUsed,
+    });
   }
 
   private async ensureInitialized(): Promise<void> {

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import type { MJAIAgentNoteEntity, MJAIPersonaEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentNoteEntity, MJAIAgentPersonaEntity, MJAIAgentUserPolicyEntity, MJAIPersonaEntity } from '@memberjunction/core-entities';
+import type { ChatMessage } from '@memberjunction/ai';
 import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { EffectiveAgentPersona } from '@memberjunction/ai-engine-base';
 
@@ -78,6 +79,8 @@ const mockEngine = {
         }
         return derived.find((a) => a.IsPrimaryInstance) ?? derived[0];
     }),
+    ResolveAgentPersona: vi.fn((): EffectiveAgentPersona | null => null),
+    GetStackedAdditionalInstructions: vi.fn(() => []),
 };
 
 vi.mock('@memberjunction/aiengine', () => ({
@@ -96,6 +99,16 @@ import { BaseAgent } from '../base-agent';
 
 @RegisterClass(BaseAgent, 'TestInheritedDriverAgent')
 class TestInheritedDriverAgent extends BaseAgent {}
+
+class TestablePersonaAgent extends BaseAgent {
+    public CallInjectAgentPersonaAndInstructions(
+        agent: MJAIAgentEntityExtended,
+        conversationMessages: ChatMessage[],
+        userPolicy?: MJAIAgentUserPolicyEntity | null
+    ): void {
+        this.InjectAgentPersonaAndInstructions(agent, conversationMessages, undefined, userPolicy);
+    }
+}
 
 class TestableAgentContextInjector extends AgentContextInjector {
     public FilterNotes(notes: MJAIAgentNoteEntity[], params: { agentId: string; userId: string }): MJAIAgentNoteEntity[] {
@@ -250,6 +263,81 @@ describe('Agent Instances & Prototype Inheritance Runtime', () => {
             expect(block).not.toBeNull();
             expect(block).toContain('### Custom & Inherited Instructions');
             expect(block).not.toContain('### Audience-Aware Tone Guardrail');
+        });
+    });
+
+    describe('BaseAgent.InjectAgentPersonaAndInstructions', () => {
+        it('does not inject model-level Audio voice fallback (e.g. Shimmer) when agent has no assigned AIAgentPersona rows', () => {
+            mockEngine.ResolveAgentPersona.mockReturnValueOnce({
+                Persona: {
+                    Name: 'Shimmer',
+                    Description: 'Bright, uplifting, and cheerful voice',
+                    Tone: 'Bright and cheerful',
+                    SpeakingStyle: 'Upbeat',
+                } as MJAIPersonaEntity,
+                AgentPersona: undefined,
+                Tone: 'Bright and cheerful',
+                SpeakingStyle: 'Upbeat',
+            });
+
+            const agent = new TestablePersonaAgent();
+            const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
+            agent.CallInjectAgentPersonaAndInstructions(
+                { ID: COS_ID, Name: 'Sage' } as MJAIAgentEntityExtended,
+                messages
+            );
+
+            expect(messages).toHaveLength(1);
+            expect(JSON.stringify(messages)).not.toContain('Shimmer');
+            expect(JSON.stringify(messages)).not.toContain('Persona & Communication Style');
+        });
+
+        it('injects Persona & Communication Style when agent has an assigned AIAgentPersona row', () => {
+            mockEngine.ResolveAgentPersona.mockReturnValueOnce({
+                Persona: {
+                    Name: 'Sage',
+                    Description: 'Thoughtful advisor',
+                } as MJAIPersonaEntity,
+                AgentPersona: { ID: 'ap-1', AgentID: COS_ID, PersonaID: 'p-1' } as MJAIAgentPersonaEntity,
+                Tone: 'Calm and analytical',
+                SpeakingStyle: 'Concise',
+            });
+
+            const agent = new TestablePersonaAgent();
+            const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
+            agent.CallInjectAgentPersonaAndInstructions(
+                { ID: COS_ID, Name: 'Sage' } as MJAIAgentEntityExtended,
+                messages
+            );
+
+            expect(messages).toHaveLength(2);
+            expect(messages[0].role).toBe('system');
+            expect(String(messages[0].content)).toContain('### Persona & Communication Style');
+            expect(String(messages[0].content)).toContain('Calm and analytical');
+        });
+
+        it('injects Persona & Communication Style when userPolicy specifies PreferredPersonaID', () => {
+            mockEngine.ResolveAgentPersona.mockReturnValueOnce({
+                Persona: {
+                    Name: 'Onyx',
+                    Description: 'Direct voice',
+                } as MJAIPersonaEntity,
+                AgentPersona: undefined,
+                Tone: 'Direct',
+                SpeakingStyle: 'Brief',
+            });
+
+            const agent = new TestablePersonaAgent();
+            const messages: ChatMessage[] = [{ role: 'user', content: 'Hello' }];
+            agent.CallInjectAgentPersonaAndInstructions(
+                { ID: COS_ID, Name: 'Sage' } as MJAIAgentEntityExtended,
+                messages,
+                { PreferredPersonaID: 'p-onyx' } as MJAIAgentUserPolicyEntity
+            );
+
+            expect(messages).toHaveLength(2);
+            expect(String(messages[0].content)).toContain('### Persona & Communication Style');
+            expect(String(messages[0].content)).toContain('Onyx');
         });
     });
 

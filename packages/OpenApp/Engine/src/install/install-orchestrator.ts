@@ -10,7 +10,7 @@ import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction, DependenciesFromHead } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 import { ParseAndValidateManifest, ParseManifestDependencies } from '../manifest/manifest-loader.js';
-import { CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
+import { CheckDependencyVersionCompatibility, CheckMJVersionCompatibility, IsValidUpgrade } from '../dependency/version-checker.js';
 import { ResolveDependencyGraph } from '../dependency/dependency-graph-builder.js';
 import type { ManifestFetcher, RootApp } from '../dependency/dependency-graph-builder.js';
 import type { InstalledAppMap, DependencyValue } from '../dependency/dependency-resolver.js';
@@ -219,19 +219,43 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
   const source = ResolveAppSource(options.Source, { GitHubOptions: context.GitHubOptions, Subpath: subpath, RepoRoot: context.RepoRoot });
 
   try {
-    // Step 1a: If an explicit version was requested, validate that the source publishes it
-    const explicitVersion = options.Version;
+    const isLocalSource = IsLocalAppLocator(options.Source);
+    const isExplicitHead = !isLocalSource && options.Version?.toUpperCase() === 'HEAD';
+    const explicitVersion = isExplicitHead ? undefined : options.Version;
+    const manifestCache = new Map<string, ManifestFetchResult>();
+
+    let resolvedVersion: string | undefined;
+    let fetchResult: ManifestFetchResult;
+
     if (explicitVersion) {
+      // Step 1a: If an explicit version was requested, validate that the source publishes it
       Callbacks?.OnProgress?.('Fetch', `Validating version tag v${explicitVersion.replace(/^v/, '')} exists...`);
       const tagResult = await source.ValidateVersion(explicitVersion);
       if (!tagResult.Exists) {
         return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${explicitVersion} not found`);
       }
+      // Step 1b: Fetch manifest (from the app's subpath when this is a multi-app repo)
+      Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
+      fetchResult = await FetchManifestCached(source, explicitVersion, manifestCache);
+    } else if (isLocalSource || isExplicitHead) {
+      // Local folder or explicit `--version HEAD`: read default branch / local folder directly
+      Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
+      fetchResult = await source.FetchManifest(undefined);
+    } else {
+      // Step 1: Remote source with no `--version` — never default to HEAD; resolve the latest MJ-compatible published release/tag
+      Callbacks?.OnProgress?.('Fetch', `Resolving latest compatible version from ${options.Source}...`);
+      const selection = await SelectCompatiblePublishedVersion({
+        Source: source,
+        MJVersion: context.MJVersion,
+        ManifestCache: manifestCache,
+      });
+      if (!selection.Version || !selection.ManifestJSON) {
+        return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, selection.ErrorMessage ?? 'Failed to resolve a compatible published version');
+      }
+      resolvedVersion = selection.Version;
+      fetchResult = { Success: true, ManifestJSON: selection.ManifestJSON };
     }
 
-    // Step 1b: Fetch manifest (from the app's subpath when this is a multi-app repo)
-    Callbacks?.OnProgress?.('Fetch', `Fetching manifest from ${options.Source}...`);
-    const fetchResult = await source.FetchManifest(explicitVersion);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
@@ -243,20 +267,31 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
       return BuildFailureResult('Install', options.Source, '', 'Schema', startTime, `Invalid manifest: ${parseResult.Errors?.join(', ')}`);
     }
     manifest = parseResult.Manifest;
-    const appSource = source.ForManifest(manifest);
+    const rawAppSource = source.ForManifest(manifest);
 
-    // When an explicit version is requested, use that version for package pins
+    // When a published version was requested or resolved, use that version for package pins
     // (not the manifest's version field, which may be a base version like "1.0.0").
-    // Also switch to 'exact' version strategy so packages are pinned without ^ prefix.
-    // A source that requires a strategy (a local folder: 'workspace') overrides both.
-    const effectivePackageVersion = explicitVersion ? explicitVersion.replace(/^v/, '') : manifest.version;
+    // Switch to 'exact' version strategy when an explicit version was requested so packages
+    // are pinned without ^ prefix. A source that requires a strategy (a local folder: 'workspace')
+    // overrides both.
+    const targetVersion = explicitVersion ?? resolvedVersion;
+    const effectivePackageVersion = targetVersion ? targetVersion.replace(/^v/, '') : manifest.version;
+    const effectiveSqlVersion = isExplicitHead ? undefined : effectivePackageVersion;
+    const appSource = PinSqlSourceVersion(rawAppSource, effectiveSqlVersion);
     const effectiveVersionStrategy: VersionStrategy | undefined = appSource.PackageVersionStrategy ?? (explicitVersion ? 'exact' : context.VersionStrategy);
 
     // Step 3: Validate MJ compatibility
     Callbacks?.OnProgress?.('Validate', 'Checking MJ version compatibility...');
     const compatResult = CheckMJVersionCompatibility(context.MJVersion, manifest.mjVersionRange);
     if (!compatResult.Compatible) {
-      return BuildFailureResult('Install', manifest.name, manifest.version, 'Schema', startTime, compatResult.Message ?? 'Incompatible MJ version');
+      return BuildFailureResult(
+        'Install',
+        manifest.name,
+        manifest.version,
+        'Schema',
+        startTime,
+        `App '${manifest.name}' (v${effectivePackageVersion}) is not compatible with MJ ${context.MJVersion}: ${compatResult.Message ?? 'Incompatible MJ version'}`,
+      );
     }
 
     // Before any database or file change: an npm auth failure or an unpublished package stops here (#3796).
@@ -1775,11 +1810,13 @@ async function ResolveDependencyChain(manifest: MJAppManifest, context: Orchestr
   };
 
   const localManifests = new Map<string, MJAppManifest>();
+  const manifestCache = new Map<string, ManifestFetchResult>();
   const result = await ResolveDependencyGraph(
     root,
     installedMap,
-    BuildManifestFetcher(context, localManifests),
-    (repoUrl, versionRange) => ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions, context.RepoRoot),
+    BuildManifestFetcher(context, localManifests, manifestCache),
+    (repoUrl, versionRange, depSubpath, depAppName) =>
+      ResolveDependencyVersion(repoUrl, versionRange, context.GitHubOptions, context.RepoRoot, context.MJVersion, manifestCache, depSubpath, depAppName),
   );
   for (const warning of result.Warnings ?? []) {
     context.Callbacks?.OnWarn?.('Dependencies', warning);
@@ -1834,9 +1871,18 @@ function ReadInstalledDependencies(app: InstalledAppInfo, context: OrchestratorC
  * builder to walk transitive deps. Each manifest read from a local folder is kept in
  * `localManifests`, keyed by its locator.
  */
-function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<string, MJAppManifest>): ManifestFetcher {
+function BuildManifestFetcher(
+  context: OrchestratorContext,
+  localManifests: Map<string, MJAppManifest>,
+  manifestCache?: Map<string, ManifestFetchResult>,
+): ManifestFetcher {
   return async (repoUrl: string, subpath?: string, version?: string, appName?: string) => {
-    const fetched = await FetchDependencyManifest(repoUrl, { GitHubOptions: context.GitHubOptions, Subpath: subpath, AppName: appName, RepoRoot: context.RepoRoot }, version);
+    const fetched = await FetchDependencyManifest(
+      repoUrl,
+      { GitHubOptions: context.GitHubOptions, Subpath: subpath, AppName: appName, RepoRoot: context.RepoRoot },
+      version,
+      manifestCache,
+    );
     if (!fetched.Success || !fetched.ManifestJSON) {
       return { Success: false, ErrorMessage: fetched.ErrorMessage ?? 'Failed to fetch manifest' };
     }
@@ -1863,14 +1909,65 @@ function BuildManifestFetcher(context: OrchestratorContext, localManifests: Map<
   };
 }
 
+function PinSqlSourceVersion(inner: OpenAppSource, sqlVersion: string | undefined): OpenAppSource {
+  return {
+    get Locator() {
+      return inner.Locator;
+    },
+    get Subpath() {
+      return inner.Subpath;
+    },
+    get PackageVersionStrategy() {
+      return inner.PackageVersionStrategy;
+    },
+    FetchManifest: (v?: string) => inner.FetchManifest(v),
+    CopySqlDirectory: (directory: string, _version: string | undefined, targetDir: string) =>
+      inner.CopySqlDirectory(directory, sqlVersion, targetDir),
+    ValidateVersion: (v: string) => inner.ValidateVersion(v),
+    GetLatestVersion: () => inner.GetLatestVersion(),
+    DescribeUnresolvedVersion: () => inner.DescribeUnresolvedVersion(),
+    ListVersions: () => inner.ListVersions(),
+    ForManifest: (m) => inner.ForManifest(m),
+  };
+}
+
+/**
+ * Fetches a manifest through `source`, memoizing the result in `cache` when provided
+ * so version selection and install/graph construction never fetch the same tag twice.
+ */
+async function FetchManifestCached(
+  source: OpenAppSource,
+  version: string | undefined,
+  cache?: Map<string, ManifestFetchResult>,
+): Promise<ManifestFetchResult> {
+  const key = `${source.Locator}\u0000${source.Subpath ?? ''}\u0000${version ?? ''}`;
+  if (cache) {
+    const hit = cache.get(key);
+    if (hit) {
+      return hit;
+    }
+  }
+  const result = await source.FetchManifest(version);
+  if (cache && result.Success) {
+    cache.set(key, result);
+  }
+  return result;
+}
+
 /**
  * Fetches a dependency's manifest. A source that throws (a rate limit while it looks for a version
  * tag) is a failed fetch: thrown out of {@link UpgradeApp} it would mark the app being upgraded as
  * `Error`, although nothing has changed yet.
  */
-async function FetchDependencyManifest(repoUrl: string, sourceContext: SourceContext, version?: string): Promise<ManifestFetchResult> {
+async function FetchDependencyManifest(
+  repoUrl: string,
+  sourceContext: SourceContext,
+  version?: string,
+  manifestCache?: Map<string, ManifestFetchResult>,
+): Promise<ManifestFetchResult> {
   try {
-    return await ResolveAppSource(repoUrl, sourceContext).FetchManifest(version);
+    const source = ResolveAppSource(repoUrl, sourceContext);
+    return await FetchManifestCached(source, version, manifestCache);
   } catch (error: unknown) {
     return { Success: false, ErrorMessage: error instanceof Error ? error.message : String(error) };
   }
@@ -1979,12 +2076,127 @@ async function InstallDependencies(
   return { Success: true };
 }
 
+/** Options for {@link SelectCompatiblePublishedVersion}. */
+export interface SelectCompatibleVersionOptions {
+  /** Source to list published versions and fetch candidate manifests from */
+  Source: OpenAppSource;
+  /** Current host MemberJunction version (e.g., '6.3.0-edge.3' or '6.2.0') */
+  MJVersion: string;
+  /** Optional dependency range constraint; omit or pass '*', '', 'latest' for unconstrained */
+  VersionRange?: string;
+  /** Optional manifest cache keyed by source+version to avoid duplicate GitHub fetches */
+  ManifestCache?: Map<string, ManifestFetchResult>;
+}
+
+/** Result of {@link SelectCompatiblePublishedVersion}. */
+export interface SelectCompatibleVersionResult {
+  /** Selected version string without leading 'v' */
+  Version?: string;
+  /** Manifest JSON fetched for the selected version */
+  ManifestJSON?: string;
+  /** Actionable failure message when no compatible published version could be selected */
+  ErrorMessage?: string;
+}
+
+/**
+ * Selects the highest published version from `Source` that satisfies `VersionRange`
+ * (when constrained, using prerelease-aware {@link CheckDependencyVersionCompatibility})
+ * AND whose `mj-app.json` `mjVersionRange` is compatible with `MJVersion`.
+ *
+ * When `MJVersion` is stable (`semver.prerelease(MJVersion) === null`), stable releases
+ * are tried highest-first before falling back to prereleases; when `MJVersion` is itself
+ * a prerelease (e.g. `6.3.0-edge.3`), all matching candidates are ordered highest-first
+ * by `semver.rcompare`.
+ */
+export async function SelectCompatiblePublishedVersion(
+  options: SelectCompatibleVersionOptions,
+): Promise<SelectCompatibleVersionResult> {
+  const rawRange = (options.VersionRange ?? '').trim();
+  const isConstrained = rawRange !== '' && rawRange !== '*' && rawRange.toLowerCase() !== 'latest';
+  if (isConstrained && !semver.valid(rawRange) && !semver.validRange(rawRange)) {
+    return { ErrorMessage: `version '${options.VersionRange}' is not a valid semver version or range` };
+  }
+
+  const rawVersions = await options.Source.ListVersions();
+  const candidates = [...new Set(
+    rawVersions
+      .map((v) => semver.valid(v) ?? semver.valid(v.replace(/^v/, '')))
+      .filter((v): v is string => v !== null),
+  )].sort(semver.rcompare);
+
+  if (candidates.length === 0) {
+    if (isConstrained) {
+      return { ErrorMessage: `no published versions found at ${options.Source.Locator} to satisfy '${options.VersionRange}'` };
+    }
+    const unresolvedReason = await options.Source.DescribeUnresolvedVersion();
+    // Only suggest `--version HEAD` when the repo is readable and simply has no tags/releases.
+    if (unresolvedReason.includes('no version tags or releases found') || unresolvedReason.includes('no versions in ')) {
+      return {
+        ErrorMessage: `${unresolvedReason}. No published versions were found — pass --version HEAD if you want to install from the default branch.`,
+      };
+    }
+    return { ErrorMessage: unresolvedReason };
+  }
+
+  const matching = isConstrained
+    ? candidates.filter((v) => CheckDependencyVersionCompatibility(v, rawRange).Compatible)
+    : candidates;
+  if (matching.length === 0) {
+    return {
+      ErrorMessage: `no published version at ${options.Source.Locator} satisfies '${options.VersionRange}' (latest available: ${candidates[0]})`,
+    };
+  }
+
+  const mjIsPrerelease = semver.valid(options.MJVersion) != null && semver.prerelease(options.MJVersion) !== null;
+  const ordered = mjIsPrerelease
+    ? matching
+    : [
+        ...matching.filter((v) => semver.prerelease(v) === null),
+        ...matching.filter((v) => semver.prerelease(v) !== null),
+      ];
+
+  let highestChecked: { Version: string; MJVersionRange: string } | undefined;
+  let lastFetchError: string | undefined;
+
+  for (const candidate of ordered) {
+    const fetchResult = await FetchManifestCached(options.Source, candidate, options.ManifestCache);
+    if (!fetchResult.Success || !fetchResult.ManifestJSON) {
+      lastFetchError = fetchResult.ErrorMessage ?? lastFetchError;
+      continue;
+    }
+    const parsed = ParseAndValidateManifest(fetchResult.ManifestJSON);
+    if (!parsed.Success || !parsed.Manifest) {
+      lastFetchError = `Invalid manifest at v${candidate}: ${parsed.Errors?.join(', ')}`;
+      continue;
+    }
+    const compat = CheckMJVersionCompatibility(options.MJVersion, parsed.Manifest.mjVersionRange);
+    if (compat.Compatible) {
+      return { Version: candidate, ManifestJSON: fetchResult.ManifestJSON };
+    }
+    if (!highestChecked) {
+      highestChecked = { Version: candidate, MJVersionRange: parsed.Manifest.mjVersionRange };
+    }
+  }
+
+  if (highestChecked) {
+    const scope = isConstrained ? ` satisfying '${options.VersionRange}'` : '';
+    return {
+      ErrorMessage:
+        `No published version of ${options.Source.Locator}${scope} is compatible with MJ version ${options.MJVersion} ` +
+        `(latest checked: v${highestChecked.Version}, requires '${highestChecked.MJVersionRange}')`,
+    };
+  }
+
+  return {
+    ErrorMessage: lastFetchError ?? `Could not fetch a valid manifest for any published version of ${options.Source.Locator}`,
+  };
+}
+
 /**
  * Resolves the version a dependency should install at, given the declared range. Returns the
- * highest published version (from the repo's releases + semver tags) that satisfies the range.
- * Returns `{ Version: undefined }` when there is no real constraint (so the caller installs the
- * default-branch latest), or `{ ErrorMessage }` when the range is invalid or unsatisfiable —
- * failing loudly rather than silently installing the wrong major version (B26).
+ * highest published version (from the repo's releases + semver tags) that satisfies the range
+ * and, when `mjVersion` is supplied, whose manifest `mjVersionRange` is compatible with the
+ * running MJ version.
  *
  * Exported for unit testing of the range-resolution logic.
  */
@@ -1993,27 +2205,53 @@ export async function ResolveDependencyVersion(
   versionRange: string,
   options: GitHubClientOptions,
   repoRoot?: string,
+  mjVersion?: string,
+  manifestCache?: Map<string, ManifestFetchResult>,
+  subpath?: string,
+  appName?: string,
 ): Promise<{ Version?: string; ErrorMessage?: string }> {
   const range = (versionRange ?? '').trim();
-  // No real constraint → let InstallApp resolve the default-branch latest (prior behavior).
-  if (range === '' || range === '*' || range.toLowerCase() === 'latest') {
+  const isUnconstrained = range === '' || range === '*' || range.toLowerCase() === 'latest';
+  // Legacy callers without mjVersion treat empty / '*' / 'latest' as unconstrained.
+  if (isUnconstrained && !mjVersion) {
     return { Version: undefined };
   }
   // An exact version is a 1-element "range" — pin it directly.
-  if (semver.valid(range)) {
+  if (!isUnconstrained && semver.valid(range)) {
     return { Version: range.replace(/^v/, '') };
   }
-  if (!semver.validRange(range)) {
+  if (!isUnconstrained && !semver.validRange(range)) {
     return { ErrorMessage: `version '${versionRange}' is not a valid semver version or range` };
   }
-  const candidates = await ResolveAppSource(repoUrl, { GitHubOptions: options, RepoRoot: repoRoot }).ListVersions();
+
+  const source = ResolveAppSource(repoUrl, {
+    GitHubOptions: options,
+    Subpath: subpath,
+    AppName: appName,
+    RepoRoot: repoRoot,
+  });
+
+  if (mjVersion) {
+    const selected = await SelectCompatiblePublishedVersion({
+      Source: source,
+      MJVersion: mjVersion,
+      VersionRange: isUnconstrained ? undefined : range,
+      ManifestCache: manifestCache,
+    });
+    return selected.Version ? { Version: selected.Version } : { ErrorMessage: selected.ErrorMessage };
+  }
+
+  const candidates = [...new Set(
+    (await source.ListVersions())
+      .map((v) => semver.valid(v) ?? semver.valid(v.replace(/^v/, '')))
+      .filter((v): v is string => v !== null),
+  )].sort(semver.rcompare);
   if (candidates.length === 0) {
     return { ErrorMessage: `no published versions found at ${repoUrl} to satisfy '${versionRange}'` };
   }
-  const best = semver.maxSatisfying(candidates, range);
+  const best = candidates.find((v) => CheckDependencyVersionCompatibility(v, range).Compatible);
   if (!best) {
-    const latest = candidates.sort(semver.rcompare)[0];
-    return { ErrorMessage: `no published version at ${repoUrl} satisfies '${versionRange}' (latest available: ${latest})` };
+    return { ErrorMessage: `no published version at ${repoUrl} satisfies '${versionRange}' (latest available: ${candidates[0]})` };
   }
   return { Version: best };
 }

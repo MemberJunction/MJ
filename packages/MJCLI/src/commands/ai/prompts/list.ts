@@ -17,7 +17,7 @@ export default class PromptsList extends Command {
   };
 
   async run(): Promise<void> {
-    const { PromptService } = await import('@memberjunction/ai-cli');
+    const { PromptService, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const { flags } = await this.parse(PromptsList);
     const spinner = ora();
@@ -38,13 +38,14 @@ export default class PromptsList extends Command {
       }
 
       this.log(chalk.gray('\nUse any of these models with the --model flag when running prompts'));
-      
-      // Force exit after completion
-      process.exit(0);
-
     } catch (error) {
       spinner.fail('Failed to load models');
       this.error(error as Error);
+    } finally {
+      await CloseMJProvider().catch(() => {});
     }
+
+    await FlushStdout();
+    setImmediate(() => process.exit(0));
   }
 }

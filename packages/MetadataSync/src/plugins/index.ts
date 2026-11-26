@@ -221,23 +221,24 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       const targetDir = flags.dir ? path.resolve(baseDir, flags.dir) : baseDir;
       const validationResult = await validator.validateDirectory(targetDir);
 
-      if (!validationResult.isValid || validationResult.warnings.length > 0) {
-        this.Host.FailStep('Validation reported issues');
+      if (!validationResult.isValid) {
+        this.Host.FailStep('Validation failed');
         if (isText) this.Host.Log('\n' + formatter.formatValidationResult(validationResult, this.Host.Verbose));
 
-        if (!validationResult.isValid) {
-          if (nonInteractive) {
-            return this.fail(startTime, formatter.formatValidationResultAsCLIErrors(validationResult, 'push'));
-          }
-          const shouldContinue = await confirm({
-            message: 'Validation failed with errors. Do you want to continue anyway?',
-            default: false,
-          });
-          if (!shouldContinue) {
-            // Clean cancel (exit 0) — matches the original interactive behavior.
-            return this.cancelled(startTime, 'Push cancelled due to validation errors.');
-          }
+        if (nonInteractive) {
+          return this.fail(startTime, formatter.formatValidationResultAsCLIErrors(validationResult, 'push'));
         }
+        const shouldContinue = await confirm({
+          message: 'Validation failed with errors. Do you want to continue anyway?',
+          default: false,
+        });
+        if (!shouldContinue) {
+          // Clean cancel (exit 0) — matches the original interactive behavior.
+          return this.cancelled(startTime, 'Push cancelled due to validation errors.');
+        }
+      } else if (validationResult.warnings.length > 0) {
+        this.Host.SucceedStep(`Validation passed (${validationResult.warnings.length} warning(s))`);
+        if (isText) this.Host.Log('\n' + formatter.formatValidationResult(validationResult, this.Host.Verbose));
       } else {
         this.Host.SucceedStep('Validation passed');
       }
@@ -538,19 +539,20 @@ export class SyncPullPlugin extends BaseCLIPlugin {
         this.Host.StartStep('Validating target directory');
         const validator = new ValidationService({ verbose: this.Host.Verbose, ValidateChildFoldersOnly: true });
         const validationResult = await validator.validateDirectory(targetDir);
-        if (!validationResult.isValid || validationResult.warnings.length > 0) {
-          this.Host.FailStep('Validation reported issues');
+        if (!validationResult.isValid) {
+          this.Host.FailStep('Validation failed');
           if (isText) this.Host.Log('\n' + formatter.formatValidationResult(validationResult, this.Host.Verbose));
-          if (!validationResult.isValid) {
-            if (nonInteractive) {
-              return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: formatter.formatValidationResultAsCLIErrors(validationResult, 'pull') };
-            }
-            const shouldContinue = await confirm({ message: 'Validation failed with errors. Continue anyway?', default: false });
-            if (!shouldContinue) {
-              if (isText) this.Host.Log('\n⚠️  Pull cancelled due to validation errors.', 'warn');
-              return { success: true, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, warnings: ['Pull cancelled due to validation errors.'] };
-            }
+          if (nonInteractive) {
+            return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: formatter.formatValidationResultAsCLIErrors(validationResult, 'pull') };
           }
+          const shouldContinue = await confirm({ message: 'Validation failed with errors. Continue anyway?', default: false });
+          if (!shouldContinue) {
+            if (isText) this.Host.Log('\n⚠️  Pull cancelled due to validation errors.', 'warn');
+            return { success: true, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, warnings: ['Pull cancelled due to validation errors.'] };
+          }
+        } else if (validationResult.warnings.length > 0) {
+          this.Host.SucceedStep(`Validation passed (${validationResult.warnings.length} warning(s))`);
+          if (isText) this.Host.Log('\n' + formatter.formatValidationResult(validationResult, this.Host.Verbose));
         } else {
           this.Host.SucceedStep('Validation passed');
         }

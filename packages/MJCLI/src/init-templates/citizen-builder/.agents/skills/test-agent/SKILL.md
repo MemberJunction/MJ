@@ -22,7 +22,7 @@ Options:
 - `-v` / `--verbose`: Detailed diagnostic logging.
 
 ## Method B: User Interactive Testing (Explorer UI)
-Instruct the user to open their browser at `http://localhost:4202` to test interactively (Zero-Config Local Dev Auth is enabled by default on localhost).
+Check `EXPLORER_PORT` in `.env` (defaults to `4202`, or `4203+` if `4202` was busy during `mj agent init`) and instruct the user to open their browser at `http://localhost:<EXPLORER_PORT>` to test interactively (Zero-Config Local Dev Auth is enabled by default on localhost).
 
 ---
 

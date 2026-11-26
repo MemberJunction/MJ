@@ -11,7 +11,7 @@ export { AgentAuditService } from './services/AgentAuditService';
 // Export utilities
 export { OutputFormatter } from './lib/output-formatter';
 export { ExecutionLogger, CreateExecutionLogger, createExecutionLogger } from './lib/execution-logger';
-export { InitializeMJProvider, initializeMJProvider, GetConnectionPool, getConnectionPool, CloseMJProvider, closeMJProvider } from './lib/mj-provider';
+export { InitializeMJProvider, initializeMJProvider, GetConnectionPool, getConnectionPool, CloseMJProvider, closeMJProvider, FlushStdout } from './lib/mj-provider';
 export { LoadAIConfig, loadAIConfig } from './config';
 export { AuditAnalyzer } from './lib/audit-analyzer';
 export { AuditFormatter } from './lib/audit-formatter';

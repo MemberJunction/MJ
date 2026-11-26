@@ -1,7 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync, statSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+
+const { execSyncMock } = vi.hoisted(() => ({
+  execSyncMock: vi.fn(),
+}));
+
+vi.mock('node:child_process', async () => {
+  const actual = await vi.importActual<typeof import('node:child_process')>('node:child_process');
+  return {
+    ...actual,
+    execSync: execSyncMock,
+  };
+});
+
 import AgentInit from '../commands/agent/init.js';
 
 const cliVersion: string = JSON.parse(
@@ -13,15 +26,37 @@ const envLines = (target: string, key: string): string[] =>
     .split('\n')
     .filter((line) => line.startsWith(`${key}=`));
 
+const LLM_KEY_NAMES = [
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GEMINI_API_KEY',
+  'GROQ_API_KEY',
+  'MISTRAL_API_KEY',
+] as const;
+
 describe('AgentInit Command', () => {
   let tempDir: string;
+  const savedEnv: Partial<Record<(typeof LLM_KEY_NAMES)[number], string | undefined>> = {};
 
   beforeEach(() => {
     tempDir = mkdtempSync(path.join(os.tmpdir(), 'mj-agent-init-test-'));
+    execSyncMock.mockReset();
+    for (const key of LLM_KEY_NAMES) {
+      savedEnv[key] = process.env[key];
+      delete process.env[key];
+    }
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    for (const key of LLM_KEY_NAMES) {
+      const prev = savedEnv[key];
+      if (prev === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = prev;
+      }
+    }
     if (existsSync(tempDir)) {
       rmSync(tempDir, { recursive: true, force: true });
     }
@@ -36,12 +71,13 @@ describe('AgentInit Command', () => {
     expect(AgentInit.flags.app).toBeDefined();
   });
 
-  it('scaffolds citizen-builder workspace into target directory', async () => {
+  it('scaffolds citizen-builder workspace into target directory with executable scripts', async () => {
     const target = path.join(tempDir, 'workspace');
     await AgentInit.run([target, '--skip-docker-check', '--no-start']);
 
     expect(existsSync(path.join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(path.join(target, 'README.md'))).toBe(true);
+    expect(existsSync(path.join(target, 'CAPABILITIES.md'))).toBe(true);
     expect(existsSync(path.join(target, 'docker-compose.yml'))).toBe(true);
     expect(existsSync(path.join(target, '.env'))).toBe(true);
     expect(existsSync(path.join(target, 'metadata', 'agents', '.customer-insight-agent.json'))).toBe(true);
@@ -49,6 +85,14 @@ describe('AgentInit Command', () => {
     expect(existsSync(path.join(target, '.agents', 'skills', 'test-agent', 'SKILL.md'))).toBe(true);
     expect(existsSync(path.join(target, '.agents', 'skills', 'package-agent', 'SKILL.md'))).toBe(true);
     expect(existsSync(path.join(target, 'docs', 'ENTERPRISE_ORG_SETUP.md'))).toBe(true);
+
+    const scriptsDir = path.join(target, 'scripts');
+    const shFiles = readdirSync(scriptsDir).filter((name) => name.endsWith('.sh'));
+    expect(shFiles.length).toBeGreaterThan(0);
+    for (const file of shFiles) {
+      const mode = statSync(path.join(scriptsDir, file)).mode;
+      expect(mode & 0o111).not.toBe(0);
+    }
   });
 
   it('customizes OPEN_APP_INSTALL_URL when --app flag is passed', async () => {
@@ -101,8 +145,12 @@ describe('AgentInit Command', () => {
 
     const read = (...segments: string[]) => readFileSync(path.join(target, ...segments), 'utf8');
     expect(read('docker-compose.yml')).toContain('MJ_VERSION: "${MJ_VERSION:?');
+    expect(read('docker-compose.yml')).toContain('./CAPABILITIES.md:/work/CAPABILITIES.md');
+    expect(read('docker-compose.yml')).toContain('http://localhost:4000/healthcheck');
     expect(read('docker', 'Dockerfile')).toContain('npm install -g "@memberjunction/cli@${MJ_VERSION}"');
     expect(read('scripts', 'docker-entrypoint.sh')).toContain('--tag "v${MJ_VERSION}"');
+    expect(read('scripts', 'docker-entrypoint.sh')).toContain('pm2-runtime start /tmp/ecosystem.config.cjs');
+    expect(read('scripts', 'docker-entrypoint.sh')).toContain('shamefully-hoist=true');
   });
 
   it('re-pins a stale MJ_VERSION in place on --force, keeping the user\'s other values', async () => {
@@ -162,5 +210,76 @@ describe('AgentInit Command', () => {
     expect(existsSync(path.join(target, 'AGENTS.md'))).toBe(true);
     expect(existsSync(path.join(target, 'docker-compose.yml'))).toBe(true);
   });
-});
 
+  it('skips automatic Docker startup when no LLM API key is configured and --start is not passed', async () => {
+    const logSpy = vi.spyOn(AgentInit.prototype, 'log').mockImplementation(() => undefined);
+    const target = path.join(tempDir, 'no-llm-key-workspace');
+
+    await AgentInit.run([target, '--skip-docker-check']);
+
+    expect(execSyncMock).not.toHaveBeenCalledWith('docker compose up -d', expect.anything());
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('no LLM API key is configured');
+    expect(output).toContain('http://localhost:4202');
+    expect(output).toContain('http://localhost:4000');
+  });
+
+  it('starts Docker automatically when an LLM API key is configured in env', async () => {
+    process.env.OPENAI_API_KEY = 'sk-test-123';
+    const logSpy = vi.spyOn(AgentInit.prototype, 'log').mockImplementation(() => undefined);
+    const target = path.join(tempDir, 'with-llm-key-workspace');
+
+    await AgentInit.run([target, '--skip-docker-check']);
+
+    expect(execSyncMock).toHaveBeenCalledWith('docker compose up -d', expect.objectContaining({ cwd: target }));
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('Your MemberJunction local instance is running');
+  });
+
+  it('starts Docker when --start is explicitly passed even without an LLM API key', async () => {
+    const target = path.join(tempDir, 'explicit-start-workspace');
+
+    await AgentInit.run([target, '--skip-docker-check', '--start']);
+
+    expect(execSyncMock).toHaveBeenCalledWith('docker compose up -d', expect.objectContaining({ cwd: target }));
+  });
+
+  it('prints resolved EXPLORER_PORT and API_PORT from .env in Next Steps', async () => {
+    const target = path.join(tempDir, 'custom-ports-workspace');
+    await AgentInit.run([target, '--skip-docker-check', '--no-start']);
+
+    const envPath = path.join(target, '.env');
+    const updatedEnv = readFileSync(envPath, 'utf8')
+      .replace(/^EXPLORER_PORT=.*$/m, 'EXPLORER_PORT=4209')
+      .replace(/^API_PORT=.*$/m, 'API_PORT=4009');
+    writeFileSync(envPath, updatedEnv, 'utf8');
+
+    const logSpy = vi.spyOn(AgentInit.prototype, 'log').mockImplementation(() => undefined);
+    await AgentInit.run([target, '--skip-docker-check', '--no-start', '--force']);
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('http://localhost:4209');
+    expect(output).toContain('http://localhost:4009');
+  });
+
+  it('warns when running multiple stacks with less than 16 GB Docker RAM', async () => {
+    const twelveGb = String(12 * 1024 * 1024 * 1024);
+    execSyncMock.mockImplementation((cmd: string) => {
+      if (cmd.includes('MemTotal')) {
+        return Buffer.from(twelveGb);
+      }
+      if (cmd === 'docker ps -q') {
+        return Buffer.from('abc123\ndef456\n');
+      }
+      return Buffer.from('');
+    });
+
+    const logSpy = vi.spyOn(AgentInit.prototype, 'log').mockImplementation(() => undefined);
+    const target = path.join(tempDir, 'multi-stack-ram-workspace');
+    await AgentInit.run([target, '--no-start']);
+
+    const output = logSpy.mock.calls.map((call) => String(call[0])).join('\n');
+    expect(output).toContain('2 container(s) already running');
+    expect(output).toContain('< 16 GB RAM');
+  });
+});

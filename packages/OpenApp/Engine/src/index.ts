@@ -103,7 +103,7 @@ export {
 export type { RefreshDatabaseConfig } from './install/open-app-metadata-refresh.js';
 export type { MigrationRunOptions, MigrationRunResult, FlywayDatabaseConfig, SkywayDatabaseConfig } from './install/migration-runner.js';
 
-export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, RunPackageInstallAsync, ResolvePackageInstallTimeoutMs, IsDefaultNpmRegistry, DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS, PACKAGE_INSTALL_TIMEOUT_ENV_VAR, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
+export { AddAppPackages, RemoveAppPackages, RunNpmInstall, RunPackageInstall, RunPackageInstallAsync, EnsurePnpmHoistNpmrc, ResolvePackageInstallTimeoutMs, IsDefaultNpmRegistry, DEFAULT_PACKAGE_INSTALL_TIMEOUT_MS, PACKAGE_INSTALL_TIMEOUT_ENV_VAR, BumpPrefixedDependencies, DetectPackageManager, detectPackageManager, HasPnpmCatalog, hasPnpmCatalog } from './install/package-manager.js';
 export type { PackageManagerOptions, AppPackageGroups, PackageOperationResult, PackageManagerType, VersionStrategy, WorkspaceTarget } from './install/package-manager.js';
 
 export {
@@ -139,9 +139,10 @@ export {
     RemoveApp,
     DisableApp,
     EnableApp,
-    RemoveAppEntityMetadata
+    RemoveAppEntityMetadata,
+    SelectCompatiblePublishedVersion,
 } from './install/install-orchestrator.js';
-export type { OrchestratorContext } from './install/install-orchestrator.js';
+export type { OrchestratorContext, SelectCompatibleVersionOptions, SelectCompatibleVersionResult } from './install/install-orchestrator.js';
 
 // FK-graph teardown (Solution 1) + migration-declared Application extraction (Solution 2)
 export {

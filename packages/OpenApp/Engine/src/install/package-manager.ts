@@ -435,6 +435,54 @@ function BuildPackageInstallPlan(
   return { Target: target, Bin: process.platform === 'win32' ? `${pm}.cmd` : pm, Argv: argv };
 }
 
+/** Matches an active pnpm hoisting configuration in `.npmrc`. */
+const PNPM_HOIST_SETTING_RE = /^\s*(?:shamefully-hoist\s*=|node-linker\s*=\s*hoisted|public-hoist-pattern\[\]\s*=\s*\*)/m;
+
+/** True when `repoRoot` is a dev-workspace parent or member (carries `.mj-dev-workspace.json`). */
+function IsInsideDevWorkspace(repoRoot: string): boolean {
+  if (existsSync(join(repoRoot, DEV_WORKSPACE_SENTINEL))) {
+    return true;
+  }
+  const parent = dirname(repoRoot);
+  return parent !== repoRoot && existsSync(join(parent, DEV_WORKSPACE_SENTINEL));
+}
+
+/**
+ * Ensures `<root>/.npmrc` sets `shamefully-hoist=true` for standalone pnpm distribution
+ * workspaces so Angular/Vite can resolve transitive Open App client dependencies when
+ * `@scope/*` is excluded from prebundling. Never modifies `.npmrc` if `shamefully-hoist`,
+ * `node-linker=hoisted`, or `public-hoist-pattern[]=*` is already present.
+ */
+export function EnsurePnpmHoistNpmrc(root: string): boolean {
+  const npmrcPath = join(root, '.npmrc');
+  if (existsSync(npmrcPath)) {
+    const existing = readFileSync(npmrcPath, 'utf-8');
+    if (PNPM_HOIST_SETTING_RE.test(existing)) {
+      return false;
+    }
+    const prefix = existing.length === 0 || existing.endsWith('\n') ? '' : '\n';
+    writeFileSync(
+      npmrcPath,
+      `${existing}${prefix}# Hoist dependencies so Angular/Vite can resolve transitive Open App imports\nshamefully-hoist=true\n`,
+      'utf-8',
+    );
+    return true;
+  }
+  writeFileSync(
+    npmrcPath,
+    '# Hoist dependencies so Angular/Vite can resolve transitive Open App imports\nshamefully-hoist=true\n',
+    'utf-8',
+  );
+  return true;
+}
+
+/** Ensures `.npmrc` hoisting before running `pnpm install` on standalone (non-dev-workspace) roots. */
+function PreparePnpmHoistingIfStandalone(repoRoot: string, target: InstallRootResolution): void {
+  if (target.PackageManager === 'pnpm' && !target.DevWorkspaceParent && !IsInsideDevWorkspace(repoRoot)) {
+    EnsurePnpmHoistNpmrc(target.Root);
+  }
+}
+
 function InstallSucceeded(target: PackageInstallPlan['Target']): PackageOperationResult {
   return { Success: true, Added: [], Removed: [], InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
 }
@@ -465,6 +513,7 @@ function InstallFailed(message: string, target?: PackageInstallPlan['Target']): 
 export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryUrl?: string, packageManager?: PackageManagerType): PackageOperationResult {
   const plan = BuildPackageInstallPlan(repoRoot, verbose, registryUrl, packageManager);
   if ('ErrorMessage' in plan) return InstallFailed(plan.ErrorMessage);
+  PreparePnpmHoistingIfStandalone(repoRoot, plan.Target);
   try {
     execFileSync(plan.Bin, plan.Argv, {
       cwd: plan.Target.Root,
@@ -501,6 +550,7 @@ export async function RunPackageInstallAsync(
 ): Promise<PackageOperationResult> {
   const plan = BuildPackageInstallPlan(repoRoot, verbose, registryUrl, packageManager);
   if ('ErrorMessage' in plan) return InstallFailed(plan.ErrorMessage);
+  PreparePnpmHoistingIfStandalone(repoRoot, plan.Target);
   const outcome = await RunChildProcess(plan.Bin, plan.Argv, plan.Target.Root, verbose === true, timeoutMs);
   if (outcome.Kind === 'ok') return InstallSucceeded(plan.Target);
   const pm = plan.Target.PackageManager;

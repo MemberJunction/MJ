@@ -81,16 +81,21 @@ export default class AgentsRun extends Command {
       }
     }
 
-    const { AgentService, OutputFormatter, ConversationService, CloseMJProvider } = await import('@memberjunction/ai-cli');
+    const { AgentService, OutputFormatter, ConversationService, CloseMJProvider, FlushStdout } = await import('@memberjunction/ai-cli');
 
     const service = new AgentService();
-    const formatter = new OutputFormatter(ResolveLegacyFormat({
-        Format: flags.format,
-        Legacy: flags.output as 'compact' | 'json' | 'table',
-        LegacyDefault: 'compact' as const,
-        LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
-        Map: AI_FORMAT_MAP,
-      }));
+    const format = ResolveLegacyFormat({
+      Format: flags.format,
+      Legacy: flags.output as 'compact' | 'json' | 'table',
+      LegacyDefault: 'compact' as const,
+      LegacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+      Map: AI_FORMAT_MAP,
+    });
+    const formatter = new OutputFormatter(format);
+
+    let exitCode = 0;
+    const isJson = format === 'json';
+    const spinner = !flags.chat && !isJson ? ora() : null;
 
     try {
       if (flags.chat) {
@@ -101,26 +106,34 @@ export default class AgentsRun extends Command {
         });
       } else {
         // Single prompt execution
-        const spinner = ora();
-        spinner.start(`Executing agent: ${flags.agent}`);
+        spinner?.start(`Executing agent: ${flags.agent}`);
 
         const result = await service.executeAgent(flags.agent, resolvedPrompt!, {
           verbose: flags.verbose,
           timeout: flags.timeout,
+          suppressProgress: isJson,
         });
 
-        spinner.stop();
+        spinner?.stop();
         this.log(formatter.formatAgentResult(result));
 
         if (!result.success) {
-          this.exit(1);
+          exitCode = 1;
         }
-        setImmediate(() => process.exit(0));
       }
     } catch (error) {
+      spinner?.fail(`Failed to execute agent: ${flags.agent}`);
       this.error(error as Error);
     } finally {
       await CloseMJProvider().catch(() => {});
+    }
+
+    await FlushStdout();
+    if (exitCode !== 0) {
+      this.exit(exitCode);
+    }
+    if (!flags.chat) {
+      setImmediate(() => process.exit(0));
     }
   }
 }
