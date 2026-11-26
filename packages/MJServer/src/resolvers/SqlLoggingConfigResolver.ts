@@ -8,8 +8,9 @@ import * as fs from 'fs/promises';
 import { LoadConfig } from '../config.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { UserCache, SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
-import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { SqlLoggingOptions as ProviderSqlLoggingOptions } from '@memberjunction/generic-database-provider';
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 
 /**
@@ -232,6 +233,7 @@ export class SqlLoggingConfig {
  * ```
  */
 @RefuseScopeLimitedPrincipals()
+@RefuseImpersonationSessions()
 @Resolver()
 export class SqlLoggingConfigResolver extends ResolverBase {
   /** Default prefix for auto-generated SQL log filenames */
@@ -255,6 +257,7 @@ export class SqlLoggingConfigResolver extends ResolverBase {
    * @private
    */
   private async checkOwnerAccess(context: AppContext): Promise<UserInfo> {
+    AssertNotImpersonationSession(context?.userPayload, 'SqlLoggingConfig');
     if (context?.userPayload?.userRecord && IsScopeLimitedPrincipal(context.userPayload.userRecord)) {
       throw new Error('Access denied. Scope-limited principals cannot access SQL logging.');
     }
@@ -262,22 +265,20 @@ export class SqlLoggingConfigResolver extends ResolverBase {
     if (!userEmail) {
       throw new Error('User not authenticated');
     }
-    
-    // Get the user from cache
-    const users = UserCache.Instance.Users;
-    const user = users.find(u => u.Email.toLowerCase() === userEmail.toLowerCase());
+
+    const user = this.GetUserFromPayload(context.userPayload);
     if (!user) {
       throw new Error('User not found');
     }
     if (IsScopeLimitedPrincipal(user)) {
       throw new Error('Access denied. Scope-limited principals cannot access SQL logging.');
     }
-    
+
     // Check if user has Type = 'Owner' (trim and case-insensitive for nchar fields)
     if (user.Type?.trim().toLowerCase() !== 'owner') {
       throw new Error('Access denied. This feature requires Owner privileges.');
     }
-    
+
     return user;
   }
   

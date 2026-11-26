@@ -1887,6 +1887,17 @@
           "primaryKey": {
             "ID": "AB9A7DFE-F06B-4759-81F9-5E56175234E6"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT194 - User Impersonation End-to-End Security, Expiry, Audit & Regression",
+            "Sequence": 49,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "05202785-BC4D-4D08-93C5-8DA405177312"
+          }
         }
       ]
     },

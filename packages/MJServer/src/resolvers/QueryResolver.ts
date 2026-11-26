@@ -10,6 +10,7 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
 import { GetImpersonationSession, IsSavedQueryForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
+import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 /**
  * Input type for batch query execution - allows running multiple queries in a single network call
@@ -201,35 +202,195 @@ export class RunQueryResolver extends ResolverBase {
     }
   }
 
-  private assertSavedQueryAllowedForImpersonation(
+  /**
+   * Resolves a saved query (and every composed query it transitively depends on via `QueryEngine`
+   * dependencies or `{{query:"..."}}` tokens) using the same lookup `RunQuery` uses, and **fails closed**
+   * for impersonation sessions if the query or any composed dependency cannot be resolved or touches a
+   * forbidden secret/security/permission entity.
+   */
+  private async assertSavedQueryAllowedForImpersonation(
     md: IMetadataProvider,
     userPayload: UserPayload | undefined,
     ref: { QueryID?: string; QueryName?: string; CategoryID?: string; CategoryPath?: string }
-  ): void {
+  ): Promise<void> {
     if (!GetImpersonationSession(userPayload)) {
       return;
     }
-    const allQueries = md.Queries ?? [];
-    const matched = allQueries.find((q) => {
-      if (ref.QueryID) {
-        return q.ID.trim().toLowerCase() === ref.QueryID.trim().toLowerCase();
+
+    const qe = QueryEngine.Instance;
+    const engineQueries = qe?.Queries ?? [];
+    const mdQueries = md.Queries ?? [];
+    const matchInList = <
+      T extends {
+        readonly ID: string;
+        readonly Name: string;
+        readonly CategoryID?: string | null;
+        readonly Category?: string | null;
+        readonly CategoryPath?: string | null;
       }
-      if (ref.QueryName) {
-        let ok = q.Name.trim().toLowerCase() === ref.QueryName.trim().toLowerCase();
-        if (ref.CategoryID) {
-          ok = ok && q.CategoryID?.trim().toLowerCase() === ref.CategoryID.trim().toLowerCase();
+    >(
+      list: readonly T[],
+      target: { QueryID?: string; QueryName?: string; CategoryID?: string; CategoryPath?: string }
+    ): T | undefined => {
+      return list.find((q) => {
+        if (target.QueryID) {
+          return UUIDsEqual(q.ID, target.QueryID);
         }
-        if (ref.CategoryPath) {
-          ok = ok && q.CategoryPath?.trim().toLowerCase() === ref.CategoryPath.trim().toLowerCase();
+        if (target.QueryName) {
+          let ok = q.Name.trim().toLowerCase() === target.QueryName.trim().toLowerCase();
+          if (target.CategoryID) {
+            ok = ok && Boolean(q.CategoryID && UUIDsEqual(q.CategoryID, target.CategoryID));
+          }
+          if (target.CategoryPath) {
+            const qCat = (q.CategoryPath ?? q.Category ?? '').trim().toLowerCase();
+            ok = ok && qCat === target.CategoryPath.trim().toLowerCase();
+          }
+          return ok;
         }
-        return ok;
+        return false;
+      });
+    };
+
+    type InspectableQuery = {
+      readonly ID: string;
+      readonly Name: string;
+      readonly SQL?: string | null;
+      readonly CategoryID?: string | null;
+      readonly Category?: string | null;
+      readonly CategoryPath?: string | null;
+      readonly Entities?: ReadonlyArray<{ readonly Entity?: string | null }> | null;
+    };
+
+    const resolveQueryRef = async (
+      target: { QueryID?: string; QueryName?: string; CategoryID?: string; CategoryPath?: string },
+      allowRefresh: boolean
+    ): Promise<InspectableQuery | null> => {
+      if (engineQueries.length > 0) {
+        const viaEngine = await this.findQuery(
+          md,
+          target.QueryID ?? '',
+          target.QueryName,
+          target.CategoryID,
+          target.CategoryPath,
+          allowRefresh
+        );
+        if (viaEngine) {
+          return viaEngine;
+        }
       }
-      return false;
-    });
-    if (IsSavedQueryForbiddenDuringImpersonation(matched, md.Entities)) {
+      const viaMd = matchInList(mdQueries, target);
+      return viaMd ?? null;
+    };
+
+    const rootQuery = await resolveQueryRef(ref, engineQueries.length > 0);
+    if (!rootQuery) {
       throw new AuthorizationError(
-        `Saved query '${matched?.Name ?? ref.QueryName ?? ref.QueryID ?? ''}' touches security/credential entities prohibited during user impersonation.`
+        `Saved query '${ref.QueryName ?? ref.QueryID ?? ''}' could not be resolved for security inspection during user impersonation.`
       );
+    }
+
+    // Extract `{{query:"Path/To/QueryName(...)"}}` composition tokens to follow SQL-level compositions
+    // even when QueryDependencies rows have not yet been refreshed.
+    const compositionTokenRegex = /\{\{\s*query\s*:\s*["']([^"'()]+?)(?:\([^)]*\))?["']\s*\}\}/gi;
+    const allKnownQueries: readonly InspectableQuery[] =
+      engineQueries.length > 0 ? [...engineQueries, ...mdQueries] : mdQueries;
+    const queriesByNormId = new Map<string, InspectableQuery>();
+    for (const q of allKnownQueries) {
+      if (q.ID) {
+        const key = NormalizeUUID(q.ID);
+        if (!queriesByNormId.has(key)) {
+          queriesByNormId.set(key, q);
+        }
+      }
+    }
+
+    const sqlsByQueryId = new Map<string, string[]>();
+    for (const s of qe?.QuerySQLs ?? []) {
+      if (s.QueryID && s.SQL) {
+        const key = NormalizeUUID(s.QueryID);
+        let bucket = sqlsByQueryId.get(key);
+        if (!bucket) {
+          bucket = [];
+          sqlsByQueryId.set(key, bucket);
+        }
+        bucket.push(s.SQL);
+      }
+    }
+
+    const depsByQueryId = new Map<string, string[]>();
+    for (const dep of qe?.Dependencies ?? []) {
+      if (dep.QueryID && dep.DependsOnQueryID) {
+        const key = NormalizeUUID(dep.QueryID);
+        let bucket = depsByQueryId.get(key);
+        if (!bucket) {
+          bucket = [];
+          depsByQueryId.set(key, bucket);
+        }
+        bucket.push(dep.DependsOnQueryID);
+      }
+    }
+
+    const visitedIds = new Set<string>();
+    const queue: InspectableQuery[] = [rootQuery];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      const normId = NormalizeUUID(current.ID);
+      if (visitedIds.has(normId)) {
+        continue;
+      }
+      visitedIds.add(normId);
+
+      // Collect primary SQL plus any platform-specific SQL variants for this query.
+      const variantSqls = sqlsByQueryId.get(normId) ?? [];
+      const combinedSql = [current.SQL ?? '', ...variantSqls].filter(Boolean).join('\n');
+
+      if (
+        IsSavedQueryForbiddenDuringImpersonation(
+          { SQL: combinedSql, Entities: current.Entities },
+          md.Entities
+        )
+      ) {
+        throw new AuthorizationError(
+          `Saved query '${current.Name}' touches security/credential entities prohibited during user impersonation.`
+        );
+      }
+
+      // 1. Follow declared QueryDependencies rows (O(1) indexed lookup)
+      for (const dependsOnId of depsByQueryId.get(normId) ?? []) {
+        const depQuery = queriesByNormId.get(NormalizeUUID(dependsOnId));
+        if (!depQuery) {
+          throw new AuthorizationError(
+            `Composed dependency query '${dependsOnId}' of '${current.Name}' could not be resolved during user impersonation.`
+          );
+        }
+        if (!visitedIds.has(NormalizeUUID(depQuery.ID))) {
+          queue.push(depQuery);
+        }
+      }
+
+      // 2. Follow inline `{{query:"Category/Name"}}` composition references
+      compositionTokenRegex.lastIndex = 0;
+      let match: RegExpExecArray | null;
+      while ((match = compositionTokenRegex.exec(combinedSql)) !== null) {
+        const rawPath = match[1].trim();
+        const segments = rawPath.split('/').map((s) => s.trim()).filter(Boolean);
+        const depName = segments.pop() ?? '';
+        const depCatPath = segments.length > 0 ? segments.join('/') : undefined;
+        const depQuery =
+          (depName
+            ? matchInList(allKnownQueries, { QueryName: depName, CategoryPath: depCatPath }) ??
+              (depCatPath ? matchInList(allKnownQueries, { QueryName: depName }) : undefined)
+            : undefined) ?? null;
+        if (!depQuery) {
+          throw new AuthorizationError(
+            `Composed query reference '${rawPath}' inside '${current.Name}' could not be resolved during user impersonation.`
+          );
+        }
+        if (!visitedIds.has(depQuery.ID.trim().toLowerCase())) {
+          queue.push(depQuery);
+        }
+      }
     }
   }
 
@@ -250,7 +411,7 @@ export class RunQueryResolver extends ResolverBase {
 
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const md = provider as unknown as IMetadataProvider;
-    this.assertSavedQueryAllowedForImpersonation(md, context.userPayload, { QueryID, CategoryID, CategoryPath });
+    await this.assertSavedQueryAllowedForImpersonation(md, context.userPayload, { QueryID, CategoryID, CategoryPath });
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
     const result = await rq.RunQuery(
       {
@@ -315,7 +476,7 @@ export class RunQueryResolver extends ResolverBase {
     await this.CheckAPIKeyScopeAuthorization('query:run', QueryName, context.userPayload);
 
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
-    this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, {
+    await this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, {
       QueryName,
       CategoryID,
       CategoryPath,
@@ -484,7 +645,7 @@ export class RunQueryResolver extends ResolverBase {
 
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     for (const item of input) {
-      this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, item);
+      await this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, item);
     }
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
@@ -540,7 +701,7 @@ export class RunQueryResolver extends ResolverBase {
   ): Promise<RunQueryResultType[]> {
     const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     for (const item of input) {
-      this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, item);
+      await this.assertSavedQueryAllowedForImpersonation(provider as unknown as IMetadataProvider, context.userPayload, item);
     }
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
@@ -603,7 +764,7 @@ export class RunQueryResolver extends ResolverBase {
     try {
       const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
       for (const item of input) {
-        this.assertSavedQueryAllowedForImpersonation(
+        await this.assertSavedQueryAllowedForImpersonation(
           provider as unknown as IMetadataProvider,
           context.userPayload,
           item.params

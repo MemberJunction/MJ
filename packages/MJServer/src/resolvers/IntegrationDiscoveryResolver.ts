@@ -76,7 +76,8 @@ import type { MJCompanyIntegrationEntityServer } from "@memberjunction/core-enti
 import { AppContext } from "../types.js";
 import { RequireSystemUser } from "../directives/RequireSystemUser.js";
 import { UserCache } from "@memberjunction/generic-database-provider";
-import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
+import { AssertNotImpersonationSession } from "../auth/impersonationGuard.js";
 
 // ─── SQL filter guard ───────────────────────────────────────────────────────
 
@@ -1584,12 +1585,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      *  - IT IS RATE LIMITED per (user, integration). The endpoint turns caller-supplied
      *    input into an outbound vendor request, so an unbounded one is a request amplifier.
      */
+    @RefuseImpersonationSessions()
     @Query(() => ConnectionTestOutput)
     async IntegrationProbeCredentials(
         @Arg("integrationID") integrationID: string,
         @Arg("credentialValues") credentialValues: string,
         @Ctx() ctx: AppContext
     ): Promise<ConnectionTestOutput> {
+        AssertNotImpersonationSession(ctx.userPayload, 'IntegrationProbeCredentials');
         try {
             const user = this.getAuthenticatedUser(ctx);
 
@@ -1727,11 +1730,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     /**
      * Tests connectivity to the external system.
      */
+    @RefuseImpersonationSessions()
     @Query(() => ConnectionTestOutput)
     async IntegrationTestConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<ConnectionTestOutput> {
+        AssertNotImpersonationSession(ctx.userPayload, 'IntegrationTestConnection');
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -2138,6 +2143,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Fetches a small sample of records from an external object for preview purposes.
      * Uses the connector's FetchChanges with a small batch size and no watermark.
      */
+    @RefuseImpersonationSessions()
     @Query(() => PreviewDataOutput)
     async IntegrationPreviewData(
         @Arg("companyIntegrationID") companyIntegrationID: string,
@@ -2145,6 +2151,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("limit", { defaultValue: 5 }) limit: number,
         @Ctx() ctx: AppContext
     ): Promise<PreviewDataOutput> {
+        AssertNotImpersonationSession(ctx.userPayload, 'IntegrationPreviewData');
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;

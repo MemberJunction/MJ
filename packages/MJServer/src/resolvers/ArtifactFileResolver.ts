@@ -10,6 +10,8 @@ import { FileStorageEngine } from '@memberjunction/storage';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
+import { RefuseImpersonationSessions } from '../auth/scopeLimitedAccess.js';
 
 export const ARTIFACT_FILE_ACCESS_DENIED_MESSAGE = 'You do not have permission to view this artifact file.';
 
@@ -69,11 +71,13 @@ export function RegisterServerArtifactFileBytesLoader(): void {
 @Resolver()
 export class ArtifactFileResolver extends ResolverBase {
 
+    @RefuseImpersonationSessions()
     @Query(() => String, { description: 'Returns a pre-authenticated download URL for an artifact version whose ContentMode is "File".' })
     async ArtifactFileDownloadUrl(
         @Arg('artifactVersionId', () => String) artifactVersionId: string,
         @Ctx() context: AppContext,
     ): Promise<string> {
+        AssertNotImpersonationSession(context.userPayload, 'ArtifactFileDownloadUrl');
         const user = this.GetUserFromPayload(context.userPayload);
         if (!user) {
             throw new Error('Unauthorized');

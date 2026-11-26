@@ -1,5 +1,6 @@
 import { DestroyRef, inject, Injectable } from '@angular/core';
 import {
+    LocalCacheManager,
     LogError,
     Metadata,
     SetProvider,
@@ -932,7 +933,7 @@ export class MJUserImpersonationService {
                 // Non-fatal
             }
         } else {
-            this.resetWorkspaceTabsAndCache();
+            await this.resetWorkspaceTabsAndCache();
         }
 
         for (const adapter of this.GetActiveAdapters()) {
@@ -949,8 +950,13 @@ export class MJUserImpersonationService {
         }
     }
 
-    private resetWorkspaceTabsAndCache(): void {
+    private async resetWorkspaceTabsAndCache(): Promise<void> {
         try {
+            // Clear LocalCacheManager entries on every enter/switch/exit boundary so actor and
+            // impersonated target rows can never mix in local storage or memory caches.
+            if (LocalCacheManager.Instance?.IsInitialized) {
+                await LocalCacheManager.Instance.ClearAll();
+            }
             if (this.workspaceManager) {
                 const cfg = this.workspaceManager.GetConfiguration();
                 const activeTabId = cfg?.activeTabId;

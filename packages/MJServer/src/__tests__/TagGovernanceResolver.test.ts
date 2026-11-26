@@ -95,10 +95,14 @@ vi.mock('type-graphql', () => ({
     Float:       () => undefined,
 }));
 
-vi.mock('@memberjunction/core', () => ({
-    LogError: vi.fn(),
-    LogStatus: vi.fn(),
-}));
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
+    return {
+        ...actual,
+        LogError: vi.fn(),
+        LogStatus: vi.fn(),
+    };
+});
 
 // Stub ResolverBase — we only need GetUserFromPayload to return a synthetic user.
 vi.mock('../generic/ResolverBase.js', () => ({

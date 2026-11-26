@@ -45,7 +45,7 @@ import { default as jwt } from 'jsonwebtoken';
 import { contextFunction, CreateReadOnlyProvider, CreateUnifiedAuthMiddleware, getUserPayload } from './context.js';
 import { UserPayload } from './types.js';
 import { requireSystemUserDirective, publicDirective, ApplyBuiltInDirectivesTransformer } from './directives/index.js';
-import { ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
+import { ApplyImpersonationRefusalGuards, ApplyScopeLimitedPrincipalGuards } from './auth/scopeLimitedAccess.js';
 import { ApplyRootVariablesLoggingMiddleware, variablesLoggingMiddleware } from './logging/variablesLoggingMiddleware.js';
 import { auditResolversForUndecoratedArgs } from './logging/bootAudit.js';
 import { StartupLogger } from './logging/StartupLogger.js';
@@ -353,6 +353,8 @@ import { RegisterArtifactPostRunViewProtectedEntities } from './generic/Register
 import {
   CreateImpersonationHttpGuardMiddleware,
   EnsureImpersonationDataHooksRegistered,
+  RegisterImpersonationWebSocket,
+  RunWithImpersonationSession,
   ValidateImpersonationWebSocketSubscribe,
 } from './auth/impersonationGuard.js';
 import { RegisterServerArtifactFileBytesLoader } from './resolvers/ArtifactFileResolver.js';
@@ -1386,6 +1388,7 @@ const setupComplete$ = new ReplaySubject(1);
   // the dynamic paths, and middleware-contributed ones), and buildSchemaSync reads middleware
   // metadata, so this must run here.
   ApplyScopeLimitedPrincipalGuards();
+  ApplyImpersonationRefusalGuards();
 
   const tBuild = performance.now();
   const builtSchema = buildSchemaSync({
@@ -1490,8 +1493,9 @@ const setupComplete$ = new ReplaySubject(1);
   // conclude from the call site that no server-side heartbeat exists. Value unchanged.
   const WS_SERVER_KEEPALIVE_MS = 12_000;
 
-  // Track per-connection expiry timers so we can clean them up on close
+  // Track per-connection expiry timers and impersonation WS teardown hooks so we can clean them up on close or revocation
   const expiryTimers = new WeakMap<object, ReturnType<typeof setTimeout>>();
+  const impersonationWsDisposers = new WeakMap<object, () => void>();
 
   const serverCleanup = useServer<Record<string, unknown>, { userPayload: UserPayload }>(
     {
@@ -1520,6 +1524,18 @@ const setupComplete$ = new ReplaySubject(1);
           // Store validated payload on the connection for use in context()
           ctx.extra.userPayload = userPayload;
 
+          // Register active impersonation WebSocket so MJEndUserImpersonation closes it immediately.
+          if (userPayload.impersonationSession) {
+            const disposeWs = RegisterImpersonationWebSocket(userPayload.impersonationSession.apiKeyId, () => {
+              try {
+                ctx.extra.socket.close(4403, 'Impersonation session ended');
+              } catch {
+                // Socket may already be closed; benign
+              }
+            });
+            impersonationWsDisposers.set(ctx, disposeWs);
+          }
+
           // Schedule proactive socket close at token OR expiring API key expiry so the client
           // reconnects (or exits expired impersonation) instead of keeping stale subscriptions open.
           const decoded = token ? jwt.decode(token.replace('Bearer ', '')) : null;
@@ -1534,6 +1550,11 @@ const setupComplete$ = new ReplaySubject(1);
           if (credentialExpiresAtMs !== undefined) {
             const msUntilExpiry = credentialExpiresAtMs - Date.now();
             if (msUntilExpiry <= 0) {
+              const disposeEarly = impersonationWsDisposers.get(ctx);
+              if (disposeEarly) {
+                disposeEarly();
+                impersonationWsDisposers.delete(ctx);
+              }
               return false;
             }
             const timer = setTimeout(() => {
@@ -1561,10 +1582,12 @@ const setupComplete$ = new ReplaySubject(1);
         }
       },
       onSubscribe: async (ctx, msg) => {
-        return ValidateImpersonationWebSocketSubscribe(
-          ctx.extra.userPayload,
-          msg.payload?.query,
-          msg.payload?.operationName
+        return RunWithImpersonationSession(ctx.extra.userPayload?.impersonationSession, () =>
+          ValidateImpersonationWebSocketSubscribe(
+            ctx.extra.userPayload,
+            msg.payload?.query,
+            msg.payload?.operationName
+          )
         );
       },
       // context() now just reads the already-validated payload — no I/O, no logging
@@ -1578,6 +1601,11 @@ const setupComplete$ = new ReplaySubject(1);
         if (timer) {
           clearTimeout(timer);
           expiryTimers.delete(ctx);
+        }
+        const disposeWs = impersonationWsDisposers.get(ctx);
+        if (disposeWs) {
+          disposeWs();
+          impersonationWsDisposers.delete(ctx);
         }
       },
       onError: (_ctx, _message, errors) => {

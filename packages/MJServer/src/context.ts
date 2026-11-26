@@ -10,6 +10,7 @@ import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 import {
   EvaluateTargetImpersonationEligibility,
   ParseImpersonationKeyLabel,
+  RunWithImpersonationSession,
   StampImpersonationSession,
 } from './auth/impersonationGuard.js';
 import { EmailsMatch, ResolveUserLookupEmail, type LoginEmailResolution } from './auth/loginEmailResolution.js';
@@ -460,16 +461,25 @@ export const GetUserPayload = async (
         // BuildMagicLinkSessionUser — see sessionUserClone.ts).
         const userRecord = CloneUserForSessionContext(resolvedUser);
 
-        // Inspect the validated MJ: API Keys record (O(1) hit against APIKeyEngine._keyValidationCache)
-        // to capture key expiration and enforce impersonation session confinement + live target ceiling.
-        const keyLookup = validationResult.APIKeyHash
-          ? await apiKeyEngine.ValidateKeyByHash(validationResult.APIKeyHash, systemUser)
-          : undefined;
-        const keyEntity = keyLookup?.APIKey;
-        const rawKeyExpiryMs = keyEntity?.ExpiresAt ? new Date(keyEntity.ExpiresAt).getTime() : NaN;
+        // Inspect the validated MJ: API Keys record directly from ValidateAPIKey (single lookup),
+        // falling back to ValidateKeyByHash ONLY when a mock/older engine omits APIKey — and
+        // strictly FAIL CLOSED when the key record cannot be read so an impersonation key can
+        // NEVER fall through as an unguarded regular API key on a revoke race or failed RunView.
+        let keyEntity = validationResult.APIKey;
+        if (!keyEntity) {
+          if (!validationResult.APIKeyHash) {
+            throw new AuthenticationError('Invalid API key');
+          }
+          const keyLookup = await apiKeyEngine.ValidateKeyByHash(validationResult.APIKeyHash, systemUser);
+          if (!keyLookup?.Valid || !keyLookup.APIKey) {
+            throw new AuthenticationError('Invalid API key');
+          }
+          keyEntity = keyLookup.APIKey;
+        }
+        const rawKeyExpiryMs = keyEntity.ExpiresAt ? new Date(keyEntity.ExpiresAt).getTime() : NaN;
         const apiKeyExpiresAtMs = Number.isFinite(rawKeyExpiryMs) ? rawKeyExpiryMs : undefined;
 
-        const parsedImpersonation = ParseImpersonationKeyLabel(keyEntity?.Label);
+        const parsedImpersonation = ParseImpersonationKeyLabel(keyEntity.Label);
         let impersonationSession: UserPayload['impersonationSession'] | undefined;
         if (parsedImpersonation) {
           if (
@@ -895,11 +905,14 @@ export function CreateUnifiedAuthMiddleware(
       (req as unknown as Record<string, unknown>)['user'] = userPayload;
       (req as unknown as Record<string, unknown>)['mjUser'] = userPayload.userRecord;
 
-      if (typeof RunWithRequestSessionId === 'function') {
-        RunWithRequestSessionId(userPayload.sessionId, () => next());
-      } else {
-        next();
-      }
+      const proceed = (): void => {
+        if (typeof RunWithRequestSessionId === 'function') {
+          RunWithRequestSessionId(userPayload.sessionId, () => next());
+        } else {
+          next();
+        }
+      };
+      RunWithImpersonationSession(userPayload.impersonationSession, proceed);
     } catch (error) {
       if (error instanceof TokenExpiredError) {
         res.status(401).json({

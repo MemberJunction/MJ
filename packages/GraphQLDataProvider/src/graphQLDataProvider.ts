@@ -596,11 +596,14 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
-     * The connection string for each GraphQLProvider instance is simply the URL for the GraphQL endpoint. This is because each GraphQLDataProvider instance can be configured with a different URL and each URL
-     * is a unique combination of host/port/etc.
+     * The connection string for each GraphQLProvider instance is the GraphQL endpoint URL scoped
+     * by the authenticated user's ID (once known) so `LocalCacheManager` slots for distinct users
+     * — including during and after user impersonation — never collide or mix rows.
      */
     public get InstanceConnectionString(): string {
-        return this._configData.URL
+        const base = this._configData.URL;
+        const userId = this.CurrentUser?.ID?.trim().toLowerCase();
+        return userId ? `${base}#user=${userId}` : base;
     }
 
     public GenerateUUID() {

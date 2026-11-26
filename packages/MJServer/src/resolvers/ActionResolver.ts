@@ -12,7 +12,8 @@ import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IsScopeLimitedPrincipal } from "../auth/scopeLimitedPrincipal.js";
 import { EvaluateActionRunAuthorization, IsOwner } from "../auth/actionAuthorization.js";
-import { RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from "../auth/scopeLimitedAccess.js";
+import { AssertNotImpersonationSession } from "../auth/impersonationGuard.js";
 import { EntityObjectDataBinding, ProjectActionParamsForCaller } from "../generic/actionOutputFieldSecurity.js";
 import type { EntityActionResult } from "@memberjunction/actions-base";
 
@@ -191,11 +192,13 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the action
    */
+  @RefuseImpersonationSessions()
   @Mutation(() => ActionResultOutput)
   async RunAction(
     @Arg("input") input: RunActionInput,
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
+    AssertNotImpersonationSession(ctx.userPayload, 'RunAction');
     try {
       const user = this.getRunActionPrincipal(ctx);
 
@@ -420,12 +423,14 @@ export class ActionResolver extends ResolverBase {
    * @param ctx The GraphQL context containing user authentication information
    * @returns The result of running the entity action
    */
+  @RefuseImpersonationSessions()
   @RefuseScopeLimitedPrincipals()
   @Mutation(() => ActionResultOutput)
   async RunEntityAction(
     @Arg("input") input: EntityActionInput,
     @Ctx() ctx: AppContext
   ): Promise<ActionResultOutput> {
+    AssertNotImpersonationSession(ctx.userPayload, 'RunEntityAction');
     try {
       // Check API key scope authorization for entity action execution
       await this.CheckAPIKeyScopeAuthorization('action:execute', input.EntityActionID, ctx.userPayload);

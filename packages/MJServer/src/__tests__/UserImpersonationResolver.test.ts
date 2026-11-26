@@ -32,6 +32,7 @@ import {
     AuthorizationInfo,
     AuthorizationRoleInfo,
     BaseEntity,
+    EntityInfo,
     RunView,
     ServerOperationScopeManager,
     UserInfo,
@@ -44,31 +45,40 @@ import {
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { CloneUserForSessionContext } from '../auth/sessionUserClone.js';
 import {
+    AssertNotImpersonationSession,
     BuildActorImpersonationKeyLikePattern,
     BuildImpersonationKeyLabel,
+    CloseImpersonationWebSockets,
     CreateImpersonationApolloPlugin,
     CreateImpersonationHttpGuardMiddleware,
     EvaluateGraphQLOperationForImpersonation,
     EvaluateTargetImpersonationEligibility,
     GetImpersonationSession,
+    HasReservedImpersonationKeyLabelPrefix,
     IMPERSONATION_FORBIDDEN_ENTITY_NAMES,
     IMPERSONATION_READ_ONLY_ALLOWED_SCOPES,
     IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES,
+    IMPERSONATION_WRITE_FORBIDDEN_ENTITY_NAMES,
     ImpersonationPostRunViewHook,
     ImpersonationPreDeleteHook,
     ImpersonationPreRunViewHook,
     ImpersonationPreSaveHook,
     IsEntityForbiddenDuringImpersonation,
+    IsEntityWriteForbiddenDuringImpersonation,
     IsOnlyEndImpersonationMutation,
     IsSavedQueryForbiddenDuringImpersonation,
     ParseImpersonationKeyLabel,
+    RegisterImpersonationWebSocket,
+    RunWithImpersonationSession,
     StampImpersonationSession,
     USER_IMPERSONATION_AUTHORIZATION_NAME,
     USER_IMPERSONATION_KEY_LABEL_PREFIX,
     USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
     ValidateImpersonationWebSocketSubscribe,
     WithImpersonationCurrentUserBootstrap,
+    WithImpersonationKeyMintScope,
 } from '../auth/impersonationGuard.js';
+import { ImpersonationSessionRefusalGuard } from '../auth/scopeLimitedAccess.js';
 import {
     ClampUserImpersonationTtlMinutes,
     IsUserImpersonationEnabled,
@@ -80,9 +90,14 @@ import {
     USER_IMPERSONATION_MIN_TTL_MINUTES,
     UserImpersonationConfigSchema,
 } from '../userImpersonationConfigUnits.js';
+import { QueryEngine } from '@memberjunction/core-entities';
+import { RunQueryResolver } from '../resolvers/QueryResolver.js';
+import { ResolverBase } from '../generic/ResolverBase.js';
 import { AdhocQueryResolver } from '../resolvers/AdhocQueryResolver.js';
+import { APIKeyResolver } from '../resolvers/APIKeyResolver.js';
 import { DatasetResolverExtended } from '../resolvers/DatasetResolver.js';
 import { EntityRecordNameResolver } from '../resolvers/EntityRecordNameResolver.js';
+import { SearchEntitiesResolver } from '../resolvers/SearchEntitiesResolver.js';
 import {
     EvaluateUserImpersonationAuthorization,
     EvaluateUserImpersonationWriteAuthorization,
@@ -90,7 +105,7 @@ import {
     USER_IMPERSONATION_AUDIT_LOG_TYPES,
     UserImpersonationResolver,
 } from '../resolvers/UserImpersonationResolver.js';
-import type { AppContext, ProviderInfo } from '../types.js';
+import type { AppContext, ProviderInfo, UserPayload } from '../types.js';
 
 const SYSTEM_USER_ID = '00000000-0000-0000-0000-000000000001';
 const ACTOR_USER_ID = '11111111-1111-4111-8111-111111111111';
@@ -221,6 +236,8 @@ interface HarnessOptions {
     auditSaveThrows?: boolean;
     createKeyResult?: { Success: boolean; RawKey?: string; APIKeyId?: string; Error?: string };
     extraApiKeys?: Array<{ ID: string; Label: string; Status: string; UserID: string }>;
+    applications?: Array<{ ID: string; Name: string; IsActive: boolean }>;
+    startedAuditLogs?: Array<{ ID: string; UserID: string; RecordID: string; Details: string }>;
 }
 
 class TestableUserImpersonationResolver extends UserImpersonationResolver {
@@ -272,7 +289,7 @@ function createHarness(opts: HarnessOptions = {}) {
             { ID: ENTITY_DELETE_SCOPE_ID, FullPath: 'entity:delete' },
             { ID: ENTITY_MERGE_SCOPE_ID, FullPath: 'entity:merge' },
         ],
-        Applications: [{ ID: MJAPI_APP_ID, Name: 'MJAPI', IsActive: true }],
+        Applications: opts.applications ?? [{ ID: MJAPI_APP_ID, Name: 'MJAPI', IsActive: true }],
         CreateAPIKey: vi.fn().mockResolvedValue(
             opts.createKeyResult ?? {
                 Success: true,
@@ -492,6 +509,25 @@ function createHarness(opts: HarnessOptions = {}) {
                 Results: [{ ID: 'app-bind-1' }],
             } as RunViewResult<unknown>;
         }
+        if (params.EntityName === 'MJ: Audit Logs') {
+            const defaultStartedAuditLogs = opts.startedAuditLogs ?? [
+                {
+                    ID: 'audit-started-default',
+                    UserID: ACTOR_USER_ID,
+                    RecordID: TARGET_USER_ID,
+                    Details: JSON.stringify({
+                        action: 'MJStartUserImpersonation',
+                        apiKeyId: MINTED_KEY_ID,
+                        actorUserId: ACTOR_USER_ID,
+                        targetUserId: TARGET_USER_ID,
+                    }),
+                },
+            ];
+            return {
+                Success: true,
+                Results: defaultStartedAuditLogs,
+            } as RunViewResult<unknown>;
+        }
         return { Success: true, Results: [] } as RunViewResult<unknown>;
     });
 
@@ -574,6 +610,7 @@ function createHarness(opts: HarnessOptions = {}) {
         extra?: {
             apiKeyId?: string;
             hasRawApiKeyHeader?: boolean;
+            isSystemUser?: boolean;
             clientIp?: string;
             userAgent?: string;
         }
@@ -590,6 +627,7 @@ function createHarness(opts: HarnessOptions = {}) {
                   userRecord: actorUser,
                   sessionId: 'sess-1',
                   ...(extra?.apiKeyId ? { apiKeyId: extra.apiKeyId } : {}),
+                  ...(extra?.isSystemUser ? { isSystemUser: true } : {}),
               }
             : (undefined as unknown as AppContext['userPayload']),
     });
@@ -614,6 +652,7 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
         delete process.env.MJ_USER_IMPERSONATION_ALLOW_WRITES;
         delete process.env.MJ_USER_IMPERSONATION_MAX_TTL_MINUTES;
         RegisterServerUserImpersonationConfig(null);
+        UserImpersonationResolver.ResetDeniedAuditRateLimitForTests();
     });
 
     afterEach(() => {
@@ -668,7 +707,7 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
             expect(IsUserImpersonationWritesEnabled()).toBe(false);
         });
 
-        it('STILL allows MJEndUserImpersonation to revoke/delete active impersonation keys when kill switch is flipped OFF mid-incident', async () => {
+        it('STILL allows MJEndUserImpersonation to revoke active impersonation keys (retaining the revoked key row for forensics) when kill switch is flipped OFF mid-incident', async () => {
             const { resolver, makeContext, apiKeyEngine, deletedRecords } = createHarness({
                 featureEnabled: false,
                 authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
@@ -691,7 +730,10 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
                 expect.anything(),
                 expect.anything()
             );
-            expect(deletedRecords).toContainEqual({ entityName: 'MJ: API Keys', id: MINTED_KEY_ID });
+            // Scopes and app bindings are purged, while the revoked MJ: API Keys row is retained for forensic lineage
+            expect(deletedRecords).toContainEqual({ entityName: 'MJ: API Key Scopes', id: SCOPE_ROW_ID });
+            expect(deletedRecords).toContainEqual({ entityName: 'MJ: API Key Applications', id: 'app-bind-1' });
+            expect(deletedRecords).not.toContainEqual({ entityName: 'MJ: API Keys', id: MINTED_KEY_ID });
         });
 
         it('denies even Owner/Administrator/Developer when infrastructure flag is true but User Impersonation has ZERO AuthorizationRoles', async () => {
@@ -1432,12 +1474,1027 @@ describe('User Impersonation — Principal Adversarial Security Suite', () => {
             expect(dualHeaderRes.ResultCode).toBe('FORBIDDEN');
         });
 
-        it('keeps scope constants strictly least-privilege', () => {
+        it('keeps scope constants strictly least-privilege (no full_access, apikey:*, agent:trusted, or async execution scopes)', () => {
             expect(IMPERSONATION_READ_ONLY_ALLOWED_SCOPES).not.toContain('full_access');
             expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('full_access');
             expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('apikey:create');
             expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('apikey:revoke');
             expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('agent:trusted');
+            expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('action:execute');
+            expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('agent:execute');
+            expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('agent:cancel');
+            expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('prompt:execute');
+            expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('task:execute');
+            expect(IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES).not.toContain('task:cancel');
+        });
+    });
+
+    describe('6. Item 1 — Request-Scoped AsyncLocalStorage Fallback for Unstamped UserInfo', () => {
+        it('still blocks forbidden entities, filters private conversations, and blocks writes when hooks receive a second unstamped UserInfo for the target ID, while keeping system user exempt', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true, allowWrites: false });
+            const sysUser = makeUser({ id: SYSTEM_USER_ID, name: 'System', email: 'sys@example.com', type: 'System' });
+            vi.spyOn(UserCache.Instance, 'GetSystemUser').mockReturnValue(sysUser);
+
+            const stampedTarget = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(stampedTarget, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+
+            // A completely distinct, UNSTAMPED UserInfo instance (as if re-resolved from UserCache)
+            const unstampedTargetCopy = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            // Outside ALS, the unstamped copy is NOT recognized
+            expect(GetImpersonationSession(unstampedTargetCopy)).toBeNull();
+
+            await RunWithImpersonationSession(session, async () => {
+                // Inside ALS, the unstamped copy IS recognized by targetUserId!
+                expect(GetImpersonationSession(unstampedTargetCopy)?.apiKeyId).toBe(MINTED_KEY_ID);
+                expect(IsEntityForbiddenDuringImpersonation('MJ: Credentials', unstampedTargetCopy)).toBe(true);
+                expect(() => ImpersonationPreRunViewHook({ EntityName: 'MJ: Credentials' }, unstampedTargetCopy)).toThrow();
+
+                // Private 1:1 conversations are still filtered on the unstamped copy
+                const convFilter = ImpersonationPreRunViewHook(
+                    { EntityName: 'MJ: Conversations', ExtraFilter: "Status = 'Available'" },
+                    unstampedTargetCopy
+                ) as RunViewParams;
+                expect(convFilter.ExtraFilter).toContain(`UserID = '${TARGET_USER_ID}'`);
+
+                const postFiltered = await ImpersonationPostRunViewHook(
+                    { EntityName: 'MJ: Conversations' },
+                    {
+                        Success: true,
+                        RowCount: 2,
+                        TotalRowCount: 2,
+                        ExecutionTime: 1,
+                        ErrorMessage: '',
+                        UserViewRunID: '',
+                        Results: [
+                            { ID: 'own', UserID: TARGET_USER_ID, AnchorType: null },
+                            { ID: 'other-private', UserID: OTHER_USER_ID, AnchorType: null },
+                        ],
+                    },
+                    unstampedTargetCopy
+                );
+                expect((postFiltered.Results as Array<{ ID: string }>).map((r) => r.ID)).toEqual(['own']);
+
+                // Writes are still blocked on the unstamped copy
+                const accountEntity = { EntityInfo: { Name: 'Accounts' }, IsSaved: false } as unknown as BaseEntity;
+                expect(typeof ImpersonationPreSaveHook(accountEntity, unstampedTargetCopy)).toBe('string');
+                expect(typeof ImpersonationPreDeleteHook(accountEntity, unstampedTargetCopy)).toBe('string');
+
+                // Internal system-user lookup inside the same request stays exempt!
+                expect(GetImpersonationSession(sysUser)).toBeNull();
+                expect(() => ImpersonationPreRunViewHook({ EntityName: 'MJ: Credentials' }, sysUser)).not.toThrow();
+            });
+        });
+    });
+
+    describe('7. Item 3 — Reserved MJ-Impersonation: Label Protection & Forged Key Audit Refusal', () => {
+        it('rejects MJ-Impersonation: prefix in CreateAPIKey and direct MJ: API Keys saves/modifications for ALL callers, allowing only WithImpersonationKeyMintScope', async () => {
+            expect(HasReservedImpersonationKeyLabelPrefix('MJ-Impersonation:v1:RO:a:b')).toBe(true);
+            expect(HasReservedImpersonationKeyLabelPrefix('  mj-impersonation:forged')).toBe(true);
+            expect(HasReservedImpersonationKeyLabelPrefix('Normal CI Key')).toBe(false);
+
+            // 1. APIKeyResolver.CreateAPIKey refuses the reserved prefix
+            const normalUser = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const apiKeyResolver = new APIKeyResolver();
+            const createRes = await apiKeyResolver.CreateAPIKey(
+                { Label: `MJ-Impersonation:v1:RO:${ADMIN_TARGET_ID}:${TARGET_USER_ID}` },
+                {
+                    providers: [],
+                    dataSources: [],
+                    dataSource: {} as AppContext['dataSource'],
+                    userPayload: { email: normalUser.Email, userRecord: normalUser, sessionId: 's-1' },
+                }
+            );
+            expect(createRes.Success).toBe(false);
+            expect(createRes.Error).toMatch(/reserved/i);
+
+            // 2. ImpersonationPreSaveHook rejects creating a new MJ: API Keys row with the reserved prefix (even for non-impersonated users!)
+            const forgedNewKey = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: false,
+                Fields: [
+                    {
+                        Name: 'Label',
+                        Value: `MJ-Impersonation:v1:RO:${ADMIN_TARGET_ID}:${TARGET_USER_ID}`,
+                        OldValue: null,
+                        Dirty: true,
+                    },
+                ],
+            } as unknown as BaseEntity;
+            expect(typeof ImpersonationPreSaveHook(forgedNewKey, normalUser)).toBe('string');
+
+            // 3. Allowed strictly inside WithImpersonationKeyMintScope (server resolver's own mint)
+            await WithImpersonationKeyMintScope(async () => {
+                expect(ImpersonationPreSaveHook(forgedNewKey, normalUser)).toBe(true);
+            });
+
+            // 4. Rejects stripping or mutating the MJ-Impersonation: prefix mid-session on an existing row
+            const strippedExistingKey = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [
+                    {
+                        Name: 'Label',
+                        Value: 'Benign Renamed Key',
+                        OldValue: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
+                        Dirty: true,
+                    },
+                ],
+            } as unknown as BaseEntity;
+            expect(typeof ImpersonationPreSaveHook(strippedExistingKey, normalUser)).toBe('string');
+
+            // 5. Benign updates (Status/LastUsedAt) where Label is NOT dirty remain allowed for non-impersonated callers
+            const statusUpdateOnly = {
+                EntityInfo: { Name: 'MJ: API Keys' },
+                IsSaved: true,
+                Fields: [
+                    {
+                        Name: 'Label',
+                        Value: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
+                        OldValue: `MJ-Impersonation:v1:RO:${ACTOR_USER_ID}:${TARGET_USER_ID}`,
+                        Dirty: false,
+                    },
+                    {
+                        Name: 'Status',
+                        Value: 'Revoked',
+                        OldValue: 'Active',
+                        Dirty: true,
+                    },
+                ],
+            } as unknown as BaseEntity;
+            expect(ImpersonationPreSaveHook(statusUpdateOnly, normalUser)).toBe(true);
+        });
+
+        it('refuses MJEndUserImpersonation on a forged key with no resolver-minted Started audit row and writes ZERO audit rows naming the admin', async () => {
+            const forgedKeyId = '66666666-6666-4666-8666-666666669999';
+            const { resolver, makeContext, savedRecords, apiKeyEngine } = createHarness({
+                featureEnabled: true,
+                authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+                extraApiKeys: [
+                    {
+                        ID: forgedKeyId,
+                        Label: BuildImpersonationKeyLabel('ViewAs', ADMIN_TARGET_ID, TARGET_USER_ID),
+                        Status: 'Active',
+                        UserID: TARGET_USER_ID,
+                    },
+                ],
+                // No matching Started audit log exists for forgedKeyId!
+                startedAuditLogs: [],
+            });
+            const attacker = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+
+            const endRes = await resolver.MJEndUserImpersonation(
+                { APIKeyID: forgedKeyId },
+                makeContext(attacker, { apiKeyId: forgedKeyId })
+            );
+            expect(endRes.Success).toBe(false);
+            expect(endRes.ResultCode).toBe('FORBIDDEN');
+            expect(apiKeyEngine.RevokeAPIKey).not.toHaveBeenCalled();
+            const auditRows = savedRecords.filter((r) => r.entityName === 'MJ: Audit Logs');
+            expect(auditRows).toHaveLength(0);
+        });
+    });
+
+    describe('8. Items 4 & 5 — Protected Roles Baseline Union & Live Role/Auth Query Fail-Closed', () => {
+        it('always unions configured protectedTargetRoles with Administrator, Developer, and Integration', () => {
+            const emptyOverride = ResolveUserImpersonationConfig({ protectedTargetRoles: [] });
+            expect(emptyOverride.protectedTargetRoles).toEqual(
+                expect.arrayContaining(['Administrator', 'Developer', 'Integration'])
+            );
+
+            const customOverride = ResolveUserImpersonationConfig({ protectedTargetRoles: ['HR'] });
+            expect(customOverride.protectedTargetRoles).toEqual(
+                expect.arrayContaining(['Administrator', 'Developer', 'Integration', 'HR'])
+            );
+
+            for (const baselineRole of ['Administrator', 'Developer', 'Integration']) {
+                const decision = EvaluateTargetImpersonationEligibility(
+                    {
+                        ID: TARGET_USER_ID,
+                        Name: 'Privileged User',
+                        Email: 'priv@example.com',
+                        Type: 'User',
+                        IsActive: true,
+                        RoleNames: [baselineRole],
+                        RoleIDs: new Set([ADMIN_ROLE_ID]),
+                    },
+                    {
+                        actorUserId: ACTOR_USER_ID,
+                        configOverride: { protectedTargetRoles: [] },
+                    }
+                );
+                expect(decision.Eligible).toBe(false);
+                expect(decision.Code).toBe('FORBIDDEN_TARGET');
+            }
+        });
+
+        it('fails closed (INTERNAL_ERROR / empty user list) when MJ: User Roles or MJ: Authorization Roles RunView returns Success: false', async () => {
+            const caller = makeUser({
+                id: ACTOR_USER_ID,
+                name: 'Alice',
+                email: 'alice@example.com',
+                roles: [{ RoleID: IMPERSONATOR_ROLE_ID, Role: 'Support Impersonator' }],
+            });
+
+            // 1. MJ: User Roles query fails
+            const failedRolesHarness = createHarness({
+                featureEnabled: true,
+                authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+                runViewHandler: (params) => {
+                    if (params.EntityName === 'MJ: User Roles') {
+                        return { Success: false, ErrorMessage: 'Transient DB failure', Results: [] } as RunViewResult<unknown>;
+                    }
+                    if (params.EntityName === 'MJ: Users') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: TARGET_USER_ID, Name: 'Bob', Email: 'bob@example.com', Type: 'User', IsActive: true }],
+                        } as RunViewResult<unknown>;
+                    }
+                    return { Success: true, Results: [] } as RunViewResult<unknown>;
+                },
+            });
+
+            const startRes = await failedRolesHarness.resolver.MJStartUserImpersonation(
+                { TargetUserID: TARGET_USER_ID },
+                failedRolesHarness.makeContext(caller)
+            );
+            expect(startRes.Success).toBe(false);
+            expect(startRes.ResultCode).toBe('INTERNAL_ERROR');
+            expect(failedRolesHarness.apiKeyEngine.CreateAPIKey).not.toHaveBeenCalled();
+
+            const listRes = await failedRolesHarness.resolver.MJListImpersonatableUsers(
+                undefined,
+                failedRolesHarness.makeContext(caller)
+            );
+            expect(listRes.Authorized).toBe(false);
+            expect(listRes.ResultCode).toBe('INTERNAL_ERROR');
+            expect(listRes.Users).toEqual([]);
+
+            // 2. MJ: Authorization Roles query fails
+            const failedAuthRolesHarness = createHarness({
+                featureEnabled: true,
+                authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+                runViewHandler: (params) => {
+                    if (params.EntityName === 'MJ: Authorization Roles') {
+                        return { Success: false, ErrorMessage: 'Auth DB failure', Results: [] } as RunViewResult<unknown>;
+                    }
+                    return { Success: true, Results: [] } as RunViewResult<unknown>;
+                },
+            });
+
+            const listAuthFail = await failedAuthRolesHarness.resolver.MJListImpersonatableUsers(
+                undefined,
+                failedAuthRolesHarness.makeContext(caller)
+            );
+            expect(listAuthFail.Authorized).toBe(false);
+            expect(listAuthFail.ResultCode).toBe('INTERNAL_ERROR');
+            expect(listAuthFail.Users).toEqual([]);
+        });
+    });
+
+    describe('9. Item 6 — Default-Deny HTTP Guard at Both "/" and "/graphql" Roots', () => {
+        const invokeHttp = (
+            guard: ReturnType<typeof CreateImpersonationHttpGuardMiddleware>,
+            method: string,
+            path: string,
+            userPayload: UserPayload
+        ): { statusCode: number; body: Record<string, unknown> | null; nextCalled: boolean } => {
+            let statusCode = 200;
+            let body: Record<string, unknown> | null = null;
+            let nextCalled = false;
+            const req = { method, path, url: path, userPayload } as unknown as Request;
+            const res = {
+                status(code: number) {
+                    statusCode = code;
+                    return this;
+                },
+                json(payload: Record<string, unknown>) {
+                    body = payload;
+                    return this;
+                },
+            } as unknown as Response;
+            const next: NextFunction = () => {
+                nextCalled = true;
+            };
+            guard(req, res, next);
+            return { statusCode, body, nextCalled };
+        };
+
+        it.each(['/', '/graphql'])(
+            'default-denies non-GraphQL/non-REST routes (extensions, realtime recording, oauth, magic-link, widget) at root "%s" and enforces kill switch + expiry',
+            (rootPath) => {
+                RegisterServerUserImpersonationConfig({ enabled: true, allowWrites: true });
+                const guard = CreateImpersonationHttpGuardMiddleware(rootPath);
+                const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+
+                const roSession = StampImpersonationSession(target, {
+                    apiKeyId: MINTED_KEY_ID,
+                    mode: 'ViewAs',
+                    readOnly: true,
+                    actorUserId: ACTOR_USER_ID,
+                    targetUserId: TARGET_USER_ID,
+                    expiresAtMs: Date.now() + 60_000,
+                });
+                const roPayload: UserPayload = {
+                    email: target.Email,
+                    userRecord: target,
+                    sessionId: 'http-ro',
+                    apiKeyId: MINTED_KEY_ID,
+                    impersonationSession: roSession,
+                };
+
+                // Exact GraphQL root passes through to Apollo plugin
+                expect(invokeHttp(guard, 'POST', rootPath, roPayload).nextCalled).toBe(true);
+                // Non-GraphQL, non-REST routes are REFUSED for ViewAs even when root is '/'!
+                for (const forbiddenPath of [
+                    '/realtime/recording/abc/shard/0',
+                    '/extensions/custom-webhook',
+                    '/custom-plugin/action',
+                    '/oauth/authorize',
+                    '/magic-link/create',
+                    '/widget/session',
+                ]) {
+                    const r = invokeHttp(guard, 'POST', forbiddenPath, roPayload);
+                    expect(r.statusCode, `Expected 403 for ${forbiddenPath} under root ${rootPath}`).toBe(403);
+                    expect(r.body?.['code']).toBe('IMPERSONATION_FORBIDDEN_ROUTE');
+                    expect(r.nextCalled).toBe(false);
+                }
+
+                // REST reads pass in ViewAs; REST writes are refused
+                expect(invokeHttp(guard, 'GET', '/api/v1/entities/Accounts', roPayload).nextCalled).toBe(true);
+                expect(invokeHttp(guard, 'POST', '/api/v1/views/Accounts', roPayload).nextCalled).toBe(true);
+                expect(invokeHttp(guard, 'POST', '/api/v1/entities/Accounts', roPayload).statusCode).toBe(403);
+
+                // Kill switch OFF refuses BOTH ViewAs and ActAs on all non-GraphQL paths!
+                const actAsTarget = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+                const actAsSession = StampImpersonationSession(actAsTarget, {
+                    apiKeyId: MINTED_KEY_ID,
+                    mode: 'ActAs',
+                    readOnly: false,
+                    actorUserId: ACTOR_USER_ID,
+                    targetUserId: TARGET_USER_ID,
+                    expiresAtMs: Date.now() + 60_000,
+                });
+                const actAsPayload: UserPayload = {
+                    email: actAsTarget.Email,
+                    userRecord: actAsTarget,
+                    sessionId: 'http-rw',
+                    apiKeyId: MINTED_KEY_ID,
+                    impersonationSession: actAsSession,
+                };
+
+                process.env.MJ_ENABLE_USER_IMPERSONATION = 'false';
+                for (const p of [roPayload, actAsPayload]) {
+                    const extKill = invokeHttp(guard, 'POST', '/realtime/recording/abc/shard/0', p);
+                    expect(extKill.statusCode).toBe(403);
+                    expect(extKill.body?.['code']).toBe('FEATURE_DISABLED');
+
+                    const restKill = invokeHttp(guard, 'POST', '/api/v1/views/Accounts', p);
+                    expect(restKill.statusCode).toBe(403);
+                    expect(restKill.body?.['code']).toBe('FEATURE_DISABLED');
+                }
+
+                // Expired session -> 401 UNAUTHENTICATED
+                delete process.env.MJ_ENABLE_USER_IMPERSONATION;
+                const expiredPayload: UserPayload = {
+                    ...roPayload,
+                    impersonationSession: { ...roSession, expiresAtMs: Date.now() - 5_000 },
+                };
+                const expRes = invokeHttp(guard, 'POST', rootPath, expiredPayload);
+                expect(expRes.statusCode).toBe(401);
+                expect(expRes.body?.['code']).toBe('UNAUTHENTICATED');
+            }
+        );
+    });
+
+    describe('10. Item 7 — Table-Driven Matrix Across ALL IMPERSONATION_FORBIDDEN_ENTITY_NAMES & All 8 Read/Query Surfaces', () => {
+        class TestableResolverBase extends ResolverBase {
+            public CallCheckUserReadPermissions(
+                entityName: string,
+                userPayload: UserPayload,
+                provider: IMetadataProvider
+            ): void {
+                this.CheckUserReadPermissions(entityName, userPayload, provider);
+            }
+
+            public CallScreenClientViewClauses(
+                extraFilter: string,
+                user: UserInfo,
+                provider: IMetadataProvider
+            ): void {
+                this.screenClientViewClauses({ extraFilter }, provider, user);
+            }
+
+            public async CallCreateAuditLogRecord(
+                provider: DatabaseProviderBase,
+                userPayload: UserPayload,
+                description: string,
+                details: string | null
+            ): Promise<void> {
+                await this.createAuditLogRecord(
+                    provider,
+                    userPayload,
+                    null,
+                    'Record Updated',
+                    'Success',
+                    description,
+                    USERS_ENTITY_ID,
+                    'rec-1',
+                    details
+                );
+            }
+        }
+
+        function syntheticViewNameFor(entityName: string): string {
+            const stripped = entityName.replace(/^MJ:\s*/i, '').replace(/[^A-Za-z0-9]/g, '');
+            return `vw${stripped}`;
+        }
+
+        it('blocks EVERY entity in IMPERSONATION_FORBIDDEN_ENTITY_NAMES across RunView, RunViews, RunViewByID, single-record load, dataset, search, record-name lookup, and ExtraFilter subquery', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true, allowWrites: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ActAs',
+                readOnly: false,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'matrix-1',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+
+            const resolverBase = new TestableResolverBase();
+            const datasetResolver = new DatasetResolverExtended();
+            const searchResolver = new SearchEntitiesResolver();
+            const recordNameResolver = new EntityRecordNameResolver();
+
+            // Build metadata entries for Accounts + every forbidden entity so SQL subquery screening can match them
+            const allEntitiesMeta = [
+                {
+                    ID: 'e-accounts',
+                    Name: 'Accounts',
+                    SchemaName: 'crm',
+                    BaseView: 'vwAccounts',
+                    BaseTable: 'Account',
+                    Fields: [{ Name: 'ID', AllowDecryptInAPI: true, Encrypt: false }],
+                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                },
+                ...IMPERSONATION_FORBIDDEN_ENTITY_NAMES.map((name, idx) => ({
+                    ID: `e-forb-${idx}`,
+                    Name: name,
+                    SchemaName: '__mj',
+                    BaseView: syntheticViewNameFor(name),
+                    BaseTable: syntheticViewNameFor(name).slice(2),
+                    Fields: [{ Name: 'ID', AllowDecryptInAPI: true, Encrypt: false }],
+                    GetUserPermisions: () => ({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true }),
+                })),
+            ];
+            const mockProvider = {
+                Entities: allEntitiesMeta,
+                EntityByName: (n: string) =>
+                    allEntitiesMeta.find((e) => e.Name.toLowerCase() === n.toLowerCase()),
+                SearchEntities: vi.fn().mockResolvedValue([]),
+                GetEntityRecordName: vi.fn().mockResolvedValue('SHOULD_NEVER_LEAK'),
+            } as unknown as DatabaseProviderBase & IMetadataProvider;
+
+            for (const entityName of IMPERSONATION_FORBIDDEN_ENTITY_NAMES) {
+                const baseView = syntheticViewNameFor(entityName);
+
+                // 1. RunView
+                expect(
+                    () => ImpersonationPreRunViewHook({ EntityName: entityName }, target),
+                    `RunView failed to block ${entityName}`
+                ).toThrow();
+
+                // 2. RunViews (batch containing an allowed entity + forbidden entity)
+                expect(() => {
+                    for (const p of [{ EntityName: 'Accounts' }, { EntityName: entityName }]) {
+                        ImpersonationPreRunViewHook(p, target);
+                    }
+                }, `RunViews batch failed to block ${entityName}`).toThrow();
+
+                // 3. RunViewByID (via ViewEntity.Entity)
+                expect(
+                    () =>
+                        ImpersonationPreRunViewHook(
+                            {
+                                ViewID: '99999999-9999-4999-8999-999999999991',
+                                ViewEntity: { Entity: entityName } as unknown as RunViewParams['ViewEntity'],
+                            },
+                            target
+                        ),
+                    `RunViewByID failed to block ${entityName}`
+                ).toThrow();
+
+                // 4. Single-record load (CheckUserReadPermissions)
+                expect(
+                    () => resolverBase.CallCheckUserReadPermissions(entityName, userPayload, mockProvider),
+                    `Single-record load CheckUserReadPermissions failed to block ${entityName}`
+                ).toThrow();
+
+                // 5. Dataset (custom dataset containing forbidden entity throws)
+                const dsProvider = {
+                    EntityByName: mockProvider.EntityByName,
+                    GetDatasetByName: vi.fn().mockResolvedValue({
+                        DatasetID: 'ds-custom',
+                        DatasetName: 'Custom_Probe_Dataset',
+                        Success: true,
+                        Status: 'OK',
+                        LatestUpdateDate: new Date(),
+                        Results: [
+                            {
+                                Code: 'Item',
+                                EntityName: entityName,
+                                EntityID: 'e-1',
+                                LatestUpdateDate: new Date(),
+                                Results: [{ ID: 'secret-1' }],
+                            },
+                        ],
+                    }),
+                } as unknown as DatabaseProviderBase;
+                await expect(
+                    datasetResolver.GetDatasetByName('Custom_Probe_Dataset', {
+                        providers: [{ type: 'Read-Only', provider: dsProvider } as ProviderInfo],
+                        userPayload,
+                    } as AppContext),
+                    `Dataset failed to block ${entityName}`
+                ).rejects.toThrow();
+
+                // 6. SearchEntities
+                const searchRes = await searchResolver.SearchEntities(
+                    {
+                        providers: [{ type: 'Read-Only', provider: mockProvider } as ProviderInfo],
+                        dataSources: [],
+                        dataSource: {} as AppContext['dataSource'],
+                        userPayload,
+                    },
+                    [{ EntityName: entityName, SearchText: 'secret' }]
+                );
+                expect(searchRes.Success, `SearchEntities failed to block ${entityName}`).toBe(false);
+
+                // 7. EntityRecordNameResolver
+                const nameRes = await recordNameResolver.InnerGetEntityRecordName(
+                    mockProvider,
+                    entityName,
+                    { KeyValuePairs: [{ FieldName: 'ID', Value: '11111111-1111-4111-8111-111111111111' }] },
+                    userPayload
+                );
+                expect(nameRes.Success, `EntityRecordNameResolver failed to block ${entityName}`).toBe(false);
+                expect(nameRes.RecordName).toBeUndefined();
+
+                // 8. ExtraFilter SQL subquery referencing forbidden view
+                expect(
+                    () =>
+                        resolverBase.CallScreenClientViewClauses(
+                            `ID IN (SELECT ID FROM __mj.${baseView})`,
+                            target,
+                            mockProvider
+                        ),
+                    `ExtraFilter subquery failed to block ${entityName} (${baseView})`
+                ).toThrow();
+            }
+
+            expect(mockProvider.SearchEntities).not.toHaveBeenCalled();
+            expect(mockProvider.GetEntityRecordName).not.toHaveBeenCalled();
+
+            // Fail-closed on unresolved empty-EntityName RunViewByID (no EntityName and no ViewEntity)
+            expect(() =>
+                ImpersonationPreRunViewHook({ ViewID: '99999999-9999-4999-8999-999999999992' }, target)
+            ).toThrow();
+
+            // Dynamic field-metadata secret check catches unknown custom entities carrying un-decryptable encrypted or secret-named fields
+            const customSecretEntity = {
+                Name: 'Custom: Vendor Config',
+                Fields: [{ Name: 'WebhookSigningSecret', Encrypt: false, AllowDecryptInAPI: true }],
+            } as unknown as EntityInfo;
+            expect(IsEntityForbiddenDuringImpersonation('Custom: Vendor Config', target, customSecretEntity)).toBe(true);
+
+            const customEncryptedEntity = {
+                Name: 'Custom: Vault Entries',
+                Fields: [{ Name: 'Payload', Encrypt: true, AllowDecryptInAPI: false }],
+            } as unknown as EntityInfo;
+            expect(IsEntityForbiddenDuringImpersonation('Custom: Vault Entries', target, customEncryptedEntity)).toBe(true);
+        });
+    });
+
+    describe('11. Items 9 & 10 — Audit Hardening, Actor Attribution & Durable Background Work Refusal', () => {
+        it('refuses isSystemUser callers, truncates oversized TargetUserID, and rate-limits Denied audit log writes', async () => {
+            const { resolver, makeContext, savedRecords } = createHarness({
+                featureEnabled: true,
+                authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+            });
+            const caller = makeUser({
+                id: ACTOR_USER_ID,
+                name: 'Alice',
+                email: 'alice@example.com',
+                roles: [{ RoleID: IMPERSONATOR_ROLE_ID, Role: 'Support Impersonator' }],
+            });
+
+            // System user principal is refused
+            const sysCan = await resolver.MJCanImpersonateUsers(makeContext(caller, { isSystemUser: true }));
+            expect(sysCan.CanImpersonate).toBe(false);
+            expect(sysCan.ResultCode).toBe('FORBIDDEN');
+
+            // Oversized TargetUserID is truncated & >10 denials within 1 minute are rate-limited
+            const unauthUser = makeUser({ id: OTHER_USER_ID, name: 'Cara', email: 'cara@example.com' });
+            const hugeInput = 'X'.repeat(500);
+            for (let i = 0; i < 15; i++) {
+                await resolver.MJStartUserImpersonation({ TargetUserID: hugeInput }, makeContext(unauthUser));
+            }
+            const deniedAudits = savedRecords.filter((r) => r.entityName === 'MJ: Audit Logs');
+            expect(deniedAudits.length).toBeLessThanOrEqual(10);
+            const firstDetails = JSON.parse(String(deniedAudits[0]?.data['Details'] ?? '{}')) as Record<string, unknown>;
+            expect(String(firstDetails['requestedTargetUserId'] ?? '').length).toBeLessThanOrEqual(128);
+        });
+
+        it('enriches ResolverBase.createAuditLogRecord with actor/target/apiKeyId/mode attribution during impersonation', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true, allowWrites: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ActAs',
+                readOnly: false,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'audit-attr',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+
+            const savedAuditFields: Record<string, unknown> = {};
+            const mockAuditEntity = {
+                NewRecord: vi.fn(),
+                Save: vi.fn().mockImplementation(async () => true),
+                set UserID(v: string) { savedAuditFields['UserID'] = v; },
+                set AuditLogTypeID(v: string) { savedAuditFields['AuditLogTypeID'] = v; },
+                set Status(v: string) { savedAuditFields['Status'] = v; },
+                set Description(v: string) { savedAuditFields['Description'] = v; },
+                set Details(v: string) { savedAuditFields['Details'] = v; },
+                set EntityID(v: string) { savedAuditFields['EntityID'] = v; },
+                set RecordID(v: string) { savedAuditFields['RecordID'] = v; },
+            };
+            const mockProvider = {
+                AuditLogTypes: [{ ID: 'type-1', Name: 'Record Updated' }],
+                GetEntityObject: vi.fn().mockResolvedValue(mockAuditEntity),
+            } as unknown as DatabaseProviderBase;
+
+            class AuditProbeResolver extends ResolverBase {
+                public async RunAudit(): Promise<void> {
+                    await this.createAuditLogRecord(
+                        mockProvider,
+                        userPayload,
+                        null,
+                        'Record Updated',
+                        'Success',
+                        JSON.stringify({ field: 'Name' }),
+                        USERS_ENTITY_ID,
+                        'rec-1'
+                    );
+                }
+            }
+
+            await new AuditProbeResolver().RunAudit();
+            expect(String(savedAuditFields['Description'])).toContain(`ActorUserID=${ACTOR_USER_ID}`);
+            const parsedDetails = JSON.parse(String(savedAuditFields['Details'])) as {
+                field?: string;
+                impersonation?: { actorUserId: string; targetUserId: string; apiKeyId: string; mode: string };
+            };
+            expect(parsedDetails.field).toBe('Name');
+            expect(parsedDetails.impersonation).toEqual({
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ActAs',
+            });
+        });
+
+        it('refuses writes/deletes to durable background-work entities even in ActAs mode', () => {
+            RegisterServerUserImpersonationConfig({ enabled: true, allowWrites: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ActAs',
+                readOnly: false,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+
+            for (const entityName of IMPERSONATION_WRITE_FORBIDDEN_ENTITY_NAMES) {
+                expect(IsEntityWriteForbiddenDuringImpersonation(entityName, target)).toBe(true);
+                const entityObj = { EntityInfo: { Name: entityName }, IsSaved: false } as unknown as BaseEntity;
+                expect(typeof ImpersonationPreSaveHook(entityObj, target)).toBe('string');
+                expect(typeof ImpersonationPreDeleteHook(entityObj, target)).toBe('string');
+            }
+        });
+    });
+
+    describe('12. Hardening #1–#7 — Saved Query Composition Fail-Closed, WS AST & Close, Missing MJAPI, Post-Mint Sweep', () => {
+        it('fails closed on unknown saved queries and blocks composed queries touching forbidden entities via Dependencies or {{query:"..."}}', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'q-1',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+
+            const childSecretQuery = {
+                ID: 'qqqq0000-0000-4000-8000-000000000002',
+                Name: 'ReadCreds',
+                Category: 'Internal',
+                CategoryPath: 'Internal',
+                SQL: 'SELECT * FROM __mj.vwCredentials',
+                Entities: [],
+            };
+            const parentComposedByDep = {
+                ID: 'qqqq0000-0000-4000-8000-000000000001',
+                Name: 'ParentViaDep',
+                Category: 'Reports',
+                CategoryPath: 'Reports',
+                SQL: 'SELECT * FROM crm.vwAccounts',
+                Entities: [{ Entity: 'Accounts' }],
+            };
+            const parentComposedByToken = {
+                ID: 'qqqq0000-0000-4000-8000-000000000003',
+                Name: 'ParentViaToken',
+                Category: 'Reports',
+                CategoryPath: 'Reports',
+                SQL: 'SELECT * FROM {{query:"Internal/ReadCreds"}}',
+                Entities: [],
+            };
+            const safeQuery = {
+                ID: 'qqqq0000-0000-4000-8000-000000000004',
+                Name: 'SafeAccounts',
+                Category: 'Reports',
+                CategoryPath: 'Reports',
+                SQL: 'SELECT ID, Name FROM crm.vwAccounts',
+                Entities: [{ Entity: 'Accounts' }],
+            };
+
+            vi.spyOn(QueryEngine.Instance, 'Queries', 'get').mockReturnValue(
+                [parentComposedByDep, childSecretQuery, parentComposedByToken, safeQuery] as unknown as typeof QueryEngine.Instance.Queries
+            );
+            vi.spyOn(QueryEngine.Instance, 'Dependencies', 'get').mockReturnValue(
+                [{ QueryID: parentComposedByDep.ID, DependsOnQueryID: childSecretQuery.ID }] as unknown as typeof QueryEngine.Instance.Dependencies
+            );
+            vi.spyOn(QueryEngine.Instance, 'QuerySQLs', 'get').mockReturnValue([]);
+            vi.spyOn(QueryEngine.Instance, 'Config').mockResolvedValue(undefined);
+
+            const md = {
+                Entities: [{ Name: 'MJ: Credentials', BaseView: 'vwCredentials', BaseTable: 'Credential' }],
+                Queries: [parentComposedByDep, childSecretQuery, parentComposedByToken, safeQuery],
+            } as unknown as IMetadataProvider;
+
+            const qr = new RunQueryResolver() as unknown as {
+                assertSavedQueryAllowedForImpersonation: (
+                    m: IMetadataProvider,
+                    up: UserPayload,
+                    ref: { QueryID?: string; QueryName?: string }
+                ) => Promise<void>;
+            };
+
+            // 1. Unknown/unresolvable query FAILS CLOSED
+            await expect(
+                qr.assertSavedQueryAllowedForImpersonation(md, userPayload, { QueryID: 'qqqq0000-0000-4000-8000-999999999999' })
+            ).rejects.toThrow();
+
+            // 2. Composed query via QueryEngine.Dependencies -> blocked!
+            await expect(
+                qr.assertSavedQueryAllowedForImpersonation(md, userPayload, { QueryID: parentComposedByDep.ID })
+            ).rejects.toThrow();
+
+            // 3. Composed query via inline {{query:"Internal/ReadCreds"}} -> blocked!
+            await expect(
+                qr.assertSavedQueryAllowedForImpersonation(md, userPayload, { QueryID: parentComposedByToken.ID })
+            ).rejects.toThrow();
+
+            // 4. Safe query -> allowed
+            await expect(
+                qr.assertSavedQueryAllowedForImpersonation(md, userPayload, { QueryID: safeQuery.ID })
+            ).resolves.toBeUndefined();
+        });
+
+        it('rejects WebSocket subscriptions with unresolvable operation AST and closes active sockets on MJEndUserImpersonation', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ViewAs',
+                readOnly: true,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+                expiresAtMs: Date.now() + 60_000,
+            });
+            const userPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'ws-ast',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+
+            // Fragment-only / mismatched operationName -> fails closed!
+            const badOpErrors = await ValidateImpersonationWebSocketSubscribe(
+                userPayload,
+                'query ActualOp { __typename }',
+                'WrongOperationName'
+            );
+            expect(badOpErrors?.[0]?.extensions?.['code']).toBe('BAD_USER_INPUT');
+
+            // Register a fake active WebSocket and verify MJEndUserImpersonation closes it with 4403
+            const closeSpy = vi.fn();
+            const unregister = RegisterImpersonationWebSocket(MINTED_KEY_ID, closeSpy);
+            try {
+                const { resolver, makeContext } = createHarness({
+                    featureEnabled: true,
+                    authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+                });
+                const caller = makeUser({
+                    id: ACTOR_USER_ID,
+                    name: 'Alice',
+                    email: 'alice@example.com',
+                    roles: [{ RoleID: IMPERSONATOR_ROLE_ID, Role: 'Support Impersonator' }],
+                });
+                const endRes = await resolver.MJEndUserImpersonation({ APIKeyID: MINTED_KEY_ID }, makeContext(caller));
+                expect(endRes.Success).toBe(true);
+                expect(closeSpy).toHaveBeenCalledTimes(1);
+            } finally {
+                unregister();
+                CloseImpersonationWebSockets(MINTED_KEY_ID);
+            }
+        });
+
+        it('refuses minting with CONFIGURATION_ERROR if active MJAPI application row is missing', async () => {
+            const { resolver, makeContext, apiKeyEngine } = createHarness({
+                featureEnabled: true,
+                authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+                applications: [], // MJAPI missing!
+            });
+            const caller = makeUser({
+                id: ACTOR_USER_ID,
+                name: 'Alice',
+                email: 'alice@example.com',
+                roles: [{ RoleID: IMPERSONATOR_ROLE_ID, Role: 'Support Impersonator' }],
+            });
+
+            const res = await resolver.MJStartUserImpersonation({ TargetUserID: TARGET_USER_ID }, makeContext(caller));
+            expect(res.Success).toBe(false);
+            expect(res.ResultCode).toBe('CONFIGURATION_ERROR');
+            expect(apiKeyEngine.CreateAPIKey).not.toHaveBeenCalled();
+        });
+
+        it('performs post-mint sibling sweep to revoke concurrent actor impersonation keys', async () => {
+            const concurrentSiblingKeyId = '66666666-6666-4666-8666-666666667777';
+            let apiKeyQueryCount = 0;
+            const { resolver, makeContext, apiKeyEngine } = createHarness({
+                featureEnabled: true,
+                authorizationRoles: [makeGrant('Allow', IMPERSONATOR_ROLE_ID)],
+                runViewHandler: (params) => {
+                    if (params.EntityName === 'MJ: Users') {
+                        return {
+                            Success: true,
+                            Results: [{ ID: TARGET_USER_ID, Name: 'Bob', Email: 'bob@example.com', Type: 'User', IsActive: true }],
+                        } as RunViewResult<unknown>;
+                    }
+                    if (params.EntityName === 'MJ: User Roles') {
+                        return {
+                            Success: true,
+                            Results: [{ UserID: TARGET_USER_ID, RoleID: ANALYST_ROLE_ID, Role: 'Analyst' }],
+                        } as RunViewResult<unknown>;
+                    }
+                    if (params.EntityName === 'MJ: API Keys') {
+                        apiKeyQueryCount++;
+                        // Simulate a concurrent sibling key appearing on another replica right after CreateAPIKey!
+                        if (apiKeyQueryCount >= 2) {
+                            return {
+                                Success: true,
+                                Results: [
+                                    {
+                                        ID: MINTED_KEY_ID,
+                                        Label: BuildImpersonationKeyLabel('ViewAs', ACTOR_USER_ID, TARGET_USER_ID),
+                                        Status: 'Active',
+                                        UserID: TARGET_USER_ID,
+                                    },
+                                    {
+                                        ID: concurrentSiblingKeyId,
+                                        Label: BuildImpersonationKeyLabel('ViewAs', ACTOR_USER_ID, OTHER_USER_ID),
+                                        Status: 'Active',
+                                        UserID: OTHER_USER_ID,
+                                    },
+                                ],
+                            } as RunViewResult<unknown>;
+                        }
+                        return { Success: true, Results: [] } as RunViewResult<unknown>;
+                    }
+                    return { Success: true, Results: [] } as RunViewResult<unknown>;
+                },
+            });
+            const caller = makeUser({
+                id: ACTOR_USER_ID,
+                name: 'Alice',
+                email: 'alice@example.com',
+                roles: [{ RoleID: IMPERSONATOR_ROLE_ID, Role: 'Support Impersonator' }],
+            });
+
+            const res = await resolver.MJStartUserImpersonation({ TargetUserID: TARGET_USER_ID }, makeContext(caller));
+            expect(res.Success).toBe(true);
+            expect(apiKeyEngine.RevokeAPIKey).toHaveBeenCalledWith(
+                concurrentSiblingKeyId,
+                expect.anything(),
+                expect.anything()
+            );
+            expect(apiKeyEngine.RevokeAPIKey).not.toHaveBeenCalledWith(
+                MINTED_KEY_ID,
+                expect.anything(),
+                expect.anything()
+            );
+        });
+
+        it('enforces ImpersonationSessionRefusalGuard and AssertNotImpersonationSession for both ViewAs and ActAs', async () => {
+            RegisterServerUserImpersonationConfig({ enabled: true, allowWrites: true });
+            const target = makeUser({ id: TARGET_USER_ID, name: 'Bob', email: 'bob@example.com' });
+            const session = StampImpersonationSession(target, {
+                apiKeyId: MINTED_KEY_ID,
+                mode: 'ActAs',
+                readOnly: false,
+                actorUserId: ACTOR_USER_ID,
+                targetUserId: TARGET_USER_ID,
+            });
+            const impPayload: UserPayload = {
+                email: target.Email,
+                userRecord: target,
+                sessionId: 'g-1',
+                apiKeyId: MINTED_KEY_ID,
+                impersonationSession: session,
+            };
+            const normalUser = makeUser({ id: OTHER_USER_ID, name: 'Cara', email: 'cara@example.com' });
+            const normalPayload: UserPayload = {
+                email: normalUser.Email,
+                userRecord: normalUser,
+                sessionId: 'g-2',
+            };
+
+            expect(() => AssertNotImpersonationSession(impPayload, 'TestOp')).toThrow(/prohibited during user impersonation/i);
+            expect(() => AssertNotImpersonationSession(normalPayload, 'TestOp')).not.toThrow();
+
+            const guardInfo = {
+                fieldName: 'IntegrationTestConnection',
+                parentType: { name: 'Query' },
+            } as Parameters<typeof ImpersonationSessionRefusalGuard>[0]['info'];
+
+            const next = vi.fn().mockResolvedValue('ok');
+            await expect(
+                ImpersonationSessionRefusalGuard(
+                    {
+                        root: {},
+                        args: {},
+                        context: { userPayload: impPayload } as AppContext,
+                        info: guardInfo,
+                    },
+                    next
+                )
+            ).rejects.toThrow(/prohibited during user impersonation/i);
+            expect(next).not.toHaveBeenCalled();
+
+            await expect(
+                ImpersonationSessionRefusalGuard(
+                    {
+                        root: {},
+                        args: {},
+                        context: { userPayload: normalPayload } as AppContext,
+                        info: guardInfo,
+                    },
+                    next
+                )
+            ).resolves.toBe('ok');
+            expect(next).toHaveBeenCalledTimes(1);
         });
     });
 });

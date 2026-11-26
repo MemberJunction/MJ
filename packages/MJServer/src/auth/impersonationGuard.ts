@@ -84,30 +84,40 @@ export interface ParsedImpersonationKeyLabel {
 
 /**
  * Security-critical entities that NO impersonation session (`ViewAs` OR `ActAs`) may EVER read or write.
- * Lowercase normalized names for O(1) comparison.
+ * Covers credentials, API keys, encryption keys, OAuth tokens, audit logs, record-change history,
+ * capability/invitation links, company integrations, MCP server secrets, and all identity/permission/RLS tables.
  */
 export const IMPERSONATION_FORBIDDEN_ENTITY_NAMES: ReadonlyArray<string> = Object.freeze([
-    // API Keys & Scopes
+    // API Keys, Applications & Scopes
     'MJ: API Keys',
     'MJ: API Key Scopes',
     'MJ: API Key Applications',
     'MJ: API Key Usage Logs',
-    // Credentials, Encryption & OAuth Secrets
+    'MJ: API Scopes',
+    'MJ: API Applications',
+    'MJ: API Application Scopes',
+    // Credentials, Integrations, Encryption, MCP & OAuth Secrets
     'MJ: Credentials',
     'MJ: Credential Types',
     'MJ: Credential Categories',
     'MJ: AI Agent Credentials',
     'MJ: AI Credential Bindings',
+    'MJ: Company Integrations',
+    'MJ: MCP Servers',
     'MJ: Encryption Keys',
     'MJ: Encryption Key Sources',
     'MJ: O Auth Tokens',
     'MJ: O Auth Authorization States',
     'MJ: O Auth Client Registrations',
     'MJ: O Auth Auth Server Metadata Caches',
-    // Audit Trail
+    // Audit Trail & Full Record-Change History (captures snapshots of forbidden entities)
     'MJ: Audit Logs',
     'MJ: Audit Log Types',
-    // Identity, Roles, Authorizations, Permissions & Capability Links
+    'MJ: Record Changes',
+    // Communication Tracking/Unsubscribe/Confirmation Tokens
+    'MJ: Communication Logs',
+    'MJ: Communication Principal Preferences',
+    // Identity, Roles, Authorizations, Permissions, ACLs, RLS & Capability Links
     'MJ: Users',
     'MJ: Roles',
     'MJ: User Roles',
@@ -115,6 +125,11 @@ export const IMPERSONATION_FORBIDDEN_ENTITY_NAMES: ReadonlyArray<string> = Objec
     'MJ: Authorization Roles',
     'MJ: Entity Permissions',
     'MJ: Entity Field Permissions',
+    'MJ: Access Control Rules',
+    'MJ: Application Roles',
+    'MJ: Resource Permissions',
+    'MJ: Row Level Security Filters',
+    'MJ: Query Permissions',
     'MJ: Authentication Providers',
     'MJ: Magic Link Invites',
     'MJ: Magic Link Invite Roles',
@@ -123,39 +138,57 @@ export const IMPERSONATION_FORBIDDEN_ENTITY_NAMES: ReadonlyArray<string> = Objec
     'MJ: Magic Link Invite Allowed Paths',
     'MJ: Magic Link Redemptions',
     'MJ: Artifact Guest Share Links',
+    'MJ: Public Links',
+    'MJ: List Invitations',
+]);
+
+/**
+ * Additional entities that `ActAs` impersonation sessions may NEVER create, update, or delete
+ * because they enqueue durable background jobs, scheduled tasks, or out-of-band agent work that
+ * outlives the short-lived impersonation key TTL and re-resolves the target user without the guard.
+ */
+export const IMPERSONATION_WRITE_FORBIDDEN_ENTITY_NAMES: ReadonlyArray<string> = Object.freeze([
+    'MJ: Scheduled Jobs',
+    'MJ: Work Queue Items',
+    'MJ: Work Queue Deliveries',
+    'MJ: AI Agent Requests',
+    'MJ: AI Agent Runs',
+    'MJ: User Routines',
 ]);
 
 const FORBIDDEN_ENTITY_LOWER_SET: ReadonlySet<string> = new Set(
     IMPERSONATION_FORBIDDEN_ENTITY_NAMES.map((name) => name.trim().toLowerCase())
 );
 
-const SAVED_QUERY_SECRET_ENTITY_LOWER_SET: ReadonlySet<string> = new Set([
-    'mj: api keys',
-    'mj: api key scopes',
-    'mj: api key applications',
-    'mj: api key usage logs',
-    'mj: credentials',
-    'mj: credential types',
-    'mj: credential categories',
-    'mj: ai agent credentials',
-    'mj: ai credential bindings',
-    'mj: encryption keys',
-    'mj: encryption key sources',
-    'mj: o auth tokens',
-    'mj: o auth authorization states',
-    'mj: o auth client registrations',
-    'mj: o auth auth server metadata caches',
-    'mj: audit logs',
-    'mj: audit log types',
-    'mj: authentication providers',
-    'mj: magic link invites',
-    'mj: magic link invite roles',
-    'mj: magic link invite applications',
-    'mj: magic link invite allowed domains',
-    'mj: magic link invite allowed paths',
-    'mj: magic link redemptions',
-    'mj: artifact guest share links',
-]);
+const WRITE_FORBIDDEN_ENTITY_LOWER_SET: ReadonlySet<string> = new Set(
+    IMPERSONATION_WRITE_FORBIDDEN_ENTITY_NAMES.map((name) => name.trim().toLowerCase())
+);
+
+/**
+ * Pattern fallback covering Open App or future entities whose names follow sensitive secret,
+ * credential, token, capability-link, or access-control naming conventions even before they are
+ * explicitly listed in {@link IMPERSONATION_FORBIDDEN_ENTITY_NAMES}.
+ */
+const SENSITIVE_ENTITY_NAME_PATTERN =
+    /(?:^|:\s*)(?:api\s*keys?|api\s*key\s*(?:scopes?|applications?|usage\s*logs?)|credentials?|credential\s*(?:types?|categories?)|encryption\s*keys?|o\s*auth\s*(?:tokens?|client\s*registrations?|authorization\s*states?)|magic\s*link\s*(?:invites?|redemptions?)|public\s*links?|access\s*control\s*rules?|row\s*level\s*security\s*filters?)$/i;
+
+/**
+ * Strict field-name pattern for real credential/secret columns (excludes LLM token counters,
+ * concurrency lock/lease tokens, and sync cursors). Used when entity metadata is available.
+ */
+const SECRET_FIELD_NAME_PATTERN =
+    /^(?:AccessToken|RefreshToken|ClientSecret|ClientSecretEncrypted|OAuthClientSecretEncrypted|APIKey|PasswordHash|PrivateKey|SecretKey|SigningSecret|WebhookSecret|WebhookSigningSecret|RegistrationAccessToken)$/i;
+
+/**
+ * Entities prohibited in saved `MJ: Queries` during impersonation: every forbidden security,
+ * secret, audit, record-change, integration, and permission entity (excluding `MJ: Users` only so
+ * standard business reports joining `vwUsers` for owner display names continue to operate).
+ */
+const SAVED_QUERY_SECRET_ENTITY_LOWER_SET: ReadonlySet<string> = new Set(
+    IMPERSONATION_FORBIDDEN_ENTITY_NAMES
+        .map((name) => name.trim().toLowerCase())
+        .filter((name) => name !== 'mj: users')
+);
 
 /**
  * Scopes granted to a Read-Only (`ViewAs`) impersonation API key.
@@ -182,6 +215,8 @@ export const IMPERSONATION_READ_ONLY_ALLOWED_SCOPES: ReadonlyArray<string> = Obj
 
 /**
  * Additional scopes granted ONLY when minting a triple-gated `ActAs` write-enabled impersonation key.
+ * Intentionally restricted to synchronous entity CRUD (`entity:create|update|delete|merge`) so
+ * `ActAs` cannot launch out-of-band agents, actions, prompts, or tasks that outlive the key's TTL.
  * Still NEVER includes `full_access`, `apikey:create`, `apikey:revoke`, or `agent:trusted`!
  */
 export const IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES: ReadonlyArray<string> = Object.freeze([
@@ -189,12 +224,6 @@ export const IMPERSONATION_ACT_AS_ADDITIONAL_SCOPES: ReadonlyArray<string> = Obj
     'entity:update',
     'entity:delete',
     'entity:merge',
-    'action:execute',
-    'agent:execute',
-    'agent:cancel',
-    'prompt:execute',
-    'task:execute',
-    'task:cancel',
 ]);
 
 /**
@@ -210,9 +239,146 @@ export const IMPERSONATION_ENTITY_DENY_SCOPE_PATHS: ReadonlyArray<string> = Obje
 ]);
 
 const IMPERSONATION_HOOKS_REGISTERED_KEY = '___MJServer___ImpersonationDataHooksRegistered';
+const IMPERSONATION_ACTIVE_WS_STORE_KEY = '___MJServer___ImpersonationActiveWebSockets';
 const INTERNAL_SECURITY_LOOKUP_PARAMS = new WeakSet<object>();
 const impersonationByUser = new WeakMap<UserInfo, ImpersonationSessionInfo>();
 const currentUserBootstrapStorage = new AsyncLocalStorage<string>();
+const impersonationRequestStorage = new AsyncLocalStorage<ImpersonationSessionInfo>();
+const impersonationKeyMintStorage = new AsyncLocalStorage<boolean>();
+
+/**
+ * Returns `true` when `label` starts with the server-reserved `MJ-Impersonation:` prefix
+ * (case-insensitive, after trimming leading whitespace).
+ */
+export function HasReservedImpersonationKeyLabelPrefix(label: string | null | undefined): boolean {
+    if (typeof label !== 'string') {
+        return false;
+    }
+    return label.trim().toLowerCase().startsWith(USER_IMPERSONATION_KEY_LABEL_PREFIX.toLowerCase());
+}
+
+/**
+ * Scoped execution wrapper owned exclusively by `UserImpersonationResolver` when minting a
+ * server-controlled `MJ-Impersonation:` API key. Every other caller attempting to create or
+ * modify an `MJ: API Keys` row carrying or stripping that prefix is refused by `ImpersonationPreSaveHook`.
+ */
+export function WithImpersonationKeyMintScope<T>(fn: () => Promise<T>): Promise<T> {
+    return impersonationKeyMintStorage.run(true, fn);
+}
+
+/** True ONLY while executing inside {@link WithImpersonationKeyMintScope}. */
+export function IsInImpersonationKeyMintScope(): boolean {
+    return impersonationKeyMintStorage.getStore() === true;
+}
+
+/**
+ * Binds `session` into request-scoped `AsyncLocalStorage` so even resolvers or library calls that
+ * re-resolve the target user from `UserCache` (producing a distinct `UserInfo` object reference)
+ * still enforce every impersonation data hook and guard for that target user's ID.
+ */
+export function RunWithImpersonationSession<T>(
+    session: ImpersonationSessionInfo | null | undefined,
+    fn: () => T
+): T {
+    if (!session) {
+        return fn();
+    }
+    return impersonationRequestStorage.run(session, fn);
+}
+
+/** Returns the active request-scoped `ImpersonationSessionInfo` from `AsyncLocalStorage`, if any. */
+export function GetActiveRequestImpersonationSession(): ImpersonationSessionInfo | undefined {
+    return impersonationRequestStorage.getStore();
+}
+
+function getActiveImpersonationWsRegistry(): Map<string, Set<() => void>> {
+    const store = GetGlobalObjectStore();
+    if (store) {
+        let map = store[IMPERSONATION_ACTIVE_WS_STORE_KEY] as Map<string, Set<() => void>> | undefined;
+        if (!map) {
+            map = new Map<string, Set<() => void>>();
+            store[IMPERSONATION_ACTIVE_WS_STORE_KEY] = map;
+        }
+        return map;
+    }
+    return new Map<string, Set<() => void>>();
+}
+
+/**
+ * Registers an active GraphQL WebSocket connection authenticated with an impersonation key so
+ * `MJEndUserImpersonation` (and single-active-session rotation) can close it immediately.
+ * Returns an idempotent disposer for `onClose`.
+ */
+export function RegisterImpersonationWebSocket(apiKeyId: string, closeFn: () => void): () => void {
+    const cleanId = apiKeyId?.trim();
+    if (!cleanId) {
+        return () => undefined;
+    }
+    const key = IsValidUUID(cleanId) ? NormalizeUUID(cleanId) : cleanId.toLowerCase();
+    const registry = getActiveImpersonationWsRegistry();
+    let closers = registry.get(key);
+    if (!closers) {
+        closers = new Set<() => void>();
+        registry.set(key, closers);
+    }
+    closers.add(closeFn);
+    return () => {
+        const set = registry.get(key);
+        if (!set) {
+            return;
+        }
+        set.delete(closeFn);
+        if (set.size === 0) {
+            registry.delete(key);
+        }
+    };
+}
+
+/**
+ * Closes every active WebSocket connection authenticated with `apiKeyId` and removes them from the registry.
+ * Returns the number of socket close callbacks invoked.
+ */
+export function CloseImpersonationWebSockets(apiKeyId: string): number {
+    const cleanId = apiKeyId?.trim();
+    if (!cleanId) {
+        return 0;
+    }
+    const key = IsValidUUID(cleanId) ? NormalizeUUID(cleanId) : cleanId.toLowerCase();
+    const registry = getActiveImpersonationWsRegistry();
+    const closers = registry.get(key);
+    if (!closers || closers.size === 0) {
+        return 0;
+    }
+    const snapshot = Array.from(closers);
+    registry.delete(key);
+    let closed = 0;
+    for (const closeFn of snapshot) {
+        try {
+            closeFn();
+            closed++;
+        } catch {
+            // Non-fatal: socket may already be closed
+        }
+    }
+    return closed;
+}
+
+/**
+ * Inline guard throwing `AuthorizationError` whenever `subject` (or the current request ALS)
+ * belongs to an active user impersonation session. Used by side-effecting `@Query` resolvers
+ * and out-of-band execution entrypoints alongside `@RefuseImpersonationSessions()`.
+ */
+export function AssertNotImpersonationSession(
+    subject: UserInfo | UserPayload | null | undefined,
+    operationName: string
+): void {
+    const session = GetImpersonationSession(subject);
+    if (session) {
+        throw new AuthorizationError(
+            `${operationName} is prohibited during user impersonation sessions.`
+        );
+    }
+}
 
 const V1_LABEL_REGEX =
     /^MJ-Impersonation:v1:(RO|RW):([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}):([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$/i;
@@ -318,6 +484,12 @@ export function StampImpersonationSession(
         ...(input.expiresAtMs !== undefined ? { expiresAtMs: input.expiresAtMs } : {}),
     });
     impersonationByUser.set(userRecord, frozen);
+    userRecord.ImpersonationContext = Object.freeze({
+        ActorUserID: frozen.actorUserId,
+        TargetUserID: frozen.targetUserId,
+        APIKeyID: frozen.apiKeyId,
+        Mode: frozen.mode,
+    });
     return frozen;
 }
 
@@ -328,12 +500,40 @@ export function CopyImpersonationSessionToClone(source: UserInfo, clone: UserInf
     const existing = impersonationByUser.get(source);
     if (existing) {
         impersonationByUser.set(clone, existing);
+        clone.ImpersonationContext = Object.freeze({
+            ActorUserID: existing.actorUserId,
+            TargetUserID: existing.targetUserId,
+            APIKeyID: existing.apiKeyId,
+            Mode: existing.mode,
+        });
     }
+}
+
+function isInternalSystemUserSubject(subject: UserInfo | UserPayload): boolean {
+    if ('userRecord' in subject) {
+        const payload = subject as UserPayload;
+        if (payload.isSystemUser) {
+            return true;
+        }
+        return payload.userRecord ? isInternalSystemUserSubject(payload.userRecord as UserInfo) : false;
+    }
+    const user = subject as UserInfo;
+    const typeLower = (user.Type ?? '').trim().toLowerCase();
+    const nameLower = (user.Name ?? '').trim().toLowerCase();
+    if (typeLower === 'system' || nameLower === 'system') {
+        return true;
+    }
+    const systemUserId = UserCache.Instance?.GetSystemUser?.()?.ID;
+    return Boolean(systemUserId && user.ID && UUIDsEqual(user.ID, systemUserId));
 }
 
 /**
  * Resolves the active `ImpersonationSessionInfo` from either a `UserInfo` or a `UserPayload`,
- * re-evaluating the server write kill-switch dynamically so flipping `MJ_USER_IMPERSONATION_ALLOW_WRITES`
+ * falling back to request-scoped `AsyncLocalStorage` whenever a resolver or library re-resolves
+ * the target user from `UserCache` (dropping `WeakMap` object identity), while preserving the
+ * explicit exemption for internal system-user lookups.
+ *
+ * Dynamically re-evaluates the server write kill-switch so flipping `MJ_USER_IMPERSONATION_ALLOW_WRITES`
  * off mid-session immediately enforces `readOnly: true` on the next request.
  */
 export function GetImpersonationSession(
@@ -351,6 +551,22 @@ export function GetImpersonationSession(
     } else {
         raw = impersonationByUser.get(subject as UserInfo);
     }
+
+    // Fallback to request-scoped AsyncLocalStorage so any code path that re-resolves the target user
+    // from UserCache (getting an unstamped UserInfo instance) still enforces every impersonation guard.
+    if (!raw && !isInternalSystemUserSubject(subject)) {
+        const requestSession = impersonationRequestStorage.getStore();
+        if (requestSession) {
+            const subjectUserId =
+                'userRecord' in subject
+                    ? (subject as UserPayload).userRecord?.ID
+                    : (subject as UserInfo).ID;
+            if (subjectUserId && UUIDsEqual(subjectUserId, requestSession.targetUserId)) {
+                raw = requestSession;
+            }
+        }
+    }
+
     if (!raw) {
         return null;
     }
@@ -392,20 +608,36 @@ export function IsInImpersonationCurrentUserBootstrapFor(userId: string | null |
 }
 
 /**
+ * Minimal entity-metadata shape used for dynamic secret-field checks without coupling callers to full `EntityInfo`.
+ */
+export interface ImpersonationEntityMetadataLike {
+    readonly Name?: string | null;
+    readonly Fields?: ReadonlyArray<{
+        readonly Name?: string | null;
+        readonly Encrypt?: boolean | null;
+        readonly AllowDecryptInAPI?: boolean | null;
+    }> | null;
+}
+
+/**
  * Returns `true` when `entityName` is forbidden to an impersonated session (`ViewAs` or `ActAs`),
  * honoring the narrow `CurrentUser` self-bootstrap scope for `MJ: Users` and `MJ: User Roles`.
+ *
+ * Enforces three layers:
+ * 1. Exact membership in {@link IMPERSONATION_FORBIDDEN_ENTITY_NAMES}.
+ * 2. Sensitive-entity name pattern matching (covers Open App and future entities).
+ * 3. Optional metadata inspection for non-API-decryptable encrypted fields or secret-credential columns.
  */
 export function IsEntityForbiddenDuringImpersonation(
     entityName: string | null | undefined,
-    contextUser?: UserInfo | null
+    contextUser?: UserInfo | null,
+    entityInfo?: ImpersonationEntityMetadataLike | null
 ): boolean {
     if (!entityName) {
         return false;
     }
-    const normalized = entityName.trim().toLowerCase();
-    if (!FORBIDDEN_ENTITY_LOWER_SET.has(normalized)) {
-        return false;
-    }
+    const trimmed = entityName.trim();
+    const normalized = trimmed.toLowerCase();
     if (
         (normalized === 'mj: users' || normalized === 'mj: user roles') &&
         contextUser?.ID &&
@@ -413,7 +645,45 @@ export function IsEntityForbiddenDuringImpersonation(
     ) {
         return false;
     }
-    return true;
+    if (FORBIDDEN_ENTITY_LOWER_SET.has(normalized)) {
+        return true;
+    }
+    if (SENSITIVE_ENTITY_NAME_PATTERN.test(trimmed)) {
+        return true;
+    }
+    const fields = entityInfo?.Fields;
+    if (Array.isArray(fields) && fields.length > 0) {
+        for (const f of fields) {
+            const fname = f?.Name?.trim() ?? '';
+            if (f?.Encrypt === true && f?.AllowDecryptInAPI === false) {
+                return true;
+            }
+            if (fname && SECRET_FIELD_NAME_PATTERN.test(fname)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Returns `true` when writing or deleting `entityName` is prohibited during `ActAs` impersonation
+ * (either because the entity is fully forbidden or because it queues out-of-band background work
+ * that would outlive the impersonation key TTL).
+ */
+export function IsEntityWriteForbiddenDuringImpersonation(
+    entityName: string | null | undefined,
+    contextUser?: UserInfo | null,
+    entityInfo?: ImpersonationEntityMetadataLike | null
+): boolean {
+    if (!entityName) {
+        return true;
+    }
+    const normalized = entityName.trim().toLowerCase();
+    if (WRITE_FORBIDDEN_ENTITY_LOWER_SET.has(normalized)) {
+        return true;
+    }
+    return IsEntityForbiddenDuringImpersonation(entityName, contextUser, entityInfo);
 }
 
 /**
@@ -782,6 +1052,12 @@ export function EvaluateGraphQLOperationForImpersonation(
         });
     }
 
+    if (!operation) {
+        return new GraphQLError('Unable to resolve GraphQL operation for impersonation session.', {
+            extensions: { code: 'BAD_USER_INPUT' },
+        });
+    }
+
     const isSelfRevoke = IsOnlyEndImpersonationMutation(operation);
 
     if (!IsUserImpersonationEnabled() && !isSelfRevoke) {
@@ -791,7 +1067,7 @@ export function EvaluateGraphQLOperationForImpersonation(
         );
     }
 
-    if (session.readOnly && operation?.operation === 'mutation' && !isSelfRevoke) {
+    if (session.readOnly && operation.operation === 'mutation' && !isSelfRevoke) {
         return new GraphQLError(
             "Write operations are disabled during Read-Only ('View As User') impersonation sessions.",
             { extensions: { code: 'IMPERSONATION_READ_ONLY' } }
@@ -826,6 +1102,7 @@ export function CreateImpersonationApolloPlugin(): ApolloServerPlugin<AppContext
 /**
  * Validates a `graphql-ws` `subscribe` message (which can carry `subscription`, `query`, OR `mutation`!)
  * against impersonation session expiry, live key revocation, kill switch, and Read-Only mutation guards.
+ * Strictly fails closed if the GraphQL document cannot be parsed or its target operation cannot be resolved.
  */
 export async function ValidateImpersonationWebSocketSubscribe(
     userPayload: UserPayload | undefined,
@@ -880,16 +1157,43 @@ export async function ValidateImpersonationWebSocketSubscribe(
         ];
     }
 
+    if (!opAst) {
+        return [
+            new GraphQLError('Unable to resolve GraphQL operation.', {
+                extensions: { code: 'BAD_USER_INPUT' },
+            }),
+        ];
+    }
+
     const opErr = EvaluateGraphQLOperationForImpersonation(opAst, userPayload);
     return opErr ? [opErr] : undefined;
 }
 
+function normalizeHttpPath(raw: string | undefined): string {
+    const withoutQuery = (raw ?? '/').split('?')[0].trim() || '/';
+    const withLeadingSlash = withoutQuery.startsWith('/') ? withoutQuery : `/${withoutQuery}`;
+    const trimmed = withLeadingSlash.length > 1 ? withLeadingSlash.replace(/\/+$/, '') : '/';
+    return (trimmed || '/').toLowerCase();
+}
+
 /**
- * Post-auth Express HTTP guard covering REST (`/api/v1/*`), `/oauth/*`, `/magic-link/*`, `/widget/*`,
- * and any post-auth server extensions when authenticated with an `MJ-Impersonation:` API key.
+ * Default-deny post-auth Express HTTP guard for `MJ-Impersonation:` API keys.
+ *
+ * Explicitly allows ONLY:
+ * 1. The **exact** configured GraphQL endpoint (`graphqlPathPrefix`, e.g. `/` or `/graphql`, `POST`/`GET`/`OPTIONS`),
+ *    which then passes through Apollo's `didResolveOperation` plugin (allowing `MJEndUserImpersonation` self-revoke).
+ * 2. REST API routes (`/api/v1/*`) — subject to kill switch, forbidden-entity path checks, and Read-Only
+ *    enforcement (`GET`/`HEAD`/`OPTIONS` and read-only `POST /views/*`, `POST /queries/run` in `ViewAs`).
+ *
+ * Every other post-auth route (post-auth Server Extensions, `/realtime/recording/*`, `/oauth/*`,
+ * `/magic-link/*`, `/widget/*`, etc.) is **refused by default** regardless of `GRAPHQL_ROOT_PATH`.
  */
-export function CreateImpersonationHttpGuardMiddleware(graphqlPathPrefix: string = '/'): RequestHandler {
-    const normalizedGqlPrefix = graphqlPathPrefix.trim() || '/';
+export function CreateImpersonationHttpGuardMiddleware(
+    graphqlPathPrefix: string = '/',
+    restApiPrefix: string = '/api/v1'
+): RequestHandler {
+    const normalizedGqlPath = normalizeHttpPath(graphqlPathPrefix);
+    const normalizedRestPrefix = normalizeHttpPath(restApiPrefix);
 
     return (req: Request, res: Response, next: NextFunction): void => {
         const session = GetImpersonationSession(req.userPayload);
@@ -898,31 +1202,33 @@ export function CreateImpersonationHttpGuardMiddleware(graphqlPathPrefix: string
             return;
         }
 
-        const pathLower = (req.path || req.url || '/').toLowerCase();
+        if (session.expiresAtMs !== undefined && session.expiresAtMs <= Date.now()) {
+            res.status(401).json({
+                error: 'Impersonation session has expired.',
+                code: 'UNAUTHENTICATED',
+            });
+            return;
+        }
 
-        // Impersonation sessions may NEVER initiate/exchange OAuth tokens, create magic links, or promote widget identities.
-        if (
-            pathLower.includes('/oauth/') ||
-            pathLower.endsWith('/oauth') ||
-            pathLower.includes('/magic-link/') ||
-            pathLower.endsWith('/magic-link') ||
-            pathLower.includes('/widget/') ||
-            pathLower.endsWith('/widget')
-        ) {
+        const reqPath = normalizeHttpPath(req.path || req.url);
+        const method = req.method.toUpperCase();
+
+        // 1. Exact GraphQL endpoint ONLY (never a prefix match when GRAPHQL_ROOT_PATH='/').
+        const isExactGraphqlPath = reqPath === normalizedGqlPath;
+        if (isExactGraphqlPath) {
+            if (method === 'POST' || method === 'GET' || method === 'OPTIONS') {
+                next();
+                return;
+            }
             res.status(403).json({
-                error: 'OAuth, Magic Link, and Widget capability routes are prohibited during user impersonation.',
+                error: `HTTP method ${method} is prohibited on the GraphQL endpoint during user impersonation sessions.`,
                 code: 'IMPERSONATION_FORBIDDEN_ROUTE',
             });
             return;
         }
 
-        // GraphQL requests pass through to Apollo's didResolveOperation plugin (which permits MJEndUserImpersonation).
-        const isGraphqlRoute =
-            normalizedGqlPrefix === '/'
-                ? !pathLower.startsWith('/api/v1')
-                : pathLower.startsWith(normalizedGqlPrefix.toLowerCase());
-
-        if (!IsUserImpersonationEnabled() && !isGraphqlRoute) {
+        // Non-GraphQL routes ALWAYS honor the kill switch immediately (even before REST/extension routing).
+        if (!IsUserImpersonationEnabled()) {
             res.status(403).json({
                 error: 'User impersonation is disabled on this server.',
                 code: 'FEATURE_DISABLED',
@@ -930,10 +1236,13 @@ export function CreateImpersonationHttpGuardMiddleware(graphqlPathPrefix: string
             return;
         }
 
-        if (pathLower.startsWith('/api/v1')) {
-            // Check REST entity path segments (`/api/v1/entities/:entityName...`, `/api/v1/views/:entityName...`, `/api/v1/metadata/entities/:entityName...`)
-            const restSubpath = (req.path || '').slice('/api/v1'.length);
-            const entitySegMatch = /^\/(?:entities|views|metadata\/entities)\/([^/]+)/i.exec(restSubpath);
+        // 2. REST API routes (`/api/v1/*`).
+        const isRestApiRoute =
+            reqPath === normalizedRestPrefix || reqPath.startsWith(`${normalizedRestPrefix}/`);
+        if (isRestApiRoute) {
+            const rawPath = (req.path || req.url || '').split('?')[0];
+            const restSubpath = rawPath.slice(normalizedRestPrefix.length);
+            const entitySegMatch = /^\/(?:entities|views|records|metadata\/entities)\/([^/]+)/i.exec(restSubpath);
             if (entitySegMatch) {
                 let decodedEntity = entitySegMatch[1];
                 try {
@@ -944,7 +1253,10 @@ export function CreateImpersonationHttpGuardMiddleware(graphqlPathPrefix: string
                 if (
                     decodedEntity.toLowerCase() !== 'batch' &&
                     decodedEntity.toLowerCase() !== 'entity' &&
-                    IsEntityForbiddenDuringImpersonation(decodedEntity, req.userPayload?.userRecord as UserInfo | undefined)
+                    IsEntityForbiddenDuringImpersonation(
+                        decodedEntity,
+                        req.userPayload?.userRecord as UserInfo | undefined
+                    )
                 ) {
                     res.status(403).json({
                         error: `Access to '${decodedEntity}' is prohibited during user impersonation sessions.`,
@@ -955,12 +1267,11 @@ export function CreateImpersonationHttpGuardMiddleware(graphqlPathPrefix: string
             }
 
             if (session.readOnly) {
-                const method = req.method.toUpperCase();
-                // Allow GET/HEAD/OPTIONS and read-only view/query POSTs (/views/*, /queries/run); block all writes/transactions.
                 const isReadPost =
                     method === 'POST' &&
                     (/^\/views\//i.test(restSubpath) || /^\/queries\/run\/?$/i.test(restSubpath));
-                const isSafeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS' || isReadPost;
+                const isSafeMethod =
+                    method === 'GET' || method === 'HEAD' || method === 'OPTIONS' || isReadPost;
                 if (!isSafeMethod) {
                     res.status(403).json({
                         error: "Write operations are disabled during Read-Only ('View As User') impersonation sessions.",
@@ -969,18 +1280,16 @@ export function CreateImpersonationHttpGuardMiddleware(graphqlPathPrefix: string
                     return;
                 }
             }
-        } else if (!isGraphqlRoute && session.readOnly) {
-            const method = req.method.toUpperCase();
-            if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-                res.status(403).json({
-                    error: "Write operations are disabled during Read-Only ('View As User') impersonation sessions.",
-                    code: 'IMPERSONATION_READ_ONLY',
-                });
-                return;
-            }
+
+            next();
+            return;
         }
 
-        next();
+        // 3. Default-deny all other post-auth routes (extensions, /realtime/recording/*, /oauth/*, /magic-link/*, /widget/*).
+        res.status(403).json({
+            error: `Route '${reqPath}' is prohibited during user impersonation sessions.`,
+            code: 'IMPERSONATION_FORBIDDEN_ROUTE',
+        });
     };
 }
 
@@ -1026,11 +1335,35 @@ function resolveRunViewTargetEntityName(params: RunViewParams): string {
     if (typeof params.EntityName === 'string' && params.EntityName.trim().length > 0) {
         return params.EntityName.trim();
     }
+    const viewEntityWithProp = params.ViewEntity as { Entity?: string | null } | undefined;
+    if (typeof viewEntityWithProp?.Entity === 'string' && viewEntityWithProp.Entity.trim().length > 0) {
+        return viewEntityWithProp.Entity.trim();
+    }
     const entityFieldVal = params.ViewEntity?.Fields?.find((f) => f.Name === 'Entity')?.Value;
     if (typeof entityFieldVal === 'string' && entityFieldVal.trim().length > 0) {
         return entityFieldVal.trim();
     }
     return '';
+}
+
+function readEntityFieldValueAndDirty(
+    entity: BaseEntity,
+    fieldName: string
+): { readonly value: string | null; readonly oldValue: string | null; readonly dirty: boolean } {
+    const field = entity.Fields?.find((f) => f.Name?.toLowerCase() === fieldName.toLowerCase());
+    if (field) {
+        return {
+            value: typeof field.Value === 'string' ? field.Value : null,
+            oldValue: typeof field.OldValue === 'string' ? field.OldValue : null,
+            dirty: Boolean(field.Dirty),
+        };
+    }
+    const rawProp = (entity as unknown as Record<string, unknown>)[fieldName];
+    return {
+        value: typeof rawProp === 'string' ? rawProp : null,
+        oldValue: null,
+        dirty: true,
+    };
 }
 
 export const ImpersonationPreRunViewHook: PreRunViewHook = (
@@ -1052,7 +1385,13 @@ export const ImpersonationPreRunViewHook: PreRunViewHook = (
     }
 
     const entityName = resolveRunViewTargetEntityName(params);
-    if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+    if (!entityName) {
+        throw new AuthorizationError(
+            'RunView requests without a resolved entity name (e.g. unresolved ViewID) are prohibited during user impersonation sessions.'
+        );
+    }
+    const entityMeta = contextUser?.OwningProvider?.EntityByName?.(entityName);
+    if (IsEntityForbiddenDuringImpersonation(entityName, contextUser, entityMeta)) {
         throw new AuthorizationError(
             `Access to '${entityName}' is prohibited during user impersonation sessions.`
         );
@@ -1188,6 +1527,27 @@ export const ImpersonationPreSaveHook: PreSaveHook = (
     entity: BaseEntity,
     contextUser: UserInfo | undefined
 ): boolean | string => {
+    const entityName = entity.EntityInfo?.Name ?? '';
+    const entityLower = entityName.trim().toLowerCase();
+
+    // ALWAYS protect the server-reserved `MJ-Impersonation:` API key prefix on EVERY save path
+    // (including non-impersonated admins/callers!) so no caller can forge a fake impersonation key
+    // or strip the prefix off an active impersonation key mid-session.
+    if (entityLower === 'mj: api keys' && !IsInImpersonationKeyMintScope()) {
+        const labelState = readEntityFieldValueAndDirty(entity, 'Label');
+        if (!entity.IsSaved) {
+            if (HasReservedImpersonationKeyLabelPrefix(labelState.value)) {
+                return `API key labels starting with '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' are reserved for server-managed user impersonation sessions.`;
+            }
+        } else if (
+            labelState.dirty &&
+            (HasReservedImpersonationKeyLabelPrefix(labelState.value) ||
+                HasReservedImpersonationKeyLabelPrefix(labelState.oldValue))
+        ) {
+            return `Modifying or stripping the reserved '${USER_IMPERSONATION_KEY_LABEL_PREFIX}' prefix on an MJ: API Keys record is prohibited.`;
+        }
+    }
+
     const session = GetImpersonationSession(contextUser);
     if (!session) {
         return true;
@@ -1196,13 +1556,12 @@ export const ImpersonationPreSaveHook: PreSaveHook = (
         return 'User impersonation is disabled on this server (MJ_ENABLE_USER_IMPERSONATION is off).';
     }
 
-    const entityName = entity.EntityInfo?.Name ?? '';
     if (session.readOnly) {
         // Allow server-initiated record-access audit log writes outside ClientCrudBoundary so
         // reading an entity with `AuditRecordAccess = true` continues to record its access audit row.
         const isInternalReadAuditWrite =
             !ServerOperationScopeManager.Instance.IsInDirectClientCrud() &&
-            entityName.trim().toLowerCase() === 'mj: audit logs' &&
+            entityLower === 'mj: audit logs' &&
             !entity.IsSaved;
         if (!isInternalReadAuditWrite) {
             return "Write operations are disabled during Read-Only ('View As User') impersonation sessions.";
@@ -1210,7 +1569,7 @@ export const ImpersonationPreSaveHook: PreSaveHook = (
         return true;
     }
 
-    if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+    if (IsEntityWriteForbiddenDuringImpersonation(entityName, contextUser, entity.EntityInfo)) {
         return `Modifying '${entityName}' is prohibited during user impersonation sessions.`;
     }
     return true;
@@ -1231,7 +1590,7 @@ export const ImpersonationPreDeleteHook: PreDeleteHook = (
         return "Delete operations are disabled during Read-Only ('View As User') impersonation sessions.";
     }
     const entityName = entity.EntityInfo?.Name ?? '';
-    if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+    if (IsEntityWriteForbiddenDuringImpersonation(entityName, contextUser, entity.EntityInfo)) {
         return `Deleting '${entityName}' is prohibited during user impersonation sessions.`;
     }
     return true;

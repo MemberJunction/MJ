@@ -155,6 +155,45 @@ describe('BuildRecordChangePayload — CloneContext & SyncContext (§10.3)', () 
         });
     });
 
+    it('appends actor attribution to changesDescription when user carries ImpersonationContext (PR #6958)', () => {
+        const impersonatedUser = new UserInfo(null, {
+            ID: 'TARGET-USER-001',
+            Name: 'Bob Analyst',
+            Email: 'bob@example.com',
+        });
+        impersonatedUser.ImpersonationContext = {
+            ActorUserID: 'ACTOR-ADMIN-001',
+            TargetUserID: 'TARGET-USER-001',
+            APIKeyID: 'KEY-IMP-001',
+            Mode: 'ActAs',
+        };
+
+        const payload = provider.TestBuildRecordChangePayload(
+            { ID: 'REC-010', Name: 'Updated During Impersonation' },
+            { ID: 'REC-010', Name: 'Before' },
+            'REC-010',
+            mockEntityInfo,
+            'Update',
+            impersonatedUser,
+        );
+
+        expect(payload).not.toBeNull();
+        expect(payload!.changesDescription).toContain(
+            '[Impersonated by ActorUserID=ACTOR-ADMIN-001, APIKeyID=KEY-IMP-001, Mode=ActAs]'
+        );
+
+        const normalPayload = provider.TestBuildRecordChangePayload(
+            { ID: 'REC-011', Name: 'Normal Update' },
+            { ID: 'REC-011', Name: 'Before' },
+            'REC-011',
+            mockEntityInfo,
+            'Update',
+            mockUser,
+        );
+        expect(normalPayload).not.toBeNull();
+        expect(normalPayload!.changesDescription).not.toContain('Impersonated by');
+    });
+
     it('sets Source to "Sync", populates integrationID, and serializes structured Sync ChangeContext JSON', () => {
         const payload = provider.TestBuildRecordChangePayload(
             { ID: 'REC-003', Name: 'Synced' },

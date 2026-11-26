@@ -35,6 +35,7 @@ import {
 import {
     BuildActorImpersonationKeyLikePattern,
     BuildImpersonationKeyLabel,
+    CloseImpersonationWebSockets,
     DoRolesHoldImpersonationReadAuthorization,
     DoRolesHoldImpersonationWriteAuthorization,
     EvaluateTargetImpersonationEligibility,
@@ -47,6 +48,7 @@ import {
     USER_IMPERSONATION_KEY_LABEL_PREFIX,
     USER_IMPERSONATION_KEY_LABEL_V1_PREFIX,
     USER_IMPERSONATION_WRITE_AUTHORIZATION_NAME,
+    WithImpersonationKeyMintScope,
     type ImpersonationMode,
 } from '../auth/impersonationGuard.js';
 import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
@@ -80,6 +82,10 @@ export const USER_IMPERSONATION_DEFAULT_LIMIT = 100;
 /** Maximum page size returned by `MJListImpersonatableUsers`. */
 export const USER_IMPERSONATION_MAX_LIMIT = 500;
 
+const MAX_AUDIT_INPUT_STRING_LENGTH = 128; // Bounds raw client-supplied TargetUserID/Mode strings recorded in Denied audit Details
+const DENIED_AUDIT_WINDOW_MS = 60_000; // Sliding 60-second window bounding per-caller Denied audit writes against log flooding
+const DENIED_AUDIT_MAX_PER_WINDOW = 10; // Caps Denied audit log writes per caller per window so unprivileged users cannot flood MJ: Audit Logs
+
 /** Canonical `MJ: Audit Log Types` names emitted by {@link UserImpersonationResolver}. */
 export const USER_IMPERSONATION_AUDIT_LOG_TYPES = {
     Started: 'User Impersonation Started',
@@ -94,7 +100,7 @@ export const USER_IMPERSONATION_AUDIT_LOG_TYPES = {
  * `PreRunView`/`PreSave`/`PreDelete`/`ResolverBase` data-layer isolation.
  */
 export const IMPERSONATION_SENSITIVE_ENTITY_DENY_PATTERN =
-    'MJ: API Key*,MJ: Credential*,MJ: AI *Credential*,MJ: Encryption*,MJ: O Auth*,MJ: Audit Log*,MJ: Users,MJ: Roles,MJ: User Roles,MJ: Authorization*,MJ: Entity *Permissions,MJ: Authentication Providers,MJ: Magic Link*,MJ: Artifact Guest Share Links';
+    'MJ: API Key*,MJ: API Scopes,MJ: API Application*,MJ: Credential*,MJ: AI *Credential*,MJ: Company Integrations,MJ: MCP Servers,MJ: Encryption*,MJ: O Auth*,MJ: Audit Log*,MJ: Record Changes,MJ: Communication Logs,MJ: Communication Principal Preferences,MJ: Users,MJ: Roles,MJ: User Roles,MJ: Authorization*,MJ: Entity *Permissions,MJ: Access Control Rules,MJ: Application Roles,MJ: Resource Permissions,MJ: Row Level Security Filters,MJ: Query Permissions,MJ: Authentication Providers,MJ: Magic Link*,MJ: Artifact Guest Share Links,MJ: Public Links,MJ: List Invitations';
 
 interface UserQueryRow {
     ID: string;
@@ -212,6 +218,19 @@ function parseCleanUuid(raw: string | null | undefined): string | null {
     }
     const trimmed = raw.trim();
     return IsValidUUID(trimmed) ? trimmed : null;
+}
+
+function truncateAuditInput(raw: string | null | undefined): string | null {
+    if (typeof raw !== 'string') {
+        return null;
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+        return null;
+    }
+    return trimmed.length > MAX_AUDIT_INPUT_STRING_LENGTH
+        ? trimmed.slice(0, MAX_AUDIT_INPUT_STRING_LENGTH)
+        : trimmed;
 }
 
 function clampListLimit(rawLimit: number | null | undefined): number {
@@ -426,6 +445,27 @@ export class MJEndUserImpersonationPayload {
 @Resolver()
 export class UserImpersonationResolver extends ResolverBase {
     private static readonly actorMintLocks = new Map<string, Promise<void>>();
+    private static readonly deniedAuditTimestamps = new Map<string, number[]>();
+
+    /** Clears per-caller Denied audit rate-limit buckets; intended for unit tests only. */
+    public static ResetDeniedAuditRateLimitForTests(): void {
+        UserImpersonationResolver.deniedAuditTimestamps.clear();
+    }
+
+    private shouldWriteDeniedAuditLog(actorUserId: string): boolean {
+        const key = IsValidUUID(actorUserId) ? NormalizeUUID(actorUserId) : actorUserId.trim().toLowerCase();
+        const now = Date.now();
+        const cutoff = now - DENIED_AUDIT_WINDOW_MS;
+        const existing = UserImpersonationResolver.deniedAuditTimestamps.get(key) ?? [];
+        const recent = existing.filter((ts) => ts > cutoff);
+        if (recent.length >= DENIED_AUDIT_MAX_PER_WINDOW) {
+            UserImpersonationResolver.deniedAuditTimestamps.set(key, recent);
+            return false;
+        }
+        recent.push(now);
+        UserImpersonationResolver.deniedAuditTimestamps.set(key, recent);
+        return true;
+    }
 
     protected getApiKeyEngine(): APIKeyEngine {
         return GetAPIKeyEngine();
@@ -502,6 +542,17 @@ export class UserImpersonationResolver extends ResolverBase {
         }
 
         const privilegedUser = await this.resolvePrivilegedUser(provider, actorUser);
+
+        // 0. System API keys carry no human actor attribution and must never initiate impersonation.
+        if (context.userPayload?.isSystemUser) {
+            return {
+                authorized: false,
+                code: 'FORBIDDEN',
+                message: 'System API key sessions are not permitted to invoke user impersonation because human actor attribution cannot be established.',
+                actorUser,
+                privilegedUser,
+            };
+        }
 
         // 1. Anti-chaining & dual-credential smuggling check FIRST so impersonation keys can never probe state.
         if (GetImpersonationSession(context.userPayload) !== null) {
@@ -609,7 +660,7 @@ export class UserImpersonationResolver extends ResolverBase {
         const provider = GetReadWriteProvider(context.providers);
         const auth = await this.authorizeImpersonationCaller(provider, context);
         if (!auth.authorized || !auth.actorUser || !auth.privilegedUser) {
-            if (auth.actorUser && auth.privilegedUser) {
+            if (auth.actorUser && auth.privilegedUser && this.shouldWriteDeniedAuditLog(auth.actorUser.ID)) {
                 await this.tryWriteAuditLog(provider, auth.privilegedUser, context, {
                     auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
                     status: 'Failed',
@@ -671,7 +722,7 @@ export class UserImpersonationResolver extends ResolverBase {
         const provider = GetReadWriteProvider(context.providers);
         const auth = await this.authorizeImpersonationCaller(provider, context);
         if (!auth.authorized || !auth.actorUser || !auth.privilegedUser) {
-            if (auth.actorUser && auth.privilegedUser) {
+            if (auth.actorUser && auth.privilegedUser && this.shouldWriteDeniedAuditLog(auth.actorUser.ID)) {
                 await this.tryWriteAuditLog(provider, auth.privilegedUser, context, {
                     auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
                     status: 'Failed',
@@ -682,8 +733,8 @@ export class UserImpersonationResolver extends ResolverBase {
                         action: 'MJStartUserImpersonation',
                         resultCode: auth.code,
                         actorUserId: auth.actorUser.ID,
-                        requestedTargetUserId: input?.TargetUserID ?? null,
-                        requestedMode: input?.Mode ?? 'ViewAs',
+                        requestedTargetUserId: truncateAuditInput(input?.TargetUserID),
+                        requestedMode: truncateAuditInput(input?.Mode) ?? 'ViewAs',
                         reason: auth.message,
                     },
                 });
@@ -838,7 +889,15 @@ export class UserImpersonationResolver extends ResolverBase {
                 this.loadLiveAuthorizationMetadata(provider, privilegedUser),
             ]);
 
-            const targetRow = targetUserRes.Success ? targetUserRes.Results?.[0] : undefined;
+            if (!targetUserRes.Success || !targetRolesRes.Success) {
+                return {
+                    Success: false,
+                    ResultCode: 'INTERNAL_ERROR',
+                    Message: 'Unable to verify target user eligibility (live user or role lookup failed).',
+                };
+            }
+
+            const targetRow = targetUserRes.Results?.[0];
             if (!targetRow || targetRow.IsActive === false) {
                 return {
                     Success: false,
@@ -866,7 +925,7 @@ export class UserImpersonationResolver extends ResolverBase {
                 }
             }
 
-            for (const r of targetRolesRes.Success ? targetRolesRes.Results ?? [] : []) {
+            for (const r of targetRolesRes.Results ?? []) {
                 const rn = r.Role?.trim();
                 if (rn) {
                     roleNameSet.add(rn);
@@ -964,7 +1023,20 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
-            // Single-active-key enforcement per actor: revoke & delete any prior impersonation keys minted by actorUser.
+            // Require an active MJAPI application row BEFORE minting so an impersonation key can
+            // NEVER be minted without an explicit MJAPI application binding (prevents MCP/A2A replay).
+            const mjApiApp = (engine.Applications ?? []).find(
+                (app) => app.Name?.trim().toLowerCase() === 'mjapi' && app.IsActive !== false
+            );
+            if (!mjApiApp?.ID) {
+                return {
+                    Success: false,
+                    ResultCode: 'CONFIGURATION_ERROR',
+                    Message: "Required 'MJAPI' API application is not configured; refusing to mint an unbound impersonation key.",
+                };
+            }
+
+            // Single-active-key enforcement per actor: revoke any prior impersonation keys minted by actorUser.
             await this.revokeExistingActorImpersonationKeys(engine, provider, privilegedUser, actorUser.ID);
 
             const ttlMinutes = ClampUserImpersonationTtlMinutes(requestedTtlMinutes);
@@ -973,15 +1045,17 @@ export class UserImpersonationResolver extends ResolverBase {
             const targetEmail = (targetRow.Email ?? targetRow.Name ?? cleanTargetUserId).trim();
             const label = BuildImpersonationKeyLabel(effectiveMode, actorUser.ID, cleanTargetUserId);
 
-            const created = await engine.CreateAPIKey(
-                {
-                    UserId: cleanTargetUserId,
-                    Label: label,
-                    Description: `Temporary ${effectiveMode} (${effectiveReadOnly ? 'Read-Only' : 'Write-Enabled'}) user impersonation session initiated by ${actorUser.ID}.`,
-                    ExpiresAt: expiresAt,
-                },
-                privilegedUser,
-                provider
+            const created = await WithImpersonationKeyMintScope(() =>
+                engine.CreateAPIKey(
+                    {
+                        UserId: cleanTargetUserId,
+                        Label: label,
+                        Description: `Temporary ${effectiveMode} (${effectiveReadOnly ? 'Read-Only' : 'Write-Enabled'}) user impersonation session initiated by ${actorUser.ID}.`,
+                        ExpiresAt: expiresAt,
+                    },
+                    privilegedUser,
+                    provider
+                )
             );
 
             if (!created.Success || !created.RawKey || !created.APIKeyId) {
@@ -992,26 +1066,23 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
-            // Bind exclusively to MJAPI when MJAPI application is present so the key cannot replay on MCP/A2A servers.
-            const mjApiApp = (engine.Applications ?? []).find(
-                (app) => app.Name?.trim().toLowerCase() === 'mjapi' && app.IsActive !== false
+            // Bind exclusively to MJAPI so the key cannot replay on MCP/A2A servers.
+            const appBinding = await provider.GetEntityObject<MJAPIKeyApplicationEntity>(
+                'MJ: API Key Applications',
+                privilegedUser
             );
-            if (mjApiApp?.ID) {
-                const appBinding = await provider.GetEntityObject<MJAPIKeyApplicationEntity>(
-                    'MJ: API Key Applications',
-                    privilegedUser
-                );
-                appBinding.NewRecord();
-                appBinding.APIKeyID = created.APIKeyId;
-                appBinding.ApplicationID = mjApiApp.ID;
-                if (!(await appBinding.Save())) {
-                    await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
-                    return {
-                        Success: false,
-                        ResultCode: 'KEY_SCOPE_FAILED',
-                        Message: 'Failed to bind temporary impersonation key to MJAPI application.',
-                    };
-                }
+            appBinding.NewRecord();
+            appBinding.APIKeyID = created.APIKeyId;
+            appBinding.ApplicationID = mjApiApp.ID;
+            if (!(await appBinding.Save())) {
+                await this.revokeImpersonationKey(engine, provider, privilegedUser, created.APIKeyId, {
+                    deleteKeyRowOnRollback: true,
+                });
+                return {
+                    Success: false,
+                    ResultCode: 'KEY_SCOPE_FAILED',
+                    Message: 'Failed to bind temporary impersonation key to MJAPI application.',
+                };
             }
 
             // 1. Attach explicit least-privilege Allow scope rules (Priority = 10, IsDeny = false)
@@ -1029,7 +1100,9 @@ export class UserImpersonationResolver extends ResolverBase {
                 scopeEntity.Priority = 10;
 
                 if (!(await scopeEntity.Save())) {
-                    await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                    await this.revokeImpersonationKey(engine, provider, privilegedUser, created.APIKeyId, {
+                        deleteKeyRowOnRollback: true,
+                    });
                     return {
                         Success: false,
                         ResultCode: 'KEY_SCOPE_FAILED',
@@ -1060,7 +1133,9 @@ export class UserImpersonationResolver extends ResolverBase {
                 denyEntity.Priority = 1000;
 
                 if (!(await denyEntity.Save())) {
-                    await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                    await this.revokeImpersonationKey(engine, provider, privilegedUser, created.APIKeyId, {
+                        deleteKeyRowOnRollback: true,
+                    });
                     return {
                         Success: false,
                         ResultCode: 'KEY_SCOPE_FAILED',
@@ -1068,6 +1143,16 @@ export class UserImpersonationResolver extends ResolverBase {
                     };
                 }
             }
+
+            // Cross-replica concurrent-mint mitigation: revoke any competing sibling impersonation key
+            // minted for the same actor while this request was in flight (skipping the newly minted key).
+            await this.revokeExistingActorImpersonationKeys(
+                engine,
+                provider,
+                privilegedUser,
+                actorUser.ID,
+                created.APIKeyId
+            );
 
             try {
                 await engine.RefreshCache(privilegedUser);
@@ -1112,7 +1197,9 @@ export class UserImpersonationResolver extends ResolverBase {
             });
 
             if (!auditSucceeded) {
-                await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, created.APIKeyId);
+                await this.revokeImpersonationKey(engine, provider, privilegedUser, created.APIKeyId, {
+                    deleteKeyRowOnRollback: true,
+                });
                 return {
                     Success: false,
                     ResultCode: 'AUDIT_LOG_FAILED',
@@ -1209,18 +1296,50 @@ export class UserImpersonationResolver extends ResolverBase {
                 };
             }
 
+            // Server-verified mint check: require a valid v1 label matching keyRow.UserID AND a
+            // server-persisted "User Impersonation Started" audit record proving this resolver
+            // actually minted the key for (actorUserId, targetUserId). Prevents an attacker who
+            // somehow forged an MJ-Impersonation: label from spoofing an "Ended" audit row naming an admin.
+            const labelStructurallyValid = Boolean(
+                parsedLabel.format === 'v1' &&
+                parsedLabel.actorUserId &&
+                parsedLabel.targetUserId &&
+                keyRow.UserID &&
+                UUIDsEqual(parsedLabel.targetUserId, keyRow.UserID) &&
+                !UUIDsEqual(parsedLabel.actorUserId, keyRow.UserID)
+            );
+            const verifiedMintActorId = labelStructurallyValid && parsedLabel.actorUserId && keyRow.UserID
+                ? await this.verifyResolverMintedImpersonationKey(
+                      provider,
+                      privilegedUser,
+                      cleanApiKeyId,
+                      parsedLabel.actorUserId,
+                      keyRow.UserID
+                  )
+                : null;
+            if (!verifiedMintActorId) {
+                return {
+                    Success: false,
+                    ResultCode: 'FORBIDDEN',
+                    Message: 'This API key does not have a verified server-minted impersonation session record.',
+                };
+            }
+
             const callerApiKeyId = parseCleanUuid(context.userPayload?.apiKeyId);
             const isSameImpersonationKey = Boolean(callerApiKeyId && UUIDsEqual(callerApiKeyId, cleanApiKeyId));
 
             // Allow revocation when:
             // 1. Caller is self-revoking the exact active impersonation key, OR
-            // 2. Caller is a non-API-key human session who EITHER originally minted this key (actorUserId match)
+            // 2. Caller is a non-API-key human session who EITHER originally minted this key (verifiedMintActorId match)
             //    OR holds `Allow` on `User Impersonation` — even if `MJ_ENABLE_USER_IMPERSONATION` was just turned off!
             let isAuthorizedActorSession = false;
-            if (!callerApiKeyId && !context.HasRawApiKeyHeader && !GetImpersonationSession(context.userPayload)) {
-                const isOriginalMintingActor = Boolean(
-                    parsedLabel.actorUserId && UUIDsEqual(parsedLabel.actorUserId, actorUser.ID)
-                );
+            if (
+                !callerApiKeyId &&
+                !context.HasRawApiKeyHeader &&
+                !context.userPayload?.isSystemUser &&
+                !GetImpersonationSession(context.userPayload)
+            ) {
+                const isOriginalMintingActor = UUIDsEqual(verifiedMintActorId, actorUser.ID);
                 const holdsImpersonationGrant = EvaluateUserImpersonationAuthorization(
                     actorUser,
                     provider
@@ -1229,19 +1348,21 @@ export class UserImpersonationResolver extends ResolverBase {
             }
 
             if (!isSameImpersonationKey && !isAuthorizedActorSession) {
-                await this.tryWriteAuditLog(provider, privilegedUser, context, {
-                    auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
-                    status: 'Failed',
-                    actorUserId: actorUser.ID,
-                    targetUserId: keyRow.UserID ?? actorUser.ID,
-                    description: `Denied MJEndUserImpersonation for key ${cleanApiKeyId}.`,
-                    details: {
-                        action: 'MJEndUserImpersonation',
-                        resultCode: 'FORBIDDEN',
+                if (this.shouldWriteDeniedAuditLog(actorUser.ID)) {
+                    await this.tryWriteAuditLog(provider, privilegedUser, context, {
+                        auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Denied,
+                        status: 'Failed',
                         actorUserId: actorUser.ID,
-                        apiKeyId: cleanApiKeyId,
-                    },
-                });
+                        targetUserId: keyRow.UserID ?? actorUser.ID,
+                        description: `Denied MJEndUserImpersonation for key ${cleanApiKeyId}.`,
+                        details: {
+                            action: 'MJEndUserImpersonation',
+                            resultCode: 'FORBIDDEN',
+                            actorUserId: actorUser.ID,
+                            apiKeyId: cleanApiKeyId,
+                        },
+                    });
+                }
                 return {
                     Success: false,
                     ResultCode: 'FORBIDDEN',
@@ -1250,17 +1371,17 @@ export class UserImpersonationResolver extends ResolverBase {
             }
 
             const engine = this.getApiKeyEngine();
-            await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, cleanApiKeyId);
+            await this.revokeImpersonationKey(engine, provider, privilegedUser, cleanApiKeyId);
 
             await this.tryWriteAuditLog(provider, privilegedUser, context, {
                 auditTypeName: USER_IMPERSONATION_AUDIT_LOG_TYPES.Ended,
                 status: 'Success',
-                actorUserId: parsedLabel.actorUserId ?? actorUser.ID,
+                actorUserId: verifiedMintActorId,
                 targetUserId: keyRow.UserID ?? parsedLabel.targetUserId ?? actorUser.ID,
                 description: `Ended user impersonation session (key ${cleanApiKeyId})`,
                 details: {
                     action: 'MJEndUserImpersonation',
-                    actorUserId: parsedLabel.actorUserId ?? actorUser.ID,
+                    actorUserId: verifiedMintActorId,
                     invokedByUserId: actorUser.ID,
                     apiKeyId: cleanApiKeyId,
                     targetUserId: keyRow.UserID ?? parsedLabel.targetUserId ?? null,
@@ -1294,47 +1415,48 @@ export class UserImpersonationResolver extends ResolverBase {
         readonly authorizationRoles: readonly AuthorizationRoleInfo[];
     }> {
         const rv = RunView.FromMetadataProvider(provider);
-        try {
-            const [authRes, authRolesRes] = await Promise.all([
-                rv.RunView<AuthorizationQueryRow>(
-                    {
-                        EntityName: 'MJ: Authorizations',
-                        Fields: ['ID', 'Name', 'ParentID', 'IsActive', 'UseAuditLog'],
-                        BypassCache: true,
-                        ResultType: 'simple',
-                    },
-                    privilegedUser
-                ),
-                rv.RunView<AuthorizationRoleQueryRow>(
-                    {
-                        EntityName: 'MJ: Authorization Roles',
-                        Fields: ['ID', 'AuthorizationID', 'RoleID', 'Type'],
-                        BypassCache: true,
-                        ResultType: 'simple',
-                    },
-                    privilegedUser
-                ),
-            ]);
+        const [authRes, authRolesRes] = await Promise.all([
+            rv.RunView<AuthorizationQueryRow>(
+                {
+                    EntityName: 'MJ: Authorizations',
+                    Fields: ['ID', 'Name', 'ParentID', 'IsActive', 'UseAuditLog'],
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                privilegedUser
+            ),
+            rv.RunView<AuthorizationRoleQueryRow>(
+                {
+                    EntityName: 'MJ: Authorization Roles',
+                    Fields: ['ID', 'AuthorizationID', 'RoleID', 'Type'],
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                privilegedUser
+            ),
+        ]);
 
-            const liveAuths =
-                authRes.Success && authRes.Results && authRes.Results.length > 0
-                    ? authRes.Results.map((r) => new AuthorizationInfo(r))
-                    : (provider.Authorizations ?? []);
-            const liveAuthRoles =
-                authRolesRes.Success && authRolesRes.Results && authRolesRes.Results.length > 0
-                    ? authRolesRes.Results.map((r) => new AuthorizationRoleInfo(r))
-                    : (provider.AuthorizationRoles ?? []);
-
-            return {
-                authorizations: liveAuths,
-                authorizationRoles: liveAuthRoles,
-            };
-        } catch {
-            return {
-                authorizations: provider.Authorizations ?? [],
-                authorizationRoles: provider.AuthorizationRoles ?? [],
-            };
+        if (!authRes.Success || !authRolesRes.Success) {
+            throw new Error(
+                authRes.ErrorMessage ||
+                    authRolesRes.ErrorMessage ||
+                    'Failed to query live authorization metadata.'
+            );
         }
+
+        const liveAuths =
+            authRes.Results && authRes.Results.length > 0
+                ? authRes.Results.map((r) => new AuthorizationInfo(r))
+                : (provider.Authorizations ?? []);
+        const liveAuthRoles =
+            authRolesRes.Results && authRolesRes.Results.length > 0
+                ? authRolesRes.Results.map((r) => new AuthorizationRoleInfo(r))
+                : (provider.AuthorizationRoles ?? []);
+
+        return {
+            authorizations: liveAuths,
+            authorizationRoles: liveAuthRoles,
+        };
     }
 
     private async loadImpersonatableUsers(
@@ -1366,8 +1488,10 @@ export class UserImpersonationResolver extends ResolverBase {
             this.loadLiveAuthorizationMetadata(provider, privilegedUser),
         ]);
 
-        if (!usersRes.Success) {
-            throw new Error(usersRes.ErrorMessage || 'Failed to query active users.');
+        if (!usersRes.Success || !userRolesRes.Success) {
+            throw new Error(
+                usersRes.ErrorMessage || userRolesRes.ErrorMessage || 'Failed to query active users or user roles.'
+            );
         }
 
         const roleIdsByLowerName = new Map<string, string>();
@@ -1379,7 +1503,7 @@ export class UserImpersonationResolver extends ResolverBase {
 
         const rolesByUserId = new Map<string, Set<string>>();
         const roleIdsByUserId = new Map<string, Set<string>>();
-        for (const row of userRolesRes.Success ? userRolesRes.Results ?? [] : []) {
+        for (const row of userRolesRes.Results ?? []) {
             if (!row.UserID || !IsValidUUID(row.UserID)) {
                 continue;
             }
@@ -1463,14 +1587,90 @@ export class UserImpersonationResolver extends ResolverBase {
     }
 
     /**
-     * Enforces single-active-key per actor: revokes and deletes any existing `MJ-Impersonation:v1:`
-     * keys previously minted by `actorUserId` before minting a new key.
+     * Verifies that `apiKeyId` was genuinely minted by `UserImpersonationResolver` by checking
+     * `MJ: Audit Logs` for a persisted `User Impersonation Started` (`Status = 'Success'`) row
+     * matching `(actorUserId, targetUserId, apiKeyId)`. Returns the verified actor UUID or `null`.
+     */
+    private async verifyResolverMintedImpersonationKey(
+        provider: IMetadataProvider,
+        privilegedUser: UserInfo,
+        apiKeyId: string,
+        expectedActorUserId: string,
+        expectedTargetUserId: string
+    ): Promise<string | null> {
+        const rv = RunView.FromMetadataProvider(provider);
+        let startedTypeId: string | undefined = provider.AuditLogTypes?.find(
+            (t) => t?.Name?.trim().toLowerCase() === USER_IMPERSONATION_AUDIT_LOG_TYPES.Started.toLowerCase()
+        )?.ID;
+        if (!startedTypeId) {
+            const typesRes = await rv.RunView<AuditLogTypeRow>(
+                {
+                    EntityName: 'MJ: Audit Log Types',
+                    Fields: ['ID', 'Name'],
+                    MaxRows: 200,
+                    BypassCache: true,
+                    ResultType: 'simple',
+                },
+                privilegedUser
+            );
+            startedTypeId = (typesRes.Success ? typesRes.Results ?? [] : []).find(
+                (t) => t.Name?.trim().toLowerCase() === USER_IMPERSONATION_AUDIT_LOG_TYPES.Started.toLowerCase()
+            )?.ID;
+        }
+        if (!startedTypeId) {
+            return null;
+        }
+
+        const auditRes = await rv.RunView<{ ID?: string; UserID?: string | null; RecordID?: string | null; Details?: string | null }>(
+            {
+                EntityName: 'MJ: Audit Logs',
+                ExtraFilter: `AuditLogTypeID = '${EscapeSQLString(startedTypeId)}' AND UserID = '${EscapeSQLString(expectedActorUserId)}' AND RecordID = '${EscapeSQLString(expectedTargetUserId)}' AND Status = 'Success'`,
+                Fields: ['ID', 'UserID', 'RecordID', 'Details'],
+                BypassCache: true,
+                ResultType: 'simple',
+            },
+            privilegedUser
+        );
+        if (!auditRes.Success) {
+            return null;
+        }
+
+        for (const row of auditRes.Results ?? []) {
+            if (!row.Details) {
+                continue;
+            }
+            try {
+                const parsed: unknown = JSON.parse(row.Details);
+                if (parsed && typeof parsed === 'object') {
+                    const detailsObj = parsed as Record<string, unknown>;
+                    const loggedKeyId = typeof detailsObj['apiKeyId'] === 'string' ? detailsObj['apiKeyId'].trim() : '';
+                    const loggedAction = detailsObj['action'];
+                    if (
+                        loggedAction === 'MJStartUserImpersonation' &&
+                        loggedKeyId &&
+                        UUIDsEqual(loggedKeyId, apiKeyId)
+                    ) {
+                        return NormalizeUUID(expectedActorUserId);
+                    }
+                }
+            } catch {
+                // Ignore malformed audit details
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Enforces single-active-key per actor: revokes any existing active `MJ-Impersonation:v1:`
+     * keys previously minted by `actorUserId` (optionally excluding `keepApiKeyId` for post-mint
+     * cross-replica sibling sweeps). Preserves the revoked `MJ: API Keys` row for forensic history.
      */
     private async revokeExistingActorImpersonationKeys(
         engine: APIKeyEngine,
         provider: IMetadataProvider,
         privilegedUser: UserInfo,
-        actorUserId: string
+        actorUserId: string,
+        keepApiKeyId?: string
     ): Promise<void> {
         const likePattern = BuildActorImpersonationKeyLikePattern(actorUserId);
         if (!likePattern) {
@@ -1491,6 +1691,12 @@ export class UserImpersonationResolver extends ResolverBase {
             return;
         }
         for (const existing of existingRes.Results ?? []) {
+            if (keepApiKeyId && existing.ID && UUIDsEqual(existing.ID, keepApiKeyId)) {
+                continue;
+            }
+            if (existing.Status && existing.Status.trim().toLowerCase() === 'revoked') {
+                continue;
+            }
             const parsed = ParseImpersonationKeyLabel(existing.Label);
             if (
                 existing.ID &&
@@ -1498,21 +1704,34 @@ export class UserImpersonationResolver extends ResolverBase {
                 parsed.actorUserId &&
                 UUIDsEqual(parsed.actorUserId, actorUserId)
             ) {
-                await this.revokeAndDeleteImpersonationKey(engine, provider, privilegedUser, existing.ID);
+                await this.revokeImpersonationKey(engine, provider, privilegedUser, existing.ID);
             }
         }
     }
 
-    private async revokeAndDeleteImpersonationKey(
+    /**
+     * Revokes a temporary impersonation key, strips its scope/application bindings, immediately closes
+     * any active GraphQL WebSocket connections authenticated with that key, and refreshes `APIKeyEngine`.
+     *
+     * By default, **retains** the `MJ: API Keys` row with `Status = 'Revoked'` so forensic audit
+     * history remains intact. Pass `deleteKeyRowOnRollback: true` only when rolling back an aborted
+     * mint whose `RawApiKey` was never issued.
+     */
+    private async revokeImpersonationKey(
         engine: APIKeyEngine,
         provider: IMetadataProvider,
         privilegedUser: UserInfo,
-        apiKeyId: string
+        apiKeyId: string,
+        options?: { readonly deleteKeyRowOnRollback?: boolean }
     ): Promise<void> {
         const cleanId = parseCleanUuid(apiKeyId);
         if (!cleanId) {
             return;
         }
+
+        // 0. Immediately sever any active GraphQL WebSocket connections authenticated with this key.
+        CloseImpersonationWebSockets(cleanId);
+
         const rv = RunView.FromMetadataProvider(provider);
 
         // 1. Delete all MJ: API Key Scopes bound to this temporary key
@@ -1575,7 +1794,7 @@ export class UserImpersonationResolver extends ResolverBase {
             // Continue revocation
         }
 
-        // 3. Revoke via APIKeyEngine (immediately marks Revoked and evicts validation cache)
+        // 3. Revoke via APIKeyEngine (immediately marks Status='Revoked' and evicts validation cache)
         try {
             await engine.RevokeAPIKey(cleanId, privilegedUser, provider);
         } catch (err) {
@@ -1584,14 +1803,16 @@ export class UserImpersonationResolver extends ResolverBase {
             );
         }
 
-        // 4. Delete the MJ: API Keys row when possible (if usage-log FK retains it, Status is already Revoked)
-        try {
-            const keyEntity = await provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', privilegedUser);
-            if (await keyEntity.Load(cleanId)) {
-                await keyEntity.Delete();
+        // 4. Keep the revoked MJ: API Keys row for forensic history; delete only on aborted-mint rollback.
+        if (options?.deleteKeyRowOnRollback) {
+            try {
+                const keyEntity = await provider.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', privilegedUser);
+                if (await keyEntity.Load(cleanId)) {
+                    await keyEntity.Delete();
+                }
+            } catch {
+                // Non-fatal: key is already Revoked with 0 scopes and cache-evicted.
             }
-        } catch {
-            // Non-fatal: key is already Revoked with 0 scopes and cache-evicted.
         }
 
         try {

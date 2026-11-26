@@ -2,6 +2,7 @@ import { AuthorizationError, UseMiddleware, getMetadataStorage, type MiddlewareF
 import { LogStatus, type UserInfo } from '@memberjunction/core';
 import type { AppContext } from '../types.js';
 import { IsScopeLimitedPrincipal } from './scopeLimitedPrincipal.js';
+import { GetImpersonationSession } from './impersonationGuard.js';
 
 /**
  * The slice of type-graphql's resolver metadata this module reads: which class declares a
@@ -92,6 +93,93 @@ export function RefuseScopeLimitedPrincipals(): ClassDecorator & MethodDecorator
  */
 export function IsRefusedToScopeLimitedPrincipals(resolverClass: Function, methodName: string): boolean {
     return refusedClasses.has(resolverClass) || (refusedMethods.get(resolverClass)?.has(methodName) ?? false);
+}
+
+/** Resolver classes whose every root field refuses impersonation sessions. */
+const impersonationRefusedClasses = new Set<Function>();
+/** Individual root fields that refuse impersonation sessions, keyed by declaring class. */
+const impersonationRefusedMethods = new Map<Function, Set<string>>();
+/** Root fields that already carry the impersonation refusal middleware. */
+const impersonationGuardedFields = new Map<Function, Set<string>>();
+
+/**
+ * type-graphql middleware that refuses a root field to active user impersonation sessions
+ * (`ViewAs` and `ActAs`). Used on side-effecting `@Query` resolvers (external probes, pre-auth
+ * URL minting, communication dispatch) and out-of-band execution entrypoints (agents, actions,
+ * prompts, templates, remote operations) that would escape read-only confinement or outlive the
+ * short-lived impersonation key TTL.
+ */
+export const ImpersonationSessionRefusalGuard: MiddlewareFn<AppContext> = async ({ context, info }, next) => {
+    const session = GetImpersonationSession(context?.userPayload);
+    if (session) {
+        LogStatus(
+            `[Auth] Refused ${info.parentType.name}.${info.fieldName} for user impersonation session (key ${session.apiKeyId}, mode ${session.mode}).`
+        );
+        throw new AuthorizationError(
+            `${info.fieldName} is prohibited during user impersonation sessions.`
+        );
+    }
+    return next();
+};
+
+/**
+ * Refuses the decorated GraphQL root field(s) to any user impersonation session (`ViewAs` or `ActAs`).
+ * Mirrors {@link RefuseScopeLimitedPrincipals}: records intent at import time, and `Serve()` attaches
+ * {@link ImpersonationSessionRefusalGuard} via {@link ApplyImpersonationRefusalGuards} before building
+ * the GraphQL schema.
+ */
+export function RefuseImpersonationSessions(): ClassDecorator & MethodDecorator {
+    return ((target: Function | object, propertyKey?: string | symbol) => {
+        if (propertyKey === undefined) {
+            impersonationRefusedClasses.add(target as Function);
+            return;
+        }
+        if (typeof propertyKey === 'symbol') {
+            throw new Error('RefuseImpersonationSessions cannot decorate a symbol-keyed member.');
+        }
+        const resolverClass = (target as object).constructor;
+        const methods = impersonationRefusedMethods.get(resolverClass) ?? new Set<string>();
+        methods.add(propertyKey);
+        impersonationRefusedMethods.set(resolverClass, methods);
+    }) as ClassDecorator & MethodDecorator;
+}
+
+/**
+ * True when the root field `methodName` declared by `resolverClass` refuses impersonation sessions.
+ */
+export function IsRefusedToImpersonationSessions(resolverClass: Function, methodName: string): boolean {
+    return (
+        impersonationRefusedClasses.has(resolverClass) ||
+        (impersonationRefusedMethods.get(resolverClass)?.has(methodName) ?? false)
+    );
+}
+
+/**
+ * Attaches {@link ImpersonationSessionRefusalGuard} to every root field marked with
+ * {@link RefuseImpersonationSessions}. Called in `Serve()` right alongside
+ * {@link ApplyScopeLimitedPrincipalGuards}.
+ */
+export function ApplyImpersonationRefusalGuards(): number {
+    const storage = getMetadataStorage() as unknown as {
+        queries: ReadonlyArray<ResolverFieldMeta>;
+        mutations: ReadonlyArray<ResolverFieldMeta>;
+        subscriptions: ReadonlyArray<ResolverFieldMeta>;
+    };
+    let added = 0;
+    for (const field of [...storage.queries, ...storage.mutations, ...storage.subscriptions]) {
+        if (!IsRefusedToImpersonationSessions(field.target, field.methodName)) {
+            continue;
+        }
+        const done = impersonationGuardedFields.get(field.target) ?? new Set<string>();
+        if (done.has(field.methodName)) {
+            continue;
+        }
+        UseMiddleware(ImpersonationSessionRefusalGuard)(field.target.prototype, field.methodName, {});
+        done.add(field.methodName);
+        impersonationGuardedFields.set(field.target, done);
+        added++;
+    }
+    return added;
 }
 
 /**

@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT194 - User Impersonation End-to-End Security, Expiry, Audit & Regression",
+    "Description": "Real-database deterministic security and regression checks for Generic User Impersonation (UI1-UI5). UI1 verifies end-to-end grant, enable, mint, single-lookup ValidateAPIKey, target read, refused forbidden entity & write, end, and post-end key authentication failure. UI2 verifies all 8 refusal invariants (no grant, kill switch off, regular API-key caller, impersonation chaining, Administrator, Owner, self, peer impersonator). UI3 verifies past-ExpiresAt refusal across ValidateAPIKey, HTTP guard (401), and WebSocket onSubscribe. UI4 verifies Started/Ended/Denied MJ: Audit Logs rows without RawApiKey leakage and fail-closed rollback deleting the minted key on audit save failure. UI5 verifies normal user sessions and normal user API keys behave identically with MJ_ENABLE_USER_IMPERSONATION both off and on. Self-cleaning throwaway fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All 5 User Impersonation checks (UI1-UI5) pass against a real database with zero leaked fixture rows."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "user-impersonation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E7440EDA-DCFA-4AB8-B335-B24A4F69B65E"
+  }
+}

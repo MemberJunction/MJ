@@ -12,8 +12,9 @@ export const USER_IMPERSONATION_MAX_TTL_MINUTES = 60;
 
 /**
  * Baseline privileged role names whose holders may NEVER be listed or impersonated.
- * Deployments may configure `userImpersonation.protectedTargetRoles` to customize or extend this set;
- * baseline roles (`Administrator`, `Developer`, `Integration`) are the default.
+ * Deployments may configure `userImpersonation.protectedTargetRoles` to extend this baseline;
+ * `ResolveUserImpersonationConfig` always unions configured roles with `DEFAULT_PROTECTED_TARGET_ROLES`
+ * so `Administrator`, `Developer`, and `Integration` can never be weakened or removed.
  */
 export const DEFAULT_PROTECTED_TARGET_ROLES: readonly string[] = Object.freeze([
     'Administrator',
@@ -191,9 +192,21 @@ export function ResolveUserImpersonationConfig(
     );
 
     const configuredRoles = cfg?.protectedTargetRoles;
-    const protectedTargetRoles = Array.isArray(configuredRoles)
-        ? configuredRoles.map((r) => r.trim()).filter(Boolean)
-        : [...DEFAULT_PROTECTED_TARGET_ROLES];
+    // Always union configured roles with DEFAULT_PROTECTED_TARGET_ROLES so configuration
+    // can only EXTEND the baseline protection (Administrator, Developer, Integration), never weaken it.
+    const mergedProtectedRoles = new Map<string, string>();
+    for (const baselineRole of DEFAULT_PROTECTED_TARGET_ROLES) {
+        mergedProtectedRoles.set(baselineRole.toLowerCase(), baselineRole);
+    }
+    if (Array.isArray(configuredRoles)) {
+        for (const rawRole of configuredRoles) {
+            const trimmed = typeof rawRole === 'string' ? rawRole.trim() : '';
+            if (trimmed && !mergedProtectedRoles.has(trimmed.toLowerCase())) {
+                mergedProtectedRoles.set(trimmed.toLowerCase(), trimmed);
+            }
+        }
+    }
+    const protectedTargetRoles = Array.from(mergedProtectedRoles.values());
 
     return {
         enabled,

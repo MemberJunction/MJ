@@ -3325,9 +3325,13 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             fullRecordJSON = JSON.stringify(this.EscapeQuotesInProperties(dataForFullJSON, quoteToEscape));
         }
         const changesJSON = changes !== null ? JSON.stringify(changes) : '';
-        const changesDescription = (oldData && newData)
+        const baseChangesDescription = (oldData && newData)
             ? this.CreateUserDescriptionOfChanges(changes!)
             : (!oldData ? 'Record Created' : 'Record Deleted');
+        const impCtx = user?.ImpersonationContext;
+        const changesDescription = impCtx
+            ? `${baseChangesDescription} [Impersonated by ActorUserID=${impCtx.ActorUserID ?? 'unknown'}, APIKeyID=${impCtx.APIKeyID}, Mode=${impCtx.Mode}]`
+            : baseChangesDescription;
 
         const source: RecordChangeSource = restoreContext
             ? 'Restore'

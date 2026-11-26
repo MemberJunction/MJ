@@ -125,6 +125,7 @@ const ENTITIES_THAT_ALWAYS_LOAD_STORED_ROW: ReadonlySet<string> = new Set([
   'mj: collection artifacts',
   'mj: artifact working states',
   'mj: artifact guest share links',
+  'mj: api keys',
 ]);
 
 interface ActiveEntitySessionListener {
@@ -368,7 +369,8 @@ export class ResolverBase {
   ): Promise<boolean> {
     const impersonationSession = GetImpersonationSession(contextUser);
     if (impersonationSession) {
-      if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+      const entityMeta = (provider ?? contextUser?.OwningProvider)?.EntityByName?.(entityName);
+      if (IsEntityForbiddenDuringImpersonation(entityName, contextUser, entityMeta)) {
         return false;
       }
       if (entityName === 'MJ: Conversations') {
@@ -673,7 +675,8 @@ export class ResolverBase {
       return [];
     }
     if (GetImpersonationSession(contextUser)) {
-      if (IsEntityForbiddenDuringImpersonation(entityName, contextUser)) {
+      const entityMeta = (provider ?? contextUser?.OwningProvider)?.EntityByName?.(entityName);
+      if (IsEntityForbiddenDuringImpersonation(entityName, contextUser, entityMeta)) {
         return [];
       }
       if (entityName === 'MJ: Conversations' || entityName === 'MJ: Conversation Details') {
@@ -1380,14 +1383,17 @@ export class ResolverBase {
       // for per-session synthesized identities. Fall back to the cache lookup when the payload
       // user has no roles attached (older/edge auth paths).
       const payloadUser = this.GetUserFromPayload(userPayload);
-      const userInfo = (payloadUser && payloadUser.UserRoles && payloadUser.UserRoles.length > 0)
+      const isImpersonatedRequest = GetImpersonationSession(userPayload) !== null;
+      const userInfo = isImpersonatedRequest
         ? payloadUser
-        : UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
+        : (payloadUser && payloadUser.UserRoles && payloadUser.UserRoles.length > 0)
+          ? payloadUser
+          : UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
       if (!userInfo) {
         throw new Error(`User ${userPayload.email} not found in metadata`);
       }
 
-      if (GetImpersonationSession(userPayload) && IsEntityForbiddenDuringImpersonation(entityInfo.Name, userInfo)) {
+      if (isImpersonatedRequest && IsEntityForbiddenDuringImpersonation(entityInfo.Name, userInfo, entityInfo)) {
         throw new AuthorizationError(
           `Access to '${entityInfo.Name}' is prohibited during user impersonation sessions.`
         );
@@ -1529,7 +1535,7 @@ export class ResolverBase {
       return;
     }
     const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
-    if (entity && IsEntityForbiddenDuringImpersonation(entity.Name, user)) {
+    if (entity && IsEntityForbiddenDuringImpersonation(entity.Name, user, entity)) {
       throw new Error(
         `Invalid ${label}: reading '${entity.Name}' is prohibited during user impersonation sessions`
       );
@@ -1573,7 +1579,7 @@ export class ResolverBase {
     for (const relation of reads.Relations) {
       if (relation.IsCTEReference) continue;
       const entity = ClientClauseScreen.AssertRelationReadable(allowed, relation, label, user);
-      if (entity && GetImpersonationSession(user) && IsEntityForbiddenDuringImpersonation(entity.Name, user)) {
+      if (entity && GetImpersonationSession(user) && IsEntityForbiddenDuringImpersonation(entity.Name, user, entity)) {
         throw new Error(
           `Invalid ${label}: reading '${entity.Name}' is prohibited during user impersonation sessions`
         );
@@ -2107,7 +2113,32 @@ export class ResolverBase {
       if (status?.trim().toLowerCase() === 'success') auditLog.Status = 'Success';
       else auditLog.Status = 'Failed';
 
-      if (details) auditLog.Details = details;
+      const impersonationSession = GetImpersonationSession(userPayload) ?? GetImpersonationSession(userInfo);
+      if (impersonationSession) {
+        const impersonationMeta = {
+          actorUserId: impersonationSession.actorUserId,
+          targetUserId: impersonationSession.targetUserId,
+          apiKeyId: impersonationSession.apiKeyId,
+          mode: impersonationSession.mode,
+        };
+        let mergedDetails: Record<string, unknown> = { impersonation: impersonationMeta };
+        if (details) {
+          try {
+            const parsed: unknown = JSON.parse(details);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+              mergedDetails = { ...(parsed as Record<string, unknown>), impersonation: impersonationMeta };
+            } else {
+              mergedDetails = { originalDetails: details, impersonation: impersonationMeta };
+            }
+          } catch {
+            mergedDetails = { originalDetails: details, impersonation: impersonationMeta };
+          }
+        }
+        auditLog.Details = JSON.stringify(mergedDetails);
+        auditLog.Description = `${auditLogTypeName} [Impersonated by ActorUserID=${impersonationSession.actorUserId ?? 'unknown'}, APIKeyID=${impersonationSession.apiKeyId}, Mode=${impersonationSession.mode}]`;
+      } else if (details) {
+        auditLog.Details = details;
+      }
 
       auditLog.EntityID = entityId;
 

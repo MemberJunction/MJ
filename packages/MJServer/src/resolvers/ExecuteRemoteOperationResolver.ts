@@ -6,6 +6,8 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { AppContext } from '../types.js';
 import { GetReadWriteProvider } from '../util.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
+import { RefuseImpersonationSessions } from '../auth/scopeLimitedAccess.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
 import { LoadSynthesizeArtifactFromSourcesOperation } from '../operations/SynthesizeArtifactFromSourcesServerOperation.js';
 import { LoadArtifactComplianceAuditOperation } from '../operations/ArtifactComplianceAuditHelper.js';
 import { LoadArtifactEvaluateAiFormulaOperation } from '../operations/ArtifactEvaluateAiFormulaServerOperation.js';
@@ -111,12 +113,14 @@ export class ExecuteRemoteOperationResultType {
  */
 @Resolver()
 export class ExecuteRemoteOperationResolver extends ResolverBase {
+    @RefuseImpersonationSessions()
     @Mutation(() => ExecuteRemoteOperationResultType)
     async ExecuteRemoteOperation(
         @Arg('input', () => ExecuteRemoteOperationInput) input: ExecuteRemoteOperationInput,
         @Ctx() ctx: AppContext,
         @PubSub() pubSub: PubSubEngine,
     ): Promise<ExecuteRemoteOperationResultType> {
+        AssertNotImpersonationSession(ctx.userPayload, 'ExecuteRemoteOperation');
         try {
             const key = input.operationKey?.trim();
             if (!key) {

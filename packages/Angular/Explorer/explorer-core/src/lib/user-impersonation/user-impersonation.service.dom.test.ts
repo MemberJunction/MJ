@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
+import { LocalCacheManager } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
@@ -362,8 +363,10 @@ describe('MJUserImpersonationService', () => {
         expect(service.GetActiveAdapters()).toEqual([]);
     });
 
-    it('emits MJEventType.TenantChanged on default workspace reset to flush cached tabs', async () => {
+    it('emits MJEventType.TenantChanged and clears LocalCacheManager on default workspace reset to isolate actor and target caches', async () => {
         const raiseSpy = vi.spyOn(MJGlobal.Instance, 'RaiseEvent');
+        vi.spyOn(LocalCacheManager.Instance, 'IsInitialized', 'get').mockReturnValue(true);
+        const clearAllSpy = vi.spyOn(LocalCacheManager.Instance, 'ClearAll').mockResolvedValue(0);
         const actorProvider: MJImpersonationProviderLike = {
             CurrentUser: {
                 ID: ACTOR_USER_ID,
@@ -418,5 +421,9 @@ describe('MJUserImpersonationService', () => {
         expect(raiseSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: MJEventType.TenantChanged })
         );
+        expect(clearAllSpy).toHaveBeenCalledTimes(1);
+
+        await service.ExitImpersonation();
+        expect(clearAllSpy).toHaveBeenCalledTimes(2);
     });
 });

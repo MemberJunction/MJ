@@ -11,7 +11,8 @@ import { ChatParams, ChatMessage, ChatMessageRole, GetAIAPIKey, BaseLLM } from '
 import { MJGlobal } from '@memberjunction/global';
 import { MJAIModelVendorEntity } from '@memberjunction/core-entities';
 import { GetReadWriteProvider } from '../util.js';
-import { RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { RefuseImpersonationSessions, RefuseScopeLimitedPrincipals } from '../auth/scopeLimitedAccess.js';
+import { AssertNotImpersonationSession } from '../auth/impersonationGuard.js';
 
 @ObjectType()
 export class AIPromptRunResult {
@@ -105,6 +106,7 @@ interface SimplePromptModelChoice {
 }
 
 @RefuseScopeLimitedPrincipals()
+@RefuseImpersonationSessions()
 @Resolver()
 export class RunAIPromptResolver extends ResolverBase {
     /**
@@ -330,6 +332,7 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('rerunFromPromptRunID', { nullable: true }) rerunFromPromptRunID?: string,
         @Arg('systemPromptOverride', { nullable: true }) systemPromptOverride?: string
     ): Promise<AIPromptRunResult> {
+        AssertNotImpersonationSession(userPayload, 'RunAIPrompt');
         // Check API key scope authorization for prompt execution
         await this.CheckAPIKeyScopeAuthorization('prompt:execute', promptId, userPayload);
 
@@ -695,6 +698,7 @@ export class RunAIPromptResolver extends ResolverBase {
         @Arg('modelPower', { nullable: true }) modelPower?: string,
         @Arg('responseFormat', { nullable: true }) responseFormat?: string
     ): Promise<SimplePromptResult> {
+        AssertNotImpersonationSession(userPayload, 'ExecuteSimplePrompt');
         // Check API key scope authorization for simple prompt execution
         await this.CheckAPIKeyScopeAuthorization('prompt:execute', '*', userPayload);
 
@@ -823,6 +827,7 @@ export class RunAIPromptResolver extends ResolverBase {
         @Ctx() { userPayload }: { userPayload: UserPayload },
         @Arg('inputType', { nullable: true, description: "'query' for search text, 'document' (default) for text that is stored and compared" }) inputType?: string
     ): Promise<EmbedTextResult> {
+        AssertNotImpersonationSession(userPayload, 'EmbedText');
         // Check API key scope authorization for embedding generation
         await this.CheckAPIKeyScopeAuthorization('embedding:generate', '*', userPayload);
 

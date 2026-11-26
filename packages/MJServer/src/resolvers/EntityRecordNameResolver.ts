@@ -5,7 +5,7 @@ import { AppContext, UserPayload } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadOnlyProvider } from '../util.js';
-import { GetImpersonationSession } from '../auth/impersonationGuard.js';
+import { GetImpersonationSession, IsEntityForbiddenDuringImpersonation } from '../auth/impersonationGuard.js';
 
 @InputType()
 export class EntityRecordNameInput {
@@ -87,6 +87,17 @@ export class EntityRecordNameResolver extends ResolverBase {
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {
       const contextUser = userPayload ? this.GetUserFromPayload(userPayload) : undefined;
+      if (
+        (GetImpersonationSession(userPayload) || GetImpersonationSession(contextUser)) &&
+        IsEntityForbiddenDuringImpersonation(e.Name, contextUser, e)
+      ) {
+        return {
+          Success: false,
+          Status: `Name for record, or record ${pk.ToString()} itself not found, could be an access issue`,
+          CompositeKey: pk,
+          EntityName,
+        };
+      }
       if (
         contextUser &&
         GetImpersonationSession(userPayload) &&
