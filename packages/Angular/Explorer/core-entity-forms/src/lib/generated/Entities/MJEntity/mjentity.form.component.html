@@ -3281,6 +3281,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Record Artifacts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJRecordArtifacts"
+        SectionName="Record Artifacts"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJRecordArtifacts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Artifacts','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Artifacts','EntityID')"
+                [AllowLoad]="IsSectionExpanded('mJRecordArtifacts')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJRecordArtifacts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

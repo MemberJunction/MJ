@@ -376,6 +376,7 @@ import type {
   MJRecommendationProviderEntityType,
   MJRecommendationRunEntityType,
   MJRecommendationEntityType,
+  MJRecordArtifactEntityType,
   MJRecordChangeReplayRunEntityType,
   MJRecordChangeEntityType,
   MJRecordCloneLogItemEntityType,
@@ -102389,6 +102390,217 @@ export class MJRecommendationEntity extends BaseEntity<MJRecommendationEntityTyp
     */
     get SourceEntity(): string | null {
         return this.Get('SourceEntity');
+    }
+}
+
+
+/**
+ * MJ: Record Artifacts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: RecordArtifact
+ * * Base View: vwRecordArtifacts
+ * * @description Polymorphic join table linking any MemberJunction entity record (EntityID + RecordID) to an MJ: Artifacts document or asset with semantic Role, ordering Sequence, optional PinnedArtifactVersionID, context notes, and attribution.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Record Artifacts')
+export class MJRecordArtifactEntity extends BaseEntity<MJRecordArtifactEntityType> {
+    /**
+    * Loads the MJ: Record Artifacts record from the database
+    * @param ID: string - primary key value to load the MJ: Record Artifacts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJRecordArtifactEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityID
+    * * Display Name: Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Foreign key to Entity identifying the type of host record linked to the artifact.
+    */
+    get EntityID(): string {
+        return this.Get('EntityID');
+    }
+    set EntityID(value: string) {
+        this.Set('EntityID', value);
+    }
+
+    /**
+    * * Field Name: RecordID
+    * * Display Name: Record ID
+    * * SQL Data Type: nvarchar(700)
+    * * Description: Serialized primary key (compact URL segment for single or composite keys) of the host record in EntityID.
+    */
+    get RecordID(): string {
+        return this.Get('RecordID');
+    }
+    set RecordID(value: string) {
+        this.Set('RecordID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    * * Description: Foreign key to Artifact identifying the linked MJ Docs artifact.
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: PinnedArtifactVersionID
+    * * Display Name: Pinned Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Optional foreign key to ArtifactVersion pinning this record link to a specific immutable version instead of floating to latest.
+    */
+    get PinnedArtifactVersionID(): string | null {
+        return this.Get('PinnedArtifactVersionID');
+    }
+    set PinnedArtifactVersionID(value: string | null) {
+        this.Set('PinnedArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(100)
+    * * Default Value: General
+    * * Description: Semantic role of the linked artifact on the host record (for example General, Brief, Spec, Proposal, MeetingNotes, Reference). Non-null with default General for identical SQL Server and PostgreSQL uniqueness semantics.
+    */
+    get Role(): string {
+        return this.Get('Role');
+    }
+    set Role(value: string) {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Display sort order for artifacts linked to the same host record (lower numbers appear first).
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: ContextDescription
+    * * Display Name: Context Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional human-readable context note explaining why this artifact is linked to the host record.
+    */
+    get ContextDescription(): string | null {
+        return this.Get('ContextDescription');
+    }
+    set ContextDescription(value: string | null) {
+        this.Set('ContextDescription', value);
+    }
+
+    /**
+    * * Field Name: LinkedByUserID
+    * * Display Name: Linked By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: Optional foreign key to User identifying who linked this artifact to the host record.
+    */
+    get LinkedByUserID(): string | null {
+        return this.Get('LinkedByUserID');
+    }
+    set LinkedByUserID(value: string | null) {
+        this.Set('LinkedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string | null {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string | null {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: PinnedArtifactVersion
+    * * Display Name: Pinned Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PinnedArtifactVersion(): string | null {
+        return this.Get('PinnedArtifactVersion');
+    }
+
+    /**
+    * * Field Name: LinkedByUser
+    * * Display Name: Linked By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LinkedByUser(): string | null {
+        return this.Get('LinkedByUser');
     }
 }
 

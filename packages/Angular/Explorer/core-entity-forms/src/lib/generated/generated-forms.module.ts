@@ -388,6 +388,7 @@ import { MJRecommendationFormComponent } from "./Entities/MJRecommendation/mjrec
 import { MJRecommendationItemFormComponent } from "./Entities/MJRecommendationItem/mjrecommendationitem.form.component";
 import { MJRecommendationProviderFormComponent } from "./Entities/MJRecommendationProvider/mjrecommendationprovider.form.component";
 import { MJRecommendationRunFormComponent } from "./Entities/MJRecommendationRun/mjrecommendationrun.form.component";
+import { MJRecordArtifactFormComponent } from "./Entities/MJRecordArtifact/mjrecordartifact.form.component";
 import { MJRecordChangeFormComponent } from "./Entities/MJRecordChange/mjrecordchange.form.component";
 import { MJRecordChangeReplayRunFormComponent } from "./Entities/MJRecordChangeReplayRun/mjrecordchangereplayrun.form.component";
 import { MJRecordCloneLogFormComponent } from "./Entities/MJRecordCloneLog/mjrecordclonelog.form.component";
@@ -830,6 +831,7 @@ declarations: [
     MJDatasetItemFormComponent,
     MJInstanceConfigurationFormComponent,
     MJQueryParameterFormComponent,
+    MJRecordArtifactFormComponent,
     MJRubricEvaluationScoreFormComponent,
     MJTagCoOccurrenceFormComponent,
     MJTemplateContentFormComponent

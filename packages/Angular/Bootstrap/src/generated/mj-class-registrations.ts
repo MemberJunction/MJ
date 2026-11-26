@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (534 classes)
+// @memberjunction/core-entities (535 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -447,6 +447,7 @@ import {
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
+    MJRecordArtifactEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
@@ -1394,6 +1395,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJRecommendationItemEntity,
     MJRecommendationProviderEntity,
     MJRecommendationRunEntity,
+    MJRecordArtifactEntity,
     MJRecordChangeEntity,
     MJRecordChangeReplayRunEntity,
     MJRecordCloneLogEntity,
@@ -1571,11 +1573,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
     ArtifactWorkspaceChannel,
-    ClientContextChannel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
     RealtimeAvatarChannel,
@@ -1775,11 +1777,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
-    SettingsExplorerComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SettingsExplorerComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
     TabStripLabComponent,
@@ -1839,7 +1841,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 844;
+export const CLASS_REGISTRATIONS_COUNT = 845;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

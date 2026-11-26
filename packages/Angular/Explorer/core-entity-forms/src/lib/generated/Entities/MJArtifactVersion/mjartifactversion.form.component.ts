@@ -26,7 +26,8 @@ export class MJArtifactVersionFormComponent extends BaseFormComponent {
             { sectionKey: 'mJArtifactUses', sectionName: 'Artifact Uses', isExpanded: false },
             { sectionKey: 'mJConversationDetailArtifacts', sectionName: 'Conversation Detail Artifacts', isExpanded: false },
             { sectionKey: 'mJConversationDetailAttachments', sectionName: 'Conversation Detail Attachments', isExpanded: false },
-            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false }
+            { sectionKey: 'mJSignatureRequestDocuments', sectionName: 'Signature Request Documents', isExpanded: false },
+            { sectionKey: 'mJRecordArtifacts', sectionName: 'Record Artifacts', isExpanded: false }
         ]);
     }
 }
