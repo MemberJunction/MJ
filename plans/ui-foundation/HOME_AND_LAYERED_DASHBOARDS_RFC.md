@@ -15,6 +15,7 @@ From the review of #6818 by Matt and Colin.
 - **A thin Home shell with compiled Angular defaults.** Home must not wait on React for first paint. It keeps its `?dashboard=` switching, agent tools, Quick Access and application access filtering.
 - **Core Home does not depend on BizApps widgets.**
 - **The card grid is built once**, in `dashboard-viewer`, and Home uses it.
+- **Shared across web, mobile and desktop.** MJ Desktop (Windows, macOS, Linux; see [ONE_CONTRACT_PLAN.md](ONE_CONTRACT_PLAN.md) section 5) mounts the same Card Grid dashboards and lets individual widgets pin to the system tray or OS desktop.
 
 ## Open questions
 
