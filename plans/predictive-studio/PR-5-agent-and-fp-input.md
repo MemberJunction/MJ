@@ -1952,7 +1952,7 @@ the builder ignore `spec.UnitDraft` → attack 9 goes red.
 
 #### A4 — Profiling, fixed refusals, the Decision Log and replay
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** The read-only Profile Prediction Target Action (development rows only, through `AgentReadScope`, computed
 by a new sidecar `POST /profile` endpoint, D5-32), the fixed small-data refusal and the stored no-usable-signal outcome
@@ -2067,7 +2067,7 @@ packages/AI/PredictiveStudio/Engine/src/agent/__tests__/profile-verdict.test.ts
 packages/AI/PredictiveStudio/Engine/src/actions/__tests__/profile-prediction-target.test.ts
 packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/agent-decision-log/agent-decision-log.component.ts
 packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/agent-decision-log/agent-decision-log.component.html
-packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/agent-decision-log/agent-decision-log.component.scss
+packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/agent-decision-log/agent-decision-log.component.css  (D5-A4-9: was .scss)
 metadata/actions/predictive-studio/.predictive-studio-actions.json
 metadata/agents/.model-development-agent.json
 metadata-optional/integration-test/tests/gates/.gate-C1-C1.3.json
@@ -3460,6 +3460,70 @@ Record every decision taken in §9 and, when it changes another plan's interface
   must move to a step only the builder refuses. · Under A3 a plan with an unresolved target is never presented (attack
   7), so the old `NoSuchTargetColumn` failure could not reach an approval. · The controller changing it at integration.
   Controller ruling (sent as "D5-A3-7"; recorded as D5-A3-11 because D5-A3-7 was already taken).
+- D5-A4-1 · 2026-11-27 · CodeGen's entity name is kept as **`MJ: Agent Decision Log`** (singular): section A4 writes the
+  entity row itself under a fixed ID (`D1C82724-8B0A-4DAE-B146-64F7FBB7AD84`), as CodeGen writes a new entity, with
+  `TrackRecordChanges = 0`, plus CodeGen's defaults for a new entity (the application link, UI read and Developer /
+  Integration full permissions); CodeGen then generates the fields, view and procedures (17 fields, `vwAgentDecisionLogs`).
+  The PS precedent is `V202611231001`'s `MJ: Latest Feature Values` row. · CodeGen gives every new entity
+  `TrackRecordChanges = 1`, and its only per-table setting is the non-PS `additionalSchemaInfo.json`. · Letting CodeGen
+  create the entity with Record Changes on (the contract says off); an owner-batch item for the config file.
+- D5-A4-2 · 2026-11-27 · `VendorCallParameters` (PR 1's product type, members `VendorModelName`, `Temperature`,
+  `MaxTokens`, `Seed`) is not in `@memberjunction/ai` at this head, so `Core/src/agent-contracts.ts` declares it with the
+  same members. `VendorModelName` is the `MJ: AI Model Vendors.APIName` of the prompt run's model and vendor; `MaxTokens`
+  is null (the prompt run does not record the cap it was sent with); `promptVersionHash` = SHA-256 of the prompt run's
+  rendered `Messages`. A code step's `Replay` is all nulls (no prompt). · The decision row must name the parameters a
+  prompt was sent with. · Waiting for PR 1's type to land in `@memberjunction/ai`.
+- D5-A4-3 · 2026-11-27 · The log's hashes are `AgentControlPath.PlanHash` (the plan content, `UnitDraft` and
+  `ProtocolDraft` included), so a `present-plan` row's `ResultingPayloadHash` is the presented plan's hash (rule 5,
+  D5-36). A row's `PayloadHash` is the previous row's `ResultingPayloadHash` (the chain `Append` compares); when a prompt
+  changed the plan since that row (and always on Step 1), the row records the plan it produced as a `prompt-output`
+  tool call with its hash, and `PromptRunID` names the newest prompt run of the run tree. Replay folds the rows from an
+  empty payload through the orchestrator's own effect code (`AgentSessionReplay.ApplyCall`: the plan content, the drafts
+  with their input hashes, `PlanHash`/`PlanId`, `BuildClaimID`), comparing the hash before (the recorded output's, or the
+  chain's) and after every row; a row that does not reproduce its hash, or names a prompt run that no longer exists, is
+  `replay-incomplete` naming that prompt run. · The repair and gather turns between rows are LLM-decided (no row), so
+  their output must be on the next row for compare-and-append and replay to hold. · Re-deriving the plan from the
+  sub-agents' raw prompt results through the framework's payload merge (not reproducible outside the framework).
+- D5-A4-4 · 2026-11-27 · A payload is **behind the log** when its plan hash is not the newest row's
+  `ResultingPayloadHash` and it is a state the log already passed (a row's `PayloadHash` or `ResultingPayloadHash`) or
+  holds no complete plan; checked on the run's first turn inside the session turn lock, after the live-sibling check
+  (D5-38), so a run whose sibling is live never rebuilds. A payload a prompt changed after the newest row (a re-plan) is
+  not behind. After a rebuild the first turn's prompt reply (made on the stale payload) is set aside (a request it raised
+  is canceled) and the control path decides from the rebuilt payload. · Attack 8: continue at `validate-plan`. · Rebuilding
+  whenever the hash differs (it would overwrite a person's re-plan).
+- D5-A4-5 · 2026-11-27 · Rows per transition: `draft-unit`, `profile`, `draft-protocol`, `present-plan`,
+  `request-build` (claim → row → dispatch, D5-39), `decline-small-data`, `decline-no-signal`,
+  `decline-unresolved-reference`, and `report` — written when the dispatched build settles, when a turn finds a claim
+  whose run died before it settled (unless the session already ended), and for the two session ends the CHECK has no
+  value for (`decline-draft-refused`, a failed profile). A repair is LLM-decided and writes no row. The claim fact's
+  `BuildStarted` also holds when the session's log has the claim's `request-build` row (a row means the build was
+  dispatched or about to be, D5-39), so a crash after the row reports "did not finish" and before it "did not start". ·
+  Attack 8's two claim cases. · New CHECK values (the contract fixes the nine).
+- D5-A4-6 · 2026-11-27 · `ProfileVerdict.NoSignal` refuses when the improvement interval's lower bound is ≤ 0: an
+  interval that includes 0, or lies wholly below it (the GLM is worse than the dummy). · Both are "no usable signal". ·
+  Refusing only when the interval straddles 0.
+- D5-A4-7 · 2026-11-27 · Profile leak suspects: a field whose single-feature improvement's lower bound recovers at
+  least `ProfilePredictionTargetAction.LEAK_SHARE = 0.5` of the dummy's log-loss (the class-prior entropy), or a
+  near-unique field (distinct non-null values on ≥ 95% of rows, the sidecar's `nearUnique`). They are recorded on the
+  `profile` row; pre-marking them `exclude` in `LeakageNotes` is G4.5's (§5.1.5; not in A4's attacks), so the plan hash
+  is unchanged by the profile. The profile's input hash covers the unit draft and the candidate feature names. A failed
+  profile (no rows, the sidecar down) ends the session with a `report` row and the reason. `/profile` folds are 5, the
+  seed `ProtocolDefaults.DEFAULT_SEED`, 1,000 paired bootstrap draws at 95%.
+- D5-A4-8 · 2026-11-27 · `C1 -> C1.3` (G4.3) runs on the server transport (the person approves as their own client save,
+  G4.1's mechanics) at agent-suite Sequence 3; `W7 -> C1.4` (G4.7) runs on the **client** transport at Sequence 4: it
+  loads W7 s42 itself through the truth harness (the suite's dataset load leaves W7 at its fresh seed 9042, and only the
+  client harness loads) and runs the agent on MJAPI; no approval is involved. A server bundle cannot follow a client one
+  (#3251), so W7 comes last (`ps-gate-suite-sequencing.test.ts` green). · The loader runs only on the client transport.
+- D5-A4-9 · 2026-11-27 · The widget's stylesheet is `agent-decision-log.component.css`, not `.scss`: the dashboards package
+  compiles with `ngc` only, which embeds `styleUrls` raw (`check:ui-ngc-scss`). Its L3 placement on the PS run view needs
+  a host outside A4's ownership (`record-panels/ps-protocol-panels.ts`, a `BaseFormPanel` on `MJ: AI Agent Runs` listed
+  in `PS_RECORD_PANELS`), handed to the controller at integration (§11 gives the class); the widget reads a session
+  itself from `[SessionRunID]` through its `[Provider]`. · Run rule 4: a file is edited only by its owner.
+- D5-A4-10 · 2026-11-27 · Attack 3's GraphQL, `Update Record` and server-side paths are all `BaseEntity.Save()`/`Delete()`
+  through the one PS hook, so they are attacked at the guard (unit) and at runtime by G4.3 (the person's client saves of
+  an update, a delete and a create, each refused). Attack 8's crashes are unit tests that stop the run at the step after
+  the row (the framework's loop), with the claiming run `Failed` as the watchdog leaves it; no MJAPI was killed. ·
+  Killing MJAPI mid-turn in a gate would also kill the gate's own in-process agent run.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3589,10 +3653,10 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
-- Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->4<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->4<!-- /gen:checks -->
-- Head: <!-- gen:head -->48a3b3dcaa<!-- /gen:head -->
+- Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL<!-- /gen:env -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->6<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->6<!-- /gen:checks -->
+- Head: <!-- gen:head -->97fbfb1d2d<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4367,6 +4431,74 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   prompts $0.6977 for G4.1/G4.2 ×3; CodeGen $0.64); `MJ_PS_PR5_claudefp` 662 runs, **$0.8933**, 1,809,649 tokens
   (CodeGen $0.63, bizapps job-title pipeline $0.2513). Total **$3.14**.
 - **Rulings:** none new; no owner-batch item.
+
+### 2026-11-27 — profiling, fixed refusals, the Decision Log and replay (council 30st24) — A4
+
+- **Branch** `ps/pr-5-agent-fp-input--A4` from `16a5fe6e46` (local only, D5-53); attack list red first (`b75a91ff96`,
+  D5-48: 6 files red — 4 Engine/Sidecar test files on missing modules, the Python route on 404), then `58560bbe2c`
+  (implementation), `97fbfb1d2d` (CodeGen and `mj:manifest` output), then the records commit. After the red commit the
+  harness fakes of `session-replay.test.ts` were corrected, no assertion changed: they compared IDs case-sensitively
+  (`UUIDSet` lower-cases, SQL Server compares case-insensitively) and read a `ParentRunID IN (…)` filter as `ID IN`.
+- **Database** `MJ_PS_PR5_claude1` (4051), dropped (0 sessions) and rebuilt from the head with section A4: `mj migrate`
+  207 applied (261.9 s); `codegen --skipfiles` **490 entities** (`MJ: Agent Decision Log`, `TrackRecordChanges` 0, 17
+  fields; its `CodeGen_Run` output appended to the migration under an A4 header); `sync push` 255 created · 17 updated
+  · 5 deleted · 0 errors, then A4's metadata 12 created (the Action, 6 params, 4 result codes, the agent link); every
+  write-back reversed; `codegen --skipdb`; D5-46 user (Developer, UI, Integration); `truth:provision` (305 immutable
+  fields), `truth:loom`; `metadata-optional/integration-test` 839 created (write-back reversed); `PS truth datasets: load
+  and verify` 68/68. Truth sidecar 4151 (run dir `~/.mj-ps/pr5-claude1/sidecar-run`), MJAPI 4051 with
+  `PREDICTIVE_STUDIO_SIDECAR_URL`, `PS_SIDECAR_RUN_DIR`, `STORAGE_LOCAL_ROOT`.
+- **Unit tests (0 TypeScript errors in each build):** `@memberjunction/predictive-studio` (Engine) **152 files, 2,238
+  passed** (A4's 4 files: 60 passed); `@memberjunction/predictive-studio-core` **46 files, 602 passed**;
+  `@memberjunction/predictive-studio-sidecar` **5 files, 41 passed** (`ml-sidecar-profile.test.ts` 3); Sidecar
+  `test:python` **541 passed** (`test_profile_route.py` 6); TruthSuite `--mypy` clean (55 files; it type-checks the
+  sidecar's `main.py`, so `profile.py` too); `@memberjunction/integration-test-suite` **79 files, 1,160 passed**
+  (`check-registry.test.ts` 298 bundles, `ps-gate-c1-c1-3.G4.3` and `ps-gate-w7-c1-4.G4.7` mutation-gated;
+  `ps-gate-suite-sequencing.test.ts` green with W7 last). Dashboards build 0. `check:guards` 16 + 5 passed (two nested
+  `UUIDsEqual` scans rewritten with `GroupByUUID`/`UUIDSet`), `check:ui` 0, `check:naming` 0 errors,
+  `check-migration-entityfield-sequence` clean, `check:codegen-tail` OK (490 entities).
+- **Gates** (on `MJ_PS_PR5_claude1`, after a last MJAPI restart on the final build): **`C1 -> C1.3` (G4.3) Passed**, test
+  run `AF54D5BD-817B-4D1C-B200-3C4FAC669F07`: 6 rows for 6 transitions (`1:draft-unit, 2:profile, 3:draft-protocol,
+  4:present-plan` in run 1, `5:request-build, 6:report` in the resumed run 2), one `SessionRunID`, chained; Replay
+  reproduced the last `ResultingPayloadHash` with **0 new prompt runs**; the copy with a missing prompt run →
+  `replay-incomplete` naming it; update/delete/create refused; the request after `report` started a new session (Step
+  1). **`W7 -> C1.4` (G4.7) Passed 3 of 3**, test run `190BD2D1-8EFF-4F19-BDBE-E9F747CF4D5C`: each W7 s42 session
+  `1:draft-unit, 2:profile, 3:decline-small-data` with **227 resolved / 18 minority** development rows on the row, 0
+  holdout rows read, no plan, no claim, no build. **Agent suite 4/4** (suite run `004C3018-F900-41C1-91F4-9191ECCFB24A`,
+  before the last two refactors): G4.1 `4018FBF6…` (0 of 20 negated runs built, 5/5 failure loops held, approved build
+  `built`, lineage ok — the profile now runs in its sessions), G4.2 `C112FDE2…` (0 units/protocols/training runs, 0 of 3
+  Action steps read holdout rows — both drafts and the profile), G4.3 `E7BFF153…`, G4.7 `F0A8CA81…`.
+- **Mutation table (each guard flipped in a scratch edit, the attack file run, the source restored; `git status` clean):**
+
+| Guard flipped | Attack | Result with the flip |
+|---|---|---|
+| the guard allows an update of a saved row | 3 | 3 red: `expected true to be false` (GraphQL update, server Save, Update Record Action) |
+| Replay skips the hash comparison (before and after every row) | 5 | 1 red: tampered copy `expected false to be 'replay-incomplete'` |
+| `Step` keyed on `AgentRunID` instead of `SessionRunID` | 4 | 5 red: `expected [ '1:draft-unit', '2:profile', …(3) ] to deeply equal [ …(4) ]` |
+| the instance-keyed authorisation replaced by a process flag | 9 | 1 red: interleaved client create `expected true to be false` |
+| the payload rebuild skipped | 8 | 2 red: `expected "Rebuild" to be called 1 times, but got 0 times` (attack 8, attack 11's failed-sibling case) |
+| append at newest + 1 without the hash compare | 11 | 1 red: `expected 'DL6' to deeply equal { kind: 'log-diverged', newestStep: 5 }` |
+| `<` → `<=` on the resolved threshold | 1 | 1 red: `expected { kind: 'small-data', …(4) } to be null` (200 / 50) |
+| `<` → `<=` on the minority threshold | 1 | 1 red: same |
+
+  A first run of the replay mutation removed only the after-row compare and stayed green (the before-row compare still
+  caught the tampered copy); the table's row removes every compare, as the contract's mutation reads.
+- **LLM spend** (§2.4 query from `2026-11-27T15:00:00Z`, the rebuild): **398 prompt runs, $0.9974, 1,608,134 tokens** on
+  `MJ_PS_PR5_claude1` — CodeGen $0.63, the agent sessions $0.30 (G4.1–G4.3 and G4.7, the suite plus the reruns), sync
+  and conversation naming the rest. Under the wave's $5 spot-check cap (shared with A5) and D5-12's $100.
+- **Not run (D5-51, D5-53):** `ci-mirror` (the controller runs it at integration); no push. No MJAPI was killed for
+  attack 8 (D5-A4-10).
+- **Hands at integration (run rule 4):** A4 owns `$E/index.ts` (`AgentDecisionLog.Register();` added after
+  `BuildApprovalResolver.Register();`; A5's `PredictiveStudioAgentNotePolicy.Register();` goes after it) and
+  `$C/index.ts` (unchanged: Core already exports `agent-contracts` and `sidecar-contract`, so A5's and B3's export lines
+  are the only additions); the integration barrel and registry carry A4's `ps-gate-c1-c1-3` / `ps-gate-w7-c1-4` lines
+  (count 298), B3's `ps-gate-c1-s3-3` lines join them (299). The agent suite: G4.3 at Sequence 3, G4.7 at Sequence 4.
+  **Owed by a host outside A4's ownership (D5-A4-9):** the L3 placement — in
+  `packages/Angular/Explorer/dashboards/src/PredictiveStudio/record-panels/ps-protocol-panels.ts`, a `BaseFormPanel` on
+  `MJ: AI Agent Runs` (`slot: 'after-fields'`, `contributionKey: 'ps-agent-decision-log'`) whose template is
+  `<mj-ps-agent-decision-log [Provider]="FormComponent.ProviderToUse" [SessionRunID]="RecordID">`, added to
+  `PS_RECORD_PANELS` (the session's first run shows its log; a later run's form shows nothing until it is the session's).
+  The migration's CodeGen tail now ends with section A4's block; the controller regenerates the whole tail.
+- Rulings this milestone: D5-A4-1 … D5-A4-10.
 
 ## 12. Refresh log (append-only)
 
