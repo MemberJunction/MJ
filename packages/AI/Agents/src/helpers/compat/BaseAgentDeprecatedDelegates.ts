@@ -88,8 +88,10 @@ export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDe
     // =========================================================================
 
     /** @deprecated Use `BaseAgentStepExecutionHelper.ExecuteAgentInternal` instead (slated for v7.0 removal). */
-    protected executeAgentInternal<P = unknown>(params: ExecuteAgentParams, config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
-        return this.getStepExecutionHelper().ExecuteAgentInternal<P>(this.getRunContext(), params, config);
+    protected executeAgentInternal<P = unknown>(params: ExecuteAgentParams<P>, config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }>;
+    protected executeAgentInternal<P = unknown, C = P>(params: ExecuteAgentParams<C>, config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }>;
+    protected executeAgentInternal<P = unknown, C = P>(params: ExecuteAgentParams<C>, config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
+        return this.getStepExecutionHelper().ExecuteAgentInternal<P, C>(this.getRunContext(), params, config);
     }
 
     /** @deprecated Use `BaseAgentStepExecutionHelper.ExecuteNextStep` instead (slated for v7.0 removal). */

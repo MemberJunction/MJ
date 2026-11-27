@@ -31,6 +31,7 @@ import { AgentHelperCache } from '../../helpers/AgentHelperResolver';
 import { AgentActionPolicyHelper } from '../../helpers/actions/AgentActionPolicyHelper';
 import { AgentActionsHelper } from '../../helpers/actions/AgentActionsHelper';
 import { AgentMessagingHelper } from '../../helpers/messaging/AgentMessagingHelper';
+import { AgentStuckDetector } from '../../helpers/limits/AgentStuckDetector';
 import { AgentPayloadHelper } from '../../helpers/payload/AgentPayloadHelper';
 import { AgentNativeToolsAndPrefixCacheHelper } from '../../helpers/prompt/AgentNativeToolsAndPrefixCacheHelper';
 import { ACTION_FAILURE_BUDGET, CircuitBreakerActionResult, IDENTICAL_FAILURE_THRESHOLD } from '../../helpers/base-agent-types';
@@ -599,6 +600,9 @@ export function CreateMockAgentRunContext(
         MaxConsecutiveUnproductiveRetries: 5,
         DefaultAgentTimeoutMS: 7_200_000,
         AgentTimeoutAbortReason: 'Agent execution exceeded maxExecutionTimeMs',
+        AgentInactivityAbortReason: 'Agent execution stalled with no progress signal',
+        LivenessWatchdog: null,
+        StuckDetector: new AgentStuckDetector(),
         ...restOverrides,
         Hooks: {
             ...defaultHooks,

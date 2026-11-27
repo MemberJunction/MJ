@@ -30,7 +30,9 @@ import type { AgentRunContext } from '../AgentRunContext';
  * post-prompt processing (`ProcessNextStep`).
  */
 export class BaseAgentStepExecutionHelper {
-    public ExecuteAgentInternal<P = unknown>(_ctx: AgentRunContext, _params: ExecuteAgentParams, _config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
+    public ExecuteAgentInternal<P = unknown>(_ctx: AgentRunContext, _params: ExecuteAgentParams<P>, _config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }>;
+    public ExecuteAgentInternal<P = unknown, C = P>(_ctx: AgentRunContext, _params: ExecuteAgentParams<C>, _config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }>;
+    public ExecuteAgentInternal<P = unknown, C = P>(_ctx: AgentRunContext, _params: ExecuteAgentParams<C>, _config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
         throw new Error('BaseAgentStepExecutionHelper.ExecuteAgentInternal must be implemented by a registered subclass.');
     }
 

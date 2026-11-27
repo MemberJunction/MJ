@@ -576,6 +576,28 @@ export class AgentLimitsHelper extends BaseAgentLimitsHelper {
         }
 
         const limits = ctx.ActiveLimitsResolution?.Limits ?? ctx.Hooks.ResolvedLimits(params);
+        if (!isPromptFailureOrParseRetry) {
+            const circuitBrokenNames = new Set<string>([
+                ...ctx.ActionFailureHistory.keys(),
+                ...ctx.FatalActionFailures,
+                ...ctx.AudienceLockedActions,
+                ...ctx.TaintLockedActions,
+            ]);
+            const stuckOutcome = ctx.StuckDetector.EvaluateStepDecision(params, nextStep, limits.StuckDetector, circuitBrokenNames);
+            if (stuckOutcome.InjectedDirectives.length > 0) {
+                ctx.Hooks.LogStatus(`⚠️ StuckDetector injected ${stuckOutcome.InjectedDirectives.length} course-correction directive(s)`, false, params);
+            }
+            if (stuckOutcome.PauseRequest) {
+                const budgetSnapshot = await this._checkpoint.CaptureCurrentBudgetLedger(ctx, params);
+                return ctx.Hooks.PauseNonDestructively(params, {
+                    PauseReason: stuckOutcome.PauseRequest.PauseReason,
+                    Summary: stuckOutcome.PauseRequest.Summary,
+                    InFlightPayload: inFlightPayload as RunawaySerializable,
+                    NextStepToResume: nextStep,
+                    Ledger: budgetSnapshot,
+                });
+            }
+        }
         const detResult = ctx.ProgressDetector.Evaluate(limits.ProgressDetector);
         if (!detResult.Checked) {
             return null;

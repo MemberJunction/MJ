@@ -36,6 +36,7 @@ import { OpeningRequestText } from '../../catalog-narrowing';
 import { IsOpeningTurn } from '../../decision-discovery';
 import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
+import { AgentLivenessWatchdog } from '../limits/AgentLivenessWatchdog';
 import { AgentRunFinalizationHelper } from './AgentRunFinalizationHelper';
 import { AgentRunInitializationHelper } from './AgentRunInitializationHelper';
 import { BaseAgentRunSetupHelper } from './BaseAgentRunSetupHelper';
@@ -77,6 +78,7 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
         ctx.LastRecordedCostUsd = 0;
         ctx.LastRemotePausePollMs = params.resumeCheckpointRunId ? 0 : Date.now();
         ctx.ProgressDetector.Reset();
+        ctx.StuckDetector.Reset();
         ctx.FastConvergenceJudge.ResetTracking();
         const policyResolution = await ctx.Hooks.ResolveServerUserPolicy(params);
         ctx.ResolvedUserPolicy = policyResolution.policy;
@@ -96,19 +98,30 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
             params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
                 ? params.agent.MaxTimePerRun * 1000
                 : undefined;
-        const resolvedMaxWallClockMs = ctx.ActiveBudgets?.PerRun.MaxWallClockMs ?? undefined;
+        const wallClockProvenance = ctx.ActiveLimitsResolution?.Provenance['Budgets.PerRun.MaxWallClockMs'];
+        const explicitResolvedMaxWallClockMs =
+            wallClockProvenance?.IsOverridden &&
+            typeof wallClockProvenance.Value === 'number' &&
+            wallClockProvenance.Value > 0
+                ? wallClockProvenance.Value
+                : undefined;
         const workflowDurationCapMs = ResolveEffectiveWorkflowDurationCapMs(treeBudget);
         const workflowStartedAtMs = ResolveWorkflowStartedAtMs(treeBudget);
         const workflowRemainingMs =
             workflowDurationCapMs !== undefined
                 ? Math.max(0, workflowDurationCapMs - Math.max(0, Date.now() - workflowStartedAtMs))
                 : undefined;
-        const baseAgentTimeoutMS =
-            resolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? ctx.DefaultAgentTimeoutMS;
-        const agentTimeoutMS =
+        const livenessConfig = ctx.ActiveLimitsResolution?.Limits.Liveness;
+        const explicitBaseCapMs = explicitResolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs;
+        const baseOuterCeilingMs =
+            explicitBaseCapMs ??
+            (livenessConfig?.Enabled === false
+                ? ctx.DefaultAgentTimeoutMS
+                : (livenessConfig?.OuterMaxWallClockMs ?? ctx.DefaultAgentTimeoutMS));
+        const outerCeilingMs =
             workflowRemainingMs !== undefined
-                ? Math.min(baseAgentTimeoutMS, Math.max(1, workflowRemainingMs))
-                : baseAgentTimeoutMS;
+                ? Math.min(baseOuterCeilingMs, Math.max(1, workflowRemainingMs))
+                : baseOuterCeilingMs;
         const upstreamToken = params.cancellationToken;
         const budgetAbortSignal = ctx.Hooks.HasExplicitWorkflowBudgetCaps(params)
             ? treeBudget.abortController?.signal
@@ -140,13 +153,17 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
                 budgetAbortSignal.addEventListener('abort', relayBudgetAbort, { once: true });
             }
         }
-        const timeoutId = setTimeout(() => {
-            if (!timeoutController.signal.aborted) {
-                timeoutController.abort(
-                    `${ctx.AgentTimeoutAbortReason}: agent '${params.agent.Name}' ran past ${agentTimeoutMS}ms`
-                );
-            }
-        }, agentTimeoutMS);
+        const livenessWatchdog = new AgentLivenessWatchdog({
+            AgentName: params.agent.Name ?? 'Agent',
+            Enabled: livenessConfig?.Enabled ?? true,
+            InactivityTimeoutMs: livenessConfig?.InactivityTimeoutMs,
+            OuterMaxWallClockMs: outerCeilingMs,
+            StreamChunkTouchThrottleMs: livenessConfig?.StreamChunkTouchThrottleMs,
+            InactivityAbortReasonPrefix: ctx.AgentInactivityAbortReason,
+            TimeoutAbortReasonPrefix: ctx.AgentTimeoutAbortReason,
+        });
+        livenessWatchdog.Start(timeoutController);
+        ctx.LivenessWatchdog = livenessWatchdog;
         params.cancellationToken = timeoutController.signal;
         ctx.RunAbortController = timeoutController;
 
@@ -458,7 +475,7 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
             await ctx.Hooks.CheckPreTurnCompaction(wrappedParams, config);
 
             ctx.Hooks.LogStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
-            const executionResult = await ctx.Hooks.ExecuteAgentInternal<R>(wrappedParams, config);
+            const executionResult = await ctx.Hooks.ExecuteAgentInternal<R, C>(wrappedParams, config);
 
             if (ctx.PausedRunOutcome) {
                 return ctx.Hooks.BuildPausedExecuteResult<R>(ctx.PausedRunOutcome);
@@ -496,7 +513,8 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
             });
             return (await ctx.Hooks.CreateFailureResult(errMsg, params.contextUser)) as ExecuteAgentResult<R>;
         } finally {
-            clearTimeout(timeoutId);
+            livenessWatchdog.Stop();
+            ctx.LivenessWatchdog = null;
             if (upstreamToken) {
                 upstreamToken.removeEventListener('abort', relayUpstreamAbort);
             }

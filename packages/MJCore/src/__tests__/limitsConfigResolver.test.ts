@@ -583,4 +583,54 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
         expect(adminResolved.Limits.Budgets.PerUserPerDay.MaxCostUsd).toBeNull();
         expect(adminResolved.ClampedKeys).toEqual([]);
     });
+
+    it('resolves Liveness and StuckDetector defaults, camelCase normalization, and policy ceiling clamping', () => {
+        expect(CODE_FALLBACK_LIMITS.Liveness.Enabled).toBe(true);
+        expect(CODE_FALLBACK_LIMITS.Liveness.InactivityTimeoutMs).toBe(900_000);
+        expect(CODE_FALLBACK_LIMITS.Liveness.OuterMaxWallClockMs).toBe(259_200_000);
+        expect(CODE_FALLBACK_LIMITS.Liveness.HttpHeadersTimeoutMs).toBe(1_800_000);
+        expect(CODE_FALLBACK_LIMITS.Liveness.HttpBodyTimeoutMs).toBe(0);
+        expect(CODE_FALLBACK_LIMITS.StuckDetector.Enabled).toBe(true);
+        expect(CODE_FALLBACK_LIMITS.StuckDetector.WindowSize).toBe(10);
+        expect(CODE_FALLBACK_LIMITS.StuckDetector.IdenticalToolCallThreshold).toBe(3);
+        expect(CODE_FALLBACK_LIMITS.StuckDetector.ReadOnlyStepThreshold).toBe(30);
+        expect(CODE_FALLBACK_LIMITS.StuckDetector.ReadOnlyPostDirectiveGraceSteps).toBe(5);
+        expect(IsPolicyCeilingKey('Liveness.InactivityTimeoutMs')).toBe(true);
+        expect(IsPolicyCeilingKey('Liveness.OuterMaxWallClockMs')).toBe(true);
+        expect(IsPolicyCeilingKey('StuckDetector.ReadOnlyStepThreshold')).toBe(true);
+
+        const normalized = NormalizeLimitsInput({
+            liveness: {
+                livenessEnabled: true,
+                inactivityTimeoutMs: 600_000,
+                outerMaxWallClockMs: 86_400_000,
+                httpHeadersTimeoutMs: 0,
+                httpBodyTimeoutMs: 0,
+            },
+            stuckDetector: {
+                enabled: true,
+                windowSize: 12,
+                repeatedToolCallThreshold: 4,
+                readOnlySpiralThreshold: 25,
+                readOnlyPostDirectiveGraceSteps: 3,
+            },
+        });
+        expect(normalized.Liveness?.InactivityTimeoutMs).toBe(600_000);
+        expect(normalized.Liveness?.HttpHeadersTimeoutMs).toBe(0);
+        expect(normalized.StuckDetector?.IdenticalToolCallThreshold).toBe(4);
+        expect(normalized.StuckDetector?.ReadOnlyStepThreshold).toBe(25);
+
+        const resolved = LimitsConfigResolver.Resolve(
+            {
+                MjConfig: { Liveness: { InactivityTimeoutMs: 300_000 }, StuckDetector: { ReadOnlyStepThreshold: 20 } },
+                RunOverride: { Liveness: { InactivityTimeoutMs: 900_000 }, StuckDetector: { ReadOnlyStepThreshold: 50 } },
+            },
+            { EnforceConfiguredCeilings: true }
+        );
+        expect(resolved.Limits.Liveness.InactivityTimeoutMs).toBe(300_000);
+        expect(resolved.Limits.StuckDetector.ReadOnlyStepThreshold).toBe(20);
+        expect(resolved.Provenance['Liveness.InactivityTimeoutMs'].WasClampedByPolicyCeiling).toBe(true);
+        expect(resolved.Provenance['StuckDetector.ReadOnlyStepThreshold'].WasClampedByPolicyCeiling).toBe(true);
+        expect(ValidateLimitsConfig(resolved.Limits).Valid).toBe(true);
+    });
 });

@@ -136,6 +136,8 @@ export class BaseAgent extends BaseAgentContextBase {
 
     /** Abort reason prefix distinguishing wall-clock timeout aborts from caller cancellations. */
     public static readonly AgentTimeoutAbortReason = 'Agent execution exceeded maxExecutionTimeMs';
+    /** Abort reason prefix distinguishing sliding-liveness inactivity aborts from caller cancellations. */
+    public static readonly AgentInactivityAbortReason = 'Agent execution stalled with no progress signal';
 
     public static readonly DefaultStopContinuationMode: StopContinuationMode =
         AgentStoppedRunContinuationHelper.DefaultStopContinuationMode;
@@ -186,7 +188,11 @@ export class BaseAgent extends BaseAgentContextBase {
     public static CancellationReasonForAbort(
         reason: string | null | undefined
     ): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
-        return AgentRunFinalizationHelper.CancellationReasonForAbort(reason, BaseAgent.AgentTimeoutAbortReason);
+        return AgentRunFinalizationHelper.CancellationReasonForAbort(
+            reason,
+            BaseAgent.AgentTimeoutAbortReason,
+            BaseAgent.AgentInactivityAbortReason
+        );
     }
 
     /** Returns the serialized payload recorded at the end of the latest step that captured one, or `null`. */
@@ -469,6 +475,7 @@ export class BaseAgent extends BaseAgentContextBase {
     protected override getMaxConsecutiveFailedSteps(): number { return BaseAgent.MAX_CONSECUTIVE_FAILED_STEPS; }
     protected override getMaxConsecutiveUnproductiveRetries(): number { return BaseAgent.MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES; }
     protected override getAgentTimeoutAbortReason(): string { return BaseAgent.AgentTimeoutAbortReason; }
+    protected override getAgentInactivityAbortReason(): string { return BaseAgent.AgentInactivityAbortReason; }
     protected override invokeMessageFingerprint(m: ChatMessage): string { return BaseAgent.messageFingerprint(m); }
 
     // =========================================================================

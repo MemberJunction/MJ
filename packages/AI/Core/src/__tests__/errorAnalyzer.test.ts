@@ -406,5 +406,21 @@ describe('ErrorAnalyzer', () => {
             const authInfo = ErrorAnalyzer.analyzeError(authError);
             expect(authInfo.canFailover).toBe(true);
         });
+
+        it('classifies Node undici UND_ERR_HEADERS_TIMEOUT and UND_ERR_BODY_TIMEOUT fetch failures as retriable NetworkError', () => {
+            const headersCause = Object.assign(new Error('Headers Timeout Error'), { code: 'UND_ERR_HEADERS_TIMEOUT' });
+            const headersErr = new TypeError('fetch failed', { cause: headersCause });
+            const headersInfo = ErrorAnalyzer.AnalyzeError(headersErr, 'Google');
+            expect(headersInfo.errorType).toBe('NetworkError');
+            expect(headersInfo.severity).toBe('Retriable');
+            expect(headersInfo.canFailover).toBe(true);
+
+            const bodyCause = Object.assign(new Error('Body Timeout Error'), { code: 'UND_ERR_BODY_TIMEOUT' });
+            const bodyErr = new TypeError('fetch failed', { cause: bodyCause });
+            const bodyInfo = ErrorAnalyzer.AnalyzeError(bodyErr, 'Anthropic');
+            expect(bodyInfo.errorType).toBe('NetworkError');
+            expect(bodyInfo.severity).toBe('Retriable');
+            expect(bodyInfo.canFailover).toBe(true);
+        });
     });
 });

@@ -99,7 +99,8 @@ export class AgentRunFinalizationHelper {
             const signalReason = ctx.RunAbortController?.signal.reason;
             ctx.AgentRun.CancellationReason = AgentRunFinalizationHelper.CancellationReasonForAbort(
                 typeof signalReason === 'string' ? signalReason : message,
-                ctx.AgentTimeoutAbortReason
+                ctx.AgentTimeoutAbortReason,
+                ctx.AgentInactivityAbortReason
             );
 
             if (!ctx.AgentRun.FinalPayload) {
@@ -132,12 +133,17 @@ export class AgentRunFinalizationHelper {
 
     public static CancellationReasonForAbort(
         reason: string | null | undefined,
-        timeoutAbortReason: string
+        timeoutAbortReason: string,
+        inactivityAbortReason?: string
     ): NonNullable<MJAIAgentRunEntityExtended['CancellationReason']> {
         if (reason === AgentRunWatchdog.UserCancelAbortReason) {
             return 'User Request';
         }
-        if (reason && reason.startsWith(timeoutAbortReason)) {
+        if (
+            reason &&
+            (reason.startsWith(timeoutAbortReason) ||
+                (inactivityAbortReason && reason.startsWith(inactivityAbortReason)))
+        ) {
             return 'Timeout';
         }
         return 'System';

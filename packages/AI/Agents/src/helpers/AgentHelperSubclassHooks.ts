@@ -460,7 +460,7 @@ export interface AgentHelperSubclassHooks {
     ConvertUIMarkupInMessages(messages: ChatMessage[]): void;
     CreateCancelledResult(message: string, contextUser?: UserInfo): Promise<ExecuteAgentResult>;
     EvaluateRunawayGovernanceAfterStep<P>(params: ExecuteAgentParams, nextStep: BaseAgentNextStep<P>, stepCount: number, prevCompletedTasksCount: number, tokensDelta: number, isPromptFailureOrParseRetry: boolean, isConsultContinuation: boolean): Promise<PausedRunOutcome | null>;
-    ExecuteAgentInternal<P = unknown>(params: ExecuteAgentParams, config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }>;
+    ExecuteAgentInternal<P = unknown, C = P>(params: ExecuteAgentParams<C>, config: AgentConfiguration): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }>;
     ExecuteClientToolsStep(params: ExecuteAgentParams, config: AgentConfiguration, previousDecision: BaseAgentNextStep, stepCount?: number): Promise<BaseAgentNextStep>;
     ExecuteDecisionStep<P>(params: ExecuteAgentParams, decision: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P>>;
     ExecuteExpandMessageStep(nextStep: BaseAgentNextStep, params: ExecuteAgentParams, currentTurn: number): string | null;

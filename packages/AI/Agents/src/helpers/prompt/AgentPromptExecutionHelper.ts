@@ -461,52 +461,62 @@ export class AgentPromptExecutionHelper {
                 }
             };
 
-            promptParams.onStreaming = params.onStreaming
-                ? (chunk) => {
-                      const enrichedChunk = {
-                          ...chunk,
-                          stepType: 'prompt' as const,
-                          stepEntityId: stepEntity.ID,
-                      };
-                      if (chunk.isComplete) {
-                          if (pendingStreamingChunk !== null) {
-                              enrichedChunk.content = pendingStreamingChunk.content + enrichedChunk.content;
-                              pendingStreamingChunk = null;
+            const hasLivenessWatchdog = Boolean(ctx.LivenessWatchdog?.IsRunning);
+            promptParams.onStreaming =
+                params.onStreaming || hasLivenessWatchdog
+                    ? (chunk) => {
+                          ctx.LivenessWatchdog?.RecordProgress({
+                              Kind: 'llm-stream-chunk',
+                              StepEntityId: stepEntity.ID,
+                              Bytes: chunk.content.length,
+                          });
+                          if (!params.onStreaming) {
+                              return;
                           }
-                          if (streamingCoalesceTimer !== null) {
-                              clearTimeout(streamingCoalesceTimer);
-                              streamingCoalesceTimer = null;
+                          const enrichedChunk = {
+                              ...chunk,
+                              stepType: 'prompt' as const,
+                              stepEntityId: stepEntity.ID,
+                          };
+                          if (chunk.isComplete) {
+                              if (pendingStreamingChunk !== null) {
+                                  enrichedChunk.content = pendingStreamingChunk.content + enrichedChunk.content;
+                                  pendingStreamingChunk = null;
+                              }
+                              if (streamingCoalesceTimer !== null) {
+                                  clearTimeout(streamingCoalesceTimer);
+                                  streamingCoalesceTimer = null;
+                              }
+                              lastStreamingEmitTime = Date.now();
+                              params.onStreaming(enrichedChunk);
+                              return;
                           }
-                          lastStreamingEmitTime = Date.now();
-                          params.onStreaming!(enrichedChunk);
-                          return;
-                      }
-                      const now = Date.now();
-                      if (
-                          lastStreamingEmitTime === 0 ||
-                          (pendingStreamingChunk === null && now - lastStreamingEmitTime >= streamingCoalesceWindowMS)
-                      ) {
-                          lastStreamingEmitTime = now;
-                          params.onStreaming!(enrichedChunk);
-                          return;
-                      }
-                      if (pendingStreamingChunk === null) {
-                          pendingStreamingChunk = { ...enrichedChunk };
-                      } else {
-                          pendingStreamingChunk.content += enrichedChunk.content;
-                          if (enrichedChunk.modelName) {
-                              pendingStreamingChunk.modelName = enrichedChunk.modelName;
+                          const now = Date.now();
+                          if (
+                              lastStreamingEmitTime === 0 ||
+                              (pendingStreamingChunk === null && now - lastStreamingEmitTime >= streamingCoalesceWindowMS)
+                          ) {
+                              lastStreamingEmitTime = now;
+                              params.onStreaming(enrichedChunk);
+                              return;
+                          }
+                          if (pendingStreamingChunk === null) {
+                              pendingStreamingChunk = { ...enrichedChunk };
+                          } else {
+                              pendingStreamingChunk.content += enrichedChunk.content;
+                              if (enrichedChunk.modelName) {
+                                  pendingStreamingChunk.modelName = enrichedChunk.modelName;
+                              }
+                          }
+                          if (streamingCoalesceTimer === null) {
+                              const delay = Math.max(1, streamingCoalesceWindowMS - (now - lastStreamingEmitTime));
+                              streamingCoalesceTimer = setTimeout(() => {
+                                  streamingCoalesceTimer = null;
+                                  flushPendingStreamingChunk();
+                              }, delay);
                           }
                       }
-                      if (streamingCoalesceTimer === null) {
-                          const delay = Math.max(1, streamingCoalesceWindowMS - (now - lastStreamingEmitTime));
-                          streamingCoalesceTimer = setTimeout(() => {
-                              streamingCoalesceTimer = null;
-                              flushPendingStreamingChunk();
-                          }, delay);
-                      }
-                  }
-                : undefined;
+                    : undefined;
 
             promptParams.onPromptRunCreated = async (promptRunId: string) => {
                 stepEntity.TargetLogID = promptRunId;

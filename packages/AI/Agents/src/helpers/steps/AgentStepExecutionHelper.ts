@@ -41,9 +41,9 @@ import { BaseAgentStepExecutionHelper } from './BaseAgentStepExecutionHelper';
 export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
     private readonly _validation = new AgentStepValidationHelper();
 
-    public override async ExecuteAgentInternal<P = unknown>(
+    public override async ExecuteAgentInternal<P = unknown, C = P>(
         ctx: AgentRunContext,
-        params: ExecuteAgentParams,
+        params: ExecuteAgentParams<C>,
         config: AgentConfiguration
     ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
         let continueExecution = true;
@@ -118,6 +118,7 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
             const executedDecision = currentNextStep;
             const nextStep = await ctx.Hooks.ExecuteNextStep<P>(params, config, currentNextStep, stepCount);
             stepCount++;
+            ctx.LivenessWatchdog?.RecordProgress({ Kind: 'step-complete', Detail: nextStep.step });
 
             if (nextStep.step === 'Failed' && params.cancellationToken?.aborted) {
                 throw new Error('Cancelled during execution');

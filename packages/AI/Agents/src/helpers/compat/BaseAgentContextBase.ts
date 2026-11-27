@@ -14,6 +14,7 @@ import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actio
 import type { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import type {
     AgentAction,
+    AgentConfiguration,
     BaseAgentNextStep,
     ExecuteAgentParams,
     MediaOutput,
@@ -47,6 +48,7 @@ export abstract class BaseAgentContextBase extends BaseAgentDeprecatedDelegates 
     protected abstract getMaxConsecutiveFailedSteps(): number;
     protected abstract getMaxConsecutiveUnproductiveRetries(): number;
     protected abstract getAgentTimeoutAbortReason(): string;
+    protected abstract getAgentInactivityAbortReason(): string;
     protected abstract invokeMessageFingerprint(m: ChatMessage): string;
 
     public abstract ExecuteSingleAction(params: ExecuteAgentParams, action: AgentAction, actionEntity: MJActionEntityExtended, contextUser?: UserInfo, options?: ExecuteSingleActionOptions): Promise<ActionResult>;
@@ -331,7 +333,7 @@ export abstract class BaseAgentContextBase extends BaseAgentDeprecatedDelegates 
             ConvertUIMarkupInMessages: (messages) => self.convertUIMarkupInMessages(messages),
             CreateCancelledResult: (message, contextUser) => self.createCancelledResult(message, contextUser),
             EvaluateRunawayGovernanceAfterStep: (params, nextStep, stepCount, prevCompletedTasksCount, tokensDelta, isPromptFailureOrParseRetry, isConsultContinuation) => self.evaluateRunawayGovernanceAfterStep(params, nextStep, stepCount, prevCompletedTasksCount, tokensDelta, isPromptFailureOrParseRetry, isConsultContinuation),
-            ExecuteAgentInternal: (params, config) => self.executeAgentInternal(params, config),
+            ExecuteAgentInternal: <P = unknown, C = P>(params: ExecuteAgentParams<C>, config: AgentConfiguration) => self.executeAgentInternal<P, C>(params, config),
             ExecuteClientToolsStep: (params, config, previousDecision, stepCount) => self.executeClientToolsStep(params, config, previousDecision, stepCount),
             ExecuteDecisionStep: (params, decision) => self.executeDecisionStep(params, decision),
             ExecuteExpandMessageStep: (nextStep, params, currentTurn) => self.executeExpandMessageStep(nextStep, params, currentTurn),
@@ -627,6 +629,10 @@ export abstract class BaseAgentContextBase extends BaseAgentDeprecatedDelegates 
             get MaxConsecutiveUnproductiveRetries() { return self.getMaxConsecutiveUnproductiveRetries(); },
             get DefaultAgentTimeoutMS() { return self.DefaultAgentTimeoutMS; },
             get AgentTimeoutAbortReason() { return self.getAgentTimeoutAbortReason(); },
+            get AgentInactivityAbortReason() { return self.getAgentInactivityAbortReason(); },
+            get LivenessWatchdog() { return self._livenessWatchdog; },
+            set LivenessWatchdog(v) { self._livenessWatchdog = v; },
+            get StuckDetector() { return self._stuckDetector; },
             Hooks: hooks,
         };
         return this._cachedRunContext;

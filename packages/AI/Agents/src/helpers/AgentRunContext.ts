@@ -154,6 +154,8 @@ import type { BaseAgentActionsHelper } from './actions/BaseAgentActionsHelper';
 import type { AgentHelperCache } from './AgentHelperResolver';
 import type { BaseAgentMessagingHelper } from './messaging/BaseAgentMessagingHelper';
 import type { BaseAgentPayloadHelper } from './payload/BaseAgentPayloadHelper';
+import type { AgentLivenessWatchdog } from './limits/AgentLivenessWatchdog';
+import type { AgentStuckDetector } from './limits/AgentStuckDetector';
 import type { AgentRealtimeModelResolution } from './realtime/BaseAgentRealtimeHelper';
 
 import type { AgentHelperSubclassHooks } from './AgentHelperSubclassHooks';
@@ -443,6 +445,12 @@ export interface AgentRunContext {
     readonly DefaultAgentTimeoutMS: number;
     /** Abort reason prefix distinguishing wall-clock timeout aborts from caller cancellations. */
     readonly AgentTimeoutAbortReason: string;
+    /** Abort reason prefix distinguishing sliding-liveness inactivity aborts from wall-clock timeouts. */
+    readonly AgentInactivityAbortReason: string;
+    /** Active per-run sliding forward-progress liveness watchdog, or `null` outside `ExecuteRun`. */
+    LivenessWatchdog: AgentLivenessWatchdog | null;
+    /** Per-run semantic stuck-run detector (repeated canonical tool calls + read-only spirals). */
+    readonly StuckDetector: AgentStuckDetector;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;

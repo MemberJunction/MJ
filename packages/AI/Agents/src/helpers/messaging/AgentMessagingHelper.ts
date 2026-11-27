@@ -159,6 +159,10 @@ export class AgentMessagingHelper extends BaseAgentMessagingHelper {
         params: ExecuteAgentParams,
         progress: Parameters<NonNullable<ExecuteAgentParams['onProgress']>>[0]
     ): void {
+        ctx.LivenessWatchdog?.RecordProgress({
+            Kind: ctx.Depth > 0 ? 'sub-agent-heartbeat' : 'action-progress',
+            Detail: progress.step,
+        });
         try {
             params.onProgress?.(progress);
         } catch (e) {

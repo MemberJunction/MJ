@@ -37,6 +37,8 @@ export * from './helpers/skills/AgentSkillsHelper';
 export * from './helpers/limits/BaseAgentLimitsHelper';
 export * from './helpers/limits/AgentLimitsHelper';
 export * from './helpers/limits/AgentCheckpointAndPauseHelper';
+export * from './helpers/limits/AgentLivenessWatchdog';
+export * from './helpers/limits/AgentStuckDetector';
 export * from './helpers/actions/BaseAgentActionPolicyHelper';
 export * from './helpers/actions/AgentActionPolicyHelper';
 export * from './helpers/actions/AgentRunScopeAndAudienceHelper';

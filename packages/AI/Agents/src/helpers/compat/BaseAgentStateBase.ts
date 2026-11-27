@@ -97,6 +97,8 @@ import {
     type RunLateJudgeScope,
     type RuntimeStateDeliveryCache,
 } from '../base-agent-types';
+import type { AgentLivenessWatchdog } from '../limits/AgentLivenessWatchdog';
+import { AgentStuckDetector } from '../limits/AgentStuckDetector';
 
 /**
  * Abstract base owning all mutable per-run state fields and lazy collaborator singletons
@@ -218,6 +220,8 @@ export abstract class BaseAgentStateBase {
 
     protected _agentRun: MJAIAgentRunEntityExtended | null = null;
     protected _runAbortController: AbortController | null = null;
+    protected _livenessWatchdog: AgentLivenessWatchdog | null = null;
+    protected readonly _stuckDetector: AgentStuckDetector = new AgentStuckDetector();
     protected _awaitingWorkflowTaskID: string | null = null;
     protected _feedbackRequestId: string | null = null;
     protected _handoffResult: AgentHandoffResult | null = null;
