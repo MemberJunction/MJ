@@ -4,15 +4,27 @@ import { CompositeKey, DataSnapshot, LogError, RunView, type EntityInfo, type IM
 import type { MentionSuggestion } from '@memberjunction/ng-composer';
 import { EscapeSQLString, IndexByUUID, IsValidUUID, RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import {
+  ApplyDocumentDesignConfigToMarkdown,
   ArtifactMetadataEngine,
   BuildArtifactVersionConfigurationWithPreview,
+  ComputeDocumentStats,
+  DOCUMENT_DESIGN_PRESETS,
   DocumentLiveBlockEngine,
+  ExtractDocumentDesignConfig,
+  GetDocumentDesignPreset,
+  ParseDocumentFrontmatter,
   ArtifactPermissionEngine,
   FilterReadableAnchoredConversations,
   SpreadsheetEngine,
   UserInfoEngine,
   type ArtifactTypeThumbnailPolicy,
   type BlockRecord,
+  type DocumentDesignConfig,
+  type DocumentDesignPreset,
+  type DocumentDesignPresetID,
+  type DocumentPageOrientation,
+  type DocumentPageSize,
+  type DocumentStats,
   type WorksheetSpec,
   type DocumentBlockColumn,
   type DocumentBlockSpec,
@@ -68,7 +80,12 @@ import {
   type DocumentWordChangeHunk,
   type DocumentWordDiffResult,
 } from '../../services/document-collaboration.service';
-import { DocumentImportExportService } from '../../services/document-import-export.service';
+import {
+  DocumentImportExportService,
+  type DocExportMode,
+  type DocumentExportPreflightReport,
+  type DocxImportFidelityReport,
+} from '../../services/document-import-export.service';
 import { ArtifactLinkTriggerProvider } from '../../services/artifact-link-trigger.provider';
 import {
   CheckDocRecordLinksAccessBatch,
@@ -124,14 +141,20 @@ export type DocsToolbarItemKey =
   | 'add-section'
   | 'suggest-mode'
   | 'blocks-mode'
+  | 'design-preset'
+  | 'page-layout'
   | 'comments'
   | 'share'
   | 'source-mode'
   | 'diff-mode'
+  | 'export-studio'
   | 'export-docx'
   | 'export-md'
   | 'copy-md'
   | 'ask-ai';
+
+export type DocsPageLayoutMode = 'continuous' | 'paginated';
+export type DocsStatsMetricMode = 'words' | 'chars' | 'charsNoSpaces';
 
 export const DEFAULT_PINNED_DOCS_TOOLBAR_ACTIONS: readonly DocsToolbarItemKey[] = [
   'format',
@@ -143,6 +166,8 @@ export interface DocsToolbarVisibilitySetting {
   ShowOutlineRail?: boolean;
   EditingStyle?: DocsEditingStyle;
   FormattingRibbonPinned?: boolean;
+  PageLayoutMode?: DocsPageLayoutMode;
+  StatsMetric?: DocsStatsMetricMode;
 }
 
 export interface ResolvedDocsToolbarItem {
@@ -841,6 +866,192 @@ interface DocsInlineToken {
         </div>
       }
 
+      <!-- .docx Import Fidelity Summary Banner -->
+      @if (LastImportFidelityReport; as report) {
+        <div class="mj-docs-import-fidelity-banner" data-testid="docs-import-fidelity-banner">
+          <div class="mj-docs-import-fidelity-banner__main">
+            <i class="fa-solid fa-file-word"></i>
+            <div class="mj-docs-import-fidelity-banner__text">
+              <strong>{{ report.SummaryText }}</strong>
+              @if (report.Warnings.length > 0) {
+                <div class="mj-docs-import-fidelity-banner__warnings">
+                  @for (warn of report.Warnings; track warn.Code) {
+                    <span class="mj-docs-badge" [attr.data-testid]="'import-warning-' + warn.Code">
+                      <i class="fa-solid fa-circle-info"></i> {{ warn.Message }}
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+          <button
+            type="button"
+            class="mj-docs-btn"
+            data-testid="dismiss-import-fidelity-btn"
+            (click)="LastImportFidelityReport = null"
+          >
+            Dismiss
+          </button>
+        </div>
+      }
+
+      <!-- Document Design Preset & Page Setup Popover -->
+      @if (!CompactMode && ShowDesignPopover) {
+        <div
+          class="mj-docs-design-popover"
+          role="region"
+          aria-label="Document Design & Page Setup"
+          data-testid="docs-design-popover"
+        >
+          <div class="mj-docs-design-popover__header">
+            <div>
+              <strong><i class="fa-solid fa-palette"></i> Document Design &amp; Page Setup</strong>
+              <span class="mj-docs-design-popover__subtitle">Applies identically to Canvas, Word (.docx), and PDF Print</span>
+            </div>
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--icon"
+              aria-label="Close design popover"
+              data-testid="close-design-popover-btn"
+              (click)="ShowDesignPopover = false"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="mj-docs-design-preset-grid" role="radiogroup" aria-label="Document Design Presets">
+            @for (preset of AvailableDesignPresets; track preset.ID) {
+              <button
+                type="button"
+                class="mj-docs-design-card"
+                [class.mj-docs-design-card--active]="ActiveDesignConfig.PresetID === preset.ID"
+                [attr.aria-pressed]="ActiveDesignConfig.PresetID === preset.ID"
+                [attr.data-testid]="'doc-preset-card-' + preset.ID"
+                [disabled]="!CanUserEdit"
+                (click)="ApplyDesignPreset(preset.ID)"
+              >
+                <div class="mj-docs-design-card__top">
+                  <span class="mj-docs-design-card__name">{{ preset.Name }}</span>
+                  <span class="mj-docs-badge">{{ preset.Category }}</span>
+                </div>
+                <span class="mj-docs-design-card__desc">{{ preset.Description }}</span>
+                <div class="mj-docs-design-card__meta">
+                  <span>{{ preset.DefaultPageSize.toUpperCase() }}</span>
+                  <span>·</span>
+                  <span>{{ preset.BodyFontSizePt }}pt</span>
+                  @if (preset.HeadingUnderline) {
+                    <span>· Rule</span>
+                  }
+                </div>
+              </button>
+            }
+          </div>
+
+          <div class="mj-docs-design-controls">
+            <div class="mj-docs-design-control-group">
+              <span class="mj-docs-design-control-label">Canvas Layout</span>
+              <div class="mj-docs-segmented">
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="PageLayoutMode === 'continuous'"
+                  data-testid="layout-continuous-btn"
+                  (click)="SetPageLayoutMode('continuous')"
+                >
+                  Continuous
+                </button>
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="PageLayoutMode === 'paginated'"
+                  data-testid="layout-paginated-btn"
+                  (click)="SetPageLayoutMode('paginated')"
+                >
+                  Page View
+                </button>
+              </div>
+            </div>
+
+            <div class="mj-docs-design-control-group">
+              <span class="mj-docs-design-control-label">Paper Size</span>
+              <div class="mj-docs-segmented">
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ActiveDesignConfig.PageSize === 'letter'"
+                  [disabled]="!CanUserEdit"
+                  data-testid="paper-letter-btn"
+                  (click)="UpdateDesignConfig({ PageSize: 'letter' })"
+                >
+                  Letter
+                </button>
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ActiveDesignConfig.PageSize === 'a4'"
+                  [disabled]="!CanUserEdit"
+                  data-testid="paper-a4-btn"
+                  (click)="UpdateDesignConfig({ PageSize: 'a4' })"
+                >
+                  A4
+                </button>
+              </div>
+            </div>
+
+            <div class="mj-docs-design-control-group">
+              <span class="mj-docs-design-control-label">Orientation</span>
+              <div class="mj-docs-segmented">
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ActiveDesignConfig.Orientation === 'portrait'"
+                  [disabled]="!CanUserEdit"
+                  data-testid="orientation-portrait-btn"
+                  (click)="UpdateDesignConfig({ Orientation: 'portrait' })"
+                >
+                  Portrait
+                </button>
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ActiveDesignConfig.Orientation === 'landscape'"
+                  [disabled]="!CanUserEdit"
+                  data-testid="orientation-landscape-btn"
+                  (click)="UpdateDesignConfig({ Orientation: 'landscape' })"
+                >
+                  Landscape
+                </button>
+              </div>
+            </div>
+
+            @if (CanUserEdit) {
+              <label class="mj-docs-design-control-group mj-docs-design-control-group--wide">
+                <span class="mj-docs-design-control-label">Watermark</span>
+                <input
+                  type="text"
+                  class="mj-docs-design-input"
+                  placeholder="e.g. DRAFT, CONFIDENTIAL"
+                  [ngModel]="ActiveDesignConfig.Watermark"
+                  (change)="OnDesignWatermarkChange($event)"
+                  data-testid="design-watermark-input"
+                />
+              </label>
+              <label class="mj-docs-design-control-group mj-docs-design-control-group--wide">
+                <span class="mj-docs-design-control-label">Running Header</span>
+                <input
+                  type="text"
+                  class="mj-docs-design-input"
+                  placeholder="Optional header shown in Page View &amp; exports"
+                  [ngModel]="ActiveDesignConfig.RunningHeader"
+                  (change)="OnDesignHeaderChange($event)"
+                  data-testid="design-header-input"
+                />
+              </label>
+            }
+          </div>
+        </div>
+      }
+
       <!-- NW-1 Live-vs-Frozen Drift Governance Banner -->
       @let frozenBlocks = FrozenBlocksInDocument;
       @if (frozenBlocks.length > 0) {
@@ -1040,7 +1251,30 @@ interface DocsInlineToken {
               [class.mj-docs-page--interactive]="IsInteractiveCanvasMode"
               [class.mj-docs-page--simple]="IsSimpleNoteMode"
               [class.mj-docs-page--blocks]="!IsSimpleNoteMode"
+              [class.mj-docs-page--paginated]="PageLayoutMode === 'paginated'"
+              [class.mj-docs-page--a4]="ActiveDesignConfig.PageSize === 'a4'"
+              [class.mj-docs-page--landscape]="ActiveDesignConfig.Orientation === 'landscape'"
+              [attr.data-doc-preset]="ActiveDesignConfig.PresetID"
+              data-testid="docs-canvas-page"
             >
+              @if (PageLayoutMode === 'paginated') {
+                <div class="mj-docs-sheet-header" data-testid="docs-paginated-header">
+                  <span class="mj-docs-sheet-header__title">
+                    {{ ActiveDesignConfig.RunningHeader || getDisplayTitle() || 'Document' }}
+                  </span>
+                  <div class="mj-docs-sheet-header__right">
+                    @if (ActiveDesignConfig.Watermark) {
+                      <span class="mj-docs-sheet-watermark" data-testid="docs-paginated-watermark">
+                        {{ ActiveDesignConfig.Watermark }}
+                      </span>
+                    }
+                    <span class="mj-docs-sheet-meta">
+                      {{ ActiveDesignPreset.Name }} · {{ ActiveDesignConfig.PageSize.toUpperCase() }}
+                      {{ ActiveDesignConfig.Orientation === 'landscape' ? 'Landscape' : 'Portrait' }}
+                    </span>
+                  </div>
+                </div>
+              }
               @if (FrontmatterHeader; as fm) {
                 <header
                   class="mj-docs-frontmatter-hero"
@@ -1106,7 +1340,7 @@ interface DocsInlineToken {
                 (mouseup)="CaptureSelectionSnapshot()"
                 (keyup)="CaptureSelectionSnapshot()"
               >
-                @for (seg of DocumentSegments; track seg.SegmentID) {
+                @for (seg of VisibleDocumentSegments; track seg.SegmentID) {
                   <div
                     class="mj-docs-segment"
                     [class.mj-docs-segment--selected]="SelectedAnchorKey === seg.SegmentID && !IsSimpleNoteMode"
@@ -2194,6 +2428,15 @@ interface DocsInlineToken {
                   </span>
                 </div>
               }
+
+              @if (PageLayoutMode === 'paginated') {
+                <div class="mj-docs-sheet-footer" data-testid="docs-paginated-footer">
+                  <span>{{ ActiveDesignConfig.RunningFooter || ActiveDesignPreset.Name }}</span>
+                  @if (ActiveDesignConfig.ShowPageNumbers) {
+                    <span>Page 1 of ~{{ LiveDocumentStats.EstimatedPages }}</span>
+                  }
+                </div>
+              }
             </div>
           }
         </main>
@@ -2967,6 +3210,317 @@ interface DocsInlineToken {
         </div>
       }
 
+      <!-- Compact Bottom Status Bar (Stats Cycler, Active Design Preset, Page View Toggle, Export Studio) -->
+      @if (!CompactMode) {
+        <footer class="mj-docs-status-footer" data-testid="docs-status-footer">
+          <div class="mj-docs-status-footer__left">
+            <button
+              type="button"
+              class="mj-docs-footer-pill"
+              title="Click to cycle between words, characters, and characters without spaces"
+              data-testid="docs-stats-cycle-btn"
+              (click)="CycleStatsMetric()"
+            >
+              <i class="fa-regular fa-file-lines"></i>
+              <span>{{ PrimaryStatsLabel }}</span>
+            </button>
+            <span class="mj-docs-footer-sep" aria-hidden="true">·</span>
+            <span class="mj-docs-footer-meta" data-testid="docs-read-time-stat">
+              ~{{ LiveDocumentStats.EstimatedReadMinutes }} min read
+            </span>
+            <span class="mj-docs-footer-sep" aria-hidden="true">·</span>
+            <span class="mj-docs-footer-meta" data-testid="docs-est-pages-stat">
+              ~{{ LiveDocumentStats.EstimatedPages }} {{ LiveDocumentStats.EstimatedPages === 1 ? 'page' : 'pages' }}
+            </span>
+          </div>
+          <div class="mj-docs-status-footer__right">
+            <button
+              type="button"
+              class="mj-docs-footer-pill"
+              [class.mj-docs-footer-pill--active]="ShowDesignPopover"
+              title="Document Design Preset &amp; Page Setup"
+              data-testid="docs-footer-design-btn"
+              (click)="ToggleDesignPopover()"
+            >
+              <i class="fa-solid fa-palette"></i>
+              <span>{{ ActiveDesignPreset.Name }}</span>
+              @if (ActiveDesignConfig.Watermark) {
+                <span class="mj-docs-badge">{{ ActiveDesignConfig.Watermark }}</span>
+              }
+            </button>
+            <button
+              type="button"
+              class="mj-docs-footer-pill"
+              [class.mj-docs-footer-pill--active]="PageLayoutMode === 'paginated'"
+              title="Toggle between Continuous and Paginated Sheet View"
+              data-testid="docs-footer-layout-btn"
+              (click)="TogglePageLayoutMode()"
+            >
+              <i class="fa-solid" [ngClass]="PageLayoutMode === 'paginated' ? 'fa-file-lines' : 'fa-align-left'"></i>
+              <span>{{ PageLayoutMode === 'paginated' ? 'Page View' : 'Continuous' }}</span>
+            </button>
+            <button
+              type="button"
+              class="mj-docs-footer-pill"
+              title="Open Export &amp; Preflight Studio (.docx, PDF, Markdown)"
+              data-testid="docs-footer-export-btn"
+              (click)="OpenExportDialog('docx')"
+            >
+              <i class="fa-solid fa-arrow-up-from-bracket"></i>
+              <span>Export</span>
+            </button>
+          </div>
+        </footer>
+      }
+
+      <!-- Native <dialog> Export & Preflight Studio (Clean vs. Markup, .docx Round-Trip & Strict Preflight) -->
+      <dialog
+        #exportDialog
+        class="mj-docs-native-dialog"
+        closedby="any"
+        aria-labelledby="docs-export-dialog-title"
+        data-testid="docs-export-dialog"
+        (close)="OnExportDialogClosed()"
+      >
+        <div class="mj-docs-modal mj-docs-modal--export">
+          <div class="mj-docs-modal__header">
+            <h1 id="docs-export-dialog-title" class="mj-docs-dialog-h1">
+              <i class="fa-solid fa-arrow-up-from-bracket"></i> Export &amp; Preflight
+            </h1>
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--icon"
+              aria-label="Close export dialog"
+              data-testid="close-export-dialog-btn"
+              (click)="CloseExportDialog()"
+            >
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          </div>
+
+          <div class="mj-docs-modal__body">
+            <div class="mj-docs-export-row">
+              <span class="mj-docs-design-control-label">Export Format</span>
+              <div class="mj-docs-segmented">
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ExportDialogFormat === 'docx'"
+                  data-testid="export-format-docx-btn"
+                  (click)="SetExportDialogFormat('docx')"
+                >
+                  <i class="fa-solid fa-file-word"></i> Word (.docx)
+                </button>
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ExportDialogFormat === 'pdf'"
+                  data-testid="export-format-pdf-btn"
+                  (click)="SetExportDialogFormat('pdf')"
+                >
+                  <i class="fa-solid fa-file-pdf"></i> Print / PDF
+                </button>
+                <button
+                  type="button"
+                  class="mj-docs-segmented__btn"
+                  [class.mj-docs-segmented__btn--active]="ExportDialogFormat === 'md'"
+                  data-testid="export-format-md-btn"
+                  (click)="SetExportDialogFormat('md')"
+                >
+                  <i class="fa-solid fa-file-code"></i> Markdown (.md)
+                </button>
+              </div>
+            </div>
+
+            @if (ExportDialogFormat !== 'md') {
+              <div class="mj-docs-export-row">
+                <span class="mj-docs-design-control-label">Review Markup</span>
+                <div class="mj-docs-segmented">
+                  <button
+                    type="button"
+                    class="mj-docs-segmented__btn"
+                    [class.mj-docs-segmented__btn--active]="ExportDialogMode === 'clean'"
+                    data-testid="export-mode-clean-btn"
+                    (click)="SetExportDialogMode('clean')"
+                  >
+                    Clean Final
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-docs-segmented__btn"
+                    [class.mj-docs-segmented__btn--active]="ExportDialogMode === 'markup'"
+                    data-testid="export-mode-markup-btn"
+                    (click)="SetExportDialogMode('markup')"
+                  >
+                    With Markup ({{ PendingSuggestionsCount }} redlines, {{ OpenThreadsCount }} comments)
+                  </button>
+                </div>
+              </div>
+
+              <div class="mj-docs-export-grid-2">
+                <div class="mj-docs-export-row">
+                  <span class="mj-docs-design-control-label">Paper Size</span>
+                  <div class="mj-docs-segmented">
+                    <button
+                      type="button"
+                      class="mj-docs-segmented__btn"
+                      [class.mj-docs-segmented__btn--active]="ExportDialogPageSize === 'letter'"
+                      data-testid="export-size-letter-btn"
+                      (click)="ExportDialogPageSize = 'letter'; RefreshExportPreflight()"
+                    >
+                      Letter
+                    </button>
+                    <button
+                      type="button"
+                      class="mj-docs-segmented__btn"
+                      [class.mj-docs-segmented__btn--active]="ExportDialogPageSize === 'a4'"
+                      data-testid="export-size-a4-btn"
+                      (click)="ExportDialogPageSize = 'a4'; RefreshExportPreflight()"
+                    >
+                      A4
+                    </button>
+                  </div>
+                </div>
+                <div class="mj-docs-export-row">
+                  <span class="mj-docs-design-control-label">Orientation</span>
+                  <div class="mj-docs-segmented">
+                    <button
+                      type="button"
+                      class="mj-docs-segmented__btn"
+                      [class.mj-docs-segmented__btn--active]="ExportDialogOrientation === 'portrait'"
+                      data-testid="export-orient-portrait-btn"
+                      (click)="ExportDialogOrientation = 'portrait'; RefreshExportPreflight()"
+                    >
+                      Portrait
+                    </button>
+                    <button
+                      type="button"
+                      class="mj-docs-segmented__btn"
+                      [class.mj-docs-segmented__btn--active]="ExportDialogOrientation === 'landscape'"
+                      data-testid="export-orient-landscape-btn"
+                      (click)="ExportDialogOrientation = 'landscape'; RefreshExportPreflight()"
+                    >
+                      Landscape
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mj-docs-export-checks">
+                @if (ExportDialogFormat === 'docx') {
+                  <label class="mj-docs-modal__checkbox">
+                    <input
+                      type="checkbox"
+                      [(ngModel)]="ExportEmbedLiveMetadata"
+                      data-testid="export-embed-metadata-checkbox"
+                    />
+                    <span>Embed live <code>:::mj-block</code> &amp; preset metadata for lossless Word round-trip</span>
+                  </label>
+                }
+                <label class="mj-docs-modal__checkbox">
+                  <input
+                    type="checkbox"
+                    [(ngModel)]="ExportStrictPreflight"
+                    (ngModelChange)="RefreshExportPreflight()"
+                    data-testid="export-strict-preflight-checkbox"
+                  />
+                  <span>Strict preflight — refuse export if broken images or malformed blocks exist</span>
+                </label>
+              </div>
+            }
+
+            @if (ExportPreflightReport; as preflight) {
+              <div
+                class="mj-docs-preflight-panel"
+                [class.mj-docs-preflight-panel--passed]="preflight.ErrorCount === 0 && preflight.WarningCount === 0"
+                [class.mj-docs-preflight-panel--error]="preflight.ErrorCount > 0"
+                data-testid="docs-export-preflight-panel"
+              >
+                <div class="mj-docs-preflight-panel__header">
+                  <strong>
+                    <i
+                      class="fa-solid"
+                      [ngClass]="
+                        preflight.ErrorCount > 0
+                          ? 'fa-circle-exclamation'
+                          : preflight.WarningCount > 0
+                            ? 'fa-triangle-exclamation'
+                            : 'fa-circle-check'
+                      "
+                    ></i>
+                    Preflight:
+                    {{
+                      preflight.ErrorCount > 0
+                        ? preflight.ErrorCount + ' error(s), ' + preflight.WarningCount + ' warning(s)'
+                        : preflight.WarningCount > 0
+                          ? 'Ready with ' + preflight.WarningCount + ' warning(s)'
+                          : 'All checks passed'
+                    }}
+                  </strong>
+                  <span class="mj-docs-footer-meta">
+                    {{ preflight.Stats.WordCount }} words · ~{{ preflight.Stats.EstimatedPages }} pp · {{ ActiveDesignPreset.Name }}
+                  </span>
+                </div>
+
+                @if (preflight.Issues.length > 0) {
+                  <ul class="mj-docs-preflight-list">
+                    @for (issue of preflight.Issues; track issue.Code + '::' + $index) {
+                      <li
+                        class="mj-docs-preflight-item"
+                        [attr.data-severity]="issue.Severity"
+                        [attr.data-testid]="'preflight-issue-' + issue.Code"
+                      >
+                        <span class="mj-docs-preflight-item__msg">{{ issue.Message }}</span>
+                        @if (issue.Code === 'wide_table_portrait' && ExportDialogOrientation === 'portrait') {
+                          <button
+                            type="button"
+                            class="mj-docs-btn mj-docs-btn--xs"
+                            data-testid="preflight-fix-landscape-btn"
+                            (click)="ExportDialogOrientation = 'landscape'; RefreshExportPreflight()"
+                          >
+                            Switch to Landscape
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="mj-docs-modal__footer">
+            <button
+              type="button"
+              class="mj-docs-btn mj-docs-btn--primary"
+              autofocus
+              [disabled]="IsRunningExport || (ExportStrictPreflight && (ExportPreflightReport?.ErrorCount ?? 0) > 0)"
+              data-testid="docs-export-confirm-btn"
+              (click)="ConfirmExportFromDialog()"
+            >
+              <i class="fa-solid fa-download"></i>
+              {{
+                IsRunningExport
+                  ? 'Exporting…'
+                  : ExportDialogFormat === 'docx'
+                    ? 'Download Word (.docx)'
+                    : ExportDialogFormat === 'pdf'
+                      ? 'Print / Save PDF'
+                      : 'Download Markdown (.md)'
+              }}
+            </button>
+            <button
+              type="button"
+              class="mj-docs-btn"
+              data-testid="cancel-export-dialog-btn"
+              (click)="CloseExportDialog()"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </dialog>
+
       <mj-context-menu
         [IsOpen]="ContextMenuOpen"
         [AnchorX]="ContextMenuX"
@@ -3557,6 +4111,441 @@ interface DocsInlineToken {
         border: 1px solid var(--mj-border-default);
         border-radius: 10px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+      }
+
+      /* Targeted modern typography wrapping (balanced headings, orphan-free prose) */
+      .mj-docs-page h1,
+      .mj-docs-page h2,
+      .mj-docs-page h3,
+      .mj-docs-page h4 {
+        text-wrap: balance;
+      }
+      .mj-docs-page p,
+      .mj-docs-page li,
+      .mj-docs-page blockquote {
+        text-wrap: pretty;
+      }
+
+      /* Document Design Preset canvas styling (pure --mj-* design tokens) */
+      .mj-docs-page[data-doc-preset='executive-memo'] h1,
+      .mj-docs-page[data-doc-preset='executive-memo'] h2,
+      .mj-docs-page[data-doc-preset='executive-memo'] .mj-docs-h1,
+      .mj-docs-page[data-doc-preset='executive-memo'] .mj-docs-h2 {
+        font-family: Georgia, 'Times New Roman', serif;
+        border-bottom: 1.5px solid var(--mj-brand-primary);
+        padding-bottom: 4px;
+      }
+      .mj-docs-page[data-doc-preset='technical-spec'] {
+        font-size: 13.5px;
+        line-height: 1.52;
+      }
+      .mj-docs-page[data-doc-preset='technical-spec'] h1,
+      .mj-docs-page[data-doc-preset='technical-spec'] h2,
+      .mj-docs-page[data-doc-preset='technical-spec'] .mj-docs-h1,
+      .mj-docs-page[data-doc-preset='technical-spec'] .mj-docs-h2 {
+        border-bottom: 1px solid var(--mj-border-strong);
+        padding-bottom: 3px;
+        letter-spacing: -0.015em;
+      }
+      .mj-docs-page[data-doc-preset='client-proposal'] h1,
+      .mj-docs-page[data-doc-preset='client-proposal'] h2,
+      .mj-docs-page[data-doc-preset='client-proposal'] .mj-docs-h1,
+      .mj-docs-page[data-doc-preset='client-proposal'] .mj-docs-h2 {
+        color: var(--mj-brand-primary);
+        border-bottom: 2px solid var(--mj-brand-primary);
+        padding-bottom: 5px;
+      }
+      .mj-docs-page[data-doc-preset='editorial'] {
+        font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+        line-height: 1.75;
+      }
+
+      /* Paginated Sheet View */
+      .mj-docs-page--paginated {
+        max-width: 816px;
+        min-height: 980px;
+        padding: 40px 56px;
+        border-radius: 4px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        display: flex;
+        flex-direction: column;
+      }
+      .mj-docs-page--paginated.mj-docs-page--a4 {
+        max-width: 794px;
+      }
+      .mj-docs-page--paginated.mj-docs-page--landscape {
+        max-width: 1056px;
+        min-height: 760px;
+      }
+      .mj-docs-sheet-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 10px;
+        margin-bottom: 18px;
+        border-bottom: 1px solid var(--mj-border-subtle);
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+      .mj-docs-sheet-header__title {
+        font-weight: 600;
+        color: var(--mj-text-secondary);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .mj-docs-sheet-header__right {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+      .mj-docs-sheet-watermark {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        background: var(--mj-bg-surface-card);
+      }
+      .mj-docs-sheet-meta {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+      .mj-docs-sheet-footer {
+        margin-top: auto;
+        padding-top: 16px;
+        border-top: 1px solid var(--mj-border-subtle);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 11px;
+        color: var(--mj-text-muted);
+      }
+
+      /* Import Fidelity Banner */
+      .mj-docs-import-fidelity-banner {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 8px 14px;
+        background: var(--mj-bg-surface-card);
+        border-bottom: 1px solid var(--mj-border-default);
+        font-size: 12px;
+        color: var(--mj-text-primary);
+      }
+      .mj-docs-import-fidelity-banner__main {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        min-width: 0;
+      }
+      .mj-docs-import-fidelity-banner__main > i {
+        color: var(--mj-brand-primary);
+        margin-top: 2px;
+      }
+      .mj-docs-import-fidelity-banner__text {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .mj-docs-import-fidelity-banner__warnings {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      /* Document Design & Page Setup Popover */
+      .mj-docs-design-popover {
+        padding: 12px 16px;
+        background: var(--mj-bg-surface);
+        border-bottom: 1px solid var(--mj-border-default);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        z-index: 25;
+      }
+      .mj-docs-design-popover__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+      }
+      .mj-docs-design-popover__header > div {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        flex-wrap: wrap;
+        font-size: 13px;
+      }
+      .mj-docs-design-popover__subtitle {
+        font-size: 11.5px;
+        color: var(--mj-text-muted);
+      }
+      .mj-docs-design-preset-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 8px;
+      }
+      .mj-docs-design-card {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+        padding: 9px 11px;
+        border-radius: 8px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface-card);
+        color: var(--mj-text-primary);
+        text-align: left;
+        cursor: pointer;
+        transition: border-color 0.12s ease, background 0.12s ease;
+      }
+      .mj-docs-design-card:hover:not(:disabled) {
+        border-color: var(--mj-brand-primary);
+        background: var(--mj-bg-surface-hover);
+      }
+      .mj-docs-design-card--active {
+        border-color: var(--mj-brand-primary);
+        box-shadow: 0 0 0 1px var(--mj-brand-primary);
+      }
+      .mj-docs-design-card__top {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 6px;
+      }
+      .mj-docs-design-card__name {
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .mj-docs-design-card__desc {
+        font-size: 11px;
+        color: var(--mj-text-secondary);
+        line-height: 1.35;
+      }
+      .mj-docs-design-card__meta {
+        display: flex;
+        gap: 5px;
+        font-size: 10.5px;
+        color: var(--mj-text-muted);
+        margin-top: 2px;
+      }
+      .mj-docs-design-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 14px;
+      }
+      .mj-docs-design-control-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .mj-docs-design-control-group--wide {
+        min-width: 180px;
+        flex: 1 1 180px;
+      }
+      .mj-docs-design-control-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--mj-text-secondary);
+      }
+      .mj-docs-design-input {
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 6px;
+        border: 1px solid var(--mj-border-default);
+        background: var(--mj-bg-surface-sunken);
+        color: var(--mj-text-primary);
+        font-size: 12px;
+      }
+      .mj-docs-segmented {
+        display: inline-flex;
+        border: 1px solid var(--mj-border-default);
+        border-radius: 6px;
+        overflow: hidden;
+        background: var(--mj-bg-surface-sunken);
+      }
+      .mj-docs-segmented__btn {
+        border: none;
+        background: transparent;
+        color: var(--mj-text-secondary);
+        font-size: 11.5px;
+        font-weight: 500;
+        padding: 4px 10px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .mj-docs-segmented__btn--active {
+        background: var(--mj-brand-primary);
+        color: var(--mj-text-inverse);
+      }
+
+      /* Compact Bottom Status Footer Bar */
+      .mj-docs-status-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        min-height: 28px;
+        padding: 2px 12px;
+        background: var(--mj-bg-surface);
+        border-top: 1px solid var(--mj-border-default);
+        font-size: 11.5px;
+        color: var(--mj-text-muted);
+        flex-shrink: 0;
+      }
+      .mj-docs-status-footer__left,
+      .mj-docs-status-footer__right {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .mj-docs-footer-sep {
+        color: var(--mj-border-strong);
+      }
+      .mj-docs-footer-meta {
+        font-size: 11px;
+        color: var(--mj-text-muted);
+        white-space: nowrap;
+      }
+      .mj-docs-footer-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 7px;
+        border-radius: 5px;
+        border: 1px solid transparent;
+        background: transparent;
+        color: var(--mj-text-secondary);
+        font-size: 11px;
+        font-weight: 500;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .mj-docs-footer-pill:hover {
+        background: var(--mj-bg-surface-hover);
+        color: var(--mj-text-primary);
+      }
+      .mj-docs-footer-pill--active {
+        border-color: var(--mj-brand-primary);
+        color: var(--mj-brand-primary);
+        background: var(--mj-bg-surface-card);
+      }
+
+      /* Native <dialog> Export & Preflight Studio (modern-web-guidance compliant) */
+      dialog.mj-docs-native-dialog {
+        padding: 0;
+        border: none;
+        border-radius: 12px;
+        background: transparent;
+        color: var(--mj-text-primary);
+        max-width: min(560px, calc(100vw - 32px));
+        width: fit-content;
+        box-shadow: none;
+        overflow: visible;
+      }
+      dialog.mj-docs-native-dialog:modal {
+        overscroll-behavior: contain;
+      }
+      dialog.mj-docs-native-dialog::backdrop {
+        background: rgba(15, 23, 42, 0.45);
+        backdrop-filter: blur(2px);
+        overflow: hidden;
+        overscroll-behavior: contain;
+      }
+      .mj-docs-modal--export {
+        width: min(560px, calc(100vw - 32px));
+        max-width: 100%;
+        margin: 0;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+      }
+      .mj-docs-modal--export .mj-docs-modal__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .mj-docs-modal--export .mj-docs-modal__footer {
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 8px;
+      }
+      .mj-docs-dialog-h1 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .mj-docs-export-row {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        margin-bottom: 12px;
+      }
+      .mj-docs-export-grid-2 {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .mj-docs-export-checks {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+      .mj-docs-preflight-panel {
+        border: 1px solid var(--mj-border-default);
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: var(--mj-bg-surface-card);
+        font-size: 12px;
+      }
+      .mj-docs-preflight-panel--passed {
+        border-color: var(--mj-status-success);
+      }
+      .mj-docs-preflight-panel--error {
+        border-color: var(--mj-status-error);
+      }
+      .mj-docs-preflight-panel__header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .mj-docs-preflight-list {
+        margin: 8px 0 0;
+        padding-left: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .mj-docs-preflight-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 8px;
+        color: var(--mj-text-secondary);
+      }
+      .mj-docs-preflight-item[data-severity='error'] {
+        color: var(--mj-status-error);
+      }
+      .mj-docs-preflight-item[data-severity='warning'] {
+        color: var(--mj-status-warning);
       }
 
       .mj-docs-frontmatter-hero {
@@ -5349,6 +6338,7 @@ export class MarkdownArtifactViewerComponent
   @ViewChild('fileImportInput') public FileImportInput?: ElementRef<HTMLInputElement>;
   @ViewChild('printableCanvas') public PrintableCanvas?: ElementRef<HTMLElement>;
   @ViewChild('moreMenuWrap') public MoreMenuWrap?: ElementRef<HTMLElement>;
+  @ViewChild('exportDialog') public ExportDialogRef?: ElementRef<HTMLDialogElement>;
 
   /**
    * Emitted when a user clicks a primary key, record name, or foreign key link inside an embedded Live View or Query block.
@@ -5439,6 +6429,23 @@ export class MarkdownArtifactViewerComponent
   public ShowCommentsDrawer = false;
   public ShowFormattingRibbon = false;
   public ShowMoreToolsMenu = false;
+  public ShowDesignPopover = false;
+  public PageLayoutMode: DocsPageLayoutMode = 'continuous';
+  public StatsMetricMode: DocsStatsMetricMode = 'words';
+  public LastImportFidelityReport: DocxImportFidelityReport | null = null;
+  public readonly AvailableDesignPresets: readonly DocumentDesignPreset[] = DOCUMENT_DESIGN_PRESETS;
+
+  // Export & Preflight Native <dialog> State
+  public ExportDialogFormat: 'docx' | 'pdf' | 'md' = 'docx';
+  public ExportDialogMode: DocExportMode = 'clean';
+  public ExportDialogPageSize: DocumentPageSize = 'letter';
+  public ExportDialogOrientation: DocumentPageOrientation = 'portrait';
+  public ExportEmbedLiveMetadata = true;
+  public ExportStrictPreflight = false;
+  public ExportPreflightReport: DocumentExportPreflightReport | null = null;
+  public IsRunningExport = false;
+  private exportDialogFallbackBound = false;
+
   public FormattingRibbonPinned = false;
   public readonly MaxPinnedToolbarActions = 4;
   public ShowCommandPalette = false;
@@ -5505,9 +6512,51 @@ export class MarkdownArtifactViewerComponent
 
   // Parsed state
   public DocumentSegments: DocumentRenderSegment[] = [];
+  private frontmatterEndLine = 0;
+  private visibleSegmentsCache: {
+    source: DocumentRenderSegment[];
+    frontmatterEndLine: number;
+    result: DocumentRenderSegment[];
+  } | null = null;
   public OutlineItems: DocumentOutlineItem[] = [];
   public WordStats = { Words: 0, Characters: 0, Lines: 0, LiveBlocks: 0, EmbeddedArtifacts: 0 };
   public FrontmatterHeader: DocumentFrontmatterHeader | null = null;
+
+  /**
+   * Returns `true` when a parsed segment belongs strictly inside leading YAML frontmatter (`--- ... ---`),
+   * which drives Design Presets & metadata but should not render as raw prose on the canvas or in prints.
+   */
+  public IsYamlFrontmatterSegment(seg: DocumentRenderSegment): boolean {
+    return (
+      this.frontmatterEndLine > 0 &&
+      seg.Kind === 'markdown' &&
+      seg.EndLine <= this.frontmatterEndLine
+    );
+  }
+
+  /**
+   * Canvas-visible segments (excluding leading YAML frontmatter metadata lines while keeping
+   * `DocumentSegments` complete for line-accurate editing and Source mode).
+   */
+  public get VisibleDocumentSegments(): DocumentRenderSegment[] {
+    if (
+      this.visibleSegmentsCache &&
+      this.visibleSegmentsCache.source === this.DocumentSegments &&
+      this.visibleSegmentsCache.frontmatterEndLine === this.frontmatterEndLine
+    ) {
+      return this.visibleSegmentsCache.result;
+    }
+    const result =
+      this.frontmatterEndLine > 0
+        ? this.DocumentSegments.filter((seg) => !this.IsYamlFrontmatterSegment(seg))
+        : this.DocumentSegments;
+    this.visibleSegmentsCache = {
+      source: this.DocumentSegments,
+      frontmatterEndLine: this.frontmatterEndLine,
+      result,
+    };
+    return result;
+  }
 
   public get EstimatedReadingMinutes(): number {
     return Math.max(1, Math.ceil((this.WordStats.Words || 0) / 200));
@@ -6027,10 +7076,28 @@ export class MarkdownArtifactViewerComponent
     return CreateMarkdownSnapshot(this.MarkdownContent || this.getRawContent(), this.getDisplayTitle());
   }
 
-  public override async ExportPDF(orientation: PdfOrientation = 'portrait'): Promise<void> {
+  public override async ExportPDF(
+    orientation: PdfOrientation = 'portrait',
+    exportMode: DocExportMode = 'clean',
+    designOverride?: Partial<DocumentDesignConfig>,
+  ): Promise<void> {
     this.FlushPendingEdits();
-    const html = this.renderDocumentPrintableHtml();
-    this.importExportService.ExportPrintablePdf(html, this.getDisplayTitle() || 'Document', orientation);
+    const designConfig: DocumentDesignConfig = {
+      ...this.ActiveDesignConfig,
+      Orientation: orientation === 'landscape' ? 'landscape' : 'portrait',
+      ...(designOverride ?? {}),
+    };
+    const html = this.renderDocumentPrintableHtml(exportMode, designConfig);
+    this.importExportService.ExportPrintablePdf(
+      html,
+      this.getDisplayTitle() || 'Document',
+      designConfig.Orientation,
+      {
+        DesignConfig: designConfig,
+        ExportMode: exportMode,
+        MarkdownSource: this.MarkdownContent,
+      },
+    );
   }
 
   /** Word and Markdown, then the PDF entries. */
@@ -6605,6 +7672,11 @@ export class MarkdownArtifactViewerComponent
             ShowOutlineRail: typeof parsed.ShowOutlineRail === 'boolean' ? parsed.ShowOutlineRail : true,
             EditingStyle: parsed.EditingStyle === 'blocks' ? 'blocks' : 'simple',
             FormattingRibbonPinned: parsed.FormattingRibbonPinned === true,
+            PageLayoutMode: parsed.PageLayoutMode === 'paginated' ? 'paginated' : 'continuous',
+            StatsMetric:
+              parsed.StatsMetric === 'chars' || parsed.StatsMetric === 'charsNoSpaces'
+                ? parsed.StatsMetric
+                : 'words',
           };
           this._serverToolbarVisibilityRaw = raw;
           this._localToolbarVisibility = null;
@@ -6642,6 +7714,8 @@ export class MarkdownArtifactViewerComponent
       ShowOutlineRail: patch.ShowOutlineRail ?? current.ShowOutlineRail ?? true,
       EditingStyle: patch.EditingStyle ?? current.EditingStyle ?? 'simple',
       FormattingRibbonPinned: patch.FormattingRibbonPinned ?? current.FormattingRibbonPinned ?? false,
+      PageLayoutMode: patch.PageLayoutMode ?? current.PageLayoutMode ?? 'continuous',
+      StatsMetric: patch.StatsMetric ?? current.StatsMetric ?? 'words',
     };
     const json = JSON.stringify(next);
     const engine = this.resolveUserInfoEngine();
@@ -6673,6 +7747,9 @@ export class MarkdownArtifactViewerComponent
     if (this.FormattingRibbonPinned) {
       this.ShowFormattingRibbon = true;
     }
+    this.PageLayoutMode = vis.PageLayoutMode === 'paginated' ? 'paginated' : 'continuous';
+    this.StatsMetricMode =
+      vis.StatsMetric === 'chars' || vis.StatsMetric === 'charsNoSpaces' ? vis.StatsMetric : 'words';
   }
 
   public get PinnedToolbarKeys(): DocsToolbarItemKey[] {
@@ -6764,6 +7841,36 @@ export class MarkdownArtifactViewerComponent
         MenuTestId: 'menu-toggle-outline-btn',
       },
       {
+        Key: 'design-preset',
+        Label: this.ActiveDesignPreset.Name,
+        MenuLabel: 'Document Design & Page Setup',
+        Description: 'Choose typography preset, paper size, watermark & running headers',
+        Icon: 'fa-palette',
+        Placement: 'left',
+        Category: 'view',
+        Order: 55,
+        Visible: true,
+        Active: this.ShowDesignPopover,
+        StatusTag: this.ActiveDesignPreset.Name,
+        TestId: 'docs-design-trigger-btn',
+        MenuTestId: 'menu-docs-design-trigger-btn',
+      },
+      {
+        Key: 'page-layout',
+        Label: this.PageLayoutMode === 'paginated' ? 'Page View' : 'Continuous',
+        MenuLabel: 'Paginated Sheet View',
+        Description: 'Toggle Letter/A4 paginated page layout with running header and footer',
+        Icon: 'fa-file-lines',
+        Placement: 'left',
+        Category: 'view',
+        Order: 58,
+        Visible: true,
+        Active: this.PageLayoutMode === 'paginated',
+        StatusTag: this.PageLayoutMode === 'paginated' ? 'Pages' : 'Scroll',
+        TestId: 'docs-page-layout-btn',
+        MenuTestId: 'menu-docs-page-layout-btn',
+      },
+      {
         Key: 'blocks-mode',
         Label: 'Blocks',
         MenuLabel: 'Block Studio Mode',
@@ -6834,6 +7941,20 @@ export class MarkdownArtifactViewerComponent
         Active: this.ShowPermissionsModal,
         TestId: 'open-permissions-modal-btn',
         MenuTestId: 'menu-open-permissions-modal-btn',
+      },
+      {
+        Key: 'export-studio',
+        Label: 'Export…',
+        MenuLabel: 'Export & Preflight Studio…',
+        Description: 'Configure Clean vs. Markup redlines, preflight checks & .docx / PDF export',
+        Icon: 'fa-arrow-up-from-bracket',
+        Placement: 'right',
+        Category: 'io',
+        Order: 105,
+        Visible: true,
+        Active: false,
+        TestId: 'open-export-studio-btn',
+        MenuTestId: 'menu-open-export-studio-btn',
       },
       {
         Key: 'export-docx',
@@ -6988,6 +8109,12 @@ export class MarkdownArtifactViewerComponent
       case 'blocks-mode':
         this.SetEditingStyle(this.EditingStyle === 'blocks' ? 'simple' : 'blocks');
         break;
+      case 'design-preset':
+        this.ToggleDesignPopover();
+        break;
+      case 'page-layout':
+        this.TogglePageLayoutMode();
+        break;
       case 'source-mode':
         this.SetViewMode(this.ViewMode === 'source' ? (this.CanUserEdit ? 'edit' : 'preview') : 'source');
         break;
@@ -7000,8 +8127,11 @@ export class MarkdownArtifactViewerComponent
       case 'share':
         this.OpenPermissionsModal();
         break;
+      case 'export-studio':
+        this.OpenExportDialog('docx');
+        break;
       case 'export-docx':
-        void this.OnExportDocx();
+        this.OpenExportDialog('docx');
         break;
       case 'export-md':
         this.OnExportMarkdown();
@@ -11874,13 +13004,46 @@ export class MarkdownArtifactViewerComponent
     return 'Whiteboard';
   }
 
-  private renderDocumentPrintableHtml(): string {
+  private renderDocumentPrintableHtml(
+    exportMode: DocExportMode = 'clean',
+    designConfig: DocumentDesignConfig = this.ActiveDesignConfig,
+  ): string {
     const parts: string[] = [];
-    for (const seg of this.DocumentSegments) {
+    const headerTitle = designConfig.RunningHeader || this.getDisplayTitle() || 'Document';
+    const watermarkBadge = designConfig.Watermark
+      ? `<span class="mj-print-watermark">${EscapeHtml(designConfig.Watermark)}</span>`
+      : '';
+    parts.push(
+      `<header class="mj-print-header"><span>${EscapeHtml(headerTitle)}</span>${watermarkBadge}</header>`,
+    );
+
+    const pendingSuggestions =
+      exportMode === 'markup' ? this.Suggestions.filter((s) => s.Status === 'Pending') : [];
+
+    for (const seg of this.VisibleDocumentSegments) {
       if (seg.Kind === 'markdown') {
         const raw = seg.RawMarkdown.trim();
         if (!raw) {
           continue;
+        }
+        const segSug =
+          exportMode === 'markup'
+            ? pendingSuggestions.find((s) => s.BlockID === seg.SegmentID)
+            : undefined;
+        if (segSug) {
+          const wordDiff = this.GetSuggestionWordDiff(segSug);
+          if (wordDiff && wordDiff.Spans.length > 0) {
+            const redlineHtml = wordDiff.Spans.map((span) => {
+              const safe = EscapeHtml(span.Text);
+              if (span.Type === 'delete') return `<del class="mj-print-del">${safe}</del>`;
+              if (span.Type === 'insert') return `<ins class="mj-print-ins">${safe}</ins>`;
+              return safe;
+            }).join('');
+            parts.push(
+              `<p>${redlineHtml}</p><div class="mj-print-markup-meta">Tracked suggestion by ${EscapeHtml(segSug.AuthorName)}${segSug.Rationale ? ` — ${EscapeHtml(segSug.Rationale)}` : ''}</div>`,
+            );
+            continue;
+          }
         }
         if (seg.BlockKind === 'heading') {
           const level = Math.min(6, Math.max(1, seg.HeadingLevel ?? 1));
@@ -11946,6 +13109,31 @@ export class MarkdownArtifactViewerComponent
         }
       }
     }
+
+    if (exportMode === 'markup') {
+      const openThreads = this.AnchoredThreads.filter((t) => t.Status === 'Open' && t.Messages.length > 0);
+      if (openThreads.length > 0) {
+        const commentCards = openThreads
+          .map((t) => {
+            const msgs = t.Messages.map(
+              (m) => `<div><strong>${EscapeHtml(m.UserName)}:</strong> ${EscapeHtml(m.Message)}</div>`,
+            ).join('');
+            const quote = t.QuotedText ? `<div><em>"${EscapeHtml(t.QuotedText)}"</em></div>` : '';
+            return `<div class="mj-print-comment-card"><div><strong>${EscapeHtml(t.AnchorLabel)}</strong></div>${quote}${msgs}</div>`;
+          })
+          .join('');
+        parts.push(`<section class="mj-print-comments-section"><h3>Review Comments (${openThreads.length})</h3>${commentCards}</section>`);
+      }
+    }
+
+    if (designConfig.RunningFooter || designConfig.ShowPageNumbers) {
+      const footerLeft = EscapeHtml(designConfig.RunningFooter || GetDocumentDesignPreset(designConfig.PresetID).Name);
+      const footerRight = designConfig.ShowPageNumbers
+        ? `~${this.LiveDocumentStats.EstimatedPages} ${this.LiveDocumentStats.EstimatedPages === 1 ? 'page' : 'pages'}`
+        : '';
+      parts.push(`<footer class="mj-print-footer"><span>${footerLeft}</span><span>${footerRight}</span></footer>`);
+    }
+
     return parts.join('\n');
   }
 
@@ -14787,6 +15975,211 @@ export class MarkdownArtifactViewerComponent
     }
   }
 
+  public get ActiveDesignConfig(): DocumentDesignConfig {
+    return ExtractDocumentDesignConfig(this.MarkdownContent);
+  }
+
+  public get ActiveDesignPreset(): DocumentDesignPreset {
+    return GetDocumentDesignPreset(this.ActiveDesignConfig.PresetID);
+  }
+
+  public get LiveDocumentStats(): DocumentStats {
+    return ComputeDocumentStats(this.MarkdownContent);
+  }
+
+  public get PrimaryStatsLabel(): string {
+    const stats = this.LiveDocumentStats;
+    if (this.StatsMetricMode === 'chars') {
+      return `${stats.CharCount.toLocaleString()} chars`;
+    }
+    if (this.StatsMetricMode === 'charsNoSpaces') {
+      return `${stats.CharCountNoSpaces.toLocaleString()} chars (no spaces)`;
+    }
+    return `${stats.WordCount.toLocaleString()} ${stats.WordCount === 1 ? 'word' : 'words'}`;
+  }
+
+  public CycleStatsMetric(): void {
+    const order: DocsStatsMetricMode[] = ['words', 'chars', 'charsNoSpaces'];
+    const idx = order.indexOf(this.StatsMetricMode);
+    this.StatsMetricMode = order[(idx + 1) % order.length];
+    this.writeToolbarVisibility({ StatsMetric: this.StatsMetricMode });
+    this.cdr.markForCheck();
+  }
+
+  public ToggleDesignPopover(): void {
+    this.ShowDesignPopover = !this.ShowDesignPopover;
+    if (this.ShowDesignPopover) {
+      this.CloseMoreToolsMenu();
+    }
+    this.cdr.markForCheck();
+  }
+
+  public TogglePageLayoutMode(): void {
+    this.SetPageLayoutMode(this.PageLayoutMode === 'paginated' ? 'continuous' : 'paginated');
+  }
+
+  public SetPageLayoutMode(mode: DocsPageLayoutMode): void {
+    this.PageLayoutMode = mode;
+    this.writeToolbarVisibility({ PageLayoutMode: mode });
+    this.cdr.markForCheck();
+  }
+
+  public ApplyDesignPreset(presetId: DocumentDesignPresetID): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    const preset = GetDocumentDesignPreset(presetId);
+    this.UpdateDesignConfig({
+      PresetID: preset.ID,
+      PageSize: preset.DefaultPageSize,
+    });
+    this.StatusBannerMessage = `Applied "${preset.Name}" document design preset.`;
+  }
+
+  public UpdateDesignConfig(patch: Partial<DocumentDesignConfig>): void {
+    if (!this.CanUserEdit) {
+      return;
+    }
+    this.FlushPendingEdits();
+    const updated = ApplyDocumentDesignConfigToMarkdown(this.MarkdownContent, patch);
+    if (updated !== this.MarkdownContent) {
+      this.OnMarkdownChanged(updated);
+    }
+    this.cdr.markForCheck();
+  }
+
+  public OnDesignWatermarkChange(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    this.UpdateDesignConfig({ Watermark: (input?.value ?? '').trim().slice(0, 64) });
+  }
+
+  public OnDesignHeaderChange(event: Event): void {
+    const input = event.target as HTMLInputElement | null;
+    this.UpdateDesignConfig({ RunningHeader: (input?.value ?? '').trim().slice(0, 140) });
+  }
+
+  public OpenExportDialog(initialFormat: 'docx' | 'pdf' | 'md' = 'docx'): void {
+    this.FlushPendingEdits();
+    this.CloseMoreToolsMenu();
+    this.ShowDesignPopover = false;
+    const design = this.ActiveDesignConfig;
+    this.ExportDialogFormat = initialFormat;
+    this.ExportDialogPageSize = design.PageSize;
+    this.ExportDialogOrientation = design.Orientation;
+    this.ExportDialogMode =
+      this.PendingSuggestionsCount > 0 || this.OpenThreadsCount > 0 ? 'markup' : 'clean';
+    this.RefreshExportPreflight();
+    this.cdr.detectChanges();
+
+    const dialog = this.ExportDialogRef?.nativeElement;
+    if (dialog) {
+      this.ensureExportDialogLightDismissFallback(dialog);
+      if (!dialog.open && typeof dialog.showModal === 'function') {
+        dialog.showModal();
+      }
+    }
+  }
+
+  public CloseExportDialog(): void {
+    const dialog = this.ExportDialogRef?.nativeElement;
+    if (dialog?.open) {
+      dialog.close('cancel');
+    }
+  }
+
+  public OnExportDialogClosed(): void {
+    const dialog = this.ExportDialogRef?.nativeElement;
+    if (dialog) {
+      // Reset returnValue per modern-web-guidance dialog best practices so stale values never leak
+      dialog.returnValue = '';
+    }
+    this.cdr.markForCheck();
+  }
+
+  private ensureExportDialogLightDismissFallback(dialog: HTMLDialogElement): void {
+    if (this.exportDialogFallbackBound || typeof HTMLDialogElement === 'undefined') {
+      return;
+    }
+    this.exportDialogFallbackBound = true;
+    // Safari fallback for <dialog closedby="any"> using pointerdown + pointerup bounding-rect check
+    if (!('closedBy' in HTMLDialogElement.prototype)) {
+      const isOutside = (e: PointerEvent): boolean => {
+        const r = dialog.getBoundingClientRect();
+        return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+      };
+      let pressedOutside = false;
+      dialog.addEventListener('pointerdown', (e) => {
+        pressedOutside = isOutside(e);
+      });
+      dialog.addEventListener('pointerup', (e) => {
+        if (pressedOutside && isOutside(e) && dialog.open) {
+          dialog.close('backdrop');
+        }
+      });
+    }
+  }
+
+  public SetExportDialogFormat(format: 'docx' | 'pdf' | 'md'): void {
+    this.ExportDialogFormat = format;
+    this.RefreshExportPreflight();
+    this.cdr.markForCheck();
+  }
+
+  public SetExportDialogMode(mode: DocExportMode): void {
+    this.ExportDialogMode = mode;
+    this.RefreshExportPreflight();
+    this.cdr.markForCheck();
+  }
+
+  public RefreshExportPreflight(): void {
+    this.ExportPreflightReport = this.importExportService.RunExportPreflight(this.MarkdownContent, {
+      LiveBlockResults: this.blockResults,
+      VerifyFrozenSnapshot: (block) => this.IsSnapshotVerified(block),
+      Suggestions: this.Suggestions,
+      AnchoredThreads: this.AnchoredThreads,
+      Orientation: this.ExportDialogOrientation,
+      Strict: this.ExportStrictPreflight,
+    });
+  }
+
+  public async ConfirmExportFromDialog(): Promise<void> {
+    if (this.IsRunningExport) {
+      return;
+    }
+    this.RefreshExportPreflight();
+    if (this.ExportStrictPreflight && (this.ExportPreflightReport?.ErrorCount ?? 0) > 0) {
+      return;
+    }
+    this.IsRunningExport = true;
+    this.cdr.markForCheck();
+    try {
+      const designOverride: Partial<DocumentDesignConfig> = {
+        PageSize: this.ExportDialogPageSize,
+        Orientation: this.ExportDialogOrientation,
+      };
+      if (this.ExportDialogFormat === 'md') {
+        this.OnExportMarkdown();
+      } else if (this.ExportDialogFormat === 'pdf') {
+        await this.ExportPDF(this.ExportDialogOrientation, this.ExportDialogMode, designOverride);
+        this.StatusBannerMessage = `Prepared ${this.ExportDialogMode === 'markup' ? 'Markup ' : ''}PDF print view (${this.ExportDialogPageSize.toUpperCase()} ${this.ExportDialogOrientation}).`;
+      } else {
+        await this.OnExportDocx({
+          ExportMode: this.ExportDialogMode,
+          DesignConfig: designOverride,
+          EmbedLiveBlockMetadata: this.ExportEmbedLiveMetadata,
+          Strict: this.ExportStrictPreflight,
+        });
+      }
+      this.CloseExportDialog();
+    } catch (err) {
+      LogError(err);
+      this.notifyError(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      this.IsRunningExport = false;
+      this.cdr.markForCheck();
+    }
+  }
+
   public TriggerFileImport(): void {
     this.FileImportInput?.nativeElement?.click();
   }
@@ -14807,9 +16200,35 @@ export class MarkdownArtifactViewerComponent
       const lowerName = file.name.toLowerCase();
       let importedMd: string;
       if (lowerName.endsWith('.docx')) {
-        importedMd = await this.importExportService.ImportDocxFile(file);
+        const importRes = await this.importExportService.ImportDocxFileWithReport(file);
+        importedMd = importRes.Markdown;
+        const lockCheck = this.validateDocumentEditLocks(importedMd);
+        if (!lockCheck.Allowed) {
+          return;
+        }
+        this.OnMarkdownChanged(importedMd);
+        if (importRes.ImportedSuggestions.length > 0) {
+          const existingIds = new Set(this.Suggestions.map((s) => s.SuggestionID));
+          const merged = [
+            ...this.Suggestions,
+            ...importRes.ImportedSuggestions.filter((s) => !existingIds.has(s.SuggestionID)),
+          ];
+          this.Suggestions = merged;
+        }
+        if (importRes.ImportedComments.length > 0) {
+          const existingIds = new Set(this.AnchoredThreads.map((t) => t.ConversationID));
+          this.AnchoredThreads = [
+            ...this.AnchoredThreads,
+            ...importRes.ImportedComments.filter((t) => !existingIds.has(t.ConversationID)),
+          ];
+        }
+        this.LastImportFidelityReport = importRes.Report;
+        this.StatusBannerMessage = '';
+        this.cdr.markForCheck();
+        return;
       } else {
         importedMd = await this.importExportService.ImportMarkdown(file);
+        this.LastImportFidelityReport = null;
       }
       const lockCheck = this.validateDocumentEditLocks(importedMd);
       if (!lockCheck.Allowed) {
@@ -14835,10 +16254,16 @@ export class MarkdownArtifactViewerComponent
     this.StatusBannerMessage = `Exported ${baseTitle}.md`;
   }
 
-  public async OnExportDocx(): Promise<void> {
+  public async OnExportDocx(overrides?: {
+    ExportMode?: DocExportMode;
+    DesignConfig?: Partial<DocumentDesignConfig>;
+    EmbedLiveBlockMetadata?: boolean;
+    Strict?: boolean;
+  }): Promise<void> {
     this.FlushPendingEdits();
     const title = this.getDisplayTitle() || 'Document';
     const baseTitle = title.replace(/[^a-zA-Z0-9_-]+/g, '-');
+    const mode = overrides?.ExportMode ?? 'clean';
     await this.importExportService.DownloadDocxFile(
       this.MarkdownContent,
       `${baseTitle}.docx`,
@@ -14846,9 +16271,15 @@ export class MarkdownArtifactViewerComponent
       {
         LiveBlockResults: this.blockResults,
         VerifyFrozenSnapshot: (block) => this.IsSnapshotVerified(block),
+        ExportMode: mode,
+        Suggestions: mode === 'markup' ? this.Suggestions : [],
+        AnchoredThreads: mode === 'markup' ? this.AnchoredThreads : [],
+        DesignConfig: overrides?.DesignConfig ?? this.ActiveDesignConfig,
+        EmbedLiveBlockMetadata: overrides?.EmbedLiveBlockMetadata ?? true,
+        Strict: overrides?.Strict ?? false,
       },
     );
-    this.StatusBannerMessage = `Exported ${baseTitle}.docx`;
+    this.StatusBannerMessage = `Exported ${baseTitle}.docx (${mode === 'markup' ? 'with Track Changes & Comments' : 'Clean Final'}).`;
   }
 
   public OnCopy(): void {
@@ -15050,6 +16481,8 @@ export class MarkdownArtifactViewerComponent
     this.reconcileSuggestionsAndAnchorsAcrossSegments(previousSegments, nextSegments);
     this.OutlineItems = this.collabService.ExtractOutline(this.MarkdownContent);
     this.WordStats = this.collabService.ComputeWordStats(this.MarkdownContent);
+    const parsedFrontmatter = ParseDocumentFrontmatter(this.MarkdownContent);
+    this.frontmatterEndLine = parsedFrontmatter.HasFrontmatter ? parsedFrontmatter.EndLine : 0;
     this.FrontmatterHeader = ParseMarkdownFrontmatterHeader(this.MarkdownContent);
     const docLinks = ExtractDocRecordLinks(this.MarkdownContent);
     if (docLinks.length > 0) {
@@ -16156,6 +17589,30 @@ export class MarkdownArtifactViewerComponent
         });
       }
     }
+    for (const preset of this.AvailableDesignPresets) {
+      items.push({
+        Id: `design:${preset.ID}`,
+        Label: `Apply Design Preset: ${preset.Name}`,
+        Category: 'Design',
+        Icon: 'fa-palette',
+        Description: preset.Description,
+        Active: this.ActiveDesignConfig.PresetID === preset.ID,
+        Disabled: !this.CanUserEdit,
+      });
+    }
+    items.push({
+      Id: 'toggle:page-layout',
+      Label: this.PageLayoutMode === 'paginated' ? 'Switch to Continuous Scroll View' : 'Switch to Paginated Sheet View',
+      Category: 'View',
+      Icon: 'fa-file-lines',
+      Active: this.PageLayoutMode === 'paginated',
+    });
+    items.push({
+      Id: 'export:studio',
+      Label: 'Open Export & Preflight Studio (.docx / PDF / Clean vs. Markup)',
+      Category: 'File',
+      Icon: 'fa-arrow-up-from-bracket',
+    });
     if (this.CanUserEdit) {
       items.push({
         Id: 'import',
@@ -16174,6 +17631,19 @@ export class MarkdownArtifactViewerComponent
     }
     if (commandId === 'mode:edit') {
       this.SetViewMode('edit');
+      return;
+    }
+    if (commandId === 'toggle:page-layout') {
+      this.TogglePageLayoutMode();
+      return;
+    }
+    if (commandId === 'export:studio') {
+      this.OpenExportDialog('docx');
+      return;
+    }
+    if (commandId.startsWith('design:')) {
+      const presetId = commandId.slice(7) as DocumentDesignPresetID;
+      this.ApplyDesignPreset(presetId);
       return;
     }
     if (commandId === 'import') {
