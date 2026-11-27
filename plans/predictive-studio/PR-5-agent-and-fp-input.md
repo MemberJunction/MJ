@@ -299,6 +299,8 @@ packages/MJServer/src/__tests__/ResolverBase.deleteReturnProjection.test.ts  (D-
 packages/SQLServerDataProvider/src/__tests__/spCreateRecordChangeContract.test.ts  (D-091 item 7)
 # Owner-batch item 8: the 10,000-item fan-out test's wall-clock deadline under a full test run (integrator, 2026-11-26)
 packages/MJServer/src/__tests__/queued-task-graph-and-enqueue-fanout.test.ts  (D-091 item 8)
+# Owner-batch item 9: the rig harness shim test's cold module load counted inside each test (integrator, 2026-11-26)
+packages/TestingFramework/integration-test-suite/src/__tests__/rig-harness-shim.test.ts  (D-091 item 9)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3397,6 +3399,13 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    `Progress` (items processed + published) and restarts the 25 s window while it advances, so a stalled run still fails
    in 25 s and a slow one finishes; the outer test timeout is a documented 300 s runaway bound. Came in with `next`
    (`90174dfd3b`); fixed by the integrator at wave-1 integration under the owner's 2026-11-26 statement; 12/12.
+9. `packages/TestingFramework/integration-test-suite/src/__tests__/rig-harness-shim.test.ts` — two tests each did a
+   cold `import()` of the shim and of `@memberjunction/testing-integration` (the whole graph through Vite's transform)
+   in their body: 19.8 s alone against 60 s and 30 s timeouts, both timed out in wave-1's second full mirror
+   (`20261127-022134-85514`, the only red, file 90 s). Both modules now load once in `beforeAll` under a documented
+   300 s hook timeout (`Promise.allSettled`, so a failed load still fails its test with the reason); the tests assert on
+   the result. Mutation: a dead binding added to `rigs/lib/harness.ts` turns both checks red (`NotARealBinding`),
+   restored. Fixed by the integrator at wave-1 integration under the owner's 2026-11-26 statement; 3/3.
 
 ## 10. PR description draft
 

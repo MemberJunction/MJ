@@ -21,7 +21,7 @@
  * rigs run. Verified by re-adding a dead binding: the import test passed, the name check failed.
  * Deleting the name check would leave this file green while the rigs stay broken.
  */
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
@@ -39,23 +39,39 @@ function reExportedNames(): string[] {
         .filter((name) => name.length > 0);
 }
 
+/**
+ * Budget for the one cold load of the shim and of `@memberjunction/testing-integration` (the whole graph through
+ * Vite's transform): ~20 s alone on a dev machine, over 60 s inside a full-repo test run. It is a hook timeout, so
+ * the load is never counted against a test's own timeout (D-091 item 9).
+ */
+const MODULE_LOAD_TIMEOUT_MS = 300_000;
+
+type HarnessModule = typeof import('../../rigs/lib/harness');
+type TestingIntegrationModule = typeof import('@memberjunction/testing-integration');
+
 describe('rigs/lib/harness.ts', () => {
-    // 60s, not the 30s default: this import pulls the whole @memberjunction/testing-integration
-    // graph through Vite's transform with a cold cache. It takes ~6s on a warm dev machine and
-    // overran 30s on a CI runner the first time this lane actually executed. The budget is for
-    // transform time, not for anything the test itself waits on.
-    it('imports without throwing', async () => {
-        await expect(import('../../rigs/lib/harness')).resolves.toBeDefined();
-    }, 60_000);
+    let shim: PromiseSettledResult<HarnessModule>;
+    let pkg: PromiseSettledResult<TestingIntegrationModule>;
+
+    // Both modules load once, here: the tests below assert on what the load produced, not on how long it took.
+    beforeAll(async () => {
+        [shim, pkg] = await Promise.allSettled([import('../../rigs/lib/harness'), import('@memberjunction/testing-integration')]);
+    }, MODULE_LOAD_TIMEOUT_MS);
+
+    it('imports without throwing', () => {
+        expect(shim.status === 'rejected' ? shim.reason : null).toBeNull();
+        expect(shim.status === 'fulfilled' ? shim.value : undefined).toBeDefined();
+    });
 
     it('forwards a non-trivial set of names', () => {
         // Guards against the regex silently matching nothing and making the next test vacuous.
         expect(reExportedNames().length).toBeGreaterThan(10);
     });
 
-    it('forwards only bindings @memberjunction/testing-integration actually exports', async () => {
-        const pkg = await import('@memberjunction/testing-integration');
-        const missing = reExportedNames().filter((name) => !(name in pkg));
+    it('forwards only bindings @memberjunction/testing-integration actually exports', () => {
+        if (pkg.status === 'rejected') throw pkg.reason;
+        const exported = pkg.value;
+        const missing = reExportedNames().filter((name) => !(name in exported));
         // Named so the failure says which binding died and where it went, not just "import failed".
         expect(missing, `harness.ts re-exports name(s) the package no longer provides: ${missing.join(', ')}`).toEqual([]);
     });
