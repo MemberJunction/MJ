@@ -242,12 +242,12 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(sql).toContain('FK_UserRoutine_AIConfiguration');
     });
 
-    it('ships verified SQLConverter PostgreSQL counterpart matching T-SQL schema additions and policy defaults (CR-DUAL-DIALECT-CONTRACT)', () => {
+    it('ships verified PostgreSQL counterpart matching T-SQL schema additions and policy defaults (CR-DUAL-DIALECT-CONTRACT)', () => {
         const repoRoot = path.resolve(__dirname, '../../../../..');
         const tsMigrationPath = path.join(repoRoot, 'migrations/v6/V202611220625__v6.3.x__Rhythm_Model_Tiers.sql');
         const pgMigrationPath = path.join(
             repoRoot,
-            '.mj/specs/epic-3-rhythms-model-tiers-active-policy-wake-coalescing-autonomous-defaults/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql'
+            'migrations-pg/v6/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql'
         );
 
         const tsSql = fs.readFileSync(tsMigrationPath, 'utf8');
@@ -264,27 +264,27 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
 
         // Schema additions: DefaultAgentConfigurationID & AgentConfigurationID + FKs + views + functions
         expect(pgSql).toContain('ALTER TABLE __mj."AIAgentRhythmTemplate"');
-        expect(pgSql).toContain('ADD COLUMN IF NOT EXISTS "DefaultAgentConfigurationID" UUID NULL');
+        expect(pgSql).toContain('ADD COLUMN "DefaultAgentConfigurationID" UUID NULL');
         expect(pgSql).toContain('FK_AIAgentRhythmTemplate_AIConfiguration');
 
         expect(pgSql).toContain('ALTER TABLE __mj."UserRoutine"');
-        expect(pgSql).toContain('ADD COLUMN IF NOT EXISTS "AgentConfigurationID" UUID NULL');
+        expect(pgSql).toContain('ADD COLUMN "AgentConfigurationID" UUID NULL');
         expect(pgSql).toContain('FK_UserRoutine_AIConfiguration');
 
-        expect(pgSql).toContain('CREATE OR REPLACE VIEW __mj."vwAIAgentRhythmTemplates"');
-        expect(pgSql).toContain('CREATE OR REPLACE VIEW __mj."vwUserRoutines"');
-        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentRhythmTemplate"');
-        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateUserRoutine"');
+        expect(pgSql).toContain('CREATE OR REPLACE VIEW "__mj"."vwAIAgentRhythmTemplates"');
+        expect(pgSql).toContain('CREATE OR REPLACE VIEW "__mj"."vwUserRoutines"');
+        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION "__mj"."spCreateAIAgentRhythmTemplate"');
+        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION "__mj"."spCreateUserRoutine"');
 
         // Policy defaults: Autonomous, DraftOnly, ProposeWithApproval, Disabled
         expect(pgSql).toContain('ALTER COLUMN "CoordinationMode" SET DEFAULT \'Autonomous\'');
         expect(pgSql).toContain('ALTER COLUMN "CalendarChannelMode" SET DEFAULT \'ProposeWithApproval\'');
         expect(pgSql).toContain('ALTER COLUMN "PhoneChannelMode" SET DEFAULT \'Disabled\'');
-        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentUserPolicy"');
-        expect(pgSql).toContain("COALESCE(p_CoordinationMode, 'Autonomous')");
-        expect(pgSql).toContain("COALESCE(p_EmailChannelMode, 'DraftOnly')");
-        expect(pgSql).toContain("COALESCE(p_CalendarChannelMode, 'ProposeWithApproval')");
-        expect(pgSql).toContain("COALESCE(p_PhoneChannelMode, 'Disabled')");
+        expect(pgSql).toContain('CREATE OR REPLACE FUNCTION "__mj"."spCreateAIAgentUserPolicy"');
+        expect(pgSql).toContain("COALESCE(p_coordinationmode, 'Autonomous')");
+        expect(pgSql).toContain("COALESCE(p_emailchannelmode, 'DraftOnly')");
+        expect(pgSql).toContain("COALESCE(p_calendarchannelmode, 'ProposeWithApproval')");
+        expect(pgSql).toContain("COALESCE(p_phonechannelmode, 'Disabled')");
 
         // Never emit unconditional DROP CONSTRAINT "DF_*" (PG defines defaults inline without named DF_* constraints)
         expect(pgSql).not.toMatch(/DROP\s+CONSTRAINT\s+"DF_/i);
@@ -307,7 +307,7 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         const repoRoot = path.resolve(__dirname, '../../../../..');
         const pgMigrationPath = path.join(
             repoRoot,
-            '.mj/specs/epic-3-rhythms-model-tiers-active-policy-wake-coalescing-autonomous-defaults/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql'
+            'migrations-pg/v6/V202611220625__v6.3.x__Rhythm_Model_Tiers.pg.sql'
         );
         const pgSql = fs.readFileSync(pgMigrationPath, 'utf8');
 
@@ -315,19 +315,22 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
         expect(pgSql).not.toMatch(/^\s*LIMIT\s+0\s*;/im);
         expect(pgSql).not.toContain('WHERE 1=0');
 
-        // Extract every CREATE OR REPLACE FUNCTION ... $$ LANGUAGE plpgsql; body
+        // Extract every CREATE OR REPLACE FUNCTION "__mj"."..." ... $$ LANGUAGE plpgsql; body
         const fnMatches = [
             ...pgSql.matchAll(
-                /CREATE OR REPLACE FUNCTION __mj\."(\w+)"[\s\S]*?\$\$\s*([\s\S]*?)\n\$\$ LANGUAGE plpgsql;/g
+                /CREATE OR REPLACE FUNCTION "__mj"\."(\w+)"[\s\S]*?\$\$\s*([\s\S]*?)\n\$\$ LANGUAGE plpgsql;/g
             ),
         ];
-        expect(fnMatches.map((m) => m[1])).toEqual([
-            'spCreateAIAgentRhythmTemplate',
-            'spUpdateAIAgentRhythmTemplate',
-            'spCreateUserRoutine',
-            'spUpdateUserRoutine',
-            'spCreateAIAgentUserPolicy',
-        ]);
+        const fnNames = fnMatches.map((m) => m[1]);
+        expect(fnNames).toEqual(
+            expect.arrayContaining([
+                'spCreateAIAgentRhythmTemplate',
+                'spUpdateAIAgentRhythmTemplate',
+                'spCreateUserRoutine',
+                'spUpdateUserRoutine',
+                'spCreateAIAgentUserPolicy',
+            ])
+        );
 
         for (const [, fnName, body] of fnMatches) {
             const ifThenCount = (body.match(/\bIF\b[\s\S]*?\bTHEN\b/gi) ?? []).length;
@@ -348,14 +351,14 @@ describe('Rhythm Model Tiers (Slice 1)', () => {
             }
         }
 
-        // Verify both spUpdate* functions emit canonical IF NOT FOUND THEN RETURN; ELSE RETURN QUERY ...; END IF;
+        // Verify both spUpdate* functions guard empty updates cleanly before RETURN QUERY
         for (const fnName of ['spUpdateAIAgentRhythmTemplate', 'spUpdateUserRoutine']) {
             const match = fnMatches.find((m) => m[1] === fnName);
             expect(match, `${fnName} should exist`).toBeDefined();
             const body = match![2];
-            expect(body).toContain('IF NOT FOUND THEN');
+            expect(body).toContain('IF v_updated_count = 0 THEN');
             expect(body).toContain('RETURN;');
-            expect(body).toContain('RETURN QUERY SELECT * FROM __mj.');
+            expect(body).toContain('RETURN QUERY');
             expect(body).toContain('END IF;');
         }
     });

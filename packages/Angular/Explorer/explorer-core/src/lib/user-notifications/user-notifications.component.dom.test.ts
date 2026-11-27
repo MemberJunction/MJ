@@ -95,4 +95,30 @@ describe('UserNotificationsComponent (DOM) — expanded plain-text normalization
     expect(renderedText).not.toContain('@{"_mode"');
     expect(renderedText).not.toContain('Northwind Northwind');
   });
+
+  it('cleans raw and HTML-escaped mention tokens in HTML-only notification Body and Preview', () => {
+    const htmlMessage =
+      '<p>Reviewed <strong>Northwind</strong> @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;record&quot;,&quot;entityName&quot;:&quot;Accounts&quot;,&quot;name&quot;:&quot;Northwind&quot;,&quot;ID&quot;:&quot;acc-1&quot;} ' +
+      'with @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;user&quot;,&quot;id&quot;:&quot;u-1&quot;,&quot;name&quot;:&quot;Elena &lt;Admin&gt;&quot;} ' +
+      'and flagged @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Contoso","ID":"acc-2"}.</p>';
+    const entity = createNotificationEntity('notif-dom-html', 'HTML Routine Watch', htmlMessage);
+
+    const fixture = renderNotifications([entity]);
+    const previewEl = fixture.nativeElement.querySelector('.card-message') as HTMLElement | null;
+    expect(previewEl?.textContent ?? '').toContain('Reviewed Northwind with @Elena <Admin> and flagged Contoso.');
+    expect(previewEl?.textContent ?? '').not.toContain('_mode');
+
+    const expandBtn = fixture.nativeElement.querySelector('.card-expand-btn') as HTMLButtonElement | null;
+    expect(expandBtn).not.toBeNull();
+    expandBtn?.click();
+    fixture.detectChanges();
+
+    const expandedHtml = fixture.nativeElement.querySelector('.card-rich-html') as HTMLElement | null;
+    expect(expandedHtml).not.toBeNull();
+    expect(expandedHtml?.innerHTML ?? '').toContain('<strong>Northwind</strong>');
+    expect(expandedHtml?.innerHTML ?? '').toContain('@Elena &lt;Admin&gt;');
+    expect(expandedHtml?.textContent ?? '').toContain('Reviewed Northwind with @Elena <Admin> and flagged Contoso.');
+    expect(expandedHtml?.textContent ?? '').not.toContain('_mode');
+    expect(expandedHtml?.textContent ?? '').not.toContain('Northwind Northwind');
+  });
 });
