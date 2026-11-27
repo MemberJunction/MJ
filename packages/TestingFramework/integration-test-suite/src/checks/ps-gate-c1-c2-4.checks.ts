@@ -9,7 +9,8 @@
  *  1. a fixture job-title Feature Pipeline (a `MJ: Record Processes` row with one Active, ungated version) holds, per
  *     dues period, a dated job-title history — title A from 2015, title B (today's, the open row) from a change date
  *     (the title at the decision date agrees with the outcome on 3 rows of 4, so the trained model ships),
- *     30 days after the row's decision date for half the rows and 30 days before it for the other half — and version 2
+ *     30 days after the row's decision date for half the rows and on the decision date itself for the other half (the
+ *     `≤` boundary) — and version 2
  *     of the same pipeline holds today's title on every row, effective from 2016;
  *  2. a C1 renewal pipeline over those periods (the product's default date-carved holdout) selects `PeriodIndex` and the pipeline's `GateJobTitle` (an
  *     `llm-derived` step): training's own assembly (`TrainingEngine.AssembleForTraining`, the pin resolved at train time)
@@ -43,7 +44,7 @@ const PROMPT_HASH = 'g7-4-prompt-v1';
 const PARAMETERS_HASH = 'g7-4-parameters-v1';
 /** Names of every row the gate creates; teardown finds them by it. */
 const NAME_PREFIX = 'PSTruth: G7.4 C1 → C2.4';
-/** Days between a row's decision date and its planted title change, before or after it. */
+/** Days after a row's decision date its planted title changes, on the rows whose title changes after it. */
 const CHANGE_OFFSET_DAYS = 30;
 /**
  * The title in effect at the decision date carries the outcome on 3 rows of 4 (a renewal reads "Director", a lapse
@@ -202,10 +203,11 @@ class PsGateC1C24Steps {
       const atDecision = renewed ? SIGNAL_TITLES.renewed : SIGNAL_TITLES.lapsed;
       const other = OTHER_TITLES[i % OTHER_TITLES.length];
       const changeAfterDecision = i % 2 === 0;
-      // The title changes after the decision date on even rows (A is in effect then, B today) and before it on odd rows.
+      // The title changes after the decision date on even rows (A is in effect then, B today) and on the decision date
+      // itself on odd rows (B is in effect then: `EffectiveAsOf` ≤ the decision date).
       const titleA = changeAfterDecision ? atDecision : other;
       const titleB = changeAfterDecision ? other : atDecision;
-      const change = UtcDay.AddUtcDays(UtcDay.ToUtcDay(r.DecisionDate) || r.DecisionDate, changeAfterDecision ? CHANGE_OFFSET_DAYS : -CHANGE_OFFSET_DAYS);
+      const change = UtcDay.AddUtcDays(UtcDay.ToUtcDay(r.DecisionDate) || r.DecisionDate, changeAfterDecision ? CHANGE_OFFSET_DAYS : 0);
       await PsGateC1C24Steps.saveValue(ctx, { recordProcessId, entityId, recordId: r.RowID, version: 1, value: titleA, from: new Date('2015-01-01T00:00:00Z'), to: change });
       await PsGateC1C24Steps.saveValue(ctx, { recordProcessId, entityId, recordId: r.RowID, version: 1, value: titleB, from: change, to: null });
       await PsGateC1C24Steps.saveValue(ctx, { recordProcessId, entityId, recordId: r.RowID, version: 2, value: titleB, from: new Date('2016-01-01T00:00:00Z'), to: null });
