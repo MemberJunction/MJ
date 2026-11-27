@@ -9,3 +9,5 @@ export const TRAIN_MODEL_DRIVER_CLASS = 'PredictiveStudioTrainModelAction';
 export const SCHEDULE_MODEL_SCORING_DRIVER_CLASS = 'PredictiveStudioScheduleModelScoringAction';
 export const SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetAction';
 export const MIGRATE_PIPELINES_DRIVER_CLASS = 'PredictiveStudioMigratePipelinesAction';
+export const DRAFT_PREDICTION_UNIT_DRIVER_CLASS = 'PredictiveStudioDraftPredictionUnitAction';
+export const DRAFT_EVALUATION_PROTOCOL_DRIVER_CLASS = 'PredictiveStudioDraftEvaluationProtocolAction';

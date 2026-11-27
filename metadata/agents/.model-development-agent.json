@@ -143,6 +143,26 @@
           "deleteRecord": {
             "delete": true
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Draft Prediction Unit",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0F77ADBE-9B00-47D9-A4AD-A0A76884DD40"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Draft Evaluation Protocol",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "0EEC36F0-6AAD-48EA-8D77-A1FC063B4F2B"
+          }
         }
       ],
       "MJ: AI Agents": [
@@ -151,7 +171,7 @@
             "ParentID": "@parent:ID",
             "Name": "Goal Analyst",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-            "Description": "Predictive Studio sub-agent that turns a fuzzy business goal into a precise, measurable prediction target: the training-unit entity, the target variable, the problem type (classification/regression), the single success metric, and an optional point-in-time as-of strategy. Writes only the Goal and TargetDefinition slices of the ModelingPlanSpec.",
+            "Description": "Predictive Studio sub-agent that turns a fuzzy business goal into a precise, measurable prediction target: the training-unit entity, the target variable, the problem type (classification/regression), the single success metric, and an optional point-in-time as-of strategy. Proposes the Prediction Unit (grain, decision date, label window, censoring rule) in TargetDefinition.Unit from the compact entity catalog. Writes only the Goal and TargetDefinition slices of the ModelingPlanSpec.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 1,
@@ -174,6 +194,36 @@
             "ModelSelectionMode": "Agent"
           },
           "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ALL_ENTITIES",
+                  "Description": "All entities across the MemberJunction schema (name, schema, base view, description): the catalog the Goal Analyst picks the training-unit entity from. The orchestrator also hands it the compact rendered catalog (PS_ENTITY_CATALOG).",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Entities",
+                  "ExtraFilter": null,
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "Name",
+                    "Description",
+                    "SchemaName",
+                    "BaseTable",
+                    "BaseView"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "25C99FAC-4D65-4CDF-A599-2D8F779E0B12"
+                }
+              }
+            ],
             "MJ: AI Agent Prompts": [
               {
                 "fields": {
@@ -205,7 +255,7 @@
             "ParentID": "@parent:ID",
             "Name": "Data Scout",
             "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Research and Analysis",
-            "Description": "Predictive Studio sub-agent that decides what data feeds the model. Reads ground truth only from approved MJ: Queries (Status='Approved'), DBAutoDoc, prior-learning Agent Notes, and existing approved ML Models; proposes candidate sources and features with rationale; and aggressively flags leakage risks. May draft a new MJ: Query as Status='Pending' for the current exploration only. Writes only the CandidateSources, CandidateFeatures, and LeakageNotes slices of the ModelingPlanSpec.",
+            "Description": "Predictive Studio sub-agent that decides what data feeds the model. Reads ground truth only from approved MJ: Queries (Status='Approved'), DBAutoDoc, prior-learning Agent Notes, and existing approved ML Models; proposes candidate sources and features with rationale; and aggressively flags leakage risks. Reads the compact entity catalog the orchestrator renders (fields within two hops of the target). Writes only the CandidateSources, CandidateFeatures, and LeakageNotes slices of the ModelingPlanSpec.",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 2,
@@ -464,7 +514,22 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "*"
+              "BuildResult",
+              "BuildResult.*",
+              "Name",
+              "Goal",
+              "TargetMetric",
+              "Leaderboard",
+              "Leaderboard.*",
+              "FeatureImportance",
+              "FeatureImportance.*",
+              "BestModel",
+              "BestModel.*",
+              "BestModelID",
+              "Summary",
+              "Markdown",
+              "GateOutcome",
+              "GateReason"
             ],
             "MaxCostPerRun": 0.01,
             "MaxTokensPerRun": 1000,

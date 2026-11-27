@@ -23,16 +23,33 @@ import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@membe
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJMLBuildApprovalClaimEntity } from '@memberjunction/core-entities';
-import { BuildApprovals, JsonParse, type BuildApproval } from '@memberjunction/predictive-studio-core';
+import {
+  BuildApprovals, JsonParse,
+  type BuildApproval, type DraftRefusal, type JsonObject, type ModelingPlanSpec, type ProtocolDraftMembers, type UnitDraft, type UnresolvedReference,
+} from '@memberjunction/predictive-studio-core';
 
 import { AgentSessionLease, type SessionBusy } from './agent-session-lease';
 import { BuildApprovalClaims } from './build-approval-claims';
 import { BuildApprovalResolver } from './build-approval-resolver';
 import {
-  AgentControlPath, PIPELINE_BUILDER_SUBAGENT_NAME, PLAN_STEP,
-  type AgentBuildApprovalRefusal, type AgentControlFacts, type BuildClaimFact,
+  AgentControlPath, DRAFT_PROTOCOL_ACTION_NAME, DRAFT_UNIT_ACTION_NAME, PIPELINE_BUILDER_SUBAGENT_NAME, PLAN_STEP,
+  type AgentBuildApprovalRefusal, type AgentControlFacts, type AgentControlTransition, type BuildClaimFact, type DraftFacts,
 } from './control-path';
-import type { PredictiveStudioBuilderPayload } from './pipeline-builder-agent';
+import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from './pipeline-builder-agent';
+import { PlanMetadataValidator } from './plan-metadata-validator';
+import { CatalogRenderer } from './catalog-renderer';
+import { DraftEvaluationProtocolAction } from '../actions/draft-evaluation-protocol.action';
+
+/** One action result of an Actions step, as the framework hands it back (`priorStepResult`). */
+interface ActionOutput {
+  readonly ActionName: string;
+  readonly Success: boolean;
+  readonly Message: string;
+  readonly Params: ReadonlyMap<string, string>;
+}
+
+/** The planning sub-agents the orchestrator hands the compact catalog to, and whether each gets the target's fields. */
+const CATALOG_READERS: Readonly<Record<string, 'with-fields' | 'entities-only'>> = { 'Data Scout': 'with-fields', 'Goal Analyst': 'entities-only' };
 
 /** The message the orchestrator hands the Pipeline Builder when it dispatches an approved, claimed build. */
 const BUILD_MESSAGE = 'The plan is approved and claimed — build the pipeline, train it, and apply the publish gate now.';
@@ -51,6 +68,12 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
   private noted = false;
   /** The session's newest claim as this run first read it (read once per run). */
   private claimRead: { readonly ClaimID: string; readonly Fact: BuildClaimFact | null } | null = null;
+  /** The draft Actions' refusals this run, by stage and input hash (`unit:<hash>`, `protocol:<hash>`). */
+  private readonly draftRefusals = new Map<string, DraftRefusal>();
+  /** Repairs this run sent back to the prompt (§5.1: at most two, then the session declines). */
+  private repairsUsed = 0;
+  /** The message the prompt wanted on the card when code replaced its reply with the draft stages. */
+  private pendingCardMessage: string | undefined = undefined;
 
   protected override async executeNextStep<P = PredictiveStudioBuilderPayload>(
     params: ExecuteAgentParams,
@@ -97,7 +120,30 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
       Approval: approval,
       Claim: approval !== null && 'kind' in approval && approval.kind === 'consumed' ? await this.claimFactOnce(params, approval.claimId) : null,
       BuildDispatchedThisRun: this.dispatchedClaimId !== null,
+      Drafts: await this.LoadDraftFacts(params, payload),
     };
+  }
+
+  /**
+   * The draft stages' facts (A3): whether each draft was made from the payload's current inputs, this run's refusal of
+   * the current inputs, and — once both drafts are current — the plan's unresolved names against the run's provider.
+   */
+  protected async LoadDraftFacts(params: ExecuteAgentParams, payload: PredictiveStudioBuilderPayload): Promise<DraftFacts> {
+    const unitHash = AgentControlPath.UnitDraftInputHash(payload);
+    const protocolHash = AgentControlPath.ProtocolDraftInputHash(payload);
+    const unitCurrent = !!payload.UnitDraft && payload.DraftInputs?.Unit === unitHash;
+    const protocolCurrent = unitCurrent && !!payload.ProtocolDraft && payload.DraftInputs?.Protocol === protocolHash;
+    const refusal = !unitCurrent ? this.draftRefusals.get(`unit:${unitHash}`) : !protocolCurrent ? this.draftRefusals.get(`protocol:${protocolHash}`) : undefined;
+    const unresolved = unitCurrent && protocolCurrent && AgentControlPath.IsPlanComplete(payload) ? await this.unresolvedNames(params, payload) : null;
+    return { UnitDraftCurrent: unitCurrent, ProtocolDraftCurrent: protocolCurrent, Refusal: refusal || null, Unresolved: unresolved, RepairsUsed: this.repairsUsed };
+  }
+
+  /** The plan's unresolved names: metadata (entities, fields, queries) and Feature Pipeline rows, through the run's provider. */
+  private async unresolvedNames(params: ExecuteAgentParams, payload: PredictiveStudioBuilderPayload): Promise<UnresolvedReference[]> {
+    const ctx = this.contextOf(params);
+    if (!ctx) return [];
+    const plan: ModelingPlanSpec = PredictiveStudioPipelineBuilderAgent.PlanOf(payload);
+    return [...PlanMetadataValidator.Validate(plan, ctx.Provider), ...await PlanMetadataValidator.ValidateFeaturePipelines(plan, ctx.Provider, ctx.ContextUser)];
   }
 
   /** A run's first turn: the session lock, then the framework (initial step, routing record, budget check). */
@@ -117,10 +163,55 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     const payload = this.payloadOf(params, previous);
     const facts = await this.LoadControlFacts(params, payload);
     const transition = AgentControlPath.Next(AgentControlPath.StateOf(facts), facts);
-    if (transition.Kind === 'present-plan') return this.presentPlanStep<P>(payload, previous);
-    if (transition.Kind === 'request-build') return this.requestBuildStep<P>(params, payload, previous, transition.Approval, facts.PayloadHash);
+    const code = await this.codeStepFor<P>(params, payload, previous, transition, facts);
+    if (code !== null) return code;
     const decided = await super.executeNextStep<P>(params, config, previous, stepCount);
     return this.settlePromptTurn<P>(params, decided);
+  }
+
+  /**
+   * The code-built step of a code-decided transition (the draft Actions, a repair, the plan, the build, a decline), or
+   * null for a transition the prompt decides (`prompt`, `advance`).
+   */
+  private async codeStepFor<P>(params: ExecuteAgentParams, payload: PredictiveStudioBuilderPayload, previous: BaseAgentNextStep<P>, t: AgentControlTransition, facts: AgentControlFacts): Promise<BaseAgentNextStep<P> | null> {
+    switch (t.Kind) {
+      case 'present-plan': return this.presentPlanStep<P>(payload, previous, this.takeCardMessage());
+      case 'request-build': return this.requestBuildStep<P>(params, payload, previous, t.Approval, facts.PayloadHash);
+      case 'draft-unit': return this.draftActionStep<P>(DRAFT_UNIT_ACTION_NAME, { TargetDefinition: JSON.stringify(payload.TargetDefinition) }, previous, payload);
+      case 'draft-protocol': return this.draftActionStep<P>(DRAFT_PROTOCOL_ACTION_NAME, { UnitDraft: JSON.stringify(payload.UnitDraft), Protocol: JSON.stringify(payload.TargetDefinition?.Protocol || {}) }, previous, payload);
+      case 'repair': return this.repairStep<P>(t.Owner, t.Reason, previous, payload);
+      case 'decline-unresolved-reference': return this.replyStep<P>(params, AgentControlPath.DeclineUnresolvedMessage(t.References), payload);
+      case 'decline-draft-refused': return this.replyStep<P>(params, AgentControlPath.DeclineDraftMessage(t.Refusal), payload);
+      default: return null;
+    }
+  }
+
+  /**
+   * A repair (§5.1): a code Sub-Agent step handing the owning planning sub-agent the exact error (with the catalog), so
+   * it corrects its slice; the next turn drafts and validates again. Counted, so the session declines after the last.
+   */
+  private repairStep<P>(owner: string, reason: string, previous: BaseAgentNextStep<P>, payload: PredictiveStudioBuilderPayload): BaseAgentNextStep<P> {
+    this.repairsUsed++;
+    const step = this.codeStep<P>({
+      step: 'Sub-Agent', terminate: false, subAgent: { name: owner, message: reason, terminateAfter: false },
+      previousPayload: previous.newPayload ?? previous.previousPayload,
+    }, payload);
+    return this.withCatalog<P>(payload, step, step);
+  }
+
+  /** A code Actions step running one draft Action on the payload's inputs. */
+  private draftActionStep<P>(action: string, actionParams: Record<string, string>, previous: BaseAgentNextStep<P>, payload: PredictiveStudioBuilderPayload): BaseAgentNextStep<P> {
+    return this.codeStep<P>({
+      step: 'Actions', terminate: false, actions: [{ name: action, params: actionParams }],
+      previousPayload: previous.newPayload ?? previous.previousPayload,
+    }, payload);
+  }
+
+  /** The prompt's message held for the card, once. */
+  private takeCardMessage(): string | undefined {
+    const message = this.pendingCardMessage;
+    this.pendingCardMessage = undefined;
+    return message;
   }
 
   /** A step the prompt decided: gated, noted, then executed by the framework. */
@@ -130,8 +221,11 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     const state = AgentControlPath.StateOf(facts);
     // A complete plan not yet presented with this hash is presented by code whatever the prompt chose to say; the
     // prompt's message goes on the card.
-    if (state === 'present-plan' && AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) return this.presentPlanStep<P>(payload, decided, decided.message);
-    const gated = AgentControlPath.Gate(state, decided);
+    if (AgentControlPath.CODE_STATES.includes(state) && AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) {
+      const code = await this.codeTransitionInPlaceOf<P>(params, payload, decided, facts);
+      if (code !== null) return code;
+    }
+    const gated = this.withCatalog<P>(payload, AgentControlPath.Gate(state, decided), decided);
     if (gated !== decided && String(decided.step) === String(PLAN_STEP) && facts.PlanComplete) return this.presentPlanStep<P>(payload, decided, decided.message);
     // A replaced step goes to the control path, not back to the prompt (D5-A2-7): executing the gate's Retry here would
     // run the prompt inside the framework, so a `request-build` state would never reach its code-decided transition.
@@ -141,14 +235,107 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
   }
 
   /**
+   * The code step that replaces a prompt's presentable reply (asking, finishing, presenting) while the plan is complete
+   * but not presented: the next draft Action, a repair, the plan, or a decline. The prompt's message is kept for the
+   * card. Null when the transition is the prompt's.
+   */
+  private async codeTransitionInPlaceOf<P>(params: ExecuteAgentParams, payload: PredictiveStudioBuilderPayload, decided: BaseAgentNextStep<P>, facts: AgentControlFacts): Promise<BaseAgentNextStep<P> | null> {
+    if (decided.message) this.pendingCardMessage = decided.message;
+    return this.codeStepFor<P>(params, payload, decided, AgentControlPath.Next(AgentControlPath.StateOf(facts), facts), facts);
+  }
+
+  /**
+   * A planning sub-agent call with the compact entity catalog in its template parameters (DD-2): the Data Scout gets
+   * the fields of the entities within two hops of the target, the Goal Analyst the entity list. The catalog is added to
+   * the prompt's own sub-agent request (the step the gate let through is the step executed); a replaced step, and every
+   * other step, is returned as it is.
+   */
+  private withCatalog<P>(payload: PredictiveStudioBuilderPayload, gated: BaseAgentNextStep<P>, decided: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+    const sub = gated.subAgent;
+    const reader = sub ? CATALOG_READERS[sub.name] : undefined;
+    const provider = this.ProviderToUse;
+    if (gated !== decided || !sub || reader === undefined || !provider) return gated;
+    // A provider that carries no entity metadata has no catalog to render; the call goes ahead without one.
+    if (!Array.isArray(provider.Entities)) return gated;
+    const target = reader === 'with-fields' ? payload.TargetDefinition?.EntityName || null : null;
+    const catalog = CatalogRenderer.Compact(provider.Entities, target, 2);
+    sub.templateParameters = { ...(sub.templateParameters || {}), [CatalogRenderer.DATA_KEY]: catalog };
+    return gated;
+  }
+
+  /**
    * A step this run's code built, executed by the framework. The build dispatch settles its claim with the builder's
    * outcome as soon as the sub-agent returns.
    */
   private async executeCodeStep<P>(params: ExecuteAgentParams, config: AgentConfiguration, step: BaseAgentNextStep<P>, stepCount: number): Promise<BaseAgentNextStep<P>> {
     const result = await super.executeNextStep<P>(params, config, step, stepCount);
     if (step.step === 'Sub-Agent' && this.dispatchedClaimId !== null) await this.settleClaim(params, this.dispatchedClaimId, result);
+    if (step.step === 'Actions') return this.absorbDraft<P>(params, step, result);
     return result;
   }
+
+  /**
+   * After a draft Action ran: its validated draft goes into the payload (with the hash of the inputs it was made from),
+   * or its refusal is held for the inputs it refused, so the next turn repairs instead of drafting the same inputs
+   * again. The payload is changed here, by code: no prompt and no sub-agent may write the drafts (D5-25).
+   */
+  private absorbDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, result: BaseAgentNextStep<P>): BaseAgentNextStep<P> {
+    const payload = this.payloadOf(params, result);
+    const action = step.actions?.[0]?.name || '';
+    const output = PredictiveStudioModelDevAgent.ActionOutputsOf(result.priorStepResult).find((o) => o.ActionName === action);
+    const isUnit = action === DRAFT_UNIT_ACTION_NAME;
+    const key = isUnit ? `unit:${AgentControlPath.UnitDraftInputHash(payload)}` : `protocol:${AgentControlPath.ProtocolDraftInputHash(payload)}`;
+    const drafted = output ? this.draftOf(isUnit, output, payload) : null;
+    if (drafted === null) {
+      this.draftRefusals.set(key, PredictiveStudioModelDevAgent.RefusalOf(output));
+      return result;
+    }
+    // The framework's generic `P` is this agent's payload; see `codeStep`.
+    return { ...result, newPayload: drafted as P };
+  }
+
+  /** The payload with the Action's draft written in, or null when the Action returned no valid draft. */
+  private draftOf(isUnit: boolean, output: ActionOutput, payload: PredictiveStudioBuilderPayload): PredictiveStudioBuilderPayload | null {
+    const json = PredictiveStudioModelDevAgent.jsonParam(output, isUnit ? 'UnitDraft' : 'ProtocolDraft');
+    if (json === null) return null;
+    if (isUnit) {
+      const unit: UnitDraft | null = DraftEvaluationProtocolAction.UnitDraftOf(json);
+      return unit === null ? null : { ...payload, UnitDraft: unit, ProtocolDraft: undefined, DraftInputs: { Unit: AgentControlPath.UnitDraftInputHash(payload), Protocol: null } };
+    }
+    if (!payload.UnitDraft || !payload.DraftInputs) return null;
+    const protocol: ProtocolDraftMembers | null = DraftEvaluationProtocolAction.ProtocolDraftOf(json, payload.UnitDraft);
+    return protocol === null ? null : { ...payload, ProtocolDraft: protocol, DraftInputs: { Unit: payload.DraftInputs.Unit, Protocol: AgentControlPath.ProtocolDraftInputHash(payload) } };
+  }
+
+  /** The refusal an Action output carries; an Action that failed or returned neither is `draft-invalid` with its message. */
+  public static RefusalOf(output: ActionOutput | undefined): DraftRefusal {
+    const json = output ? PredictiveStudioModelDevAgent.jsonParam(output, 'Refusal') : null;
+    const parsed = json === null ? null : AgentControlPath.ParseDraftRefusal(json);
+    return parsed || { kind: 'draft-invalid', problems: [output ? output.Message || 'the draft Action returned no draft' : 'the draft Action did not run'] };
+  }
+
+  /** The framework's action results (`priorStepResult` of an Actions step), read through guards. */
+  public static ActionOutputsOf(priorStepResult: unknown): ActionOutput[] {
+    if (!Array.isArray(priorStepResult)) return [];
+    return priorStepResult.flatMap((r: unknown) => {
+      if (typeof r !== 'object' || r === null || !('actionName' in r) || typeof r.actionName !== 'string') return [];
+      const params = 'params' in r && Array.isArray(r.params) ? r.params : [];
+      const values = new Map<string, string>();
+      for (const p of params) {
+        if (typeof p === 'object' && p !== null && 'Name' in p && typeof p.Name === 'string' && 'Value' in p) values.set(p.Name, typeof p.Value === 'string' ? p.Value : JSON.stringify(p.Value));
+      }
+      const message = 'message' in r && typeof r.message === 'string' ? r.message : '';
+      return [{ ActionName: r.actionName, Success: 'success' in r && r.success === true, Message: message, Params: values }];
+    });
+  }
+
+  /** An output param parsed as JSON, or null. */
+  private static jsonParam(output: ActionOutput, name: string): JsonObject | null {
+    const text = output.Params.get(name);
+    const parsed = text ? JsonParse.ParseJsonText(text, name) : null;
+    return parsed && parsed.Ok && JsonParse.IsJsonObject(parsed.Value) ? parsed.Value : null;
+  }
+
 
   /** The code Plan step: the plan rendered from the payload, its hash and id written into the payload (D5-36). */
   private presentPlanStep<P>(payload: PredictiveStudioBuilderPayload, previous: BaseAgentNextStep<P>, message?: string): BaseAgentNextStep<P> {
@@ -259,11 +446,14 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     if (!AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) return decided;
     const payload = this.payloadOf(params, decided);
     const facts = await this.LoadControlFacts(params, payload);
-    if (AgentControlPath.StateOf(facts) === 'present-plan') {
-      // The framework already raised a request for the prompt's Chat (BaseAgent.executePromptStep); the code Plan step
-      // raises the one the person answers, so the prompt's is canceled rather than left open beside it.
-      if (String(decided.step) === 'Chat') await this.CancelPromptRaisedRequests(params);
-      return this.presentPlanStep<P>(payload, decided, decided.message);
+    if (AgentControlPath.CODE_STATES.includes(AgentControlPath.StateOf(facts))) {
+      const code = await this.codeTransitionInPlaceOf<P>(params, payload, decided, facts);
+      if (code !== null) {
+        // The framework already raised a request for the prompt's Chat (BaseAgent.executePromptStep); the code steps
+        // end in the Plan step that raises the one the person answers, so the prompt's is canceled, not left beside it.
+        if (String(decided.step) === 'Chat') await this.CancelPromptRaisedRequests(params);
+        return code;
+      }
     }
     if (!decided.terminate || this.noted) return decided;
     return this.noteStep<P>(decided, facts);

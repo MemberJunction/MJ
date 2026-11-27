@@ -28,6 +28,7 @@ import { RunView, type IMetadataProvider, type UserInfo, type EntityInfo, LogErr
 import type { MJMLAlgorithmEntity, MJMLTrainingPipelineEntity, MJMLModelEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import {
   EvaluationProtocolRules,
+  GUARD_FIELDS,
   InnerScoreSelection,
   UtcDay,
   PredictionUnit,
@@ -39,8 +40,12 @@ import {
   type HyperparameterValue,
   type Actor,
   type ModelingPlanSpec,
+  type EvaluationProtocolDraft,
+  type PredictionUnitSpec,
+  type ProtocolDraftMembers,
   type PromotionRule,
   type TrustVerdict,
+  type UnitDraft,
 } from '@memberjunction/predictive-studio-core';
 
 import { ModelingPlanToPipelineConfig, type PipelineConfig } from './modeling-plan-to-pipeline';
@@ -59,6 +64,11 @@ import { ProtocolDefaults } from '../protocol/protocol-defaults';
 import { RunViewDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { PipelineMigration, type MigrationDeps } from '../migration/legacy-pipeline-migration';
+import { PredictionUnitVersioning } from '../prediction-unit/unit-versioning';
+import { RunViewPredictionUnitStore } from '../prediction-unit/unit-store';
+
+/** Who the builder records as the author of the unit and protocol versions it creates. */
+const BUILDER_ACTOR: Actor = { kind: 'system', component: 'pipeline-builder' };
 
 /** Baseline member names a candidate may not take (with the `heuristic:` prefix); the sidecar refuses them too. */
 export const RESERVED_CANDIDATE_NAMES: readonly string[] = ['dummy', 'oneFeature', 'glm', 'naive', 'seasonalNaive'];
@@ -262,7 +272,7 @@ export class PredictiveStudioPipelineBuilder {
     const config = ModelingPlanToPipelineConfig(spec);
     warnings.push(...PredictiveStudioPipelineBuilder.DistinctWarnings(config.warnings));
     const { Pipeline: pipeline, Candidates: candidates } = await this.createBoundPipeline(spec, config, provider, user);
-    const training = await this.trainSearch(pipeline, candidates, sidecarVersion, protocolPromotion, provider, user);
+    const training = await this.trainSearch(pipeline, candidates, sidecarVersion, { Draft: spec.ProtocolDraft, Promotion: protocolPromotion }, provider, user);
     const model = training.Train.model;
     if (model === null) {
       const runOutcome = autoPublish ? await this.publishRun(training.Train.run.ID, initiator, provider, user) : null;
@@ -304,7 +314,7 @@ export class PredictiveStudioPipelineBuilder {
       LogStatus('PredictiveStudioPipelineBuilder: per-experiment feature sets are not candidates of one search; every candidate uses the pipeline feature schema.');
     }
     const pipeline = await this.savePipeline(config, entity, PredictiveStudioPipelineBuilder.algorithmOf(algorithms, config.algorithmName).ID, provider, user);
-    await PredictiveStudioPipelineBuilder.bindUnit(pipeline, provider, user);
+    await this.BindUnit(spec, pipeline, provider, user);
     return { Pipeline: pipeline, Candidates: candidates };
   }
 
@@ -411,31 +421,61 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
-   * Bind version 1 of the pipeline's Prediction Unit, mapped from the columns the plan wrote (the pipeline migration's
-   * mapping), right after the pipeline is saved; its search protocol is bound later, for every candidate. A pipeline
-   * the mapping would archive or hold is refused with the mapping's reason, and the pipeline just saved is deleted: no
-   * pipeline trains without a unit, and the build leaves no unit-less Draft behind.
+   * Bind version 1 of the pipeline's Prediction Unit right after the pipeline is saved; its search protocol is bound
+   * later, for every candidate. An approved plan's `UnitDraft` (validated by the Draft Prediction Unit Action, D5-25) is
+   * saved as unit version 1 and bound ({@link bindDraftUnit}); a plan without one gets the unit the pipeline migration
+   * maps from the columns the plan wrote ({@link bindMigratedUnit}), exactly as before drafts existed. Either way a
+   * pipeline that gets no unit is deleted: no pipeline trains without a unit, and the build leaves no unit-less Draft.
    *
    * @throws Error naming why the pipeline gets no unit (and the pipeline's ID when deleting it failed)
    */
-  private static async bindUnit(pipeline: MJMLTrainingPipelineEntity, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+  protected async BindUnit(spec: ModelingPlanSpec, pipeline: MJMLTrainingPipelineEntity, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+    const reason = spec.UnitDraft ? await PredictiveStudioPipelineBuilder.bindDraftUnit(spec.UnitDraft, pipeline, provider, user) : await PredictiveStudioPipelineBuilder.bindMigratedUnit(pipeline, provider, user);
+    if (reason === null) return;
+    const id = pipeline.ID;
+    if (await pipeline.Delete()) throw new Error(`The pipeline gets no Prediction Unit, so it cannot train and was not kept: ${reason}`);
+    throw new Error(`The pipeline gets no Prediction Unit, so it cannot train (${reason}); deleting pipeline ${id} failed: ${pipeline.LatestResult?.CompleteMessage || 'Delete() returned false'}`);
+  }
+
+  /** The migration's mapping of the plan's columns to unit version 1, bound; null when bound, else the mapping's reason. */
+  private static async bindMigratedUnit(pipeline: MJMLTrainingPipelineEntity, provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
     const deps: MigrationDeps = { Provider: provider, User: user, EntityFactory: new MetadataEntityFactory(provider), Today: UtcDay.UtcDayIso(new Date()) };
     const bound = await PipelineMigration.BindMigratedUnit(pipeline, deps);
-    if (bound.Ok === true) return;
-    const id = pipeline.ID;
-    if (await pipeline.Delete()) throw new Error(`The pipeline gets no Prediction Unit, so it cannot train and was not kept: ${bound.Reason}`);
-    throw new Error(`The pipeline gets no Prediction Unit, so it cannot train (${bound.Reason}); deleting pipeline ${id} failed: ${pipeline.LatestResult?.CompleteMessage || 'Delete() returned false'}`);
+    return bound.Ok === true ? null : bound.Reason;
   }
 
   /**
-   * Train a pipeline with a Prediction Unit: bind its default Evaluation Protocol (before the run row; `promotion`, when
-   * supplied, sets its promotion members), run ONE search over every candidate, and read the leaderboard from the stored
-   * inner-fold scores and the gate decision from the stored record.
+   * Saves the approved draft as unit version 1 (`PredictionUnitVersioning.CreatePredictionUnitV1`) and binds it
+   * (`RunViewPredictionUnitStore.ApplyUnitToPipeline`); a unit decided on a column carries the as-of the plan's
+   * `AsOfStrategy` would have, so the pipeline's is reset to none. Null when bound; else the reason, with the unit
+   * deleted again so nothing points at a unit no pipeline uses.
+   */
+  private static async bindDraftUnit(draft: UnitDraft, pipeline: MJMLTrainingPipelineEntity, provider: IMetadataProvider, user: UserInfo): Promise<string | null> {
+    const row = await PredictionUnitVersioning.CreatePredictionUnitV1(draft, BUILDER_ACTOR, new MetadataEntityFactory(provider), user);
+    const parsed = PredictionUnit.ParsePredictionUnitRow(row);
+    if (parsed.Ok === false) return PredictiveStudioPipelineBuilder.undoUnit(row, `the drafted unit does not parse: ${parsed.Errors.join('; ')}`);
+    RunViewPredictionUnitStore.ApplyUnitToPipeline(pipeline, row.ID, parsed.Value, new ProviderAssemblyMetadata(provider));
+    if (draft.UnitRows.kind === 'grain' && draft.UnitRows.decisionDate.kind !== 'fixed') pipeline.AsOfStrategy = JSON.stringify({ Mode: 'none' });
+    if (await pipeline.Save()) return null;
+    return PredictiveStudioPipelineBuilder.undoUnit(row, `binding the drafted unit: ${pipeline.LatestResult?.CompleteMessage || 'save failed'}`);
+  }
+
+  /** Deletes a unit the build just saved after a later step failed; the reason names both failures when the delete fails too. */
+  private static async undoUnit(row: MJMLPredictionUnitEntity, reason: string): Promise<string> {
+    if (await row.Delete()) return reason;
+    return `${reason}; deleting the unbound Prediction Unit ${row.ID} also failed: ${row.LatestResult?.CompleteMessage || 'delete failed'}`;
+  }
+
+  /**
+   * Train a pipeline with a Prediction Unit: bind its Evaluation Protocol (before the run row: the template with the
+   * approved draft's non-guard members and the caller's promotion setting over it), run ONE search over every
+   * candidate, and read the leaderboard from the stored inner-fold scores and the gate decision from the stored record.
    */
   private async trainSearch(
-    pipeline: MJMLTrainingPipelineEntity, candidates: readonly CandidateSpec[], sidecarVersion: string, promotion: ProtocolPromotionSetting | null, provider: IMetadataProvider, user: UserInfo,
+    pipeline: MJMLTrainingPipelineEntity, candidates: readonly CandidateSpec[], sidecarVersion: string, protocol: { readonly Draft: ProtocolDraftMembers | undefined; readonly Promotion: ProtocolPromotionSetting | null },
+    provider: IMetadataProvider, user: UserInfo,
   ): Promise<BuildTraining> {
-    await this.ensureProtocol(pipeline, candidates.length, promotion, provider, user);
+    await this.ensureProtocol(pipeline, candidates.length, protocol.Draft, protocol.Promotion, provider, user);
     const train = await TrainingDelegation.TrainModelViaEngine({ pipelineId: pipeline.ID, candidates, sidecarVersion }, provider, user);
     return { Train: train, ...PredictiveStudioPipelineBuilder.searchResults(train) };
   }
@@ -476,22 +516,48 @@ export class PredictiveStudioPipelineBuilder {
   }
 
   /**
-   * Bind version 1 of a default Evaluation Protocol when the pipeline has none — always before the first candidate
-   * trains, so the protocol row precedes the run row. The holdout is the unit's default ({@link ProtocolDefaults}); a
-   * supplied `promotion` replaces the default's members it names, before the version is saved (versions are immutable).
+   * Bind version 1 of an Evaluation Protocol when the pipeline has none — always before the first candidate trains, so
+   * the protocol row precedes the run row ({@link BindProtocol}).
    */
-  private async ensureProtocol(pipeline: MJMLTrainingPipelineEntity, candidates: number, promotion: ProtocolPromotionSetting | null, provider: IMetadataProvider, user: UserInfo): Promise<void> {
+  private async ensureProtocol(
+    pipeline: MJMLTrainingPipelineEntity, candidates: number, draft: ProtocolDraftMembers | undefined, promotion: ProtocolPromotionSetting | null, provider: IMetadataProvider, user: UserInfo,
+  ): Promise<void> {
     if (pipeline.EvaluationProtocolID) return;
     const unitRow = await provider.GetEntityObject<MJMLPredictionUnitEntity>('MJ: ML Prediction Units', user);
     if (!pipeline.PredictionUnitID || !(await unitRow.Load(pipeline.PredictionUnitID))) throw new Error(`Prediction Unit ${pipeline.PredictionUnitID || '(none)'} not found.`);
     const parsed = PredictionUnit.ParsePredictionUnitRow(unitRow);
     if (parsed.Ok === false) throw new Error(`Prediction Unit cannot be read: ${parsed.Errors.join('; ')}`);
-    const holdout = await ProtocolDefaults.DefaultHoldoutFor(parsed.Value, { DataAccess: new RunViewDataAccess(user, provider), Metadata: new ProviderAssemblyMetadata(provider), Now: new Date() });
-    const defaults = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: parsed.Value, Holdout: holdout, Candidates: candidates, Seed: ProtocolDefaults.DEFAULT_SEED, Name: `${pipeline.Name} — protocol` });
-    const draft = promotion === null ? defaults : { ...defaults, promotion: { ...defaults.promotion, ...promotion } };
-    const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(draft, { kind: 'system', component: 'pipeline-builder' }, new MetadataEntityFactory(provider), user);
+    await this.BindProtocol(pipeline, parsed.Value, draft, candidates, promotion, provider, user);
+  }
+
+  /**
+   * Saves and binds protocol version 1 for `unit`: the default protocol (the unit's default holdout,
+   * {@link ProtocolDefaults}) with the approved draft's non-guard members over it and the caller's promotion setting
+   * over that ({@link ProtocolDraftFor}), before the version is saved (versions are immutable).
+   */
+  protected async BindProtocol(
+    pipeline: MJMLTrainingPipelineEntity, unit: PredictionUnitSpec, draft: ProtocolDraftMembers | undefined, candidates: number, promotion: ProtocolPromotionSetting | null,
+    provider: IMetadataProvider, user: UserInfo,
+  ): Promise<void> {
+    const holdout = await ProtocolDefaults.DefaultHoldoutFor(unit, { DataAccess: new RunViewDataAccess(user, provider), Metadata: new ProviderAssemblyMetadata(provider), Now: new Date() });
+    const defaults = EvaluationProtocolRules.DefaultEvaluationProtocolDraft({ Unit: unit, Holdout: holdout, Candidates: candidates, Seed: ProtocolDefaults.DEFAULT_SEED, Name: `${pipeline.Name} — protocol` });
+    const row = await EvaluationProtocolVersioning.CreateEvaluationProtocolV1(PredictiveStudioPipelineBuilder.ProtocolDraftFor(defaults, draft, promotion), BUILDER_ACTOR, new MetadataEntityFactory(provider), user);
     pipeline.EvaluationProtocolID = row.ID;
     if (!(await pipeline.Save())) throw new Error(`Binding the Evaluation Protocol failed: ${pipeline.LatestResult?.CompleteMessage || 'unknown error'}`);
+  }
+
+  /**
+   * The protocol a build binds: the template (`defaults`), the approved draft's non-guard members over it, then the
+   * caller's promotion setting. Guard members always come from the template: a guard member in `draft` (a hand-edited
+   * payload) is ignored, never applied (D5-25, PR 3's `'non-agent'` rule).
+   */
+  public static ProtocolDraftFor(defaults: EvaluationProtocolDraft, draft: ProtocolDraftMembers | undefined, promotion: ProtocolPromotionSetting | null): EvaluationProtocolDraft {
+    const members: ProtocolDraftMembers = {};
+    for (const [key, value] of Object.entries(draft || {})) {
+      if (value !== undefined && !(GUARD_FIELDS as readonly string[]).includes(key) && key in defaults) Object.assign(members, { [key]: value });
+    }
+    const merged: EvaluationProtocolDraft = { ...defaults, ...members };
+    return promotion === null ? merged : { ...merged, promotion: { ...defaults.promotion, ...promotion } };
   }
 
   /**

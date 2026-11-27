@@ -10,9 +10,15 @@
 import { Canonicalize } from '@memberjunction/global';
 import type { BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentRequestEntity, MJMLBuildApprovalClaimEntity } from '@memberjunction/core-entities';
-import type { AgentControlState, BuildApproval, BuildApprovalRefusal, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
+import {
+  GUARD_FIELDS, JsonParse,
+  type AgentControlState, type BuildApproval, type BuildApprovalRefusal, type DraftRefusal, type JsonValue, type ModelingPlanSpec, type UnresolvedReference,
+} from '@memberjunction/predictive-studio-core';
 
 import { SnapshotHash } from '../snapshot/snapshot-hash';
+
+/** Every `UnresolvedReference['kind']`. */
+const UNRESOLVED_KINDS: readonly UnresolvedReference['kind'][] = ['entity', 'field', 'query', 'feature-pipeline'];
 
 /** A refusal of the approval rule, its request status bound to the generated `MJ: AI Agent Requests` field. */
 export type AgentBuildApprovalRefusal = BuildApprovalRefusal<MJAIAgentRequestEntity['Status']>;
@@ -29,6 +35,23 @@ export interface BuildClaimFact {
   readonly ErrorMessage: string | null;
 }
 
+/**
+ * The draft stages' facts (PR 5, A3): whether the payload's drafts were made from its current inputs, the refusal of
+ * the current inputs when the draft Action refused them, the presented plan's unresolved names and the repairs used.
+ */
+export interface DraftFacts {
+  /** The payload's `UnitDraft` was drafted from its current target (`DraftInputs.Unit` = {@link AgentControlPath.UnitDraftInputHash}). */
+  readonly UnitDraftCurrent: boolean;
+  /** The payload's `ProtocolDraft` was drafted from its current unit draft and proposal. */
+  readonly ProtocolDraftCurrent: boolean;
+  /** The draft Action's refusal of the current inputs of the stage the session is in, or null. */
+  readonly Refusal: DraftRefusal | null;
+  /** The drafted plan's unresolved names (`PlanMetadataValidator`), or null before both drafts are current. */
+  readonly Unresolved: readonly UnresolvedReference[] | null;
+  /** Repairs this run already sent back to the prompt. */
+  readonly RepairsUsed: number;
+}
+
 /** What the control path decides on: read from the database and the payload, never from a message. */
 export interface AgentControlFacts {
   /** {@link AgentControlPath.PlanHash} of the current payload. */
@@ -43,14 +66,29 @@ export interface AgentControlFacts {
   readonly Claim: BuildClaimFact | null;
   /** Whether this run already dispatched its build (one claimed dispatch per run). */
   readonly BuildDispatchedThisRun: boolean;
+  /**
+   * The draft stages (A3). The orchestrator always reads them; facts without them (a caller that tracks no drafts)
+   * move through the draft stages without a step and present a complete plan as A2 did.
+   */
+  readonly Drafts?: DraftFacts;
 }
 
 /** What the control path does next. */
 export type AgentControlTransition =
   /** An LLM-decided state: the framework runs the orchestrator's prompt. */
   | { readonly Kind: 'prompt'; readonly State: AgentControlState }
-  /** A stage A3/A4 attach a tool to: no step in A2, the path moves on. */
+  /** A stage with nothing to do for these facts (profile until A4; a draft stage without draft facts): the path moves on. */
   | { readonly Kind: 'advance'; readonly From: AgentControlState; readonly To: AgentControlState }
+  /** Run the Draft Prediction Unit Action on the plan's target (a code Actions step). */
+  | { readonly Kind: 'draft-unit' }
+  /** Run the Draft Evaluation Protocol Action on the unit draft and the protocol proposal (a code Actions step). */
+  | { readonly Kind: 'draft-protocol' }
+  /** Send the refusal or the unresolved names, with the exact error, to the sub-agent that owns the slice (a code Sub-Agent step). */
+  | { readonly Kind: 'repair'; readonly Reason: string; readonly Owner: string }
+  /** After {@link AgentControlPath.MAX_REPAIRS} repairs the plan still names something that does not exist: end the session. */
+  | { readonly Kind: 'decline-unresolved-reference'; readonly References: readonly UnresolvedReference[] }
+  /** After {@link AgentControlPath.MAX_REPAIRS} repairs the draft Action still refuses the plan: end the session. */
+  | { readonly Kind: 'decline-draft-refused'; readonly Refusal: DraftRefusal }
   /** Present the payload's plan (a code Plan step; the framework raises the request). */
   | { readonly Kind: 'present-plan' }
   /** Claim the approval, then dispatch the Pipeline Builder. */
@@ -64,6 +102,10 @@ export const PLAN_STEP = 'Plan' as BaseAgentNextStep['step'];
 
 /** The name of the build executor sub-agent (the metadata's `Pipeline Builder`, D-089). */
 export const PIPELINE_BUILDER_SUBAGENT_NAME = 'Pipeline Builder';
+
+/** The draft Actions the control path runs as code steps (the metadata's `MJ: Actions` names, A3). */
+export const DRAFT_UNIT_ACTION_NAME = 'Draft Prediction Unit';
+export const DRAFT_PROTOCOL_ACTION_NAME = 'Draft Evaluation Protocol';
 
 /** The orchestrator's control path (pure statics). */
 export class AgentControlPath {
@@ -79,8 +121,17 @@ export class AgentControlPath {
   /** The planning sub-agents a `gather` turn may call. */
   public static readonly PLANNING_SUBAGENTS: readonly string[] = ['Goal Analyst', 'Data Scout', 'Experiment Designer'];
 
+  /** Repairs a run sends back to the prompt before it declines (§5.1: at most two). */
+  public static readonly MAX_REPAIRS = 2; // design §5.1: unresolved names go back to the owning sub-agent at most twice
+
+  /** The states whose transition is decided in code once the plan is complete (no prompt runs in them unless a repair is sent). */
+  public static readonly CODE_STATES: readonly AgentControlState[] = ['draft-unit', 'draft-protocol', 'validate-plan', 'present-plan'];
+
   /** The step kinds a prompt may choose without an effect (asking, finishing, thinking again). */
   private static readonly neutralSteps: readonly string[] = ['Chat', 'Success', 'Failed', 'Retry'];
+
+  /** The states in which the planning sub-agents may be called: gathering, and repairing a draft or a name. */
+  private static readonly repairStates: readonly AgentControlState[] = ['gather', 'draft-unit', 'draft-protocol', 'validate-plan'];
 
   /** SHA-256 (hex) of the canonical plan content: its {@link PLAN_CONTENT_KEYS} slices, keys sorted at every depth. */
   public static PlanHash(payload: ModelingPlanSpec): string {
@@ -100,21 +151,42 @@ export class AgentControlPath {
       && (payload.ProposedExperiments?.length ?? 0) > 0;
   }
 
-  /** The state the facts put the session in. */
+  /**
+   * The state the facts put the session in. A complete plan not presented with its current hash is drafted first (the
+   * unit, then the protocol), then validated, then presented.
+   */
   public static StateOf(facts: AgentControlFacts): AgentControlState {
     if (facts.BuildDispatchedThisRun) return 'report';
     if (AgentControlPath.isApproval(facts.Approval)) return 'request-build';
-    if (facts.PlanComplete && facts.PresentedPlanHash !== facts.PayloadHash) return 'present-plan';
-    return 'gather';
+    if (!facts.PlanComplete || facts.PresentedPlanHash === facts.PayloadHash) return 'gather';
+    const d = facts.Drafts;
+    if (!d) return 'present-plan';
+    if (!d.UnitDraftCurrent) return 'draft-unit';
+    if (!d.ProtocolDraftCurrent) return 'draft-protocol';
+    return 'validate-plan';
+  }
+
+  /** SHA-256 of what the unit draft is made from: the plan's target (with its unit proposal). */
+  public static UnitDraftInputHash(payload: Pick<ModelingPlanSpec, 'TargetDefinition'>): string {
+    return SnapshotHash.Sha256Hex(Canonicalize({ TargetDefinition: payload.TargetDefinition || null }));
+  }
+
+  /** SHA-256 of what the protocol draft is made from: the unit draft and the protocol proposal. */
+  public static ProtocolDraftInputHash(payload: Pick<ModelingPlanSpec, 'TargetDefinition' | 'UnitDraft'>): string {
+    return SnapshotHash.Sha256Hex(Canonicalize({ UnitDraft: payload.UnitDraft || null, Protocol: payload.TargetDefinition?.Protocol || null }));
   }
 
   /** The transition out of `state` (pure). A build is reached only through a resolved approval of this run. */
   public static Next(state: AgentControlState, facts: AgentControlFacts): AgentControlTransition {
     switch (state) {
-      case 'draft-unit': return { Kind: 'advance', From: state, To: 'profile' };
+      case 'draft-unit':
+        if (!facts.Drafts) return { Kind: 'advance', From: state, To: 'profile' };
+        return facts.Drafts.Refusal ? AgentControlPath.repairOrDecline(facts.Drafts.Refusal, facts.Drafts.RepairsUsed) : { Kind: 'draft-unit' };
       case 'profile': return { Kind: 'advance', From: state, To: 'draft-protocol' };
-      case 'draft-protocol': return { Kind: 'advance', From: state, To: 'validate-plan' };
-      case 'validate-plan': return { Kind: 'advance', From: state, To: 'present-plan' };
+      case 'draft-protocol':
+        if (!facts.Drafts) return { Kind: 'advance', From: state, To: 'validate-plan' };
+        return facts.Drafts.Refusal ? AgentControlPath.repairOrDecline(facts.Drafts.Refusal, facts.Drafts.RepairsUsed) : { Kind: 'draft-protocol' };
+      case 'validate-plan': return AgentControlPath.nextAfterValidation(facts);
       case 'present-plan':
         return facts.PlanComplete ? { Kind: 'present-plan' } : { Kind: 'prompt', State: 'gather' };
       case 'request-build':
@@ -126,9 +198,75 @@ export class AgentControlPath {
     }
   }
 
+  /** The transition out of `validate-plan`: present a plan whose every name resolves; else repair, then decline. */
+  private static nextAfterValidation(facts: AgentControlFacts): AgentControlTransition {
+    const d = facts.Drafts;
+    if (!d) return { Kind: 'advance', From: 'validate-plan', To: 'present-plan' };
+    const unresolved = d.Unresolved || [];
+    if (unresolved.length === 0) return facts.PlanComplete ? { Kind: 'present-plan' } : { Kind: 'prompt', State: 'gather' };
+    if (d.RepairsUsed >= AgentControlPath.MAX_REPAIRS) return { Kind: 'decline-unresolved-reference', References: unresolved };
+    const refusal: DraftRefusal = { kind: 'unresolved-reference', references: unresolved };
+    return { Kind: 'repair', Reason: AgentControlPath.RepairReason(refusal), Owner: AgentControlPath.OwnerOfRefusal(refusal) };
+  }
+
+  /** A draft refusal goes back for a repair until {@link MAX_REPAIRS} are used; then the session declines. */
+  private static repairOrDecline(refusal: DraftRefusal, repairsUsed: number): AgentControlTransition {
+    if (repairsUsed < AgentControlPath.MAX_REPAIRS) return { Kind: 'repair', Reason: AgentControlPath.RepairReason(refusal), Owner: AgentControlPath.OwnerOfRefusal(refusal) };
+    return refusal.kind === 'unresolved-reference' ? { Kind: 'decline-unresolved-reference', References: refusal.references } : { Kind: 'decline-draft-refused', Refusal: refusal };
+  }
+
+  /** The sub-agent that owns the plan slice at `path` (the one a repair asks to fix it). */
+  public static OwnerOf(path: string): string {
+    if (/^(CandidateSources|CandidateFeatures|LeakageNotes)/.test(path)) return 'Data Scout';
+    if (/^(ProposedExperiments|ValidationStrategy|ProposedBudget)/.test(path)) return 'Experiment Designer';
+    return 'Goal Analyst';
+  }
+
+  /** The sub-agent a refusal goes to: the owner of its first unresolved name; the Goal Analyst for a unit or protocol draft. */
+  public static OwnerOfRefusal(refusal: DraftRefusal): string {
+    return refusal.kind === 'unresolved-reference' && refusal.references.length > 0 ? AgentControlPath.OwnerOf(refusal.references[0].path) : 'Goal Analyst';
+  }
+
+  /** The exact error a repair hands the owning sub-agent: what is wrong, where, and what to do. */
+  public static RepairReason(refusal: DraftRefusal): string {
+    return `${AgentControlPath.DescribeRefusal(refusal)} Correct your slice of the plan so that it uses only names from the entity catalog, and change nothing else.`;
+  }
+
+  /** A draft refusal in words, naming the slice and the sub-agent that fixes it. */
+  public static DescribeRefusal(refusal: DraftRefusal): string {
+    switch (refusal.kind) {
+      case 'unresolved-reference': {
+        const lines = refusal.references.map((r) => `- ${r.kind} '${r.name}' at ${r.path} does not exist (fix: ${AgentControlPath.OwnerOf(r.path)})`);
+        return `The plan names things that do not exist in the database:\n${lines.join('\n')}\nUse only names from the entity catalog.`;
+      }
+      case 'censoring-required':
+        return 'The Prediction Unit has a label window but names no censoring rule (TargetDefinition.Unit.Censoring, fix: Goal Analyst): say how rows whose outcome window has not closed are handled.';
+      case 'guard-field-edited-by-disallowed-author':
+        return `The protocol proposal sets guard fields an agent may not set (${refusal.fields.join(', ')}); remove them from TargetDefinition.Protocol (fix: Goal Analyst).`;
+      case 'holdout-read':
+        return 'A draft would have read holdout rows, which is refused.';
+      case 'draft-invalid':
+        return `The draft is not valid: ${refusal.problems.join('; ')} (fix: Goal Analyst).`;
+      default:
+        return 'The draft was refused.';
+    }
+  }
+
+  /** The session's last message when the plan still names things that do not exist after the repairs. */
+  public static DeclineUnresolvedMessage(references: readonly UnresolvedReference[]): string {
+    const names = references.map((r) => `- \`${r.name}\` (${r.kind}, at ${r.path})`);
+    return `I can't present this plan: after ${AgentControlPath.MAX_REPAIRS} attempts to fix it, it still names things that do not exist in your database:\n${names.join('\n')}\n\nTell me which real entity and columns you mean and I will draft the plan again.`;
+  }
+
+  /** The session's last message when the draft Action still refuses the plan after the repairs. */
+  public static DeclineDraftMessage(refusal: DraftRefusal): string {
+    return `I can't present this plan: after ${AgentControlPath.MAX_REPAIRS} attempts to fix it, it is still refused. ${AgentControlPath.DescribeRefusal(refusal)}`;
+  }
+
   /**
-   * The step a prompt decided, allowed by `state` or replaced. `gather` allows the planning sub-agents and the neutral
-   * steps; every other state allows only the neutral steps. A replaced step in `report` ends the run with the report's
+   * The step a prompt decided, allowed by `state` or replaced. `gather` and the repair states (`draft-unit`,
+   * `draft-protocol`, `validate-plan`) allow the planning sub-agents and the neutral steps; every other state allows
+   * only the neutral steps. A replaced step in `report` ends the run with the report's
    * text; elsewhere it becomes a `Retry` that names what was refused, so the prompt decides again.
    */
   public static Gate(state: AgentControlState, step: BaseAgentNextStep): BaseAgentNextStep {
@@ -184,9 +322,58 @@ export class AgentControlPath {
     ];
     const excluded = payload.LeakageNotes.filter((n) => n.Action === 'exclude');
     if (excluded.length > 0) lines.push('', '**Excluded (leakage risk):**', ...excluded.map((n) => `- \`${n.Field}\`: ${n.Risk}`));
+    if (payload.UnitDraft) lines.push('', ...AgentControlPath.renderUnit(payload.UnitDraft));
     lines.push('', '**Experiments:**', ...[...payload.ProposedExperiments].sort((a, b) => a.Priority - b.Priority).map((e) => `- ${e.Label}: ${e.AlgorithmName} on ${e.FeatureSet.length} feature(s) — ${e.Rationale}`));
     lines.push('', 'Approve to build this plan; reject (with a note) and I will revise it.');
     return lines.join('\n');
+  }
+
+  /** The plan card's Prediction Unit section: the rows, the decision date, the outcome window and the censoring rule. */
+  private static renderUnit(u: NonNullable<ModelingPlanSpec['UnitDraft']>): string[] {
+    const rows = u.UnitRows;
+    const decision = rows.kind === 'grain'
+      ? rows.decisionDate.kind === 'fixed' ? `fixed on ${rows.decisionDate.date}${rows.decisionDate.advance ? ' (advances each run)' : ''}`
+        : rows.decisionDate.kind === 'column' ? `\`${rows.decisionDate.column}\`` : `\`${rows.decisionDate.column}\` + ${rows.decisionDate.offsetDays} days`
+      : `each \`${rows.periodDate}\` period of ${rows.childEntity}`;
+    const cutoff = u.Censoring.cutoff;
+    const cutoffText = cutoff.kind === 'now' ? 'today' : cutoff.kind === 'fixed' ? cutoff.at : `the latest ${cutoff.entity}.${cutoff.field}`;
+    return [
+      '**Prediction unit:**',
+      `- One row per ${rows.grainEntity} record; decision date ${decision}`,
+      `- Outcome: ${u.LabelWindowDays} day(s) after a ${u.LabelGapDays}-day gap; task ${u.TaskType.kind}`,
+      `- **Censoring rule:** ${u.Censoring.rule} — rows whose outcome window has not closed by ${cutoffText} are left out`,
+    ];
+  }
+
+  /** A draft Action's `Refusal` output read back into its union, or null when it is not one. */
+  public static ParseDraftRefusal(value: JsonValue): DraftRefusal | null {
+    if (!JsonParse.IsJsonObject(value)) return null;
+    switch (JsonParse.JsonString(value, 'kind')) {
+      case 'censoring-required': return { kind: 'censoring-required' };
+      case 'holdout-read': return { kind: 'holdout-read' };
+      case 'draft-invalid': return { kind: 'draft-invalid', problems: AgentControlPath.stringsOf(value['problems']) };
+      case 'guard-field-edited-by-disallowed-author':
+        return { kind: 'guard-field-edited-by-disallowed-author', fields: AgentControlPath.stringsOf(value['fields']).flatMap((f) => GUARD_FIELDS.filter((g) => g === f)) };
+      case 'unresolved-reference': {
+        const refs = Array.isArray(value['references']) ? value['references'] : [];
+        return { kind: 'unresolved-reference', references: refs.flatMap((r) => AgentControlPath.referenceOf(r)) };
+      }
+      default: return null;
+    }
+  }
+
+  /** The strings of a JSON array (other elements dropped). */
+  private static stringsOf(value: JsonValue | undefined): string[] {
+    return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+  }
+
+  /** One unresolved reference of a parsed refusal, or none when the element is not one. */
+  private static referenceOf(value: JsonValue): UnresolvedReference[] {
+    if (!JsonParse.IsJsonObject(value)) return [];
+    const path = JsonParse.JsonString(value, 'path');
+    const name = JsonParse.JsonString(value, 'name');
+    const kind = UNRESOLVED_KINDS.find((k) => k === JsonParse.JsonString(value, 'kind'));
+    return path !== null && name !== null && kind !== undefined ? [{ path, name, kind }] : [];
   }
 
   /** True when `value` is an approval (not a refusal, not null). */
@@ -198,7 +385,7 @@ export class AgentControlPath {
   private static allowed(state: AgentControlState, step: BaseAgentNextStep): boolean {
     const kind = String(step.step);
     if (AgentControlPath.neutralSteps.includes(kind)) return step.subAgent === undefined && step.actions === undefined;
-    if (state === 'gather' && kind === 'Sub-Agent') return AgentControlPath.PLANNING_SUBAGENTS.includes(step.subAgent?.name ?? '');
+    if (AgentControlPath.repairStates.includes(state) && kind === 'Sub-Agent') return AgentControlPath.PLANNING_SUBAGENTS.includes(step.subAgent?.name ?? '');
     return false;
   }
 

@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C1.2",
+    "Description": "Gate G4.2 (owner PR 5, phase 4, dataset C1, criterion C1.2): the Model Development Agent's tool paths read 0 holdout labels during a scenario C1 session. On the truth suite's W1-signal world, one planning session from the renewal goal (D5-45) until the plan is presented: 0 MJ: ML Prediction Units, 0 MJ: ML Evaluation Protocols and 0 MJ: ML Training Runs rows are written (no row before approval, D5-25; no training run, so the protocol's holdout-access record has 0 agent accesses); both draft Actions ran and every Action step of the session reports HoldoutRowsRead = 0; the presented plan resolves every name and names its censoring rule; each Data Scout prompt run renders the compact catalog within the 30,000-token DD-2 budget. Server transport (the agent runs as the D5-46 person); spends LLM money. Mutation: let AgentReadScope.DevelopmentRows return the unit's rows without the holdout rule -> red. Run budget 20 min (MaxExecutionTimeMS): up to four orchestrator turns at M0's 51 s maximum, with their sub-agent runs.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G4.2\",\"owner:PR5\",\"phase:4\",\"dataset:C1\",\"criterion:C1.2\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1200000,
+    "ExpectedOutcomes": {
+      "summary": "A C1 planning session up to present-plan writes no unit, protocol or training run and every Action step reads 0 holdout rows."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-c1-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "0273764B-2AA3-4575-A280-221AB7BD2C8E"
+  }
+}

@@ -12,6 +12,7 @@
  *
  * Members are camelCase: they are persisted JSON (claim and decision rows, D-039), as the other PS contracts are.
  */
+import type { GuardField } from './evaluation-protocol-rules';
 import type { HumanActor } from './prediction-unit';
 
 /** A person's approval of one presented plan; the only thing that starts an agent build (D-090). */
@@ -89,3 +90,29 @@ export class BuildApprovals {
     return value !== null && !('kind' in value) && typeof value.requestId === 'string' && value.requestId !== '';
   }
 }
+
+/** A name a plan or a draft presents that the passed provider's metadata does not resolve (PR 5, A3; F-PIT-8). */
+export interface UnresolvedReference {
+  /** Where the name sits in the plan payload (`TargetDefinition.EntityName`, `CandidateFeatures[0].Name`, …). */
+  readonly path: string;  // case-violation-ok-legacy-back-compat: persisted contract JSON member (D-039)
+  /** The name as written. */
+  readonly name: string;  // case-violation-ok-legacy-back-compat: persisted contract JSON member (D-039)
+  /** What the name should have named. */
+  readonly kind: 'entity' | 'field' | 'query' | 'feature-pipeline';  // case-violation-ok-legacy-back-compat: persisted contract JSON member (D-039)
+}
+
+/**
+ * Why a draft Action returned no draft (PR 5, A3). The first four variants are the contract's; `draft-invalid` carries
+ * the PR 3 parser's or protocol rules' problems with a draft whose names all resolve (D5-A3-2).
+ */
+export type DraftRefusal =
+  /** A name the draft uses does not resolve, or a date field is not a date. */
+  | { readonly kind: 'unresolved-reference'; readonly references: readonly UnresolvedReference[] }  // case-violation-ok-legacy-back-compat: persisted refusal JSON
+  /** An agent tool call set guard fields (PR 3's `GuardFieldsEditableBy = 'non-agent'` rule). */
+  | { readonly kind: 'guard-field-edited-by-disallowed-author'; readonly fields: readonly GuardField[] }  // case-violation-ok-legacy-back-compat: persisted refusal JSON
+  /** A unit with a label window names no censoring rule. */
+  | { readonly kind: 'censoring-required' }  // case-violation-ok-legacy-back-compat: persisted refusal JSON
+  /** A read would have reached holdout rows. */
+  | { readonly kind: 'holdout-read' }  // case-violation-ok-legacy-back-compat: persisted refusal JSON
+  /** The draft's names resolve but PR 3's validation refuses it (the problems, in words). */
+  | { readonly kind: 'draft-invalid'; readonly problems: readonly string[] };  // case-violation-ok-legacy-back-compat: persisted refusal JSON
