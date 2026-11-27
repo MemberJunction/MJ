@@ -75,7 +75,7 @@ export class PSAgentDecisionLogComponent extends BaseAngularComponent {
     this.IsLoading = true;
     this.LoadError = null;
     const result = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<AgentDecisionLogRow>({
-      EntityName: 'MJ: Agent Decision Log',
+      EntityName: 'MJ: Agent Decision Logs',
       ExtraFilter: `SessionRunID='${EscapeSQLString(sessionRunId)}'`,
       Fields: ['ID', 'SessionRunID', 'AgentRunID', 'Step', 'Decision', 'Rationale', 'PayloadHash', 'ResultingPayloadHash', 'PromptRunID', 'BuildApprovalRequestID'],
       OrderBy: 'Step ASC',

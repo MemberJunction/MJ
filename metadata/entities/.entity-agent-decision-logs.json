@@ -1,0 +1,20 @@
+[
+  {
+    "_comments": [
+      "Agent Decision Logs - one append-only row per control-path transition of a Model Development Agent session",
+      "(PR 5 §5.1.6, D5-24). Record-change tracking is off: AgentDecisionLog's write guard refuses every update and",
+      "delete, so a Record Change would only ever record the create the row already is. CodeGen's default for a new",
+      "table turned tracking on; this record sets ONLY TrackRecordChanges (as .entity-feature-pipeline-rederivation-",
+      "leases.json and .entity-ml-scoring-runs.json do), so the entity's other attributes stay at their CodeGen values",
+      "(PR 5 §9 D5-A4-1, integration ruling)."
+    ],
+    "fields": {
+      "Name": "MJ: Agent Decision Logs",
+      "BaseView": "vwAgentDecisionLogs",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Agent Decision Logs"
+    }
+  }
+]

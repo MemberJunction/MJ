@@ -54,7 +54,7 @@ class MemoryAndMetadataFake {
       MakeEntity('MJ: ML Training Pipelines'),
       MakeEntity('MJ: ML Training Runs'),
       MakeEntity('MJ: ML Models'),
-      ...(includeDecisionLog ? [MakeEntity('MJ: Agent Decision Log')] : []),
+      ...(includeDecisionLog ? [MakeEntity('MJ: Agent Decision Logs')] : []),
     ];
   }
 
@@ -107,7 +107,7 @@ class MemoryAndMetadataFake {
               );
           return { Success: true, Results: filtered as unknown as T[] };
         }
-        if (entity === 'MJ: Agent Decision Log') {
+        if (entity === 'MJ: Agent Decision Logs') {
           const ids = [...filter.matchAll(/'([^']+)'/g)].map((m) => m[1].toLowerCase());
           const filtered = ids.length === 0
             ? self.DecisionLogs
@@ -361,8 +361,8 @@ describe('PredictiveStudioAgentEvalDriver — Attacks 3, 7, 8', () => {
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it('Attack 8: treats missing MJ: Agent Decision Log entity on baseline DB as 0 rows and fails cleanly without throwing', async () => {
-    const fake = new MemoryAndMetadataFake(false); // No MJ: Agent Decision Log in metadata!
+  it('Attack 8: treats missing MJ: Agent Decision Logs entity on baseline DB as 0 rows and fails cleanly without throwing', async () => {
+    const fake = new MemoryAndMetadataFake(false); // No MJ: Agent Decision Logs in metadata!
     const driver = new HarnessDriver(fake);
 
     const ctx = MakeContext('test-baseline-missing-log', 'test-run-baseline', [

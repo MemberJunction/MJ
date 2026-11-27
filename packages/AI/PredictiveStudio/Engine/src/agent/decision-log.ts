@@ -1,7 +1,7 @@
 /**
  * @module agent/decision-log
  *
- * `AgentDecisionLog` — `MJ: Agent Decision Log` (PR 5, A4; §5.1.6, D5-24, D5-38). Every control-path transition of a
+ * `AgentDecisionLog` — `MJ: Agent Decision Logs` (PR 5, A4; §5.1.6, D5-24, D5-38). Every control-path transition of a
  * Model Development Agent session appends one row **before** its effect, carrying what the effect needs (the
  * resulting plan hash, the draft, the claim), so a crash between the two leaves a log the next run can rebuild the
  * payload from (`AgentSessionReplay`).
@@ -74,8 +74,8 @@ let registered = false;
 
 /** The decision log: the session rule, compare-and-append, reads, and the guard on its rows. */
 export class AgentDecisionLog {
-  /** The entity the rows live in (kept as `MJ: Agent Decision Log`: the migration names the entity, D5-A4-1). */
-  public static readonly EntityName = 'MJ: Agent Decision Log';
+  /** The entity the rows live in (kept as `MJ: Agent Decision Logs`: the migration names the entity, D5-A4-1). */
+  public static readonly EntityName = 'MJ: Agent Decision Logs';
   /** The global mark the registered `PreSave` hook carries. */
   public static readonly HookMark: symbol = Symbol.for('@memberjunction/predictive-studio:agent-decision-log-guard');
   /** The global mark the registered `PreDelete` hook carries. */

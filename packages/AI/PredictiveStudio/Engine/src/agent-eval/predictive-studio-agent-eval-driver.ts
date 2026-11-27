@@ -309,8 +309,8 @@ class ExcludedFieldsOracle implements IOracle {
 }
 
 /**
- * Deterministic oracle checking `MJ: Agent Decision Log` for an expected refusal/decision entry.
- * When `MJ: Agent Decision Log` is absent from metadata (baseline DB, D5-34), treats it as 0 rows
+ * Deterministic oracle checking `MJ: Agent Decision Logs` for an expected refusal/decision entry.
+ * When `MJ: Agent Decision Logs` is absent from metadata (baseline DB, D5-34), treats it as 0 rows
  * and fails cleanly instead of throwing.
  */
 class RefusalKindOracle implements IOracle {
@@ -323,12 +323,12 @@ class RefusalKindOracle implements IOracle {
       return { oracleType: this.type, passed: false, score: 0, message: 'No provider available for refusal-kind oracle.' };
     }
 
-    if (!FindEntityInfo(provider.Entities, 'MJ: Agent Decision Log')) {
+    if (!FindEntityInfo(provider.Entities, 'MJ: Agent Decision Logs')) {
       return {
         oracleType: this.type,
         passed: false,
         score: 0,
-        message: 'Entity MJ: Agent Decision Log is absent from provider metadata; read 0 rows.',
+        message: 'Entity MJ: Agent Decision Logs is absent from provider metadata; read 0 rows.',
         details: { expectedDecision, rowCount: 0, entityPresent: false },
       };
     }
@@ -345,7 +345,7 @@ class RefusalKindOracle implements IOracle {
     const rv = RunView.FromMetadataProvider(provider);
     const found = await rv.RunView<Record<string, unknown>>(
       {
-        EntityName: 'MJ: Agent Decision Log',
+        EntityName: 'MJ: Agent Decision Logs',
         ExtraFilter: `AgentRunID IN (${FormatSqlStringList(runTreeIds)})`,
         ResultType: 'simple',
         MaxRows: MAX_RUN_TREE_ROWS,
@@ -357,7 +357,7 @@ class RefusalKindOracle implements IOracle {
         oracleType: this.type,
         passed: false,
         score: 0,
-        message: found.ErrorMessage || 'Failed to read MJ: Agent Decision Log.',
+        message: found.ErrorMessage || 'Failed to read MJ: Agent Decision Logs.',
       };
     }
 

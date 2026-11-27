@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (537 classes)
+// @memberjunction/core-entities (538 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -810,7 +810,7 @@ import {
     TagEngineBase,
 } from '@memberjunction/tag-engine-base';
 
-// @memberjunction/ng-dashboards (126 classes)
+// @memberjunction/ng-dashboards (127 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -888,6 +888,7 @@ import {
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSAgentDecisionLogPanel,
     PSModelEvaluationPanel,
     PSModelsResourceComponent,
     PSPipelineBindingsPanel,
@@ -1372,11 +1373,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOpenAppDependencyEntity,
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
-    MJOutputDeliveryTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
@@ -1576,11 +1577,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     SvgArtifactViewerComponent,
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
-    XlsxArtifactViewerComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    XlsxArtifactViewerComponent,
     AgentMentionProvider,
     ArtifactWorkspaceChannel,
     ClientContextChannel,
@@ -1763,6 +1764,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MappingWorkspaceComponent,
     ModelManagementComponent,
     OverviewComponent,
+    PSAgentDecisionLogPanel,
     PSModelEvaluationPanel,
     PSModelsResourceComponent,
     PSPipelineBindingsPanel,
@@ -1779,12 +1781,12 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RealtimeRecordingsDashboardComponent,
     SchedulesComponent,
     SchedulingActivityResourceComponent,
-    SchedulingDashboardComponent,
-    SchedulingJobsResourceComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SchedulingDashboardComponent,
+    SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
     SettingsExplorerComponent,
@@ -1847,7 +1849,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 847;
+export const CLASS_REGISTRATIONS_COUNT = 849;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

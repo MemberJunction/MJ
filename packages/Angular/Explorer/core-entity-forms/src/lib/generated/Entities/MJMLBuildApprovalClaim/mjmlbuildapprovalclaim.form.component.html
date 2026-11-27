@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Claim Details Section -->
+    <!-- Claim Information Section -->
     <mj-collapsible-panel
-        SectionKey="claimDetails"
-        SectionName="Claim Details"
+        SectionKey="claimInformation"
+        SectionName="Claim Information"
         Icon="fa fa-clipboard-check"
         [Form]="this"
         [FormContext]="formContext">
@@ -39,7 +39,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PlanHash"
-            Type="textbox"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -59,19 +59,9 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Execution References Section -->
-    <mj-collapsible-panel
-        SectionKey="executionReferences"
-        SectionName="Execution References"
-        Icon="fa fa-project-diagram"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="MLTrainingPipelineID"
             Type="textbox"
             [EditMode]="EditMode"

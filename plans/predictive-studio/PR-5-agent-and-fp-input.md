@@ -316,6 +316,8 @@ packages/MJCoreEntitiesServer/src/__tests__/MJAIPromptRunEntityServer.completedD
 packages/AI/Agents/src/__tests__/DocumentToolLibrary.test.ts  (D-091 item 11)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
+# A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
+metadata/entities/.entity-agent-decision-logs.json  (D5-A4-12)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3637,6 +3639,16 @@ Record every decision taken in §9 and, when it changes another plan's interface
   Allowlist line `packages/Angular/Explorer/dashboards/src/__tests__/vector-sensitive-fields.test.ts  (D5-A4-11)`. · The
   contract names the column (§5.1.6). · Renaming the column; narrowing `hash` in the sensitivity filter (a non-PS
   behaviour change).
+- D5-A4-12 · 2026-11-27 · Wave-3 integration supersedes D5-A4-1: section A4 no longer writes the `Entity`,
+  `ApplicationEntity` and `EntityPermission` rows; CodeGen's tail creates the entity as for any new table, under its
+  own name **`MJ: Agent Decision Logs`** (`simpleNewEntityName` pluralises the table name; `EntityNames` advanced
+  generation is off), and `metadata/entities/.entity-agent-decision-logs.json` sets only `TrackRecordChanges = 0`, as
+  D5-B3-1 does for the lease. Every literal of the old name outside `plans/` and the migration is renamed (13 files:
+  the Engine, Core, the dashboards widget, the G4.3 check and its gate JSON, their tests); the generated class stays
+  `MJAgentDecisionLogEntity`. · The repo rule (no ad-hoc metadata inserts in a migration) allows a hand-written row
+  only where a fixed ID is referenced; `git grep D1C82724-8B0A-4DAE-B146-64F7FBB7AD84` at the merged head finds it in
+  the migration and this plan only — no permission, RLS filter, metadata record or code reads the ID (PR 4's virtual
+  entity had to be hand-written because CodeGen creates no entity for a view). · Keeping the hand-written row.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved

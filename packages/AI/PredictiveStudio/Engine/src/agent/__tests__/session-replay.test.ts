@@ -137,7 +137,7 @@ function logRow(): MJAgentDecisionLogEntity {
   for (const f of Object.keys(values) as (keyof Stored)[]) {
     Object.defineProperty(e, f, { get: () => values[f], set: (v: never) => { values[f] = v; }, configurable: true });
   }
-  Object.defineProperty(e, 'EntityInfo', { get: () => ({ Name: 'MJ: Agent Decision Log' }) });
+  Object.defineProperty(e, 'EntityInfo', { get: () => ({ Name: 'MJ: Agent Decision Logs' }) });
   Object.defineProperty(e, 'IsSaved', { get: () => saved });
   Object.defineProperty(e, 'NewRecord', { value: () => true });
   Object.defineProperty(e, 'LatestResult', { get: () => ({ CompleteMessage: lastMessage }) });
@@ -187,7 +187,7 @@ function eq(filter: string, column: string): string | undefined {
 function answer(p: ViewParams): { Success: boolean; Results: object[]; ErrorMessage?: string } {
   const f = p.ExtraFilter ?? '';
   switch (p.EntityName) {
-    case 'MJ: Agent Decision Log': {
+    case 'MJ: Agent Decision Logs': {
       const session = eq(f, 'SessionRunID');
       const byRuns = idsIn(f, 'AgentRunID');
       let rows = table.filter((r) => (session === undefined || r.SessionRunID === session) && (byRuns === undefined || byRuns.includes(r.AgentRunID)));

@@ -1,7 +1,7 @@
 /**
  * @module agent/decision-log-write-authorisations
  *
- * The one-shot authorisations that make `MJ: Agent Decision Log` writable only by `AgentDecisionLog.Append` (PR 5, A4;
+ * The one-shot authorisations that make `MJ: Agent Decision Logs` writable only by `AgentDecisionLog.Append` (PR 5, A4;
  * D5-30). `Append` authorises the exact entity instance it is about to save; the log guard (a `PreSave` hook,
  * `AgentDecisionLog.CheckSave`) takes the entry during that save and refuses a create without one, so a row written
  * through GraphQL, an Action, an agent or any other server save — even one interleaved in this process with an

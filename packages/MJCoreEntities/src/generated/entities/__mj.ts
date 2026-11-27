@@ -33439,7 +33439,7 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
 
 
 /**
- * MJ: Agent Decision Log - strongly typed entity sub-class
+ * MJ: Agent Decision Logs - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AgentDecisionLog
  * * Base View: vwAgentDecisionLogs
@@ -33449,11 +33449,11 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'MJ: Agent Decision Log')
+@RegisterClass(BaseEntity, 'MJ: Agent Decision Logs')
 export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntityType> {
     /**
-    * Loads the MJ: Agent Decision Log record from the database
-    * @param ID: string - primary key value to load the MJ: Agent Decision Log record.
+    * Loads the MJ: Agent Decision Logs record from the database
+    * @param ID: string - primary key value to load the MJ: Agent Decision Logs record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
@@ -33628,7 +33628,7 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
 
     /**
     * * Field Name: Replay
-    * * Display Name: Replay Data
+    * * Display Name: Replay
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON {promptId, promptVersionHash, parameters}: the prompt and the vendor call parameters of the decision's prompt run (empty for a code step).
     */
@@ -33651,6 +33651,26 @@ export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntit
     }
     set BuildApprovalRequestID(value: string | null) {
         this.Set('BuildApprovalRequestID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 
     /**
@@ -76107,7 +76127,7 @@ export class MJFeaturePipelineRederivationLeaseEntity extends BaseEntity<MJFeatu
 
     /**
     * * Field Name: RecordProcessID
-    * * Display Name: Record Process ID
+    * * Display Name: Record Process
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
     * * Description: The Feature Pipeline (MJ: Record Processes) whose re-derivation slice this lease holds; unique.
@@ -76121,7 +76141,7 @@ export class MJFeaturePipelineRederivationLeaseEntity extends BaseEntity<MJFeatu
 
     /**
     * * Field Name: ProcessRunID
-    * * Display Name: Process Run ID
+    * * Display Name: Process Run
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
     * * Description: The Process Run that holds (or last held) the lease.
@@ -76194,7 +76214,7 @@ export class MJFeaturePipelineRederivationLeaseEntity extends BaseEntity<MJFeatu
 
     /**
     * * Field Name: RecordProcess
-    * * Display Name: Record Process
+    * * Display Name: Record Process Name
     * * SQL Data Type: nvarchar(255)
     */
     get RecordProcess(): string | null {
@@ -88748,7 +88768,7 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
 
     /**
     * * Field Name: AgentRequestID
-    * * Display Name: Agent Request ID
+    * * Display Name: Agent Request
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
     * * Description: The approved build request this claim consumes; unique, so a request is claimed once.
@@ -88822,7 +88842,7 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
 
     /**
     * * Field Name: MLTrainingPipelineID
-    * * Display Name: ML Training Pipeline ID
+    * * Display Name: ML Training Pipeline
     * * SQL Data Type: uniqueidentifier
     * * Description: The ID of the training pipeline the build created, when it created one: a provenance record with no foreign key, kept when that pipeline is later deleted (the claim and its consumed approval outlive the build).
     */

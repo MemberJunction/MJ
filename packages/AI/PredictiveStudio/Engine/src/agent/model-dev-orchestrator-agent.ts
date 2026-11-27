@@ -18,7 +18,7 @@
  * approval's atomic claim (`BuildApprovalClaims`, D5-23); the claim consumes the approval whatever the build does. No
  * message text is read, so framework-injected messages and "don't build it" sentences decide nothing.
  *
- * **The decision log (A4, D5-24).** Every control-path transition appends one `MJ: Agent Decision Log` row before its
+ * **The decision log (A4, D5-24).** Every control-path transition appends one `MJ: Agent Decision Logs` row before its
  * effect (`AgentDecisionLog.Append`, compare-and-append under the session lock): the drafts, the profile and its
  * declines, the presented plan, the build's claim and its report. A run's first turn reads its session under the turn
  * lock; a payload behind the log (a crash between a row and its effect) is rebuilt by `AgentSessionReplay` there, and
@@ -27,8 +27,13 @@
 import { EscapeSQLString, RegisterClass, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
-import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJMLBuildApprovalClaimEntity } from '@memberjunction/core-entities';
+import type { ChatMessage } from '@memberjunction/ai';
+import type {
+  AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended, SecondaryScopeConfig, SecondaryScopeValue,
+} from '@memberjunction/ai-core-plus';
+import type {
+  MJAIAgentExampleEntity, MJAIAgentNoteEntity, MJAIAgentRequestEntity, MJAIAgentRunEntity, MJMLBuildApprovalClaimEntity,
+} from '@memberjunction/core-entities';
 import {
   BuildApprovals, JsonParse, ProfileContract,
   type AgentDecisionToolCall, type BuildApproval, type DraftRefusal, type JsonObject, type ModelingPlanSpec, type ProfileResult, type UnresolvedReference,
@@ -41,6 +46,7 @@ import {
   AgentControlPath, DRAFT_PROTOCOL_ACTION_NAME, DRAFT_UNIT_ACTION_NAME, PIPELINE_BUILDER_SUBAGENT_NAME, PLAN_STEP, PROFILE_ACTION_NAME,
   type AgentBuildApprovalRefusal, type AgentControlFacts, type AgentControlTransition, type BuildClaimFact, type DraftFacts, type ProfileFact,
 } from './control-path';
+import { PredictiveStudioAgentNotePolicy } from './agent-note-policy';
 import { AgentDecisionLog, type AgentDecision, type LogDiverged, type LoggedDecision } from './decision-log';
 import { AgentSessionReplay, CLAIM_CALL, PRESENT_PLAN_CALL, PROMPT_OUTPUT_CALL } from './session-replay';
 import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from './pipeline-builder-agent';
@@ -114,6 +120,34 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     if (this.codeSteps.has(previousDecision)) return this.executeCodeStep<P>(params, config, previousDecision, stepCount);
     if (previousDecision.step === 'Retry') return this.decisionTurn<P>(params, config, previousDecision, stepCount);
     return this.executePromptDecision<P>(params, config, previousDecision, stepCount);
+  }
+
+  /**
+   * Runs the memory policy's sweep for this run's user and company before the framework injects notes (DD-10, D5-A5-5):
+   * a note whose source model became Published since the hourly sweep is activated, one whose model was archived is
+   * archived, so the run never injects a note the policy would no longer allow. A failed read throws (the run fails
+   * rather than inject unswept notes); a failed note save is counted by the sweep and injection goes on.
+   */
+  protected override async InjectContextMemory(
+    input: string,
+    agent: MJAIAgentEntityExtended,
+    userId?: string,
+    companyId?: string,
+    contextUser?: UserInfo,
+    conversationMessages?: ChatMessage[],
+    primaryScopeEntityId?: string,
+    primaryScopeRecordId?: string,
+    secondaryScopes?: Record<string, SecondaryScopeValue>,
+    secondaryScopeConfig?: SecondaryScopeConfig | null,
+    sharedOnly?: boolean,
+  ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
+    if (contextUser) {
+      await PredictiveStudioAgentNotePolicy.Sweep(this.ProviderToUse, contextUser, { UserID: userId || null, CompanyID: companyId || null });
+    }
+    return super.InjectContextMemory(
+      input, agent, userId, companyId, contextUser, conversationMessages,
+      primaryScopeEntityId, primaryScopeRecordId, secondaryScopes, secondaryScopeConfig, sharedOnly,
+    );
   }
 
   /** The run this agent is executing (its ID claims the approval). */

@@ -12,13 +12,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { BaseAgent } from '@memberjunction/ai-agents';
-import type { IMetadataProvider } from '@memberjunction/core';
-import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import type { BuildApproval, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import * as orchestratorModule from '../model-dev-orchestrator-agent';
 import { PredictiveStudioModelDevAgent } from '../model-dev-orchestrator-agent';
 import { AgentControlPath, type AgentControlFacts } from '../control-path';
 import { BuildApprovalClaims } from '../build-approval-claims';
+import { PredictiveStudioAgentNotePolicy } from '../agent-note-policy';
 import type { PredictiveStudioBuilderPayload } from '../pipeline-builder-agent';
 
 const PLAN: ModelingPlanSpec = {
@@ -374,5 +376,44 @@ describe('attacks 11 and 12: the agent metadata', () => {
     expect(models.fields.OrderBy).toBe('Pipeline ASC, Version DESC');
     expect(models.fields.FieldsToRetrieve).toEqual(expect.arrayContaining(['ID', 'Pipeline', 'Version']));
     expect(models.fields.FieldsToRetrieve).not.toContain('Name');
+  });
+});
+
+describe('DD-10 (D5-A5-5): the memory sweep runs before the framework injects notes', () => {
+  type Inject = (...a: unknown[]) => Promise<{ notes: []; examples: [] }>;
+  // Casts: the agent and user field bags, where they are handed over (as the file header says).
+  const AGENT = {} as MJAIAgentEntityExtended;
+  const USER = { ID: 'U1' } as UserInfo;
+  class InjectingOrchestrator extends TestOrchestrator {
+    public Inject(contextUser: UserInfo | undefined): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
+      return this.InjectContextMemory('hi', AGENT, 'U1', 'C1', contextUser);
+    }
+  }
+  it('the scoped sweep (the run user and company) completes before the framework injection starts', async () => {
+    const order: string[] = [];
+    const sweep = vi.spyOn(PredictiveStudioAgentNotePolicy, 'Sweep').mockImplementation(async () => {
+      order.push('sweep');
+      return { Activated: 0, Archived: 0, Failed: [] };
+    });
+    const inject = vi.spyOn(BaseAgent.prototype as unknown as { InjectContextMemory: Inject }, 'InjectContextMemory').mockImplementation(async () => {
+      order.push('inject');
+      return { notes: [], examples: [] };
+    });
+    await new InjectingOrchestrator(facts()).Inject(USER);
+    expect(order).toEqual(['sweep', 'inject']);
+    expect(sweep.mock.calls[0][2]).toEqual({ UserID: 'U1', CompanyID: 'C1' });
+    expect(inject.mock.calls[0].slice(0, 4)).toEqual(['hi', {}, 'U1', 'C1']);
+  });
+  it('a failed sweep read fails the injection (no unswept notes are injected)', async () => {
+    vi.spyOn(PredictiveStudioAgentNotePolicy, 'Sweep').mockRejectedValue(new Error('read failed'));
+    const inject = vi.spyOn(BaseAgent.prototype as unknown as { InjectContextMemory: Inject }, 'InjectContextMemory');
+    await expect(new InjectingOrchestrator(facts()).Inject(USER)).rejects.toThrow('read failed');
+    expect(inject).not.toHaveBeenCalled();
+  });
+  it('no context user: no sweep, the framework injects as before', async () => {
+    const sweep = vi.spyOn(PredictiveStudioAgentNotePolicy, 'Sweep');
+    vi.spyOn(BaseAgent.prototype as unknown as { InjectContextMemory: Inject }, 'InjectContextMemory').mockResolvedValue({ notes: [], examples: [] });
+    await new InjectingOrchestrator(facts()).Inject(undefined);
+    expect(sweep).not.toHaveBeenCalled();
   });
 });

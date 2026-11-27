@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (537 classes)
+// @memberjunction/core-entities (538 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -547,6 +547,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -1691,13 +1692,14 @@ import {
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
 
-// @memberjunction/predictive-studio (29 classes)
+// @memberjunction/predictive-studio (30 classes)
 import {
     DraftEvaluationProtocolAction,
     DraftPredictionUnitAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioAgentEvalDriver,
+    PredictiveStudioAgentNoteSweepJobDriver,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
@@ -2428,6 +2430,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2453,11 +2456,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
-    MJInstanceConfigurationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
@@ -2657,11 +2660,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWebSearchProviderEntity,
     MJWorkQueueDeduplicationEntity,
     MJWorkQueueDeliveryEntity,
-    MJWorkQueueMessageEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJWorkQueueMessageEntity,
     MJWorkQueueSubscriptionEntity,
     MJWorkQueueTopicEntity,
     MJWorkQueueTransportEntity,
@@ -2861,11 +2864,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     DatabricksExternalDataSourceDriver,
     MongoExternalDataSourceDriver,
     MySQLExternalDataSourceDriver,
-    OracleExternalDataSourceDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    OracleExternalDataSourceDriver,
     PostgresExternalDataSourceDriver,
     SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
@@ -3065,11 +3068,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DatabaseDesignerSchemaBuilder,
     DatabaseDesignerSchemaDesigner,
     DatabaseDesignerSchemaValidator,
-    CreateEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    CreateEntityAction,
     DescribeEntityAction,
     ListMyEntitiesAction,
     ModifyEntityAction,
@@ -3259,6 +3262,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioAgentEvalDriver,
+    PredictiveStudioAgentNoteSweepJobDriver,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
@@ -3268,12 +3272,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
     PredictiveStudioPredictionRetentionJobDriver,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PredictiveStudioPromoteModelAction,
+    PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
@@ -3472,12 +3476,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RetryAction,
     ReverseGeocodeAction,
     RevertInteractiveFormAction,
-    RevokeListInvitationAction,
-    RunAdhocQueryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    RevokeListInvitationAction,
+    RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
     RunRecordProcessAction,
@@ -3586,7 +3590,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1490;
+export const CLASS_REGISTRATIONS_COUNT = 1492;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

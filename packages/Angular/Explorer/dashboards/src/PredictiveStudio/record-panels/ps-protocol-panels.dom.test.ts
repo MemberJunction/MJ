@@ -6,7 +6,7 @@ import type { CompositeKey } from '@memberjunction/core';
 import type { FormContext } from '@memberjunction/ng-base-forms';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { AfterVersionSavedEventArgs } from '../components/ps-widget-events';
-import { PSModelEvaluationPanel, PSPipelineBindingsPanel, PSProtocolVersionsPanel, PSUnitVersionsPanel } from './ps-protocol-panels';
+import { PSAgentDecisionLogPanel, PSModelEvaluationPanel, PSPipelineBindingsPanel, PSProtocolVersionsPanel, PSUnitVersionsPanel } from './ps-protocol-panels';
 
 /**
  * DOM coverage for the Predictive Studio record-form panels: what each passes its widget, and how the versions panels
@@ -52,6 +52,12 @@ class RunEvaluationStub {
   @Input() ModelID: string | null = null;
 }
 
+@Component({ standalone: true, selector: 'mj-ps-agent-decision-log', template: '' })
+class AgentDecisionLogStub {
+  @Input() Provider: object | null = null;
+  @Input() SessionRunID: string | null = null;
+}
+
 /** The form member the panels use. */
 interface FormDouble {
   ProviderToUse: object;
@@ -61,6 +67,7 @@ interface FormDouble {
 interface RecordDouble {
   IsSaved: boolean;
   ID: string;
+  Agent?: string | null;
 }
 
 /** The NavigationService member the panels call, and every call it received. */
@@ -167,5 +174,28 @@ describe('PSModelEvaluationPanel (DOM)', () => {
     TestBed.resetTestingModule();
     const unsaved = await render(PSModelEvaluationPanel, RunEvaluationStub, recordDouble(false), formDouble());
     expect(unsaved.Widget.ModelID).toBeNull();
+  });
+});
+
+describe('PSAgentDecisionLogPanel (DOM)', () => {
+  it("passes a saved Model Development Agent run to the widget as the session's first run", async () => {
+    const form = formDouble();
+    const r = await render(PSAgentDecisionLogPanel, AgentDecisionLogStub, { ...recordDouble(true), Agent: 'Model Development Agent' }, form);
+    expect(r.Widget.SessionRunID).toBe(RECORD_ID);
+    expect(r.Widget.Provider).toBe(form.ProviderToUse);
+  });
+
+  it("shows no panel on another agent's run or on a new run", async () => {
+    for (const record of [{ ...recordDouble(true), Agent: 'Sage' }, { ...recordDouble(false), Agent: 'Model Development Agent' }]) {
+      TestBed.configureTestingModule({ providers: [{ provide: NavigationService, useValue: navigationDouble() }] });
+      TestBed.overrideComponent(PSAgentDecisionLogPanel, { set: { imports: [CollapsiblePanelStub, AgentDecisionLogStub] } });
+      const fixture = TestBed.createComponent(PSAgentDecisionLogPanel);
+      fixture.componentRef.setInput('Record', record);
+      fixture.componentRef.setInput('FormComponent', formDouble());
+      fixture.detectChanges();
+      expect(fixture.debugElement.query(By.directive(AgentDecisionLogStub))).toBeNull();
+      expect(fixture.debugElement.query(By.directive(CollapsiblePanelStub))).toBeNull();
+      TestBed.resetTestingModule();
+    }
   });
 });

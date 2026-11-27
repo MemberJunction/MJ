@@ -25,7 +25,7 @@ export class MJAIAgentRunStepFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentRunStepsPayloadAtStartSourceStepID', sectionName: 'AI Agent Run Steps (Payload At Start Source Step ID)', isExpanded: false },
             { sectionKey: 'mJAIAgentRequests', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJAIAgentRunStepsPayloadAtEndSourceStepID', sectionName: 'AI Agent Run Steps (Payload At End Source Step ID)', isExpanded: false },
-            { sectionKey: 'mJAgentDecisionLog', sectionName: 'Agent Decision Log', isExpanded: false }
+            { sectionKey: 'mJAgentDecisionLogs', sectionName: 'Agent Decision Logs', isExpanded: false }
         ]);
     }
 }

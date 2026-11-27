@@ -15,8 +15,7 @@ export class MJMLBuildApprovalClaimFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'claimDetails', sectionName: 'Claim Details', isExpanded: true },
-            { sectionKey: 'executionReferences', sectionName: 'Execution References', isExpanded: true },
+            { sectionKey: 'claimInformation', sectionName: 'Claim Information', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

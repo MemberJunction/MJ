@@ -9,7 +9,7 @@
  * - {@link BuildApprovalRefusal} — why no approval holds: one variant per D-090 rule, plus consumption.
  * - {@link AgentControlState} — the orchestrator's states; {@link AgentDecisionKind} — the nine decision-log values
  *   (§5.1.6).
- * - {@link AgentDecisionLogEntry} — one `MJ: Agent Decision Log` row as `AgentDecisionLog.Append` writes it (A4, D5-24).
+ * - {@link AgentDecisionLogEntry} — one `MJ: Agent Decision Logs` row as `AgentDecisionLog.Append` writes it (A4, D5-24).
  * - {@link AgentRefusal} — the session's fixed refusals (small data, no usable signal, unresolved names), and
  *   {@link ProfileResult} — what the read-only Profile Prediction Target Action found (A4, §5.1.5).
  *
@@ -76,7 +76,7 @@ export type AgentControlState =
   | 'request-build'
   | 'report';
 
-/** The nine `Decision` values of `MJ: Agent Decision Log` (§5.1.6). */
+/** The nine `Decision` values of `MJ: Agent Decision Logs` (§5.1.6). */
 export type AgentDecisionKind =
   | 'profile'
   | 'draft-unit'

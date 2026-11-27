@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (537 classes)
+// @memberjunction/core-entities (538 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -1222,11 +1222,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOpenAppDependencyEntity,
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
-    MJOutputDeliveryTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJOutputDeliveryTypeEntity,
     MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
@@ -1426,11 +1426,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     VideoArtifactViewerComponent,
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
-    AgentMentionProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    AgentMentionProvider,
     ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
@@ -1558,7 +1558,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 713;
+export const CLASS_REGISTRATIONS_COUNT = 714;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

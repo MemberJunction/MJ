@@ -1,6 +1,6 @@
 /**
  * Gate G4.3 "C1 → C1.3" (owner PR 5, phase 4): every control-path transition of a Model Development Agent session is a
- * `MJ: Agent Decision Log` row, and the log reproduces the session (§5.1.6, D5-24). Server transport: the agent runs in
+ * `MJ: Agent Decision Logs` row, and the log reproduces the session (§5.1.6, D5-24). Server transport: the agent runs in
  * this process as the D5-46 person, who approves the presented plan as their own client save (G4.1's mechanics).
  *
  * One C1 session on the truth suite's W1-signal world spans the approval boundary — run 1 presents the plan, the

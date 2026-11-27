@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Session and Execution Context Section -->
+    <!-- Session and Run Info Section -->
     <mj-collapsible-panel
-        SectionKey="sessionAndExecutionContext"
-        SectionName="Session and Execution Context"
-        Icon="fa fa-stream"
+        SectionKey="sessionAndRunInfo"
+        SectionName="Session and Run Info"
+        Icon="fa fa-play-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -52,32 +52,14 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="PromptRunID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="BuildApprovalRequestID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Decision and Payload Section -->
+    <!-- Decision Details Section -->
     <mj-collapsible-panel
-        SectionKey="decisionAndPayload"
-        SectionName="Decision and Payload"
-        Icon="fa fa-brain"
+        SectionKey="decisionDetails"
+        SectionName="Decision Details"
+        Icon="fa fa-balance-scale"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -91,11 +73,65 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="Rationale"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Execution Context Section -->
+    <mj-collapsible-panel
+        SectionKey="executionContext"
+        SectionName="Execution Context"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="PromptRunID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="ToolCalls"
             Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Replay"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="BuildApprovalRequestID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Payload and Hashes Section -->
+    <mj-collapsible-panel
+        SectionKey="payloadAndHashes"
+        SectionName="Payload and Hashes"
+        Icon="fa fa-fingerprint"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -112,19 +148,29 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Rationale"
-            Type="textarea"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Replay"
-            Type="textarea"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

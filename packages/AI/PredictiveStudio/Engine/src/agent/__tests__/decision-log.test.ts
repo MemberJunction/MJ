@@ -1,5 +1,5 @@
 /**
- * A4 attacks 3, 4 (the session rule), 9 and 11 (compare-and-append) — `MJ: Agent Decision Log` (§5.1.6, D5-24, D5-38).
+ * A4 attacks 3, 4 (the session rule), 9 and 11 (compare-and-append) — `MJ: Agent Decision Logs` (§5.1.6, D5-24, D5-38).
  *
  * The log table is an in-memory fake with the migration's unique (`SessionRunID`, `Step`) index; each fake row's
  * `Save()` runs the registered guard's `CheckSave` first (as `BaseEntity.Save` runs `PreSave` hooks), then the index,
@@ -46,7 +46,7 @@ function logRow(stored: Stored | null): MJAgentDecisionLogEntity {
   for (const f of Object.keys(values) as (keyof Stored)[]) {
     Object.defineProperty(e, f, { get: () => values[f], set: (v: never) => { values[f] = v; }, configurable: true });
   }
-  Object.defineProperty(e, 'EntityInfo', { get: () => ({ Name: 'MJ: Agent Decision Log' }) });
+  Object.defineProperty(e, 'EntityInfo', { get: () => ({ Name: 'MJ: Agent Decision Logs' }) });
   Object.defineProperty(e, 'IsSaved', { get: () => saved });
   Object.defineProperty(e, 'NewRecord', { value: () => true });
   Object.defineProperty(e, 'LatestResult', { get: () => ({ CompleteMessage: lastMessage }) });
@@ -84,7 +84,7 @@ const provider = { GetEntityObject: vi.fn(async () => logRow(null)) } as unknown
 
 /** The log's reads answered from the table: by session, or by the runs that wrote rows. */
 function answer(p: { EntityName?: string; ExtraFilter?: string; OrderBy?: string; MaxRows?: number }): { Success: boolean; Results: Stored[] } {
-  if (p.EntityName !== 'MJ: Agent Decision Log') return { Success: true, Results: [] };
+  if (p.EntityName !== 'MJ: Agent Decision Logs') return { Success: true, Results: [] };
   const filter = p.ExtraFilter ?? '';
   const session = /SessionRunID\s*=\s*'([^']+)'/i.exec(filter)?.[1];
   const runs = /AgentRunID\s+IN\s*\(([^)]*)\)/i.exec(filter)?.[1]?.split(',').map((s) => s.trim().replace(/'/g, ''));

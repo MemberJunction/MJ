@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (537 classes)
+// @memberjunction/core-entities (538 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -524,6 +524,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -1584,13 +1585,14 @@ import {
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
 
-// @memberjunction/predictive-studio (29 classes)
+// @memberjunction/predictive-studio (30 classes)
 import {
     DraftEvaluationProtocolAction,
     DraftPredictionUnitAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioAgentEvalDriver,
+    PredictiveStudioAgentNoteSweepJobDriver,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
@@ -2031,6 +2033,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2067,11 +2070,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
     MJJurisdictionEntity,
-    MJJurisdictionMemberEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJJurisdictionMemberEntity,
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -2271,11 +2274,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
-    RecordLinkEdgeProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    RecordLinkEdgeProvider,
     ResourcePermissionProvider,
     SavedQueryDocumentBlock,
     SharedConceptEdgeProvider,
@@ -2475,11 +2478,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordClonePlanServerOperation,
     RecordComparisonCompareServerOperation,
     RubricEngineBase,
-    MJScheduledJobEntityExtended,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    MJScheduledJobEntityExtended,
     TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
@@ -2679,11 +2682,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJQuerySQLEntityServer,
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
-    MJRemoteOperationEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJRemoteOperationEntityServer,
     MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
@@ -2883,11 +2886,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
-    ScheduleNextAgentWakeAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
@@ -2942,6 +2945,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioAgentEvalDriver,
+    PredictiveStudioAgentNoteSweepJobDriver,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
@@ -3009,7 +3013,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1304;
+export const CLASS_REGISTRATIONS_COUNT = 1306;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

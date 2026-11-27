@@ -6,9 +6,10 @@
 import { Component, inject } from '@angular/core';
 import { CompositeKey } from '@memberjunction/core';
 import { RegisterClassEx } from '@memberjunction/global';
-import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentRunEntity, MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLPredictionUnitEntity } from '@memberjunction/core-entities';
 import { BaseFormPanel, BaseFormsModule } from '@memberjunction/ng-base-forms';
 import { NavigationService } from '@memberjunction/ng-shared';
+import { PSAgentDecisionLogComponent } from '../components/agent-decision-log/agent-decision-log.component';
 import { PSPipelineBindingsComponent } from '../components/pipeline-bindings/pipeline-bindings.component';
 import { PSProtocolVersionsComponent } from '../components/protocol-versions/protocol-versions.component';
 import { PSRunEvaluationComponent } from '../components/run-evaluation/run-evaluation.component';
@@ -119,5 +120,40 @@ export class PSModelEvaluationPanel extends BaseFormPanel<MJMLModelEntity> {
   }
 }
 
-/** The four record-form panels of the Predictive Studio chunk. */
-export const PS_RECORD_PANELS = [PSProtocolVersionsPanel, PSUnitVersionsPanel, PSPipelineBindingsPanel, PSModelEvaluationPanel] as const;
+/** The agent whose runs write the decision log (its orchestrator; PR 5 §5.1.6). */
+const MODEL_DEV_AGENT_NAME = 'Model Development Agent';
+
+/**
+ * The Model Development Agent session's decision log on an agent run's form (PR 5, A4; D5-A4-9). The log is keyed by
+ * the session's first run, so the session's first run shows its whole log and a later run of the session shows the
+ * entries it took only from that first run's form. Runs of every other agent show no panel.
+ */
+@RegisterClassEx(BaseFormPanel, {
+  key: 'form-panel:MJAIAgentRuns:decision-log',
+  metadata: { entity: 'MJ: AI Agent Runs', slot: 'after-fields', sortKey: 100, contributionKey: 'ps-agent-decision-log', inclusion: 'Primary' },
+})
+@Component({
+  selector: 'mj-ps-agent-decision-log-panel',
+  standalone: true,
+  imports: [BaseFormsModule, PSAgentDecisionLogComponent],
+  template: `
+    @if (IsModelDevelopmentRun) {
+      <mj-collapsible-panel SectionKey="ps-agent-decision-log" SectionName="Decision log" Icon="fa-solid fa-list-check" [Form]="FormComponent" [FormContext]="FormContext" [Order]="DisplayOrder" [DefaultExpanded]="true">
+        <mj-ps-agent-decision-log [Provider]="FormComponent.ProviderToUse" [SessionRunID]="RecordID"></mj-ps-agent-decision-log>
+      </mj-collapsible-panel>
+    }
+  `,
+})
+export class PSAgentDecisionLogPanel extends BaseFormPanel<MJAIAgentRunEntity> {
+  public get RecordID(): string | null {
+    return savedId(this.Record);
+  }
+
+  /** True for a saved run of the Model Development Agent (the only agent that writes the log). */
+  public get IsModelDevelopmentRun(): boolean {
+    return this.Record.IsSaved && this.Record.Agent === MODEL_DEV_AGENT_NAME;
+  }
+}
+
+/** The five record-form panels of the Predictive Studio chunk. */
+export const PS_RECORD_PANELS = [PSProtocolVersionsPanel, PSUnitVersionsPanel, PSPipelineBindingsPanel, PSModelEvaluationPanel, PSAgentDecisionLogPanel] as const;
