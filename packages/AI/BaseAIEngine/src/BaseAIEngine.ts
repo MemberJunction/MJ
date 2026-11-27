@@ -55,9 +55,15 @@ import {
     MJAIModelEntityExtended,
     MJAIAgentEntityExtended,
     MAX_AGENT_INHERITANCE_DEPTH,
+    BuildAgentTypeConfigurationFromLegacyFields,
     DeepMergeAgentConfigObjects,
+    DeepMergeAgentConfigurations,
     ParseAgentConfigJsonObject,
+    ParseAgentConfiguration,
+    ParseAgentHelperPlugins,
     type AgentConfigJsonObject,
+    type AgentHelperPluginEntry,
+    type IAgentConfiguration,
     type DecisionAnsweringModel,
     type DecisionCalibrationKey
 } from "@memberjunction/ai-core-plus";
@@ -110,10 +116,28 @@ export interface EffectiveAgentProperties {
     InjectExamples: boolean;
     MaxExamplesToInject: number | null;
     ExampleInjectionStrategy: MJAIAgentEntity['ExampleInjectionStrategy'];
+    NoteRetentionDays: number | null;
+    ExampleRetentionDays: number | null;
+    AutoArchiveEnabled: boolean;
+    ExecutionMode: MJAIAgentEntity['ExecutionMode'];
+    MinExecutionsPerRun: number | null;
+    MaxExecutionsPerRun: number | null;
+    MaxSubAgentConsultRounds: number | null;
+    MessageMode: MJAIAgentEntity['MessageMode'];
+    MaxMessages: number | null;
+    AttachmentRootPath: string | null;
+    InlineStorageThresholdBytes: number | null;
+    AcceptUnregisteredFiles: boolean;
+    AllowEphemeralClientTools: boolean;
+    RecordingDefault: MJAIAgentEntity['RecordingDefault'];
     LogoURL: string | null;
     IconClass: string | null;
     TypeConfiguration: string | null;
     AgentTypePromptParams: string | null;
+    /** Fully resolved 3-table cascade configuration (`Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType`). */
+    Configuration: IAgentConfiguration;
+    /** Merged admin-configured `helperPlugins` across AgentType -> Category -> BaseAgent chain -> Agent. */
+    HelperPlugins: AgentHelperPluginEntry[];
 }
 
 /**
@@ -1694,9 +1718,36 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Resolves effective scalar properties and deep-merged `TypeConfiguration` /
-     * `AgentTypePromptParams` across the agent's `BaseAgentID` prototype inheritance chain
-     * (`[rootAgent, ..., leafAgent]`).
+     * Walks up the `AIAgentCategory.ParentID` hierarchy cycle-safely and returns
+     * `[rootCategory, ..., directCategory]` so defaults can merge root -> leaf.
+     */
+    private resolveCategoryChain(categoryId: string | null): MJAIAgentCategoryEntity[] {
+        if (!categoryId) {
+            return [];
+        }
+        const categoriesById = IndexByUUID(this.AgentCategories);
+        const chain: MJAIAgentCategoryEntity[] = [];
+        const visited = new UUIDSet();
+        let currentId: string | null = categoryId;
+        while (currentId && !visited.Has(currentId)) {
+            visited.Add(currentId);
+            const cat = categoriesById.Get(currentId);
+            if (!cat) {
+                break;
+            }
+            chain.push(cat);
+            currentId = cat.ParentID ?? null;
+        }
+        return chain.reverse();
+    }
+
+    /**
+     * Resolves effective scalar properties, 3-table `IAgentConfiguration` cascade
+     * (`Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default`),
+     * and deep-merged `TypeConfiguration` / `AgentTypePromptParams`.
+     *
+     * Dual-reads `Configuration` JSON with seamless fallback to deprecated legacy columns,
+     * and enforces narrow-only security invariants monotonically down the chain.
      */
     public ResolveEffectiveAgentProperties(
         agentOrId: string | MJAIAgentEntityExtended
@@ -1704,13 +1755,53 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         const leaf = typeof agentOrId === 'string' ? this.GetAgentByID(agentOrId) : agentOrId;
         const nodes: MJAIAgentEntityExtended[] = leaf ? this.resolveInheritanceNodesForAgent(leaf) : [];
         const root = nodes[0];
+        const nodeConfigs: Array<IAgentConfiguration | null> = nodes.map((n) =>
+            ParseAgentConfiguration(n.Configuration)
+        );
 
-        const nearestNonNull = <T>(picker: (a: MJAIAgentEntityExtended) => T | null | undefined): T | null => {
+        const nearestNonNull = <T>(picker: (a: MJAIAgentEntityExtended, cfg: IAgentConfiguration | null) => T | null | undefined): T | null => {
             for (let i = nodes.length - 1; i >= 0; i--) {
-                const v = picker(nodes[i]);
+                const v = picker(nodes[i], nodeConfigs[i]);
                 if (v !== null && v !== undefined && (typeof v !== 'string' || v.trim().length > 0)) {
                     return v;
                 }
+            }
+            return null;
+        };
+
+        // 1. AgentType default layer (lowest metadata tier: legacy 7 columns merged under DefaultAgentConfiguration JSON)
+        const effectiveTypeId = nearestNonNull((a) => a.TypeID);
+        const agentType = effectiveTypeId
+            ? this.AgentTypes.find((at) => UUIDsEqual(at.ID, effectiveTypeId))
+            : undefined;
+        let defaultsLayer: IAgentConfiguration = {};
+        if (agentType) {
+            const typeLegacy = BuildAgentTypeConfigurationFromLegacyFields(agentType);
+            const typeJson = ParseAgentConfiguration(agentType.DefaultAgentConfiguration);
+            defaultsLayer = DeepMergeAgentConfigurations(typeLegacy, typeJson);
+        }
+
+        // 2. Category chain layer (rootCategory -> ... -> directCategory)
+        const effectiveCategoryId = nearestNonNull((a) => a.CategoryID);
+        const categoryChain = this.resolveCategoryChain(effectiveCategoryId);
+        for (const cat of categoryChain) {
+            const catJson = ParseAgentConfiguration(cat.DefaultConfiguration);
+            if (catJson) {
+                defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, catJson);
+            }
+        }
+
+        // Helper for nearest non-null value across agent chain (JSON first, then legacy) falling back to defaultsLayer
+        const nearestOrDefault = <T>(
+            nodePicker: (a: MJAIAgentEntityExtended, cfg: IAgentConfiguration | null) => T | null | undefined,
+            defaultValue: T | null | undefined
+        ): T | null => {
+            const fromNodes = nearestNonNull(nodePicker);
+            if (fromNodes !== null) {
+                return fromNodes;
+            }
+            if (defaultValue !== null && defaultValue !== undefined && (typeof defaultValue !== 'string' || defaultValue.trim().length > 0)) {
+                return defaultValue;
             }
             return null;
         };
@@ -1731,7 +1822,6 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         // AcceptsSkills narrows monotonically down the chain: All (2) -> Limited (1) -> None (0).
-        // When a derived node omits AcceptsSkills (undefined/null), it inherits from its ancestor.
         const acceptsRank: Record<MJAIAgentEntity['AcceptsSkills'], number> = {
             None: 0,
             Limited: 1,
@@ -1746,32 +1836,43 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         // SkillActivationMode narrows monotonically: Auto (1) -> RequestedOnly (0).
+        // Category/AgentType defaults may supply an initial default when root omits it, but never widen.
         const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
             RequestedOnly: 0,
             Auto: 1,
         };
+        const rootSkillMode = nodeConfigs[0]?.skills?.activationMode ?? root?.SkillActivationMode;
         let effectiveSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] =
-            root?.SkillActivationMode ?? 'RequestedOnly';
+            rootSkillMode ?? defaultsLayer.skills?.activationMode ?? 'RequestedOnly';
+        if (defaultsLayer.skills?.activationMode != null && rootSkillMode != null) {
+            // Category/Type defaults cannot loosen; if root is explicitly set, root establishes the chain start
+            effectiveSkillActivationMode = rootSkillMode;
+        }
         for (let i = 1; i < nodes.length; i++) {
-            const nodeMode = nodes[i].SkillActivationMode;
+            const nodeMode = nodeConfigs[i]?.skills?.activationMode ?? nodes[i].SkillActivationMode;
             if (nodeMode != null && (skillModeRank[nodeMode] ?? 0) < (skillModeRank[effectiveSkillActivationMode] ?? 0)) {
                 effectiveSkillActivationMode = nodeMode;
             }
         }
 
         // ModelSelectionMode: if leaf owns active prompts use leaf's mode; otherwise inherit from
-        // the nearest prompt-owning ancestor (or root).
+        // the nearest prompt-owning ancestor (or root), falling back to category/type default.
         const activePromptAgentIds = new UUIDSet(
             this._agentPrompts.filter(ap => ap.Status === 'Active').map(ap => ap.AgentID)
         );
         const leafHasOwnPrompts = leaf ? activePromptAgentIds.Has(leaf.ID) : false;
+        const leafModelMode = (nodes.length > 0 ? nodeConfigs[nodes.length - 1]?.execution?.modelSelectionMode : null) ?? leaf?.ModelSelectionMode;
         let effectiveModelSelectionMode: MJAIAgentEntity['ModelSelectionMode'] =
-            leaf?.ModelSelectionMode ?? 'Agent Type';
+            leafModelMode ?? defaultsLayer.execution?.modelSelectionMode ?? 'Agent Type';
         if (!leafHasOwnPrompts && nodes.length > 1) {
             for (let i = nodes.length - 1; i >= 0; i--) {
                 const candidate = nodes[i];
                 if (activePromptAgentIds.Has(candidate.ID)) {
-                    effectiveModelSelectionMode = candidate.ModelSelectionMode ?? 'Agent Type';
+                    effectiveModelSelectionMode =
+                        nodeConfigs[i]?.execution?.modelSelectionMode ??
+                        candidate.ModelSelectionMode ??
+                        defaultsLayer.execution?.modelSelectionMode ??
+                        'Agent Type';
                     break;
                 }
             }
@@ -1791,8 +1892,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             delete mergedTypeConfig['instantiation'];
         }
 
-        // Deep-merge AgentTypePromptParams root -> leaf
+        // Deep-merge AgentTypePromptParams (category/type promptDefaults beneath root -> leaf)
         let mergedPromptParams: AgentConfigJsonObject | null = null;
+        if (defaultsLayer.promptDefaults && Object.keys(defaultsLayer.promptDefaults).length > 0) {
+            mergedPromptParams = ParseAgentConfigJsonObject(JSON.stringify(defaultsLayer.promptDefaults));
+        }
         for (const node of nodes) {
             const parsed = ParseAgentConfigJsonObject(node.AgentTypePromptParams);
             if (parsed) {
@@ -1802,65 +1906,291 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
 
-        // RequirePlanMode is monotonic OR down the chain; SupportsPlanMode is monotonic AND.
-        const effectiveRequirePlanMode = nodes.some(n => n.RequirePlanMode === true);
-        const effectiveSupportsPlanMode = nodes.length > 0 ? nodes.every(n => n.SupportsPlanMode !== false) : true;
+        // RequirePlanMode is monotonic OR down the chain (+ defaultsLayer); SupportsPlanMode is monotonic AND.
+        const effectiveRequirePlanMode =
+            defaultsLayer.execution?.requirePlanMode === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.execution?.requirePlanMode ?? n.RequirePlanMode) === true);
+        const effectiveSupportsPlanMode =
+            defaultsLayer.execution?.supportsPlanMode === false
+                ? false
+                : nodes.length > 0
+                    ? nodes.every((n, i) => (nodeConfigs[i]?.execution?.supportsPlanMode ?? n.SupportsPlanMode) !== false)
+                    : (defaultsLayer.execution?.supportsPlanMode ?? true);
 
-        // Capability flags that default to false/conservative on minimal derived rows inherit from
-        // the nearest ancestor that enabled them (while leaf overrides if set).
-        const effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] =
-            leaf?.SearchScopeAccess && leaf.SearchScopeAccess !== 'None'
-                ? leaf.SearchScopeAccess
-                : (nearestNonNull(a => (a.SearchScopeAccess && a.SearchScopeAccess !== 'None' ? a.SearchScopeAccess : null)) ??
-                    leaf?.SearchScopeAccess ??
-                    'None');
+        // SearchScopeAccess: narrow-only down chain (All: 2 > Assigned: 1 > None: 0) while allowing
+        // minimal derived rows with default legacy 'None' (and no explicit JSON override) to inherit from ancestors.
+        const searchAccessRank: Record<MJAIAgentEntity['SearchScopeAccess'], number> = {
+            None: 0,
+            Assigned: 1,
+            All: 2,
+        };
+        let effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] =
+            defaultsLayer.scope?.searchScopeAccess ?? 'None';
+        let establishedSearchAccess = false;
+        for (let i = 0; i < nodes.length; i++) {
+            const explicitJsonVal = nodeConfigs[i]?.scope?.searchScopeAccess;
+            const legacyVal = nodes[i].SearchScopeAccess;
+            const candidate = explicitJsonVal ?? (legacyVal && legacyVal !== 'None' ? legacyVal : (i === 0 ? legacyVal : null));
+            if (candidate != null) {
+                if (!establishedSearchAccess) {
+                    effectiveSearchScopeAccess = candidate;
+                    establishedSearchAccess = true;
+                } else if (searchAccessRank[candidate] < searchAccessRank[effectiveSearchScopeAccess]) {
+                    effectiveSearchScopeAccess = candidate;
+                }
+            }
+        }
+
+        // ArtifactCreationMode: dual-read with ancestor + category/type fallback
+        const leafArtifactMode =
+            (nodes.length > 0 ? nodeConfigs[nodes.length - 1]?.artifacts?.creationMode : null) ??
+            leaf?.ArtifactCreationMode;
         const effectiveArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] =
-            leaf?.ArtifactCreationMode && leaf.ArtifactCreationMode !== 'Never'
-                ? leaf.ArtifactCreationMode
-                : (nearestNonNull(a => (a.ArtifactCreationMode && a.ArtifactCreationMode !== 'Never' ? a.ArtifactCreationMode : null)) ??
-                    leaf?.ArtifactCreationMode ??
+            leafArtifactMode && leafArtifactMode !== 'Never'
+                ? leafArtifactMode
+                : (nearestNonNull((a, cfg) => {
+                      const val = cfg?.artifacts?.creationMode ?? a.ArtifactCreationMode;
+                      return val && val !== 'Never' ? val : null;
+                  }) ??
+                    defaultsLayer.artifacts?.creationMode ??
+                    leafArtifactMode ??
                     'Never');
 
+        // Narrow-only boolean capabilities: AllowEphemeralClientTools & AcceptUnregisteredFiles (AND down chain)
+        const resolveNarrowBoolean = (
+            jsonPicker: (cfg: IAgentConfiguration | null) => boolean | null | undefined,
+            legacyPicker: (a: MJAIAgentEntityExtended) => boolean | null | undefined,
+            fallback: boolean
+        ): boolean => {
+            let resolved: boolean | null = jsonPicker(defaultsLayer) ?? null;
+            for (let i = 0; i < nodes.length; i++) {
+                const explicit = jsonPicker(nodeConfigs[i]);
+                const legacy = legacyPicker(nodes[i]);
+                const val = explicit ?? (legacy !== undefined ? legacy : null);
+                if (val === null) {
+                    continue;
+                }
+                if (resolved === null) {
+                    resolved = val;
+                } else {
+                    // Narrow-only: once false on an ancestor/category, descendants cannot widen back to true
+                    resolved = resolved && val;
+                }
+            }
+            return resolved ?? fallback;
+        };
+
+        const effectiveAllowEphemeralClientTools = resolveNarrowBoolean(
+            (cfg) => cfg?.clientTools?.allowEphemeral,
+            (a) => a.AllowEphemeralClientTools,
+            false
+        );
+        const effectiveAcceptUnregisteredFiles = resolveNarrowBoolean(
+            (cfg) => cfg?.attachments?.acceptUnregisteredFiles,
+            (a) => a.AcceptUnregisteredFiles,
+            false
+        );
+
+        // Narrow-only numeric ceilings (min of non-null positive values across defaultsLayer + nodes)
+        const minCeiling = (
+            values: Array<number | null | undefined>
+        ): number | null => {
+            let best: number | null = null;
+            for (const v of values) {
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    best = best === null ? v : Math.min(best, v);
+                }
+            }
+            return best;
+        };
+
+        const effectiveMaxExecutionsPerRun = minCeiling([
+            defaultsLayer.subAgentExecution?.maxExecutionsPerRun,
+            ...nodes.map((n, i) => nodeConfigs[i]?.subAgentExecution?.maxExecutionsPerRun ?? n.MaxExecutionsPerRun),
+        ]);
+        const effectiveMaxSubAgentConsultRounds = minCeiling([
+            defaultsLayer.subAgentExecution?.maxConsultRounds,
+            ...nodes.map((n, i) => nodeConfigs[i]?.subAgentExecution?.maxConsultRounds ?? n.MaxSubAgentConsultRounds),
+        ]);
+
+        // Merge full IAgentConfiguration bag: AgentType -> Categories -> rootAgent..leafAgent
+        let mergedConfiguration: IAgentConfiguration = DeepMergeAgentConfigurations({}, defaultsLayer);
+        for (const cfg of nodeConfigs) {
+            if (cfg) {
+                mergedConfiguration = DeepMergeAgentConfigurations(mergedConfiguration, cfg);
+            }
+        }
+        if (leaf && leaf.BaseAgentID && (leaf.InstantiationMode ?? 'None') === 'None' && mergedConfiguration.instantiation) {
+            delete mergedConfiguration.instantiation;
+        }
+
+        // Collect admin-configured helperPlugins across AgentType -> Categories -> BaseAgent chain -> Agent
+        const helperPlugins: AgentHelperPluginEntry[] = [];
+        if (Array.isArray(defaultsLayer.helperPlugins)) {
+            helperPlugins.push(...defaultsLayer.helperPlugins);
+        }
+        for (const node of nodes) {
+            helperPlugins.push(...ParseAgentHelperPlugins(node.Configuration));
+            helperPlugins.push(...ParseAgentHelperPlugins(node.TypeConfiguration));
+        }
+
+        const effectiveReranker = nearestOrDefault(
+            (a, cfg) => (cfg?.memory?.reranker ? JSON.stringify(cfg.memory.reranker) : a.RerankerConfiguration),
+            defaultsLayer.memory?.reranker ? JSON.stringify(defaultsLayer.memory.reranker) : null
+        );
+        const effectiveScopeConfig = nearestOrDefault(
+            (a, cfg) => (cfg?.scope?.secondaryScopeConfig ? JSON.stringify(cfg.scope.secondaryScopeConfig) : a.ScopeConfig),
+            defaultsLayer.scope?.secondaryScopeConfig ? JSON.stringify(defaultsLayer.scope.secondaryScopeConfig) : null
+        );
+
+        const effectiveEnableCompression =
+            defaultsLayer.contextWindow?.enableCompression === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.contextWindow?.enableCompression ?? n.EnableContextCompression) === true);
+        const effectiveDeclareNativeTools =
+            defaultsLayer.execution?.declareActionsAsNativeTools === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.execution?.declareActionsAsNativeTools ?? n.DeclareActionsAsNativeTools) === true);
+        const effectiveAllowMemoryWrite =
+            defaultsLayer.memory?.allowMemoryWrite === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.memory?.allowMemoryWrite ?? n.AllowMemoryWrite) === true);
+        const effectiveInjectNotes =
+            defaultsLayer.memory?.injectNotes === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.memory?.injectNotes ?? n.InjectNotes) === true);
+        const effectiveInjectExamples =
+            defaultsLayer.memory?.injectExamples === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.memory?.injectExamples ?? n.InjectExamples) === true);
+        const effectiveAutoArchive =
+            defaultsLayer.memory?.autoArchiveEnabled === true ||
+            nodes.some((n, i) => (nodeConfigs[i]?.memory?.autoArchiveEnabled ?? n.AutoArchiveEnabled) === true);
+
         return {
-            TypeID: nearestNonNull(a => a.TypeID),
-            DriverClass: nearestNonNull(a => a.DriverClass),
+            TypeID: effectiveTypeId,
+            DriverClass: nearestNonNull((a) => a.DriverClass),
             ModelSelectionMode: effectiveModelSelectionMode,
             Isolation: effectiveIsolation,
-            ContextWindowMaxTokens: nearestNonNull(a => a.ContextWindowMaxTokens),
-            CompactionTriggerPercent: nearestNonNull(a => a.CompactionTriggerPercent),
-            CompactionTargetPercent: nearestNonNull(a => a.CompactionTargetPercent),
-            ConversationSummaryPromptID: nearestNonNull(a => a.ConversationSummaryPromptID),
-            EnableContextCompression: nodes.some(n => n.EnableContextCompression === true),
-            ContextCompressionMessageThreshold: nearestNonNull(a => a.ContextCompressionMessageThreshold),
-            ContextCompressionPromptID: nearestNonNull(a => a.ContextCompressionPromptID),
-            ContextCompressionMessageRetentionCount: nearestNonNull(a => a.ContextCompressionMessageRetentionCount),
-            RerankerConfiguration: nearestNonNull(a => a.RerankerConfiguration),
-            ScopeConfig: nearestNonNull(a => a.ScopeConfig),
-            DefaultPromptEffortLevel: nearestNonNull(a => a.DefaultPromptEffortLevel),
-            ChatHandlingOption: nearestNonNull(a => a.ChatHandlingOption),
-            DefaultArtifactTypeID: nearestNonNull(a => a.DefaultArtifactTypeID),
+            ContextWindowMaxTokens: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.maxTokens ?? a.ContextWindowMaxTokens,
+                defaultsLayer.contextWindow?.maxTokens
+            ),
+            CompactionTriggerPercent: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.compactionTriggerPercent ?? a.CompactionTriggerPercent,
+                defaultsLayer.contextWindow?.compactionTriggerPercent
+            ),
+            CompactionTargetPercent: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.compactionTargetPercent ?? a.CompactionTargetPercent,
+                defaultsLayer.contextWindow?.compactionTargetPercent
+            ),
+            ConversationSummaryPromptID: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.summaryPromptID ?? a.ConversationSummaryPromptID,
+                defaultsLayer.contextWindow?.summaryPromptID
+            ),
+            EnableContextCompression: effectiveEnableCompression,
+            ContextCompressionMessageThreshold: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.compressionMessageThreshold ?? a.ContextCompressionMessageThreshold,
+                defaultsLayer.contextWindow?.compressionMessageThreshold
+            ),
+            ContextCompressionPromptID: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.compressionPromptID ?? a.ContextCompressionPromptID,
+                defaultsLayer.contextWindow?.compressionPromptID
+            ),
+            ContextCompressionMessageRetentionCount: nearestOrDefault(
+                (a, cfg) => cfg?.contextWindow?.compressionMessageRetentionCount ?? a.ContextCompressionMessageRetentionCount,
+                defaultsLayer.contextWindow?.compressionMessageRetentionCount
+            ),
+            RerankerConfiguration: effectiveReranker,
+            ScopeConfig: effectiveScopeConfig,
+            DefaultPromptEffortLevel: nearestOrDefault(
+                (a, cfg) => cfg?.execution?.defaultPromptEffortLevel ?? a.DefaultPromptEffortLevel,
+                defaultsLayer.execution?.defaultPromptEffortLevel
+            ),
+            ChatHandlingOption: nearestOrDefault(
+                (a, cfg) => cfg?.execution?.chatHandlingOption ?? a.ChatHandlingOption,
+                defaultsLayer.execution?.chatHandlingOption
+            ),
+            DefaultArtifactTypeID: nearestOrDefault(
+                (a, cfg) => cfg?.artifacts?.defaultArtifactTypeID ?? a.DefaultArtifactTypeID,
+                defaultsLayer.artifacts?.defaultArtifactTypeID
+            ),
             ArtifactCreationMode: effectiveArtifactCreationMode,
-            DeclareActionsAsNativeTools: nodes.some(n => n.DeclareActionsAsNativeTools === true),
+            DeclareActionsAsNativeTools: effectiveDeclareNativeTools,
             SupportsPlanMode: effectiveSupportsPlanMode,
             RequirePlanMode: effectiveRequirePlanMode,
             AcceptsSkills: effectiveAcceptsSkills,
             SkillActivationMode: effectiveSkillActivationMode,
             SearchScopeAccess: effectiveSearchScopeAccess,
-            AllowMemoryWrite: nodes.some(n => n.AllowMemoryWrite === true),
-            InjectNotes: nodes.some(n => n.InjectNotes === true),
-            MaxNotesToInject: nearestNonNull(a => a.MaxNotesToInject),
-            NoteInjectionStrategy: nearestNonNull(a => a.NoteInjectionStrategy) ?? 'Relevant',
-            InjectExamples: nodes.some(n => n.InjectExamples === true),
-            MaxExamplesToInject: nearestNonNull(a => a.MaxExamplesToInject),
-            ExampleInjectionStrategy: nearestNonNull(a => a.ExampleInjectionStrategy) ?? 'Semantic',
-            LogoURL: nearestNonNull(a => a.LogoURL),
-            IconClass: nearestNonNull(a => a.IconClass),
+            AllowMemoryWrite: effectiveAllowMemoryWrite,
+            InjectNotes: effectiveInjectNotes,
+            MaxNotesToInject: nearestOrDefault(
+                (a, cfg) => cfg?.memory?.maxNotesToInject ?? a.MaxNotesToInject,
+                defaultsLayer.memory?.maxNotesToInject
+            ),
+            NoteInjectionStrategy:
+                nearestOrDefault(
+                    (a, cfg) => cfg?.memory?.noteInjectionStrategy ?? a.NoteInjectionStrategy,
+                    defaultsLayer.memory?.noteInjectionStrategy
+                ) ?? 'Relevant',
+            InjectExamples: effectiveInjectExamples,
+            MaxExamplesToInject: nearestOrDefault(
+                (a, cfg) => cfg?.memory?.maxExamplesToInject ?? a.MaxExamplesToInject,
+                defaultsLayer.memory?.maxExamplesToInject
+            ),
+            ExampleInjectionStrategy:
+                nearestOrDefault(
+                    (a, cfg) => cfg?.memory?.exampleInjectionStrategy ?? a.ExampleInjectionStrategy,
+                    defaultsLayer.memory?.exampleInjectionStrategy
+                ) ?? 'Semantic',
+            NoteRetentionDays: nearestOrDefault(
+                (a, cfg) => cfg?.memory?.noteRetentionDays ?? a.NoteRetentionDays,
+                defaultsLayer.memory?.noteRetentionDays
+            ),
+            ExampleRetentionDays: nearestOrDefault(
+                (a, cfg) => cfg?.memory?.exampleRetentionDays ?? a.ExampleRetentionDays,
+                defaultsLayer.memory?.exampleRetentionDays
+            ),
+            AutoArchiveEnabled: effectiveAutoArchive,
+            ExecutionMode:
+                nearestOrDefault(
+                    (a, cfg) => cfg?.subAgentExecution?.mode ?? a.ExecutionMode,
+                    defaultsLayer.subAgentExecution?.mode
+                ) ?? 'Sequential',
+            MinExecutionsPerRun: nearestOrDefault(
+                (a, cfg) => cfg?.subAgentExecution?.minExecutionsPerRun ?? a.MinExecutionsPerRun,
+                defaultsLayer.subAgentExecution?.minExecutionsPerRun
+            ),
+            MaxExecutionsPerRun: effectiveMaxExecutionsPerRun,
+            MaxSubAgentConsultRounds: effectiveMaxSubAgentConsultRounds,
+            MessageMode:
+                nearestOrDefault(
+                    (a, cfg) => cfg?.attachments?.messageMode ?? a.MessageMode,
+                    defaultsLayer.attachments?.messageMode
+                ) ?? 'All',
+            MaxMessages: nearestOrDefault(
+                (a, cfg) => cfg?.attachments?.maxMessages ?? a.MaxMessages,
+                defaultsLayer.attachments?.maxMessages
+            ),
+            AttachmentRootPath: nearestOrDefault(
+                (a, cfg) => cfg?.attachments?.rootPath ?? a.AttachmentRootPath,
+                defaultsLayer.attachments?.rootPath
+            ),
+            InlineStorageThresholdBytes: nearestOrDefault(
+                (a, cfg) => cfg?.attachments?.inlineStorageThresholdBytes ?? a.InlineStorageThresholdBytes,
+                defaultsLayer.attachments?.inlineStorageThresholdBytes
+            ),
+            AcceptUnregisteredFiles: effectiveAcceptUnregisteredFiles,
+            AllowEphemeralClientTools: effectiveAllowEphemeralClientTools,
+            RecordingDefault: nearestOrDefault(
+                (a, cfg) => cfg?.recording?.defaultMode ?? a.RecordingDefault,
+                defaultsLayer.recording?.defaultMode
+            ),
+            LogoURL: nearestNonNull((a) => a.LogoURL),
+            IconClass: nearestNonNull((a) => a.IconClass),
             TypeConfiguration: mergedTypeConfig && Object.keys(mergedTypeConfig).length > 0
                 ? JSON.stringify(mergedTypeConfig)
                 : null,
             AgentTypePromptParams: mergedPromptParams && Object.keys(mergedPromptParams).length > 0
                 ? JSON.stringify(mergedPromptParams)
                 : null,
+            Configuration: mergedConfiguration,
+            HelperPlugins: helperPlugins,
         };
     }
 

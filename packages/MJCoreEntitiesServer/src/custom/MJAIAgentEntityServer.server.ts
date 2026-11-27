@@ -18,6 +18,8 @@ import {
     MJAIAgentEntityExtended,
     ParseAgentHelperPlugins,
     ParseAgentInstantiationConfig,
+    SyncAgentLegacyColumnsAndConfiguration,
+    type LegacyAIAgentConfigColumns,
 } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { ValidateJsonAgainstSchemaLite } from './json-schema-lite';
@@ -467,6 +469,9 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             }
         }
 
+        // Bidirectional v6.x sync between AIAgent.Configuration JSON and deprecated legacy columns
+        this.syncConfigurationWithLegacyColumns(isCreate);
+
         const saved = await super.Save(options);
         if (!saved) {
             return false;
@@ -510,7 +515,9 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         // 1. BaseAgentID inheritance, helperPlugins & non-admin sandbox checks
         const user = this.ContextCurrentUser;
         const isAdmin = IsAgentAdminOrOwnerUser(user);
-        const hasDeclaredHelperPlugins = ParseAgentHelperPlugins(this.TypeConfiguration).length > 0;
+        const hasDeclaredHelperPlugins =
+            ParseAgentHelperPlugins(this.Configuration).length > 0 ||
+            ParseAgentHelperPlugins(this.TypeConfiguration).length > 0;
         if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins) {
             const [allAgents, allPermissions] = await Promise.all([
                 this.loadAllAgentsForGuard(),
@@ -535,6 +542,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     MaxTokensPerRun: this.MaxTokensPerRun,
                     MaxTimePerRun: this.MaxTimePerRun,
                     MaxIterationsPerRun: this.MaxIterationsPerRun,
+                    Configuration: this.Configuration,
                     TypeConfiguration: this.TypeConfiguration,
                 },
                 User: user,
@@ -714,6 +722,95 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             this.ContextCurrentUser
         );
         return res.Success ? res.Results : [];
+    }
+
+    private syncConfigurationWithLegacyColumns(isCreate: boolean): void {
+        const legacyValues: LegacyAIAgentConfigColumns = {
+            ModelSelectionMode: this.ModelSelectionMode,
+            DefaultPromptEffortLevel: this.DefaultPromptEffortLevel,
+            ChatHandlingOption: this.ChatHandlingOption,
+            SupportsPlanMode: this.SupportsPlanMode,
+            RequirePlanMode: this.RequirePlanMode,
+            DeclareActionsAsNativeTools: this.DeclareActionsAsNativeTools,
+            EnableContextCompression: this.EnableContextCompression,
+            ContextCompressionMessageThreshold: this.ContextCompressionMessageThreshold,
+            ContextCompressionPromptID: this.ContextCompressionPromptID,
+            ContextCompressionMessageRetentionCount: this.ContextCompressionMessageRetentionCount,
+            ContextWindowMaxTokens: this.ContextWindowMaxTokens,
+            CompactionTriggerPercent: this.CompactionTriggerPercent,
+            CompactionTargetPercent: this.CompactionTargetPercent,
+            ConversationSummaryPromptID: this.ConversationSummaryPromptID,
+            InjectNotes: this.InjectNotes,
+            MaxNotesToInject: this.MaxNotesToInject,
+            NoteInjectionStrategy: this.NoteInjectionStrategy,
+            InjectExamples: this.InjectExamples,
+            MaxExamplesToInject: this.MaxExamplesToInject,
+            ExampleInjectionStrategy: this.ExampleInjectionStrategy,
+            NoteRetentionDays: this.NoteRetentionDays,
+            ExampleRetentionDays: this.ExampleRetentionDays,
+            AutoArchiveEnabled: this.AutoArchiveEnabled,
+            AllowMemoryWrite: this.AllowMemoryWrite,
+            RerankerConfiguration: this.RerankerConfiguration,
+            PayloadDownstreamPaths: this.PayloadDownstreamPaths,
+            PayloadUpstreamPaths: this.PayloadUpstreamPaths,
+            PayloadSelfReadPaths: this.PayloadSelfReadPaths,
+            PayloadSelfWritePaths: this.PayloadSelfWritePaths,
+            PayloadScope: this.PayloadScope,
+            StartingPayloadValidation: this.StartingPayloadValidation,
+            StartingPayloadValidationMode: this.StartingPayloadValidationMode,
+            FinalPayloadValidation: this.FinalPayloadValidation,
+            FinalPayloadValidationMode: this.FinalPayloadValidationMode,
+            FinalPayloadValidationMaxRetries: this.FinalPayloadValidationMaxRetries,
+            ExecutionMode: this.ExecutionMode,
+            MinExecutionsPerRun: this.MinExecutionsPerRun,
+            MaxExecutionsPerRun: this.MaxExecutionsPerRun,
+            MaxSubAgentConsultRounds: this.MaxSubAgentConsultRounds,
+            MessageMode: this.MessageMode,
+            MaxMessages: this.MaxMessages,
+            AttachmentRootPath: this.AttachmentRootPath,
+            InlineStorageThresholdBytes: this.InlineStorageThresholdBytes,
+            AcceptUnregisteredFiles: this.AcceptUnregisteredFiles,
+            ArtifactCreationMode: this.ArtifactCreationMode,
+            DefaultArtifactTypeID: this.DefaultArtifactTypeID,
+            SearchScopeAccess: this.SearchScopeAccess,
+            ScopeConfig: this.ScopeConfig,
+            SkillActivationMode: this.SkillActivationMode,
+            AllowEphemeralClientTools: this.AllowEphemeralClientTools,
+            RecordingDefault: this.RecordingDefault,
+        };
+
+        const dirtyLegacyFields = new Set<keyof LegacyAIAgentConfigColumns>();
+        for (const key of Object.keys(legacyValues) as Array<keyof LegacyAIAgentConfigColumns>) {
+            if (this.GetFieldByName(key)?.Dirty === true) {
+                dirtyLegacyFields.add(key);
+            }
+        }
+
+        const configDirty = this.GetFieldByName('Configuration')?.Dirty === true;
+        const syncResult = SyncAgentLegacyColumnsAndConfiguration({
+            IsNewRecord: isCreate,
+            ConfigurationJson: this.Configuration,
+            ConfigurationDirty: configDirty,
+            LegacyValues: legacyValues,
+            DirtyLegacyFields: dirtyLegacyFields,
+        });
+
+        for (const [key, value] of Object.entries(syncResult.LegacyColumnUpdates)) {
+            if (value !== undefined) {
+                this.assignLegacyConfigField(key as keyof LegacyAIAgentConfigColumns, value);
+            }
+        }
+        if (syncResult.ShouldUpdateConfiguration) {
+            this.Configuration = syncResult.ConfigurationJson;
+        }
+    }
+
+    private assignLegacyConfigField<K extends keyof LegacyAIAgentConfigColumns>(
+        fieldName: K,
+        value: LegacyAIAgentConfigColumns[K]
+    ): void {
+        const target: LegacyAIAgentConfigColumns = this;
+        target[fieldName] = value;
     }
 
     private async loadTypeConfigSchema(): Promise<string | null> {

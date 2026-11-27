@@ -1267,7 +1267,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (99 classes)
+// @memberjunction/core-entities-server (100 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1281,6 +1281,7 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
@@ -2665,6 +2666,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
@@ -2700,11 +2702,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
-    MJEntityFieldPermissionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
@@ -2904,11 +2906,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ObjectExistsAction,
     OpenAgentChannelAction,
     PDFExtractorAction,
-    ParallelExecuteAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
@@ -3051,7 +3053,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1325;
+export const CLASS_REGISTRATIONS_COUNT = 1326;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

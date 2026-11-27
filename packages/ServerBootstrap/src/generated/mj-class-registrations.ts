@@ -1572,7 +1572,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (99 classes)
+// @memberjunction/core-entities-server (100 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
@@ -1586,6 +1586,7 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
@@ -3192,6 +3193,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
     MJAIBridgeProviderChannelEntityServer,
@@ -3290,11 +3292,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
-    PredictiveStudioMigratePreGateModelsServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PredictiveStudioMigratePreGateModelsServerOperation,
     PredictiveStudioModelDevAgent,
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
@@ -3494,11 +3496,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     OAuthFlowAction,
     ObjectExistsAction,
     OpenAgentChannelAction,
-    PDFExtractorAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -3628,7 +3630,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1511;
+export const CLASS_REGISTRATIONS_COUNT = 1512;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

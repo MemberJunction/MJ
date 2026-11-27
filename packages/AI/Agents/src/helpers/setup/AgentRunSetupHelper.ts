@@ -183,9 +183,23 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
 
             await ctx.Hooks.InheritBoundActionParams(params);
 
-            // Reset per-run helper resolution cache so global @RegisterClass and per-agent helperPlugins take effect cleanly.
+            // Reset per-run helper resolution cache so global @RegisterClass and per-agent helperPlugins
+            // (resolved through the 3-table Agent -> BaseAgent -> Category -> AgentType cascade) take effect cleanly.
+            let cascadedHelperPlugins: AgentHelperPluginEntry[] = [];
+            try {
+                if (params.agent && typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                    cascadedHelperPlugins = AIEngine.Instance.ResolveEffectiveAgentProperties(params.agent).HelperPlugins ?? [];
+                }
+            } catch {
+                cascadedHelperPlugins = [];
+            }
             const agentHelperPlugins: AgentHelperPluginEntry[] = [
-                ...ParseAgentHelperPlugins(params.agent?.TypeConfiguration),
+                ...(cascadedHelperPlugins.length > 0
+                    ? cascadedHelperPlugins
+                    : [
+                          ...ParseAgentHelperPlugins(params.agent?.Configuration),
+                          ...ParseAgentHelperPlugins(params.agent?.TypeConfiguration),
+                      ]),
                 ...(params.helperPlugins ?? []),
             ];
             ctx.HelperCache.ResetForRun(agentHelperPlugins.length > 0 ? agentHelperPlugins : undefined);

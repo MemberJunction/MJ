@@ -1307,6 +1307,19 @@ export class MJAIAgentCategoryEntity extends BaseEntity<MJAIAgentCategoryEntityT
     }
 
     /**
+    * * Field Name: DefaultConfiguration
+    * * Display Name: Default Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Default typed JSON configuration bag (IAgentConfiguration) inherited by agents in this category and child categories (walks ParentID tree). Narrow-only security invariants cannot be loosened by category defaults.
+    */
+    get DefaultConfiguration(): string | null {
+        return this.Get('DefaultConfiguration');
+    }
+    set DefaultConfiguration(value: string | null) {
+        this.Set('DefaultConfiguration', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(200)
@@ -12522,6 +12535,19 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
     }
 
     /**
+    * * Field Name: DefaultAgentConfiguration
+    * * Display Name: Default Agent Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Default typed JSON configuration bag (IAgentConfiguration) providing agent-type-level defaults (such as contextWindow settings) inherited by agents of this type beneath category and agent overrides. Distinct from DefaultConfiguration, which seeds type-specific TypeConfiguration.
+    */
+    get DefaultAgentConfiguration(): string | null {
+        return this.Get('DefaultAgentConfiguration');
+    }
+    set DefaultAgentConfiguration(value: string | null) {
+        this.Set('DefaultAgentConfiguration', value);
+    }
+
+    /**
     * * Field Name: SystemPrompt
     * * Display Name: System Prompt
     * * SQL Data Type: nvarchar(255)
@@ -14762,6 +14788,19 @@ if this limit is exceeded.
     }
     set IsPrimaryInstance(value: boolean) {
         this.Set('IsPrimaryInstance', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Unified typed JSON configuration bag (IAgentConfiguration) consolidating operational agent settings across execution, contextWindow, memory, payload, subAgentExecution, attachments, artifacts, scope, skills, clientTools, recording, helperPlugins, instantiation, and promptDefaults. Cascades across Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 
     /**

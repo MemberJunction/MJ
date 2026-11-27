@@ -268,6 +268,11 @@ export const MJAIAgentCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
         * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`),
+    DefaultConfiguration: z.string().nullable().describe(`
+        * * Field Name: DefaultConfiguration
+        * * Display Name: Default Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default typed JSON configuration bag (IAgentConfiguration) inherited by agents in this category and child categories (walks ParentID tree). Narrow-only security invariants cannot be loosened by category defaults.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -4364,6 +4369,11 @@ export const MJAIAgentTypeSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
         * * Description: Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.`),
+    DefaultAgentConfiguration: z.string().nullable().describe(`
+        * * Field Name: DefaultAgentConfiguration
+        * * Display Name: Default Agent Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Default typed JSON configuration bag (IAgentConfiguration) providing agent-type-level defaults (such as contextWindow settings) inherited by agents of this type beneath category and agent overrides. Distinct from DefaultConfiguration, which seeds type-specific TypeConfiguration.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -5164,6 +5174,11 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection).`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Unified typed JSON configuration bag (IAgentConfiguration) consolidating operational agent settings across execution, contextWindow, memory, payload, subAgentExecution, attachments, artifacts, scope, skills, clientTools, recording, helperPlugins, instantiation, and promptDefaults. Cascades across Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent

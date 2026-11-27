@@ -675,6 +675,9 @@ export class MJAIAgentCategory_ {
     @MaxLength(36)
     DefaultStorageAccountID?: string;
         
+    @Field({nullable: true, description: "Default typed JSON configuration bag (IAgentConfiguration) inherited by agents in this category and child categories (walks ParentID tree). Narrow-only security invariants cannot be loosened by category defaults."}) 
+    DefaultConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -730,6 +733,9 @@ export class CreateMJAIAgentCategoryInput {
     @Field({ nullable: true })
     DefaultStorageAccountID: string | null;
 
+    @Field({ nullable: true })
+    DefaultConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -760,6 +766,9 @@ export class UpdateMJAIAgentCategoryInput {
 
     @Field({ nullable: true })
     DefaultStorageAccountID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -10100,6 +10109,9 @@ export class MJAIAgentType_ {
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
         
+    @Field({nullable: true, description: "Default typed JSON configuration bag (IAgentConfiguration) providing agent-type-level defaults (such as contextWindow settings) inherited by agents of this type beneath category and agent overrides. Distinct from DefaultConfiguration, which seeds type-specific TypeConfiguration."}) 
+    DefaultAgentConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     SystemPrompt?: string;
@@ -10192,6 +10204,9 @@ export class CreateMJAIAgentTypeInput {
     @Field({ nullable: true })
     ConversationSummaryPromptID: string | null;
 
+    @Field({ nullable: true })
+    DefaultAgentConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -10267,6 +10282,9 @@ export class UpdateMJAIAgentTypeInput {
 
     @Field({ nullable: true })
     ConversationSummaryPromptID?: string | null;
+
+    @Field({ nullable: true })
+    DefaultAgentConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -11009,6 +11027,9 @@ export class MJAIAgent_ {
     @Field(() => Boolean, {nullable: true, description: "When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection)."}) 
     IsPrimaryInstance?: boolean;
         
+    @Field({nullable: true, description: "Unified typed JSON configuration bag (IAgentConfiguration) consolidating operational agent settings across execution, contextWindow, memory, payload, subAgentExecution, attachments, artifacts, scope, skills, clientTools, recording, helperPlugins, instantiation, and promptDefaults. Cascades across Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default."}) 
+    Configuration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -11358,6 +11379,9 @@ export class CreateMJAIAgentInput {
     @Field(() => Boolean, { nullable: true })
     IsPrimaryInstance?: boolean;
 
+    @Field({ nullable: true })
+    Configuration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -11622,6 +11646,9 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     IsPrimaryInstance?: boolean;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
