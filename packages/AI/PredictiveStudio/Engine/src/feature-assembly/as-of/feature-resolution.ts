@@ -5,10 +5,12 @@
  * metadata (AllowUpdateAPI = false → immutable-field, else record-changes; a `__mj_` system column and a virtual
  * field — a value the entity's view joins from a related record — are always record-changes, and the assembler reads a
  * virtual field only for rows decided on or after its own day), its encoding from the field type unless declared, and
- * every column gets an imputer with a missing indicator. Preprocessing steps must target a produced column. Steps with
- * no as-of semantics are refused.
+ * every column gets an imputer with a missing indicator. Preprocessing steps must target a produced column. An
+ * `llm-derived` or `model-prediction` step becomes `feature-value` columns carrying the pin resolved for it at train time
+ * ({@link FeaturePinResolver}); with no pin it is refused (`unpinned-feature-version`). Steps with no as-of semantics,
+ * and a stored step of a kind this build does not know, are refused.
  */
-import type { AssemblyRefusal, ColumnEncoding, ColumnEncodingKind, FeatureColumnSpec, FeatureStep, FeatureStepGraph, MissingValuePolicy, PredictionUnitSpec, PreprocessingOp, ProtocolExclusions } from '@memberjunction/predictive-studio-core';
+import type { AssemblyRefusal, ColumnEncoding, ColumnEncodingKind, FeatureColumnSpec, FeatureStep, FeatureStepBase, FeatureStepGraph, FeatureValuePin, MissingValuePolicy, PredictionUnitSpec, PreprocessingOp, ProtocolExclusions } from '@memberjunction/predictive-studio-core';
 import { NormalizeName, PredictionUnit } from '@memberjunction/predictive-studio-core';
 import type { AssemblyEntityInfo, AssemblyFieldInfo, IAssemblyMetadata } from '../assembly-metadata';
 import { AssemblyRefused } from './refusal';
@@ -17,6 +19,9 @@ import { AssemblyRefused } from './refusal';
 export type FeatureResolution =
   | { readonly Status: 'resolved'; readonly Columns: readonly FeatureColumnSpec[]; readonly ExplicitOps: readonly PreprocessingOp[] }
   | { readonly Status: 'refused'; readonly Refusal: AssemblyRefusal };
+
+/** The pins resolved at train time for a pipeline's Feature Value steps, by step `Id`. */
+export type FeaturePinsByStep = ReadonlyMap<string, FeatureValuePin>;
 
 /** The most distinct categories a categorical column one-hot encodes. */
 export const CATEGORICAL_CARDINALITY_CAP = 50;
@@ -37,20 +42,25 @@ export class FeatureResolver {
     protected readonly RowEntity: AssemblyEntityInfo,
     protected readonly Metadata: IAssemblyMetadata,
     exclusions: ProtocolExclusions,
+    protected readonly Pins: FeaturePinsByStep,
   ) {
     this.deny = new Set(exclusions.denyFields.map(NormalizeName));
     this.denySources = new Set(exclusions.denySources.map(NormalizeName));
   }
 
-  /** Resolves every step in order; the first refusal ends resolution (no partial column list). */
+  /**
+   * Resolves every step in order; the first refusal ends resolution (no partial column list). `pins` holds the pin
+   * resolved at train time for each Feature Value step, by step id (none: every such step is refused unpinned).
+   */
   public static ResolveFeatureColumns(
     graph: FeatureStepGraph,
     unit: PredictionUnitSpec,
     rowEntity: AssemblyEntityInfo,
     metadata: IAssemblyMetadata,
     exclusions: ProtocolExclusions,
+    pins: FeaturePinsByStep = new Map(),
   ): FeatureResolution {
-    const resolver = new FeatureResolver(unit, rowEntity, metadata, exclusions);
+    const resolver = new FeatureResolver(unit, rowEntity, metadata, exclusions, pins);
     try {
       for (const step of graph.Steps) resolver.ResolveStep(step);
     } catch (e) {
@@ -62,13 +72,7 @@ export class FeatureResolver {
 
   /** The encoding a column gets: the declared one, else from the field type (no variant maps a date, ID or string to 0). */
   public static EncodingFor(field: AssemblyFieldInfo, declared: ColumnEncodingKind | undefined): ColumnEncoding {
-    switch (declared) {
-      case 'numeric': return { kind: 'numeric', nonNumericValue: 'fail' };
-      case 'categorical': return { kind: 'categorical', cardinalityCap: CATEGORICAL_CARDINALITY_CAP, method: 'onehot' };
-      case 'date-parts': return { kind: 'date-parts', parts: ['days-since-decision'] };
-      case 'boolean': return { kind: 'boolean' };
-      case 'identifier': return { kind: 'identifier', policy: 'exclude' };
-    }
+    if (declared) return FeatureResolver.DeclaredEncoding(declared);
     if (field.IsPrimaryKey) return { kind: 'identifier', policy: 'exclude' };
     switch (field.TSType) {
       case 'number': return { kind: 'numeric', nonNumericValue: 'fail' };
@@ -101,8 +105,8 @@ export class FeatureResolver {
       case 'select': return this.ResolveSelect(step);
       case 'windowed-aggregate': return this.ResolveWindowedAggregate(step);
       case 'series': return this.ResolveSeries(step);
-      case 'llm-derived':
-        throw new AssemblyRefused({ kind: 'unpinned-feature-version', featureName: (step.Columns || [])[0] || step.Id });
+      case 'llm-derived': return this.ResolveLLMDerived(step);
+      case 'model-prediction': return this.ResolveModelPrediction(step);
       case 'embedding':
       case 'flow-agent':
       case 'vision-llm':
@@ -132,6 +136,51 @@ export class FeatureResolver {
         this.requireColumn(step.Column);
         this.ops.push({ op: 'bin', col: step.Column, bins: step.Bins });
         return;
+      default: {
+        // A stored step of a kind this build does not know (D5-B2-2): refused by name, never skipped.
+        const stored: FeatureStepBase = step;
+        throw new AssemblyRefused({ kind: 'unsupported-step-kind', stepId: stored.Id, stepKind: String(stored.Kind) });
+      }
+    }
+  }
+
+  /**
+   * `llm-derived`: one `feature-value` column per persisted column, read from the Feature Pipeline version pinned for
+   * the step; a deny-listed column is skipped. Encoding is declared per column, else categorical.
+   */
+  protected ResolveLLMDerived(step: Extract<FeatureStep, { Kind: 'llm-derived' }>): void {
+    const columns = (step.Columns || []).filter((col) => !this.isDenied(col));
+    if (columns.length === 0) return;
+    const pin = this.pinFor(step.Id, columns[0]);
+    for (const col of columns) this.addFeatureValue(col, pin, step.Encodings?.[col] || 'categorical');
+  }
+
+  /** `model-prediction`: one `feature-value` column reading the binding's predictions of the pinned model; numeric unless declared. */
+  protected ResolveModelPrediction(step: Extract<FeatureStep, { Kind: 'model-prediction' }>): void {
+    if (this.isDenied(step.FeatureName)) return;
+    this.addFeatureValue(step.FeatureName, this.pinFor(step.Id, step.FeatureName), step.Encoding || 'numeric');
+  }
+
+  /** The pin resolved for a step; a step without one is refused, naming its (first) feature. */
+  private pinFor(stepId: string, featureName: string): FeatureValuePin {
+    const pin = this.Pins.get(stepId);
+    if (!pin) throw new AssemblyRefused({ kind: 'unpinned-feature-version', featureName });
+    return pin;
+  }
+
+  private addFeatureValue(featureName: string, pin: FeatureValuePin, declared: ColumnEncodingKind): void {
+    const encoding = FeatureResolver.DeclaredEncoding(declared);
+    this.add({ name: featureName, source: { kind: 'feature-value', featureName, pin }, encoding, missing: FeatureResolver.DefaultMissing(encoding) });
+  }
+
+  /** The encoding of a declared kind, for a column with no field metadata to type it from (a Feature Value). */
+  public static DeclaredEncoding(kind: ColumnEncodingKind): ColumnEncoding {
+    switch (kind) {
+      case 'numeric': return { kind: 'numeric', nonNumericValue: 'fail' };
+      case 'categorical': return { kind: 'categorical', cardinalityCap: CATEGORICAL_CARDINALITY_CAP, method: 'onehot' };
+      case 'date-parts': return { kind: 'date-parts', parts: ['days-since-decision'] };
+      case 'boolean': return { kind: 'boolean' };
+      case 'identifier': return { kind: 'identifier', policy: 'exclude' };
     }
   }
 

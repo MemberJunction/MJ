@@ -12,7 +12,9 @@ import {
   type ColumnEncoding,
   type DatedSource,
   type FeatureColumnSpec,
+  type FeatureValuePin,
   type FeatureVersionPin,
+  type PredictionFeaturePin,
   type JsonObject,
   type JsonValue,
   type MissingValuePolicy,
@@ -179,8 +181,20 @@ export class UnitModelLineageParser {
     return pin.Ok === false ? pin : UnitModelLineageParser.ok({ kind: 'feature-value', featureName, pin: pin.Value });
   }
 
-  private static pin(v: JsonValue | undefined, path: string): Checked<FeatureVersionPin> {
+  /** A stored pin: a prediction pin when it names a scoring binding (D5-15), else a Feature Pipeline version pin. */
+  private static pin(v: JsonValue | undefined, path: string): Checked<FeatureValuePin> {
     if (!JsonParse.IsJsonObject(v)) return UnitModelLineageParser.fail(path, 'is not an object or null');
+    return 'mlModelScoringBindingId' in v ? UnitModelLineageParser.predictionPin(v, path) : UnitModelLineageParser.pipelinePin(v, path);
+  }
+
+  private static predictionPin(v: JsonObject, path: string): Checked<PredictionFeaturePin> {
+    const bindingId = JsonParse.JsonString(v, 'mlModelScoringBindingId');
+    const modelId = JsonParse.JsonString(v, 'mlModelId');
+    if (bindingId === null || modelId === null) return UnitModelLineageParser.fail(path, 'needs mlModelScoringBindingId and mlModelId (each a non-empty string)');
+    return UnitModelLineageParser.ok({ mlModelScoringBindingId: bindingId, mlModelId: modelId });
+  }
+
+  private static pipelinePin(v: JsonObject, path: string): Checked<FeatureVersionPin> {
     const processId = JsonParse.JsonString(v, 'featurePipelineRecordProcessId');
     const pipelineVersion = UnitModelLineageParser.nullableNumber(v, 'pipelineVersion');
     const promptVersionHash = UnitModelLineageParser.nullableString(v, 'promptVersionHash');

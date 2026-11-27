@@ -64,6 +64,8 @@ export type AssemblyRefusal =
   | { readonly kind: 'non-numeric-in-numeric-column'; readonly column: string; readonly sampleValue: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'future-period-lag'; readonly column: string; readonly lag: number; readonly horizonPeriods: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unpinned-feature-version'; readonly featureName: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** A Feature Value (pipeline, Human or prediction) has no value in effect at some rows' decision dates (D5-9): the value before it is not known. */
+  | { readonly kind: 'decision-date-before-feature-history'; readonly featureName: string; readonly rowsAffected: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'incumbent-score-missing'; readonly entity: string; readonly rows: number; readonly firstRowIds: readonly string[] }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name

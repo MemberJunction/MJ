@@ -22,6 +22,32 @@ export interface FeatureVersionPin {
   readonly parametersHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
 }
 
+/**
+ * The prediction a model input reads (D-058, D5-15): a scoring binding's prediction feature, as scored by one model of
+ * the binding's pipeline. A retrain publishes a new model, so the pin names the model, not only the binding.
+ */
+export interface PredictionFeaturePin {
+  readonly mlModelScoringBindingId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+  readonly mlModelId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+}
+
+/** What a feature-value source is pinned to: a Feature Pipeline version, or a model's predictions (D5-15). */
+export type FeatureValuePin = FeatureVersionPin | PredictionFeaturePin;
+
+/** Decisions about a {@link FeatureValuePin}: which kind it is, and the version string provenance records for it. */
+export class FeatureValuePins {
+  /** True when the pin names a scoring binding's predictions rather than a Feature Pipeline version. */
+  public static IsPrediction(pin: FeatureValuePin): pin is PredictionFeaturePin {
+    return 'mlModelScoringBindingId' in pin;
+  }
+
+  /** `<binding>@<model>` for a prediction pin, `<record process>@<version or prompt hash>` for a pipeline pin. */
+  public static VersionOf(pin: FeatureValuePin): string {
+    if (FeatureValuePins.IsPrediction(pin)) return `${pin.mlModelScoringBindingId}@${pin.mlModelId}`;
+    return `${pin.featurePipelineRecordProcessId}@${pin.pipelineVersion !== null ? pin.pipelineVersion : pin.promptVersionHash}`;
+  }
+}
+
 /** A feature aggregated over a dated child table as of each row's decision day. */
 export interface WindowedAggregateSource {
   readonly kind: 'windowed-aggregate';  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
@@ -45,7 +71,7 @@ export interface WindowedAggregateSource {
 export type DatedSource =
   | { readonly kind: 'record-changes'; readonly entity: string; readonly field: string; readonly keyField: string | null }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'immutable-field'; readonly entity: string; readonly field: string; readonly keyField: string | null }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
-  | { readonly kind: 'feature-value'; readonly featureName: string; readonly pin: FeatureVersionPin | null }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  | { readonly kind: 'feature-value'; readonly featureName: string; readonly pin: FeatureValuePin | null }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | WindowedAggregateSource
   | { readonly kind: 'series'; readonly feature: { readonly kind: 'lag'; readonly index: number } | { readonly kind: 'rolling'; readonly index: number } };  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
 
@@ -96,6 +122,8 @@ export type AssemblyRefusal =
   | { readonly kind: 'non-numeric-in-numeric-column'; readonly column: string; readonly sampleValue: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'future-period-lag'; readonly column: string; readonly lag: number; readonly horizonPeriods: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unpinned-feature-version'; readonly featureName: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+  /** A Feature Value (pipeline, Human or prediction) has no value in effect at some rows' decision dates (D5-9): the value before it is not known. */
+  | { readonly kind: 'decision-date-before-feature-history'; readonly featureName: string; readonly rowsAffected: number }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'scope-entity-mismatch'; readonly modelEntity: string; readonly scopeEntity: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   | { readonly kind: 'unresolved-column'; readonly entity: string; readonly field: string }  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
   /** The unit's incumbent rule has no value on some rows (a column it reads is missing there); `firstRowIds` holds at most 5 ids in row order. */

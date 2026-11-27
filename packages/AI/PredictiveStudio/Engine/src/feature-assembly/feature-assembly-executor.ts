@@ -15,8 +15,10 @@
  * the preprocessing recipe** for the Python sidecar to *fit then apply*. It does
  * **not** fit impute/standardize/onehot/bin itself:
  *
- * - **Data-assembly step kinds** (`select`, `embedding`, `llm-derived`,
- *   `flow-agent`) → produce raw column values in the matrix.
+ * - **Data-assembly step kinds** (`select`, `embedding`, `flow-agent`,
+ *   `vision-llm`) → produce raw column values in the matrix. Feature Value steps
+ *   (`llm-derived`, `model-prediction`) are refused here (`unpinned-feature-version`):
+ *   only the as-of assembly reads them, pinned and as of each decision date.
  * - **Preprocessing step kinds** (`impute`, `standardize`, `onehot`, `bin`) →
  *   translate into ordered {@link PreprocessingOp}[] returned for the sidecar;
  *   they do NOT transform values in TS.
@@ -42,7 +44,7 @@ import type {
   MatrixData,
   FeatureKind,
 } from '@memberjunction/predictive-studio-core';
-import { LogStatus, type UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 import type { AIPromptParams } from '@memberjunction/ai-core-plus';
 import type { VisionLLMFeatureStep } from '@memberjunction/predictive-studio-core';
@@ -52,6 +54,7 @@ import { ReadCapExceededError } from './read-cap-error';
 import { type DatedRow, ResolveAsOfDate, DaysSinceLastActivityAsOf, ActivityCountAsOf } from './as-of';
 import { LeakageGuardEnforcer } from './leakage-guard';
 import { VisionFeatureExtractor, type IVisionPromptRunner } from './vision-llm';
+import { AssemblyRefused } from './as-of/refusal';
 
 /**
  * The assembly input lacks required feature columns. The model was trained on them but they were not available — at
@@ -277,7 +280,7 @@ export class FeatureAssemblyExecutor {
   /**
    * The RAW columns that must be present on every record because the matrix reads them
    * directly off the row (the `select`-emitter source columns — which also cover the
-   * `llm-derived` / `flow-agent` persisted-attribute reads — plus the train-time target
+   * `flow-agent` persisted-attribute reads — plus the train-time target
    * variable). Embedding / as-of / vision values are fetched or computed, not row-read, so
    * they are deliberately excluded.
    */
@@ -393,11 +396,16 @@ export class FeatureAssemblyExecutor {
       switch (step.Kind) {
         case 'select':
         case 'embedding':
-        case 'llm-derived':
         case 'flow-agent':
         case 'vision-llm':
           dataSteps.push(step);
           break;
+        // A Feature Value is read only as of each row's decision date, from its pinned version (B2, F-FP-11): this
+        // executor has neither, and selecting the persisted column off the row would be today's value. Refused typed.
+        case 'llm-derived':
+          throw new AssemblyRefused({ kind: 'unpinned-feature-version', featureName: (step.Columns || [])[0] || step.Id });
+        case 'model-prediction':
+          throw new AssemblyRefused({ kind: 'unpinned-feature-version', featureName: step.FeatureName });
         case 'impute':
         case 'standardize':
         case 'onehot':
@@ -478,11 +486,6 @@ export class FeatureAssemblyExecutor {
         case 'embedding':
           this.planEmbeddingColumns(step, guard, schema, emitters, plannedCols);
           break;
-        case 'llm-derived':
-          // §5.3/§6.5: read the PERSISTED, version-pinned attribute — never recompute inline.
-          // Explicit output columns populated by the upstream Feature Pipeline write-back.
-          this.planLLMDerivedColumns(step, guard, schema, emitters, plannedCols);
-          break;
         case 'flow-agent':
           // INTEGRATION SEAM (§5.4): resolve from a persisted attribute when present;
           // otherwise leave a clearly-commented per-record agent-invocation point.
@@ -560,35 +563,6 @@ export class FeatureAssemblyExecutor {
         embeddingDim: i,
         embeddingTotalDims: step.Dims,
       });
-    }
-  }
-
-  /** Plan an llm-derived column read from a persisted, version-pinned attribute. */
-  private planLLMDerivedColumns(
-    step: Extract<FeatureStep, { Kind: 'llm-derived' }>,
-    guard: LeakageGuardEnforcer,
-    schema: FeatureSchemaEntry[],
-    emitters: ColumnEmitter[],
-    plannedCols: Set<string>,
-  ): void {
-    const cols = step.Columns && step.Columns.length > 0 ? step.Columns : [];
-    if (cols.length === 0) {
-      LogStatus(
-        `Feature step ${step.Id} (llm-derived) has no Columns configured; skipping column emission.`
-      );
-      return;
-    }
-    for (const col of cols) {
-      if (!guard.IsFieldAllowed(col)) {
-        continue;
-      }
-      if (plannedCols.has(col)) {
-        continue;
-      }
-      plannedCols.add(col);
-      schema.push({ Name: col, Kind: 'llm-derived' });
-      // Read the persisted attribute off the target row by its column name.
-      emitters.push({ column: col, kind: 'select', sourceColumn: col });
     }
   }
 

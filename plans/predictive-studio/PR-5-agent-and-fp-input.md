@@ -2607,6 +2607,14 @@ metadata/entities/JSONType-interfaces/IMLScoringRunJsonTypes.ts
 metadata-optional/integration-test/tests/gates/.gate-C1-C2.4.json
 metadata-optional/integration-test/test-suites/.ps-gates-feature-pipelines-suite.json
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c2-4.checks.ts
+packages/AI/PredictiveStudio/Core/src/feature-steps.ts
+packages/AI/PredictiveStudio/Core/src/registry-contracts.ts
+packages/AI/PredictiveStudio/Engine/src/registry/registry-entry.ts
+packages/AI/PredictiveStudio/Engine/src/training/training-engine.ts
+packages/AI/PredictiveStudio/Engine/src/operations/refusals.ts
+packages/Angular/Explorer/dashboards/src/PredictiveStudio/components/ps-pipelines.component.ts
+packages/AI/PredictiveStudio/Engine/src/__tests__/feature-assembly.test.ts
+packages/AI/PredictiveStudio/Engine/src/feature-assembly/as-of/__tests__/as-of-assembler.test.ts
 ```
 
 Hands at integration: its `$C/index.ts` export and its barrel/registry lines to A3.
@@ -3360,6 +3368,27 @@ Record every decision taken in §9 and, when it changes another plan's interface
   metadata, the sync write-back reverse-applied); `MJ_PS_PR5_claudeint` stays a pure PR 5 schema. A failure (b) cannot
   supply (missing generated classes, host CodeGen) is reported for a ruling on a fresh-clone workspace. · `mj dev
   workspace` over `~/repos` would link 14 MJ clones and replace the main checkout's own install (controller ruling).
+- D5-B2-1 · 2026-11-27 · B2's wave-2 ownership adds `Engine/src/training/training-engine.ts` (`AssembleForTraining`
+  resolves each pin through `FeaturePinResolver.Resolve` at train time and passes them to `FeatureResolver`),
+  `Core/src/registry-contracts.ts` and `Engine/src/registry/registry-entry.ts` (`PinnedFeatureVersions` widened to the
+  D5-15 union), and `Engine/src/operations/refusals.ts` (`decision-date-before-feature-history` →
+  `AS_OF_SOURCE_UNDATED`, as its change-history twin). · `ResolveFeatureColumns` is synchronous and its only caller is
+  `training-engine.ts`; the widened pin no longer compiles against the registry's `readonly FeatureVersionPin[]`. No
+  wave-2 milestone owns them (B3 owns two from wave 3) (controller ruling).
+- D5-B2-2 · 2026-11-27 · Do not overload llm-derived with a scoring-binding ID in FeaturePipelineRef. A field that
+  sometimes means a Record Process and sometimes a binding is exactly the untyped ambiguity the coding standards forbid.
+  Instead: add a typed step kind to `Core/src/feature-steps.ts` (added to B2's ownership), `model-prediction`, with its
+  own interface carrying `ScoringBindingID`; resolve it to a `PredictionFeaturePin` in `FeaturePinResolver`; handle it
+  wherever the `FeatureStepKind` union is switched on, by adding the case, and add a `default` that refuses an unknown
+  kind. An attack asserts that a model-prediction step whose binding has no serving model refuses typed (controller
+  ruling, overruling B2's proposal to reuse `FeaturePipelineRef`).
+- D5-B2-3 · 2026-11-27 · Caller maintenance of B2's own change (D-082, as D5-B1-3): `Engine/src/__tests__/feature-assembly.test.ts`
+  encoded the legacy executor's today's-value `select` of an `llm-derived` column (three cases); they are replaced by
+  attack 5's legacy half (refused `unpinned-feature-version`, an `llm-derived` and a `model-prediction` step).
+  `Engine/src/feature-assembly/as-of/__tests__/as-of-assembler.test.ts`'s two Feature Value fixtures gain the columns
+  the reader now selects (`Source`, `Role`, `EffectiveTo`, `InTraining`); their assertions are unchanged. Both join B2's
+  ownership block; no other wave-2 milestone owns them. · B2 replaces the behaviour the first asserted and widens the
+  read the second feeds (B2's ruling).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved

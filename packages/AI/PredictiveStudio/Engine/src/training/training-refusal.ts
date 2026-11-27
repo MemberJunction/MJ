@@ -38,6 +38,7 @@ export class TrainingRefusedError extends Error {
       case 'truncated-read': return `Refused (truncated-read): ${reason.entity} returned ${reason.rowsRead} of ${reason.rowsExpected} expected rows; a partial read is not a complete one.`;
       case 'non-numeric-in-numeric-column': return `Refused (non-numeric-in-numeric-column): column ${reason.column} is declared numeric but holds "${reason.sampleValue}"; no value is coerced to 0.`;
       case 'future-period-lag': return `Refused (future-period-lag): column ${reason.column} is read ${reason.lag} period(s) back, inside the ${reason.horizonPeriods}-period horizon.`;
+      case 'decision-date-before-feature-history': return `Refused (decision-date-before-feature-history): feature ${reason.featureName} has no value in effect at ${reason.rowsAffected} row(s)' decision dates, so its value then is not known; never today's value instead.`;
       case 'unpinned-feature-version': return `Refused (unpinned-feature-version): feature ${reason.featureName} has no pinned version, so its past values cannot be reproduced.`;
       case 'scope-entity-mismatch': return `Refused (scope-entity-mismatch): the model scores ${reason.modelEntity} records but the scope holds ${reason.scopeEntity} records.`;
       case 'unresolved-column': return `Refused (unresolved-column): ${reason.entity}.${reason.field} is not a field the pipeline can read.`;

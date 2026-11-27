@@ -159,6 +159,7 @@ describe('AsOfFeatureAssembler', () => {
     const fv = (ID: string, EffectiveAsOf: string | null, PipelineVersion: number, ValueNumeric: number): SourceRow => ({
       ID, EntityID: 'E-Y', FeatureName: 'Engagement', RecordProcessID: 'RP-1', RecordID: 'ID|y1', EffectiveAsOf: EffectiveAsOf === null ? null : new Date(EffectiveAsOf),
       ComputedAt: new Date('2024-08-01T00:00:00Z'), PipelineVersion, PromptVersionHash: null, AIModelID: null, ParametersHash: null, ValueNumeric, ValueText: null, ValueBoolean: null, ValueDate: null,
+      Source: 'Pipeline', Role: 'Champion', EffectiveTo: null, InTraining: null,
     });
     const data: Record<string, SourceRow[]> = {
       ...tables,
@@ -368,6 +369,7 @@ describe('AsOfFeatureAssembler stable values, scoring levels and pins', () => {
     const fv = (ID: string, PipelineVersion: number, ValueNumeric: number): SourceRow => ({
       ID, EntityID: 'E-Y', FeatureName: 'Engagement', RecordProcessID: 'RP-1', RecordID: 'ID|y1', EffectiveAsOf: new Date('2022-01-01T00:00:00Z'), ComputedAt: new Date('2022-01-02T00:00:00Z'),
       PipelineVersion, PromptVersionHash: null, AIModelID: null, ParametersHash: null, ValueNumeric, ValueText: null, ValueBoolean: null, ValueDate: null,
+      Source: 'Pipeline', Role: 'Champion', EffectiveTo: null, InTraining: null,
     });
     const data: Record<string, SourceRow[]> = { ...tables, 'MJ: Feature Values': [fv('fv-v0', 0, 5), fv('fv-v2', 2, 9)] };
     const out = await new AsOfFeatureAssembler().Assemble(input([engagement(0)], { Tables: data, Rows: [rows[0]] }));

@@ -80,6 +80,7 @@ export class PredictiveStudioRefusals {
       // The asOf input still has no effect; it is now refused by name instead of being ignored.
       case 'input-not-accepted': return reason.input === 'asOf' ? 'AS_OF_NO_EFFECT' : null;
       case 'decision-date-before-change-history':
+      case 'decision-date-before-feature-history':
       case 'select-changes-after-decision-date': return 'AS_OF_SOURCE_UNDATED';
       case 'protocol-required': return 'PROTOCOL_REQUIRED';
       case 'time-index-needs-time-holdout': return 'TIME_HOLDOUT_REQUIRED';

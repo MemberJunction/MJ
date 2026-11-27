@@ -87,6 +87,7 @@ const valuesOf = (out: Awaited<ReturnType<typeof assembled>>): Record<string, st
 describe('B2 attack 1 — G7.4: a planted dated job-title history is read as of each decision date', () => {
   it('reads the planted value at the decision date for 100% of rows and today\'s value for 0', async () => {
     // 40 people; each holds title A from 2022-01-01, title B from its change date; half decide before, half after the change.
+    // Version 2 of the pipeline holds each person's title today; the snapshot column must never carry it.
     const n = 40;
     const rows: AssemblyRowRef[] = [];
     const values: SourceRow[] = [];
@@ -96,6 +97,8 @@ describe('B2 attack 1 — G7.4: a planted dated job-title history is read as of 
       const change = `2023-0${1 + (i % 9)}-15T00:00:00Z`;
       values.push(fv({ ID: `${id}-a`, RecordID: id, Source: 'Pipeline', EffectiveAsOf: '2022-01-01T00:00:00Z', EffectiveTo: change, Value: `A${i}` }));
       values.push(fv({ ID: `${id}-b`, RecordID: id, Source: 'Pipeline', EffectiveAsOf: change, Value: `B${i}` }));
+      // Another version of the same pipeline, carrying today's title: the pin (version 3) must keep it out.
+      values.push(fv({ ID: `${id}-v2`, RecordID: id, Source: 'Pipeline', EffectiveAsOf: '2022-02-01T00:00:00Z', Value: `today ${id}`, PipelineVersion: 2 }));
       const before = i % 2 === 0;
       const decision = before ? '2022-12-31T00:00:00Z' : '2024-06-01T00:00:00Z';
       rows.push(row(id, decision));
@@ -139,6 +142,25 @@ describe('B2 attack 3 — a Human value in effect wins over an earlier pinned pi
     ];
     const out = await assembled(input([titleColumn(pipelinePin())], [row('p1', '2024-01-01T00:00:00Z')], { 'MJ: Feature Values': values }));
     expect(out.Rows[0].Values[0]).toBe('Manager');
+  });
+});
+
+describe('B2 attack 3 (closed rows) — a row closed before the decision day ends is not in effect', () => {
+  it('a Human value retired before the decision date gives way to the pipeline value in effect (B1 closes, never deletes)', async () => {
+    const values = [
+      fv({ ID: 'pipe', RecordID: 'p1', Source: 'Pipeline', EffectiveAsOf: '2023-01-01T00:00:00Z', Value: 'Analyst' }),
+      fv({ ID: 'human-retired', RecordID: 'p1', Source: 'Human', EffectiveAsOf: '2023-06-01T00:00:00Z', EffectiveTo: '2023-09-01T00:00:00Z', Value: 'Senior Analyst' }),
+    ];
+    const out = await assembled(input([titleColumn(pipelinePin())], [row('p1', '2024-01-01T00:00:00Z'), row('p1', '2023-07-01T00:00:00Z')], { 'MJ: Feature Values': values }));
+    expect(out.Rows.map((r) => r.Values[0])).toEqual(['Analyst', 'Senior Analyst']);
+  });
+  it('never reads a history-only row (written closed, EffectiveTo = EffectiveAsOf)', async () => {
+    const values = [
+      fv({ ID: 'pipe', RecordID: 'p1', Source: 'Pipeline', EffectiveAsOf: '2023-01-01T00:00:00Z', Value: 'Analyst' }),
+      fv({ ID: 'history-only', RecordID: 'p1', Source: 'Pipeline', EffectiveAsOf: '2023-06-01T00:00:00Z', EffectiveTo: '2023-06-01T00:00:00Z', Value: 'superseded decision' }),
+    ];
+    const out = await assembled(input([titleColumn(pipelinePin())], [row('p1', '2024-01-01T00:00:00Z')], { 'MJ: Feature Values': values }));
+    expect(out.Rows[0].Values[0]).toBe('Analyst');
   });
 });
 
