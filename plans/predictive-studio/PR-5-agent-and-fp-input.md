@@ -150,7 +150,10 @@ delete it when there was no DDL; restore any `sync` blocks written back into `me
   $0.0623 · 173,700 · 10 · 80 s; Experiment Designer $0.0636 · 165,160 · 10 · 25 s; Pipeline Builder: no LLM use in
   the baseline (0 prompt runs, 0 iterations, ≤ 0.03 s in its 15 invocations, every one a fast build failure), so the
   10× rule yields no usable cap — A2 sets it from its own first measured build. Track B spends LLM money only when it
-  re-derives Feature Values.
+  re-derives Feature Values. **A3 re-measured (2026-11-27, catalog in the prompts, 5 counted C1 renewal sessions up to
+  `present-plan`, no build, §11):** mean **$0.039482** per session, min $0.027498, max $0.053458 (35,139–90,308
+  tokens, 6–7 prompt runs, every one on Gemini 4 Hydrogen); the Data Scout prompt 27,035–28,391 input tokens (DD-2
+  budget 30,000), the Goal Analyst's 28,883.
 - **Ceiling (D5-12):** plan for ≤ $100 of LLM spend for the whole PR. Before every money-spending step, compute
   cumulative spend (query below) plus the step's projection (M0's measured per-run mean × runs). If it would pass $100:
   drop discretionary spend first (development spot checks, capped per wave); the required suite arms are never cut —
@@ -1831,7 +1834,7 @@ liveness read → attack 22 goes red; let `BuildAllowed` return true for a non-t
 
 #### A3 — Drafting tools, catalog and plan validation
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** The agent drafts Prediction Units and Evaluation Protocols only through two draft Actions that validate
 every name against the passed provider's metadata and refuse guard fields; the validated drafts live in the plan
@@ -3361,6 +3364,64 @@ Record every decision taken in §9 and, when it changes another plan's interface
   supply (missing generated classes, host CodeGen) is reported for a ruling on a fresh-clone workspace. · `mj dev
   workspace` over `~/repos` would link 14 MJ clones and replace the main checkout's own install (controller ruling).
 
+- D5-A3-1 · 2026-11-27 · The Goal Analyst's unit proposal is `TargetDefinition.Unit` (`UnitProposal`: grain entity,
+  label column, decision-date column and offset, label window and gap, censoring, group key, filters, task, decision; all
+  optional) and a protocol proposal is `TargetDefinition.Protocol` (unvalidated members), both inside the slice the Goal
+  Analyst already writes (`TargetDefinition.*`). The control path writes `UnitDraft`, `ProtocolDraft` and `DraftInputs`
+  (SHA-256 of each draft's inputs, not plan content) from the draft Actions' outputs; a draft whose inputs changed is
+  drafted again before the plan is presented. An absent member takes the legacy mapping's default (a fixed decision date
+  advancing each run, a 1-day window, the next-day censoring cutoff), so a plan with no proposal (G4.1's seeded plans)
+  still gets a validated draft that names its censoring rule. · The contract names the drafts but not the proposal that
+  feeds them; the Goal Analyst is the sub-agent the design gives the unit vocabulary. · A proposal slice of its own
+  (needs a new upstream path and a writer).
+- D5-A3-2 · 2026-11-27 · `DraftRefusal` gains `{ kind: 'draft-invalid'; problems }` for a draft whose names resolve but
+  that PR 3's unit parser, protocol parser or protocol rules refuse (an unknown protocol member, an empty development
+  set, a label window with no decision-date column). · The contract's four kinds cannot carry PR 3's refusals, and a
+  refusal must be typed, never message text. · Folding them into `unresolved-reference` (they name nothing missing).
+- D5-A3-3 · 2026-11-27 · `AgentControlFacts.Drafts` is optional: facts without it move through the draft stages without
+  a step and present a complete plan, as in A2. The orchestrator always reads it (`LoadDraftFacts`). · A2's
+  `control-path.test.ts` and `model-dev-orchestrator-agent.test.ts` (A2-owned, not in A3's ownership) build facts
+  without draft facts and pin A2's transitions; both stay green unchanged (14 agent test files, 288 passed). · Editing
+  A2's tests (outside A3's ownership).
+- D5-A3-4 · 2026-11-27 · A repair is a code Sub-Agent step: the refusal or the unresolved names, worded as the fix, go to
+  the sub-agent that owns the slice (`AgentControlPath.OwnerOf`: Data Scout for sources, features and leakage notes,
+  Experiment Designer for experiments, Goal Analyst for the target and the unit), with the catalog; after
+  `MAX_REPAIRS = 2` the session ends `decline-unresolved-reference` (or `decline-draft-refused`) listing the names. The
+  planning sub-agents may also be called by a prompt in the draft and validate states. · Runtime: with the repair handed
+  to the orchestrator prompt as a Retry reason, 3 of 5 sessions never presented (the prompt ignored the reason and
+  re-presented the plan as text: run `77DB967F…`, step 10 `Success`); with the code step 5 of 5 presented, two after a
+  repair to the Data Scout. · Repairs through the orchestrator prompt.
+- D5-A3-5 · 2026-11-27 · DD-2 measured: `CatalogRenderer.TOKEN_BUDGET = 12,000` (estimated at 4 characters per token),
+  descriptions 60 characters, shortened to 40, 20, then names only until the catalog fits; fields for the entities
+  within two foreign-key hops of the target. The first measured Data Scout prompt (60-character descriptions, 537
+  entities, catalog 57,721 characters) took 30,116 input tokens (5,540 + 24,576 cached), over the 30,000 budget; at
+  12,000 the five counted sessions' Data Scout prompts took 27,035–28,391. The Goal Analyst gets the entity list only
+  (28,883 tokens). · DD-2's default (≤ 30,000 tokens on a fresh database with the loaded worlds), measured. · A larger
+  budget (over 30,000).
+- D5-A3-6 · 2026-11-27 · `PlanMetadataValidator.Validate(plan, provider)` stays metadata-only (entities, fields, queries,
+  the unit draft's columns, qualified `Entity.Field` leakage notes); Feature Pipeline sources are `MJ: Record Processes`
+  rows, resolved by `PlanMetadataValidator.ValidateFeaturePipelines(plan, provider, user)` in the same validate-plan
+  step. Vector Set sources and algorithm names have no `UnresolvedReference` kind and are not checked here (the builder
+  refuses an unknown algorithm before any row). Runtime: a qualified leakage field (`PS Truth: W1_Person.Status`) was
+  first reported unresolved and declined a valid plan; it now resolves. · The contract's signature is synchronous over
+  metadata; a pipeline is a row. · An async `Validate`.
+- D5-A3-7 · 2026-11-27 · The Goal Analyst and Data Scout output examples use catalog placeholders (`<entity name from the
+  catalog>`) instead of `Members`, `TenureMonths`, `PlanTier`, `LapsedWithin90Days`. · Those are the assessment's
+  invented names (F-PIT-8): the agent copied them from the examples. · Keeping concrete example names.
+- D5-A3-8 · 2026-11-27 · The Pipeline Builder records a drafted unit's version 1 as `{ kind: 'system', component:
+  'pipeline-builder' }` (the author its protocol already carries) and resets the pipeline's `AsOfStrategy` to none when
+  the unit is decided on a column (the unit carries the decision date, as the migration does); its upstream paths narrow
+  from `*` to the build result and report slices. · D5-25 and attack 5 (no sub-agent writes the drafts). · An agent
+  author (the build runs after a person approved the plan).
+- D5-A3-9 · 2026-11-27 · Attack 2's grain-entity case expects the decision-date column as a third unresolved reference
+  (a column of an entity that does not exist does not resolve), and attack 5's forged slices include `DraftInputs`. ·
+  Both tighten the attack; found when the implementation reported them. · Not reporting columns of a missing entity.
+- D5-A3-10 · 2026-11-27 · A label window with no decision-date column is refused (`draft-invalid`, worded as the fix) and
+  the Goal Analyst template says a window needs a `DecisionDateColumn`. · Runtime: 3 of 5 first sessions proposed
+  `LabelWindowDays: 31` with no date, so every row was decided today, every row was censored and the default holdout
+  carve refused an empty set (`seeded-random-side-empty`), a refusal the agent could not act on. · Defaulting the
+  window away silently.
+
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
 item becomes an allowlist line `<path>  (D-091 item <n>)`. **Items 1 and 2 approved by the owner 2026-11-26** ("shared
@@ -3490,9 +3551,9 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->2c223ef583<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->3<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->3<!-- /gen:checks -->
+- Head: <!-- gen:head -->4101f90c86<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4025,6 +4086,71 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   `20261127-062235-48465` ok 12 passed).
 - 2026-11-27 — integration: the D5-56 push (`2c223ef583`) went red in its fast tier on `ai-agents` only
   (`20261127-065819-91706`) → owner-batch item 11 (§9), fixed and re-pushed.
+
+### 2026-11-27 — drafting tools, catalog and plan validation (council 30st24) — A3
+
+- **Branch** `ps/pr-5-agent-fp-input--A3` from `5a3d5f0809` (local only, D5-53); attack list red first (`995fac9e9f`,
+  D5-48: 6 files red on missing modules, 9 assertions red, 4 already-true halves green), then `69b0433369`
+  (implementation), `4101f90c86` (`pnpm run mj:manifest`: the two draft Actions in both server manifests), then the
+  records commit.
+- **Database** `MJ_PS_PR5_claude1` (4051), dropped (0 sessions) and rebuilt from the head with the repo CLI: `mj
+  migrate` 207 applied; `codegen --skipfiles` 489 entities; `sync push --dir=metadata` 231 created · 9 updated · 5
+  deleted · 0 errors (write-back reversed); `codegen --skipdb` (no file diff); D5-46 user (Developer, UI, Integration).
+  The `mj` on PATH is the global CLI 5.51.1 (its `sync push` failed with `Spread syntax requires
+  ...iterable[Symbol.iterator]`), so every command used `pnpm mj` (the worktree's MJCLI); the first build with the
+  global CLI was dropped and redone. `truth:provision` (48 pstruth entities, 305 immutable fields), `truth:loom`,
+  `metadata-optional/integration-test` pushed (833 created; write-back reversed), `PS truth datasets: load and verify`
+  passed. A3's metadata pushed after each change (24 created, 9 updated; then 8 updated), write-back reversed each time.
+- **Unit tests (exit 0, 0 TypeScript errors in each build):** `@memberjunction/predictive-studio` (Engine) **146 files,
+  2,148 passed** (A3's attack files: 6 files, 50 passed; the agent folder 14 files, 288 passed, A2's
+  `control-path.test.ts` and `model-dev-orchestrator-agent.test.ts` unchanged and green);
+  `@memberjunction/predictive-studio-core` **46 files, 602 passed**; `@memberjunction/integration-test-suite` **78
+  files, 1,156 passed** (`check-registry.test.ts`: 295 bundles, `ps-gate-c1-c1-2.G4.2` in the mutation-gated set).
+  `check:guards` 16 + 5 passed (a nested `UUIDsEqual` scan in `CatalogRenderer.Reachable` was rewritten as a BFS over a
+  `UUIDMap` adjacency); `check:naming` no finding in A3's files; TruthSuite `test:python` 24 passed and mypy clean once
+  `pnpm run setup:python` built the worktree's venv (the first milestone-exit failed only on the missing venv).
+- **G4.2** `pnpm mj test run "C1 -> C1.2"` → **Passed** (test run `98643097-F05D-4F18-89D3-A065D125D946`): `0 units, 0
+  protocols, 0 training runs written; 0 of 2 Action steps read holdout rows`, both draft Actions ran
+  (`Unit drafted on 12419 development rows (4157 holdout rows left unread)`), 0 unresolved names, censoring named,
+  Data Scout prompt 27,063 input tokens with the catalog marker, the plan presented (`AwaitingFeedback`, open request).
+- **Exit: 5 renewal-clean runs** (G4.2 ×5 after the two runtime fixes below; test runs `277F429B…`, `48570D75…`,
+  `F0C15348…`, `98643097…`, `7DB6BFBD…`): presented 5/5 in one turn, **0 unresolved names in 5/5 presented plans,
+  censoring named 5/5**, 0 holdout reads, 0 units/protocols/training runs; two sessions repaired once through the Data
+  Scout. **Measured cost** (the sessions' prompt runs through their steps): mean **$0.039482**, min $0.027498, max
+  $0.053458, 35,139–90,308 tokens, 33 of 33 prompt runs on Gemini 4 Hydrogen (§2.4).
+- **Runtime findings, fixed at the root** (each with a test): (a) 3 of 5 first sessions never presented: the Goal
+  Analyst proposed a 31-day window with no decision-date column, every row was censored, the holdout carve refused an
+  empty set (`seeded-random-side-empty`, Action log on run `712D6063…`) → D5-A3-10; (b) a valid qualified leakage field
+  (`PS Truth: W1_Person.Status`) was reported unresolved, and the repair, handed to the orchestrator prompt, was
+  ignored (step 10 returned `Success` with the plan as text) → D5-A3-6 and D5-A3-4 (repairs are code Sub-Agent steps);
+  (c) the Data Scout prompt measured 30,116 input tokens, over DD-2's 30,000 → D5-A3-5 (27,035–28,391 after).
+- **Mutation table (each guard flipped in a scratch edit, the attack file run, the source restored; `git status` clean):**
+
+| Guard flipped | Attack | Result with the flip |
+|---|---|---|
+| `AgentReadScope.DevelopmentRows` keeps the holdout rows | 6 | 1 red: `expected [ { RowID: 'y2025-0', …(7) }, …(3) ] to deeply equal []` |
+| the guard-field refusal dropped | 3 | 8 red: `PromotionRule → guard-field-edited-by-disallowed-author, no draft` (and the other five spellings, two Action cases) |
+| the censoring requirement dropped | 4 | 2 red: `expected null to deeply equal { kind: 'censoring-required' }` |
+| the builder ignores `spec.UnitDraft` | 9 | 1 red: `expected [] to deeply equal [ { Name: 'Renewal unit', …(12) } ]` |
+| the builder applies a payload's guard members | 5 (builder) | 1 red: `holdout: expected { kind: 'seeded-random', …(1) } to deeply equal { kind: 'date-carved', …(4) }` |
+| `PlanMetadataValidator.Validate` resolves nothing | 1 | 4 red: `the assessment's invented names → four UnresolvedReferences` |
+| validate-plan presents with unresolved names | 7 | 3 red: `after two failed repairs the session ends decline-unresolved-reference listing the names` |
+| the Pipeline Builder's upstream paths back to `*` | 5 (writers) | 1 red: `a sub-agent upstream path writing them is refused, for every sub-agent` |
+
+  **Mutation output G4.2:** `AssertionError: expected [ { RowID: 'y2025-0', …(7) }, …(3) ] to deeply equal []` (let
+  `AgentReadScope.DevelopmentRows` return the unit's rows without the holdout rule → attack 6 red); dropping the
+  guard-field refusal → attack 3 red, the censoring requirement → attack 4 red, `spec.UnitDraft` ignored → attack 9 red.
+- **LLM spend** (§2.4 query from `2026-11-27T07:00:00Z`, the rebuild): **439 prompt runs, $1.4236, 1,977,344 tokens** on
+  `MJ_PS_PR5_claude1` — CodeGen and sync pushes $0.56, the agent sessions $0.86 (the stale-`dist` run, 5 sessions that
+  found the fixes, 2 + 5 G4.2 runs). Under the wave's $5 spot-check cap and D5-12's $100.
+- **Not run (D5-51, D5-53):** `ci-mirror` (the controller runs it at integration); no push.
+- **Hands at integration (run rule 4):** none needed beyond A3's own lines (`$C/index.ts` unchanged: Core's barrel
+  already exports `agent-contracts` and `modeling-plan-spec`); B2's `$C/index.ts` export and its barrel/registry lines
+  for `ps-gate-c1-c2-4` are received there.
+- **Owed / open:** G4.1 (`C1 -> C1.1`, A2's check) seeds a forced-failure plan whose target `NoSuchTargetColumn` does not
+  exist; under A3 that plan is never presented (attack 7), so G4.1's failure loop cannot run as written — asked the
+  controller (below).
+- Rulings this milestone: D5-A3-1 … D5-A3-10.
 
 ## 12. Refresh log (append-only)
 
