@@ -17,18 +17,20 @@ import type {
     AgentExecutionProgressCallback,
     AgentPayloadChangeRequest,
     AgentSkillInvocation,
+    AgentSubAgentRequest,
     AgentTreeBudget,
     BaseAgentNextStep,
     BudgetBreachDetail,
     BudgetCostEvent,
     ExecuteAgentParams,
+    ExecuteAgentResult,
     ProgressEvaluationResult,
     RunawayPauseReason,
     RunawaySerializable,
     StopContinuationMode,
     WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
-import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
+import type { MJAIAgentRelationshipEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { ActionResult, type ActionErrorRecovery, type ActionOutputTrustLevel, type ActionParam, type AIDirective, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { SecondaryScopeValue } from '@memberjunction/ai-core-plus';
 import type { ChatMessage, DecisionAnswer } from '@memberjunction/ai';
@@ -40,6 +42,7 @@ import type { CooperativePauseResult } from '../ActiveRunGovernanceRegistry';
 import type { LoopIterationError } from '../AgentStepDispatcher';
 import type { BudgetEnforcementGuard } from '../BudgetEnforcementGuard';
 import type { PauseRunWithCheckpointResult } from '../RunawayCheckpointManager';
+import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { StoppedRunStepRecord } from '../tool-result-format';
 
 /**
@@ -483,6 +486,45 @@ export interface RuntimeStateDeliveryCache {
     markers: readonly string[];
     delivery: 'trailing' | 'embedded' | 'unsupported';
 }
+
+/**
+ * Maximum number of sub-agents to dispatch concurrently when a Loop agent
+ * returns a `subAgents` array.
+ */
+export const PARALLEL_SUBAGENT_CONCURRENCY_LIMIT = 5;
+
+/**
+ * Result envelope returned by `runSingleParallelSubAgent` — combines the
+ * execution outcome with the metadata needed to merge results back into the
+ * parent payload deterministically.
+ */
+export interface ParallelSubAgentExecution<SR> {
+    request: AgentSubAgentRequest<unknown>;
+    result: ExecuteAgentResult<SR>;
+    subAgentEntity: MJAIAgentEntityExtended;
+    relationship?: MJAIAgentRelationshipEntity;
+    /** Undefined only for synthetic entries representing an unresolved sub-agent. */
+    stepEntity?: MJAIAgentRunStepEntityExtended;
+    upstreamPaths: string[];
+    consult?: SubAgentConsultRecord;
+    maxConsultRounds?: number;
+}
+
+/**
+ * Synchronously-prepared dispatch record for one parallel sub-agent.
+ */
+export interface ParallelSubAgentDispatch {
+    request: AgentSubAgentRequest<unknown>;
+    subAgentEntity: MJAIAgentEntityExtended;
+    relationship?: MJAIAgentRelationshipEntity;
+}
+
+/** Validated target agent stored between `validateHandoffNextStep` and `executeHandoffStep`. */
+export interface ResolvedHandoffTarget {
+    id: string;
+    name: string;
+}
+
 
 
 

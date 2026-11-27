@@ -33,7 +33,8 @@ import { AgentMessagingHelper } from '../../helpers/messaging/AgentMessagingHelp
 import { AgentPayloadHelper } from '../../helpers/payload/AgentPayloadHelper';
 import { AgentNativeToolsAndPrefixCacheHelper } from '../../helpers/prompt/AgentNativeToolsAndPrefixCacheHelper';
 import { ACTION_FAILURE_BUDGET, CircuitBreakerActionResult, IDENTICAL_FAILURE_THRESHOLD } from '../../helpers/base-agent-types';
-import type { AgentHelperSubclassHooks, AgentRunContext } from '../../helpers/AgentRunContext';
+import type { AgentHelperSubclassHooks } from '../../helpers/AgentHelperSubclassHooks';
+import type { AgentRunContext } from '../../helpers/AgentRunContext';
 
 export function CreateMockAgentRunContext(
     overrides?: Partial<Omit<AgentRunContext, 'Hooks'>> & { Hooks?: Partial<AgentHelperSubclassHooks> }
@@ -280,7 +281,7 @@ export function CreateMockAgentRunContext(
         ApplyActionChanges: (base) => ({ actions: base, dynamicLimits: {} }),
         GetEffectiveSubAgentsForValidation: () => [],
         IsSubAgentConsultEnabledForSubAgent: () => false,
-        ResolveSubAgentChatHandlingOption: () => 'Passthrough',
+        ResolveSubAgentChatHandlingOption: () => null,
         GetAgentTools: () => [],
         ExecuteNativeArtifactTool: vi.fn(async () => ({ Content: '', IsError: false })),
         ExecuteAgentToolCallsAsSteps: vi.fn(async (_c, p) => ({ payload: p, results: [] })),
@@ -334,6 +335,32 @@ export function CreateMockAgentRunContext(
         ReadScratchpadFromTemplateData: () => null,
         GetAgentPromptParameters: () => [],
         HideNarrowedOut: (_k, items) => items,
+        CollectPolicyAgentChain: () => [],
+        FilterActionChangesForSubAgent: (c) => c,
+        FilterSubAgentChangesForSubAgent: (c) => c,
+        AbsorbSubAgentTaint: vi.fn(),
+        ResolveChildPayloadArtifactTypeID: () => undefined,
+        GetSkillAttributionForSubAgent: () => undefined,
+        ValidateChatNextStep: vi.fn(async (_p, s) => s),
+        TaskGraphRefusal: () => undefined,
+        RunWithholdsHandoff: () => false,
+        MapWithConcurrency: async (items, _limit, worker) => Promise.all(items.map((item, idx) => worker(item, idx))),
+        PayloadToolResult: () => [],
+        PrepareSubAgentMessages: () => [],
+        ExecuteSubAgent: vi.fn(async () => ({ success: true, agentRun: {} as MJAIAgentRunEntityExtended })),
+        ExecuteChildSubAgentStep: vi.fn(async () => ({ step: 'Success' as const, terminate: false })),
+        ExecuteRelatedSubAgentStep: vi.fn(async () => ({ step: 'Success' as const, terminate: false })),
+        ResolveSubAgentByName: () => undefined,
+        ExtractSubAgentWorkflowTaskID: () => 'sub-agent-workflow',
+        ValidateSubAgentNextStep: vi.fn(async (_p, s) => s),
+        ValidateTasksNextStep: vi.fn(async (_p, s) => s),
+        ValidateHandoffNextStep: vi.fn(async (_p, s) => s),
+        StripSubAgentToolPrefix: (name) => name.trim().replace(/^delegate_to_/i, ''),
+        BuildAvailableRunnableAgentsHint: () => '',
+        MakeToolTurnsSelfConsistent: (w) => w,
+        ExecuteTasksStep: vi.fn(async () => ({ step: 'Success' as const, terminate: true })),
+        ExecuteHandoffStep: vi.fn(async () => ({ step: 'Success' as const, terminate: true })),
+        RecordFoldedTaskGraph: vi.fn(async () => undefined),
     };
 
     const { Hooks: hookOverrides, ...restOverrides } = overrides ?? {};
@@ -474,6 +501,14 @@ export function CreateMockAgentRunContext(
         MaxRecoveryAttempts: 1,
         CatalogNarrowingTimeoutMs: 30000,
         DecisionConcurrency: 8,
+        SubAgentConsultRounds: new Map(),
+        LoggedConsultUnsupportedAgentType: false,
+        SubAgentRuns: [],
+        LastSubAgentArtifactDirective: undefined,
+        LastSubAgentPayloadArtifactTypeID: undefined,
+        ResolvedHandoffTarget: null,
+        HandoffResult: null,
+        IsRunTainted: false,
         ...restOverrides,
         Hooks: {
             ...defaultHooks,
