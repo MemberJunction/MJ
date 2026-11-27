@@ -559,89 +559,97 @@ interface DocsInlineToken {
             >
               <i class="fa-solid fa-ellipsis"></i>
             </button>
-
-            <div class="mj-docs-more-menu" [hidden]="!ShowMoreToolsMenu" data-testid="docs-more-tools-menu">
-              <div class="mj-docs-more-menu__header">
-                <span class="mj-docs-more-menu__title">Tools &amp; View</span>
-                <span class="mj-docs-badge" data-testid="toolbar-pin-count-badge">
-                  {{ PinnedToolbarItemsCount }}/{{ MaxPinnedToolbarActions }} pinned
-                </span>
-                @if (HasCustomToolbarSettings) {
-                  <button
-                    type="button"
-                    class="mj-docs-menu-reset-btn"
-                    title="Reset toolbar pins &amp; view preferences to defaults"
-                    data-testid="reset-toolbar-pins-btn"
-                    (mousedown)="OnToolbarActionMousedown($event)"
-                    (click)="ResetToolbarCustomizations($event)"
-                  >
-                    Reset
-                  </button>
-                }
-              </div>
-
-              @for (cat of ToolbarMenuCategories; track cat.Key; let lastCat = $last) {
-                @let catItems = GetMenuItemsForCategory(cat.Key);
-                @if (catItems.length > 0 || (cat.Key === 'io' && CanUserEdit)) {
-                  <div class="mj-docs-more-menu__section">{{ cat.Title }}</div>
-                  @for (item of catItems; track item.Key) {
-                    <div class="mj-docs-menu-row">
-                      <button
-                        type="button"
-                        class="mj-docs-more-menu__item"
-                        [class.mj-docs-more-menu__item--active]="item.Active"
-                        [title]="item.Description"
-                        [attr.data-testid]="IsToolbarItemShownOnBar(item.Key) ? item.MenuTestId : item.TestId"
-                        (mousedown)="OnToolbarActionMousedown($event)"
-                        (click)="ExecuteToolbarItem(item, true, $event)"
-                      >
-                        <i class="fa-solid" [ngClass]="item.Icon"></i>
-                        <span class="mj-docs-more-menu__item-label">{{ item.MenuLabel }}</span>
-                        @if (item.StatusTag) {
-                          <span class="mj-docs-badge">{{ item.StatusTag }}</span>
-                        } @else if (item.Badge != null) {
-                          <span class="mj-docs-badge mj-docs-badge--brand">{{ item.Badge }}</span>
-                        }
-                      </button>
-                      <button
-                        type="button"
-                        class="mj-docs-menu-pin"
-                        [class.pinned]="IsToolbarItemPinned(item.Key)"
-                        [class.over-cap]="IsToolbarItemPinnedOverCap(item.Key)"
-                        [attr.aria-disabled]="!IsToolbarItemPinned(item.Key) && !CanPinMoreToolbarItems ? 'true' : null"
-                        [attr.aria-pressed]="IsToolbarItemPinned(item.Key)"
-                        [attr.aria-label]="'Pin ' + item.MenuLabel"
-                        [attr.data-testid]="'menu-pin-' + item.Key"
-                        [title]="GetToolbarPinTooltip(item.Key)"
-                        (mousedown)="OnToolbarActionMousedown($event)"
-                        (click)="ToggleToolbarItemPin(item.Key, $event)"
-                      >
-                        <i class="fa-solid fa-thumbtack"></i>
-                      </button>
-                    </div>
-                  }
-                  @if (cat.Key === 'io' && CanUserEdit) {
-                    <div class="mj-docs-menu-row">
-                      <button
-                        type="button"
-                        class="mj-docs-more-menu__item"
-                        data-testid="import-doc-btn"
-                        (mousedown)="OnToolbarActionMousedown($event)"
-                        (click)="TriggerFileImport(); CloseMoreToolsMenu()"
-                      >
-                        <i class="fa-solid fa-file-import"></i>
-                        <span class="mj-docs-more-menu__item-label">Import .docx or .md…</span>
-                      </button>
-                    </div>
-                  }
-                  @if (!lastCat) {
-                    <div class="mj-docs-more-menu__divider"></div>
-                  }
-                }
-              }
-            </div>
           </div>
         </div>
+      </div>
+
+      <!-- Rendered outside .mj-docs-toolbar so toolbar horizontal scrolling (overflow-x: auto) never clips the menu -->
+      <div
+        class="mj-docs-more-menu"
+        #moreMenuPanel
+        [hidden]="!ShowMoreToolsMenu"
+        [style.top.px]="MoreMenuTopPx"
+        [style.right.px]="MoreMenuRightPx"
+        data-testid="docs-more-tools-menu"
+      >
+        <div class="mj-docs-more-menu__header">
+          <span class="mj-docs-more-menu__title">Tools &amp; View</span>
+          <span class="mj-docs-badge" data-testid="toolbar-pin-count-badge">
+            {{ PinnedToolbarItemsCount }}/{{ MaxPinnedToolbarActions }} pinned
+          </span>
+          @if (HasCustomToolbarSettings) {
+            <button
+              type="button"
+              class="mj-docs-menu-reset-btn"
+              title="Reset toolbar pins &amp; view preferences to defaults"
+              data-testid="reset-toolbar-pins-btn"
+              (mousedown)="OnToolbarActionMousedown($event)"
+              (click)="ResetToolbarCustomizations($event)"
+            >
+              Reset
+            </button>
+          }
+        </div>
+
+        @for (cat of ToolbarMenuCategories; track cat.Key; let lastCat = $last) {
+          @let catItems = GetMenuItemsForCategory(cat.Key);
+          @if (catItems.length > 0 || (cat.Key === 'io' && CanUserEdit)) {
+            <div class="mj-docs-more-menu__section">{{ cat.Title }}</div>
+            @for (item of catItems; track item.Key) {
+              <div class="mj-docs-menu-row">
+                <button
+                  type="button"
+                  class="mj-docs-more-menu__item"
+                  [class.mj-docs-more-menu__item--active]="item.Active"
+                  [title]="item.Description"
+                  [attr.data-testid]="IsToolbarItemShownOnBar(item.Key) ? item.MenuTestId : item.TestId"
+                  (mousedown)="OnToolbarActionMousedown($event)"
+                  (click)="ExecuteToolbarItem(item, true, $event)"
+                >
+                  <i class="fa-solid" [ngClass]="item.Icon"></i>
+                  <span class="mj-docs-more-menu__item-label">{{ item.MenuLabel }}</span>
+                  @if (item.StatusTag) {
+                    <span class="mj-docs-badge">{{ item.StatusTag }}</span>
+                  } @else if (item.Badge != null) {
+                    <span class="mj-docs-badge mj-docs-badge--brand">{{ item.Badge }}</span>
+                  }
+                </button>
+                <button
+                  type="button"
+                  class="mj-docs-menu-pin"
+                  [class.pinned]="IsToolbarItemPinned(item.Key)"
+                  [class.over-cap]="IsToolbarItemPinnedOverCap(item.Key)"
+                  [attr.aria-disabled]="!IsToolbarItemPinned(item.Key) && !CanPinMoreToolbarItems ? 'true' : null"
+                  [attr.aria-pressed]="IsToolbarItemPinned(item.Key)"
+                  [attr.aria-label]="'Pin ' + item.MenuLabel"
+                  [attr.data-testid]="'menu-pin-' + item.Key"
+                  [title]="GetToolbarPinTooltip(item.Key)"
+                  (mousedown)="OnToolbarActionMousedown($event)"
+                  (click)="ToggleToolbarItemPin(item.Key, $event)"
+                >
+                  <i class="fa-solid fa-thumbtack"></i>
+                </button>
+              </div>
+            }
+            @if (cat.Key === 'io' && CanUserEdit) {
+              <div class="mj-docs-menu-row">
+                <button
+                  type="button"
+                  class="mj-docs-more-menu__item"
+                  data-testid="import-doc-btn"
+                  (mousedown)="OnToolbarActionMousedown($event)"
+                  (click)="TriggerFileImport(); CloseMoreToolsMenu()"
+                >
+                  <i class="fa-solid fa-file-import"></i>
+                  <span class="mj-docs-more-menu__item-label">Import .docx or .md…</span>
+                </button>
+              </div>
+            }
+            @if (!lastCat) {
+              <div class="mj-docs-more-menu__divider"></div>
+            }
+          }
+        }
       </div>
       }
 
@@ -5901,11 +5909,11 @@ interface DocsInlineToken {
 
       .mj-docs-more-menu {
         position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        z-index: 85;
+        top: 44px;
+        right: 10px;
+        z-index: 200;
         width: 276px;
-        max-height: 70vh;
+        max-height: min(70vh, calc(100% - 56px));
         overflow-y: auto;
         padding: 6px;
         background: var(--mj-bg-surface);
@@ -6338,6 +6346,7 @@ export class MarkdownArtifactViewerComponent
   @ViewChild('fileImportInput') public FileImportInput?: ElementRef<HTMLInputElement>;
   @ViewChild('printableCanvas') public PrintableCanvas?: ElementRef<HTMLElement>;
   @ViewChild('moreMenuWrap') public MoreMenuWrap?: ElementRef<HTMLElement>;
+  @ViewChild('moreMenuPanel') public MoreMenuPanel?: ElementRef<HTMLElement>;
   @ViewChild('exportDialog') public ExportDialogRef?: ElementRef<HTMLDialogElement>;
 
   /**
@@ -7548,9 +7557,25 @@ export class MarkdownArtifactViewerComponent
     this.cdr.markForCheck();
   }
 
+  public MoreMenuTopPx = 44;
+  public MoreMenuRightPx = 10;
+
   public ToggleMoreToolsMenu(event?: Event): void {
     event?.stopPropagation();
     this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
+    if (this.ShowMoreToolsMenu) {
+      const btnEl = this.MoreMenuWrap?.nativeElement;
+      const wsEl = btnEl?.closest('.mj-docs-workspace') as HTMLElement | null;
+      const btnRect = btnEl?.getBoundingClientRect();
+      const wsRect = wsEl?.getBoundingClientRect();
+      if (btnRect && wsRect && btnRect.height > 0 && wsRect.width > 0) {
+        this.MoreMenuTopPx = Math.max(36, Math.round(btnRect.bottom - wsRect.top + 6));
+        this.MoreMenuRightPx = Math.max(8, Math.round(wsRect.right - btnRect.right));
+      } else {
+        this.MoreMenuTopPx = 44;
+        this.MoreMenuRightPx = 10;
+      }
+    }
     this.syncMoreMenuDocumentListeners();
     this.cdr.markForCheck();
   }
@@ -8194,8 +8219,9 @@ export class MarkdownArtifactViewerComponent
     }
     const unlistenClick = this.renderer.listen('document', 'click', (evt: Event) => {
       const wrapEl = this.MoreMenuWrap?.nativeElement;
+      const panelEl = this.MoreMenuPanel?.nativeElement;
       const target = evt.target as Node | null;
-      if (wrapEl && target && wrapEl.contains(target)) {
+      if (target && ((wrapEl && wrapEl.contains(target)) || (panelEl && panelEl.contains(target)))) {
         return;
       }
       this.CloseMoreToolsMenu();
