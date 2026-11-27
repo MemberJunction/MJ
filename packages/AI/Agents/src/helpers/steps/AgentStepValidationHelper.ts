@@ -7,7 +7,6 @@
  */
 
 import {
-    GetTaskGraphSubmitter,
     type AgentConfiguration,
     type AIPromptRunResult,
     type BaseAgentNextStep,
@@ -16,11 +15,10 @@ import {
     type MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { AIErrorType } from '@memberjunction/ai';
-import { AIEngine } from '@memberjunction/aiengine';
 import { IsVerboseLoggingEnabled, LogError, LogStatus } from '@memberjunction/core';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
 import type { AgentRunContext } from '../AgentRunContext';
+import { AgentStepTypeRegistry } from './AgentStepTypeRegistry';
 
 /**
  * Collaborator handling next-step validation dispatch and prompt/config error classification.
@@ -34,7 +32,9 @@ export class AgentStepValidationHelper {
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        if (ctx.PlanModeActive && !ctx.PlanApproved && (nextStep.step === 'Actions' || nextStep.step === 'Sub-Agent')) {
+        const policy = AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(nextStep.step);
+
+        if (ctx.PlanModeActive && !ctx.PlanApproved && policy && !policy.AllowedInUnapprovedPlanMode) {
             ctx.GeneralValidationRetryCount++;
             return {
                 step: 'Retry',
@@ -44,74 +44,19 @@ export class AgentStepValidationHelper {
             };
         }
 
-        switch (nextStep.step) {
-            case 'Sub-Agent':
-                if (
-                    nextStep.taskGraph?.folded &&
-                    nextStep.subAgent?.name &&
-                    Boolean(GetTaskGraphSubmitter()) &&
-                    !ctx.Hooks.ResolveSubAgentByName(params, nextStep.subAgent.name)
-                ) {
-                    const activeAgentExists = AIEngine.Instance.Agents.some(
-                        (a) =>
-                            a.Status === 'Active' &&
-                            a.Name === nextStep.subAgent!.name &&
-                            !UUIDsEqual(a.ID, params.agent.ID)
-                    );
-                    if (activeAgentExists) {
-                        ctx.Hooks.LogStatus(
-                            `target is not a sub-agent of ${params.agent.Name}; submitting durably`,
-                            false,
-                            params
-                        );
-                        const unfolded: BaseAgentNextStep<P> = {
-                            ...nextStep,
-                            step: 'Tasks' as typeof nextStep.step,
-                            subAgent: undefined,
-                            taskGraph: {
-                                spec: nextStep.taskGraph.spec,
-                                folded: false,
-                            },
-                        };
-                        return ctx.Hooks.ValidateTasksNextStep<P>(params, unfolded, currentPayload, agentRun, currentStep);
-                    }
-                }
-                return ctx.Hooks.ValidateSubAgentNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Actions':
-                return ctx.Hooks.ValidateActionsNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Success':
-                return ctx.Hooks.ValidateSuccessNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Chat':
-                return ctx.Hooks.ValidateChatNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Retry':
-                return ctx.Hooks.ValidateRetryNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Failed':
-                return ctx.Hooks.ValidateFailedNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'ForEach':
-                return nextStep;
-            case 'While':
-                return nextStep;
-            case 'Skill' as typeof nextStep.step:
-                return ctx.Hooks.ValidateSkillNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Plan' as typeof nextStep.step:
-                return ctx.Hooks.ValidatePlanNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'ClientTools' as typeof nextStep.step:
-                return nextStep;
-            case 'Tasks' as typeof nextStep.step:
-                return ctx.Hooks.ValidateTasksNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            case 'Handoff' as typeof nextStep.step:
-                return ctx.Hooks.ValidateHandoffNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
-            default:
-                ctx.Hooks.LogError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
-                    agent: params.agent,
-                    category: 'NextStepValidation',
-                });
-                return {
-                    step: 'Failed',
-                    terminate: true,
-                    errorMessage: `Invalid next step '${nextStep.step}'`,
-                };
+        if (!policy) {
+            ctx.Hooks.LogError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
+                agent: params.agent,
+                category: 'NextStepValidation',
+            });
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: `Invalid next step '${nextStep.step}'`,
+            };
         }
+
+        return policy.Handler.Validate<P>(ctx, params, nextStep, currentPayload, agentRun, currentStep);
     }
 
     public async ValidatePlanNextStep<P>(

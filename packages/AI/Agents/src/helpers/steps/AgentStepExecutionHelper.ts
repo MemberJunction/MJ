@@ -31,6 +31,7 @@ import { IsPromptTurnStep, RepeatedFailingStepTracker } from '../../repeated-fai
 import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import { AgentPayloadHelper } from '../payload/AgentPayloadHelper';
+import { AgentStepTypeRegistry } from './AgentStepTypeRegistry';
 import { AgentStepValidationHelper } from './AgentStepValidationHelper';
 import { BaseAgentStepExecutionHelper } from './BaseAgentStepExecutionHelper';
 
@@ -285,7 +286,13 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
         stepCount: number = 0
     ): Promise<BaseAgentNextStep<P>> {
         const currentPayload = (previousDecision?.newPayload ?? previousDecision?.previousPayload ?? params.payload) as P;
-        if (previousDecision?.step !== 'Chat' && previousDecision?.terminate !== true) {
+        const decisionPolicy = previousDecision
+            ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(previousDecision.step)
+            : null;
+        const countsAgainstTreeBudget = previousDecision
+            ? (decisionPolicy ? decisionPolicy.CountsAgainstTreeBudget : previousDecision.step !== 'Chat')
+            : true;
+        if (countsAgainstTreeBudget && previousDecision?.terminate !== true) {
             const treeBudgetResult = ctx.Hooks.CheckTreeBudgetLimit(params);
             if (treeBudgetResult.exceeded) {
                 ctx.Hooks.LogStatus(`⛔ Execution guardrail exceeded: ${treeBudgetResult.reason}`, false, params);
@@ -329,182 +336,11 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
             return customNextStep as BaseAgentNextStep<P>;
         }
 
-        switch (previousDecision.step) {
-            case 'Retry':
-                if (previousDecision.messageIndex !== undefined) {
-                    const expandFailure = ctx.Hooks.ExecuteExpandMessageStep(
-                        previousDecision,
-                        params,
-                        ctx.PromptTurnCount
-                    );
-                    if (expandFailure) {
-                        params.conversationMessages.push({
-                            role: 'user',
-                            content: `Message expansion failed: ${expandFailure}`,
-                        });
-                    }
-                }
-                return await ctx.Hooks.ExecutePromptStep<P>(params, config, previousDecision, stepCount);
-            case 'Sub-Agent': {
-                await ctx.Hooks.RecordFoldedTaskGraph(params, previousDecision);
-                const subAgentResult = await ctx.Hooks.ProcessSubAgentStep<P, P>(
-                    params,
-                    previousDecision,
-                    undefined,
-                    undefined,
-                    stepCount
-                );
-                if (ctx.TreeBudget?.breachedReason) {
-                    const breachedReason = ctx.TreeBudget.breachedReason;
-                    return {
-                        ...subAgentResult,
-                        step: 'Failed',
-                        terminate: true,
-                        message: breachedReason,
-                        errorMessage: breachedReason,
-                    };
-                }
-                const afterSubAgent =
-                    (await ctx.Hooks.FinishAfterSubAgent<P>(params, previousDecision, subAgentResult)) ??
-                    subAgentResult;
-                return ctx.Hooks.SelfCheckSuccess(
-                    params,
-                    afterSubAgent,
-                    afterSubAgent.newPayload ?? subAgentResult.newPayload
-                );
-            }
-            case 'Actions':
-                return (await ctx.Hooks.ExecuteActionsStep(
-                    params,
-                    previousDecision,
-                    undefined,
-                    true,
-                    stepCount,
-                    ctx.Hooks.ActionOptionsForAgentType()
-                )) as BaseAgentNextStep<P>;
-            case 'Skill' as typeof previousDecision.step:
-                return (await ctx.Hooks.ExecuteSkillStep(
-                    params,
-                    config,
-                    previousDecision,
-                    stepCount
-                )) as BaseAgentNextStep<P>;
-            case 'Plan' as typeof previousDecision.step:
-                return (await ctx.Hooks.ExecutePlanStep(params, previousDecision)) as BaseAgentNextStep<P>;
-            case 'Tasks' as typeof previousDecision.step:
-                return (await ctx.Hooks.ExecuteTasksStep(params, previousDecision)) as BaseAgentNextStep<P>;
-            case 'Handoff' as typeof previousDecision.step:
-                return (await ctx.Hooks.ExecuteHandoffStep(params, previousDecision)) as BaseAgentNextStep<P>;
-            case 'ClientTools' as typeof previousDecision.step:
-                return (await ctx.Hooks.ExecuteClientToolsStep(
-                    params,
-                    config,
-                    previousDecision,
-                    stepCount
-                )) as BaseAgentNextStep<P>;
-            case 'Decision' as typeof previousDecision.step:
-                return await ctx.Hooks.ExecuteDecisionStep<P>(params, previousDecision);
-            case 'Chat':
-                return (await ctx.MessagingHelper.ExecuteChatStep(ctx, params, previousDecision)) as BaseAgentNextStep<P>;
-            case 'Success':
-                if (previousDecision.terminate) {
-                    return {
-                        terminate: true,
-                        step: 'Success',
-                        previousPayload: previousDecision.previousPayload,
-                        newPayload: previousDecision.newPayload,
-                    };
-                } else {
-                    const fallbackStep = await ctx.AgentTypeInstance!.HandleStepFallback(
-                        previousDecision,
-                        config,
-                        params,
-                        previousDecision.newPayload || previousDecision.previousPayload,
-                        ctx.AgentTypeState
-                    );
-
-                    if (fallbackStep) {
-                        if (fallbackStep.terminate) {
-                            const terminationMessage = `Agent completed successfully. Agent type '${config.agentType.Name}' terminated execution.`;
-                            const stepEntity = await ctx.Hooks.CreateStepEntity({
-                                stepType: 'Decision',
-                                stepName: terminationMessage,
-                                contextUser: params.contextUser,
-                                payloadAtStart: fallbackStep.previousPayload,
-                                payloadAtEnd: fallbackStep.newPayload,
-                            });
-                            await ctx.Hooks.FinalizeStepEntity(stepEntity, true, undefined, {
-                                reason: 'Agent type intervention - Success',
-                                agentType: config.agentType.Name,
-                                decision: 'Success',
-                            });
-                        }
-                        return fallbackStep as BaseAgentNextStep<P>;
-                    } else {
-                        return await ctx.Hooks.ExecutePromptStep<P>(params, config, previousDecision, stepCount);
-                    }
-                }
-            case 'Failed':
-                if (previousDecision.terminate) {
-                    return {
-                        terminate: true,
-                        step: 'Failed',
-                        previousPayload: previousDecision.previousPayload,
-                        newPayload: previousDecision.newPayload,
-                    };
-                } else {
-                    const fallbackStep = await ctx.AgentTypeInstance!.HandleStepFallback(
-                        previousDecision,
-                        config,
-                        params,
-                        previousDecision.newPayload || previousDecision.previousPayload,
-                        ctx.AgentTypeState
-                    );
-
-                    if (fallbackStep) {
-                        if (fallbackStep.terminate) {
-                            const errorDetails = fallbackStep.errorMessage || 'No error details provided';
-                            const terminationMessage = `Agent failed. Agent type '${config.agentType.Name}' terminated execution: ${errorDetails}`;
-                            const stepEntity = await ctx.Hooks.CreateStepEntity({
-                                stepType: 'Decision',
-                                stepName: terminationMessage,
-                                contextUser: params.contextUser,
-                                payloadAtStart: fallbackStep.previousPayload,
-                                payloadAtEnd: fallbackStep.newPayload,
-                            });
-                            await ctx.Hooks.FinalizeStepEntity(stepEntity, false, errorDetails, {
-                                reason: 'Agent type intervention - Failed',
-                                agentType: config.agentType.Name,
-                                decision: 'Failed',
-                            });
-                            if (ctx.AgentRun) {
-                                ctx.AgentRun.ErrorMessage = terminationMessage;
-                                await ctx.AgentRun.Save();
-                            }
-                            ctx.Hooks.LogError(
-                                `Agent type '${config.agentType.Name}' handling Failed step with termination`,
-                                {
-                                    agent: params.agent,
-                                    category: 'AgentExecution',
-                                    metadata: {
-                                        errorDetails,
-                                        agentType: config.agentType.Name,
-                                    },
-                                }
-                            );
-                        }
-                        return fallbackStep as BaseAgentNextStep<P>;
-                    } else {
-                        return await ctx.Hooks.ExecutePromptStep<P>(params, config, previousDecision, stepCount);
-                    }
-                }
-            case 'ForEach':
-                return (await ctx.Hooks.ExecuteForEachLoop(params, config, previousDecision)) as BaseAgentNextStep<P>;
-            case 'While':
-                return (await ctx.Hooks.ExecuteWhileLoop(params, config, previousDecision)) as BaseAgentNextStep<P>;
-            default:
-                throw new Error(`Unsupported next step: ${previousDecision.step}`);
+        const execPolicy = decisionPolicy ?? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(previousDecision.step);
+        if (!execPolicy) {
+            throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
+        return execPolicy.Handler.Execute<P>(ctx, params, config, previousDecision, stepCount);
     }
 
     public override async RecordExecutionRouting(ctx: AgentRunContext, params: ExecuteAgentParams): Promise<void> {
@@ -761,7 +597,7 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
 
         const responseForm = ctx.Hooks.BuildPlanApprovalForm(planText);
         const planPresentation: BaseAgentNextStep = {
-            step: 'Plan' as BaseAgentNextStep['step'],
+            step: 'Plan',
             terminate: true,
             message: previousDecision.message || 'Please review the proposed plan before I proceed.',
             reasoning: previousDecision.reasoning,

@@ -6,11 +6,12 @@
  * @module @memberjunction/ai-agents
  */
 
-import type {
-    BaseAgentNextStep,
-    ExecuteAgentResult,
-    GovernedRunArtifactSummary,
-    MJAIAgentRunEntityExtended,
+import {
+    ToAgentRunFinalStep,
+    type BaseAgentNextStep,
+    type ExecuteAgentResult,
+    type GovernedRunArtifactSummary,
+    type MJAIAgentRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import { LogError, type UserInfo } from '@memberjunction/core';
 import { AgentRunWatchdog } from '../../agent-run-watchdog';
@@ -206,7 +207,7 @@ export class AgentRunFinalizationHelper {
             }
 
             const finalPayloadJson = resolvedPayload ? JSON.stringify(resolvedPayload) : null;
-            ctx.AgentRun.FinalStep = finalStep.step;
+            ctx.AgentRun.FinalStep = ToAgentRunFinalStep(finalStep.step);
             ctx.AgentRun.Message = finalStep.message ?? null;
 
             ctx.AgentRun.FinalPayloadObject = resolvedPayload;

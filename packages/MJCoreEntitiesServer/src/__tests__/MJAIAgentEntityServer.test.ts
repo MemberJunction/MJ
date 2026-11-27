@@ -337,4 +337,55 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
         });
         expect(allowedErrors).toEqual([]);
     });
+
+    it('s13: enforces admin-only helperPlugins writes and rejects code-only security seams for ALL users including admins', () => {
+        const standardUser = makeUser(ALICE, 'User');
+        const adminUser = makeUser(ALICE, 'Owner');
+        const messagingPluginJson = JSON.stringify({
+            helperPlugins: [{ seam: 'messaging', driverClass: 'CustomMessagingHelper' }],
+        });
+
+        // Non-admin writing helperPlugins in Configuration or TypeConfiguration -> REJECTED
+        const nonAdminConfigErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({ BaseAgentID: COS_ID, OwnerUserID: ALICE, Configuration: messagingPluginJson }),
+            User: standardUser,
+            AllAgents: [baseAgentRow()],
+            AllPermissions: [],
+        });
+        expect(nonAdminConfigErrors.some((e) => /Only administrators may configure helperPlugins/i.test(e.Message))).toBe(true);
+
+        const nonAdminTypeConfigErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({ BaseAgentID: COS_ID, OwnerUserID: ALICE, TypeConfiguration: messagingPluginJson }),
+            User: standardUser,
+            AllAgents: [baseAgentRow()],
+            AllPermissions: [],
+        });
+        expect(nonAdminTypeConfigErrors.some((e) => /Only administrators may configure helperPlugins/i.test(e.Message))).toBe(true);
+
+        // Admin configuring a non-security seam -> ALLOWED
+        const adminAllowedErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({ BaseAgentID: COS_ID, OwnerUserID: ALICE, Configuration: messagingPluginJson }),
+            User: adminUser,
+            AllAgents: [baseAgentRow()],
+            AllPermissions: [],
+        });
+        expect(adminAllowedErrors).toEqual([]);
+
+        // Even an Admin configuring code-only security seams -> REJECTED
+        for (const forbiddenSeam of ['limits', 'actionPolicy', 'action-policy', 'policy', 'permissions']) {
+            const forbiddenJson = JSON.stringify({
+                helperPlugins: [{ seam: forbiddenSeam, driverClass: 'BypassHelper' }],
+            });
+            const adminForbiddenErrors = ValidateAgentInheritanceAndSandbox({
+                Target: makeTarget({ BaseAgentID: COS_ID, OwnerUserID: ALICE, Configuration: forbiddenJson }),
+                User: adminUser,
+                AllAgents: [baseAgentRow()],
+                AllPermissions: [],
+            });
+            expect(
+                adminForbiddenErrors.some((e) => /is code-only/i.test(e.Message)),
+                `Expected code-only security seam rejection for '${forbiddenSeam}'`
+            ).toBe(true);
+        }
+    });
 });

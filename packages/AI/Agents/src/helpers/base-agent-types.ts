@@ -149,6 +149,8 @@ export type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0]
  */
 export interface CreateStepEntityParams {
     stepType: MJAIAgentRunStepEntityExtended['StepType'];
+    /** Optional foreign key to `MJ: AI Agent Step Types` (`AIAgentStepType.ID`). */
+    stepTypeId?: string;
     stepName: string;
     contextUser: UserInfo;
     targetId?: string;

@@ -1166,7 +1166,7 @@ export class FlowAgentType extends BaseAgentType {
         if ('ErrorMessage' in resolved) {
             return this.decisionNotAsked(key, resolved.ErrorMessage, payload);
         }
-        return this.createNextStep<P>('Decision' as BaseAgentNextStep['step'], {
+        return this.createNextStep<P>('Decision', {
             decisions: [{ id: key, state: state ?? 'payload', questions }],
             ...(promptName ? { decisionPromptName: promptName } : {}),
             newPayload: payload,

@@ -2486,7 +2486,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Handoff'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Custom'), z.literal('Decision'), z.literal('ForEach'), z.literal('Handoff'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -2496,6 +2496,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Actions
     *   * Chat
     *   * Compaction
+    *   * Custom
     *   * Decision
     *   * ForEach
     *   * Handoff
@@ -2507,7 +2508,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Tool
     *   * Validation
     *   * While
-        * * Description: Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.`),
+        * * Description: Type of execution step: Actions, Chat, Compaction, Custom, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.`),
     StepName: z.string().describe(`
         * * Field Name: StepName
         * * Display Name: Step Name
@@ -2665,6 +2666,12 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.`),
+    StepTypeID: z.string().nullable().describe(`
+        * * Field Name: StepTypeID
+        * * Display Name: Step Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+        * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition executed by this run step (especially when StepType is Custom).`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2681,6 +2688,10 @@ detailed information about what validation rules failed.`),
         * * Field Name: PayloadAtEndSourceStep
         * * Display Name: Payload At End Source Step
         * * SQL Data Type: nvarchar(255)`),
+    StepType_Virtual: z.string().nullable().describe(`
+        * * Field Name: StepType_Virtual
+        * * Display Name: Step Type Virtual
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -3863,6 +3874,100 @@ export const MJAIAgentStepPathSchema = z.object({
 export type MJAIAgentStepPathEntityType = z.infer<typeof MJAIAgentStepPathSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Step Types
+ */
+export const MJAIAgentStepTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique canonical step key (e.g. Actions, Sub-Agent, Skill, Plan, Handoff, or a custom OpenApp step key).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what this step type performs during agent execution.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: @RegisterClass(BaseAgentStepHandler, DriverClass) key used by AgentStepTypeRegistry to instantiate the runtime handler for this step type.`),
+    AppliesTo: z.union([z.literal('All'), z.literal('Both'), z.literal('Flow'), z.literal('Loop')]).describe(`
+        * * Field Name: AppliesTo
+        * * Display Name: Applies To
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Loop
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Both
+    *   * Flow
+    *   * Loop
+        * * Description: Which agent execution models support this step type: Loop, Flow, Both, or All.`),
+    AllowedInUnapprovedPlanMode: z.boolean().describe(`
+        * * Field Name: AllowedInUnapprovedPlanMode
+        * * Display Name: Allowed In Unapproved Plan Mode
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When false, invoking this step while Plan Mode is active and unapproved is rejected with a Retry prompting the agent to present a Plan first.`),
+    CountsAgainstTreeBudget: z.boolean().describe(`
+        * * Field Name: CountsAgainstTreeBudget
+        * * Display Name: Counts Against Tree Budget
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, dispatching this step checks and counts against cumulative AgentTreeBudget limits.`),
+    DefaultEnabledInPrompt: z.boolean().describe(`
+        * * Field Name: DefaultEnabledInPrompt
+        * * Display Name: Default Enabled In Prompt
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether prompt templates should advertise this step type by default when constructing agent instructions.`),
+    PromptDocsTemplate: z.string().nullable().describe(`
+        * * Field Name: PromptDocsTemplate
+        * * Display Name: Prompt Docs Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional Nunjucks/Markdown prompt documentation snippet describing how an LLM invokes this step type.`),
+    ResponseSchemaSnippet: z.string().nullable().describe(`
+        * * Field Name: ResponseSchemaSnippet
+        * * Display Name: Response Schema Snippet
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON schema fragment describing the payload fields emitted by an LLM response envelope for this step type.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Lifecycle status of this step type registration: Active, Deprecated, or Disabled.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration bag specific to this step type handler.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIAgentStepTypeEntityType = z.infer<typeof MJAIAgentStepTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Steps
  */
 export const MJAIAgentStepSchema = z.object({
@@ -3884,13 +3989,14 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Wait'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Custom'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Wait'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Custom
     *   * Decision
     *   * External
     *   * ForEach
@@ -3899,7 +4005,7 @@ export const MJAIAgentStepSchema = z.object({
     *   * Sub-Agent
     *   * Wait
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
+        * * Description: Type of step: Action (execute an action), Custom (pluggable step type referenced by StepTypeID), Decision (one typed decision call whose answers the outgoing paths route on), External, ForEach / While (a loop), Human (ask a person), Prompt (run an AI prompt), Sub-Agent (delegate to another agent), or Wait.`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -4007,6 +4113,12 @@ export const MJAIAgentStepSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
+    StepTypeID: z.string().nullable().describe(`
+        * * Field Name: StepTypeID
+        * * Display Name: Step Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+        * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition for this flow agent step (especially when StepType is Custom).`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -4023,6 +4135,10 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
+    StepType_Virtual: z.string().nullable().describe(`
+        * * Field Name: StepType_Virtual
+        * * Display Name: Step Type Virtual
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentStepEntityType = z.infer<typeof MJAIAgentStepSchema>;

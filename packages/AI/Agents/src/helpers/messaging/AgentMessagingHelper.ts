@@ -313,6 +313,7 @@ export class AgentMessagingHelper extends BaseAgentMessagingHelper {
             AgentRunID: ctx.AgentRun!.ID,
             StepNumber: stepNumber,
             StepType: params.stepType,
+            StepTypeID: params.stepTypeId,
             StepName: ctx.Hooks.FitStepName(stepEntity, ctx.Hooks.FormatHierarchicalMessage(params.stepName)),
             TargetID: params.targetId,
             TargetLogID: params.targetLogId,

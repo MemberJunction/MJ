@@ -172,6 +172,77 @@ export function DeepMergeAgentConfigObjects(
 }
 
 /**
+ * Strongly-typed entry inside `AIAgent.Configuration.helperPlugins` (or `TypeConfiguration.helperPlugins`)
+ * configuring a per-agent pluggable `BaseAgent*Helper` seam override (Extension Point #3).
+ */
+export interface AgentHelperPluginEntry {
+    /** Canonical seam key (e.g. `'messaging'`, `'payload'`, `'compaction'`, `'prompt'`, `'actions'`). */
+    seam: string;
+    /** Registered `@RegisterClass(BaseAgent<Seam>Helper, driverClass)` key. */
+    driverClass: string;
+    /** Optional precedence weight when merging multiple plugin lists (higher wins). */
+    priority?: number;
+}
+
+/**
+ * Lowercased helper seam names that are strictly **code-only** — metadata overrides via
+ * `helperPlugins` are rejected both at entity save time (`ValidateAgentInheritanceAndSandbox`)
+ * and at runtime (`AgentHelperCache.ResetForRun` / `ResolveAgentHelper`).
+ */
+export const FORBIDDEN_METADATA_HELPER_SEAMS: ReadonlySet<string> = new Set<string>([
+    'limits',
+    'actionpolicy',
+    'policy',
+    'permissions',
+    'permission',
+]);
+
+/**
+ * Returns `true` when `seam` identifies a code-only security/limits/policy seam that cannot
+ * be replaced via agent metadata `helperPlugins`.
+ */
+export function IsForbiddenMetadataHelperSeam(seam: string | null | undefined): boolean {
+    if (typeof seam !== 'string') {
+        return false;
+    }
+    const normalized = seam.trim().toLowerCase().replace(/[-_\s]/g, '');
+    return FORBIDDEN_METADATA_HELPER_SEAMS.has(normalized);
+}
+
+/**
+ * Tolerantly parses `helperPlugins` from an agent configuration JSON string (`Configuration` or
+ * `TypeConfiguration`). Returns an empty array when absent, malformed, or not an array.
+ */
+export function ParseAgentHelperPlugins(configJson: string | null | undefined): AgentHelperPluginEntry[] {
+    const root = parseJsonObject(configJson);
+    if (!root) {
+        return [];
+    }
+    const rawPlugins = root['helperPlugins'];
+    if (!Array.isArray(rawPlugins)) {
+        return [];
+    }
+    const parsed: AgentHelperPluginEntry[] = [];
+    for (const item of rawPlugins) {
+        if (!isJsonObject(item)) {
+            continue;
+        }
+        const seam = typeof item['seam'] === 'string' ? item['seam'].trim() : '';
+        const driverClass = typeof item['driverClass'] === 'string' ? item['driverClass'].trim() : '';
+        if (!seam || !driverClass) {
+            continue;
+        }
+        const rawPriority = item['priority'];
+        const entry: AgentHelperPluginEntry = { seam, driverClass };
+        if (typeof rawPriority === 'number' && Number.isFinite(rawPriority)) {
+            entry.priority = rawPriority;
+        }
+        parsed.push(entry);
+    }
+    return parsed;
+}
+
+/**
  * Parses a raw JSON object string (such as `TypeConfiguration` or `AgentTypePromptParams`).
  * Returns `null` when empty, invalid JSON, or not a plain object.
  */

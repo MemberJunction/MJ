@@ -11,6 +11,7 @@
  * @module @memberjunction/ai-agents
  */
 
+import { IsForbiddenMetadataHelperSeam, type AgentHelperPluginEntry } from '@memberjunction/ai-core-plus';
 import { MJGlobal } from '@memberjunction/global';
 import {
     CODE_ONLY_HELPER_SEAMS,
@@ -54,7 +55,7 @@ export const DEFAULT_AGENT_HELPER_KEY = 'Default';
 export function ResolveAgentHelper<TBase>(options: ResolveAgentHelperOptions<TBase>): TBase {
     const trimmedDriver = options.DriverClass?.trim();
     if (trimmedDriver && trimmedDriver.length > 0) {
-        if (CODE_ONLY_HELPER_SEAMS.has(options.SeamKey)) {
+        if (CODE_ONLY_HELPER_SEAMS.has(options.SeamKey) || IsForbiddenMetadataHelperSeam(options.SeamKey)) {
             throw new Error(
                 `Security violation: helper seam '${options.SeamKey}' is code-only and cannot be overridden ` +
                 `via agent metadata helperPlugins (requested driverClass '${trimmedDriver}'). ` +
@@ -72,18 +73,26 @@ export function ResolveAgentHelper<TBase>(options: ResolveAgentHelperOptions<TBa
     }
 
     const factory = MJGlobal.Instance.ClassFactory;
-    const unkeyedReg = factory.GetRegistration(options.BaseClass, undefined);
-    const defaultReg = factory.GetRegistration(options.BaseClass, DEFAULT_AGENT_HELPER_KEY);
-    if (unkeyedReg && (!defaultReg || unkeyedReg.Priority >= defaultReg.Priority)) {
-        const unkeyed = factory.TryCreateInstance<TBase>(options.BaseClass);
-        if (unkeyed.Resolved && unkeyed.Instance) {
-            return unkeyed.Instance;
-        }
-    }
+    const defaultKeyLower = DEFAULT_AGENT_HELPER_KEY.toLowerCase();
+    // Only consider truly unkeyed global overrides or explicit 'Default' registrations —
+    // never let a keyed per-agent plugin (e.g. 'AcmePayloadHelper') bleed into unrelated agents.
+    const globalRegs = factory
+        .GetAllRegistrations(options.BaseClass)
+        .filter((reg) => {
+            const key = reg.Key?.trim().toLowerCase() ?? '';
+            return key === '' || key === defaultKeyLower;
+        });
 
-    const defaultResult = factory.TryCreateInstance<TBase>(options.BaseClass, DEFAULT_AGENT_HELPER_KEY);
-    if (defaultResult.Resolved && defaultResult.Instance) {
-        return defaultResult.Instance;
+    if (globalRegs.length > 0) {
+        let best = globalRegs[0];
+        for (let i = 1; i < globalRegs.length; i++) {
+            // Highest priority wins; on ties, later registration wins (matches ClassFactory semantics).
+            if (globalRegs[i].Priority >= best.Priority) {
+                best = globalRegs[i];
+            }
+        }
+        const SubClassCtor = best.SubClass as AgentHelperConstructor<TBase>;
+        return new SubClassCtor();
     }
 
     return new options.DefaultClass();
@@ -100,7 +109,7 @@ export class AgentHelperCache {
     /**
      * Resets cached helper instances and applies optional per-agent plugin bindings for a new run.
      */
-    public ResetForRun(plugins?: ReadonlyArray<AgentHelperPluginConfig>): void {
+    public ResetForRun(plugins?: ReadonlyArray<AgentHelperPluginConfig | AgentHelperPluginEntry>): void {
         this._instances.clear();
         this._pluginsBySeam.clear();
         if (!plugins || plugins.length === 0) {
@@ -109,14 +118,15 @@ export class AgentHelperCache {
         // Sort ascending by priority so higher-priority entries win in the map.
         const sorted = [...plugins].sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
         for (const plugin of sorted) {
-            if (CODE_ONLY_HELPER_SEAMS.has(plugin.seam)) {
+            const seamKey = plugin.seam.trim();
+            if (CODE_ONLY_HELPER_SEAMS.has(seamKey as AgentHelperSeamKey) || IsForbiddenMetadataHelperSeam(seamKey)) {
                 throw new Error(
                     `Security violation: helper seam '${plugin.seam}' is code-only and cannot be configured ` +
                     `in agent helperPlugins (driverClass '${plugin.driverClass}').`
                 );
             }
             if (plugin.driverClass?.trim()) {
-                this._pluginsBySeam.set(plugin.seam, plugin.driverClass.trim());
+                this._pluginsBySeam.set(seamKey as AgentHelperSeamKey, plugin.driverClass.trim());
             }
         }
     }

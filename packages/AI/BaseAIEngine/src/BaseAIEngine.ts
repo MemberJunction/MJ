@@ -20,6 +20,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIConfigurationParamEntity,
          MJAIAgentStepEntity,
          MJAIAgentStepPathEntity,
+         MJAIAgentStepTypeEntity,
          MJAIAgentRelationshipEntity,
          MJAIAgentPermissionEntity,
          MJAIAgentDataSourceEntity,
@@ -274,6 +275,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agents: MJAIAgentEntityExtended[] = [];
     private _agentRelationships: MJAIAgentRelationshipEntity[] = [];
     private _agentTypes: MJAIAgentTypeEntity[] = [];
+    private _agentStepTypes: MJAIAgentStepTypeEntity[] = [];
     private _agentRequestTypes: MJAIAgentRequestTypeEntity[] = [];
     private _vendorTypeDefinitions: MJAIVendorTypeDefinitionEntity[] = [];
     private _vendors: MJAIVendorEntity[] = [];
@@ -681,6 +683,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentPersonas',
                 EntityName: 'MJ: AI Agent Personas',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentStepTypes',
+                EntityName: 'MJ: AI Agent Step Types',
                 CacheLocal: true
             }
         ];
@@ -1951,6 +1958,25 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentTypes(): MJAIAgentTypeEntity[] {
         return this.GetConfigData<MJAIAgentTypeEntity>('_agentTypes');
+    }
+
+    /**
+     * Built-in and OpenApp-registered AI agent step types (`MJ: AI Agent Step Types`),
+     * cached conditionally during Config() and consumed by `AgentStepTypeRegistry`.
+     */
+    public get AgentStepTypes(): MJAIAgentStepTypeEntity[] {
+        return this.GetConfigData<MJAIAgentStepTypeEntity>('_agentStepTypes');
+    }
+
+    /**
+     * Finds a registered AI agent step type by its canonical `Name` (trimmed, case-insensitive).
+     */
+    public GetAgentStepTypeByName(name: string): MJAIAgentStepTypeEntity | undefined {
+        const normalized = name?.trim().toLowerCase();
+        if (!normalized) {
+            return undefined;
+        }
+        return this.AgentStepTypes.find(t => t.Name.trim().toLowerCase() === normalized);
     }
 
     /**

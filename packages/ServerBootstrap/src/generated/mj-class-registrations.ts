@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (535 classes)
+// @memberjunction/core-entities (536 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -308,6 +308,7 @@ import {
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentStepTypeEntity,
     MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
@@ -1375,21 +1376,41 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (33 classes)
+// @memberjunction/ai-agents (60 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
+    ActionsStepHandler,
+    AgentActionPolicyHelper,
+    AgentActionsHelper,
+    AgentCompactionHelper,
+    AgentIterationHelper,
+    AgentLimitsHelper,
+    AgentMessagingHelper,
+    AgentPayloadHelper,
+    AgentPromptHelper,
+    AgentRealtimeHelper,
+    AgentRunSetupHelper,
+    AgentSkillsHelper,
+    AgentStepExecutionHelper,
+    AgentSubAgentHelper,
     ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
+    ChatStepHandler,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
+    ClientToolsStepHandler,
     DataSnapshotToolLibrary,
+    DecisionStepHandler,
     DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
+    FailedStepHandler,
     FlowAgentType,
+    ForEachStepHandler,
     GenericBinaryToolLibrary,
+    HandoffStepHandler,
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
@@ -1402,12 +1423,19 @@ import {
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
+    PlanStepHandler,
     QueryBuilderAgent,
     RealtimeAgentType,
+    RetryStepHandler,
     SearchResultSetToolLibrary,
+    SkillStepHandler,
     SlideDeckToolLibrary,
     SpreadsheetToolLibrary,
+    SubAgentStepHandler,
+    SuccessStepHandler,
+    TasksStepHandler,
     TextToolLibrary,
+    WhileStepHandler,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
 } from '@memberjunction/ai-agents';
@@ -2178,6 +2206,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentStepTypeEntity,
     MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
@@ -2242,11 +2271,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAgentChannelParticipantEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
-    MJApplicationRoleEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArchiveConfigurationEntity,
     MJArchiveConfigurationEntityEntity,
@@ -2446,11 +2475,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
-    MJIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
@@ -2650,11 +2679,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueDeliveryEntity,
     MJWorkQueueMessageEntity,
     MJWorkQueueSubscriptionEntity,
-    MJWorkQueueTopicEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJWorkQueueTopicEntity,
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
@@ -2854,11 +2883,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MySQLExternalDataSourceDriver,
     OracleExternalDataSourceDriver,
     PostgresExternalDataSourceDriver,
-    SnowflakeExternalDataSourceDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
     MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
@@ -3001,17 +3030,37 @@ const CLASS_REGISTRATIONS_4: any[] = [
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
+    ActionsStepHandler,
+    AgentActionPolicyHelper,
+    AgentActionsHelper,
+    AgentCompactionHelper,
+    AgentIterationHelper,
+    AgentLimitsHelper,
+    AgentMessagingHelper,
+    AgentPayloadHelper,
+    AgentPromptHelper,
+    AgentRealtimeHelper,
+    AgentRunSetupHelper,
+    AgentSkillsHelper,
+    AgentStepExecutionHelper,
+    AgentSubAgentHelper,
     ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
+    ChatStepHandler,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
+    ClientToolsStepHandler,
     DataSnapshotToolLibrary,
+    DecisionStepHandler,
     DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
+    FailedStepHandler,
     FlowAgentType,
+    ForEachStepHandler,
     GenericBinaryToolLibrary,
+    HandoffStepHandler,
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
@@ -3024,13 +3073,24 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
+    PlanStepHandler,
     QueryBuilderAgent,
     RealtimeAgentType,
+    RetryStepHandler,
     SearchResultSetToolLibrary,
+    SkillStepHandler,
     SlideDeckToolLibrary,
     SpreadsheetToolLibrary,
+    SubAgentStepHandler,
+    SuccessStepHandler,
+    TasksStepHandler,
     TextToolLibrary,
+    WhileStepHandler,
     WhiteboardChannelServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     WhiteboardToolLibrary,
     DefaultRuntimeActionBridgeBuilder,
     AntigravityCliAdapter,
@@ -3059,10 +3119,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     CreateEntityAction,
     DescribeEntityAction,
     ListMyEntitiesAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     ModifyEntityAction,
     ValidateEntitySchemaAction,
     RecordProcessCancelRunServerOperation,
@@ -3235,6 +3291,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
     PredictiveStudioMigratePreGateModelsServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     PredictiveStudioModelDevAgent,
     PredictiveStudioModelMonitoringJobDriver,
     PredictiveStudioPipelineBuilderAgent,
@@ -3263,10 +3323,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     DecisionEvalDriver,
     PromptEvalDriver,
     RubricCalibrationTestDriver,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     ComputerUseAction,
     ComputerUseTestDriver,
     DecisionFeaturePipelineDriver,
@@ -3439,6 +3495,10 @@ const CLASS_REGISTRATIONS_6: any[] = [
     ObjectExistsAction,
     OpenAgentChannelAction,
     PDFExtractorAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_7: any[] = [
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -3467,10 +3527,6 @@ const CLASS_REGISTRATIONS_6: any[] = [
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_7: any[] = [
     SearchAction,
     SearchEntityAction,
     SearchQueryCatalogAction,
@@ -3572,7 +3628,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1483;
+export const CLASS_REGISTRATIONS_COUNT = 1511;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

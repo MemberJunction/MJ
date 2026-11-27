@@ -20,6 +20,7 @@ export class MJAIAgentRunStepFormComponent extends BaseFormComponent {
             { sectionKey: 'executionStatusValidation', sectionName: 'Execution Status & Validation', isExpanded: true },
             { sectionKey: 'dataPayload', sectionName: 'Data & Payload', isExpanded: true },
             { sectionKey: 'notesSystemMetadata', sectionName: 'Notes & System Metadata', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAIAgentRunStepsParentID', sectionName: 'AI Agent Run Steps (Parent Step)', isExpanded: false },
             { sectionKey: 'mJAIAgentRunStepsPayloadAtStartSourceStepID', sectionName: 'AI Agent Run Steps (Payload At Start Source Step ID)', isExpanded: false },

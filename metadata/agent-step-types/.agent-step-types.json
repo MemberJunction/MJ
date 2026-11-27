@@ -1,0 +1,212 @@
+[
+  {
+    "fields": {
+      "Name": "Actions",
+      "Description": "Executes one or more server-side MJ Actions with parameter normalization, policy enforcement, and action circuit breaking.",
+      "DriverClass": "ActionsStepHandler",
+      "AppliesTo": "Both",
+      "AllowedInUnapprovedPlanMode": false,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "81F4251D-7103-4AE0-9CBD-4F3415A6C448"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sub-Agent",
+      "Description": "Delegates work to a child or related sub-agent (sequentially or in parallel) and folds results back into the parent run.",
+      "DriverClass": "SubAgentStepHandler",
+      "AppliesTo": "Both",
+      "AllowedInUnapprovedPlanMode": false,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "11D9E096-324B-4CFC-B903-A7B39D5AE77A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Retry",
+      "Description": "Re-enters the agent prompt loop with updated context, prior step results, or an expanded compacted message.",
+      "DriverClass": "RetryStepHandler",
+      "AppliesTo": "Loop",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "EC464185-DFF8-4CF1-9910-76CBBCC69AD1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Success",
+      "Description": "Concludes the agent run successfully after payload validation, minimum execution checks, and optional self-check.",
+      "DriverClass": "SuccessStepHandler",
+      "AppliesTo": "All",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "04854C85-53AA-4B93-97D5-DE41AE8BC35A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Failed",
+      "Description": "Signals a step or run failure, invoking AgentType fallback recovery or terminating the run.",
+      "DriverClass": "FailedStepHandler",
+      "AppliesTo": "All",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "ED1C8EC8-D9FD-4514-B796-E0283DFC6860"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Chat",
+      "Description": "Sends a conversational message or feedback request to the user (or parent agent in consult mode).",
+      "DriverClass": "ChatStepHandler",
+      "AppliesTo": "Both",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": false,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "6A15A5B9-4F6F-44F2-A896-B345220513A9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ForEach",
+      "Description": "Iterates sequentially or in bounded parallel batches over a collection in payload, running an action or sub-agent per item.",
+      "DriverClass": "ForEachStepHandler",
+      "AppliesTo": "Both",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F2F07A3E-C44F-4A69-935E-C0EB18710CFF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "While",
+      "Description": "Repeatedly executes a loop body while a configured payload/context condition evaluates true.",
+      "DriverClass": "WhileStepHandler",
+      "AppliesTo": "Both",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "D7BA4F16-3E01-4F41-A6FF-FD51F79C4EA0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Skill",
+      "Description": "Activates an approved AI Skill and injects its instructions, actions, and sub-agent capabilities into the run.",
+      "DriverClass": "SkillStepHandler",
+      "AppliesTo": "Loop",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "3B9CB7A3-26B1-4C4D-A9FA-99BFCC207976"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Plan",
+      "Description": "Presents a structured execution plan for human approval before mutating actions or sub-agents run in Plan Mode.",
+      "DriverClass": "PlanStepHandler",
+      "AppliesTo": "Loop",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "83DB317F-C895-44DB-905C-F2E28CF33035"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tasks",
+      "Description": "Submits a multi-node durable TaskGraph for orchestrated parallel or asynchronous execution.",
+      "DriverClass": "TasksStepHandler",
+      "AppliesTo": "Loop",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A6637F50-3004-4E12-BD80-DD1927CCBBB3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Handoff",
+      "Description": "Transfers ownership of the active conversation turn to a validated target agent and concludes the source run.",
+      "DriverClass": "HandoffStepHandler",
+      "AppliesTo": "Loop",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "A604AAB0-2B0F-43CB-BC14-A42A5977DB27"
+    }
+  },
+  {
+    "fields": {
+      "Name": "ClientTools",
+      "Description": "Invokes one or more client-side tools hosted in the user's browser or workspace session.",
+      "DriverClass": "ClientToolsStepHandler",
+      "AppliesTo": "Loop",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "68970697-AADA-4317-95E1-BCB2371B2055"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Decision",
+      "Description": "Evaluates one or more typed System-1 decisions without an intervening LLM turn and returns decision results.",
+      "DriverClass": "DecisionStepHandler",
+      "AppliesTo": "Both",
+      "AllowedInUnapprovedPlanMode": true,
+      "CountsAgainstTreeBudget": true,
+      "DefaultEnabledInPrompt": true,
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "B7A42537-50E4-4E46-8FC8-C4CB61E9FA15"
+    }
+  }
+]

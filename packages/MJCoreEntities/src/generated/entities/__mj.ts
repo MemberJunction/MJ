@@ -38,6 +38,7 @@ import type {
   MJAIAgentSessionEntityType,
   MJAIAgentSkillEntityType,
   MJAIAgentStepPathEntityType,
+  MJAIAgentStepTypeEntityType,
   MJAIAgentStepEntityType,
   MJAIAgentSuggestionEntityType,
   MJAIAgentTypeEntityType,
@@ -7655,6 +7656,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Actions
     *   * Chat
     *   * Compaction
+    *   * Custom
     *   * Decision
     *   * ForEach
     *   * Handoff
@@ -7666,12 +7668,12 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     *   * Tool
     *   * Validation
     *   * While
-    * * Description: Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.
+    * * Description: Type of execution step: Actions, Chat, Compaction, Custom, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.
     */
-    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
+    get StepType(): 'Actions' | 'Chat' | 'Compaction' | 'Custom' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
+    set StepType(value: 'Actions' | 'Chat' | 'Compaction' | 'Custom' | 'Decision' | 'ForEach' | 'Handoff' | 'Plan' | 'Prompt' | 'Skill' | 'Sub-Agent' | 'TaskGraph' | 'Tool' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -8042,6 +8044,20 @@ detailed information about what validation rules failed.
     }
 
     /**
+    * * Field Name: StepTypeID
+    * * Display Name: Step Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+    * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition executed by this run step (especially when StepType is Custom).
+    */
+    get StepTypeID(): string | null {
+        return this.Get('StepTypeID');
+    }
+    set StepTypeID(value: string | null) {
+        this.Set('StepTypeID', value);
+    }
+
+    /**
     * * Field Name: AgentRun
     * * Display Name: Agent Run Context
     * * SQL Data Type: nvarchar(255)
@@ -8075,6 +8091,15 @@ detailed information about what validation rules failed.
     */
     get PayloadAtEndSourceStep(): string | null {
         return this.Get('PayloadAtEndSourceStep');
+    }
+
+    /**
+    * * Field Name: StepType_Virtual
+    * * Display Name: Step Type Virtual
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StepType_Virtual(): string | null {
+        return this.Get('StepType_Virtual');
     }
 
     /**
@@ -11146,6 +11171,230 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
 
 
 /**
+ * MJ: AI Agent Step Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentStepType
+ * * Base View: vwAIAgentStepTypes
+ * * @description Catalog of built-in and OpenApp-registered AI agent step types resolved through AgentStepTypeRegistry and @RegisterClass(BaseAgentStepHandler).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Step Types')
+export class MJAIAgentStepTypeEntity extends BaseEntity<MJAIAgentStepTypeEntityType> {
+    /**
+    * Loads the MJ: AI Agent Step Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Step Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentStepTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique canonical step key (e.g. Actions, Sub-Agent, Skill, Plan, Handoff, or a custom OpenApp step key).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what this step type performs during agent execution.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: @RegisterClass(BaseAgentStepHandler, DriverClass) key used by AgentStepTypeRegistry to instantiate the runtime handler for this step type.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: AppliesTo
+    * * Display Name: Applies To
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Loop
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Both
+    *   * Flow
+    *   * Loop
+    * * Description: Which agent execution models support this step type: Loop, Flow, Both, or All.
+    */
+    get AppliesTo(): 'All' | 'Both' | 'Flow' | 'Loop' {
+        return this.Get('AppliesTo');
+    }
+    set AppliesTo(value: 'All' | 'Both' | 'Flow' | 'Loop') {
+        this.Set('AppliesTo', value);
+    }
+
+    /**
+    * * Field Name: AllowedInUnapprovedPlanMode
+    * * Display Name: Allowed In Unapproved Plan Mode
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When false, invoking this step while Plan Mode is active and unapproved is rejected with a Retry prompting the agent to present a Plan first.
+    */
+    get AllowedInUnapprovedPlanMode(): boolean {
+        return this.Get('AllowedInUnapprovedPlanMode');
+    }
+    set AllowedInUnapprovedPlanMode(value: boolean) {
+        this.Set('AllowedInUnapprovedPlanMode', value);
+    }
+
+    /**
+    * * Field Name: CountsAgainstTreeBudget
+    * * Display Name: Counts Against Tree Budget
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, dispatching this step checks and counts against cumulative AgentTreeBudget limits.
+    */
+    get CountsAgainstTreeBudget(): boolean {
+        return this.Get('CountsAgainstTreeBudget');
+    }
+    set CountsAgainstTreeBudget(value: boolean) {
+        this.Set('CountsAgainstTreeBudget', value);
+    }
+
+    /**
+    * * Field Name: DefaultEnabledInPrompt
+    * * Display Name: Default Enabled In Prompt
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether prompt templates should advertise this step type by default when constructing agent instructions.
+    */
+    get DefaultEnabledInPrompt(): boolean {
+        return this.Get('DefaultEnabledInPrompt');
+    }
+    set DefaultEnabledInPrompt(value: boolean) {
+        this.Set('DefaultEnabledInPrompt', value);
+    }
+
+    /**
+    * * Field Name: PromptDocsTemplate
+    * * Display Name: Prompt Docs Template
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional Nunjucks/Markdown prompt documentation snippet describing how an LLM invokes this step type.
+    */
+    get PromptDocsTemplate(): string | null {
+        return this.Get('PromptDocsTemplate');
+    }
+    set PromptDocsTemplate(value: string | null) {
+        this.Set('PromptDocsTemplate', value);
+    }
+
+    /**
+    * * Field Name: ResponseSchemaSnippet
+    * * Display Name: Response Schema Snippet
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON schema fragment describing the payload fields emitted by an LLM response envelope for this step type.
+    */
+    get ResponseSchemaSnippet(): string | null {
+        return this.Get('ResponseSchemaSnippet');
+    }
+    set ResponseSchemaSnippet(value: string | null) {
+        this.Set('ResponseSchemaSnippet', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+    * * Description: Lifecycle status of this step type registration: Active, Deprecated, or Disabled.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON configuration bag specific to this step type handler.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Agent Steps - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentStep
@@ -11308,6 +11557,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Custom
     *   * Decision
     *   * External
     *   * ForEach
@@ -11316,12 +11566,12 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     *   * Sub-Agent
     *   * Wait
     *   * While
-    * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).
+    * * Description: Type of step: Action (execute an action), Custom (pluggable step type referenced by StepTypeID), Decision (one typed decision call whose answers the outgoing paths route on), External, ForEach / While (a loop), Human (ask a person), Prompt (run an AI prompt), Sub-Agent (delegate to another agent), or Wait.
     */
-    get StepType(): 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While' {
+    get StepType(): 'Action' | 'Custom' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While') {
+    set StepType(value: 'Action' | 'Custom' | 'Decision' | 'External' | 'ForEach' | 'Human' | 'Prompt' | 'Sub-Agent' | 'Wait' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -11571,6 +11821,20 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     }
 
     /**
+    * * Field Name: StepTypeID
+    * * Display Name: Step Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+    * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition for this flow agent step (especially when StepType is Custom).
+    */
+    get StepTypeID(): string | null {
+        return this.Get('StepTypeID');
+    }
+    set StepTypeID(value: string | null) {
+        this.Set('StepTypeID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -11604,6 +11868,15 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     */
     get Prompt(): string | null {
         return this.Get('Prompt');
+    }
+
+    /**
+    * * Field Name: StepType_Virtual
+    * * Display Name: Step Type Virtual
+    * * SQL Data Type: nvarchar(100)
+    */
+    get StepType_Virtual(): string | null {
+        return this.Get('StepType_Virtual');
     }
 }
 

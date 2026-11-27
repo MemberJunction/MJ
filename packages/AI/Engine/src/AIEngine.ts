@@ -24,7 +24,7 @@ import { MJAIActionEntity, MJActionEntity,
          MJAIAgentTypeEntity, MJAIAgentRequestTypeEntity, MJAIVendorEntity, MJAIModelVendorEntity, MJAIModelTypeEntity,
          MJAIModelCostEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity,
          MJAIConfigurationEntity, MJAIConfigurationParamEntity, MJAIAgentStepEntity,
-         MJAIAgentStepPathEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
+         MJAIAgentStepPathEntity, MJAIAgentStepTypeEntity, MJAIAgentRelationshipEntity, MJAIAgentPermissionEntity,
          MJAIAgentDataSourceEntity, MJAIAgentConfigurationEntity, MJAIAgentExampleEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
@@ -271,6 +271,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public get Agents(): MJAIAgentEntityExtended[] { return this.Base.Agents; }
     public get AgentRelationships(): MJAIAgentRelationshipEntity[] { return this.Base.AgentRelationships; }
     public get AgentTypes(): MJAIAgentTypeEntity[] { return this.Base.AgentTypes; }
+    public get AgentStepTypes(): MJAIAgentStepTypeEntity[] { return this.Base.AgentStepTypes; }
+    public GetAgentStepTypeByName(name: string): MJAIAgentStepTypeEntity | undefined { return this.Base.GetAgentStepTypeByName(name); }
     public get AgentRequestTypes(): MJAIAgentRequestTypeEntity[] { return this.Base.AgentRequestTypes; }
     public get AgentCategories(): MJAIAgentCategoryEntity[] { return this.Base.AgentCategories; }
     public get AgentActions(): MJAIAgentActionEntity[] { return this.Base.AgentActions; }

@@ -9,11 +9,13 @@
  */
 
 import {
+    ParseAgentHelperPlugins,
     ResolveEffectiveWorkflowDurationCapMs,
     ResolveWorkflowStartedAtMs,
     WithAgentRunDataTrustApplied,
     type AgentChatMessage,
     type AgentConfiguration,
+    type AgentHelperPluginEntry,
     type BaseAgentNextStep,
     type ExecuteAgentParams,
     type ExecuteAgentResult,
@@ -181,8 +183,12 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
 
             await ctx.Hooks.InheritBoundActionParams(params);
 
-            // Reset per-run helper resolution cache so global @RegisterClass / per-agent helperPlugins take effect cleanly.
-            ctx.HelperCache.ResetForRun();
+            // Reset per-run helper resolution cache so global @RegisterClass and per-agent helperPlugins take effect cleanly.
+            const agentHelperPlugins: AgentHelperPluginEntry[] = [
+                ...ParseAgentHelperPlugins(params.agent?.TypeConfiguration),
+                ...(params.helperPlugins ?? []),
+            ];
+            ctx.HelperCache.ResetForRun(agentHelperPlugins.length > 0 ? agentHelperPlugins : undefined);
 
             const wrappedParams: ExecuteAgentParams<C> = {
                 ...params,

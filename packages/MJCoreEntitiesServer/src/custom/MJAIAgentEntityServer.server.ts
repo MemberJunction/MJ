@@ -13,8 +13,10 @@ import {
 import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import { MJAIAgentEntity, MJAIAgentPermissionEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import {
+    IsForbiddenMetadataHelperSeam,
     MAX_AGENT_INHERITANCE_DEPTH,
     MJAIAgentEntityExtended,
+    ParseAgentHelperPlugins,
     ParseAgentInstantiationConfig,
 } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
@@ -78,6 +80,10 @@ export interface AgentSandboxValidationTarget {
     MaxTokensPerRun: number | null;
     MaxTimePerRun: number | null;
     MaxIterationsPerRun: number | null;
+    /** Optional JSON bag carrying `helperPlugins` (`Configuration` or `TypeConfiguration`). */
+    Configuration?: string | null;
+    /** Optional `TypeConfiguration` JSON (checked for `helperPlugins` fallback). */
+    TypeConfiguration?: string | null;
 }
 
 /**
@@ -132,6 +138,37 @@ export function ValidateAgentInheritanceAndSandbox(
     const errors: ValidationErrorInfo[] = [];
     const { Target, User, AllAgents, AllPermissions } = ctx;
     const isAdmin = IsAgentAdminOrOwnerUser(User);
+
+    // 0. Per-agent helperPlugins security guard (Extension Point #3):
+    //    - Code-only security seams (limits, actionPolicy, policy, permissions) are forbidden in
+    //      metadata for ALL users (including administrators).
+    //    - Non-administrator users cannot configure ANY helperPlugins on personal agent instances.
+    const declaredHelperPlugins = [
+        ...ParseAgentHelperPlugins(Target.Configuration),
+        ...ParseAgentHelperPlugins(Target.TypeConfiguration),
+    ];
+    for (const plugin of declaredHelperPlugins) {
+        if (IsForbiddenMetadataHelperSeam(plugin.seam)) {
+            errors.push(
+                new ValidationErrorInfo(
+                    'Configuration',
+                    `Helper seam '${plugin.seam}' is code-only and cannot be overridden via agent metadata helperPlugins (driverClass '${plugin.driverClass}'). Use @RegisterClass in server code instead.`,
+                    plugin.seam,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
+    }
+    if (!isAdmin && User && declaredHelperPlugins.length > 0) {
+        errors.push(
+            new ValidationErrorInfo(
+                'Configuration',
+                'Only administrators may configure helperPlugins on an AI Agent.',
+                declaredHelperPlugins.map((p) => `${p.seam}:${p.driverClass}`).join(', '),
+                ValidationErrorType.Failure
+            )
+        );
+    }
 
     // 1. Non-admin sandbox on root vs derived + ownership + InstantiationMode
     if (!isAdmin && User) {
@@ -470,10 +507,11 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         const result = await super.ValidateAsync();
         if (!result.Success) return result;
 
-        // 1. BaseAgentID inheritance & non-admin sandbox checks
+        // 1. BaseAgentID inheritance, helperPlugins & non-admin sandbox checks
         const user = this.ContextCurrentUser;
         const isAdmin = IsAgentAdminOrOwnerUser(user);
-        if (this.BaseAgentID || !isAdmin) {
+        const hasDeclaredHelperPlugins = ParseAgentHelperPlugins(this.TypeConfiguration).length > 0;
+        if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins) {
             const [allAgents, allPermissions] = await Promise.all([
                 this.loadAllAgentsForGuard(),
                 this.loadAllAgentPermissionsForGuard(),
@@ -497,6 +535,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     MaxTokensPerRun: this.MaxTokensPerRun,
                     MaxTimePerRun: this.MaxTimePerRun,
                     MaxIterationsPerRun: this.MaxIterationsPerRun,
+                    TypeConfiguration: this.TypeConfiguration,
                 },
                 User: user,
                 AllAgents: allAgents,

@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (535 classes)
+// @memberjunction/core-entities (536 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -285,6 +285,7 @@ import {
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentStepTypeEntity,
     MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
@@ -1126,21 +1127,41 @@ import {
     VoyageReRanker,
 } from '@memberjunction/search-engine';
 
-// @memberjunction/ai-agents (33 classes)
+// @memberjunction/ai-agents (60 classes)
 import {
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
+    ActionsStepHandler,
+    AgentActionPolicyHelper,
+    AgentActionsHelper,
+    AgentCompactionHelper,
+    AgentIterationHelper,
+    AgentLimitsHelper,
+    AgentMessagingHelper,
+    AgentPayloadHelper,
+    AgentPromptHelper,
+    AgentRealtimeHelper,
+    AgentRunSetupHelper,
+    AgentSkillsHelper,
+    AgentStepExecutionHelper,
+    AgentSubAgentHelper,
     ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
+    ChatStepHandler,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
+    ClientToolsStepHandler,
     DataSnapshotToolLibrary,
+    DecisionStepHandler,
     DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
+    FailedStepHandler,
     FlowAgentType,
+    ForEachStepHandler,
     GenericBinaryToolLibrary,
+    HandoffStepHandler,
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
@@ -1153,12 +1174,19 @@ import {
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
+    PlanStepHandler,
     QueryBuilderAgent,
     RealtimeAgentType,
+    RetryStepHandler,
     SearchResultSetToolLibrary,
+    SkillStepHandler,
     SlideDeckToolLibrary,
     SpreadsheetToolLibrary,
+    SubAgentStepHandler,
+    SuccessStepHandler,
+    TasksStepHandler,
     TextToolLibrary,
+    WhileStepHandler,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
 } from '@memberjunction/ai-agents';
@@ -1781,6 +1809,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentSkillEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
+    MJAIAgentStepTypeEntity,
     MJAIAgentSuggestionEntity,
     MJAIAgentTypeEntity,
     MJAIAgentUserPolicyEntity,
@@ -1856,11 +1885,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
-    MJArtifactUseEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
@@ -2060,11 +2089,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionOfferEntity,
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
-    MJKnowledgeHubSavedSearchEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -2264,11 +2293,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
-    SavedQueryDocumentBlock,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    SavedQueryDocumentBlock,
     SharedConceptEdgeProvider,
     MJActionEntityExtended,
     MJEntityActionEntityExtended,
@@ -2468,11 +2497,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RubricEngineBase,
     MJScheduledJobEntityExtended,
     TagEngineBase,
-    AIPromptExtension,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
     LLMDecision,
@@ -2514,17 +2543,37 @@ const CLASS_REGISTRATIONS_4: any[] = [
     VoyageReRanker,
     AISkillExportMarkdownServerOperation,
     AISkillImportMarkdownServerOperation,
+    ActionsStepHandler,
+    AgentActionPolicyHelper,
+    AgentActionsHelper,
+    AgentCompactionHelper,
+    AgentIterationHelper,
+    AgentLimitsHelper,
+    AgentMessagingHelper,
+    AgentPayloadHelper,
+    AgentPromptHelper,
+    AgentRealtimeHelper,
+    AgentRunSetupHelper,
+    AgentSkillsHelper,
+    AgentStepExecutionHelper,
+    AgentSubAgentHelper,
     ArtifactWorkspaceChannelServer,
     CSVToolLibrary,
+    ChatStepHandler,
     ClientContextChannelServer,
     ClientOnlyChannelServer,
+    ClientToolsStepHandler,
     DataSnapshotToolLibrary,
+    DecisionStepHandler,
     DocumentToolLibrary,
     DocxToolLibrary,
     DuplicateReasoningAgentProvider,
     ExcelToolLibrary,
+    FailedStepHandler,
     FlowAgentType,
+    ForEachStepHandler,
     GenericBinaryToolLibrary,
+    HandoffStepHandler,
     IdentityVerificationChannelServer,
     InteractiveComponentChannelServer,
     JSONToolLibrary,
@@ -2537,12 +2586,19 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MeetingControlsChannelServer,
     MemoryManagerAgent,
     PDFToolLibrary,
+    PlanStepHandler,
     QueryBuilderAgent,
     RealtimeAgentType,
+    RetryStepHandler,
     SearchResultSetToolLibrary,
+    SkillStepHandler,
     SlideDeckToolLibrary,
     SpreadsheetToolLibrary,
+    SubAgentStepHandler,
+    SuccessStepHandler,
+    TasksStepHandler,
     TextToolLibrary,
+    WhileStepHandler,
     WhiteboardChannelServer,
     WhiteboardToolLibrary,
     AntigravityCliAdapter,
@@ -2645,6 +2701,10 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
     MJFieldSuggestionEntityServer,
@@ -2673,10 +2733,6 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJRubricBandEntityServer,
     MJRubricCriterionEntityServer,
     MJRubricCriterionLevelEntityServer,
@@ -2849,6 +2905,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     OpenAgentChannelAction,
     PDFExtractorAction,
     ParallelExecuteAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     PasswordStrengthAction,
     PerplexitySearchAction,
     PostalCodeLookupAction,
@@ -2877,10 +2937,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     SearchEntityAction,
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
@@ -2995,7 +3051,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1297;
+export const CLASS_REGISTRATIONS_COUNT = 1325;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
