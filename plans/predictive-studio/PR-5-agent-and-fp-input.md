@@ -2354,6 +2354,17 @@ mj test run "<test name>"` in that worktree on that database, the test found by 
 summary reads both arms' `MJ: Test Runs` by those keys. A partial arm is resumed by re-running only its missing or
 refused tests.
 
+**How an arm runs the suite (D5-58).** The parent suite `Predictive Studio Agent Eval` is a grouping only: it holds no
+tests and loads no world, and `PredictiveStudioAgentEvalDriver.RegisterWorldLoader` is not wired (the Engine never
+depends on the truth suite). Each arm runs the 7 child suites by name, one after the other, each after loading its
+world: `PS_PR=5 tools/ps-env.sh pnpm --filter @memberjunction/predictive-studio-truth-suite run truth:world <world>`
+(`C1 | W1-signal | W2-noise | W3-leak-row | W7-small-imbalanced | C4 | N1c`), then `PS_PR=5 tools/ps-env.sh pnpm mj
+test suite "Predictive Studio Agent Eval - <world>"`. The world step (`TruthSuite/scripts/a7b-world.ts`, committed
+byte-identical to the baseline arm's file, sha256 `45f4015342312a79ff185ffaeef6e128e6305ba59a12c8edeb853773177212d9`)
+loads that child's planted-truth dataset through `DatasetLoader` and empties every other membership world and scenario
+table (rows and dataset stamp); C1's child runs on the C1 corpus plus W1-signal s42 (D5-45). The baseline arm runs
+these same bytes in its uncommitted worktree. A re-run of one test loads its child suite's world first.
+
 **Gates and findings.** G4.4 `N1c → C1.4`, G4.5 `C4 → C1.4`, G4.6 `W3 → C1.4`; G4.7's suite run. F-AG-11.
 
 **Seams.** `c9-agent-eval-driver`, `c9-agent-eval-rubric`, `c9-subagent-model-pin`.

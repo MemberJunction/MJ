@@ -12,6 +12,7 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
+          "Status": "Published",
           "PassThreshold": 1,
           "NotApplicablePolicy": "ExcludeAndRedistribute",
           "ScoreDisplayMin": 0,
@@ -148,6 +149,10 @@
               }
             }
           ]
+        },
+        "sync": {
+          "lastModified": "2026-11-27T22:32:43.212Z",
+          "checksum": "883b9c0647be6710476eb9a61face8eb557094770d47934993a8acad27e61cbf"
         }
       }
     ]

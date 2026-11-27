@@ -19,6 +19,7 @@
     "truth:provision": "node scripts/provision.mjs",
     "truth:load-c1": "tsx scripts/load-c1-corpus.ts",
     "truth:sidecar": "tsx scripts/sidecar.mts",
+    "truth:world": "tsx scripts/a7b-world.ts",
     "setup:python": "node scripts/setup-python.mjs"
   },
   "dependencies": {

@@ -76,3 +76,31 @@ describe('RubricCalibration — Attack 4', () => {
     }
   });
 });
+
+/** The shape of the checked-in rubric metadata file the suite's rubric oracle reads (D5-58). */
+interface RubricMetadataFile {
+  readonly fields: { readonly Name: string; readonly Status: string };
+  readonly primaryKey: { readonly ID: string };
+  readonly relatedEntities: {
+    readonly 'MJ: Rubric Versions': readonly {
+      readonly fields: { readonly Status?: string };
+      readonly primaryKey: { readonly ID: string };
+    }[];
+  };
+}
+
+const RUBRIC_METADATA_PATH = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..', '..', '..', '..', '..', '..', '..',
+  'metadata', 'rubrics', '.predictive-studio-agent-eval-rubric.json'
+);
+
+describe('Predictive Studio Agent Eval rubric metadata (D5-58)', () => {
+  it('ships its one version Published, so RubricEngine finds a published version to evaluate with', () => {
+    const rubric = JSON.parse(readFileSync(RUBRIC_METADATA_PATH, 'utf8')) as RubricMetadataFile;
+    const versions = rubric.relatedEntities['MJ: Rubric Versions'];
+    expect(versions).toHaveLength(1);
+    expect(versions[0].primaryKey.ID).toBe('267FF292-E94E-4ABC-AC40-BB7088324AD3');
+    expect(versions[0].fields.Status).toBe('Published');
+  });
+});
