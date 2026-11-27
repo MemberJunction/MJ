@@ -16,7 +16,9 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 import type { CheckContext, CheckResult, StandardCheck, Violation } from '../types.js';
 
+/** Default maximum line count per non-test source file when `Options.MaxLines` is omitted (locked in plans/baseagent-refactor-study.md). */
 const DEFAULT_MAX_LINES = 1000;
+/** Number of leading lines scanned for a top-of-file `// file-size-ok: <reason>` exemption comment (accommodates license/fileoverview headers). */
 const DEFAULT_HEADER_SCAN_LINES = 15;
 const DEFAULT_HEADER_REASON_PATTERN = '//\\s*file-size-ok:\\s*\\S+';
 
