@@ -9,18 +9,29 @@
 
 import type {
     MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
     AgentChatMessageMetadata,
     AgentExecutionProgressCallback,
     AgentPayloadChangeRequest,
     AgentSkillInvocation,
+    AgentTreeBudget,
+    BaseAgentNextStep,
+    BudgetBreachDetail,
+    BudgetCostEvent,
+    ExecuteAgentParams,
+    ProgressEvaluationResult,
+    RunawayPauseReason,
+    RunawaySerializable,
     StopContinuationMode,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { ActionErrorRecovery, ActionOutputTrustLevel, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import type { ChatMessage } from '@memberjunction/ai';
-import type { UserInfo } from '@memberjunction/core';
+import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { CodeLang } from '@memberjunction/context-crush/code';
+import type { LoopIterationError } from '../AgentStepDispatcher';
+import type { PauseRunWithCheckpointResult } from '../RunawayCheckpointManager';
 import type { StoppedRunStepRecord } from '../tool-result-format';
 
 /**
@@ -213,5 +224,87 @@ export interface HeldCompletionChange {
     Change: AgentPayloadChangeRequest<unknown>;
     /** Whether it was built on a payload still inherited unmodified from a prior run. */
     UnmodifiedInheritedPayload: boolean;
+}
+
+/** Pending durable settlement for a late-arriving FastConvergenceJudge invocation. */
+export interface PendingDurableFastJudgeSettlement {
+    InvocationId: string;
+    CostUsd: number;
+    TokensUsed: number;
+    TimestampMs: number;
+}
+
+/** Per-run reconciliation scope for late FastConvergenceJudge usage accounting. */
+export interface RunLateJudgeScope {
+    AgentRun: MJAIAgentRunEntityExtended | null;
+    Provider: IMetadataProvider;
+    ContextUser?: UserInfo;
+    CostEvents: BudgetCostEvent[];
+    DayCostBaselines: Record<string, number>;
+    TreeBudget?: AgentTreeBudget;
+    LoopExited: boolean;
+    InMemoryReconciledIds: Set<string>;
+    PersistedIds: Set<string>;
+    PendingDurableSettlements: Map<string, PendingDurableFastJudgeSettlement>;
+    LateSaveChain: Promise<boolean>;
+    ActiveFinalSavePromise: Promise<void> | null;
+}
+
+/** Outcome stored when a run pauses non-destructively with a persisted (or pending) checkpoint. */
+export interface PausedRunOutcome {
+    PauseResult: PauseRunWithCheckpointResult;
+    PauseReason: RunawayPauseReason;
+    BudgetBreach?: BudgetBreachDetail;
+    ProgressEvaluation?: ProgressEvaluationResult;
+    Payload: RunawaySerializable;
+    PausePersistencePending?: boolean;
+}
+
+/** Result returned by a single `ForEach` iteration. */
+export interface ForEachIterationResult {
+    payload?: unknown;
+    error?: LoopIterationError;
+    result?: BaseAgentNextStep;
+    appliedFolds?: Array<{ output: Record<string, unknown>; mapping: string }>;
+}
+
+/** Aggregate result returned by `ExecuteForEachIterations`. */
+export interface ForEachLoopResults {
+    results: BaseAgentNextStep[];
+    errors: LoopIterationError[];
+    finalPayload: unknown;
+}
+
+/** Result returned by a single `While` iteration. */
+export interface WhileIterationResult {
+    payload?: unknown;
+    error?: LoopIterationError;
+    result?: BaseAgentNextStep;
+}
+
+/** Aggregate result handed from `ExecuteWhileIterations` to `CompleteWhileLoop`. */
+export interface WhileLoopResults {
+    results: BaseAgentNextStep[];
+    errors: LoopIterationError[];
+    finalPayload: BaseAgentNextStep['newPayload'];
+    iterations: number;
+    conditionError?: string;
+}
+
+/** Arguments passed to inline `ForEach`/`While` iteration governance checks. */
+export interface InlineLoopGovernanceArgs<P = unknown> {
+    LoopType: 'ForEach' | 'While';
+    ParentStepID: string;
+    NextIndex: number;
+    CompletedResults: BaseAgentNextStep[];
+    WorkingPayload: P;
+    LoopDecision: BaseAgentNextStep<P>;
+    Params: ExecuteAgentParams;
+    RecordProgressSample?: boolean;
+    LastIterResult?: BaseAgentNextStep;
+    TokensDelta?: number;
+    DelayBetweenIterationsMs?: number;
+    ContinueOnError?: boolean;
+    TotalItems?: number;
 }
 

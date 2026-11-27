@@ -11,11 +11,13 @@ import type {
 import { AgentRunStepSaveQueue } from '@memberjunction/ai-core-plus';
 import type { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ActionResultSpilloverManager } from '../../ActionResultSpilloverManager';
-import type { AgentDecisionService } from '../../AgentDecisionService';
+import { AgentDecisionService } from '../../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../../AgentFeedbackCoordinator';
+import { AgentStepDispatcher } from '../../AgentStepDispatcher';
 import { AgentTreeBudgetTracker } from '../../AgentTreeBudgetTracker';
 import { ArtifactToolManager } from '../../ArtifactToolManager';
 import { PayloadManager } from '../../PayloadManager';
+import { PipelineToolRegistry } from '../../pipeline';
 import { ScratchpadManager } from '../../ScratchpadManager';
 import type { AgentHelperSubclassHooks, AgentRunContext } from '../../helpers/AgentRunContext';
 
@@ -25,6 +27,7 @@ export function CreateMockAgentRunContext(
     const budgetTracker = new AgentTreeBudgetTracker();
     const stepSaveQueue = new AgentRunStepSaveQueue();
     const payloadManager = new PayloadManager();
+    const stepDispatcher = new AgentStepDispatcher();
     const actionSpilloverManager = new ActionResultSpilloverManager();
     const artifactToolManager = new ArtifactToolManager({
         AgentRunId: '11111111-1111-4111-8111-111111111111',
@@ -142,6 +145,30 @@ export function CreateMockAgentRunContext(
         ParseDelegateRequestText: (s) => s,
         PersistRealtimeTranscript: vi.fn(async () => null),
         FinalizeRealtimeRecording: vi.fn(async () => undefined),
+        ValidateActionInAgent: () => null,
+        ValidateSubAgentInAgent: () => null,
+        GetAvailableActionsForAgent: () => [],
+        ResolveActionEntityForAgent: () => undefined,
+        IndexEffectiveAgentActions: () => new Map(),
+        MatchNamedBySanitizedToolName: () => ({}),
+        ResolveActionTrustLevel: () => 'Trusted',
+        RecordTaintedSource: vi.fn(),
+        AudienceReadersFor: vi.fn(async () => ({ Readers: [] })),
+        ExecuteActionsStep: vi.fn(async () => ({ step: 'Retry' as const, terminate: false, priorStepResult: [] })),
+        ProcessSubAgentStep: vi.fn(async () => ({ step: 'Retry' as const, terminate: false })),
+        CloneSubAgentPayload: <T>(p: T) => structuredClone(p),
+        FormatActionResultsAsMarkdown: () => '',
+        CheckInlineLoopIterationGovernance: vi.fn(async () => null),
+        BuildPipelineRegistry: () => new PipelineToolRegistry(),
+        GetValueFromPath: () => undefined,
+        ResolveTemplates: (obj) => obj,
+        ResolveValueFromContext: (v) => v,
+        ResolveInlineTemplateExpressions: (t) => t,
+        ApplyLoopOutputFold: (p) => (p as Record<string, unknown>) ?? {},
+        FormatLoopResultsAsMarkdown: () => '',
+        ResolveLoopExpirationMetadata: () => ({ turnAdded: 0, messageType: 'loop-result' }),
+        ExecuteSingleForEachIteration: vi.fn(async () => ({})),
+        ExecuteSingleWhileIteration: vi.fn(async () => ({})),
     };
 
     const { Hooks: hookOverrides, ...restOverrides } = overrides ?? {};
@@ -193,6 +220,11 @@ export function CreateMockAgentRunContext(
         RealtimePersistQueues: new Map(),
         RealtimeRecording: null,
         RealtimeRecordingAccountId: null,
+        StepDispatcher: stepDispatcher,
+        AgentTypeInstance: undefined,
+        ActionResultCrush: undefined,
+        PendingLoopCursorToResume: null,
+        PausedRunOutcome: null,
         ...restOverrides,
         Hooks: {
             ...defaultHooks,

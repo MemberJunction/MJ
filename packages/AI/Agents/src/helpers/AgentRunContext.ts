@@ -20,9 +20,11 @@ import type {
     AIModelSelectionInfo,
     AIPromptExecutionScope,
     AIPromptRunResult,
+    AgentTaintedSource,
     BaseAgentNextStep,
     ExecuteAgentParams,
     ExecuteAgentResult,
+    ForEachOperation,
     MediaOutput,
     MessageLifecycleCallback,
     MessageLifecycleEvent,
@@ -31,21 +33,26 @@ import type {
     MJAIAgentRunStepEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
+    PendingLoopCursorState,
+    WhileOperation,
 } from '@memberjunction/ai-core-plus';
-import type { ActionParam, ActionResult, ActionRunScope, MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { ActionOutputTrustLevel, ActionParam, ActionResult, ActionRunScope, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { BaseRealtimeModel, ChatMessage, ChatMessageContent, RealtimeTranscript } from '@memberjunction/ai';
 import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { IMetadataProvider, MJLimitsConfig, UserInfo } from '@memberjunction/core';
 import type { ConversationBranchRow, MJAIPromptRunEntity } from '@memberjunction/core-entities';
-import type { ActionCompactMode } from '../ActionLifecycleResolver';
+import type { ActionCompactMode, ActionLifecycleResolver } from '../ActionLifecycleResolver';
 import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
+import type { BaseAgentType } from '../agent-types/base-agent-type';
 import type { AgentDecisionService } from '../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
+import type { AgentStepDispatcher, LoopIterationError } from '../AgentStepDispatcher';
 import type { AgentRunTokenStats, AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
 import type { ArtifactToolManager } from '../ArtifactToolManager';
 import type { CompactionOutcome, EffectiveContextBudget } from '../ConversationCompactionManager';
 import type { NativeControlConfig } from '../native-tools/native-control-config';
 import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
+import type { PipelineToolRegistry } from '../pipeline';
 import type { PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
 import type { RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 import type { RealtimePlatformCredentials } from '../realtime/realtime-platform-credentials';
@@ -59,15 +66,20 @@ import type { ScratchpadManager } from '../ScratchpadManager';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { CarryForwardStepRecord } from '../tool-result-format';
 import type {
+    ActionResultCrushConfig,
     ActionResultSummary,
     AgentLogErrorOptions,
     CreateStepEntityParams,
     ExecuteSingleActionOptions,
     ExtendedProgressStep,
+    ForEachIterationResult,
     HeldCompletionChange,
+    InlineLoopGovernanceArgs,
+    PausedRunOutcome,
     RecordedPromptMessage,
     StoppedRunContinuation,
     StoppedRunStackStepRecord,
+    WhileIterationResult,
 } from './base-agent-types';
 import type { AgentRealtimeModelResolution } from './realtime/BaseAgentRealtimeHelper';
 
@@ -300,6 +312,86 @@ export interface AgentHelperSubclassHooks {
     ParseDelegateRequestText(argumentsJson: string): string;
     PersistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null>;
     FinalizeRealtimeRecording(params: ExecuteAgentParams): Promise<void>;
+
+    // --- Iteration, loop & pipeline hooks (Slice s5) ---
+    ValidateActionInAgent(actionName: string, agentId?: string): string | null;
+    ValidateSubAgentInAgent(subAgentName: string, agentId?: string): string | null;
+    GetAvailableActionsForAgent(agentId: string): MJActionEntityExtended[];
+    ResolveActionEntityForAgent(
+        rawName: string | null | undefined,
+        pool: readonly MJActionEntityExtended[],
+        params?: ExecuteAgentParams,
+        logMatches?: boolean
+    ): MJActionEntityExtended | undefined;
+    IndexEffectiveAgentActions(
+        agentId: string
+    ): ReturnType<typeof ActionLifecycleResolver.IndexEffectiveAgentActions>;
+    MatchNamedBySanitizedToolName<T extends { Name?: string | null }>(
+        rawName: string,
+        candidates: readonly T[]
+    ): { match?: T; ambiguous?: T[] };
+    ResolveActionTrustLevel(
+        actionName: string,
+        actionEntity: MJActionEntityExtended | undefined,
+        params: ExecuteAgentParams
+    ): ActionOutputTrustLevel;
+    RecordTaintedSource(stepNumber: number, sourceName: string, trustLevel: AgentTaintedSource['trustLevel']): void;
+    AudienceReadersFor(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }>;
+    ExecuteActionsStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep,
+        parentStepId: string,
+        addConversationMessage?: boolean,
+        stepCount?: number,
+        actionOptions?: ExecuteSingleActionOptions
+    ): Promise<BaseAgentNextStep>;
+    ProcessSubAgentStep(
+        params: ExecuteAgentParams,
+        previousDecision: BaseAgentNextStep,
+        parentStepId?: string,
+        subAgentPayloadOverride?: unknown,
+        stepCount?: number
+    ): Promise<BaseAgentNextStep>;
+    CloneSubAgentPayload<T>(payload: T): T;
+    FormatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string;
+    CheckInlineLoopIterationGovernance<P>(args: InlineLoopGovernanceArgs<P>): Promise<PausedRunOutcome | null>;
+    BuildPipelineRegistry(params: ExecuteAgentParams): PipelineToolRegistry;
+    GetValueFromPath(obj: unknown, path: string): unknown;
+    ResolveTemplates(
+        obj: Record<string, unknown>,
+        context: Record<string, unknown>,
+        itemVariable: string
+    ): Record<string, unknown>;
+    ResolveValueFromContext(value: string, context: Record<string, unknown>, itemVariable: string): unknown;
+    ResolveInlineTemplateExpressions(
+        template: string,
+        context: Record<string, unknown>,
+        itemVariable: string
+    ): string;
+    ApplyLoopOutputFold(basePayload: unknown, output: Record<string, unknown>, mapping: string): Record<string, unknown>;
+    FormatLoopResultsAsMarkdown(results: BaseAgentNextStep[], errors: LoopIterationError[]): string;
+    ResolveLoopExpirationMetadata(
+        params: ExecuteAgentParams,
+        actionNames?: string | readonly string[]
+    ): AgentChatMessageMetadata;
+    ExecuteSingleForEachIteration(
+        forEach: ForEachOperation,
+        item: unknown,
+        index: number,
+        currentPayload: unknown,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<ForEachIterationResult>;
+    ExecuteSingleWhileIteration(
+        whileOp: WhileOperation,
+        attemptContext: { attemptNumber: number; totalAttempts: number },
+        index: number,
+        currentPayload: unknown,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<WhileIterationResult>;
 }
 
 /**
@@ -379,6 +471,16 @@ export interface AgentRunContext {
     RealtimeRecording: RealtimeRecordingController | null;
     /** Storage account id for the active realtime audio recording, or `null`. */
     RealtimeRecordingAccountId: string | null;
+    /** Shared step/loop formatting, payload mapping, and template dispatcher collaborator. */
+    readonly StepDispatcher: AgentStepDispatcher;
+    /** Resolved `BaseAgentType` instance for the currently executing agent (may be undefined in unit tests). */
+    readonly AgentTypeInstance: BaseAgentType | undefined;
+    /** Action result crush config resolved for the active run. */
+    ActionResultCrush: ActionResultCrushConfig | undefined;
+    /** Restored loop cursor when resuming a paused `ForEach`/`While` loop. */
+    PendingLoopCursorToResume: PendingLoopCursorState | null;
+    /** Non-destructive pause outcome if the run paused mid-loop. */
+    PausedRunOutcome: PausedRunOutcome | null;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;
