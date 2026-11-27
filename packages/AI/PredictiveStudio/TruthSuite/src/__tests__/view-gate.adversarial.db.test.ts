@@ -24,7 +24,7 @@ import type {
   MJMLModelEntity, MJMLModelScoringBindingEntity, MJMLScoringRunEntity, MJMLTrainingPipelineEntity, MJRoleEntity, MJUserEntity,
   MJUserRoleEntity, MJvwLatestFeatureValuesEntity,
 } from '@memberjunction/core-entities';
-import { FeatureValueCacheService, type ModelValueRow } from '@memberjunction/feature-pipelines';
+import { FeatureValueCacheService, FeatureValueWriteAuthorisations, type ModelValueRow } from '@memberjunction/feature-pipelines';
 import { EscapeSQLString, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import {
   BindingNotAuthorizedError, InMemoryArtifactLoader, PredictionRetention, ScoringBindings, ScoringService,
@@ -100,6 +100,18 @@ async function createRow<T extends BaseEntity>(entityName: string, fill: (row: T
   row.NewRecord();
   fill(row);
   if (!(await row.Save())) throw new Error(`fixture ${entityName} did not save: ${row.LatestResult?.CompleteMessage}`);
+  return row;
+}
+
+/**
+ * Save a new `Human` Feature Value through the write path's one-shot authorisation: the PS Engine's
+ * `FeatureValueEffectiveRangeGuard` refuses any other create of a `Pipeline`/`Human` row (PR 5 B1, D5-30).
+ */
+async function createAuthorisedFeatureValue(fill: (row: MJFeatureValueEntity) => void): Promise<MJFeatureValueEntity> {
+  const row = await server.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', server.User);
+  row.NewRecord();
+  fill(row);
+  if (!(await FeatureValueWriteAuthorisations.Save(row))) throw new Error(`fixture MJ: Feature Values did not save: ${row.LatestResult?.CompleteMessage}`);
   return row;
 }
 
@@ -446,7 +458,7 @@ describe('M5b.10 harness', () => {
   }, CASE_TIMEOUT_MS);
 
   it('human value, without Record Process: a binding\'s Human row stays visible to a user without the authorization', async () => {
-    const human = await createRow<MJFeatureValueEntity>('MJ: Feature Values', (fv) => {
+    const human = await createAuthorisedFeatureValue((fv) => {
       fv.EntityID = f.TargetEntityID; fv.RecordID = f.Records['r2']; fv.FeatureName = f.Binding.FeatureName; fv.Source = 'Human'; fv.Role = 'Champion';
       fv.ValueNumeric = 0.9; fv.RecordProcessID = null; fv.MLModelScoringBindingID = f.Binding.ID; fv.EffectiveAsOf = new Date('2026-10-05T00:00:00Z');
     });
@@ -460,7 +472,7 @@ describe('M5b.10 harness', () => {
     // The view ranks every Champion row of a key before the row-level security filter runs (§5.8.4): the newest row of
     // r3's binding feature is the DAY3 Model row, so a user who may not see it sees no latest value for the key, not
     // the older Human row. That Human row stays readable in MJ: Feature Values. Fails closed; leaks nothing.
-    const human = await createRow<MJFeatureValueEntity>('MJ: Feature Values', (fv) => {
+    const human = await createAuthorisedFeatureValue((fv) => {
       fv.EntityID = f.TargetEntityID; fv.RecordID = f.Records['r3']; fv.FeatureName = f.Binding.FeatureName; fv.Source = 'Human'; fv.Role = 'Champion';
       fv.ValueNumeric = 0.1; fv.RecordProcessID = null; fv.MLModelScoringBindingID = f.Binding.ID; fv.EffectiveAsOf = new Date('2026-10-02T00:00:00Z');
     });

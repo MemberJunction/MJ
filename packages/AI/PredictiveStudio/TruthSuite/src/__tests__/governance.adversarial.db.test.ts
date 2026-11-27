@@ -1246,9 +1246,9 @@ describe('a model-level Evaluate refusal of an automatic publish attempt is reco
 describe('deleted parent or child — a model\'s entity deleted, a signed-off model\'s snapshot deleted', () => {
   it("deleting a model's entity removes its output bindings first", async () => {
     // The order claim, statically: in the newest migration that (re)creates the procedure, and in the procedure the
-    // database holds, the output-binding delete precedes the model delete.
+    // database holds, the output-binding delete precedes the model delete. The newest definition need not be a PS
+    // migration (`next` redefined the procedure after PR 4); the claim is that whichever one is newest keeps PR 4's order.
     const migration = newestProcMigration();
-    expect(migration.Name).toMatch(/^V\d+__v6\.3\.x__PS_Honest_Serving_Schema\.sql$/);
     const proc = sliceBetween(migration.Text, PROC_MARKER, '\nGO');
     const [bindingAt, modelAt] = [proc.indexOf(BINDING_DELETE), proc.indexOf(MODEL_DELETE)];
     expect(bindingAt).toBeGreaterThan(0);

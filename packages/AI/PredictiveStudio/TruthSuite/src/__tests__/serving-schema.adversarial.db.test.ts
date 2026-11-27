@@ -25,6 +25,7 @@ import type {
 import { MJMLModelSchema } from '@memberjunction/core-entities';
 import { SemanticsRules, type OutputSemantics, type PersistedModelStatus } from '@memberjunction/predictive-studio-core';
 import { PublishRecordWriteAuthorisations } from '@memberjunction/predictive-studio';
+import { FeatureValueWriteAuthorisations } from '@memberjunction/feature-pipelines';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BootstrapIntegrationServer, type IntegrationBootstrapContext } from '@memberjunction/testing-integration';
 import { TruthConnection } from '../db/connection';
@@ -138,6 +139,18 @@ async function createRow<T extends BaseEntity>(
 ): Promise<T> {
   const row = await unsavedRow<T>(entityName, fill);
   if (!(await row.Save())) throw new Error(`fixture ${entityName} did not save: ${row.LatestResult?.CompleteMessage}`);
+  return row;
+}
+
+/**
+ * Save a new `Pipeline`/`Human` Feature Value through the write path's one-shot authorisation: the PS Engine's
+ * `FeatureValueEffectiveRangeGuard` refuses any other create of such a row (PR 5 B1, D5-30). An identity has at most one
+ * open Champion row (`UQ_FeatureValue_OpenPipeline` / `UQ_FeatureValue_OpenHuman`), so a fixture's superseded rows carry
+ * the `EffectiveTo` the write path would have closed them with.
+ */
+async function createAuthorisedFeatureValue(fill: (row: MJFeatureValueEntity) => void): Promise<MJFeatureValueEntity> {
+  const row = await unsavedRow<MJFeatureValueEntity>('MJ: Feature Values', fill);
+  if (!(await FeatureValueWriteAuthorisations.Save(row))) throw new Error(`fixture MJ: Feature Values did not save: ${row.LatestResult?.CompleteMessage}`);
   return row;
 }
 
@@ -471,8 +484,10 @@ describe('ML model publish records refuse inconsistent rows', () => {
     const entityId = server.Provider.EntityByName('MJ: Users')?.ID;
     if (!entityId) throw new Error('MJ: Users is not in metadata');
     const recordId = fixtures.Pipeline.ID;   // any key the record process never wrote before this case
-    const value = (role: MJFeatureValueEntity['Role'], effectiveAsOf: Date | null, computedAt: Date): Promise<MJFeatureValueEntity> =>
-      createRow<MJFeatureValueEntity>('MJ: Feature Values', (fv) => {
+    // effectiveTo: the instant the write path closed a superseded Champion row (one open row per identity, PR 5 B1); the
+    // view ranks closed and open rows alike.
+    const value = (role: MJFeatureValueEntity['Role'], effectiveAsOf: Date | null, computedAt: Date, effectiveTo: Date | null): Promise<MJFeatureValueEntity> =>
+      createAuthorisedFeatureValue((fv) => {
         fv.RecordProcessID = fixtures.RecordProcess.ID;
         fv.EntityID = entityId;
         fv.RecordID = recordId;
@@ -480,14 +495,16 @@ describe('ML model publish records refuse inconsistent rows', () => {
         fv.Source = 'Pipeline';
         fv.Role = role;
         fv.EffectiveAsOf = effectiveAsOf;
+        fv.EffectiveTo = effectiveTo;
         fv.ComputedAt = computedAt;
         fv.ValueNumeric = 1;
       });
-    await value('Champion', new Date('2026-01-01T00:00:00Z'), new Date('2026-07-01T00:00:00Z'));
-    await value('Champion', new Date('2026-03-01T00:00:00Z'), new Date('2026-03-02T00:00:00Z'));                // same EffectiveAsOf, computed earlier
-    const newestDatedChampion = await value('Champion', new Date('2026-03-01T00:00:00Z'), new Date('2026-03-05T00:00:00Z'));
-    await value('Champion', null, new Date('2026-09-01T00:00:00Z'));                                   // undated: never beats a dated value
-    await value('Challenger', new Date('2026-06-01T00:00:00Z'), new Date('2026-06-02T00:00:00Z'));    // newer, but a shadow score
+    const march = new Date('2026-03-01T00:00:00Z');
+    await value('Champion', new Date('2026-01-01T00:00:00Z'), new Date('2026-07-01T00:00:00Z'), march);
+    await value('Champion', march, new Date('2026-03-02T00:00:00Z'), march);                                   // same EffectiveAsOf, computed earlier
+    const newestDatedChampion = await value('Champion', march, new Date('2026-03-05T00:00:00Z'), null);
+    await value('Champion', null, new Date('2026-09-01T00:00:00Z'), new Date('2026-09-01T00:00:00Z'));    // undated: never beats a dated value
+    await value('Challenger', new Date('2026-06-01T00:00:00Z'), new Date('2026-06-02T00:00:00Z'), null); // newer, but a shadow score
     const rows = await LatestRows(server, entityId, recordId, PROBE_FEATURE, ['ID']);
     expect(rows.map((r) => r.ID)).toEqual([newestDatedChampion.ID]);
   });
@@ -496,8 +513,9 @@ describe('ML model publish records refuse inconsistent rows', () => {
     const entityId = server.Provider.EntityByName('MJ: Users')?.ID;
     if (!entityId) throw new Error('MJ: Users is not in metadata');
     const day = new Date('2026-04-01T00:00:00Z');
-    const champion = (recordId: string, computedAt: Date): Promise<MJFeatureValueEntity> =>
-      createRow<MJFeatureValueEntity>('MJ: Feature Values', (fv) => {
+    // effectiveTo: a superseded row is closed (one open Champion row per identity, PR 5 B1); the view ranks it anyway.
+    const champion = (recordId: string, computedAt: Date, effectiveTo: Date | null = null): Promise<MJFeatureValueEntity> =>
+      createAuthorisedFeatureValue((fv) => {
         fv.RecordProcessID = fixtures.RecordProcess.ID;
         fv.EntityID = entityId;
         fv.RecordID = recordId;
@@ -505,18 +523,19 @@ describe('ML model publish records refuse inconsistent rows', () => {
         fv.Source = 'Pipeline';
         fv.Role = 'Champion';
         fv.EffectiveAsOf = day;
+        fv.EffectiveTo = effectiveTo;
         fv.ComputedAt = computedAt;
         fv.ValueNumeric = 1;
       });
     // one EffectiveAsOf, two computations: the later ComputedAt wins whichever row was written first
     const rerunRecord = randomUUID();
     const rerun = await champion(rerunRecord, new Date('2026-04-01T18:00:00Z'));
-    await champion(rerunRecord, new Date('2026-04-01T06:00:00Z'));
+    await champion(rerunRecord, new Date('2026-04-01T06:00:00Z'), day);
     expect((await LatestRows(server, entityId, rerunRecord, PROBE_FEATURE, ['ID'])).map((r) => r.ID)).toEqual([rerun.ID]);
     // one EffectiveAsOf and one ComputedAt: the higher ID, in the database's uniqueidentifier order
     const tieRecord = randomUUID();
     const sameInstant = new Date('2026-04-01T12:00:00Z');
-    const tied = [await champion(tieRecord, sameInstant), await champion(tieRecord, sameInstant)];
+    const tied = [await champion(tieRecord, sameInstant, sameInstant), await champion(tieRecord, sameInstant)];
     const higher = await pool.request()
       .input('A', sql.UniqueIdentifier, tied[0].ID)
       .input('B', sql.UniqueIdentifier, tied[1].ID)
@@ -764,7 +783,7 @@ async function createSurvivingRows(w: DoomedEntityWorld, s: ServingFixtures): Pr
   const publish = await SavePublishRecord({ Kind: 'publish', ModelID: s.Model.ID, SignOffID: w.ConsumedSignOffID, ReplacesModelID: w.ModelID });
   const scoringRun = await NewScoringRun(s.Model.ID, usersEntityId, w.BindingID);
   const monitoring = await NewMonitoringResult(s.Model.ID, w.RunID);
-  const featureValue = await createRow<MJFeatureValueEntity>('MJ: Feature Values', (fv) => {
+  const featureValue = await createAuthorisedFeatureValue((fv) => {
     fv.RecordProcessID = s.RecordProcess.ID;
     fv.EntityID = usersEntityId;
     fv.RecordID = s.Pipeline.ID;
