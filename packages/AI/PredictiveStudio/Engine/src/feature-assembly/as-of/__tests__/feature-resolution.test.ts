@@ -204,3 +204,42 @@ describe('ResolveFeatureColumns — fields whose stored value is not the value s
     ]);
   });
 });
+
+describe('ResolveFeatureColumns — Feature Value steps resolve to pinned feature-value sources (B2)', () => {
+  const pipelinePin = { featurePipelineRecordProcessId: 'RP-1', pipelineVersion: 3, promptVersionHash: 'ph-3', aiModelId: 'AIM-1', parametersHash: 'pa-3' };
+  const predictionPin = { mlModelScoringBindingId: 'B-1', mlModelId: 'M-UP' };
+  const none = { denyFields: [], denySources: [] };
+
+  it('an llm-derived step becomes one feature-value column per persisted column, each carrying the step\'s pin', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'llm-derived', FeaturePipelineRef: 'RP-1', Columns: ['JobFunction', 'Seniority'], Encodings: { Seniority: 'numeric' } }] },
+      unitSpec, years, metadata, none, new Map([['l', pipelinePin]]));
+    expect(r).toEqual({ Status: 'resolved', ExplicitOps: [], Columns: [
+      { name: 'JobFunction', source: { kind: 'feature-value', featureName: 'JobFunction', pin: pipelinePin }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } },
+      { name: 'Seniority', source: { kind: 'feature-value', featureName: 'Seniority', pin: pipelinePin }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } },
+    ] });
+  });
+  it('a model-prediction step becomes a numeric feature-value column carrying its PredictionFeaturePin', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'p', Kind: 'model-prediction', ScoringBindingID: 'B-1', FeatureName: 'ChurnRisk' }] },
+      unitSpec, years, metadata, none, new Map([['p', predictionPin]]));
+    expect(r).toEqual({ Status: 'resolved', ExplicitOps: [], Columns: [
+      { name: 'ChurnRisk', source: { kind: 'feature-value', featureName: 'ChurnRisk', pin: predictionPin }, encoding: { kind: 'numeric', nonNumericValue: 'fail' }, missing: { impute: 'median', indicator: true, constant: null } },
+    ] });
+  });
+  it('attack 5: a Feature Value step with no resolved pin refuses unpinned-feature-version', () => {
+    expect(FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'p', Kind: 'model-prediction', ScoringBindingID: 'B-1', FeatureName: 'ChurnRisk' }] }, unitSpec, years, metadata, none))
+      .toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'ChurnRisk' } });
+    expect(FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'llm-derived', FeaturePipelineRef: 'RP-1', Columns: ['JobFunction'] }] }, unitSpec, years, metadata, none, new Map([['other', pipelinePin]])))
+      .toEqual({ Status: 'refused', Refusal: { kind: 'unpinned-feature-version', featureName: 'JobFunction' } });
+  });
+  it('drops a deny-listed Feature Value column before it becomes a column', () => {
+    const r = FeatureResolver.ResolveFeatureColumns({ Steps: [{ Id: 'l', Kind: 'llm-derived', FeaturePipelineRef: 'RP-1', Columns: ['JobFunction', 'Seniority'] }] },
+      unitSpec, years, metadata, { denyFields: ['Seniority'], denySources: [] }, new Map([['l', pipelinePin]]));
+    expect(r.Status === 'resolved' && r.Columns.map((c) => c.name)).toEqual(['JobFunction']);
+  });
+  it('D5-B2-2: a step of a kind the resolver does not know refuses unsupported-step-kind (the default branch)', () => {
+    /** A stored step from a later version whose kind this build does not know, read off untyped JSON. */
+    const stored: FeatureStepGraph = JSON.parse('{"Steps":[{"Id":"x","Kind":"quantum-feature"}]}');
+    expect(FeatureResolver.ResolveFeatureColumns(stored, unitSpec, years, metadata, none))
+      .toEqual({ Status: 'refused', Refusal: { kind: 'unsupported-step-kind', stepId: 'x', stepKind: 'quantum-feature' } });
+  });
+});
