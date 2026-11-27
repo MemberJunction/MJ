@@ -284,6 +284,8 @@ src/generated/class-registrations-manifest.ts
 pnpm-lock.yaml
 # Caller maintenance: shipped Query SQL files join sql-parser's shipped golden corpus (§9 D5-B1-5, D5-A2-12)
 packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5, D5-A2-12)
+# Caller maintenance: the vector-index sensitivity calibration reads every core field name (§9 D5-A4-11)
+packages/Angular/Explorer/dashboards/src/__tests__/vector-sensitive-fields.test.ts  (D5-A4-11)
 # Owner-approved non-PS items (§9 owner batch, 2026-11-26)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
@@ -3524,6 +3526,13 @@ Record every decision taken in §9 and, when it changes another plan's interface
   an update, a delete and a create, each refused). Attack 8's crashes are unit tests that stop the run at the step after
   the row (the framework's loop), with the claiming run `Failed` as the watchdog leaves it; no MJAPI was killed. ·
   Killing MJAPI mid-turn in a gate would also kill the gate's own in-process agent run.
+- D5-A4-11 · 2026-11-27 · Caller maintenance of A4's own change (D-082, as D5-B1-5): the dashboards test
+  `vector-sensitive-fields.test.ts` derives its `tin`-collision fixture from every generated core field name, and the new
+  `MJ: Agent Decision Log.ResultingPayloadHash` (Resul-tin-g) is refused there by the deliberately broad `hash` term on
+  its own merits, as `RoutingOrder` is by `routing`; the expected set becomes `['ResultingPayloadHash', 'RoutingOrder']`.
+  Allowlist line `packages/Angular/Explorer/dashboards/src/__tests__/vector-sensitive-fields.test.ts  (D5-A4-11)`. · The
+  contract names the column (§5.1.6). · Renaming the column; narrowing `hash` in the sensitivity filter (a non-PS
+  behaviour change).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3656,7 +3665,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->6<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->6<!-- /gen:checks -->
-- Head: <!-- gen:head -->97fbfb1d2d<!-- /gen:head -->
+- Head: <!-- gen:head -->3120f20d73<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4498,7 +4507,17 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   `<mj-ps-agent-decision-log [Provider]="FormComponent.ProviderToUse" [SessionRunID]="RecordID">`, added to
   `PS_RECORD_PANELS` (the session's first run shows its log; a later run's form shows nothing until it is the session's).
   The migration's CodeGen tail now ends with section A4's block; the controller regenerates the whole tail.
-- Rulings this milestone: D5-A4-1 … D5-A4-10.
+- **Caller maintenance (D5-A4-11):** the dashboards package's tests went red on one assertion when `milestone-exit` ran
+  them (266 passed · 1 failed: `vector-sensitive-fields.test.ts` `expected [ 'ResultingPayloadHash', …(1) ] to deeply
+  equal [ 'RoutingOrder' ]`), from A4's new column; the expectation is updated with its reason, allowlisted. After it
+  `@memberjunction/ng-dashboards` **267 files, 3,202 passed**.
+- **Mutation output G4.3:** `AssertionError: expected true to be false` (let the guard allow an update of a saved row →
+  attack 3 red); skipping every hash compare in `Replay` → attack 5 red (`expected false to be 'replay-incomplete'`);
+  keying `Step` on `AgentRunID` → attack 4 red; a process flag for the authorisation → attack 9 red; skipping the
+  rebuild → attack 8 red; appending without the hash compare → attack 11 red.
+- **Mutation output G4.7:** `AssertionError: expected { kind: 'small-data', …(4) } to be null` (`<` → `<=` on either
+  threshold → attack 1 red at 200 resolved / 50 minority rows).
+- Rulings this milestone: D5-A4-1 … D5-A4-11.
 
 ## 12. Refresh log (append-only)
 

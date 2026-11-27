@@ -316,11 +316,12 @@ describe('calibration against MJ core entity field names', () => {
 
     it('drops the whole `tin`-as-substring collision set, derived from the fixture', () => {
         // `t-i-n` is a substring of ordinary English, so this set is large (43 fields) and
-        // contains no tax identifier at all. `RoutingOrder` is the single member still
-        // refused, and it is refused by `routing` on its own merits, not by `tin`.
+        // contains no tax identifier at all. Two members are still refused, each on its own
+        // merits, not by `tin`: `RoutingOrder` by `routing`, and `ResultingPayloadHash`
+        // (MJ: Agent Decision Log) by the deliberately broad `hash`.
         const collisions = FIELDS.filter((f) => normalizedForFixture(f).includes('tin'));
         expect(collisions.length).toBeGreaterThanOrEqual(40);
-        expect(collisions.filter((f) => IsSensitiveFieldName(f))).toEqual(['RoutingOrder']);
+        expect(collisions.filter((f) => IsSensitiveFieldName(f))).toEqual(['ResultingPayloadHash', 'RoutingOrder']);
     });
 
     it('accepts every plural `Tokens` field, because a count is not a secret', () => {
