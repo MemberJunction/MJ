@@ -16,28 +16,36 @@
         </div>
       </div>
 
-      @if (AllNotifications.length > 0) {
-        <div class="header-actions">
-          @if (UnreadNotifications.length > 0) {
-            <button class="action-btn action-btn-ghost"
-                    type="button"
-                    (click)="markAllAsRead()"
-                    aria-label="Mark all notifications as read">
-              <i class="fa-solid fa-check-double" aria-hidden="true"></i>
-              <span class="btn-text">Mark All Read</span>
-            </button>
-          }
-          @if (ReadNotifications.length > 0) {
-            <button class="action-btn action-btn-secondary"
-                    type="button"
-                    (click)="markAllAsUnread()"
-                    aria-label="Mark all notifications as unread">
-              <i class="fa-solid fa-envelope" aria-hidden="true"></i>
-              <span class="btn-text">Mark All Unread</span>
-            </button>
-          }
-        </div>
-      }
+      <div class="header-actions">
+        @if (UnreadNotifications.length > 0) {
+          <button class="action-btn action-btn-ghost"
+                  type="button"
+                  (click)="markAllAsRead()"
+                  aria-label="Mark all notifications as read">
+            <i class="fa-solid fa-check-double" aria-hidden="true"></i>
+            <span class="btn-text">Mark All Read</span>
+          </button>
+        }
+        @if (ReadNotifications.length > 0) {
+          <button class="action-btn action-btn-secondary"
+                  type="button"
+                  (click)="markAllAsUnread()"
+                  aria-label="Mark all notifications as unread">
+            <i class="fa-solid fa-envelope" aria-hidden="true"></i>
+            <span class="btn-text">Mark All Unread</span>
+          </button>
+        }
+        @if (CanOpenPreferences) {
+          <button class="action-btn action-btn-secondary"
+                  type="button"
+                  (click)="OpenNotificationPreferences()"
+                  aria-label="Notification preferences"
+                  title="Notification preferences">
+            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+            <span class="btn-text">Preferences</span>
+          </button>
+        }
+      </div>
     </div>
 
     <!-- Filters Section -->

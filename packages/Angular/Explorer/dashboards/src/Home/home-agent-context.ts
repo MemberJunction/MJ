@@ -122,11 +122,11 @@ export interface HomeAgentContextInput {
     PinGroupNames: string[];
     /** Display names of the pinned items (the ones the agent can open via OpenPin). */
     PinNames: string[];
-    /** Count of unread notifications shown in the sidebar. */
+    /** Count of unread notifications. */
     UnreadNotifications: number;
     /** Titles of the unread notifications (bounded). */
     NotificationTitles: string[];
-    /** Count of recent items shown in the sidebar. */
+    /** Count of recent items available for navigation. */
     RecentItemsCount: number;
     /** Structured summaries of the recent items (bounded) — the ones OpenRecent can target. */
     RecentItems: RecentItemSummary[];
@@ -134,8 +134,6 @@ export interface HomeAgentContextInput {
     EditMode: boolean;
     /** Whether the Add Pin panel is open. */
     AddPanelOpen: boolean;
-    /** Whether the sidebar (notifications / favorites / recents) is open. */
-    SidebarOpen: boolean;
     /** Current search query inside the Add Pin panel (empty when not searching). */
     AddPanelSearchQuery: string;
     /** Whether the Pinned section is collapsed. */
@@ -205,7 +203,6 @@ export function BuildHomeAgentContext(input: HomeAgentContextInput): Record<stri
         RecentItemsCount: input.RecentItemsCount,
         EditMode: input.EditMode,
         AddPanelOpen: input.AddPanelOpen,
-        SidebarOpen: input.SidebarOpen,
         PinnedCollapsed: input.PinnedCollapsed,
     };
 

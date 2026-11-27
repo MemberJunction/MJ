@@ -837,7 +837,7 @@ describe('HomeDashboardComponent (DOM)', () => {
       const tools = navigation.SetAgentClientTools.mock.calls.at(-1)?.[1] ?? [];
       expect(tools.map(t => t.Name)).toEqual([
         'OpenApp', 'OpenPin', 'SearchPins', 'OpenRecent', 'SearchAddPinPanel', 'ClearAddPinPanelSearch',
-        'OpenAddPinPanel', 'CloseAddPinPanel', 'ToggleSidebar', 'TogglePinEditMode', 'SwitchHomeDashboard',
+        'OpenAddPinPanel', 'CloseAddPinPanel', 'TogglePinEditMode', 'SwitchHomeDashboard',
       ]);
     });
   });
@@ -965,12 +965,6 @@ describe('HomeDashboardComponent (DOM)', () => {
     return appNames;
   }
 
-  /** Opens the Quick Access panel: notifications, favorites and recents. */
-  function openQuickAccess(fixture: Fixture): void {
-    Click(fixture, '.sidebar-fab-toggle');
-    fixture.detectChanges();
-  }
-
   describe('Pins', () => {
     it('opens a dashboard pin inside Home, also after the Add Pin panel finds Data Explorer', async () => {
       const { fixture, navigation } = await renderHome({ pins: [REVENUE_PIN], apps: [DATA_EXPLORER_APP] });
@@ -1077,65 +1071,14 @@ describe('HomeDashboardComponent (DOM)', () => {
     });
   });
 
-  describe('Quick Access', () => {
-    it('opens a dashboard favorite without forcing a new tab, with or without the MJ: prefix', async () => {
-      const { fixture, navigation } = await renderHome({
-        userFavorites: [favoriteOf(1, 'MJ: Dashboards', REVENUE.ID), favoriteOf(2, 'Dashboards', QUOTA.ID)],
+  describe('Quiet Home (Quick Access retired)', () => {
+    it('does not render the retired Quick Access FAB or sidebar even when favorites, recents, and unread notifications exist', async () => {
+      const { fixture } = await renderHome({
+        userFavorites: [favoriteOf(1, 'MJ: Dashboards', REVENUE.ID)],
+        recents: [recentOpen(REVENUE, 'Revenue')],
       });
-      openQuickAccess(fixture);
-      const items = QueryAll(fixture, '[data-testid="favorite-item"]') as HTMLElement[];
-      expect(items).toHaveLength(2);
-
-      items[0].click();
-      expect(navigation.OpenDashboard).toHaveBeenLastCalledWith(REVENUE.ID, 'Dashboard');
-      items[1].click();
-      expect(navigation.OpenDashboard).toHaveBeenLastCalledWith(QUOTA.ID, 'Dashboard');
-      expect(navigation.OpenDashboard).toHaveBeenCalledTimes(2);
-      expect(navigation.OpenEntityRecord).not.toHaveBeenCalled();
-    });
-
-    it('opens a view favorite as a view, with or without the MJ: prefix', async () => {
-      const VIEW_ID = 'V0000000-0000-4000-8000-000000000001';
-      const LEGACY_VIEW_ID = 'V0000000-0000-4000-8000-000000000002';
-      const { fixture, navigation } = await renderHome({
-        userFavorites: [favoriteOf(4, 'MJ: User Views', VIEW_ID), favoriteOf(5, 'User Views', LEGACY_VIEW_ID)],
-      });
-      openQuickAccess(fixture);
-      const items = QueryAll(fixture, '[data-testid="favorite-item"]') as HTMLElement[];
-      expect(items).toHaveLength(2);
-
-      items[0].click();
-      expect(navigation.OpenView).toHaveBeenLastCalledWith(VIEW_ID, 'View');
-      items[1].click();
-      expect(navigation.OpenView).toHaveBeenLastCalledWith(LEGACY_VIEW_ID, 'View');
-      expect(navigation.OpenView).toHaveBeenCalledTimes(2);
-      expect(navigation.OpenEntityRecord).not.toHaveBeenCalled();
-    });
-
-    it('opens other favorites as before', async () => {
-      const { fixture, navigation } = await renderHome({ userFavorites: [favoriteOf(3, 'MJ: Users', 'ID|U-1')] });
-      openQuickAccess(fixture);
-
-      Click(fixture, '[data-testid="favorite-item"]');
-
-      expect(navigation.OpenDashboard).not.toHaveBeenCalled();
-      expect(navigation.OpenEntityRecord).toHaveBeenCalledTimes(1);
-      const [entityName, key] = navigation.OpenEntityRecord.mock.calls[0];
-      expect(entityName).toBe('MJ: Users');
-      expect(key.ToURLSegment()).toBe('ID|U-1');
-    });
-
-    it('opens a recent dashboard without forcing a new tab', async () => {
-      const { fixture, navigation } = await renderHome({ recents: [recentOpen(REVENUE, 'Revenue'), recentOpen(QUOTA)] });
-      openQuickAccess(fixture);
-      const items = QueryAll(fixture, '[data-testid="recent-item"]') as HTMLElement[];
-      expect(items).toHaveLength(2);
-
-      items[0].click();
-      expect(navigation.OpenDashboard).toHaveBeenLastCalledWith(REVENUE.ID, 'Revenue');
-      items[1].click();
-      expect(navigation.OpenDashboard).toHaveBeenLastCalledWith(QUOTA.ID, 'Dashboard');
-      expect(navigation.OpenDashboard).toHaveBeenCalledTimes(2);
+      expect(Query(fixture, '.sidebar-fab-toggle')).toBeNull();
+      expect(Query(fixture, '.quick-access-sidebar')).toBeNull();
     });
   });
 
@@ -1842,31 +1785,6 @@ describe('HomeDashboardComponent (DOM)', () => {
       expect(shown.StartInEditMode).toBe(false);
     });
 
-    it('hides Quick Access while a dashboard shows, and closes an open Quick Access panel', async () => {
-      const { fixture } = await renderHome({ pins: [REVENUE_PIN], recents: [recentOpen(QUOTA, 'Quota')] });
-      openQuickAccess(fixture);
-      expect(Query(fixture, '.home-dashboard.sidebar-open .quick-access-sidebar')).not.toBeNull();
-
-      Click(fixture, '.pin-card');
-      await settleAndRender(fixture);
-      expect(editor(fixture)?.Id).toBe(REVENUE.ID);
-      expect(Query(fixture, '.home-dashboard.sidebar-open')).toBeNull();
-      expect(Query(fixture, '.quick-access-sidebar')).toBeNull();
-      expect(Query(fixture, '.sidebar-fab-toggle')).toBeNull();
-
-      // A sidebar toggle (the agent has one) does not make room for a sidebar the dashboard view does not show
-      fixture.componentInstance.ToggleSidebar();
-      renderFully(fixture);
-      expect(fixture.componentInstance.SidebarOpen).toBe(true);
-      expect(Query(fixture, '.home-dashboard.sidebar-open')).toBeNull();
-      expect(Query(fixture, '.quick-access-sidebar')).toBeNull();
-      fixture.componentInstance.ToggleSidebar();
-
-      Click(fixture, CRUMB_HOME);
-      await settleAndRender(fixture);
-      expect(Query(fixture, '.sidebar-fab-toggle')).not.toBeNull();
-    });
-
     it('Open in Dashboards opens the dashboard in the Dashboards app', async () => {
       const { fixture, navigation, userInfo } = await renderHome({ apps: [DASHBOARDS_APP], pins: [REVENUE_PIN], queryParams: { dashboard: REVENUE.ID } });
       userInfo.CheckUserApplicationAccess = (_appId: string): UserApplicationAccessStatus => 'installed_active';
@@ -2473,40 +2391,6 @@ describe('HomeDashboardComponent (DOM)', () => {
       expect(texts(fixture, PINNED_HEADER_BUTTONS)).toEqual(['Add Pin', 'Dashboards', 'Edit']);
       expect(Query(fixture, '.pinned-section .edit-mode-banner')).toBeNull();
       expect(lastContext(navigation)).toMatchObject({ EditMode: false });
-    });
-
-    it('ToggleSidebar opens and closes Quick Access, and the next render shows it', async () => {
-      const { fixture, navigation } = await renderHome({ recents: [recentOpen(QUOTA, 'Quota')] });
-      const tool = agentTool(navigation, 'ToggleSidebar');
-      expect(Query(fixture, '.home-dashboard.sidebar-open')).toBeNull();
-      expect(Query(fixture, '.sidebar-fab-toggle')).not.toBeNull();
-
-      expect(await tool.Handler({})).toEqual({ Success: true, Data: { SidebarOpen: true } });
-      // A plain render: Home is OnPush, so it shows the change only when the tool marked Home for check
-      fixture.detectChanges();
-      expect(Query(fixture, '.home-dashboard.sidebar-open .quick-access-sidebar')).not.toBeNull();
-      expect(Query(fixture, '.sidebar-fab-toggle')).toBeNull();
-      expect(lastContext(navigation)).toMatchObject({ SidebarOpen: true });
-
-      expect(await tool.Handler({})).toEqual({ Success: true, Data: { SidebarOpen: false } });
-      fixture.detectChanges();
-      expect(Query(fixture, '.home-dashboard.sidebar-open')).toBeNull();
-      expect(Query(fixture, '.sidebar-fab-toggle')).not.toBeNull();
-      expect(lastContext(navigation)).toMatchObject({ SidebarOpen: false });
-    });
-
-    it('ToggleSidebar refuses while a dashboard shows, where Quick Access does not show, and opens nothing', async () => {
-      const { fixture, navigation } = await renderHome({ pins: [REVENUE_PIN], recents: [recentOpen(QUOTA, 'Quota')], queryParams: { dashboard: REVENUE.ID } });
-      const tool = agentTool(navigation, 'ToggleSidebar');
-      expect(tool.Description).toContain('Home overview only');
-
-      expect(await tool.Handler({})).toEqual({
-        Success: false,
-        ErrorMessage: 'Quick Access shows on the Home overview only. Use SwitchHomeDashboard with "Home" first.',
-      });
-      renderFully(fixture);
-      expect(fixture.componentInstance.SidebarOpen).toBe(false);
-      expect(lastContext(navigation)).toMatchObject({ SidebarOpen: false });
     });
 
     it('TogglePinEditMode refuses while a dashboard shows, where the pins do not show, and saves nothing', async () => {

@@ -560,7 +560,7 @@ export class MJNotificationService {
       container.id = 'mj-toast-container';
       container.style.cssText = `
         position: fixed;
-        top: 24px;
+        top: 72px;
         right: 24px;
         z-index: 100000;
         display: flex;

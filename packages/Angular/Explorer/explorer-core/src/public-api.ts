@@ -38,6 +38,8 @@ export * from './lib/single-dashboard/Components/edit-dashboard/edit-dashboard.c
 export * from './lib/single-list-detail/single-list-detail.component'
 export * from './lib/user-profile/user-profile.component'
 export * from './lib/user-notifications/user-notifications.component';
+export * from './lib/user-notifications/notification-action.helpers';
+export * from './lib/shell/components/header/notification-popover.component';
 export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/app-lock-guard.service';
 export * from './lib/guards/entities.guard';
