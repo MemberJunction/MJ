@@ -11,6 +11,7 @@ import type {
 import { AgentRunStepSaveQueue } from '@memberjunction/ai-core-plus';
 import type { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ActionResultSpilloverManager } from '../../ActionResultSpilloverManager';
+import { AgentContextAssembler } from '../../AgentContextAssembler';
 import { AgentDecisionService } from '../../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../../AgentFeedbackCoordinator';
 import { AgentStepDispatcher } from '../../AgentStepDispatcher';
@@ -19,10 +20,13 @@ import { ArtifactToolManager } from '../../ArtifactToolManager';
 import { BudgetEnforcementGuard } from '../../BudgetEnforcementGuard';
 import { DeterministicProgressDetector } from '../../DeterministicProgressDetector';
 import { FastConvergenceJudge } from '../../FastConvergenceJudge';
+import { AgentToolCircuitBreaker } from '../../native-tools/agent-tool-circuit-breaker';
 import { PayloadManager } from '../../PayloadManager';
 import { PipelineToolRegistry } from '../../pipeline';
 import { RunawayCheckpointManager } from '../../RunawayCheckpointManager';
 import { ScratchpadManager } from '../../ScratchpadManager';
+import { AgentActionPolicyHelper } from '../../helpers/actions/AgentActionPolicyHelper';
+import { ACTION_FAILURE_BUDGET, CircuitBreakerActionResult, IDENTICAL_FAILURE_THRESHOLD } from '../../helpers/base-agent-types';
 import type { AgentHelperSubclassHooks, AgentRunContext } from '../../helpers/AgentRunContext';
 
 export function CreateMockAgentRunContext(
@@ -36,6 +40,9 @@ export function CreateMockAgentRunContext(
     const progressDetector = new DeterministicProgressDetector();
     const fastConvergenceJudge = new FastConvergenceJudge();
     const checkpointManager = new RunawayCheckpointManager();
+    const actionPolicyHelper = new AgentActionPolicyHelper();
+    const contextAssembler = new AgentContextAssembler();
+    const agentToolBreaker = new AgentToolCircuitBreaker(IDENTICAL_FAILURE_THRESHOLD, ACTION_FAILURE_BUDGET);
     const actionSpilloverManager = new ActionResultSpilloverManager();
     const artifactToolManager = new ArtifactToolManager({
         AgentRunId: '11111111-1111-4111-8111-111111111111',
@@ -71,7 +78,7 @@ export function CreateMockAgentRunContext(
         FormatSubAgentResultAsMarkdown: (name, res) => `SubAgent ${name}: ${res.success}`,
         BuildActionInvocationMessage: () => 'invoked',
         BuildActionResultsMessage: () => 'results',
-        AppendActionResults: vi.fn(),
+        AppendActionResults: vi.fn(() => new Set()),
         ReconcileUnansweredToolCalls: vi.fn(),
         InterceptLargeBinaryContent: (p) => p,
         LoadPriorTurnToolResultSteps: vi.fn(async () => []),
@@ -211,6 +218,39 @@ export function CreateMockAgentRunContext(
         GetSubAgentExecutionCount: vi.fn(async () => 0),
         GetExecutionCount: () => 0,
         PauseNonDestructively: vi.fn(async () => null),
+        NormalizeActionParams: (p) => (p ? JSON.stringify(p) : ''),
+        NormalizeActionParamEntry: (key, value) => ({ key, value }),
+        NormalizeActionParamValue: (value) => value,
+        IsFatalActionError: () => false,
+        HasCredentialShapedArguments: () => false,
+        RecordActionFailure: vi.fn(),
+        LockOutAction: vi.fn(),
+        ClearActionFailureRecord: vi.fn(),
+        CheckActionCircuitBreaker: () => null,
+        BuildBlockedActionResult: (actionEntity, reason, message) => {
+            const res = new CircuitBreakerActionResult(reason);
+            res.Success = false;
+            res.Message = message;
+            res.Params = [];
+            return res;
+        },
+        ClassifyActionFailure: () => 'warning',
+        FormatActionFailureDirective: () => '',
+        DoesChangeScopeApply: () => true,
+        PushToolResultTurn: vi.fn(),
+        ActionMayUseRuntimeAPIKey: () => true,
+        ResolveActionSupportsAudience: () => false,
+        CheckUserActionPolicy: vi.fn(async () => null),
+        ResolveAudienceUsers: vi.fn(async () => []),
+        SafeOnProgress: vi.fn(),
+        GetSkillAttributionForAction: () => [],
+        IncrementExecutionCount: vi.fn(),
+        DetectFileOutputs: () => [],
+        GetDefaultPayloadSelfWritePaths: () => ['*'],
+        FindPayloadAtEndSource: () => null,
+        FinishAfterActions: vi.fn(async () => undefined),
+        SelfCheckSuccess: vi.fn(async (_p, step) => step),
+        AssertLastRunIdIsUUID: vi.fn(),
     };
 
     const { Hooks: hookOverrides, ...restOverrides } = overrides ?? {};
@@ -303,6 +343,27 @@ export function CreateMockAgentRunContext(
         FastConvergenceJudge: fastConvergenceJudge,
         FastConvergenceJudgeIfInitialized: undefined,
         CheckpointManager: checkpointManager,
+        ActionPolicyHelper: actionPolicyHelper,
+        ContextAssembler: contextAssembler,
+        AgentTypeState: undefined,
+        FatalActionFailures: new Set(),
+        AudienceLockedActions: new Set(),
+        TaintLockedActions: new Set(),
+        ActionFailureHistory: new Map(),
+        AgentToolBreaker: agentToolBreaker,
+        AudienceReaders: undefined,
+        AudienceSource: undefined,
+        RunScope: undefined,
+        EffectiveActions: [],
+        EffectiveCatalogComputed: false,
+        DynamicActionLimits: {},
+        AgentTypePromptParams: undefined,
+        ResolvedStorageAccountId: null,
+        FileOutputs: [],
+        NativeToolBindings: undefined,
+        PendingAgentToolResults: undefined,
+        LastNativeTurnAppended: undefined,
+        ActionResultCrushThreshold: 600,
         ...restOverrides,
         Hooks: {
             ...defaultHooks,

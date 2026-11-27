@@ -27,7 +27,8 @@ import type {
     WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
-import type { ActionErrorRecovery, ActionOutputTrustLevel, ActionParam, AIDirective } from '@memberjunction/actions-base';
+import { ActionResult, type ActionErrorRecovery, type ActionOutputTrustLevel, type ActionParam, type AIDirective } from '@memberjunction/actions-base';
+import type { SecondaryScopeValue } from '@memberjunction/ai-core-plus';
 import type { ChatMessage } from '@memberjunction/ai';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { CodeLang } from '@memberjunction/context-crush/code';
@@ -343,4 +344,73 @@ export interface PauseNonDestructivelyDetails {
     FastJudgeResult?: ProgressEvaluationResult['FastJudgeResult'];
     Ledger: AgentBudgetLedgerSnapshot;
 }
+
+/** Parameter-aware consecutive failure record for one action in the run-scoped circuit breaker. */
+export interface ActionFailureHistoryEntry {
+    lastParamsString: string;
+    identicalFailures: number;
+    totalConsecutiveFailures: number;
+}
+
+/** What one run's prompt leaves out (`BaseAgentActionPolicyHelper.PromptWithholding`). */
+export interface PromptWithholding {
+    /** Task graphs are not offered (a constraint no security envelope will carry). */
+    TaskGraphs: boolean;
+    /** Handoff is not offered (a sub-agent run, no conversation detail row, or a host that does not carry handoffs). */
+    Handoff: boolean;
+    /** The caller's browser and view are not: no client tools, no app context (an audience). */
+    CallerContext: boolean;
+}
+
+/** The run's validated scope as memory, retrieval and scoped prompt configuration take it. */
+export interface RunContextScope {
+    /** The primary scope entity's ID, resolved from the run's entity name; undefined when it names none or it is unknown. */
+    EntityID: string | undefined;
+    /** The run's tenant, or undefined. */
+    RecordID: string | undefined;
+    /** The run's secondary dimensions (the agent's defaults applied), or undefined. */
+    Secondary: Record<string, SecondaryScopeValue> | undefined;
+}
+
+/** Result codes that are structurally non-retryable (permission or run-scope refusals). */
+export const NON_RETRYABLE_RESULT_CODES: ReadonlySet<string> = new Set([
+    'PERMISSION_DENIED',
+    'RUN_SCOPE_UNSUPPORTED',
+]);
+
+/** Result code of a call the user's agent policy denies outright (`CheckUserActionPolicy`). */
+export const POLICY_DENIED_RESULT_CODE = 'POLICY_DENIED';
+/** Result code of a call the user's agent policy allows only with the user's approval. */
+export const POLICY_APPROVAL_REQUIRED_RESULT_CODE = 'POLICY_APPROVAL_REQUIRED';
+/** Result code of a call the user's agent policy defers to its next allowed time window. */
+export const POLICY_DEFERRED_RESULT_CODE = 'POLICY_DEFERRED_OUTSIDE_TIME_WINDOW';
+
+/**
+ * The result codes `CheckUserActionPolicy` returns when the user's agent policy refuses a call. None of them is
+ * fixed by retrying: approval cannot be granted inside the run, a time window does not open by asking again, and
+ * a denial repeats for the same call.
+ */
+export const POLICY_REFUSAL_RESULT_CODES: ReadonlySet<string> = new Set([
+    POLICY_DENIED_RESULT_CODE,
+    POLICY_APPROVAL_REQUIRED_RESULT_CODE,
+    POLICY_DEFERRED_RESULT_CODE,
+]);
+
+/** Identical-arguments rule: this many failures with the same arguments block further identical calls. */
+export const IDENTICAL_FAILURE_THRESHOLD = 2;
+
+/** Attempt budget: this many consecutive failures, across any arguments, disable the action for the run. */
+export const ACTION_FAILURE_BUDGET = 5;
+
+/**
+ * The {@link ActionResult} returned when the run-scoped circuit breaker blocks a call before it
+ * reaches the action engine. Carries the rule that fired so the failure directive can name it
+ * directly instead of re-deriving it from the failure history, which a blocked call never updates.
+ */
+export class CircuitBreakerActionResult extends ActionResult {
+    constructor(public readonly Reason: ActionCircuitBreakerReason) {
+        super();
+    }
+}
+
 

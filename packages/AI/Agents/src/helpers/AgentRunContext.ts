@@ -10,10 +10,14 @@
  */
 
 import type {
+    ActionChange,
+    ActionChangeScope,
     AgentAction,
     AgentChatMessage,
     AgentChatMessageMetadata,
     AgentConfiguration,
+    AgentExecutionProgressCallback,
+    AgentRunAudience,
     AgentRunStepSaveQueue,
     AgentSkillActivationRequest,
     AgentSkillInvocation,
@@ -26,6 +30,7 @@ import type {
     BudgetCostEvent,
     ExecuteAgentParams,
     ExecuteAgentResult,
+    FileOutputRef,
     ForEachOperation,
     MediaOutput,
     MessageLifecycleCallback,
@@ -47,6 +52,7 @@ import type { ConversationBranchRow, MJAIAgentActionEntity, MJAIAgentUserPolicyE
 import type { ActionCompactMode, ActionLifecycleResolver } from '../ActionLifecycleResolver';
 import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
 import type { BaseAgentType } from '../agent-types/base-agent-type';
+import type { AgentContextAssembler } from '../AgentContextAssembler';
 import type { AgentDecisionService } from '../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 import type { AgentStepDispatcher, LoopIterationError } from '../AgentStepDispatcher';
@@ -56,7 +62,10 @@ import type { BudgetEnforcementGuard } from '../BudgetEnforcementGuard';
 import type { CompactionOutcome, EffectiveContextBudget } from '../ConversationCompactionManager';
 import type { DeterministicProgressDetector } from '../DeterministicProgressDetector';
 import type { FastConvergenceJudge } from '../FastConvergenceJudge';
+import type { AgentToolCircuitBreaker } from '../native-tools/agent-tool-circuit-breaker';
+import type { NativeToolBinding } from '../native-tools/control-tools';
 import type { NativeControlConfig } from '../native-tools/native-control-config';
+import type { NativeToolResult } from '../native-tools/tool-result-turns';
 import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
 import type { PipelineToolRegistry } from '../pipeline';
 import type { PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
@@ -78,9 +87,13 @@ import type { SelfCheckLinkRow } from '../self-check';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { CarryForwardStepRecord } from '../tool-result-format';
 import type {
+    ActionCircuitBreakerReason,
+    ActionFailureClass,
+    ActionFailureHistoryEntry,
     ActionResultCrushConfig,
     ActionResultSummary,
     AgentLogErrorOptions,
+    CircuitBreakerActionResult,
     CooperativePauseState,
     CreateStepEntityParams,
     ExecuteSingleActionOptions,
@@ -97,6 +110,7 @@ import type {
     StoppedRunStackStepRecord,
     WhileIterationResult,
 } from './base-agent-types';
+import type { BaseAgentActionPolicyHelper } from './actions/BaseAgentActionPolicyHelper';
 import type { AgentRealtimeModelResolution } from './realtime/BaseAgentRealtimeHelper';
 
 /**
@@ -147,8 +161,9 @@ export interface AgentHelperSubclassHooks {
         summaries: ActionResultSummary[],
         formattedResultsMessage: string,
         metadata?: AgentChatMessageMetadata,
-        decision?: BaseAgentNextStep
-    ): void;
+        decision?: BaseAgentNextStep,
+        failureGuidance?: ReadonlyMap<ActionResultSummary, string>
+    ): ReadonlySet<ActionResultSummary>;
     ReconcileUnansweredToolCalls(params: ExecuteAgentParams): void;
     InterceptLargeBinaryContent(outputParams: ActionParam[], actionEntity?: MJActionEntityExtended): ActionParam[];
 
@@ -467,6 +482,69 @@ export interface AgentHelperSubclassHooks {
     GetSubAgentExecutionCount(agentRunId: string, subAgentId: string): Promise<number>;
     GetExecutionCount(itemId: string): number;
     PauseNonDestructively(params: ExecuteAgentParams, details: PauseNonDestructivelyDetails): Promise<PausedRunOutcome | null>;
+
+    // --- Actions, circuit breaker, client tools & actionPolicy hooks (Slice s8) ---
+    NormalizeActionParams(params: Record<string, unknown> | null | undefined): string;
+    NormalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null;
+    NormalizeActionParamValue(value: unknown): unknown;
+    IsFatalActionError(message: string | null | undefined, actionParams?: Record<string, unknown> | null): boolean;
+    HasCredentialShapedArguments(actionParams?: Record<string, unknown> | null): boolean;
+    RecordActionFailure(
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended | undefined,
+        message: string | null | undefined,
+        normalizedParams: string
+    ): void;
+    LockOutAction(
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended | undefined,
+        reason?: 'fatal' | 'audience' | 'tainted'
+    ): void;
+    ClearActionFailureRecord(action: AgentAction, actionEntity: MJActionEntityExtended | undefined): void;
+    CheckActionCircuitBreaker(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        normalizedParams: string
+    ): CircuitBreakerActionResult | null;
+    BuildBlockedActionResult(
+        actionEntity: MJActionEntityExtended,
+        reason: ActionCircuitBreakerReason,
+        message: string
+    ): CircuitBreakerActionResult;
+    ClassifyActionFailure(summary: ActionResultSummary): ActionFailureClass;
+    FormatActionFailureDirective(summary: ActionResultSummary): string;
+    DoesChangeScopeApply(scope: ActionChangeScope, agentId: string, isRoot: boolean, agentIds?: string[]): boolean;
+    PushToolResultTurn(params: ExecuteAgentParams, results: AgentChatMessage): void;
+    ActionMayUseRuntimeAPIKey(action: MJActionEntityExtended, driverClass: string, params: ExecuteAgentParams): boolean;
+    ResolveActionSupportsAudience(actionEntity: MJActionEntityExtended): boolean;
+    CheckUserActionPolicy(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo
+    ): Promise<ActionResult | null>;
+    ResolveAudienceUsers(ids: string[], params: ExecuteAgentParams): Promise<UserInfo[]>;
+    SafeOnProgress(params: ExecuteAgentParams, progress: Parameters<AgentExecutionProgressCallback>[0]): void;
+    GetSkillAttributionForAction(actionId: string, agent: MJAIAgentEntityExtended): AgentSkillInvocation[];
+    IncrementExecutionCount(itemId: string): void;
+    DetectFileOutputs(outputParams: ActionParam[]): FileOutputRef[];
+    GetDefaultPayloadSelfWritePaths(): string[];
+    FindPayloadAtEndSource(
+        serializedEnd: string | null,
+        currentStep?: MJAIAgentRunStepEntityExtended
+    ): MJAIAgentRunStepEntityExtended | null;
+    FinishAfterActions<P>(
+        params: ExecuteAgentParams,
+        decision: BaseAgentNextStep<P>,
+        actionResults: Array<{ success: boolean; result?: ActionResult }>,
+        actionSummaries: ActionResultSummary[],
+        payload: P,
+        parentStepId: string | undefined,
+        addConversationMessage: boolean
+    ): Promise<BaseAgentNextStep<P> | undefined>;
+    SelfCheckSuccess<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, payload: P): Promise<BaseAgentNextStep<P>>;
+    AssertLastRunIdIsUUID(lastRunId: string | undefined): void;
 }
 
 /**
@@ -628,6 +706,48 @@ export interface AgentRunContext {
     readonly FastConvergenceJudgeIfInitialized: FastConvergenceJudge | undefined;
     /** Runaway checkpoint persistence & notification manager collaborator. */
     readonly CheckpointManager: RunawayCheckpointManager;
+    /** Resolved code-only action policy helper (`BaseAgentActionPolicyHelper`). */
+    readonly ActionPolicyHelper: BaseAgentActionPolicyHelper;
+    /** Shared prompt context & formatting assembler collaborator. */
+    readonly ContextAssembler: AgentContextAssembler;
+    /** Opaque agent-type state bag passed to `BaseAgentType` callbacks. */
+    AgentTypeState: unknown;
+    /** Run-scoped actions that failed fatally and are locked out for the run. */
+    readonly FatalActionFailures: Set<string>;
+    /** Run-scoped actions locked out due to audience incompatibility. */
+    readonly AudienceLockedActions: Set<string>;
+    /** Run-scoped actions locked out due to tainted-egress refusal. */
+    readonly TaintLockedActions: Set<string>;
+    /** Parameter-aware consecutive failure history per action name for the run-scoped circuit breaker. */
+    readonly ActionFailureHistory: Map<string, ActionFailureHistoryEntry>;
+    /** Agent-local native tool circuit breaker. */
+    readonly AgentToolBreaker: AgentToolCircuitBreaker;
+    /** Hydrated audience readers beyond the caller, or undefined until hydrated. */
+    AudienceReaders: UserInfo[] | undefined;
+    /** `ExecuteAgentParams.Audience` reference from which `AudienceReaders` was hydrated. */
+    AudienceSource: AgentRunAudience | undefined;
+    /** Validated run scope active for this run (or undefined outside `Execute`). */
+    RunScope: ActionRunScope | undefined;
+    /** Computed effective actions for this run (including runtime `actionChanges`). */
+    EffectiveActions: MJActionEntityExtended[];
+    /** True once effective catalog has been computed for this run. */
+    EffectiveCatalogComputed: boolean;
+    /** Dynamic per-action execution limits applied via runtime `actionChanges`. */
+    DynamicActionLimits: Record<string, number>;
+    /** Merged agent-type prompt parameters for this run. */
+    AgentTypePromptParams: Record<string, unknown> | undefined;
+    /** Resolved storage account ID for media/file outputs in this run. */
+    ResolvedStorageAccountId: string | null;
+    /** Accumulated file outputs produced by actions during this run. */
+    readonly FileOutputs: FileOutputRef[];
+    /** Active native tool bindings for the current prompt turn. */
+    NativeToolBindings: ReadonlyMap<string, NativeToolBinding> | undefined;
+    /** Pending agent-local tool results awaiting attachment after the assistant call turn. */
+    PendingAgentToolResults: { results: NativeToolResult[] } | undefined;
+    /** Reference to the last native assistant turn already appended to conversation history. */
+    LastNativeTurnAppended: BaseAgentNextStep['nativeTurn'] | undefined;
+    /** Default character threshold before inline action-result crushing triggers. */
+    readonly ActionResultCrushThreshold: number;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;
