@@ -51,6 +51,7 @@ import {
 } from '../../catalog-narrowing';
 import { FinishIfModeWarnings } from '../../finish-if-mode-warnings';
 import type { AgentRunContext } from '../AgentRunContext';
+import { AgentStepTypeRegistry } from '../steps/AgentStepTypeRegistry';
 import type { AgentBaseCatalog, PromptWithholding } from '../base-agent-types';
 import type { BaseAgentPromptHelper } from './BaseAgentPromptHelper';
 
@@ -787,10 +788,18 @@ export class AgentPromptCatalogAndNarrowingHelper {
         const schemaJson = agentType?.PromptParamsSchema;
         const schemaDefaults = ctx.Hooks.ExtractSchemaDefaults(schemaJson);
 
-        const effectiveProps =
-            agent.BaseAgentID && typeof AIEngine.Instance.ResolveEffectiveAgentProperties === 'function'
-                ? AIEngine.Instance.ResolveEffectiveAgentProperties(agent)
-                : null;
+        // Resolve effective AgentTypePromptParams / promptDefaults across the full 3-table cascade
+        // for BOTH root and derived agents (AgentType.DefaultAgentConfiguration -> Category tree -> BaseAgent chain -> Agent).
+        const effectiveProps = (() => {
+            try {
+                if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                    return AIEngine.Instance.ResolveEffectiveAgentProperties(agent);
+                }
+            } catch {
+                // Uninitialized engine in unit tests
+            }
+            return null;
+        })();
         const agentParamsJson = effectiveProps?.AgentTypePromptParams ?? agent.AgentTypePromptParams;
         let agentParams: Record<string, unknown> = {};
         if (agentParamsJson) {
@@ -801,11 +810,37 @@ export class AgentPromptCatalogAndNarrowingHelper {
             }
         }
 
-        const merged = {
+        const merged: Record<string, unknown> = {
             ...schemaDefaults,
             ...agentParams,
             ...(runtimeOverrides || {}),
         };
+
+        // Surface active custom (non-built-in) step types with DefaultEnabledInPrompt=true so Loop/Flow
+        // prompt templates can instruct the model on registered OpenApp step types (0-byte impact when none exist).
+        const scopeName = agentType?.Name?.toLowerCase();
+        const stepScope: 'Loop' | 'Flow' | undefined = scopeName?.includes('flow')
+            ? 'Flow'
+            : scopeName?.includes('loop')
+              ? 'Loop'
+              : undefined;
+        const activeCustomSteps = AgentStepTypeRegistry.Instance.GetActiveCustomStepPolicies(stepScope).filter(
+            (p) => p.DefaultEnabledInPrompt
+        );
+        if (activeCustomSteps.length > 0) {
+            merged.customStepTypes = activeCustomSteps.map((p) => ({
+                name: p.StepKey,
+                appliesTo: p.AppliesTo,
+                allowedInUnapprovedPlanMode: p.AllowedInUnapprovedPlanMode,
+                instructions: p.PromptInstructions ?? null,
+            }));
+            const instructionBlocks = activeCustomSteps
+                .map((p) => (p.PromptInstructions ? `### Custom Step Type: ${p.StepKey}\n${p.PromptInstructions}` : null))
+                .filter((s): s is string => s !== null);
+            if (instructionBlocks.length > 0) {
+                merged.customStepTypeInstructions = instructionBlocks.join('\n\n');
+            }
+        }
 
         const explicitResponseType =
             (runtimeOverrides?.includeResponseTypeDefinition as Record<string, unknown> | undefined) ||

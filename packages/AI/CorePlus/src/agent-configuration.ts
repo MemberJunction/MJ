@@ -420,15 +420,126 @@ export interface BidirectionalConfigSyncResult<TLegacy extends object> {
 }
 
 /**
+ * Validates raw `IAgentConfiguration` JSON syntax, root shape, section shapes, and key scalar types.
+ * Returns an array of human-readable error strings (empty when absent or valid).
+ */
+export function ValidateAgentConfigurationJson(
+    json: string | null | undefined,
+    fieldLabel: string = 'Configuration'
+): string[] {
+    if (json === null || json === undefined || json.trim().length === 0) {
+        return [];
+    }
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(json);
+    } catch (error) {
+        return [`${fieldLabel} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`];
+    }
+    if (!IsPlainObject(parsed)) {
+        return [`${fieldLabel} must be a JSON object.`];
+    }
+    const errors: string[] = [];
+    const obj = parsed as { [key: string]: unknown };
+    for (const key of OBJECT_SECTION_KEYS) {
+        const val = obj[key];
+        if (val !== undefined && val !== null && !IsPlainObject(val)) {
+            errors.push(`${fieldLabel}.${String(key)} must be a JSON object or null.`);
+        }
+    }
+    if (obj.helperPlugins !== undefined && obj.helperPlugins !== null) {
+        if (!Array.isArray(obj.helperPlugins)) {
+            errors.push(`${fieldLabel}.helperPlugins must be an array or null.`);
+        } else {
+            for (let i = 0; i < obj.helperPlugins.length; i++) {
+                const entry = obj.helperPlugins[i];
+                if (!IsPlainObject(entry)) {
+                    errors.push(`${fieldLabel}.helperPlugins[${i}] must be an object.`);
+                    continue;
+                }
+                const rec = entry as { [key: string]: unknown };
+                if (typeof rec.seam !== 'string' || rec.seam.trim().length === 0) {
+                    errors.push(`${fieldLabel}.helperPlugins[${i}].seam must be a non-empty string.`);
+                }
+                if (typeof rec.driverClass !== 'string' || rec.driverClass.trim().length === 0) {
+                    errors.push(`${fieldLabel}.helperPlugins[${i}].driverClass must be a non-empty string.`);
+                }
+            }
+        }
+    }
+
+    const checkNum = (section: string, key: string, val: unknown): void => {
+        if (val !== undefined && val !== null && (typeof val !== 'number' || !Number.isFinite(val))) {
+            errors.push(`${fieldLabel}.${section}.${key} must be a finite number or null.`);
+        }
+    };
+    const checkBool = (section: string, key: string, val: unknown): void => {
+        if (val !== undefined && val !== null && typeof val !== 'boolean') {
+            errors.push(`${fieldLabel}.${section}.${key} must be a boolean or null.`);
+        }
+    };
+
+    if (IsPlainObject(obj.execution)) {
+        const ex = obj.execution as { [key: string]: unknown };
+        checkNum('execution', 'defaultPromptEffortLevel', ex.defaultPromptEffortLevel);
+        checkBool('execution', 'supportsPlanMode', ex.supportsPlanMode);
+        checkBool('execution', 'requirePlanMode', ex.requirePlanMode);
+        checkBool('execution', 'declareActionsAsNativeTools', ex.declareActionsAsNativeTools);
+    }
+    if (IsPlainObject(obj.contextWindow)) {
+        const cw = obj.contextWindow as { [key: string]: unknown };
+        checkBool('contextWindow', 'enableCompression', cw.enableCompression);
+        checkNum('contextWindow', 'compressionMessageThreshold', cw.compressionMessageThreshold);
+        checkNum('contextWindow', 'compressionMessageRetentionCount', cw.compressionMessageRetentionCount);
+        checkNum('contextWindow', 'maxTokens', cw.maxTokens);
+        checkNum('contextWindow', 'compactionTriggerPercent', cw.compactionTriggerPercent);
+        checkNum('contextWindow', 'compactionTargetPercent', cw.compactionTargetPercent);
+    }
+    if (IsPlainObject(obj.memory)) {
+        const mem = obj.memory as { [key: string]: unknown };
+        checkBool('memory', 'injectNotes', mem.injectNotes);
+        checkNum('memory', 'maxNotesToInject', mem.maxNotesToInject);
+        checkBool('memory', 'injectExamples', mem.injectExamples);
+        checkNum('memory', 'maxExamplesToInject', mem.maxExamplesToInject);
+        checkNum('memory', 'noteRetentionDays', mem.noteRetentionDays);
+        checkNum('memory', 'exampleRetentionDays', mem.exampleRetentionDays);
+        checkBool('memory', 'autoArchiveEnabled', mem.autoArchiveEnabled);
+        checkBool('memory', 'allowMemoryWrite', mem.allowMemoryWrite);
+    }
+    if (IsPlainObject(obj.payload)) {
+        const pl = obj.payload as { [key: string]: unknown };
+        checkNum('payload', 'finalValidationMaxRetries', pl.finalValidationMaxRetries);
+    }
+    if (IsPlainObject(obj.subAgentExecution)) {
+        const sub = obj.subAgentExecution as { [key: string]: unknown };
+        checkNum('subAgentExecution', 'minExecutionsPerRun', sub.minExecutionsPerRun);
+        checkNum('subAgentExecution', 'maxExecutionsPerRun', sub.maxExecutionsPerRun);
+        checkNum('subAgentExecution', 'maxConsultRounds', sub.maxConsultRounds);
+    }
+    if (IsPlainObject(obj.attachments)) {
+        const att = obj.attachments as { [key: string]: unknown };
+        checkNum('attachments', 'maxMessages', att.maxMessages);
+        checkNum('attachments', 'inlineStorageThresholdBytes', att.inlineStorageThresholdBytes);
+        checkBool('attachments', 'acceptUnregisteredFiles', att.acceptUnregisteredFiles);
+    }
+    if (IsPlainObject(obj.clientTools)) {
+        const ct = obj.clientTools as { [key: string]: unknown };
+        checkBool('clientTools', 'allowEphemeral', ct.allowEphemeral);
+    }
+    return errors;
+}
+
+/**
  * Pure bidirectional dirty-field sync core for `MJAIAgentEntityServer.Save()`:
  *
  * - If `Configuration` is dirty (and a legacy column is NOT dirty), JSON values write through
- *   to the corresponding legacy columns so older v6.x readers stay 100% consistent.
- * - If any legacy column IS dirty (and `Configuration` is NOT dirty, or even when both are dirty),
- *   each dirty legacy column writes its value into the corresponding `Configuration` section so
- *   legacy writers never drift from `Configuration`.
- * - On create (`isNewRecord === true`) when `Configuration` is null/empty, seeds `Configuration`
- *   from the entity's legacy columns.
+ *   to the corresponding legacy columns (resetting NOT NULL columns to their schema defaults when
+ *   explicitly set to `null`) so older v6.x readers stay 100% consistent.
+ * - If any legacy column IS dirty, each dirty legacy column writes its value into the
+ *   corresponding `Configuration` section so legacy writers never drift from `Configuration`.
+ * - Non-empty malformed `Configuration` JSON is NEVER overwritten silently (validation rejects it).
+ * - On create (`IsNewRecord === true`), ONLY caller-dirty legacy fields are written into
+ *   `Configuration` so untouched DB defaults are never frozen as explicit overrides.
  */
 export function SyncAgentLegacyColumnsAndConfiguration(args: {
     IsNewRecord: boolean;
@@ -438,8 +549,18 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
     DirtyLegacyFields: ReadonlySet<keyof LegacyAIAgentConfigColumns>;
 }): BidirectionalConfigSyncResult<LegacyAIAgentConfigColumns> {
     const { IsNewRecord, ConfigurationJson, ConfigurationDirty, LegacyValues, DirtyLegacyFields } = args;
+    const hasRawJson = typeof ConfigurationJson === 'string' && ConfigurationJson.trim().length > 0;
     const parsedConfig = ParseAgentConfiguration(ConfigurationJson);
     const legacyUpdates: Partial<LegacyAIAgentConfigColumns> = {};
+
+    // Never destroy non-empty malformed JSON on a legacy-column edit; ValidateAsync rejects it cleanly.
+    if (hasRawJson && !parsedConfig) {
+        return {
+            ConfigurationJson: ConfigurationJson ?? null,
+            ShouldUpdateConfiguration: false,
+            LegacyColumnUpdates: legacyUpdates,
+        };
+    }
 
     // Direction 1: Configuration JSON -> non-dirty legacy columns
     if (parsedConfig && (ConfigurationDirty || IsNewRecord)) {
@@ -455,8 +576,12 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
         const ex = parsedConfig.execution;
         if (ex) {
             if (ex.modelSelectionMode != null) setLegacy('ModelSelectionMode', ex.modelSelectionMode);
-            if (ex.defaultPromptEffortLevel !== undefined) setLegacy('DefaultPromptEffortLevel', ex.defaultPromptEffortLevel);
-            if (ex.chatHandlingOption !== undefined) setLegacy('ChatHandlingOption', ex.chatHandlingOption);
+            if (ex.defaultPromptEffortLevel === null || typeof ex.defaultPromptEffortLevel === 'number') {
+                setLegacy('DefaultPromptEffortLevel', ex.defaultPromptEffortLevel);
+            }
+            if (ex.chatHandlingOption === null || typeof ex.chatHandlingOption === 'string') {
+                setLegacy('ChatHandlingOption', ex.chatHandlingOption);
+            }
             if (typeof ex.supportsPlanMode === 'boolean') setLegacy('SupportsPlanMode', ex.supportsPlanMode);
             if (typeof ex.requirePlanMode === 'boolean') setLegacy('RequirePlanMode', ex.requirePlanMode);
             if (typeof ex.declareActionsAsNativeTools === 'boolean') setLegacy('DeclareActionsAsNativeTools', ex.declareActionsAsNativeTools);
@@ -465,25 +590,51 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
         const cw = parsedConfig.contextWindow;
         if (cw) {
             if (typeof cw.enableCompression === 'boolean') setLegacy('EnableContextCompression', cw.enableCompression);
-            if (cw.compressionMessageThreshold !== undefined) setLegacy('ContextCompressionMessageThreshold', cw.compressionMessageThreshold);
-            if (cw.compressionPromptID !== undefined) setLegacy('ContextCompressionPromptID', cw.compressionPromptID);
-            if (cw.compressionMessageRetentionCount !== undefined) setLegacy('ContextCompressionMessageRetentionCount', cw.compressionMessageRetentionCount);
-            if (cw.maxTokens !== undefined) setLegacy('ContextWindowMaxTokens', cw.maxTokens);
-            if (cw.compactionTriggerPercent !== undefined) setLegacy('CompactionTriggerPercent', cw.compactionTriggerPercent);
-            if (cw.compactionTargetPercent !== undefined) setLegacy('CompactionTargetPercent', cw.compactionTargetPercent);
-            if (cw.summaryPromptID !== undefined) setLegacy('ConversationSummaryPromptID', cw.summaryPromptID);
+            if (cw.compressionMessageThreshold === null || typeof cw.compressionMessageThreshold === 'number') {
+                setLegacy('ContextCompressionMessageThreshold', cw.compressionMessageThreshold);
+            }
+            if (cw.compressionPromptID === null || typeof cw.compressionPromptID === 'string') {
+                setLegacy('ContextCompressionPromptID', cw.compressionPromptID);
+            }
+            if (cw.compressionMessageRetentionCount === null || typeof cw.compressionMessageRetentionCount === 'number') {
+                setLegacy('ContextCompressionMessageRetentionCount', cw.compressionMessageRetentionCount);
+            }
+            if (cw.maxTokens === null || typeof cw.maxTokens === 'number') {
+                setLegacy('ContextWindowMaxTokens', cw.maxTokens);
+            }
+            if (cw.compactionTriggerPercent === null || typeof cw.compactionTriggerPercent === 'number') {
+                setLegacy('CompactionTriggerPercent', cw.compactionTriggerPercent);
+            }
+            if (cw.compactionTargetPercent === null || typeof cw.compactionTargetPercent === 'number') {
+                setLegacy('CompactionTargetPercent', cw.compactionTargetPercent);
+            }
+            if (cw.summaryPromptID === null || typeof cw.summaryPromptID === 'string') {
+                setLegacy('ConversationSummaryPromptID', cw.summaryPromptID);
+            }
         }
 
         const mem = parsedConfig.memory;
         if (mem) {
             if (typeof mem.injectNotes === 'boolean') setLegacy('InjectNotes', mem.injectNotes);
-            if (typeof mem.maxNotesToInject === 'number') setLegacy('MaxNotesToInject', mem.maxNotesToInject);
+            if (typeof mem.maxNotesToInject === 'number') {
+                setLegacy('MaxNotesToInject', mem.maxNotesToInject);
+            } else if (mem.maxNotesToInject === null) {
+                setLegacy('MaxNotesToInject', 5);
+            }
             if (mem.noteInjectionStrategy != null) setLegacy('NoteInjectionStrategy', mem.noteInjectionStrategy);
             if (typeof mem.injectExamples === 'boolean') setLegacy('InjectExamples', mem.injectExamples);
-            if (typeof mem.maxExamplesToInject === 'number') setLegacy('MaxExamplesToInject', mem.maxExamplesToInject);
+            if (typeof mem.maxExamplesToInject === 'number') {
+                setLegacy('MaxExamplesToInject', mem.maxExamplesToInject);
+            } else if (mem.maxExamplesToInject === null) {
+                setLegacy('MaxExamplesToInject', 3);
+            }
             if (mem.exampleInjectionStrategy != null) setLegacy('ExampleInjectionStrategy', mem.exampleInjectionStrategy);
-            if (mem.noteRetentionDays !== undefined) setLegacy('NoteRetentionDays', mem.noteRetentionDays);
-            if (mem.exampleRetentionDays !== undefined) setLegacy('ExampleRetentionDays', mem.exampleRetentionDays);
+            if (mem.noteRetentionDays === null || typeof mem.noteRetentionDays === 'number') {
+                setLegacy('NoteRetentionDays', mem.noteRetentionDays);
+            }
+            if (mem.exampleRetentionDays === null || typeof mem.exampleRetentionDays === 'number') {
+                setLegacy('ExampleRetentionDays', mem.exampleRetentionDays);
+            }
             if (typeof mem.autoArchiveEnabled === 'boolean') setLegacy('AutoArchiveEnabled', mem.autoArchiveEnabled);
             if (typeof mem.allowMemoryWrite === 'boolean') setLegacy('AllowMemoryWrite', mem.allowMemoryWrite);
             if (mem.reranker !== undefined) {
@@ -493,43 +644,73 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
 
         const pl = parsedConfig.payload;
         if (pl) {
-            if (Array.isArray(pl.downstreamPaths)) setLegacy('PayloadDownstreamPaths', JSON.stringify(pl.downstreamPaths));
-            if (Array.isArray(pl.upstreamPaths)) setLegacy('PayloadUpstreamPaths', JSON.stringify(pl.upstreamPaths));
+            if (Array.isArray(pl.downstreamPaths)) {
+                setLegacy('PayloadDownstreamPaths', JSON.stringify(pl.downstreamPaths));
+            } else if (pl.downstreamPaths === null) {
+                setLegacy('PayloadDownstreamPaths', '["*"]');
+            }
+            if (Array.isArray(pl.upstreamPaths)) {
+                setLegacy('PayloadUpstreamPaths', JSON.stringify(pl.upstreamPaths));
+            } else if (pl.upstreamPaths === null) {
+                setLegacy('PayloadUpstreamPaths', '["*"]');
+            }
             if (pl.selfReadPaths !== undefined) {
                 setLegacy('PayloadSelfReadPaths', pl.selfReadPaths ? JSON.stringify(pl.selfReadPaths) : null);
             }
             if (pl.selfWritePaths !== undefined) {
                 setLegacy('PayloadSelfWritePaths', pl.selfWritePaths ? JSON.stringify(pl.selfWritePaths) : null);
             }
-            if (pl.scope !== undefined) setLegacy('PayloadScope', pl.scope);
-            if (pl.startingValidationSchema !== undefined) setLegacy('StartingPayloadValidation', pl.startingValidationSchema);
+            if (pl.scope === null || typeof pl.scope === 'string') setLegacy('PayloadScope', pl.scope);
+            if (pl.startingValidationSchema === null || typeof pl.startingValidationSchema === 'string') {
+                setLegacy('StartingPayloadValidation', pl.startingValidationSchema);
+            }
             if (pl.startingValidationMode != null) setLegacy('StartingPayloadValidationMode', pl.startingValidationMode);
-            if (pl.finalValidationSchema !== undefined) setLegacy('FinalPayloadValidation', pl.finalValidationSchema);
+            if (pl.finalValidationSchema === null || typeof pl.finalValidationSchema === 'string') {
+                setLegacy('FinalPayloadValidation', pl.finalValidationSchema);
+            }
             if (pl.finalValidationMode != null) setLegacy('FinalPayloadValidationMode', pl.finalValidationMode);
-            if (typeof pl.finalValidationMaxRetries === 'number') setLegacy('FinalPayloadValidationMaxRetries', pl.finalValidationMaxRetries);
+            if (typeof pl.finalValidationMaxRetries === 'number') {
+                setLegacy('FinalPayloadValidationMaxRetries', pl.finalValidationMaxRetries);
+            } else if (pl.finalValidationMaxRetries === null) {
+                setLegacy('FinalPayloadValidationMaxRetries', 3);
+            }
         }
 
         const sub = parsedConfig.subAgentExecution;
         if (sub) {
             if (sub.mode != null) setLegacy('ExecutionMode', sub.mode);
-            if (sub.minExecutionsPerRun !== undefined) setLegacy('MinExecutionsPerRun', sub.minExecutionsPerRun);
-            if (sub.maxExecutionsPerRun !== undefined) setLegacy('MaxExecutionsPerRun', sub.maxExecutionsPerRun);
-            if (sub.maxConsultRounds !== undefined) setLegacy('MaxSubAgentConsultRounds', sub.maxConsultRounds);
+            if (sub.minExecutionsPerRun === null || typeof sub.minExecutionsPerRun === 'number') {
+                setLegacy('MinExecutionsPerRun', sub.minExecutionsPerRun);
+            }
+            if (sub.maxExecutionsPerRun === null || typeof sub.maxExecutionsPerRun === 'number') {
+                setLegacy('MaxExecutionsPerRun', sub.maxExecutionsPerRun);
+            }
+            if (sub.maxConsultRounds === null || typeof sub.maxConsultRounds === 'number') {
+                setLegacy('MaxSubAgentConsultRounds', sub.maxConsultRounds);
+            }
         }
 
         const att = parsedConfig.attachments;
         if (att) {
             if (att.messageMode != null) setLegacy('MessageMode', att.messageMode);
-            if (att.maxMessages !== undefined) setLegacy('MaxMessages', att.maxMessages);
-            if (att.rootPath !== undefined) setLegacy('AttachmentRootPath', att.rootPath);
-            if (att.inlineStorageThresholdBytes !== undefined) setLegacy('InlineStorageThresholdBytes', att.inlineStorageThresholdBytes);
+            if (att.maxMessages === null || typeof att.maxMessages === 'number') {
+                setLegacy('MaxMessages', att.maxMessages);
+            }
+            if (att.rootPath === null || typeof att.rootPath === 'string') {
+                setLegacy('AttachmentRootPath', att.rootPath);
+            }
+            if (att.inlineStorageThresholdBytes === null || typeof att.inlineStorageThresholdBytes === 'number') {
+                setLegacy('InlineStorageThresholdBytes', att.inlineStorageThresholdBytes);
+            }
             if (typeof att.acceptUnregisteredFiles === 'boolean') setLegacy('AcceptUnregisteredFiles', att.acceptUnregisteredFiles);
         }
 
         const art = parsedConfig.artifacts;
         if (art) {
             if (art.creationMode != null) setLegacy('ArtifactCreationMode', art.creationMode);
-            if (art.defaultArtifactTypeID !== undefined) setLegacy('DefaultArtifactTypeID', art.defaultArtifactTypeID);
+            if (art.defaultArtifactTypeID === null || typeof art.defaultArtifactTypeID === 'string') {
+                setLegacy('DefaultArtifactTypeID', art.defaultArtifactTypeID);
+            }
         }
 
         const sc = parsedConfig.scope;
@@ -546,21 +727,19 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
         if (typeof parsedConfig.clientTools?.allowEphemeral === 'boolean') {
             setLegacy('AllowEphemeralClientTools', parsedConfig.clientTools.allowEphemeral);
         }
-        if (parsedConfig.recording && parsedConfig.recording.defaultMode !== undefined) {
+        if (parsedConfig.recording && (parsedConfig.recording.defaultMode === null || typeof parsedConfig.recording.defaultMode === 'string')) {
             setLegacy('RecordingDefault', parsedConfig.recording.defaultMode);
         }
     }
 
-    // Direction 2: Dirty legacy columns (or new record with no Configuration JSON) -> Configuration JSON
-    if (DirtyLegacyFields.size > 0 || (IsNewRecord && !parsedConfig)) {
+    // Direction 2: Dirty legacy columns -> Configuration JSON
+    // Only caller-dirty legacy fields are written into Configuration so untouched DB defaults
+    // on newly created rows never shadow parent/category/type inheritance.
+    if (DirtyLegacyFields.size > 0) {
         const dirtySubset: Partial<LegacyAIAgentConfigColumns> = {};
-        if (IsNewRecord && !parsedConfig) {
-            Object.assign(dirtySubset, LegacyValues);
-        } else {
-            for (const key of DirtyLegacyFields) {
-                if (LegacyValues[key] !== undefined) {
-                    (dirtySubset as Record<string, unknown>)[key] = LegacyValues[key];
-                }
+        for (const key of DirtyLegacyFields) {
+            if (LegacyValues[key] !== undefined) {
+                (dirtySubset as Record<string, unknown>)[key] = LegacyValues[key];
             }
         }
         const patchFromLegacy = BuildAgentConfigurationFromLegacyFields(dirtySubset);
@@ -598,8 +777,17 @@ export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
         LegacyValues,
         DirtyLegacyFields,
     } = args;
+    const hasRawJson = typeof DefaultAgentConfigurationJson === 'string' && DefaultAgentConfigurationJson.trim().length > 0;
     const parsedConfig = ParseAgentConfiguration(DefaultAgentConfigurationJson);
     const legacyUpdates: Partial<LegacyAIAgentTypeConfigColumns> = {};
+
+    if (hasRawJson && !parsedConfig) {
+        return {
+            ConfigurationJson: DefaultAgentConfigurationJson ?? null,
+            ShouldUpdateConfiguration: false,
+            LegacyColumnUpdates: legacyUpdates,
+        };
+    }
 
     // Direction 1: DefaultAgentConfiguration JSON -> non-dirty legacy columns
     if (parsedConfig?.contextWindow && (DefaultAgentConfigurationDirty || IsNewRecord)) {
@@ -612,25 +800,31 @@ export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
                 legacyUpdates[key] = value;
             }
         };
-        if (cw.compressionMessageThreshold !== undefined) setLegacy('ContextCompressionMessageThreshold', cw.compressionMessageThreshold);
-        if (cw.compressionPromptID !== undefined) setLegacy('ContextCompressionPromptID', cw.compressionPromptID);
-        if (cw.compressionMessageRetentionCount !== undefined) setLegacy('ContextCompressionMessageRetentionCount', cw.compressionMessageRetentionCount);
-        if (cw.maxTokens !== undefined) setLegacy('ContextWindowMaxTokens', cw.maxTokens);
+        if (cw.compressionMessageThreshold === null || typeof cw.compressionMessageThreshold === 'number') {
+            setLegacy('ContextCompressionMessageThreshold', cw.compressionMessageThreshold);
+        }
+        if (cw.compressionPromptID === null || typeof cw.compressionPromptID === 'string') {
+            setLegacy('ContextCompressionPromptID', cw.compressionPromptID);
+        }
+        if (cw.compressionMessageRetentionCount === null || typeof cw.compressionMessageRetentionCount === 'number') {
+            setLegacy('ContextCompressionMessageRetentionCount', cw.compressionMessageRetentionCount);
+        }
+        if (cw.maxTokens === null || typeof cw.maxTokens === 'number') {
+            setLegacy('ContextWindowMaxTokens', cw.maxTokens);
+        }
         if (typeof cw.compactionTriggerPercent === 'number') setLegacy('CompactionTriggerPercent', cw.compactionTriggerPercent);
         if (typeof cw.compactionTargetPercent === 'number') setLegacy('CompactionTargetPercent', cw.compactionTargetPercent);
-        if (cw.summaryPromptID !== undefined) setLegacy('ConversationSummaryPromptID', cw.summaryPromptID);
+        if (cw.summaryPromptID === null || typeof cw.summaryPromptID === 'string') {
+            setLegacy('ConversationSummaryPromptID', cw.summaryPromptID);
+        }
     }
 
-    // Direction 2: Dirty legacy columns (or new record with no JSON) -> DefaultAgentConfiguration JSON
-    if (DirtyLegacyFields.size > 0 || (IsNewRecord && !parsedConfig)) {
+    // Direction 2: Dirty legacy columns -> DefaultAgentConfiguration JSON
+    if (DirtyLegacyFields.size > 0) {
         const dirtySubset: Partial<LegacyAIAgentTypeConfigColumns> = {};
-        if (IsNewRecord && !parsedConfig) {
-            Object.assign(dirtySubset, LegacyValues);
-        } else {
-            for (const key of DirtyLegacyFields) {
-                if (LegacyValues[key] !== undefined) {
-                    (dirtySubset as Record<string, unknown>)[key] = LegacyValues[key];
-                }
+        for (const key of DirtyLegacyFields) {
+            if (LegacyValues[key] !== undefined) {
+                (dirtySubset as Record<string, unknown>)[key] = LegacyValues[key];
             }
         }
         const patchFromLegacy = BuildAgentTypeConfigurationFromLegacyFields(dirtySubset);

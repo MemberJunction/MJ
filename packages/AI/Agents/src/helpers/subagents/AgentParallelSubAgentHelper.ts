@@ -30,6 +30,7 @@ import {
     type SubAgentConsultRecord,
 } from '../../sub-agent-consult';
 import type { AgentRunContext } from '../AgentRunContext';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import {
     PARALLEL_SUBAGENT_CONCURRENCY_LIMIT,
     type ParallelSubAgentDispatch,
@@ -564,7 +565,10 @@ export class AgentParallelSubAgentHelper {
                 if (subAgentHelper.IsSubAgentConsultActive(ctx, resolvedOption, params)) {
                     const round = (ctx.SubAgentConsultRounds.get(execution.subAgentEntity.ID) ?? 0) + 1;
                     ctx.SubAgentConsultRounds.set(execution.subAgentEntity.ID, round);
-                    const maxRounds = params.agent.MaxSubAgentConsultRounds ?? GetMaxSubAgentConsultRounds();
+                    const maxRounds =
+                        SafeResolveEffectiveAgentProperties(params.agent)?.MaxSubAgentConsultRounds ??
+                        params.agent.MaxSubAgentConsultRounds ??
+                        GetMaxSubAgentConsultRounds();
                     if (round <= maxRounds) {
                         const childRunId = execution.result.agentRun?.ID || '';
                         const question = execution.result.agentRun?.Message || null;

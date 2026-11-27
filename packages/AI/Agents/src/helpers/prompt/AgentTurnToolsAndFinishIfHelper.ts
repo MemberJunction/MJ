@@ -38,6 +38,7 @@ import {
 import type { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from '../../MemoryWriteManager';
 import { CarryForwardToolFamily, type CarryForwardToolStepOutput } from '../../tool-result-format';
 import type { AgentRunContext } from '../AgentRunContext';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type {
     ActionResultSummary,
     FinishIfSettings,
@@ -237,7 +238,9 @@ export class AgentTurnToolsAndFinishIfHelper {
     }
 
     public IsArtifactSupportEnabled(ctx: AgentRunContext, agent: MJAIAgentEntityExtended): boolean {
-        if (!agent.ArtifactCreationMode || agent.ArtifactCreationMode !== 'Never') {
+        const effectiveArtifactMode =
+            SafeResolveEffectiveAgentProperties(agent)?.ArtifactCreationMode ?? agent.ArtifactCreationMode;
+        if (!effectiveArtifactMode || effectiveArtifactMode !== 'Never') {
             return true;
         }
         if (ctx.ArtifactToolManager.HasArtifacts()) {
@@ -253,7 +256,9 @@ export class AgentTurnToolsAndFinishIfHelper {
     }
 
     public MemoryWriteSkip(ctx: AgentRunContext, params: ExecuteAgentParams): MemoryWriteSkip | null {
-        if (params.agent.AllowMemoryWrite !== true) {
+        const effectiveAllowMemoryWrite =
+            SafeResolveEffectiveAgentProperties(params.agent)?.AllowMemoryWrite ?? params.agent.AllowMemoryWrite;
+        if (effectiveAllowMemoryWrite !== true) {
             return { Reason: 'AllowMemoryWrite=false', Told: 'this agent does not have durable memory writes enabled' };
         }
         if (ctx.Hooks.RunAudienceAddsReader(params)) {

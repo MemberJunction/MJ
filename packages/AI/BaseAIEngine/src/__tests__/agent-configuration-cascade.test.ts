@@ -266,4 +266,95 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         expect(eff.DefaultPromptEffortLevel).toBe(55);
         expect(eff.NoteRetentionDays).toBe(30);
     });
+
+    it('lets an agent override overridable Category boolean defaults to false, narrows AllowMemoryWrite, and sanitizes malformed Category helperPlugins (2.7 regression)', () => {
+        const permissiveCat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'PermissiveCat',
+            DefaultConfiguration: JSON.stringify({
+                memory: { injectNotes: true, injectExamples: true, allowMemoryWrite: true },
+                contextWindow: { enableCompression: true },
+                helperPlugins: [null, { seam: 123, driverClass: 'Bad' }, { seam: 'messaging', driverClass: 'GoodMsgHelper' }],
+            }),
+        });
+        const strictAgent = makeAgent({
+            ID: AGENT_BASE,
+            CategoryID: CAT_ROOT,
+            AllowMemoryWrite: false,
+            Configuration: JSON.stringify({
+                memory: { injectNotes: false, injectExamples: false, allowMemoryWrite: false },
+                contextWindow: { enableCompression: false },
+            }),
+        });
+        const childTryingToWiden = makeAgent({
+            ID: AGENT_LEAF,
+            BaseAgentID: AGENT_BASE,
+            AllowMemoryWrite: true,
+            Configuration: JSON.stringify({
+                memory: { allowMemoryWrite: true },
+            }),
+        });
+
+        const engine = seedEngine({
+            _agentCategories: [permissiveCat],
+            _agents: [strictAgent, childTryingToWiden],
+        });
+
+        const baseEff = engine.ResolveEffectiveAgentProperties(strictAgent);
+        expect(baseEff.InjectNotes).toBe(false);
+        expect(baseEff.InjectExamples).toBe(false);
+        expect(baseEff.EnableContextCompression).toBe(false);
+        expect(baseEff.AllowMemoryWrite).toBe(false);
+        // Malformed null / non-string seam entries stripped; valid entry preserved
+        expect(baseEff.HelperPlugins).toEqual([{ seam: 'messaging', driverClass: 'GoodMsgHelper' }]);
+
+        const childEff = engine.ResolveEffectiveAgentProperties(childTryingToWiden);
+        expect(childEff.AllowMemoryWrite).toBe(false);
+    });
+
+    it('lets Category defaults shine through untouched SQL NOT NULL legacy defaults while respecting explicit Configuration overrides', () => {
+        const cat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'CustomMemoryCat',
+            DefaultConfiguration: JSON.stringify({
+                memory: { maxNotesToInject: 6, maxExamplesToInject: 7 },
+                subAgentExecution: { mode: 'Parallel' },
+            }),
+        });
+        // Simulates a freshly-saved SQL row where untouched NOT NULL columns hold DB defaults (5, 3, 'Sequential')
+        const inheritingAgent = makeAgent({
+            ID: AGENT_BASE,
+            CategoryID: CAT_ROOT,
+            MaxNotesToInject: 5,
+            MaxExamplesToInject: 3,
+            ExecutionMode: 'Sequential',
+            Configuration: null,
+        });
+        // Explicit Configuration override back to the DB default (5) MUST win over Category (6)
+        const explicitOverrideAgent = makeAgent({
+            ID: AGENT_LEAF,
+            BaseAgentID: AGENT_BASE,
+            MaxNotesToInject: 5,
+            MaxExamplesToInject: 3,
+            ExecutionMode: 'Sequential',
+            Configuration: JSON.stringify({
+                memory: { maxNotesToInject: 5 },
+            }),
+        });
+
+        const engine = seedEngine({
+            _agentCategories: [cat],
+            _agents: [inheritingAgent, explicitOverrideAgent],
+        });
+
+        const inherited = engine.ResolveEffectiveAgentProperties(inheritingAgent);
+        expect(inherited.MaxNotesToInject).toBe(6);
+        expect(inherited.MaxExamplesToInject).toBe(7);
+        expect(inherited.ExecutionMode).toBe('Parallel');
+
+        const overridden = engine.ResolveEffectiveAgentProperties(explicitOverrideAgent);
+        expect(overridden.MaxNotesToInject).toBe(5);
+        expect(overridden.MaxExamplesToInject).toBe(7);
+        expect(overridden.ExecutionMode).toBe('Parallel');
+    });
 });

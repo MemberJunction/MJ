@@ -2025,9 +2025,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         // Collect admin-configured helperPlugins across AgentType -> Categories -> BaseAgent chain -> Agent
+        // Always sanitize every layer through ParseAgentHelperPlugins so malformed category/type JSON
+        // entries can never crash AgentHelperCache.ResetForRun at runtime.
         const helperPlugins: AgentHelperPluginEntry[] = [];
-        if (Array.isArray(defaultsLayer.helperPlugins)) {
-            helperPlugins.push(...defaultsLayer.helperPlugins);
+        if (defaultsLayer.helperPlugins != null) {
+            helperPlugins.push(...ParseAgentHelperPlugins(JSON.stringify({ helperPlugins: defaultsLayer.helperPlugins })));
         }
         for (const node of nodes) {
             helperPlugins.push(...ParseAgentHelperPlugins(node.Configuration));
@@ -2043,24 +2045,88 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             defaultsLayer.scope?.secondaryScopeConfig ? JSON.stringify(defaultsLayer.scope.secondaryScopeConfig) : null
         );
 
-        const effectiveEnableCompression =
-            defaultsLayer.contextWindow?.enableCompression === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.contextWindow?.enableCompression ?? n.EnableContextCompression) === true);
-        const effectiveDeclareNativeTools =
-            defaultsLayer.execution?.declareActionsAsNativeTools === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.execution?.declareActionsAsNativeTools ?? n.DeclareActionsAsNativeTools) === true);
-        const effectiveAllowMemoryWrite =
-            defaultsLayer.memory?.allowMemoryWrite === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.memory?.allowMemoryWrite ?? n.AllowMemoryWrite) === true);
-        const effectiveInjectNotes =
-            defaultsLayer.memory?.injectNotes === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.memory?.injectNotes ?? n.InjectNotes) === true);
-        const effectiveInjectExamples =
-            defaultsLayer.memory?.injectExamples === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.memory?.injectExamples ?? n.InjectExamples) === true);
-        const effectiveAutoArchive =
-            defaultsLayer.memory?.autoArchiveEnabled === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.memory?.autoArchiveEnabled ?? n.AutoArchiveEnabled) === true);
+        // Overridable booleans: nearest explicit agent-chain Configuration override wins (so an agent
+        // setting `false` overrides a Category/AgentType default of `true`), falling back to defaultsLayer
+        // when no node explicitly overrode via Configuration JSON, then legacy columns.
+        const resolveOverridableBoolean = (
+            jsonPicker: (cfg: IAgentConfiguration | null) => boolean | null | undefined,
+            legacyPicker: (a: MJAIAgentEntityExtended) => boolean | null | undefined,
+            dbDefault: boolean
+        ): boolean => {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const explicit = jsonPicker(nodeConfigs[i]);
+                if (typeof explicit === 'boolean') {
+                    return explicit;
+                }
+                const legacy = legacyPicker(nodes[i]);
+                if (typeof legacy === 'boolean' && legacy !== dbDefault) {
+                    return legacy;
+                }
+            }
+            const layerVal = jsonPicker(defaultsLayer);
+            if (typeof layerVal === 'boolean') {
+                return layerVal;
+            }
+            return dbDefault;
+        };
+
+        const resolveOverridableWithDbDefault = <T>(
+            jsonPicker: (cfg: IAgentConfiguration | null) => T | null | undefined,
+            legacyPicker: (a: MJAIAgentEntityExtended) => T | null | undefined,
+            layerDefault: T | null | undefined,
+            dbDefault: T
+        ): T | null => {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const explicit = jsonPicker(nodeConfigs[i]);
+                if (explicit !== null && explicit !== undefined && (typeof explicit !== 'string' || explicit.trim().length > 0)) {
+                    return explicit;
+                }
+                const legacy = legacyPicker(nodes[i]);
+                if (
+                    legacy !== null &&
+                    legacy !== undefined &&
+                    (typeof legacy !== 'string' || legacy.trim().length > 0) &&
+                    legacy !== dbDefault
+                ) {
+                    return legacy;
+                }
+            }
+            if (layerDefault !== null && layerDefault !== undefined && (typeof layerDefault !== 'string' || layerDefault.trim().length > 0)) {
+                return layerDefault;
+            }
+            return nearestNonNull((a) => legacyPicker(a));
+        };
+
+        const effectiveEnableCompression = resolveOverridableBoolean(
+            (cfg) => cfg?.contextWindow?.enableCompression,
+            (a) => a.EnableContextCompression,
+            false
+        );
+        const effectiveDeclareNativeTools = resolveOverridableBoolean(
+            (cfg) => cfg?.execution?.declareActionsAsNativeTools,
+            (a) => a.DeclareActionsAsNativeTools,
+            true
+        );
+        const effectiveAllowMemoryWrite = resolveNarrowBoolean(
+            (cfg) => cfg?.memory?.allowMemoryWrite,
+            (a) => a.AllowMemoryWrite,
+            true
+        );
+        const effectiveInjectNotes = resolveOverridableBoolean(
+            (cfg) => cfg?.memory?.injectNotes,
+            (a) => a.InjectNotes,
+            true
+        );
+        const effectiveInjectExamples = resolveOverridableBoolean(
+            (cfg) => cfg?.memory?.injectExamples,
+            (a) => a.InjectExamples,
+            false
+        );
+        const effectiveAutoArchive = resolveOverridableBoolean(
+            (cfg) => cfg?.memory?.autoArchiveEnabled,
+            (a) => a.AutoArchiveEnabled,
+            true
+        );
 
         return {
             TypeID: effectiveTypeId,
@@ -2119,38 +2185,52 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             SearchScopeAccess: effectiveSearchScopeAccess,
             AllowMemoryWrite: effectiveAllowMemoryWrite,
             InjectNotes: effectiveInjectNotes,
-            MaxNotesToInject: nearestOrDefault(
-                (a, cfg) => cfg?.memory?.maxNotesToInject ?? a.MaxNotesToInject,
-                defaultsLayer.memory?.maxNotesToInject
+            MaxNotesToInject: resolveOverridableWithDbDefault(
+                (cfg) => cfg?.memory?.maxNotesToInject,
+                (a) => a.MaxNotesToInject,
+                defaultsLayer.memory?.maxNotesToInject,
+                5
             ),
             NoteInjectionStrategy:
-                nearestOrDefault(
-                    (a, cfg) => cfg?.memory?.noteInjectionStrategy ?? a.NoteInjectionStrategy,
-                    defaultsLayer.memory?.noteInjectionStrategy
+                resolveOverridableWithDbDefault(
+                    (cfg) => cfg?.memory?.noteInjectionStrategy,
+                    (a) => a.NoteInjectionStrategy,
+                    defaultsLayer.memory?.noteInjectionStrategy,
+                    'Relevant'
                 ) ?? 'Relevant',
             InjectExamples: effectiveInjectExamples,
-            MaxExamplesToInject: nearestOrDefault(
-                (a, cfg) => cfg?.memory?.maxExamplesToInject ?? a.MaxExamplesToInject,
-                defaultsLayer.memory?.maxExamplesToInject
+            MaxExamplesToInject: resolveOverridableWithDbDefault(
+                (cfg) => cfg?.memory?.maxExamplesToInject,
+                (a) => a.MaxExamplesToInject,
+                defaultsLayer.memory?.maxExamplesToInject,
+                3
             ),
             ExampleInjectionStrategy:
-                nearestOrDefault(
-                    (a, cfg) => cfg?.memory?.exampleInjectionStrategy ?? a.ExampleInjectionStrategy,
-                    defaultsLayer.memory?.exampleInjectionStrategy
+                resolveOverridableWithDbDefault(
+                    (cfg) => cfg?.memory?.exampleInjectionStrategy,
+                    (a) => a.ExampleInjectionStrategy,
+                    defaultsLayer.memory?.exampleInjectionStrategy,
+                    'Semantic'
                 ) ?? 'Semantic',
-            NoteRetentionDays: nearestOrDefault(
-                (a, cfg) => cfg?.memory?.noteRetentionDays ?? a.NoteRetentionDays,
-                defaultsLayer.memory?.noteRetentionDays
+            NoteRetentionDays: resolveOverridableWithDbDefault(
+                (cfg) => cfg?.memory?.noteRetentionDays,
+                (a) => a.NoteRetentionDays,
+                defaultsLayer.memory?.noteRetentionDays,
+                90
             ),
-            ExampleRetentionDays: nearestOrDefault(
-                (a, cfg) => cfg?.memory?.exampleRetentionDays ?? a.ExampleRetentionDays,
-                defaultsLayer.memory?.exampleRetentionDays
+            ExampleRetentionDays: resolveOverridableWithDbDefault(
+                (cfg) => cfg?.memory?.exampleRetentionDays,
+                (a) => a.ExampleRetentionDays,
+                defaultsLayer.memory?.exampleRetentionDays,
+                180
             ),
             AutoArchiveEnabled: effectiveAutoArchive,
             ExecutionMode:
-                nearestOrDefault(
-                    (a, cfg) => cfg?.subAgentExecution?.mode ?? a.ExecutionMode,
-                    defaultsLayer.subAgentExecution?.mode
+                resolveOverridableWithDbDefault(
+                    (cfg) => cfg?.subAgentExecution?.mode,
+                    (a) => a.ExecutionMode,
+                    defaultsLayer.subAgentExecution?.mode,
+                    'Sequential'
                 ) ?? 'Sequential',
             MinExecutionsPerRun: nearestOrDefault(
                 (a, cfg) => cfg?.subAgentExecution?.minExecutionsPerRun ?? a.MinExecutionsPerRun,
@@ -2159,9 +2239,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             MaxExecutionsPerRun: effectiveMaxExecutionsPerRun,
             MaxSubAgentConsultRounds: effectiveMaxSubAgentConsultRounds,
             MessageMode:
-                nearestOrDefault(
-                    (a, cfg) => cfg?.attachments?.messageMode ?? a.MessageMode,
-                    defaultsLayer.attachments?.messageMode
+                resolveOverridableWithDbDefault(
+                    (cfg) => cfg?.attachments?.messageMode,
+                    (a) => a.MessageMode,
+                    defaultsLayer.attachments?.messageMode,
+                    'None'
                 ) ?? 'All',
             MaxMessages: nearestOrDefault(
                 (a, cfg) => cfg?.attachments?.maxMessages ?? a.MaxMessages,

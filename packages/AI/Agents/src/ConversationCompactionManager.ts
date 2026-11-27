@@ -163,8 +163,17 @@ export class ConversationCompactionManager {
         let boundedBy: EffectiveContextBudget['BoundedBy'];
 
         const tuning = LimitsConfigResolver.Resolve().Limits.Tuning;
-        if (agent.ContextWindowMaxTokens) {
-            maxTokens = agent.ContextWindowMaxTokens;
+        let effectiveCompactionProps: ReturnType<typeof AIEngine.Instance.ResolveEffectiveAgentProperties> | null = null;
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                effectiveCompactionProps = AIEngine.Instance.ResolveEffectiveAgentProperties(agent);
+            }
+        } catch {
+            effectiveCompactionProps = null;
+        }
+        const effectiveMaxTokens = effectiveCompactionProps?.ContextWindowMaxTokens ?? agent.ContextWindowMaxTokens;
+        if (effectiveMaxTokens) {
+            maxTokens = effectiveMaxTokens;
             boundedBy = 'Agent';
         } else if (agentType?.ContextWindowMaxTokens) {
             maxTokens = agentType.ContextWindowMaxTokens;
@@ -189,8 +198,16 @@ export class ConversationCompactionManager {
         // NOT NULL there); AIAgent's nullable inherit semantics mean the EFFECTIVE pair
         // can only be validated here, after resolution — an inverted pair would make
         // every pass select a no-progress boundary and churn.
-        const rawTriggerPercent = agent.CompactionTriggerPercent || agentType?.CompactionTriggerPercent || tuning.CompactionDefaultTriggerPercent;
-        const rawTargetPercent = agent.CompactionTargetPercent || agentType?.CompactionTargetPercent || tuning.CompactionDefaultTargetPercent;
+        const rawTriggerPercent =
+            effectiveCompactionProps?.CompactionTriggerPercent ||
+            agent.CompactionTriggerPercent ||
+            agentType?.CompactionTriggerPercent ||
+            tuning.CompactionDefaultTriggerPercent;
+        const rawTargetPercent =
+            effectiveCompactionProps?.CompactionTargetPercent ||
+            agent.CompactionTargetPercent ||
+            agentType?.CompactionTargetPercent ||
+            tuning.CompactionDefaultTargetPercent;
         const triggerPercent = Math.min(Math.max(rawTriggerPercent, 1), 100);
         let targetPercent = Math.min(Math.max(rawTargetPercent, 1), 100);
         if (targetPercent >= triggerPercent) {

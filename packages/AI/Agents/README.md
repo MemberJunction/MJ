@@ -8,62 +8,51 @@ It also provides two capability layers any agent can opt into:
 - **Plan Mode** — a per-request human-in-the-loop gate (`ExecuteAgentParams.planMode`) that makes an agent present a plan and get it approved before executing any Actions or Sub-Agents, built on the existing `MJ: AI Agent Requests` pause/resume flow.
 - **Consult & Handoff** (*owner: `@AN-BC` / `@memberjunction/ai-agents` maintainers*) — **Consult** (`ChatHandlingOption = 'Consult'`, [`src/sub-agent-consult.ts`](./src/sub-agent-consult.ts)) routes a sub-agent's `Chat` step back to its parent Loop agent for up to `MaxSubAgentConsultRounds` (default 3) before escalating to the human caller via `MJ: AI Agent Requests`, and resumes the paused child run via `resumeRunId`. **Handoff** (`step = 'Handoff'`, [`src/handoff-target.ts`](./src/handoff-target.ts)) lets a general router agent (such as Sage) transfer a conversation turn to a discoverable, permitted specialist agent (up to `MAX_HANDOFF_HOPS = 3` with cycle detection and target preset resolution). See [Sub-Agents Guide](./docs/sub-agents-guide.md), [Human-in-the-Loop](./docs/HUMAN_IN_THE_LOOP.md), and the post-release review in [`plans/video-studio-ws3-consult-handoff-review.md`](../../../plans/video-studio-ws3-consult-handoff-review.md).
 
-**See the [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)** for the full architecture, the three-layer gate, the SKILL.md format, and the plan-approval flow.
+**Canonical Agent Guides:**
+- [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) — security & sandbox invariants, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, sliding liveness watchdog, `undici` tuning, `AgentStuckDetector`, and `MJ: AI Agent Step Types`
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) — 536-line `BaseAgent` + `AgentRunContext` + 13 pluggable helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, and prefix-cache discipline
+- [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md) — personal instances, personas, presets, memory, Plan Mode, and long-running runs
+- [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md) — exhaustive 1-to-1 map of all 494 preserved `@deprecated` `BaseAgent` methods to their new `BaseAgent<Seam>Helper` classes
+- [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md) — full architecture, three-layer gate, SKILL.md format, and plan-approval flow
 
 ## Architecture
+
+`packages/AI/Agents/src/base-agent.ts` is a **536-line** public execution facade decomposed into **13 strongly-typed, pluggable `BaseAgent*Helper` seams** (`packages/AI/Agents/src/helpers/`) sharing live per-run state via `AgentRunContext`, a pluggable step-type registry (`AgentStepTypeRegistry` + `BaseAgentStepHandler`), and a zero-breakage `v6.x` compatibility shim (`BaseAgentDeprecatedDelegates*`, scheduled for removal in `v7.0`).
 
 ```mermaid
 graph TD
     subgraph "@memberjunction/ai-agents"
-        BA["BaseAgent<br/>Core Execution Engine"]
-        style BA fill:#2d8659,stroke:#1a5c3a,color:#fff
+        AR["AgentRunner\nOrchestration Entry Point"]
+        BA["BaseAgent (536L Facade)\nLifecycle · Permanent Hooks · 13 Seam Resolvers"]
+        CTX["AgentRunContext\nLive Per-Run State + SubclassHooks"]
+        RES["ResolveAgentHelper / AgentHelperCache\n1. Configuration.helperPlugins (Admin-Only)\n2. Global @RegisterClass\n3. Built-in Default"]
+        STEPREG["AgentStepTypeRegistry (BaseSingleton)\n14 Built-in BaseAgentStepHandlers\n+ MJ: AI Agent Step Types"]
 
-        AR["AgentRunner<br/>Orchestration Entry Point"]
-        style AR fill:#2d8659,stroke:#1a5c3a,color:#fff
+        subgraph "13 Pluggable Helper Seams (helpers/)"
+            H_CORE["messaging · payload · compaction · realtime\niteration · skills · actions · prompt · subAgents · steps · setup"]
+            H_SEC["CODE-ONLY Security Seams (@RegisterClass only)\nlimits (BaseAgentLimitsHelper + Watchdog + StuckDetector)\nactionPolicy (BaseAgentActionPolicyHelper)"]
+        end
 
         subgraph "Agent Types"
             BAT["BaseAgentType"]
-            style BAT fill:#7c5295,stroke:#563a6b,color:#fff
-            LAT["LoopAgentType"]
-            style LAT fill:#7c5295,stroke:#563a6b,color:#fff
-            FAT["FlowAgentType"]
-            style FAT fill:#7c5295,stroke:#563a6b,color:#fff
-        end
-
-        subgraph "Support Systems"
-            PM["PayloadManager<br/>Data Flow Between Steps"]
-            style PM fill:#b8762f,stroke:#8a5722,color:#fff
-            PCA["PayloadChangeAnalyzer"]
-            style PCA fill:#b8762f,stroke:#8a5722,color:#fff
-            PFM["PayloadFeedbackManager"]
-            style PFM fill:#b8762f,stroke:#8a5722,color:#fff
-            ACI["AgentContextInjector<br/>Notes, Examples, Data Sources"]
-            style ACI fill:#b8762f,stroke:#8a5722,color:#fff
-            ADP["AgentDataPreloader<br/>Batch Metadata Loading"]
-            style ADP fill:#b8762f,stroke:#8a5722,color:#fff
-            MMA["MemoryManagerAgent<br/>Note/Example Management"]
-            style MMA fill:#b8762f,stroke:#8a5722,color:#fff
+            LAT["LoopAgentType / HarnessAgentType"]
+            FAT["FlowAgentType / RealtimeAgentType"]
         end
     end
 
-    BA --> BAT
-    BA --> PM
-    BA --> ACI
-    BA --> ADP
     AR --> BA
+    BA --> CTX
+    BA --> RES
+    BA --> STEPREG
+    BA --> BAT
+    RES --> H_CORE
+    RES --> H_SEC
 
     subgraph Dependencies
-        AIP["@memberjunction/ai-prompts<br/>AIPromptRunner"]
-        style AIP fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        AIE["@memberjunction/aiengine<br/>AIEngine"]
-        style AIE fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        ACT["@memberjunction/actions<br/>ActionEngineServer"]
-        style ACT fill:#2d6a9f,stroke:#1a4971,color:#fff
-
-        RR["@memberjunction/ai-reranker<br/>RerankerService"]
-        style RR fill:#2d6a9f,stroke:#1a4971,color:#fff
+        AIP["@memberjunction/ai-prompts (AIPromptRunner)"]
+        AIE["@memberjunction/aiengine (AIEngine)"]
+        ACT["@memberjunction/actions (ActionEngineServer)"]
+        RR["@memberjunction/ai-reranker (RerankerService)"]
     end
 
     AIP --> BA
@@ -80,19 +69,32 @@ npm install @memberjunction/ai-agents
 
 ## Key Components
 
-### BaseAgent
+### BaseAgent, `AgentRunContext` & 13 Pluggable Helper Seams
 
-The core execution engine that all agents use. Handles:
+`BaseAgent` (`src/base-agent.ts`, 536 lines) orchestrates every agent run by resolving 13 pluggable helper seams via `ResolveAgentHelper` / `AgentHelperCache` (`src/helpers/AgentHelperResolver.ts`) and sharing live per-run state through `AgentRunContext` (`src/helpers/AgentRunContext.ts`):
 
-- Hierarchical prompt execution (agent type's system prompt as parent, agent's prompts as children)
-- Action execution through the MJ Actions framework
-- **Client tool invocation** for browser-side UI operations (navigate to records, switch tabs, show search results) via PubSub round-trip
-- Sub-agent orchestration with full context propagation
-- Conversation context management with automatic message compaction
-- Memory retrieval (notes and examples) with optional reranking
-- Payload data management across execution steps
-- ForEach and While loop operations
-- Comprehensive execution tracking (AIAgentRun, AIAgentRunStep records)
+| Seam Key (`AgentHelperSeamKey`) | Pluggable Base Class | Default Implementation | Per-Agent `helperPlugins`? |
+|---|---|---|---|
+| `'messaging'` | `BaseAgentMessagingHelper` | `AgentMessagingHelper` | Yes (Admin-Only) |
+| `'payload'` | `BaseAgentPayloadHelper` | `AgentPayloadHelper` | Yes (Admin-Only) |
+| `'compaction'` | `BaseAgentCompactionHelper` | `AgentCompactionHelper` | Yes (Admin-Only) |
+| `'realtime'` | `BaseAgentRealtimeHelper` | `AgentRealtimeHelper` | Yes (Admin-Only) |
+| `'iteration'` | `BaseAgentIterationHelper` | `AgentIterationHelper` | Yes (Admin-Only) |
+| `'skills'` | `BaseAgentSkillsHelper` | `AgentSkillsHelper` | Yes (Admin-Only) |
+| `'limits'` | `BaseAgentLimitsHelper` | `AgentLimitsHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'actionPolicy'` | `BaseAgentActionPolicyHelper` | `AgentActionPolicyHelper` | **No — Code-Only (`@RegisterClass`)** |
+| `'actions'` | `BaseAgentActionsHelper` | `AgentActionsHelper` | Yes (Admin-Only) |
+| `'prompt'` | `BaseAgentPromptHelper` | `AgentPromptHelper` | Yes (Admin-Only) |
+| `'subAgents'` | `BaseAgentSubAgentHelper` | `AgentSubAgentHelper` | Yes (Admin-Only) |
+| `'steps'` | `BaseAgentStepExecutionHelper` | `AgentStepExecutionHelper` | Yes (Admin-Only) |
+| `'setup'` | `BaseAgentRunSetupHelper` | `AgentRunSetupHelper` | Yes (Admin-Only) |
+
+- **Four Extension Points:** (1) `BaseAgentType`, (2) `AIAgentStepType` + `BaseAgentStepHandler` via `AgentStepTypeRegistry`, (3) `BaseAgent*Helper` global `@RegisterClass` or admin-only `AIAgent.Configuration.helperPlugins`, and (4) `BaseAgent` subclassing (`AIAgent.DriverClass`). See [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md).
+- **Pluggable Step-Type Registry (`AgentStepTypeRegistry`):** Replaces monolithic step `switch` blocks with 14 built-in `BaseAgentStepHandler` classes (`BuiltInAgentStepHandlers.ts`) plus metadata-driven (`MJ: AI Agent Step Types`) and programmatic OpenApp step handlers, each declaring `AllowedInUnapprovedPlanMode` and `CountsAgainstTreeBudget`.
+- **Sliding Liveness Watchdog & `AgentStuckDetector` (`helpers/limits/`):**
+  - `AgentLivenessWatchdog` replaces blunt wall-clock aborts with a sliding inactivity window (`Liveness.InactivityTimeoutMs`, default `900_000` ms = 15m) reset by streaming chunks (via an always-on headless liveness sink), step completions, and action/sub-agent heartbeats, suspended during external waits (`SuspendForExternalWait` / `ResumeFromExternalWait`), plus a 32-bit-safe outer ceiling (`Liveness.OuterMaxWallClockMs`, default `259_200_000` ms = 72h). Pair with `InstallGlobalLongRunningFetchDispatcher` from `@memberjunction/ai` to avoid Node `undici`'s 300s `headersTimeout`.
+  - `AgentStuckDetector` catches identical succeeding canonical tool-call loops (`IdenticalToolCallThreshold`, default `3` in `WindowSize = 10`) and consecutive read-only spirals (`ReadOnlyStepThreshold`, default `30` + `5` grace steps), injecting course-correction/wrap-up directives before escalating to a non-destructive checkpoint pause (`StuckToolCallLoop` / `ReadOnlySpiral`).
+- **Zero-Breakage `v6.x` Compatibility:** All 494 historical `protected` methods remain callable and overridable via logic-free `@deprecated` 1-line delegates in `helpers/compat/BaseAgentDeprecatedDelegates*.ts` (retiring in `v7.0`; see [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)).
 
 ### AgentRunner
 
@@ -163,7 +165,7 @@ Set it in an agent's `AgentTypePromptParams` (`{"decisionsEnabled": true, "finis
 
 When an agent has access to a large library of skills (`AcceptsSkills = 'All'`), `LoopAgentPromptParams` supports capping the skills injected into the system prompt via `maxSkillsInPrompt` (default `25` when `decisionsEnabled: true` or when explicitly set) and `maxSkillDecisionCandidates` (default `60`).
 
-In [`catalog-narrowing.ts`](./src/catalog-narrowing.ts), [`BaseAgent.narrowCatalogsIfConfigured`](./src/base-agent.ts) runs a **two-stage narrowing pipeline**:
+In [`catalog-narrowing.ts`](./src/catalog-narrowing.ts), [`AgentPromptCatalogAndNarrowingHelper.EnsureCatalogNarrowing`](./src/helpers/prompt/AgentPromptCatalogAndNarrowingHelper.ts) (via `BaseAgentPromptHelper`) runs a **two-stage narrowing pipeline**:
 1. **Stage 1 (`PreFilterSkillCandidatesForDecision` + `RankSkillsByHybridRelevance`)**: Ranks all available skills in-memory (`0ms`) using a weighted hybrid score combining lexical/semantic query fit across skill name, description, category, and bundled action names (`0.55`), log-normalized agent-specific + global usage frequency from recent `MJ: AI Agent Run Steps` (`0.25`), and exponential recency decay with a 7-day half-life (`0.20`), slicing the top `maxSkillDecisionCandidates` (60).
 2. **Stage 2 (`NarrowSkillsWithDecision`)**: When `decisionsEnabled: true`, passes the Stage 1 shortlist to `AgentDecisionService` (`selectRelevantCatalogItems`) to pick up to `maxSkillsInPrompt`. When `decisionsEnabled: false` (or if the decision call fails), deterministically slices the top `maxSkillsInPrompt` from Stage 1.
 3. **Pinned Skills & Discovery Guidance**: Any skill already activated in the run (`_activatedSkillIDs`) or requested via `requestedSkillIDs` is pinned (`pinnedSkillIDs`) so it is never dropped. When skills are narrowed and the agent holds `Find Candidate Skills`, `BuildCatalogNarrowingNote` appends guidance instructing the model to use `Find Candidate Skills` and `Get Skill Details` to discover omitted skills.
@@ -748,7 +750,18 @@ if (!result.triggered) {
 
 ## Documentation
 
-Detailed guides are available in the [`docs/`](./docs/) directory:
+### Canonical Repo-Level Agent Guides (`guides/`)
+
+| Guide | Audience & Scope |
+|---|---|
+| [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) | Security & sandbox invariants, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, sliding liveness watchdog, `undici` tuning, `AgentStuckDetector`, `MJ: AI Agent Step Types` |
+| [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) | 536L `BaseAgent` + `AgentRunContext` + 13 helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, prefix-cache discipline |
+| [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md) | Personal instances, personas, presets, memory, Plan Mode, Handoff, long-running pause/resume, and personal policy controls |
+| [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md) | Exhaustive 1-to-1 map of all 494 preserved `@deprecated` `BaseAgent` methods → `BaseAgent<Seam>Helper` classes & rebase guide for `MJ#6878` |
+
+### Package Deep-Dive Guides (`docs/` & Related)
+
+Detailed topic guides are available in the [`docs/`](./docs/) directory:
 
 | Guide | Description |
 |---|---|
@@ -781,12 +794,6 @@ For backward compatibility, this package re-exports the following from `@memberj
 
 New code should import these directly from `@memberjunction/ai-reranker`.
 
-## Dependencies
-
-- `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
-- `@memberjunction/aiengine` -- AIEngine for metadata and vector search
-- `@memberjunction/ai-core-plus` -- Shared types (ExecuteAgentParams, ExecuteAgentResult)
-- `@memberjunction/ai-engine-base` -- Base metadata cache and permissions
 ## Storage Account Resolution
 
 When agents create file-based artifacts (PDF, Excel, Word), the system resolves which `FileStorageAccount` to use via a hierarchical chain. The first non-null value wins:
@@ -801,7 +808,7 @@ When agents create file-based artifacts (PDF, Excel, Word), the system resolves 
 
 ### How it works
 
-- `BaseAgent.getStorageAccountID(params)` implements the resolution logic. It is `protected` so subclasses can override it for custom routing.
+- `BaseAgentRunSetupHelper.GetStorageAccountID(ctx, params)` (also accessible via the `@deprecated` `BaseAgent.getStorageAccountID(params)` delegate during `v6.x`) implements the resolution logic and can be customized via the `'setup'` helper seam.
 - The resolved ID is stored in `ExecuteAgentResult.resolvedStorageAccountId` and passed to `AgentRunner.ProcessFileArtifacts()` for upload routing.
 - `AgentRunner.uploadBase64ToStorage()` uses `FileStorageEngine.Instance.GetAccountWithProvider()` to get the account + provider, then `initializeDriverWithAccountCredentials()` for proper OAuth credential handling.
 
@@ -833,11 +840,15 @@ Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../g
 
 ## Dependencies
 
-- `@memberjunction/ai` -- Core AI abstractions
+- `@memberjunction/ai` -- Core AI abstractions (including `httpDispatcher.ts` long-running fetch dispatcher)
+- `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
+- `@memberjunction/aiengine` -- AIEngine for metadata and vector search
+- `@memberjunction/ai-core-plus` -- Shared types (`ExecuteAgentParams`, `ExecuteAgentResult`, `IAgentConfiguration`)
+- `@memberjunction/ai-engine-base` -- Base metadata cache, `ResolveEffectiveAgentProperties`, `AgentStepTypes`, and permissions
 - `@memberjunction/ai-reranker` -- Two-stage retrieval reranking
 - `@memberjunction/actions` -- Server-side action execution
 - `@memberjunction/actions-base` -- Action framework base types
-- `@memberjunction/core` -- MJ framework core
+- `@memberjunction/core` -- MJ framework core (Metadata, RunView, `LimitsConfigResolver`, UserInfo)
 - `@memberjunction/core-entities` -- Generated entity classes
-- `@memberjunction/global` -- Class factory and utilities
+- `@memberjunction/global` -- Class factory (`@RegisterClass`), `BaseSingleton`, and global utilities
 - `lodash` -- Utility functions

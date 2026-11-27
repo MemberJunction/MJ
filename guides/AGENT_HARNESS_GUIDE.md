@@ -10,7 +10,7 @@ which do not**.
 
 - **Package**: [`@memberjunction/ai-agent-harness`](../packages/AI/AgentHarness/README.md)
 - **Design plan**: [`plans/external-agent-harness.md`](../plans/external-agent-harness.md)
-- **Related**: [Agent Framework Comparison](AGENT_FRAMEWORK_COMPARISON.md) · [Unified Permissions](UNIFIED_PERMISSIONS_GUIDE.md)
+- **Related**: [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md) · [Agent Framework Comparison](AGENT_FRAMEWORK_COMPARISON.md) · [Unified Permissions](UNIFIED_PERMISSIONS_GUIDE.md)
 
 ---
 
@@ -81,11 +81,9 @@ Set the agent's `TypeID` to `Harness` and its `TypeConfiguration`:
 
 See §5. In dev, the vendor-key fallback often means you need to do nothing.
 
-### Step 4 — set cost limits
+### Step 4 — set cost & liveness limits
 
-`MaxCostPerRun`, `MaxIterationsPerRun`, `MaxTimePerRun`. These matter more here than anywhere else in
-MJ — a harness is designed for long autonomous runs against a vendor key you injected into a sandbox.
-See `Demo Harness Agent` for sane starting values.
+`MaxCostPerRun`, `MaxIterationsPerRun`, and `MaxTimePerRun` (alongside `mj.config.cjs` `limits.Liveness.InactivityTimeoutMs`, `OuterMaxWallClockMs`, and `limits.StuckDetector`). These matter more here than anywhere else in MJ — a harness is designed for long autonomous runs against a vendor key you injected into a sandbox. With the sliding liveness watchdog (`AgentLivenessWatchdog`), actively progressing multi-hour runs stay alive automatically up to `OuterMaxWallClockMs` (or any tighter `MaxTimePerRun` ceiling) while stalled runs abort cleanly after `InactivityTimeoutMs` (default 15m). See [Agent Administrator Guide §4](AGENT_ADMINISTRATOR_GUIDE.md#4-long-running-execution-sliding-liveness-watchdog-undici-tuning--stuckdetector) and `Demo Harness Agent` for sane starting values.
 
 ---
 

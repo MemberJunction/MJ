@@ -373,69 +373,109 @@ export class AgentStuckDetector {
         const injectedDirectives: string[] = [];
         let pauseRequest: StuckStepEvaluationOutcome['PauseRequest'] = null;
 
+        const recordToolInvocation = (name: string, args: unknown): void => {
+            actionNames.push(name);
+            if (circuitBrokenActionNames?.has(name)) {
+                return;
+            }
+            const toolEval = this.RecordToolCall(name, args, config);
+            if (toolEval.Action === 'inject-directive' && toolEval.Directive) {
+                injectedDirectives.push(toolEval.Directive);
+            } else if (toolEval.Action === 'pause' && toolEval.PauseReason && !pauseRequest) {
+                pauseRequest = {
+                    PauseReason: toolEval.PauseReason,
+                    Summary: toolEval.Summary ?? `Repeated identical tool call '${name}'`,
+                };
+            }
+        };
+
         const actionNames: string[] = [];
         if (nextStep.actions && nextStep.actions.length > 0) {
             for (const act of nextStep.actions) {
-                actionNames.push(act.name);
-                // Actions already failing or locked out by the action circuit breaker are owned by
-                // ActionCircuitBreaker + RepeatedFailingStepTracker; StuckDetector catches identical
-                // succeeding/non-failing tool-call loops without short-circuiting those guards.
-                if (circuitBrokenActionNames?.has(act.name)) {
-                    continue;
-                }
-                const toolEval = this.RecordToolCall(act.name, act.params, config);
-                if (toolEval.Action === 'inject-directive' && toolEval.Directive) {
-                    injectedDirectives.push(toolEval.Directive);
-                } else if (toolEval.Action === 'pause' && toolEval.PauseReason && !pauseRequest) {
-                    pauseRequest = {
-                        PauseReason: toolEval.PauseReason,
-                        Summary: toolEval.Summary ?? `Repeated identical tool call '${act.name}'`,
-                    };
-                }
+                recordToolInvocation(act.name, act.params);
             }
         }
 
         if (nextStep.clientTools && nextStep.clientTools.length > 0) {
             for (const tool of nextStep.clientTools) {
-                actionNames.push(tool.Name);
-                const toolEval = this.RecordToolCall(tool.Name, tool.Params, config);
-                if (toolEval.Action === 'inject-directive' && toolEval.Directive) {
-                    injectedDirectives.push(toolEval.Directive);
-                } else if (toolEval.Action === 'pause' && toolEval.PauseReason && !pauseRequest) {
-                    pauseRequest = {
-                        PauseReason: toolEval.PauseReason,
-                        Summary: toolEval.Summary ?? `Repeated identical client tool '${tool.Name}'`,
-                    };
-                }
+                recordToolInvocation(tool.Name, tool.Params);
             }
         }
 
+        // Inline turn tools (artifact, conversation, agent tools, and memory writes) are also
+        // tracked so repeated identical inline calls trigger StuckToolCallLoop and mutating
+        // writes reset the read-only streak accurately.
+        if (nextStep.artifactToolCalls && nextStep.artifactToolCalls.length > 0) {
+            for (const call of nextStep.artifactToolCalls) {
+                recordToolInvocation(call.tool, call.input);
+            }
+        }
+        if (nextStep.conversationToolCalls && nextStep.conversationToolCalls.length > 0) {
+            for (const call of nextStep.conversationToolCalls) {
+                recordToolInvocation(call.tool, call.input);
+            }
+        }
+        if (nextStep.agentToolCalls && nextStep.agentToolCalls.length > 0) {
+            for (const call of nextStep.agentToolCalls) {
+                recordToolInvocation(call.toolName, call.arguments);
+            }
+        }
+
+        const hasInlineMemoryWrite = Array.isArray(nextStep.memoryWrites) && nextStep.memoryWrites.length > 0;
         const hasPayloadMutation = Boolean(
-            nextStep.payloadChangeRequest &&
-                ((nextStep.payloadChangeRequest.newElements &&
-                    Object.keys(nextStep.payloadChangeRequest.newElements).length > 0) ||
-                    (nextStep.payloadChangeRequest.updateElements &&
-                        Object.keys(nextStep.payloadChangeRequest.updateElements).length > 0) ||
-                    (nextStep.payloadChangeRequest.removeElements &&
-                        Object.keys(nextStep.payloadChangeRequest.removeElements).length > 0))
+            hasInlineMemoryWrite ||
+                (nextStep.payloadChangeRequest &&
+                    ((nextStep.payloadChangeRequest.newElements &&
+                        Object.keys(nextStep.payloadChangeRequest.newElements).length > 0) ||
+                        (nextStep.payloadChangeRequest.updateElements &&
+                            Object.keys(nextStep.payloadChangeRequest.updateElements).length > 0) ||
+                        (nextStep.payloadChangeRequest.removeElements &&
+                            Object.keys(nextStep.payloadChangeRequest.removeElements).length > 0)))
         );
-        const readOnlyEval = this.RecordStepOutcome(
-            {
-                StepType: nextStep.step ?? 'Unknown',
-                ActionNames: actionNames,
-                HasPayloadMutation: hasPayloadMutation,
-                HasSubAgentDelegation: nextStep.step === 'Sub-Agent' || Boolean(nextStep.subAgent),
-                IsTerminal: nextStep.terminate === true || nextStep.step === 'Success' || nextStep.step === 'Chat',
-            },
-            config
-        );
-        if (readOnlyEval.Action === 'inject-wrap-up-directive' && readOnlyEval.Directive) {
-            injectedDirectives.push(readOnlyEval.Directive);
-        } else if (readOnlyEval.Action === 'pause' && readOnlyEval.PauseReason && !pauseRequest) {
-            pauseRequest = {
-                PauseReason: readOnlyEval.PauseReason,
-                Summary: readOnlyEval.Summary ?? 'Consecutive read-only spiral exceeded grace window',
-            };
+
+        // Distinguish synthetic post-action / post-subagent / post-loop `step: 'Retry'` continuations
+        // (carrying `priorStepResult` from an already-evaluated step) so they neither double-count
+        // `_consecutiveReadOnlySteps` nor trigger false `ReadOnlySpiral` pauses after mutating actions.
+        const isSyntheticPostStepRetry =
+            nextStep.step === 'Retry' &&
+            nextStep.priorStepResult !== undefined &&
+            actionNames.length === 0;
+
+        if (isSyntheticPostStepRetry) {
+            let priorMutated = hasPayloadMutation;
+            if (!priorMutated && Array.isArray(nextStep.priorStepResult)) {
+                for (const item of nextStep.priorStepResult) {
+                    if (!item || typeof item !== 'object') continue;
+                    const summary = item as { success?: boolean; actionName?: string; name?: string };
+                    const executedName = summary.actionName ?? summary.name;
+                    if (summary.success !== false && executedName && !IsReadOnlyToolOrActionName(executedName)) {
+                        priorMutated = true;
+                        break;
+                    }
+                }
+            }
+            if (priorMutated) {
+                this.resetReadOnlyStreak();
+            }
+        } else {
+            const readOnlyEval = this.RecordStepOutcome(
+                {
+                    StepType: nextStep.step ?? 'Unknown',
+                    ActionNames: actionNames,
+                    HasPayloadMutation: hasPayloadMutation,
+                    HasSubAgentDelegation: nextStep.step === 'Sub-Agent' || Boolean(nextStep.subAgent),
+                    IsTerminal: nextStep.terminate === true || nextStep.step === 'Success' || nextStep.step === 'Chat',
+                },
+                config
+            );
+            if (readOnlyEval.Action === 'inject-wrap-up-directive' && readOnlyEval.Directive) {
+                injectedDirectives.push(readOnlyEval.Directive);
+            } else if (readOnlyEval.Action === 'pause' && readOnlyEval.PauseReason && !pauseRequest) {
+                pauseRequest = {
+                    PauseReason: readOnlyEval.PauseReason,
+                    Summary: readOnlyEval.Summary ?? 'Consecutive read-only spiral exceeded grace window',
+                };
+            }
         }
 
         if (injectedDirectives.length > 0 && Array.isArray(params.conversationMessages)) {

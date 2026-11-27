@@ -1267,11 +1267,12 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (100 classes)
+// @memberjunction/core-entities-server (102 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     GraphFindPathServerOperation,
+    MJAIAgentCategoryEntityServer,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -1281,6 +1282,7 @@ import {
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentStepTypeEntityServer,
     MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
@@ -2657,6 +2659,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     GraphFindPathServerOperation,
+    MJAIAgentCategoryEntityServer,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
@@ -2666,6 +2669,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentStepTypeEntityServer,
     MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
     MJAIBridgeAgentIdentityEntityServer,
@@ -2700,12 +2704,12 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityAlternateBaseViewEntityServer,
-    MJEntityDocumentEntityServer,
-    MJEntityEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJEntityDocumentEntityServer,
+    MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
     MJEntityFormContributionEntityServer,
     MJEntityFormOverrideEntityServer,
@@ -2904,12 +2908,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MutateGovernedArtifactAction,
     OAuthFlowAction,
     ObjectExistsAction,
-    OpenAgentChannelAction,
-    PDFExtractorAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    OpenAgentChannelAction,
+    PDFExtractorAction,
     ParallelExecuteAction,
     PasswordStrengthAction,
     PerplexitySearchAction,
@@ -3053,7 +3057,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1326;
+export const CLASS_REGISTRATIONS_COUNT = 1328;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

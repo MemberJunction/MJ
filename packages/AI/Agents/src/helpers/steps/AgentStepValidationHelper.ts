@@ -18,6 +18,7 @@ import type { AIErrorType } from '@memberjunction/ai';
 import { IsVerboseLoggingEnabled, LogError, LogStatus } from '@memberjunction/core';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { AgentRunContext } from '../AgentRunContext';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import { AgentStepTypeRegistry } from './AgentStepTypeRegistry';
 
 /**
@@ -53,6 +54,19 @@ export class AgentStepValidationHelper {
                 step: 'Failed',
                 terminate: true,
                 errorMessage: `Invalid next step '${nextStep.step}'`,
+            };
+        }
+
+        const agentTypeName = ctx.AgentConfig?.agentType?.Name ?? null;
+        if (!AgentStepTypeRegistry.Instance.DoesStepApplyToAgentType(policy.AppliesTo, agentTypeName)) {
+            ctx.Hooks.LogError(
+                `Step type '${policy.StepKey}' (AppliesTo='${policy.AppliesTo}') is not permitted for agent type '${agentTypeName}'`,
+                { agent: params.agent, category: 'NextStepValidation' }
+            );
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: `Step type '${policy.StepKey}' does not apply to agent type '${agentTypeName}' (AppliesTo='${policy.AppliesTo}')`,
             };
         }
 
@@ -109,7 +123,11 @@ export class AgentStepValidationHelper {
         currentStep: MJAIAgentRunStepEntityExtended,
         chatHandlingOption?: MJAIAgentEntity['ChatHandlingOption']
     ): Promise<BaseAgentNextStep<P>> {
-        const effectiveOption = chatHandlingOption !== undefined ? chatHandlingOption : params.agent.ChatHandlingOption;
+        const effectiveChatOption =
+            chatHandlingOption !== undefined
+                ? chatHandlingOption
+                : (SafeResolveEffectiveAgentProperties(params.agent)?.ChatHandlingOption ?? params.agent.ChatHandlingOption);
+        const effectiveOption = effectiveChatOption;
 
         if (effectiveOption) {
             let mappedStep: 'Success' | 'Failed' | 'Retry';

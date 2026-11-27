@@ -340,6 +340,12 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
         if (!execPolicy) {
             throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
+        const execAgentTypeName = ctx.AgentConfig?.agentType?.Name ?? null;
+        if (!AgentStepTypeRegistry.Instance.DoesStepApplyToAgentType(execPolicy.AppliesTo, execAgentTypeName)) {
+            throw new Error(
+                `Step type '${execPolicy.StepKey}' does not apply to agent type '${execAgentTypeName}' (AppliesTo='${execPolicy.AppliesTo}')`
+            );
+        }
         return execPolicy.Handler.Execute<P>(ctx, params, config, previousDecision, stepCount);
     }
 

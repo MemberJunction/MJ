@@ -16,8 +16,8 @@
 
 /** Tuning: 30-minute default headers timeout when caller does not disable it (`0`) explicitly. */
 export const DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS = 1_800_000;
-/** Tuning: disable undici bodyTimeout (`0`) by default so per-request AbortSignal owns cancellation. */
-export const DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS = 0;
+/** Tuning: 30-minute finite default body timeout so dead sockets still fail cleanly; pass `0` to defer strictly to `AbortSignal`. */
+export const DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS = 1_800_000;
 /** Tuning: 30-second TCP/TLS connect timeout so unreachable endpoints fail fast. */
 export const DEFAULT_LONG_RUNNING_CONNECT_TIMEOUT_MS = 30_000;
 /** Tuning: 60-second idle keep-alive socket timeout matching standard HTTP/1.1 connection pools. */
@@ -115,6 +115,51 @@ export interface GlobalFetchDispatcherInstallation {
  */
 export const UNDICI_GLOBAL_DISPATCHER_SYMBOL: symbol = Symbol.for('undici.globalDispatcher.1');
 
+/**
+ * Resolves a browser-safe {@link UndiciModuleLike} facade around Node's built-in global
+ * `undici` dispatcher (`globalThis[Symbol.for('undici.globalDispatcher.1')]`) without
+ * requiring an external `undici` dependency or any Node-only imports.
+ *
+ * Returns `null` in browser runtimes or when Node's lazy `undici` dispatcher has not been
+ * initialized yet.
+ */
+export function ResolveNodeBuiltinUndiciModule(): UndiciModuleLike | null {
+    const slotHolder = globalThis as Record<PropertyKey, unknown>;
+    const current = slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL];
+    if (!current || typeof current !== 'object') {
+        return null;
+    }
+    const ctor = (current as { constructor?: unknown }).constructor;
+    if (typeof ctor !== 'function') {
+        return null;
+    }
+    return {
+        Agent: ctor as UndiciModuleLike['Agent'],
+        getGlobalDispatcher: () => slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL] as FetchDispatcherLike,
+        setGlobalDispatcher: (dispatcher: FetchDispatcherLike) => {
+            slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL] = dispatcher;
+        },
+    };
+}
+
+/**
+ * Primes Node's lazy built-in `undici` global dispatcher with zero network traffic (using a
+ * pre-aborted `AbortSignal`) so {@link ResolveNodeBuiltinUndiciModule} can access the built-in
+ * `Agent` constructor during server startup. Safe no-op in browsers or when already primed.
+ */
+export async function PrimeNodeBuiltinUndiciDispatcher(): Promise<boolean> {
+    if (ResolveNodeBuiltinUndiciModule()) {
+        return true;
+    }
+    if (typeof globalThis.fetch !== 'function' || typeof AbortController !== 'function') {
+        return false;
+    }
+    const ac = new AbortController();
+    ac.abort();
+    await globalThis.fetch('http://127.0.0.1:1', { signal: ac.signal }).catch(() => undefined);
+    return ResolveNodeBuiltinUndiciModule() !== null;
+}
+
 function normalizeNonNegativeMs(value: number | undefined, fallback: number): number {
     if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
         return fallback;
@@ -194,9 +239,10 @@ export function InstallGlobalLongRunningFetchDispatcher(
     undiciModule?: UndiciModuleLike | null
 ): GlobalFetchDispatcherInstallation {
     const resolved = ResolveLongRunningFetchDispatcherOptions(options);
-    const dispatcher = CreateLongRunningFetchDispatcher(options, undiciModule);
+    const targetUndici = undiciModule === undefined ? ResolveNodeBuiltinUndiciModule() : undiciModule;
+    const dispatcher = CreateLongRunningFetchDispatcher(options, targetUndici);
 
-    if (!dispatcher || !undiciModule || typeof undiciModule.setGlobalDispatcher !== 'function') {
+    if (!dispatcher || !targetUndici || typeof targetUndici.setGlobalDispatcher !== 'function') {
         return {
             Installed: false,
             Options: resolved,
@@ -210,8 +256,8 @@ export function InstallGlobalLongRunningFetchDispatcher(
     }
 
     const previous =
-        typeof undiciModule.getGlobalDispatcher === 'function' ? undiciModule.getGlobalDispatcher() : null;
-    undiciModule.setGlobalDispatcher(dispatcher);
+        typeof targetUndici.getGlobalDispatcher === 'function' ? targetUndici.getGlobalDispatcher() : null;
+    targetUndici.setGlobalDispatcher(dispatcher);
 
     let restored = false;
     return {
@@ -223,8 +269,8 @@ export function InstallGlobalLongRunningFetchDispatcher(
                 return;
             }
             restored = true;
-            if (previous && typeof undiciModule.setGlobalDispatcher === 'function') {
-                undiciModule.setGlobalDispatcher(previous);
+            if (previous && typeof targetUndici.setGlobalDispatcher === 'function') {
+                targetUndici.setGlobalDispatcher(previous);
             }
             if (dispatcher.close) {
                 await dispatcher.close();

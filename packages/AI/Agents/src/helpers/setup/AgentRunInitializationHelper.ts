@@ -34,6 +34,7 @@ import { AgentDataPreloader } from '../../AgentDataPreloader';
 import { AgentRunWatchdog } from '../../agent-run-watchdog';
 import { BaseAgentType } from '../../agent-types/base-agent-type';
 import type { AgentRunContext } from '../AgentRunContext';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 
 /**
  * Collaborator handling data preloading, run creation, checkpoint resume, config load & validation.
@@ -405,13 +406,12 @@ export class AgentRunInitializationHelper {
         agentRun.UserID = params.userId || params.contextUser?.ID || null;
         agentRun.CompanyID = params.companyId || null;
 
+        const effectiveInitProps = SafeResolveEffectiveAgentProperties(params.agent);
+        const defaultEffort = effectiveInitProps?.DefaultPromptEffortLevel ?? params.agent.DefaultPromptEffortLevel;
         if (params.effortLevel !== undefined && params.effortLevel !== null) {
             agentRun.EffortLevel = params.effortLevel;
-        } else if (
-            params.agent.DefaultPromptEffortLevel !== undefined &&
-            params.agent.DefaultPromptEffortLevel !== null
-        ) {
-            agentRun.EffortLevel = params.agent.DefaultPromptEffortLevel;
+        } else if (defaultEffort !== undefined && defaultEffort !== null) {
+            agentRun.EffortLevel = defaultEffort;
         }
 
         agentRun.ParentRunID = params.parentRun?.ID ?? null;
@@ -628,8 +628,14 @@ export class AgentRunInitializationHelper {
             : [params.agent.Name || 'Unknown Agent'];
         ctx.Depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
         ctx.ParentStepCounts = params.parentStepCounts || [];
-        ctx.PlanModeActive = false;
-        ctx.PlanApproved = false;
+        // Re-evaluate the Plan Mode gate on checkpoint resume so resuming an unapproved Plan Mode
+        // run can never silently disable Plan Mode and allow mutating steps without approval.
+        const resumedPlanGate = await this.ResolvePlanModeGate(ctx, {
+            ...params,
+            lastRunId: params.lastRunId ?? ctx.AgentRun.ID,
+        });
+        ctx.PlanModeActive = resumedPlanGate.active;
+        ctx.PlanApproved = resumedPlanGate.approved;
         ctx.AllProgressSteps = [];
 
         if (ctx.ActiveLimitsResolution) {
@@ -658,8 +664,10 @@ export class AgentRunInitializationHelper {
         ctx: AgentRunContext,
         params: ExecuteAgentParams
     ): Promise<{ active: boolean; approved: boolean }> {
-        const requiredByAgent = params.agent.RequirePlanMode === true;
-        const requestedByCaller = !!(params.agent.SupportsPlanMode && params.planMode === true);
+        const effectivePlanProps = SafeResolveEffectiveAgentProperties(params.agent);
+        const requiredByAgent = (effectivePlanProps?.RequirePlanMode ?? params.agent.RequirePlanMode) === true;
+        const supportsPlan = (effectivePlanProps?.SupportsPlanMode ?? params.agent.SupportsPlanMode) !== false;
+        const requestedByCaller = !!(supportsPlan && params.planMode === true);
         const active = ctx.Depth === 0 && (requiredByAgent || requestedByCaller);
         if (!active) {
             return { active: false, approved: false };

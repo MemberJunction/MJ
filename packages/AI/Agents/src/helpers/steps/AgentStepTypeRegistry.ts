@@ -94,7 +94,7 @@ interface BuiltInStepDefault {
 const BUILT_IN_STEP_DEFAULTS: ReadonlyArray<BuiltInStepDefault> = [
     { StepKey: 'Actions', DriverClass: 'ActionsStepHandler', AppliesTo: 'Both', AllowedInUnapprovedPlanMode: false, CountsAgainstTreeBudget: true, FallbackClass: ActionsStepHandler },
     { StepKey: 'Sub-Agent', DriverClass: 'SubAgentStepHandler', AppliesTo: 'Both', AllowedInUnapprovedPlanMode: false, CountsAgainstTreeBudget: true, FallbackClass: SubAgentStepHandler },
-    { StepKey: 'Retry', DriverClass: 'RetryStepHandler', AppliesTo: 'Loop', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: RetryStepHandler },
+    { StepKey: 'Retry', DriverClass: 'RetryStepHandler', AppliesTo: 'All', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: RetryStepHandler },
     { StepKey: 'Success', DriverClass: 'SuccessStepHandler', AppliesTo: 'All', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: SuccessStepHandler },
     { StepKey: 'Failed', DriverClass: 'FailedStepHandler', AppliesTo: 'All', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: FailedStepHandler },
     { StepKey: 'Chat', DriverClass: 'ChatStepHandler', AppliesTo: 'Both', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: false, FallbackClass: ChatStepHandler },
@@ -102,7 +102,7 @@ const BUILT_IN_STEP_DEFAULTS: ReadonlyArray<BuiltInStepDefault> = [
     { StepKey: 'While', DriverClass: 'WhileStepHandler', AppliesTo: 'Both', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: WhileStepHandler },
     { StepKey: 'Skill', DriverClass: 'SkillStepHandler', AppliesTo: 'Loop', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: SkillStepHandler },
     { StepKey: 'Plan', DriverClass: 'PlanStepHandler', AppliesTo: 'Loop', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: PlanStepHandler },
-    { StepKey: 'Tasks', DriverClass: 'TasksStepHandler', AppliesTo: 'Loop', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: TasksStepHandler },
+    { StepKey: 'Tasks', DriverClass: 'TasksStepHandler', AppliesTo: 'Both', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: TasksStepHandler },
     { StepKey: 'Handoff', DriverClass: 'HandoffStepHandler', AppliesTo: 'Loop', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: HandoffStepHandler },
     { StepKey: 'ClientTools', DriverClass: 'ClientToolsStepHandler', AppliesTo: 'Loop', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: ClientToolsStepHandler },
     { StepKey: 'Decision', DriverClass: 'DecisionStepHandler', AppliesTo: 'Both', AllowedInUnapprovedPlanMode: true, CountsAgainstTreeBudget: true, FallbackClass: DecisionStepHandler },
@@ -200,17 +200,24 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
             if (metadataRow.Status !== 'Active') {
                 return null;
             }
-            const handler = this.instantiateHandler(metadataRow.DriverClass, builtIn?.FallbackClass);
+            // Clamp built-in step type security invariants so DB metadata edits can never weaken
+            // Plan Mode restrictions, skip tree-budget accounting, or hijack built-in DriverClass.
+            const effectiveDriverClass = builtIn ? builtIn.DriverClass : metadataRow.DriverClass;
+            const handler = this.instantiateHandler(effectiveDriverClass, builtIn?.FallbackClass);
             if (!handler) {
                 return null;
             }
             return {
                 StepKey: builtIn ? builtIn.StepKey : metadataRow.Name,
                 StepTypeID: metadataRow.ID,
-                DriverClass: metadataRow.DriverClass,
+                DriverClass: effectiveDriverClass,
                 AppliesTo: metadataRow.AppliesTo,
-                AllowedInUnapprovedPlanMode: metadataRow.AllowedInUnapprovedPlanMode,
-                CountsAgainstTreeBudget: metadataRow.CountsAgainstTreeBudget,
+                AllowedInUnapprovedPlanMode: builtIn
+                    ? builtIn.AllowedInUnapprovedPlanMode && metadataRow.AllowedInUnapprovedPlanMode
+                    : metadataRow.AllowedInUnapprovedPlanMode,
+                CountsAgainstTreeBudget: builtIn
+                    ? builtIn.CountsAgainstTreeBudget || metadataRow.CountsAgainstTreeBudget
+                    : metadataRow.CountsAgainstTreeBudget,
                 DefaultEnabledInPrompt: metadataRow.DefaultEnabledInPrompt,
                 PromptInstructions: metadataRow.PromptDocsTemplate ?? null,
                 IsBuiltIn: Boolean(builtIn),
@@ -269,6 +276,28 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
             results.push(policy);
         }
         return results;
+    }
+
+    /**
+     * Checks whether a step type's `AppliesTo` scope permits execution under the given agent type name.
+     * Unknown or custom agent type names (not `'Loop'` or `'Flow'`) are allowed only when
+     * `AppliesTo === 'All'` or `'Both'`, or when `agentTypeName` is absent (e.g. unit test mocks).
+     */
+    public DoesStepApplyToAgentType(
+        appliesTo: AgentStepTypeAppliesTo,
+        agentTypeName: string | null | undefined
+    ): boolean {
+        if (appliesTo === 'All' || appliesTo === 'Both' || !agentTypeName) {
+            return true;
+        }
+        const normalized = agentTypeName.trim().toLowerCase();
+        if (normalized.includes('loop')) {
+            return appliesTo === 'Loop';
+        }
+        if (normalized.includes('flow')) {
+            return appliesTo === 'Flow';
+        }
+        return true;
     }
 
     private appliesToScope(appliesTo: AgentStepTypeAppliesTo, scope: 'Loop' | 'Flow'): boolean {

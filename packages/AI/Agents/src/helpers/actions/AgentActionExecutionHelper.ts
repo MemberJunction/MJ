@@ -656,15 +656,21 @@ export class AgentActionExecutionHelper {
 
             const timeoutMs = tool.TimeoutMs ?? defaultTimeout;
 
-            const response = await ClientToolRequestManager.Instance.RequestClientTool(
-                `ct_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                tool.Name,
-                tool.Params,
-                params.sessionID,
-                agentRunID,
-                timeoutMs,
-                tool.Description
-            );
+            ctx.LivenessWatchdog?.SuspendForExternalWait(`client-tool:${tool.Name}`);
+            let response: Awaited<ReturnType<typeof ClientToolRequestManager.Instance.RequestClientTool>>;
+            try {
+                response = await ClientToolRequestManager.Instance.RequestClientTool(
+                    `ct_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+                    tool.Name,
+                    tool.Params,
+                    params.sessionID,
+                    agentRunID,
+                    timeoutMs,
+                    tool.Description
+                );
+            } finally {
+                ctx.LivenessWatchdog?.ResumeFromExternalWait(`client-tool:${tool.Name}`);
+            }
 
             await ctx.Hooks.FinalizeStepEntity(stepEntity, response.Success, response.ErrorMessage, {
                 result: response.Result,

@@ -38,6 +38,7 @@ import {
     type SubAgentConsultRecord,
 } from '../../sub-agent-consult';
 import type { AgentRunContext } from '../AgentRunContext';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { BaseAgentSubAgentHelper } from './BaseAgentSubAgentHelper';
 
 /**
@@ -117,7 +118,10 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
         if (subAgentHelper.IsSubAgentConsultActive(ctx, resolvedOption, params)) {
             const round = (ctx.SubAgentConsultRounds.get(subAgentEntity.ID) ?? 0) + 1;
             ctx.SubAgentConsultRounds.set(subAgentEntity.ID, round);
-            const maxRounds = params.agent.MaxSubAgentConsultRounds ?? GetMaxSubAgentConsultRounds();
+            const maxRounds =
+                SafeResolveEffectiveAgentProperties(params.agent)?.MaxSubAgentConsultRounds ??
+                params.agent.MaxSubAgentConsultRounds ??
+                GetMaxSubAgentConsultRounds();
 
             const childRunId = subAgentResult.agentRun?.ID || '';
             const question = subAgentResult.agentRun?.Message || null;

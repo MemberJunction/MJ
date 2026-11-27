@@ -14,6 +14,11 @@ import {
     type AgentSandboxValidationTarget,
 } from '../custom/MJAIAgentEntityServer.server';
 import { ValidateAgentPersonaOwnership } from '../custom/MJAIAgentPersonaEntityServer.server';
+import { ValidateAgentScopedConfigurationJson } from '../custom/MJAIAgentCategoryEntityServer.server';
+import {
+    ValidateAgentStepTypeDelete,
+    ValidateAgentStepTypeMutation,
+} from '../custom/MJAIAgentStepTypeEntityServer.server';
 
 const SCHEMA = JSON.stringify({
     type: 'object',
@@ -387,5 +392,229 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
                 `Expected code-only security seam rejection for '${forbiddenSeam}'`
             ).toBe(true);
         }
+    });
+
+    it('blocks non-admin multi-hop ceiling escalation, null-clearing finite limits, narrow-only widening via Configuration, and non-dirty DriverClass smuggling (2.7 regression)', () => {
+        const standardUser = makeUser(ALICE, 'User');
+        const DEPT_ID = '00000000-0000-4000-8000-000000000099';
+        const root = baseAgentRow({
+            ID: COS_ID,
+            Isolation: 'Container',
+            MaxCostPerRun: 5,
+            MaxIterationsPerRun: 20,
+            SearchScopeAccess: 'Assigned',
+            AcceptsSkills: 'Limited',
+            SkillActivationMode: 'RequestedOnly',
+            RequirePlanMode: true,
+            SupportsPlanMode: false,
+            AcceptUnregisteredFiles: false,
+            AllowEphemeralClientTools: false,
+            AllowMemoryWrite: false,
+            MaxSubAgentConsultRounds: 2,
+            DriverClass: 'RootDriver',
+            Configuration: JSON.stringify({ instantiation: { maxInstancesPerUser: 1 } }),
+        });
+        // Intermediate department template leaves MaxCostPerRun null & Isolation InProcess (weak defaults)
+        const dept = baseAgentRow({
+            ID: DEPT_ID,
+            Name: 'Sales Dept Template',
+            BaseAgentID: COS_ID,
+            InstantiationMode: 'Optional',
+            Isolation: 'InProcess',
+            MaxCostPerRun: null,
+            MaxIterationsPerRun: null,
+            SearchScopeAccess: 'None',
+            DriverClass: null,
+        });
+        function makePerm(agentId: string, userId: string | null, roleId: string | null): MJAIAgentPermissionEntity {
+            const perm = Object.create(MJAIAgentPermissionEntity.prototype) as MJAIAgentPermissionEntity;
+            Object.defineProperties(perm, {
+                AgentID: { value: agentId },
+                UserID: { value: userId },
+                RoleID: { value: roleId },
+                CanView: { value: true },
+                CanRun: { value: true },
+                CanEdit: { value: false },
+                CanDelete: { value: false },
+            });
+            return perm;
+        }
+        const allowPerm = makePerm(DEPT_ID, ALICE, null);
+
+        // Multi-hop escalation + null-clearing + narrow-only widening via Configuration + non-dirty DriverClass
+        const escalateErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                BaseAgentID: DEPT_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Worker', // weaker than root 'Container'
+                MaxCostPerRun: null, // null-clearing root's finite 5
+                MaxIterationsPerRun: 50, // exceeds root's 20
+                DriverClass: 'EvilDriver',
+                DriverClassDirty: false, // unconditional check still blocks!
+                Configuration: JSON.stringify({
+                    scope: { searchScopeAccess: 'All' },
+                    skills: { activationMode: 'Auto' },
+                    execution: { requirePlanMode: false, supportsPlanMode: true },
+                    attachments: { acceptUnregisteredFiles: true },
+                    clientTools: { allowEphemeral: true },
+                    memory: { allowMemoryWrite: true },
+                    subAgentExecution: { maxConsultRounds: 9 },
+                }),
+            }),
+            User: standardUser,
+            AllAgents: [root, dept],
+            AllPermissions: [allowPerm],
+        });
+
+        const fields = new Set(escalateErrors.map((e) => e.Source));
+        expect(fields.has('Isolation')).toBe(true);
+        expect(fields.has('MaxCostPerRun')).toBe(true);
+        expect(fields.has('MaxIterationsPerRun')).toBe(true);
+        expect(fields.has('DriverClass')).toBe(true);
+        expect(fields.has('SearchScopeAccess')).toBe(true);
+        expect(fields.has('SkillActivationMode')).toBe(true);
+        expect(fields.has('RequirePlanMode')).toBe(true);
+        expect(fields.has('SupportsPlanMode')).toBe(true);
+        expect(fields.has('AcceptUnregisteredFiles')).toBe(true);
+        expect(fields.has('AllowEphemeralClientTools')).toBe(true);
+        expect(fields.has('AllowMemoryWrite')).toBe(true);
+        expect(fields.has('MaxSubAgentConsultRounds')).toBe(true);
+
+        // maxInstancesPerUser read from baseAgent.Configuration.instantiation
+        const existingInstance = baseAgentRow({
+            ID: '00000000-0000-4000-8000-000000000077',
+            BaseAgentID: COS_ID,
+            OwnerUserID: ALICE,
+            Status: 'Active',
+        });
+        const maxInstErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                ID: '00000000-0000-4000-8000-000000000078',
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Container',
+                MaxCostPerRun: 2,
+                MaxIterationsPerRun: 10,
+                DriverClass: 'RootDriver',
+            }),
+            User: standardUser,
+            AllAgents: [root, existingInstance],
+            AllPermissions: [makePerm(COS_ID, ALICE, null)],
+        });
+        expect(maxInstErrors.some((e) => /Maximum of 1 active instance/i.test(e.Message))).toBe(true);
+    });
+
+    it('enforces category/type DefaultConfiguration JSON validation, admin-only helperPlugins, and code-only seam blocks', () => {
+        const standardUser = makeUser(ALICE, 'User');
+        const adminUser = makeUser(ALICE, 'Owner');
+
+        // Malformed JSON rejected on both Category and Type
+        expect(
+            ValidateAgentScopedConfigurationJson('{broken', 'DefaultConfiguration', 'AI Agent Category', adminUser)
+                .length
+        ).toBeGreaterThan(0);
+        expect(
+            ValidateAgentScopedConfigurationJson(
+                '[1,2,3]',
+                'DefaultAgentConfiguration',
+                'AI Agent Type',
+                adminUser
+            ).length
+        ).toBeGreaterThan(0);
+
+        const pluginJson = JSON.stringify({
+            helperPlugins: [{ seam: 'messaging', driverClass: 'CustomMsgHelper' }],
+        });
+        // Non-admin blocked from writing helperPlugins
+        const nonAdminErrors = ValidateAgentScopedConfigurationJson(
+            pluginJson,
+            'DefaultConfiguration',
+            'AI Agent Category',
+            standardUser
+        );
+        expect(nonAdminErrors.some((e) => /Only administrators may configure helperPlugins/i.test(e.Message))).toBe(
+            true
+        );
+        // Admin allowed for non-security seam
+        expect(
+            ValidateAgentScopedConfigurationJson(pluginJson, 'DefaultConfiguration', 'AI Agent Category', adminUser)
+        ).toEqual([]);
+
+        // Even admin blocked from code-only seams on Category & Type
+        const forbiddenJson = JSON.stringify({
+            helperPlugins: [{ seam: 'actionPolicy', driverClass: 'EvilPolicy' }],
+        });
+        const forbiddenTypeErrors = ValidateAgentScopedConfigurationJson(
+            forbiddenJson,
+            'DefaultAgentConfiguration',
+            'AI Agent Type',
+            adminUser
+        );
+        expect(forbiddenTypeErrors.some((e) => /is code-only/i.test(e.Message))).toBe(true);
+    });
+
+    it('enforces MJAIAgentStepTypeEntityServer admin-only writes/deletes and built-in security floors', () => {
+        const standardUser = makeUser(ALICE, 'User');
+        const adminUser = makeUser(ALICE, 'Owner');
+
+        // Non-admin blocked from creating/modifying or deleting any step type
+        const nonAdminCreate = ValidateAgentStepTypeMutation(
+            {
+                Name: 'CustomApproval',
+                DriverClass: 'CustomApprovalStepHandler',
+                AllowedInUnapprovedPlanMode: false,
+                CountsAgainstTreeBudget: true,
+            },
+            standardUser
+        );
+        expect(nonAdminCreate.some((e) => /Only administrators/i.test(e.Message))).toBe(true);
+
+        const nonAdminDelete = ValidateAgentStepTypeDelete('CustomApproval', 'id-1', standardUser);
+        expect(nonAdminDelete.some((e) => /Only administrators/i.test(e.Message))).toBe(true);
+
+        // Admin cannot weaken built-in Actions floors or hijack DriverClass
+        const builtInWeakening = ValidateAgentStepTypeMutation(
+            {
+                Name: 'Actions',
+                DriverClass: 'HijackedDriver',
+                AllowedInUnapprovedPlanMode: true,
+                CountsAgainstTreeBudget: false,
+            },
+            adminUser
+        );
+        const sources = new Set(builtInWeakening.map((e) => e.Source));
+        expect(sources.has('AllowedInUnapprovedPlanMode')).toBe(true);
+        expect(sources.has('CountsAgainstTreeBudget')).toBe(true);
+        expect(sources.has('DriverClass')).toBe(true);
+
+        // Admin cannot delete built-in step types, CAN delete custom step types
+        expect(
+            ValidateAgentStepTypeDelete('Actions', 'id-2', adminUser).some((e) => /cannot be deleted/i.test(e.Message))
+        ).toBe(true);
+        expect(ValidateAgentStepTypeDelete('CustomApproval', 'id-3', adminUser)).toEqual([]);
+
+        // Admin can save valid custom step type & valid built-in step type
+        expect(
+            ValidateAgentStepTypeMutation(
+                {
+                    Name: 'Actions',
+                    DriverClass: 'ActionsStepHandler',
+                    AllowedInUnapprovedPlanMode: false,
+                    CountsAgainstTreeBudget: true,
+                },
+                adminUser
+            )
+        ).toEqual([]);
+        expect(
+            ValidateAgentStepTypeMutation(
+                {
+                    Name: 'CustomApproval',
+                    DriverClass: 'CustomApprovalStepHandler',
+                    AllowedInUnapprovedPlanMode: false,
+                    CountsAgainstTreeBudget: true,
+                },
+                adminUser
+            )
+        ).toEqual([]);
     });
 });

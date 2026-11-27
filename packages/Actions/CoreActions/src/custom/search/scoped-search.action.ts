@@ -750,7 +750,17 @@ export class ScopedSearchAction extends BaseAction {
         if (hostScopeIDs && hostScopeIDs.length > 0) {
             return this.resolveScopeFromHost(requestedScopeID, hostScopeIDs);
         }
-        const access = agent.SearchScopeAccess;
+        let access = agent.SearchScopeAccess;
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                const eff = AIEngine.Instance.ResolveEffectiveAgentProperties(agent.ID);
+                if (eff?.SearchScopeAccess) {
+                    access = eff.SearchScopeAccess;
+                }
+            }
+        } catch {
+            // Fall back to direct column if AIEngine is uninitialized in isolated unit tests.
+        }
         if (access === 'None') {
             return {
                 success: false,

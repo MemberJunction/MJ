@@ -1,5 +1,13 @@
 # Code Refactoring Plan for AI Agents Package
 
+> **Historical Document — Superseded & Completed:** This early refactoring proposal predates the completed `BaseAgent` decomposition. `packages/AI/Agents/src/base-agent.ts` is now a **536-line** public facade backed by **13 pluggable `BaseAgent*Helper` seams** (`packages/AI/Agents/src/helpers/`, all files `<= 989` lines), `AgentRunContext`, `AgentStepTypeRegistry`, and `BaseAgentDeprecatedDelegates*` (`v6.x` compat shim).
+>
+> For the current architecture, extension recipes, and complete 494-method rebase map, see:
+> - [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md)
+> - [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md)
+> - [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)
+> - [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md)
+
 ## Overview
 
 This document outlines a comprehensive refactoring plan for the AI Agents package. The current codebase contains several extremely long methods (some over 200 lines!) that violate our functional decomposition principles. These methods are difficult to test, understand, and maintain.

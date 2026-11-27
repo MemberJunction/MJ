@@ -98,6 +98,12 @@ import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunctio
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import {
+  DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,
+  DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS,
+  InstallGlobalLongRunningFetchDispatcher,
+  PrimeNodeBuiltinUndiciDispatcher,
+} from '@memberjunction/ai';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -1962,6 +1968,19 @@ const setupComplete$ = new ReplaySubject(1);
   AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
   // Wire default fresh-worker continuation dispatcher for checkpoint-resumed paused runs (CR-14).
   InstallDefaultResumeContinuationDispatcher();
+  // Configure Node's built-in undici fetch dispatcher with generous finite headers/body timeouts
+  // (30 min each) so extended-thinking / non-streaming tool-calling LLM calls never trip Node's
+  // default 300s UND_ERR_HEADERS_TIMEOUT cliff while dead sockets still fail cleanly.
+  await PrimeNodeBuiltinUndiciDispatcher();
+  const longRunningFetchInstall = InstallGlobalLongRunningFetchDispatcher({
+    headersTimeoutMs: DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS,
+    bodyTimeoutMs: DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,
+  });
+  if (longRunningFetchInstall.Installed) {
+    LogStatus(
+      `[AI Transport] Configured long-running fetch dispatcher (headersTimeout=${longRunningFetchInstall.Options.headersTimeout}ms, bodyTimeout=${longRunningFetchInstall.Options.bodyTimeout}ms)`
+    );
+  }
   // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
   ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
 

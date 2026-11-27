@@ -11,7 +11,14 @@
  * @module @memberjunction/ai-agents
  */
 
-import { IsForbiddenMetadataHelperSeam, type AgentHelperPluginEntry } from '@memberjunction/ai-core-plus';
+import {
+    IsForbiddenMetadataHelperSeam,
+    ParseAgentHelperPlugins,
+    type AgentHelperPluginEntry,
+    type MJAIAgentEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import { type EffectiveAgentProperties } from '@memberjunction/ai-engine-base';
+import { AIEngine } from '@memberjunction/aiengine';
 import { MJGlobal } from '@memberjunction/global';
 import {
     CODE_ONLY_HELPER_SEAMS,
@@ -148,4 +155,45 @@ export class AgentHelperCache {
         this._instances.set(options.SeamKey, resolved);
         return resolved;
     }
+}
+
+/**
+ * Safely resolves cascaded `EffectiveAgentProperties` for `agent` via `AIEngine.Instance`
+ * (`Agent -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default`),
+ * returning `null` cleanly when `AIEngine` is uninitialized in isolated unit tests.
+ */
+export function SafeResolveEffectiveAgentProperties(
+    agent: MJAIAgentEntityExtended | null | undefined
+): EffectiveAgentProperties | null {
+    if (!agent) {
+        return null;
+    }
+    try {
+        if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+            return AIEngine.Instance.ResolveEffectiveAgentProperties(agent);
+        }
+    } catch {
+        // Uninitialized engine in isolated unit tests; callers fall back to direct agent fields.
+    }
+    return null;
+}
+
+/**
+ * Resolves the ordered per-run `helperPlugins` list combining cascaded metadata bindings
+ * (`AgentType -> Categories -> BaseAgent chain -> Agent`) with optional programmatic overrides.
+ */
+export function ResolveAgentHelperPluginsForRun(
+    agent: MJAIAgentEntityExtended | null | undefined,
+    runtimePlugins?: ReadonlyArray<AgentHelperPluginConfig | AgentHelperPluginEntry>
+): Array<AgentHelperPluginConfig | AgentHelperPluginEntry> {
+    const effective = SafeResolveEffectiveAgentProperties(agent);
+    const cascaded = effective?.HelperPlugins ?? [];
+    const metadataPlugins: AgentHelperPluginEntry[] =
+        cascaded.length > 0
+            ? cascaded
+            : [
+                  ...ParseAgentHelperPlugins(agent?.Configuration),
+                  ...ParseAgentHelperPlugins(agent?.TypeConfiguration),
+              ];
+    return [...metadataPlugins, ...(runtimePlugins ?? [])];
 }

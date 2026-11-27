@@ -10,6 +10,7 @@ import {
     ParseAgentConfiguration,
     SyncAgentLegacyColumnsAndConfiguration,
     SyncAgentTypeLegacyColumnsAndConfiguration,
+    ValidateAgentConfigurationJson,
     type IAgentConfiguration,
     type LegacyAIAgentConfigColumns,
     type LegacyAIAgentTypeConfigColumns,
@@ -145,8 +146,25 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         expect(parsed?.artifacts?.creationMode).toBe('Always');
     });
 
-    it('SyncAgentLegacyColumnsAndConfiguration seeds Configuration on new record when JSON is omitted', () => {
-        const res = SyncAgentLegacyColumnsAndConfiguration({
+    it('SyncAgentLegacyColumnsAndConfiguration seeds ONLY caller-dirty fields on new record (never freezes untouched DB defaults)', () => {
+        // Untouched defaults on create -> does NOT materialize Configuration JSON
+        const untouchedRes = SyncAgentLegacyColumnsAndConfiguration({
+            IsNewRecord: true,
+            ConfigurationJson: null,
+            ConfigurationDirty: false,
+            LegacyValues: {
+                ExecutionMode: 'Sequential',
+                SupportsPlanMode: true,
+                RequirePlanMode: false,
+                SearchScopeAccess: 'None',
+            },
+            DirtyLegacyFields: new Set<keyof LegacyAIAgentConfigColumns>(),
+        });
+        expect(untouchedRes.ShouldUpdateConfiguration).toBe(false);
+        expect(untouchedRes.ConfigurationJson).toBeNull();
+
+        // Explicitly caller-dirty fields on create -> serialized into Configuration JSON
+        const dirtyRes = SyncAgentLegacyColumnsAndConfiguration({
             IsNewRecord: true,
             ConfigurationJson: null,
             ConfigurationDirty: false,
@@ -155,13 +173,58 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
                 SupportsPlanMode: true,
                 RequirePlanMode: false,
             },
-            DirtyLegacyFields: new Set<keyof LegacyAIAgentConfigColumns>(),
+            DirtyLegacyFields: new Set<keyof LegacyAIAgentConfigColumns>(['ExecutionMode', 'SupportsPlanMode']),
         });
-        expect(res.ShouldUpdateConfiguration).toBe(true);
-        const parsed = ParseAgentConfiguration(res.ConfigurationJson);
+        expect(dirtyRes.ShouldUpdateConfiguration).toBe(true);
+        const parsed = ParseAgentConfiguration(dirtyRes.ConfigurationJson);
         expect(parsed?.subAgentExecution?.mode).toBe('Parallel');
         expect(parsed?.execution?.supportsPlanMode).toBe(true);
-        expect(parsed?.execution?.requirePlanMode).toBe(false);
+        expect(parsed?.execution?.requirePlanMode).toBeUndefined();
+    });
+
+    it('SyncAgentLegacyColumnsAndConfiguration preserves malformed JSON and resets/clears null fields cleanly (2.7 regression)', () => {
+        // Malformed Configuration JSON MUST NOT be overwritten when a legacy column is edited
+        const badJson = '{broken-json: true';
+        const preserved = SyncAgentLegacyColumnsAndConfiguration({
+            IsNewRecord: false,
+            ConfigurationJson: badJson,
+            ConfigurationDirty: false,
+            LegacyValues: { MaxMessages: 12 },
+            DirtyLegacyFields: new Set<keyof LegacyAIAgentConfigColumns>(['MaxMessages']),
+        });
+        expect(preserved.ShouldUpdateConfiguration).toBe(false);
+        expect(preserved.ConfigurationJson).toBe(badJson);
+        expect(preserved.LegacyColumnUpdates).toEqual({});
+
+        // Explicit nulls in Configuration clear nullable columns and reset NOT NULL columns to DB defaults
+        const cleared = SyncAgentLegacyColumnsAndConfiguration({
+            IsNewRecord: false,
+            ConfigurationJson: JSON.stringify({
+                memory: { maxNotesToInject: null, maxExamplesToInject: null },
+                payload: { downstreamPaths: null, upstreamPaths: null, finalValidationMaxRetries: null },
+                attachments: { maxMessages: null },
+            }),
+            ConfigurationDirty: true,
+            LegacyValues: {},
+            DirtyLegacyFields: new Set<keyof LegacyAIAgentConfigColumns>(),
+        });
+        expect(cleared.LegacyColumnUpdates.MaxNotesToInject).toBe(5);
+        expect(cleared.LegacyColumnUpdates.MaxExamplesToInject).toBe(3);
+        expect(cleared.LegacyColumnUpdates.PayloadDownstreamPaths).toBe('["*"]');
+        expect(cleared.LegacyColumnUpdates.PayloadUpstreamPaths).toBe('["*"]');
+        expect(cleared.LegacyColumnUpdates.FinalPayloadValidationMaxRetries).toBe(3);
+        expect(cleared.LegacyColumnUpdates.MaxMessages).toBeNull();
+
+        // ValidateAgentConfigurationJson rejects syntax errors and wrong-typed leaves
+        expect(ValidateAgentConfigurationJson(null)).toEqual([]);
+        expect(ValidateAgentConfigurationJson(badJson).length).toBeGreaterThan(0);
+        expect(
+            ValidateAgentConfigurationJson(JSON.stringify({ subAgentExecution: { maxExecutionsPerRun: 'not-a-number' } }))
+                .length
+        ).toBeGreaterThan(0);
+        expect(
+            ValidateAgentConfigurationJson(JSON.stringify({ helperPlugins: [{ seam: 123, driverClass: '' }] })).length
+        ).toBeGreaterThan(0);
     });
 
     it('SyncAgentTypeLegacyColumnsAndConfiguration syncs both directions for the 7 AIAgentType columns', () => {

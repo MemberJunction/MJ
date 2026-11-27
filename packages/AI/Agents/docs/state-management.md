@@ -4,6 +4,8 @@
 
 The MemberJunction AI Agent framework provides a sophisticated state management system that ensures safe, efficient, and traceable state mutations throughout agent execution. The system uses a change-based approach where agents specify only the changes they need to make to the state, rather than returning complete state objects. This prevents data loss from LLM truncation and dramatically reduces token usage.
 
+**Canonical Guides:** [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) (`AgentRunContext` & `BaseAgentPayloadHelper`) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) (`IAgentConfiguration.payload`) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
+
 ## Core Concepts
 
 ### State vs Payload

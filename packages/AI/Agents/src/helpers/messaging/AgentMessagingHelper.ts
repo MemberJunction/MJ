@@ -53,6 +53,7 @@ import type {
 import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
 import { AgentStoppedRunContinuationHelper } from './AgentStoppedRunContinuationHelper';
 import { BaseAgentMessagingHelper } from './BaseAgentMessagingHelper';
+import { AgentStepTypeRegistry } from '../steps/AgentStepTypeRegistry';
 
 /**
  * Default pluggable implementation of {@link BaseAgentMessagingHelper}.
@@ -309,11 +310,15 @@ export class AgentMessagingHelper extends BaseAgentMessagingHelper {
             : ctx.Hooks.SerializePayloadAtEnd(params.payloadAtEnd);
         const payloadAtEndSource = this.findPayloadEndSourceBefore(ctx, payloadAtEnd);
 
+        const resolvedStepTypeId =
+            params.stepTypeId ??
+            AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(params.stepType)?.StepTypeID ??
+            undefined;
         initAgentRunStep(stepEntity, {
             AgentRunID: ctx.AgentRun!.ID,
             StepNumber: stepNumber,
             StepType: params.stepType,
-            StepTypeID: params.stepTypeId,
+            StepTypeID: resolvedStepTypeId,
             StepName: ctx.Hooks.FitStepName(stepEntity, ctx.Hooks.FormatHierarchicalMessage(params.stepName)),
             TargetID: params.targetId,
             TargetLogID: params.targetLogId,

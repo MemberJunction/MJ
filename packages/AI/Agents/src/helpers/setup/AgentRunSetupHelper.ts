@@ -9,13 +9,11 @@
  */
 
 import {
-    ParseAgentHelperPlugins,
     ResolveEffectiveWorkflowDurationCapMs,
     ResolveWorkflowStartedAtMs,
     WithAgentRunDataTrustApplied,
     type AgentChatMessage,
     type AgentConfiguration,
-    type AgentHelperPluginEntry,
     type BaseAgentNextStep,
     type ExecuteAgentParams,
     type ExecuteAgentResult,
@@ -96,10 +94,38 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
 
         const treeBudget = ctx.Hooks.EnsureTreeBudget(params);
 
+        // Clamp MaxTimePerRun across the full BaseAgentID ancestor chain so derived instances
+        // cannot loosen an ancestor's finite MaxTimePerRun ceiling via null or larger values.
+        const ancestorEffectiveMaxTimeSec = (() => {
+            const agent = params.agent;
+            if (!agent) return undefined;
+            const candidates: number[] = [];
+            if (typeof agent.MaxTimePerRun === 'number' && agent.MaxTimePerRun > 0) {
+                candidates.push(agent.MaxTimePerRun);
+            }
+            try {
+                if (agent.BaseAgentID && typeof AIEngine.Instance?.GetAgentByID === 'function') {
+                    let curId: string | null | undefined = agent.BaseAgentID;
+                    const seen = new Set<string>([agent.ID.toLowerCase()]);
+                    while (curId) {
+                        const key = curId.toLowerCase();
+                        if (seen.has(key)) break;
+                        seen.add(key);
+                        const anc = AIEngine.Instance.GetAgentByID(curId);
+                        if (!anc) break;
+                        if (typeof anc.MaxTimePerRun === 'number' && anc.MaxTimePerRun > 0) {
+                            candidates.push(anc.MaxTimePerRun);
+                        }
+                        curId = anc.BaseAgentID;
+                    }
+                }
+            } catch {
+                // Uninitialized AIEngine in unit tests; fall back to leaf MaxTimePerRun.
+            }
+            return candidates.length > 0 ? Math.min(...candidates) : undefined;
+        })();
         const configuredMaxTimeMs =
-            params.agent?.MaxTimePerRun != null && params.agent.MaxTimePerRun > 0
-                ? params.agent.MaxTimePerRun * 1000
-                : undefined;
+            ancestorEffectiveMaxTimeSec !== undefined ? ancestorEffectiveMaxTimeSec * 1000 : undefined;
         const wallClockProvenance = ctx.ActiveLimitsResolution?.Provenance['Budgets.PerRun.MaxWallClockMs'];
         const explicitResolvedMaxWallClockMs =
             wallClockProvenance?.IsOverridden &&
@@ -182,27 +208,6 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
             ctx.Hooks.LogStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
 
             await ctx.Hooks.InheritBoundActionParams(params);
-
-            // Reset per-run helper resolution cache so global @RegisterClass and per-agent helperPlugins
-            // (resolved through the 3-table Agent -> BaseAgent -> Category -> AgentType cascade) take effect cleanly.
-            let cascadedHelperPlugins: AgentHelperPluginEntry[] = [];
-            try {
-                if (params.agent && typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
-                    cascadedHelperPlugins = AIEngine.Instance.ResolveEffectiveAgentProperties(params.agent).HelperPlugins ?? [];
-                }
-            } catch {
-                cascadedHelperPlugins = [];
-            }
-            const agentHelperPlugins: AgentHelperPluginEntry[] = [
-                ...(cascadedHelperPlugins.length > 0
-                    ? cascadedHelperPlugins
-                    : [
-                          ...ParseAgentHelperPlugins(params.agent?.Configuration),
-                          ...ParseAgentHelperPlugins(params.agent?.TypeConfiguration),
-                      ]),
-                ...(params.helperPlugins ?? []),
-            ];
-            ctx.HelperCache.ResetForRun(agentHelperPlugins.length > 0 ? agentHelperPlugins : undefined);
 
             const wrappedParams: ExecuteAgentParams<C> = {
                 ...params,

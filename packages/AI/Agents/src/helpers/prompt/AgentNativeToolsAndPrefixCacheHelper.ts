@@ -62,6 +62,7 @@ import { TurnToolCallingMode } from '../../native-tools/turn-mode';
 import type { RuntimeStateDateTime, RuntimeStateScratchpad } from '../../runtime-state-fragment';
 import { RenderToolResultData } from '../../tool-result-format';
 import { ResolveSpecializationPlacement } from '../../volatile-child-prompt';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import type { BaseAgentPromptHelper } from './BaseAgentPromptHelper';
 
@@ -161,7 +162,8 @@ export class AgentNativeToolsAndPrefixCacheHelper {
         if (!ctx.AgentTypeInstance?.SupportsNativeToolCalls) {
             return;
         }
-        if (params.agent?.DeclareActionsAsNativeTools === false) {
+        const effectiveNativeProps = SafeResolveEffectiveAgentProperties(params.agent);
+        if ((effectiveNativeProps?.DeclareActionsAsNativeTools ?? params.agent?.DeclareActionsAsNativeTools) === false) {
             return;
         }
         const actions = FilterDeclarableActions(
@@ -363,7 +365,32 @@ export class AgentNativeToolsAndPrefixCacheHelper {
         if (!iterations) {
             return false;
         }
-        const perAgent = params.agent?.MaxIterationsPerRun;
+        // Clamp MaxIterationsPerRun across the full BaseAgentID ancestor chain so derived instances
+        // cannot loosen an ancestor's iteration ceiling.
+        const candidates: number[] = [];
+        if (typeof params.agent?.MaxIterationsPerRun === 'number' && params.agent.MaxIterationsPerRun > 0) {
+            candidates.push(params.agent.MaxIterationsPerRun);
+        }
+        try {
+            if (params.agent?.BaseAgentID && typeof AIEngine.Instance?.GetAgentByID === 'function') {
+                let curId: string | null | undefined = params.agent.BaseAgentID;
+                const seen = new Set<string>([params.agent.ID.toLowerCase()]);
+                while (curId) {
+                    const key = curId.toLowerCase();
+                    if (seen.has(key)) break;
+                    seen.add(key);
+                    const anc = AIEngine.Instance.GetAgentByID(curId);
+                    if (!anc) break;
+                    if (typeof anc.MaxIterationsPerRun === 'number' && anc.MaxIterationsPerRun > 0) {
+                        candidates.push(anc.MaxIterationsPerRun);
+                    }
+                    curId = anc.BaseAgentID;
+                }
+            }
+        } catch {
+            // Uninitialized engine in unit tests
+        }
+        const perAgent = candidates.length > 0 ? Math.min(...candidates) : undefined;
         const absolute = ctx.Hooks.ResolvedLimits(params).AgentAbsoluteIterations;
         return (typeof perAgent === 'number' && perAgent > 0 && iterations >= perAgent) || (absolute > 0 && iterations >= absolute);
     }

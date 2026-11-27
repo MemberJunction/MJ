@@ -8,7 +8,9 @@ import {
     DEFAULT_LONG_RUNNING_KEEP_ALIVE_MAX_TIMEOUT_MS,
     DEFAULT_LONG_RUNNING_KEEP_ALIVE_TIMEOUT_MS,
     InstallGlobalLongRunningFetchDispatcher,
+    PrimeNodeBuiltinUndiciDispatcher,
     ResolveLongRunningFetchDispatcherOptions,
+    ResolveNodeBuiltinUndiciModule,
     type FetchDispatcherLike,
     type ResolvedUndiciAgentOptions,
     type UndiciModuleLike,
@@ -71,7 +73,7 @@ describe('httpDispatcher (long-running undici transport helpers)', () => {
                 public constructor() {
                     return createdDispatcher;
                 }
-            } as unknown as UndiciModuleLike['Agent'],
+            },
         };
 
         const mockResponse = new Response('ok', { status: 200 });
@@ -126,5 +128,21 @@ describe('httpDispatcher (long-running undici transport helpers)', () => {
         // Idempotent second restore.
         await install.Restore();
         expect(closeMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('uses a finite 30-minute default bodyTimeout and primes/resolves Node built-in undici without external deps (2.7 regression)', async () => {
+        expect(DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS).toBe(1_800_000);
+        expect(DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS).toBe(1_800_000);
+
+        const primed = await PrimeNodeBuiltinUndiciDispatcher();
+        expect(primed).toBe(true);
+        const builtin = ResolveNodeBuiltinUndiciModule();
+        expect(builtin).not.toBeNull();
+
+        const install = InstallGlobalLongRunningFetchDispatcher();
+        expect(install.Installed).toBe(true);
+        expect(install.Options.headersTimeout).toBe(1_800_000);
+        expect(install.Options.bodyTimeout).toBe(1_800_000);
+        await install.Restore();
     });
 });

@@ -73,6 +73,7 @@ import {
     type StoppedRunStackStepRecord,
 } from './helpers/base-agent-types';
 import { BaseAgentContextBase } from './helpers/compat/BaseAgentContextBase';
+import { ResolveAgentHelperPluginsForRun } from './helpers/AgentHelperResolver';
 import { BaseAgentMessagingHelper } from './helpers/messaging/BaseAgentMessagingHelper';
 import { AgentMessagingHelper } from './helpers/messaging/AgentMessagingHelper';
 import { AgentStoppedRunContinuationHelper } from './helpers/messaging/AgentStoppedRunContinuationHelper';
@@ -268,6 +269,10 @@ export class BaseAgent extends BaseAgentContextBase {
 
     /** Executes an AI agent using hierarchical prompt composition and pluggable helper seams. */
     public async Execute<C = unknown, R = unknown>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Reset per-run helper bindings BEFORE resolving the `setup` (or any other) seam so
+        // per-agent helperPlugins apply on Run 1 and never leak across runs on a reused instance.
+        const plugins = ResolveAgentHelperPluginsForRun(params.agent, params.helperPlugins);
+        this.helperCache.ResetForRun(plugins.length > 0 ? plugins : undefined);
         return ServerOperationScopeManager.Instance.RunAsServerWork(() => this.executeRun<C, R>(params));
     }
 
@@ -301,6 +306,8 @@ export class BaseAgent extends BaseAgentContextBase {
 
     /** Opens a raw bridged {@link IRealtimeSession} for voice/video transports. */
     public StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
+        const plugins = ResolveAgentHelperPluginsForRun(params.agent, params.helperPlugins);
+        this.helperCache.ResetForRun(plugins.length > 0 ? plugins : undefined);
         return this.getRealtimeHelper().StartBridgeRealtimeSession(this.getRunContext(), params);
     }
 

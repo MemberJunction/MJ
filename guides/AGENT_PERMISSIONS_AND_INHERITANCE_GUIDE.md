@@ -74,7 +74,7 @@ Because `MJ: AI Agents.BaseAgentID` is declared as a CodeGen recursive hierarchy
 | Surface | Method | Resolution Rule |
 | --- | --- | --- |
 | **Chain & Root** | `GetAgentInheritanceChain(agentId)`, `GetRootAgent(agentId)` | Walks `BaseAgentID` safely up to 5 hops; returns `[root, ..., parent, leaf]`. |
-| **Scalar Properties** | `ResolveEffectiveAgentProperties(agent)` | Nearest non-null descendant wins for `TypeID`, `DriverClass`, `ExecutionMode`, `ModelSelectionMode`, `PayloadDownstreamPaths`, `PayloadUpstreamPaths`, `DefaultArtifactTypeID`, `ArtifactCreationMode`, `LogoURL`, `IconClass`; `Isolation`, `AcceptsSkills`, and `SkillActivationMode` narrow monotonically; run limits clamp to the tightest bound. |
+| **Scalar & `IAgentConfiguration` Cascade** | `ResolveEffectiveAgentProperties(agent)` | Resolves the 3-table `IAgentConfiguration` cascade (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` walking up `ParentID` → `AIAgent.Configuration` root → leaf) with `v6.x` dual-read fallback for the 49 deprecated `AIAgent` columns and 7 deprecated `AIAgentType` columns; enforces monotonic narrow-only invariants (`Isolation`, `AcceptsSkills`, `SkillActivationMode`, `SearchScopeAccess`, `RequirePlanMode`, `SupportsPlanMode`, `AllowEphemeralClientTools`, `AcceptUnregisteredFiles`, `MaxExecutionsPerRun`, `MaxSubAgentConsultRounds`); collects admin-only `HelperPlugins`. |
 | **JSON Config** | `DeepMergeAgentConfigObjects` (via `ResolveEffectiveAgentProperties`) | Deep-merges `TypeConfiguration` and `AgentTypePromptParams` root → leaf; strips `instantiation` UI hints from non-instantiable leaves. |
 | **Prompts** | `GetEffectiveAgentPrompts(agentId, status?)` | Uses the leaf's own active `AIAgentPrompt` rows when present; otherwise inherits from the nearest prompt-owning ancestor. |
 | **Actions** | `GetEffectiveAgentActions(agentId)` | Unions `AIAgentAction` rows root → leaf by `ActionID`. Any descendant row with `Status !== 'Active'` (e.g. `'Revoked'` or `'Pending'`) **vetoes** an inherited action. |
@@ -190,8 +190,8 @@ Because the `UI` role receives `CanCreate`/`CanUpdate`/`CanDelete` on `MJ: AI Ag
 1. **`MJAIAgentEntityServer`**:
    - **Chain Integrity (all users)**: Validates `BaseAgentID` exists, rejects self-reference and cycles, and enforces `MAX_AGENT_INHERITANCE_DEPTH = 5`.
    - **Instantiation Policy on Create**: Blocks non-admins from deriving from an agent whose `InstantiationMode === 'None'` and enforces `TypeConfiguration.instantiation.maxInstancesPerUser`.
-   - **Non-Owner (`UI` role) Sandbox**: Requires `BaseAgentID != null`, pins `OwnerUserID = ContextCurrentUser.ID` (checked against pre-save `OldValue` on update/delete so ownership cannot be hijacked), forces `InstantiationMode = 'None'`, blocks `ExposeAsAction = true`, requires effective `CanRun` on `BaseAgentID`, blocks custom `DriverClass`, blocks loosening `Isolation`, and blocks raising finite `MaxCostPerRun` / `MaxTokensPerRun` / `MaxTimePerRun` / `MaxIterationsPerRun` above the base agent's bounds.
-   - **Automatic Capability Copy & Primary Uniqueness**: Copies untouched capability defaults (`TypeID`, `AcceptsSkills`, `SkillActivationMode`, `ModelSelectionMode`, `Isolation`, memory & compaction settings) from `BaseAgentID` on create, auto-defaults the first instance per `(OwnerUserID, RootBaseAgentID)` to `IsPrimaryInstance = true`, and atomically demotes sibling `IsPrimaryInstance` rows when another sibling is promoted.
+   - **Non-Owner (`UI` role) Sandbox & `helperPlugins` Guard**: Requires `BaseAgentID != null`, pins `OwnerUserID = ContextCurrentUser.ID` (checked against pre-save `OldValue` on update/delete so ownership cannot be hijacked), forces `InstantiationMode = 'None'`, blocks `ExposeAsAction = true`, requires effective `CanRun` on `BaseAgentID`, blocks custom `DriverClass` and any `helperPlugins`, blocks loosening `Isolation`, and blocks raising finite `MaxCostPerRun` / `MaxTokensPerRun` / `MaxTimePerRun` / `MaxIterationsPerRun` above the base agent's bounds. In addition, code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`) are rejected in metadata `helperPlugins` for **all** users including administrators (see [Agent Administrator Guide](./AGENT_ADMINISTRATOR_GUIDE.md#13-code-only-security-seams-baseagentlimitshelper--baseagentactionpolicyhelper)).
+   - **Automatic Capability Copy, Bidirectional Sync & Primary Uniqueness**: Copies untouched capability defaults from `BaseAgentID` on create, keeps `AIAgent.Configuration` bidirectionally synced with the 49 deprecated legacy columns during `v6.x`, auto-defaults the first instance per `(OwnerUserID, RootBaseAgentID)` to `IsPrimaryInstance = true`, and atomically demotes sibling `IsPrimaryInstance` rows when another sibling is promoted.
 2. **`MJAIAgentPersonaEntityServer`**:
    - Confines non-Owner `Create`/`Update`/`Delete` on `MJ: AI Agent Personas` strictly to derived agents (`BaseAgentID != null`) owned by `ContextCurrentUser` (checked against both pre-save `OldValue` and new `AgentID`).
 3. **`MJAIAgentUserPolicyEntityServer`**:
@@ -261,6 +261,10 @@ async function createPersonalChiefOfStaff(user: UserInfo, conversationId?: strin
 
 ## Related Guides
 
+- [Agent Administrator Guide](./AGENT_ADMINISTRATOR_GUIDE.md) — full security & governance reference, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, liveness watchdog & `StuckDetector`
+- [Agent Builder & Extension Guide](./AGENT_BUILDER_EXTENSION_GUIDE.md) — refactored `BaseAgent` architecture, 13 helper seams, and Four Extension Points
+- [Agent End-User Guide](./AGENT_END_USER_GUIDE.md) — plain-language guide to personal instances, personas, memory, and policy controls
+- [BaseAgent Rebase Map](./BASE_AGENT_REBASE_MAP.md) — 1-to-1 map of all 494 legacy `BaseAgent` methods
 - [Built-In Agents Guide (including Chief of Staff Architecture)](./BUILT_IN_AGENTS_GUIDE.md#4-chief-of-staff-agent-core-and-extensions)
 - [Recursive Foreign Keys & Hierarchies Guide](./RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md)
 - [Agent Skills & Plan Mode Guide](./AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md)
