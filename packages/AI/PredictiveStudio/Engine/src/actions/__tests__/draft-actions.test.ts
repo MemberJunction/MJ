@@ -78,7 +78,12 @@ describe('A3 attack 2: a draft-unit call naming a missing field, or a date field
     const out = await DraftPredictionUnitAction.Draft({ ...target(VALID_PROPOSAL), EntityName: 'Members', TargetVariable: 'Lapsed' }, unitDeps());
     expect(out.Kind === 'refused' ? out.Refusal : null).toEqual({
       kind: 'unresolved-reference',
-      references: [{ path: 'TargetDefinition.EntityName', name: 'Members', kind: 'entity' }, { path: 'TargetDefinition.TargetVariable', name: 'Lapsed', kind: 'field' }],
+      references: [
+        { path: 'TargetDefinition.EntityName', name: 'Members', kind: 'entity' },
+        { path: 'TargetDefinition.TargetVariable', name: 'Lapsed', kind: 'field' },
+        // the decision-date column cannot resolve on an entity that does not exist
+        { path: 'TargetDefinition.Unit.DecisionDateColumn', name: 'StartDate', kind: 'field' },
+      ],
     });
   });
 
@@ -104,6 +109,21 @@ describe('A3 attack 4: a unit with a label window and no censoring rule is refus
   it('an explicit null censoring rule with a window is refused the same way', async () => {
     const out = await DraftPredictionUnitAction.Draft(target({ ...VALID_PROPOSAL, Censoring: null }), unitDeps());
     expect(out.Kind === 'refused' ? out.Refusal : null).toEqual({ kind: 'censoring-required' });
+  });
+});
+
+describe('A3: a label window needs a decision date (found at runtime, 2026-11-27: every row was censored)', () => {
+  it('a window with no DecisionDateColumn is refused with the fix in words, before any row is read', async () => {
+    const read = vi.fn(unitDeps().ReadDevelopmentRows);
+    const out = await DraftPredictionUnitAction.Draft(target({ LabelWindowDays: 31, Censoring: { rule: 'exclude-unresolved', cutoff: { kind: 'now' } } }), { ...unitDeps(), ReadDevelopmentRows: read });
+    expect(out.Kind === 'refused' ? out.Refusal.kind : out.Kind).toBe('draft-invalid');
+    expect(out.Kind === 'refused' && out.Refusal.kind === 'draft-invalid' ? out.Refusal.problems[0] : '').toMatch(/DecisionDateColumn/);
+    expect(read).not.toHaveBeenCalled();
+  });
+
+  it('no window and no date is a snapshot of the stored outcome, drafted with the default censoring', async () => {
+    const out = await DraftPredictionUnitAction.Draft(target({ TaskType: VALID_PROPOSAL.TaskType }), { ...unitDeps(), Today: new Date('2026-11-27T00:00:00Z') });
+    expect(out.Kind === 'draft' ? out.Draft.Censoring : null).toEqual({ rule: 'exclude-unresolved', cutoff: { kind: 'fixed', at: '2026-11-28' } });
   });
 });
 

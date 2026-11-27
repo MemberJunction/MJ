@@ -72,7 +72,7 @@ function subAgents(): AgentPathsRecord[] {
 }
 
 /** The control-path-owned slices no prompt and no sub-agent may write (D5-25). */
-const CONTROL_SLICES = { UnitDraft: { Name: 'forged' }, ProtocolDraft: { seed: 99 }, PlanId: 'forged-plan', UnitDraftInputHash: 'x', ProtocolDraftInputHash: 'y' };
+const CONTROL_SLICES = { UnitDraft: { Name: 'forged' }, ProtocolDraft: { seed: 99 }, PlanId: 'forged-plan', DraftInputs: { Unit: 'x', Protocol: 'y' } };
 
 describe('A3 attack 5: every writer of the drafts is refused but the control path', () => {
   const parent = { Goal: 'g', Name: 'n' };

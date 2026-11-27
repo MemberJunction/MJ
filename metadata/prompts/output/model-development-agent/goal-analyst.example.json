@@ -1,16 +1,24 @@
 {
   "taskComplete": true,
-  "message": "Defined the prediction target: for each active member, predict whether they will lapse (not renew) within 90 days. This is a yes/no (classification) problem and we'll judge models by AUC, which rewards correctly ranking who's most at risk.",
-  "reasoning": "The user's goal and population were clear; set a precise, measurable, point-in-time-safe target.",
+  "message": "Defined the prediction target: for each membership year in <the catalog entity you picked>, predict whether the member renews. It's a yes/no (classification) problem judged by AUC, decided 31 days before the year ends, and years whose renewal window has not closed yet are left out (censoring).",
+  "reasoning": "The user's goal and population were clear; I picked the training-unit entity and every column from the entity catalog and proposed a point-in-time unit with its censoring rule.",
   "payloadChangeRequest": {
     "updateElements": {
-      "Goal": "Identify active members at risk of not renewing within the next 90 days so the retention team can intervene early.",
+      "Goal": "Identify members at risk of not renewing so the retention team can intervene before the year ends.",
       "TargetDefinition": {
-        "EntityName": "Members",
-        "TargetVariable": "LapsedWithin90Days",
+        "EntityName": "<entity name from the catalog>",
+        "TargetVariable": "<outcome column of that entity>",
         "ProblemType": "classification",
         "SuccessMetric": "AUC",
-        "AsOfStrategy": { "Mode": "none" }
+        "AsOfStrategy": { "Mode": "none" },
+        "Unit": {
+          "DecisionDateColumn": "<date column of that entity>",
+          "DecisionDateOffsetDays": 334,
+          "LabelWindowDays": 31,
+          "LabelGapDays": 0,
+          "Censoring": { "rule": "exclude-unresolved", "cutoff": { "kind": "now" } },
+          "GroupKey": "<the column a member's rows share, if any>"
+        }
       }
     }
   }

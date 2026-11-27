@@ -9,7 +9,8 @@
  *     before approval, D5-25; no training run, so the protocol holdout-access record has 0 agent accesses);
  *  2. the two draft Actions ran, and every Action step of the session reports `HoldoutRowsRead = 0`;
  *  3. the presented plan resolves every name (`PlanMetadataValidator.Validate` → none) and names its censoring rule;
- *  4. each Data Scout prompt run's rendered messages carry the catalog marker within the DD-2 prompt budget.
+ *  4. the Data Scout ran, and each of its prompt runs' rendered messages carries the catalog marker within the DD-2
+ *     prompt budget (uncached plus cached input tokens).
  * Needs the database MJAPI uses and the LLM keys. Mutation tier: it spends LLM money (one planning session).
  */
 import { RunView, WellKnownUserSource, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
@@ -19,6 +20,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { EscapeSQLString } from '@memberjunction/global';
 import { CatalogRenderer, PlanMetadataValidator, PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
+import { ResolvePromptRunIdsForAgentRuns } from './agent-live-shared';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
 
 /** One turn of the session: the run and its final payload. */
@@ -131,14 +133,25 @@ class PsGateC1C12Steps {
     return match ? Number(match[1]) : null;
   }
 
-  /** The Data Scout prompt runs of the session: whether each rendered the catalog marker, and its prompt tokens. */
+  /**
+   * The Data Scout prompt runs of the session: whether each rendered the catalog marker, and its input tokens (the
+   * uncached prompt tokens plus the cache read). A prompt run is reached through the step of the Data Scout's agent run
+   * that invoked it (`MJ: AI Prompt Runs` has no agent-run column; the run is recorded under the Loop type's prompt).
+   */
   public static async ScoutPrompts(ctx: IntegrationCheckContext, person: UserInfo, runIds: readonly string[]): Promise<Array<{ readonly Marker: boolean; readonly Tokens: number }>> {
-    const inList = runIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
-    const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ readonly Messages: string | null; readonly TokensPrompt: number | null }>({
-      EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `AgentRunID IN (${inList}) AND Prompt='Data Scout - Main Prompt'`, Fields: ['Messages', 'TokensPrompt'], ResultType: 'simple', BypassCache: true,
+    const inRuns = runIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const scouts = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ readonly ID: string }>({
+      EntityName: 'MJ: AI Agent Runs', ExtraFilter: `ID IN (${inRuns}) AND Agent='Data Scout'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
+    }, person);
+    if (!scouts.Success) throw new Error(`G4.2: reading the Data Scout runs failed: ${scouts.ErrorMessage}`);
+    const promptRunIds = await ResolvePromptRunIdsForAgentRuns(scouts.Results.map((r) => r.ID), person, ctx.Provider);
+    if (promptRunIds.length === 0) return [];
+    const inList = promptRunIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
+    const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ readonly Messages: string | null; readonly TokensPrompt: number | null; readonly TokensCacheRead: number | null }>({
+      EntityName: 'MJ: AI Prompt Runs', ExtraFilter: `ID IN (${inList})`, Fields: ['Messages', 'TokensPrompt', 'TokensCacheRead'], ResultType: 'simple', BypassCache: true,
     }, person);
     if (!rows.Success) throw new Error(`G4.2: reading the Data Scout prompt runs failed: ${rows.ErrorMessage}`);
-    return rows.Results.map((r) => ({ Marker: (r.Messages || '').includes(CatalogRenderer.MARKER), Tokens: r.TokensPrompt || 0 }));
+    return rows.Results.map((r) => ({ Marker: (r.Messages || '').includes(CatalogRenderer.MARKER), Tokens: (r.TokensPrompt || 0) + (r.TokensCacheRead || 0) }));
   }
 
   /** The presented payload's censoring rule, as the plan names it; null when the plan has no unit draft. */
@@ -182,7 +195,7 @@ export const PsGateC1C12Checks: NamedCheck[] = [
         lastStatus: turns[turns.length - 1]?.Status,
       };
       console.log(`      → G4.2: ${units} units, ${protocols} protocols, ${trainingRuns} training runs written; ${holdoutReads.length} of ${steps.length} Action steps read holdout rows  ${JSON.stringify(measured)}`);
-      const scoutOk = scout.every((s) => s.Marker && s.Tokens <= CatalogRenderer.DATA_SCOUT_PROMPT_TOKENS);
+      const scoutOk = scout.length > 0 && scout.every((s) => s.Marker && s.Tokens <= CatalogRenderer.DATA_SCOUT_PROMPT_TOKENS);
       const passed = presented && units === 0 && protocols === 0 && trainingRuns === 0 && draftSteps.length >= PsGateC1C12Steps.DRAFT_ACTIONS.length
         && holdoutReads.length === 0 && unresolved.length === 0 && censoring !== null && scoutOk;
       Assert(passed, `G4.2: ${JSON.stringify(measured)}`);

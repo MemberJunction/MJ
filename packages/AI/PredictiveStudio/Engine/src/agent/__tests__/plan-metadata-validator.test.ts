@@ -101,6 +101,12 @@ describe('A3 attack 1: PlanMetadataValidator.Validate resolves every name agains
     ]);
   });
 
+  it('a qualified Entity.Field leakage note resolves when its entity has the field (found at runtime, 2026-11-27)', () => {
+    const plan = RealPlan();
+    plan.LeakageNotes.push({ Field: 'PS Truth W1 Membership Years.Region', Risk: 'r', Action: 'exclude' }, { Field: 'PS Truth W1 Membership Years.NoSuchColumn', Risk: 'r', Action: 'exclude' });
+    expect(PlanMetadataValidator.Validate(plan, ValidatorProvider()).map((r) => r.name)).toEqual(['PS Truth W1 Membership Years.NoSuchColumn']);
+  });
+
   it("a unit draft's grain entity and columns are resolved too", () => {
     const plan: ModelingPlanSpec = {
       ...RealPlan(),

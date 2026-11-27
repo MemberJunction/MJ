@@ -1902,6 +1902,292 @@
     }
   },
   {
+    "fields": {
+      "Name": "Draft Prediction Unit",
+      "Description": "Draft-only Prediction Unit tool of the Model Development Agent (PR 5, A3). Validates the plan's target and its unit proposal (TargetDefinition.Unit: grain entity, label column, decision-date column, label window, censoring rule, group key, filters, task) against the metadata of the caller's provider and returns a validated UnitDraft, or a typed refusal (unresolved-reference, censoring-required, draft-invalid). Writes no row: the Pipeline Builder saves unit version 1 from the approved draft. Reads only the draft unit's development rows (never the locked holdout); HoldoutRowsRead is always 0.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioDraftPredictionUnitAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-table-list",
+      "Config": {
+        "disallowWhenTainted": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TargetDefinition",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "JSON of the plan's TargetDefinition (EntityName, TargetVariable, ProblemType, SuccessMetric) with its Unit proposal."
+          },
+          "primaryKey": {
+            "ID": "FCDB29A8-E876-48FC-95FE-83A07CBF6A78"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UnitDraft",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the validated UnitDraft (PR 3's unit draft shape); absent when refused."
+          },
+          "primaryKey": {
+            "ID": "6DBF45BC-BE6F-47CB-9E88-FB93A931279B"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Refusal",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the DraftRefusal when no draft was returned."
+          },
+          "primaryKey": {
+            "ID": "401250ED-5266-4AA4-A924-9F6998BA0225"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HoldoutRowsRead",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Locked-holdout rows read: always 0 (the Action reads development rows only)."
+          },
+          "primaryKey": {
+            "ID": "BCA0FE25-0AE4-4C97-B4AA-7CD3C74A4301"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DevelopmentRows",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Development rows the draft unit resolves to (a preview count)."
+          },
+          "primaryKey": {
+            "ID": "1A89D27E-3E5B-4F11-90A5-370556934CC9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HoldoutRowsExcluded",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Locked-holdout rows the read left out unread."
+          },
+          "primaryKey": {
+            "ID": "188D3D9D-9D43-4FBA-90E7-6130B642A12D"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "A validated UnitDraft was returned."
+          },
+          "primaryKey": {
+            "ID": "9FEFD615-CB40-4EFF-83FC-81C2B9152C1F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "REFUSED",
+            "IsSuccess": true,
+            "Description": "No draft: the Refusal output says why (a name that does not exist, a window without a censoring rule, an invalid draft)."
+          },
+          "primaryKey": {
+            "ID": "92BC2E89-EDE8-4C5C-A67E-2903C41DABC4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_TARGET",
+            "IsSuccess": false,
+            "Description": "TargetDefinition was not supplied."
+          },
+          "primaryKey": {
+            "ID": "B3D95E20-8EE0-47AB-B0D0-6FFE94DF5A9F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DRAFT_FAILED",
+            "IsSuccess": false,
+            "Description": "The draft could not be computed (an unexpected error)."
+          },
+          "primaryKey": {
+            "ID": "27D24815-4C41-4761-82CF-4F6A23DBCC69"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6381DB82-1257-4116-8AF3-83FDB7C7B990"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Draft Evaluation Protocol",
+      "Description": "Draft-only Evaluation Protocol tool of the Model Development Agent (PR 5, A3). Validates a proposal of non-guard protocol members (seed, primary score, secondary metrics, baselines, calibration, inner validation, …) against the drafted unit and returns the validated ProtocolDraft, or a typed refusal. Guard members (holdout policy, promotion rule, leakage audit, exclusions, budgets, minimum minority-class rows, search, guardFieldsEditableBy) are never accepted from an agent: guard-field-edited-by-disallowed-author. Writes no row: the Pipeline Builder merges the approved draft over the protocol template, guard members always the template's. HoldoutRowsRead is always 0.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioDraftEvaluationProtocolAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-scale-balanced",
+      "Config": {
+        "disallowWhenTainted": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UnitDraft",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "JSON of the validated UnitDraft the protocol evaluates."
+          },
+          "primaryKey": {
+            "ID": "7784EE66-085A-4528-879D-ADA223F36DF7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Protocol",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON object of the proposed non-guard protocol members (may be empty: the template)."
+          },
+          "primaryKey": {
+            "ID": "9FF89DF9-DB8E-46F2-B05E-094B2C47BC13"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProtocolDraft",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the validated ProtocolDraft (exactly the proposed members); absent when refused."
+          },
+          "primaryKey": {
+            "ID": "50800E2B-C449-498F-B303-A83562464730"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Refusal",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the DraftRefusal when no draft was returned."
+          },
+          "primaryKey": {
+            "ID": "45E85E17-583B-4C66-A952-D63F7FF7448D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HoldoutRowsRead",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Locked-holdout rows read: always 0."
+          },
+          "primaryKey": {
+            "ID": "1CB296E4-DB7A-4861-8355-95D7BFFEC570"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "A validated ProtocolDraft was returned."
+          },
+          "primaryKey": {
+            "ID": "363ED5C4-C66E-4C4D-97F0-16A355CCA497"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "REFUSED",
+            "IsSuccess": true,
+            "Description": "No draft: the Refusal output says why (a guard member, an invalid member)."
+          },
+          "primaryKey": {
+            "ID": "FD50B93D-3B81-47DF-8262-7FBE92CDC7FA"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_UNIT",
+            "IsSuccess": false,
+            "Description": "UnitDraft was not supplied or does not parse."
+          },
+          "primaryKey": {
+            "ID": "E12C2949-9870-442D-9A16-C5E62BD0709D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DRAFT_FAILED",
+            "IsSuccess": false,
+            "Description": "The draft could not be computed (an unexpected error)."
+          },
+          "primaryKey": {
+            "ID": "094074F5-3C50-434E-A6CB-2A8FF8689A98"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7958E0AB-A3DA-4F93-A8D4-256A1494E05F"
+    }
+  },
+  {
     "_comments": [
       "Deleted by PR 4 M6.8 (D4-31, D4-35): #6180's PSI drift action is superseded by the monitoring job's procedure M (drift alerts, never retrains)."
     ],

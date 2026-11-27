@@ -11,6 +11,10 @@
  */
 
 import type { ValidationStrategy } from './pipeline-spec';
+import type { EvaluationProtocolDraft, GuardField } from './evaluation-protocol-rules';
+import type { CensoringRule, DecisionSpec, RowFilter } from './prediction-unit';
+import type { UnitDraft } from './protocol-rows';
+import type { TaskType } from './task-type';
 
 /**
  * Explicit resource budget for an experiment session — the bounded-autonomy
@@ -68,6 +72,17 @@ export interface ModelingPlanSpec {
     SuccessMetric: 'AUC' | 'F1' | 'Accuracy' | 'RMSE' | string;
     /** Optional point-in-time assembly strategy. */
     AsOfStrategy?: { Mode: 'none' | 'column' | 'offset'; Column?: string; OffsetDays?: number };
+    /**
+     * The Goal Analyst's Prediction Unit proposal: grain, decision date, label window and censoring (PR 5, A3). The
+     * Draft Prediction Unit Action validates it into {@link ModelingPlanSpec.UnitDraft}; the proposal itself builds nothing.
+     */
+    Unit?: UnitProposal;
+    /**
+     * A proposal of non-guard Evaluation Protocol members (`seed`, `primaryScore`, …), as written by a prompt and not yet
+     * validated: the Draft Evaluation Protocol Action refuses any guard member and validates the rest into
+     * {@link ModelingPlanSpec.ProtocolDraft}.
+     */
+    Protocol?: Record<string, string | number | boolean | object | null>;
   };
   /** Candidate feed-in sources proposed by the Data Scout, each with rationale. */
   CandidateSources: Array<{ Kind: 'Entity' | 'Query' | 'ExternalEntity' | 'VectorSet' | 'FeaturePipeline'; Ref: string; Why: string }>;
@@ -88,10 +103,59 @@ export interface ModelingPlanSpec {
   ValidationStrategy: ValidationStrategy;
   /** Proposed resource budget for the experiment session. */
   ProposedBudget: { MaxComputeCost?: number; MaxRuns?: number; MaxWallclockMinutes?: number };
+  /**
+   * The validated Prediction Unit draft (PR 5, A3; D5-25): written only by the control path from the Draft Prediction
+   * Unit Action's output. No unit row exists before approval; the Pipeline Builder saves unit version 1 from it.
+   */
+  UnitDraft?: UnitDraft;
+  /**
+   * The validated non-guard Evaluation Protocol members (PR 5, A3; D5-25): written only by the control path from the
+   * Draft Evaluation Protocol Action's output. The builder merges them over the default protocol; guard members always
+   * come from the template.
+   */
+  ProtocolDraft?: ProtocolDraftMembers;
+  /**
+   * What the drafts were made from (SHA-256 of their inputs), written only by the control path with them: a draft whose
+   * inputs changed since is drafted again before the plan is presented. Not plan content (not in the plan hash).
+   */
+  DraftInputs?: { readonly Unit: string; readonly Protocol: string | null };
   /** User approval gate — execution does not begin until this is true. */
   Approved?: boolean;
   /** Execution-phase leaderboard — one entry per Experiment Session Iteration. */
   Leaderboard?: Array<{ IterationID: string; Metric: number; ModelID?: string }>;
+}
+
+/** The Evaluation Protocol members a draft may set: every member except the guard fields (a `Pick` of PR 3's draft). */
+export type ProtocolDraftMembers = Partial<Pick<EvaluationProtocolDraft, Exclude<keyof EvaluationProtocolDraft, GuardField>>>;
+
+/**
+ * The Goal Analyst's Prediction Unit proposal (PR 5, A3). Every member is optional; an absent one takes the target's
+ * value or the default the Draft Prediction Unit Action documents. A proposal with a label window must name its
+ * censoring rule (`censoring-required`).
+ */
+export interface UnitProposal {
+  /** The entity one training row is a row of; default `TargetDefinition.EntityName`. */
+  GrainEntity?: string;
+  /** The column the outcome is read from; default `TargetDefinition.TargetVariable`. */
+  LabelColumn?: string;
+  /** The date column each row's decision date is read from; absent or null = one fixed decision date (today). */
+  DecisionDateColumn?: string | null;
+  /** Days added to {@link DecisionDateColumn}; absent = 0. */
+  DecisionDateOffsetDays?: number;
+  /** Days after the decision date the outcome is observed over; default 1. */
+  LabelWindowDays?: number;
+  /** Days between the decision date and the window's start; default 0. */
+  LabelGapDays?: number;
+  /** How rows whose window has not closed are handled; required with an explicit label window. */
+  Censoring?: CensoringRule | null;
+  /** The field rows are grouped by (a person across years); default none. */
+  GroupKey?: string | null;
+  /** Conditions the unit's rows must meet; default none. */
+  Filter?: RowFilter[];
+  /** The task; default from the problem type and the development rows' labels. */
+  TaskType?: TaskType;
+  /** The decision the prediction informs; default a monthly analyst review. */
+  DecisionSpec?: DecisionSpec;
 }
 
 /** The allowed kinds for candidate features proposed by the Data Scout. */
