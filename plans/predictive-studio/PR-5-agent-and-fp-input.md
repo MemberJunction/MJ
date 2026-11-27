@@ -2219,7 +2219,7 @@ goes red.
 
 #### A7a — The agent eval suite, authored (no LLM spend)
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** Everything the eval suite needs except paid runs, written against the contracts from wave 1 and finished
 in wave 3: the checked-in scenario manifest (≥ 100 scenarios; every trap kind ≥ 15, `none` ≥ 20; `uuidgen` keys stored
@@ -3205,6 +3205,11 @@ Record every decision taken in §9 and, when it changes another plan's interface
   `MJ: Experiment Sessions.PlanSpec` JSON (defaulting to `SeededRandomWaveStrategist.DefaultSeed = 42` or
   `options.searchSeed` / injected strategist `.Seed`). · `MJExperimentSessionEntity` has no dedicated `Seed` column and
   no schema change was planned on `ExperimentSession` (B4).
+- D5-A7a-1 · 2026-11-26 · No new database is provisioned for wave-1 A7a. A7a verifies `ci-mirror --tier fast`,
+  `milestone-exit` (without `--skip-commands`), `pnpm run build` and `test:types` and unit tests for its touched
+  packages, plus read-only `mj sync validate --dir=metadata` through `ps-env.sh` against `MJ_PS_PR5_claudeint` (validate
+  only, never push). `mj sync push --dir=metadata --ci` on a fresh database and `ci-mirror --tier full` for A7a's files
+  run at wave-1 integration on `MJ_PS_PR5_claudeint`, by the controller. · A7a is DB-free in wave 1 (controller ruling).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3305,7 +3310,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->1<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->1<!-- /gen:checks -->
-- Head: <!-- gen:head -->b9ab9d7e97<!-- /gen:head -->
+- Head: <!-- gen:head -->c7b68e1c18<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3521,6 +3526,75 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   - `packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts`: `'ps-gate-w1-c3-2': 1,`, `'ps-gate-w1-c3-2.G7.7',`, and `expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(293);`
 - **LLM spend (§2.4):** `268` prompt runs, `$0.19193622` USD, `400,374` tokens on `MJ_PS_PR5_hydrogen1` (from CodeGen + suite run; B4 unit tests & gate `W1 -> C3.2` spent `$0.00`).
 - **Decisions recorded:** §9 `D5-B4-1`–`D5-B4-5`, §9 controller ruling `D5-51` (`ci-mirror --tier full` deferred to integration; milestone exits on `milestone-exit`, touched package unit tests, attacks/Exit gate, and `ci-mirror --tier fast`).
+### 2026-11-26 — The agent eval suite, authored (no LLM spend) — A7a
+
+- **Branch:** `ps/pr-5-agent-fp-input--A7a` (from `origin/ps/pr-5-agent-fp-input` @ `261546a083`; red attack-list commit `e5ff4548dc`; merged `ps/pr-5-agent-fp-input` @ `aebd2c4707` for D-091 item 4 & item 5).
+- **What landed:**
+  - Self-contained `packages/AI/PredictiveStudio/Engine/src/agent-eval/` importing only `@memberjunction/core`,
+    `@memberjunction/core-entities`, `@memberjunction/global`, `@memberjunction/testing-engine`, and `node:*` (zero
+    PR 5 imports outside `agent-eval/`, D5-34 compatible for baseline worktree overlay).
+  - `@memberjunction/testing-engine` added to `packages/AI/PredictiveStudio/Engine/package.json` (`pnpm-lock.yaml` updated)
+    plus `agent-eval:generate` script (`pnpm run build && node dist/agent-eval/scenario-manifest.js`).
+  - `AgentEvalSuiteRules.Validate`, `AgentEvalSummary.Compute` (pass^k, Wilson 95% CIs, paired difference CI,
+    safety pass^k = 1 gate, fallback refusal), `RubricCalibration.Agreement` & `BuildFixtures` (180 items = 60 per
+    text criterion `censoring-named`, `asks-what-to-improve`, `failure-reported`, `seed=20261126`, overall and per-criterion
+    Wilson 95% lower bound `0.9791 >= 0.85`), `PredictiveStudioAgentEvalDriver` (parallel refusal `parallel-refused`,
+    run-tree `SourceAIAgentRunID` note isolation before/after repeat, `SetupSuite` world loader hook, deterministic PS
+    oracles `builds-started`, `models-published`, `excluded-fields`, `refusal-kind`, `notes-leaked` safe when
+    `MJ: Agent Decision Log` is absent), and `AgentEvalScenarioManifest.GenerateMetadata`.
+  - `scenario-manifest.json`: 104 scenarios (`pure-noise`: 16, `leaky-field`: 16, `small-n`: 15,
+    `unresolved-reference`: 16, `negated-build-request`: 16, `none`: 25), M0's 6 baseline prompts verbatim (D5-45),
+    all C1 `negated-build-request` tests carrying `RepeatCount = 5` and all others `3`, stable `uuidgen` keys,
+    generating `metadata/test-types/.predictive-studio-agent-eval-test-type.json`,
+    `metadata/test-suites/.predictive-studio-agent-eval-suite.json`,
+    `metadata/tests/predictive-studio-agent/.predictive-studio-agent-eval-tests.json`, and
+    `metadata/rubrics/.predictive-studio-agent-eval-rubric.json`.
+- **Shared files (D5-49):**
+  - Added `export * from './agent-eval';` to `packages/AI/PredictiveStudio/Engine/src/index.ts`.
+  - Updated tracked server class manifests (`packages/ServerBootstrap/src/generated/mj-class-registrations.ts`,
+    `packages/ServerBootstrapLite/src/generated/mj-class-registrations.ts`) from `mj codegen manifest` for
+    `PredictiveStudioAgentEvalDriver`.
+  - Added `.changeset/ps-agent-fp-input.md` listing `@memberjunction/core`, `@memberjunction/predictive-studio`,
+    `@memberjunction/server-bootstrap`, and `@memberjunction/server-bootstrap-lite` (`minor`, required by
+    `milestone-exit` `ChangesetPackageNames` for `metadata/` and server class manifests; regenerated by controller at integration).
+- **Verification:**
+  - `cd packages/AI/PredictiveStudio/Engine && pnpm run build && pnpm test` -> build exit 0 (0 TS errors); 135 files /
+    1967 tests passed, 0 failed, 0 skipped (including all 5 A7a attack test files / 15 tests covering Attacks 1–8).
+  - `cd packages/ServerBootstrap && pnpm run build && pnpm test` -> build exit 0 (0 TS errors); 2 files / 26 tests passed,
+    0 failed, 0 skipped.
+  - `cd packages/ServerBootstrapLite && pnpm run build && pnpm test` -> build exit 0 (0 TS errors); 2 files / 6 tests passed,
+    0 failed, 0 skipped.
+  - `npx turbo run test:types --filter=@memberjunction/predictive-studio --filter=@memberjunction/server-bootstrap --filter=@memberjunction/server-bootstrap-lite`
+    -> exit 0 (220/220 tasks).
+  - All 9 repo guards (`check:guards`, `check:ui`, `check:esm`, `check:standards`, `check:changeset`, `check:codegen-tail`,
+    `check-migration-entityfield-sequence`, `check-browser-manifest-leakage`, `npx vitest run --config .github/scripts/vitest.config.mts`
+    46 files / 1074 tests passed) -> all exit 0.
+  - `PS_PR=5 PS_ENV_FILE=.../.env.MJ_PS_PR5_claudeint .../ps-env.sh pnpm mj sync validate --dir=metadata` (read-only
+    against `MJ_PS_PR5_claudeint`, D5-A7a-1) -> exit 0 (`Files: 874`, `Entities: 7182`, `Errors: 0`, `Warnings: 1377`
+    best-practice on pre-existing files; 0 warnings/errors on A7a's 4 metadata files).
+  - `node /Users/arieglazier/repos/ps-rebuild-plans/tools/milestone-exit.mjs --plan ... --milestone A7a` (at `77bec97c21`) -> `# checks 22 · failed 0` (`cmd:build` + all 3 touched-package tests + all 9 guards).
+  - `CI=true node /Users/arieglazier/repos/ps-rebuild-plans/tools/ci-mirror.mjs --mj ... --tier fast --pr 5` (at `77bec97c21`) -> `summary: ok (12 passed)` (`20261126-183634-43737`).
+  - Merged `ps/pr-5-agent-fp-input` (`aebd2c4707`, carrying D-091 item 4 LiveKitNative `-threads 1` and item 5 GraphQLDataProvider WS fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input`; re-verifying `milestone-exit` and fast tier via pre-push hook.
+  - Merged `ps/pr-5-agent-fp-input` (`020d86e373`, carrying D-091 item 6 MJServer delete-test timeout fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input` (`ef641d95a0`); regenerated §10 and changeset with `pr-body.mjs`; fast tier re-run via pre-push hook.
+  - Push of `2668294b3e` went red on `@memberjunction/sqlserver-dataprovider#test` only (`spCreateRecordChangeContract.test.ts` timeout, 1 failed / 446 passed / 17 skipped; D-091 item 7; `sql-parser` showed only a load-only `onTaskUpdate` RPC timeout, 2175/2175 passed, and passes alone: 63 files / 2175 tests, 0 errors). Merged `ps/pr-5-agent-fp-input` (`35d05d5ba0`, carrying item 7 fix `a72b2db90d`) cleanly (`9053014833`); regenerated §10 and changeset; re-pushing through the D5-52 own-package hook.
+- **Mutation table (ruling S1):**
+
+  | Guard | Mutation | Red attack | Restored |
+  |---|---|---|---|
+  | `AgentEvalSuiteRules.Validate` minimum scenario count (`MIN_SCENARIO_COUNT = 100`) | Lowered to `90` | Attack 1 (`agent-eval-suite-rules.test.ts`: `refuses a suite with 99 scenarios` — `expected 0 to be greater than 0`) | Yes (5/5 `agent-eval` files, 15/15 passed) |
+  | `AgentEvalSummary.Compute` safety pass^k = 1 gate (`pairedDifference.Passed && safetyAllPassed`) | Dropped `&& safetyAllPassed` | Attack 2 (`agent-eval-summary.test.ts`: `rejects a candidate whose paired interval lower bound >= -0.05 when one safety scenario fails pass^k` — `expected true to be false`) | Yes (15/15 passed) |
+  | `AgentEvalScenarioManifest` C1 negated repeat count (`C1_NEGATED_REPEAT_COUNT = 5`) | Changed to `3` | Attack 6 (`scenario-manifest.test.ts`: `Attack 6: negated-build-request scenarios on C1 carry RepeatCount = 5...` — `expected 3 to be 5`) | Yes (15/15 passed) |
+  | `PredictiveStudioAgentEvalDriver.Execute` run-tree note archival | Skipped `archivePriorRepeatsNotes` and `archiveRunTreeNotes` | Attack 3 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 3: isolates repeat notes...` — `expected 'Provisional' to be 'Archived'`) | Yes (15/15 passed) |
+  | `PredictiveStudioAgentEvalDriver.Execute` parallel guard (`context.workerIndex !== undefined`) | Disabled check (`&& false`) | Attack 7 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 7: refuses parallel runs...` — `expected 'Passed' to be 'Failed'`) | Yes (15/15 passed) |
+  | `RefusalKindOracle.evaluate` absent metadata check (`!FindEntityInfo(provider.Entities, 'MJ: Agent Decision Log')`) | Bypassed check (`&& false`) | Attack 8 (`predictive-studio-agent-eval-driver.test.ts`: `Attack 8: treats missing MJ: Agent Decision Log...` — message regex `/0 rows\|not present\|absent/i` mismatch) | Yes (15/15 passed) |
+
+- **LLM spend:** `$0.00` (no database assigned to A7a; no LLM calls).
+- **Owed, not done by A7a (D5-A7a-1, D5-51):** `PS_PR=5 tools/ps-env.sh mj sync push --dir=metadata --ci` on a fresh database
+  (including the §6 Exit `SELECT COUNT(*) FROM __mj.vwTests WHERE TypeID = <PS eval type>` check) and
+  `ci-mirror --tier full` for A7a's files are owed and run at wave-1 integration on `MJ_PS_PR5_claudeint` by the
+  controller (no database or `.env.MJ_PS_PR5_*` is provisioned for DB-free wave-1 A7a, and per controller ruling D5-51
+  `ci-mirror --tier full` runs once per integration, alone on the machine, rather than per milestone).
+- **Rulings this milestone:** `D5-A7a-1` (controller ruling: DB-free A7a exit scope; `mj sync push` and `ci-mirror --tier full` owed at wave-1 integration on `MJ_PS_PR5_claudeint`), `D5-51` (controller ruling: full-tier `ci-mirror` runs only at integration; milestone exit uses `milestone-exit`, touched-package unit tests, attack/exit checks, and `ci-mirror --tier fast`).
 
 ## 12. Refresh log (append-only)
 

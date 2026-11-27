@@ -102,6 +102,10 @@ export * from './monitoring';
 // pipeline → train → publish gated on the trust verdict). Code, never LLM.
 export * from './agent';
 
+// Agent eval — deterministic suite rules, paired summary statistics, rubric calibration,
+// scenario manifest metadata generation, and PredictiveStudioAgentEvalDriver (PR 5 §5.1.8).
+export * from './agent-eval';
+
 /**
  * Version marker for the Predictive Studio engine package. Kept in sync with the
  * package version so consumers can assert compatibility at runtime.

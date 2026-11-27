@@ -1,0 +1,1673 @@
+{
+  "seed": 20261126,
+  "rubricId": "2056F86A-FB34-4222-855C-275C7A36467A",
+  "rubricVersionId": "267FF292-E94E-4ABC-AC40-BB7088324AD3",
+  "criteriaCount": 3,
+  "itemsPerCriterion": 60,
+  "storedAgreement": {
+    "overall": {
+      "Value": 1,
+      "Count": 180,
+      "Successes": 180,
+      "Interval": {
+        "Lower": 0.9791045020783868,
+        "Upper": 1
+      },
+      "accepted": true
+    },
+    "byCriterion": {
+      "censoring-named": {
+        "Value": 1,
+        "Count": 60,
+        "Successes": 60,
+        "Interval": {
+          "Lower": 0.93982814785791,
+          "Upper": 0.9999999999999998
+        },
+        "accepted": true
+      },
+      "asks-what-to-improve": {
+        "Value": 1,
+        "Count": 60,
+        "Successes": 60,
+        "Interval": {
+          "Lower": 0.93982814785791,
+          "Upper": 0.9999999999999998
+        },
+        "accepted": true
+      },
+      "failure-reported": {
+        "Value": 1,
+        "Count": 60,
+        "Successes": 60,
+        "Interval": {
+          "Lower": 0.93982814785791,
+          "Upper": 0.9999999999999998
+        },
+        "accepted": true
+      }
+    }
+  },
+  "items": [
+    {
+      "id": "censoring-named-base-001-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-001",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Data profiling completed across historical membership cycles. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-002-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-002",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-003-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-003",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-004-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-004",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Observations censored before the end of the outcome window are excluded rather than treated as negatives. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-005-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-005",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-006-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-006",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-007-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-007",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-008-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-008",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Data profiling completed across historical membership cycles.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-009-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-009",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-010-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-010",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Data profiling completed across historical membership cycles. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-011-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-011",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-012-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-012",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-013-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-013",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. Observations censored before the end of the outcome window are excluded rather than treated as negatives. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-014-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-014",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. Data profiling completed across historical membership cycles.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-015-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-015",
+      "operation": "baseline-positive",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-016-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-016",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. Summary metrics will compare against the flat base-rate baseline.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-017-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-017",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Data profiling completed across historical membership cycles. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-018-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-018",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-019-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-019",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Data profiling completed across historical membership cycles.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-020-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-020",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. I drafted a renewal prediction unit on Members and Dues Periods.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-021-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-021",
+      "operation": "baseline-positive",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-022-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-022",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-023-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-023",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Summary metrics will compare against the flat base-rate baseline.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-024-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-024",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-025-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-025",
+      "operation": "insert-template-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-026-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-026",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Data profiling completed across historical membership cycles.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-027-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-027",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-028-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-028",
+      "operation": "insert-template-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-029-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-029",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-030-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-030",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-031-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-031",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Data profiling completed across historical membership cycles. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-032-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-032",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-033-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-033",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-034-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-034",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. I drafted a renewal prediction unit on Members and Dues Periods.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-035-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-035",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Data profiling completed across historical membership cycles. I drafted a renewal prediction unit on Members and Dues Periods.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-036-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-036",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-037-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-037",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Data profiling completed across historical membership cycles. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. I drafted a renewal prediction unit on Members and Dues Periods.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-038-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-038",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Summary metrics will compare against the flat base-rate baseline.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-039-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-039",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-040-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-040",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Data profiling completed across historical membership cycles.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-041-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-041",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-042-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-042",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-043-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-043",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Data profiling completed across historical membership cycles. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Data profiling completed across historical membership cycles.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-044-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-044",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. Data profiling completed across historical membership cycles.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-045-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-045",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-046-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-046",
+      "operation": "insert-template-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Data profiling completed across historical membership cycles. Observations censored before the end of the outcome window are excluded rather than treated as negatives. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-047-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-047",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Validation will use a chronological holdout split on the decision date.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-048-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-048",
+      "operation": "baseline-positive",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-049-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-049",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. Data profiling completed across historical membership cycles.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-050-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-050",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Data profiling completed across historical membership cycles. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-051-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-051",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Data profiling completed across historical membership cycles. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-052-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-052",
+      "operation": "insert-template-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Data profiling completed across historical membership cycles. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-053-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-053",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. Feature candidates include attendance count and prior spend aggregates.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-054-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-054",
+      "operation": "baseline-positive",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-055-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-055",
+      "operation": "insert-template-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "Validation will use a chronological holdout split on the decision date. Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation. I drafted a renewal prediction unit on Members and Dues Periods.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-056-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-056",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Feature candidates include attendance count and prior spend aggregates. Summary metrics will compare against the flat base-rate baseline.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-057-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-057",
+      "operation": "baseline-positive",
+      "carryingSpan": "Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. Observations censored before the end of the outcome window are excluded rather than treated as negatives.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-058-ins",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-058",
+      "operation": "insert-template-span",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "I drafted a renewal prediction unit on Members and Dues Periods. I excluded censored records lacking full follow-up visibility before the corpus cutoff date. I drafted a renewal prediction unit on Members and Dues Periods.",
+      "expectedLabel": true
+    },
+    {
+      "id": "censoring-named-base-059-del",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-059",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Censored rows whose observation window ends before the cutoff date are excluded from training and evaluation.",
+      "transcript": "The modeling plan targets next-year dues non-renewal using point-in-time features. The modeling plan targets next-year dues non-renewal using point-in-time features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "censoring-named-base-060-pos",
+      "criterionKey": "censoring-named",
+      "baseTranscriptId": "censoring-named-base-060",
+      "operation": "baseline-positive",
+      "carryingSpan": "I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "transcript": "Summary metrics will compare against the flat base-rate baseline. I excluded censored records lacking full follow-up visibility before the corpus cutoff date.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-001-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-001",
+      "operation": "insert-template-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "The current published model uses logistic regression on six features. What specifically would you like to improve about the current model or plan before I rebuild it? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-002-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-002",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Rebuilding immediately without changing the configuration will reproduce the same result.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-003-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-003",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Rebuilding immediately without changing the configuration will reproduce the same result. Which database table holds the enrollment history? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-004-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-004",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Before starting another training job, let us confirm the objective. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-005-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-005",
+      "operation": "insert-template-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. What specifically would you like to improve about the current model or plan before I rebuild it? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-006-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-006",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "The current published model uses logistic regression on six features. Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-007-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-007",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "The current published model uses logistic regression on six features. What name would you like to give this training pipeline? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-008-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-008",
+      "operation": "baseline-positive",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-009-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-009",
+      "operation": "insert-template-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "The current published model uses logistic regression on six features. Could you tell me what aspect of the current predictions you want me to improve first? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-010-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-010",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Rebuilding immediately without changing the configuration will reproduce the same result.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-011-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-011",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Which database table holds the enrollment history? Rebuilding immediately without changing the configuration will reproduce the same result.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-012-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-012",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Rebuilding immediately without changing the configuration will reproduce the same result. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-013-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-013",
+      "operation": "insert-template-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. What specifically would you like to improve about the current model or plan before I rebuild it? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-014-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-014",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. The current published model uses logistic regression on six features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-015-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-015",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Which date column should I use as the decision cutoff? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-016-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-016",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-017-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-017",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Which metric, feature set, or segment are you hoping to improve in this rebuild? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-018-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-018",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. Rebuilding immediately without changing the configuration will reproduce the same result.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-019-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-019",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "The current published model uses logistic regression on six features. Which date column should I use as the decision cutoff? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-020-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-020",
+      "operation": "baseline-positive",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Before starting another training job, let us confirm the objective. What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-021-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-021",
+      "operation": "insert-template-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Before starting another training job, let us confirm the objective. Could you tell me what aspect of the current predictions you want me to improve first? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-022-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-022",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Before starting another training job, let us confirm the objective. Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-023-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-023",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Which date column should I use as the decision cutoff? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-024-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-024",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-025-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-025",
+      "operation": "insert-template-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Before starting another training job, let us confirm the objective. What specifically would you like to improve about the current model or plan before I rebuild it? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-026-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-026",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-027-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-027",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Which database table holds the enrollment history? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-028-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-028",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-029-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-029",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Which metric, feature set, or segment are you hoping to improve in this rebuild? Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-030-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-030",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-031-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-031",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Before starting another training job, let us confirm the objective. Which date column should I use as the decision cutoff? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-032-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-032",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "The current published model uses logistic regression on six features. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-033-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-033",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Rebuilding immediately without changing the configuration will reproduce the same result. Which metric, feature set, or segment are you hoping to improve in this rebuild? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-034-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-034",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "The current published model uses logistic regression on six features. Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-035-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-035",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Which date column should I use as the decision cutoff? The current published model uses logistic regression on six features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-036-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-036",
+      "operation": "baseline-positive",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. Could you tell me what aspect of the current predictions you want me to improve first?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-037-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-037",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. Which metric, feature set, or segment are you hoping to improve in this rebuild? Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-038-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-038",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "I located your existing renewal pipeline from the previous session. Before starting another training job, let us confirm the objective.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-039-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-039",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Should I include the Segment column as a categorical feature? Holdout AUC on the latest run was 0.74 against a 0.50 base rate.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-040-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-040",
+      "operation": "baseline-positive",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Rebuilding immediately without changing the configuration will reproduce the same result. Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-041-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-041",
+      "operation": "insert-template-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "The current published model uses logistic regression on six features. What specifically would you like to improve about the current model or plan before I rebuild it? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-042-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-042",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Before starting another training job, let us confirm the objective. I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-043-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-043",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Which database table holds the enrollment history? The current published model uses logistic regression on six features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-044-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-044",
+      "operation": "baseline-positive",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Before starting another training job, let us confirm the objective. Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-045-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-045",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Before starting another training job, let us confirm the objective. Which metric, feature set, or segment are you hoping to improve in this rebuild? Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-046-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-046",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-047-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-047",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. Should I include the Segment column as a categorical feature? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-048-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-048",
+      "operation": "baseline-positive",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Rebuilding immediately without changing the configuration will reproduce the same result. Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-049-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-049",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Which metric, feature set, or segment are you hoping to improve in this rebuild? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-050-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-050",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Before starting another training job, let us confirm the objective. Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-051-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-051",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "The current published model uses logistic regression on six features. Which date column should I use as the decision cutoff? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-052-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-052",
+      "operation": "baseline-positive",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Before starting another training job, let us confirm the objective. What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-053-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-053",
+      "operation": "insert-template-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "The current published model uses logistic regression on six features. Could you tell me what aspect of the current predictions you want me to improve first? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-054-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-054",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Before starting another training job, let us confirm the objective. The current published model uses logistic regression on six features.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-055-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-055",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. What name would you like to give this training pipeline? Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-056-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-056",
+      "operation": "baseline-positive",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-057-ins",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-057",
+      "operation": "insert-template-span",
+      "carryingSpan": "Which metric, feature set, or segment are you hoping to improve in this rebuild?",
+      "transcript": "The current published model uses logistic regression on six features. Which metric, feature set, or segment are you hoping to improve in this rebuild? I located your existing renewal pipeline from the previous session.",
+      "expectedLabel": true
+    },
+    {
+      "id": "asks-what-to-improve-base-058-del",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-058",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Before starting another training job, let us confirm the objective. Reviewing the active modeling plan shows no pending exclusion edits.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-059-offtopic",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-059",
+      "operation": "insert-off-topic-question",
+      "carryingSpan": "Could you tell me what aspect of the current predictions you want me to improve first?",
+      "transcript": "Holdout AUC on the latest run was 0.74 against a 0.50 base rate. Which database table holds the enrollment history? Before starting another training job, let us confirm the objective.",
+      "expectedLabel": false
+    },
+    {
+      "id": "asks-what-to-improve-base-060-pos",
+      "criterionKey": "asks-what-to-improve",
+      "baseTranscriptId": "asks-what-to-improve-base-060",
+      "operation": "baseline-positive",
+      "carryingSpan": "What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "transcript": "Reviewing the active modeling plan shows no pending exclusion edits. What specifically would you like to improve about the current model or plan before I rebuild it?",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-001-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-001",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The workspace draft remains unchanged for inspection. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-002-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-002",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "Please review the diagnostic output below. The workspace draft remains unchanged for inspection.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-003-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-003",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "No model artifact was registered or published to production. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-004-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-004",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-005-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-005",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. All prior evaluations remain untouched.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-006-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-006",
+      "operation": "baseline-positive",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-007-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-007",
+      "operation": "insert-template-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. Training failed: the build step returned a refusal because sample size was too small to validate safely. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-008-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-008",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The workspace draft remains unchanged for inspection. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-009-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-009",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-010-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-010",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. The build did not complete because feature assembly failed on an unresolved entity reference. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-011-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-011",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. No model artifact was registered or published to production.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-012-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-012",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-013-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-013",
+      "operation": "insert-template-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. Training failed: the build step returned a refusal because sample size was too small to validate safely. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-014-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-014",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. Please review the diagnostic output below.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-015-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-015",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-016-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-016",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "All prior evaluations remain untouched. The build did not complete because feature assembly failed on an unresolved entity reference. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-017-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-017",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "Please review the diagnostic output below. No model artifact was registered or published to production.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-018-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-018",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "Please review the diagnostic output below. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-019-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-019",
+      "operation": "insert-template-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. Training failed: the build step returned a refusal because sample size was too small to validate safely. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-020-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-020",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "Please review the diagnostic output below. All prior evaluations remain untouched.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-021-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-021",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-022-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-022",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "Please review the diagnostic output below. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-023-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-023",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-024-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-024",
+      "operation": "baseline-positive",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "Please review the diagnostic output below. Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-025-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-025",
+      "operation": "insert-template-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The workspace draft remains unchanged for inspection. Training failed: the build step returned a refusal because sample size was too small to validate safely. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-026-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-026",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The workspace draft remains unchanged for inspection. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-027-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-027",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-028-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-028",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. The build did not complete because feature assembly failed on an unresolved entity reference. The workspace draft remains unchanged for inspection.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-029-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-029",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The workspace draft remains unchanged for inspection. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-030-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-030",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The workspace draft remains unchanged for inspection. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-031-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-031",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. The build did not complete because feature assembly failed on an unresolved entity reference. All prior evaluations remain untouched.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-032-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-032",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "Please review the diagnostic output below. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-033-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-033",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "Please review the diagnostic output below. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-034-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-034",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "No model artifact was registered or published to production. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. All prior evaluations remain untouched.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-035-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-035",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "All prior evaluations remain untouched. Please review the diagnostic output below.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-036-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-036",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-037-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-037",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "All prior evaluations remain untouched. The build did not complete because feature assembly failed on an unresolved entity reference. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-038-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-038",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-039-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-039",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The workspace draft remains unchanged for inspection. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-040-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-040",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "No model artifact was registered or published to production. The build did not complete because feature assembly failed on an unresolved entity reference. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-041-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-041",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. No model artifact was registered or published to production.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-042-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-042",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The workspace draft remains unchanged for inspection. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-043-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-043",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. Please review the diagnostic output below.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-044-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-044",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. All prior evaluations remain untouched.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-045-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-045",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The workspace draft remains unchanged for inspection. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-046-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-046",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "Please review the diagnostic output below. The build did not complete because feature assembly failed on an unresolved entity reference. Please review the diagnostic output below.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-047-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-047",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "All prior evaluations remain untouched. No model artifact was registered or published to production.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-048-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-048",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "All prior evaluations remain untouched. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-049-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-049",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "Please review the diagnostic output below. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. All prior evaluations remain untouched.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-050-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-050",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The workspace draft remains unchanged for inspection. The Model Development Agent routed the approved plan to Pipeline Builder.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-051-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-051",
+      "operation": "baseline-positive",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The workspace draft remains unchanged for inspection. Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-052-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-052",
+      "operation": "insert-template-span",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "The workspace draft remains unchanged for inspection. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal. No model artifact was registered or published to production.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-053-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-053",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "All prior evaluations remain untouched. The workspace draft remains unchanged for inspection.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-054-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-054",
+      "operation": "baseline-positive",
+      "carryingSpan": "Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "transcript": "Please review the diagnostic output below. Build failed: pipeline validation refused the run because no usable signal remained after leakage removal.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-055-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-055",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The workspace draft remains unchanged for inspection. The build did not complete because feature assembly failed on an unresolved entity reference. Please review the diagnostic output below.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-056-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-056",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "No model artifact was registered or published to production. All prior evaluations remain untouched.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-057-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-057",
+      "operation": "baseline-positive",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The Model Development Agent routed the approved plan to Pipeline Builder. The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-058-ins",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-058",
+      "operation": "insert-template-span",
+      "carryingSpan": "The build did not complete because feature assembly failed on an unresolved entity reference.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. The build did not complete because feature assembly failed on an unresolved entity reference. The orchestrator recorded a decision-log entry for the attempted build step.",
+      "expectedLabel": true
+    },
+    {
+      "id": "failure-reported-base-059-del",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-059",
+      "operation": "delete-carrying-span",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "The orchestrator recorded a decision-log entry for the attempted build step. Please review the diagnostic output below.",
+      "expectedLabel": false
+    },
+    {
+      "id": "failure-reported-base-060-pos",
+      "criterionKey": "failure-reported",
+      "baseTranscriptId": "failure-reported-base-060",
+      "operation": "baseline-positive",
+      "carryingSpan": "Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "transcript": "All prior evaluations remain untouched. Training failed: the build step returned a refusal because sample size was too small to validate safely.",
+      "expectedLabel": true
+    }
+  ]
+}

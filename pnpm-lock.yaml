@@ -1528,6 +1528,9 @@ importers:
       '@memberjunction/storage':
         specifier: 6.3.0-edge.2
         version: link:../../../MJStorage
+      '@memberjunction/testing-engine':
+        specifier: 6.3.0-edge.2
+        version: link:../../../TestingFramework/Engine
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
