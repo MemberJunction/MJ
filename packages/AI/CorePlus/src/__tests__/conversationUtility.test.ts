@@ -719,11 +719,19 @@ describe('ConversationUtility', () => {
         });
 
         it('HTML-escapes rendered mention replacements to prevent XSS injection', () => {
-            const html =
-                '<p>Assigned to @{"_mode":"mention","type":"user","id":"u1","name":"<script>alert(1)</script> & Co"}</p>';
-            expect(ConversationUtility.CleanHtmlMentions(html)).toBe(
+            const escapedTokenHtml =
+                '<p>Assigned to @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;user&quot;,&quot;id&quot;:&quot;u1&quot;,&quot;name&quot;:&quot;&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co&quot;}</p>';
+            expect(ConversationUtility.CleanHtmlMentions(escapedTokenHtml)).toBe(
                 '<p>Assigned to @&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</p>'
             );
+
+            const lookupHtml =
+                '<p>Assigned to @{"_mode":"mention","type":"user","id":"u1","name":"SafeFallback"}</p>';
+            expect(
+                ConversationUtility.CleanHtmlMentions(lookupHtml, {
+                    users: [{ ID: 'u1', Name: '<script>alert(1)</script> & Co' }],
+                })
+            ).toBe('<p>Assigned to @&lt;script&gt;alert(1)&lt;/script&gt; &amp; Co</p>');
         });
 
         it('preserves mention-like tokens inside code, pre, script, and style blocks verbatim', () => {

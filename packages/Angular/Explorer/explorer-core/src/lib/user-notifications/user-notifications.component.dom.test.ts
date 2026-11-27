@@ -99,7 +99,7 @@ describe('UserNotificationsComponent (DOM) — expanded plain-text normalization
   it('cleans raw and HTML-escaped mention tokens in HTML-only notification Body and Preview', () => {
     const htmlMessage =
       '<p>Reviewed <strong>Northwind</strong> @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;record&quot;,&quot;entityName&quot;:&quot;Accounts&quot;,&quot;name&quot;:&quot;Northwind&quot;,&quot;ID&quot;:&quot;acc-1&quot;} ' +
-      'with @{"_mode":"mention","type":"user","id":"u-1","name":"Elena <Admin>"} ' +
+      'with @{&quot;_mode&quot;:&quot;mention&quot;,&quot;type&quot;:&quot;user&quot;,&quot;id&quot;:&quot;u-1&quot;,&quot;name&quot;:&quot;Elena &lt;Admin&gt;&quot;} ' +
       'and flagged @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Contoso","ID":"acc-2"}.</p>';
     const entity = createNotificationEntity('notif-dom-html', 'HTML Routine Watch', htmlMessage);
 
