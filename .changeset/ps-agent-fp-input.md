@@ -1,6 +1,7 @@
 ---
 "@memberjunction/ai-agents": minor
 "@memberjunction/ai-bridge-livekit-native": minor
+"@memberjunction/aiengine": minor
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
@@ -11,6 +12,7 @@
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
 "@memberjunction/ng-dashboards": minor
+"@memberjunction/ng-explorer-core": minor
 "@memberjunction/predictive-studio": minor
 "@memberjunction/predictive-studio-core": minor
 "@memberjunction/predictive-studio-sidecar": minor
