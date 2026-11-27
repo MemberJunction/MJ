@@ -10086,26 +10086,26 @@ export class MJAIAgentType_ {
     @Field({nullable: true, description: "Type-level DEFAULT configuration JSON for agents of this type — the base layer of the effective-configuration merge: type DefaultConfiguration <- agent TypeConfiguration <- runtime overrides (later layers win per key, deep-merged). Must itself conform to ConfigSchema when one is published. Null = no type defaults."}) 
     DefaultConfiguration?: string;
         
-    @Field(() => Int, {nullable: true, description: "Type-level default for the in-turn context-compression message-count threshold. Overridable per agent via AIAgent.ContextCompressionMessageThreshold."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionMessageThreshold. Kept bidirectionally synced during v6.x."}) 
     ContextCompressionMessageThreshold?: number;
         
-    @Field({nullable: true, description: "Type-level default prompt used for in-turn context compression. Overridable per agent via AIAgent.ContextCompressionPromptID."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionPromptID. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(36)
     ContextCompressionPromptID?: string;
         
-    @Field(() => Int, {nullable: true, description: "Type-level default for the number of most-recent messages kept uncompressed (the \"hot tail\") when context compression is applied. Overridable per agent via AIAgent.ContextCompressionMessageRetentionCount."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionMessageRetentionCount. Kept bidirectionally synced during v6.x."}) 
     ContextCompressionMessageRetentionCount?: number;
         
-    @Field(() => Int, {nullable: true, description: "Type-level default effective working-context budget, in tokens. Null means use the selected model's MaxInputTokens. The resolved value is clamped to the model's limit at runtime (a warning is logged if it would exceed it). Overridable per agent via AIAgent.ContextWindowMaxTokens."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.maxTokens. Kept bidirectionally synced during v6.x."}) 
     ContextWindowMaxTokens?: number;
         
-    @Field(() => Int, {nullable: true, description: "Type-level default: the percentage of the effective context budget at which cross-turn conversation compaction is triggered. Defaults to 75. Overridable per agent via AIAgent.CompactionTriggerPercent."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compactionTriggerPercent. Kept bidirectionally synced during v6.x."}) 
     CompactionTriggerPercent?: number;
         
-    @Field(() => Int, {nullable: true, description: "Type-level default: the target percentage of the effective context budget to reduce to after a cross-turn compaction. Defaults to 30. Overridable per agent via AIAgent.CompactionTargetPercent."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compactionTargetPercent. Kept bidirectionally synced during v6.x."}) 
     CompactionTargetPercent?: number;
         
-    @Field({nullable: true, description: "Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.summaryPromptID. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
         
@@ -10761,21 +10761,21 @@ export class MJAIAgent_ {
     @Field(() => Int, {nullable: true, description: "The order in which this agent should be executed among its siblings under the same parent."}) 
     ExecutionOrder?: number;
         
-    @Field({nullable: true, description: "Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.mode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     ExecutionMode?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When true, enables automatic compression of conversation context when the message threshold is reached."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.enableCompression. Kept bidirectionally synced during v6.x."}) 
     EnableContextCompression?: boolean;
         
-    @Field(() => Int, {nullable: true, description: "Number of messages that triggers context compression when EnableContextCompression is true."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionMessageThreshold. Kept bidirectionally synced during v6.x."}) 
     ContextCompressionMessageThreshold?: number;
         
-    @Field({nullable: true}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionPromptID. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(36)
     ContextCompressionPromptID?: string;
         
-    @Field(() => Int, {nullable: true, description: "Number of recent messages to keep uncompressed when context compression is applied."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionMessageRetentionCount. Kept bidirectionally synced during v6.x."}) 
     ContextCompressionMessageRetentionCount?: number;
         
     @Field({nullable: true, description: "Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null."}) 
@@ -10794,33 +10794,33 @@ export class MJAIAgent_ {
     @MaxLength(100)
     IconClass?: string;
         
-    @Field({nullable: true, description: "Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.modelSelectionMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(50)
     ModelSelectionMode?: string;
         
-    @Field({nullable: true, description: "JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use [\"*\"] to send entire payload, or specify paths like [\"customer.id\", \"campaign.*\", \"analysis.sentiment\"]"}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.downstreamPaths. Kept bidirectionally synced during v6.x."}) 
     PayloadDownstreamPaths?: string;
         
-    @Field({nullable: true, description: "JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use [\"*\"] to allow all writes, or specify paths like [\"analysis.results\", \"recommendations.*\"]"}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.upstreamPaths. Kept bidirectionally synced during v6.x."}) 
     PayloadUpstreamPaths?: string;
         
-    @Field({nullable: true, description: "JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data \nflow when the agent executes its own prompt step."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.selfReadPaths. Kept bidirectionally synced during v6.x."}) 
     PayloadSelfReadPaths?: string;
         
-    @Field({nullable: true, description: "JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream \ndata flow when the agent executes its own prompt step."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.selfWritePaths. Kept bidirectionally synced during v6.x."}) 
     PayloadSelfWritePaths?: string;
         
-    @Field({nullable: true, description: "Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)"}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.scope. Kept bidirectionally synced during v6.x."}) 
     PayloadScope?: string;
         
-    @Field({nullable: true, description: "Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationSchema. Kept bidirectionally synced during v6.x."}) 
     FinalPayloadValidation?: string;
         
-    @Field({nullable: true, description: "Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(25)
     FinalPayloadValidationMode?: string;
         
-    @Field(() => Int, {nullable: true, description: "Maximum number of retry attempts allowed when FinalPayloadValidation fails with\nRetry mode. After reaching this limit, the validation will fail permanently."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationMaxRetries. Kept bidirectionally synced during v6.x."}) 
     FinalPayloadValidationMaxRetries?: number;
         
     @Field(() => Float, {nullable: true, description: "Maximum cost in dollars allowed for a single agent run. Run will be terminated\nif this limit is exceeded."}) 
@@ -10835,23 +10835,23 @@ export class MJAIAgent_ {
     @Field(() => Int, {nullable: true, description: "Maximum time in seconds allowed for a single agent run. Run will be terminated\nif this limit is exceeded."}) 
     MaxTimePerRun?: number;
         
-    @Field(() => Int, {nullable: true, description: "When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run"}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.minExecutionsPerRun. Kept bidirectionally synced during v6.x."}) 
     MinExecutionsPerRun?: number;
         
-    @Field(() => Int, {nullable: true, description: "When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run"}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.maxExecutionsPerRun. Kept bidirectionally synced during v6.x."}) 
     MaxExecutionsPerRun?: number;
         
-    @Field({nullable: true, description: "Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.startingValidationSchema. Kept bidirectionally synced during v6.x."}) 
     StartingPayloadValidation?: string;
         
-    @Field({nullable: true, description: "Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.startingValidationMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(25)
     StartingPayloadValidationMode?: string;
         
-    @Field(() => Int, {nullable: true, description: "Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.defaultPromptEffortLevel. Kept bidirectionally synced during v6.x."}) 
     DefaultPromptEffortLevel?: number;
         
-    @Field({nullable: true, description: "Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.chatHandlingOption. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(30)
     ChatHandlingOption?: string;
         
@@ -10867,7 +10867,7 @@ export class MJAIAgent_ {
     @MaxLength(20)
     InvocationMode?: string;
         
-    @Field({nullable: true, description: "Controls how artifacts are created from this agent's payloads. \"Always\" creates visible artifacts, \"Never\" skips artifact creation, \"System Only\" creates hidden system artifacts."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.artifacts.creationMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     ArtifactCreationMode?: string;
         
@@ -10877,81 +10877,81 @@ export class MJAIAgent_ {
     @Field({nullable: true, description: "Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure."}) 
     TechnicalDesign?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When enabled, agent notes will be automatically injected into the agent context based on scoping rules."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.injectNotes. Kept bidirectionally synced during v6.x."}) 
     InjectNotes?: boolean;
         
-    @Field(() => Int, {nullable: true, description: "Maximum number of notes to inject into agent context per request."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.maxNotesToInject. Kept bidirectionally synced during v6.x."}) 
     MaxNotesToInject?: number;
         
-    @Field({nullable: true, description: "Strategy for selecting which notes to inject: Relevant (semantic search), Recent (most recent first), or All (up to max limit)."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.noteInjectionStrategy. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     NoteInjectionStrategy?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When enabled, agent examples will be automatically injected into the agent context based on scoping rules."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.injectExamples. Kept bidirectionally synced during v6.x."}) 
     InjectExamples?: boolean;
         
-    @Field(() => Int, {nullable: true, description: "Maximum number of examples to inject into agent context per request."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.maxExamplesToInject. Kept bidirectionally synced during v6.x."}) 
     MaxExamplesToInject?: number;
         
-    @Field({nullable: true, description: "Strategy for selecting which examples to inject: Semantic (vector similarity), Recent (most recent first), or Rated (highest success score first)."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.exampleInjectionStrategy. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     ExampleInjectionStrategy?: string;
         
     @Field(() => Boolean, {nullable: true, description: "When true, agent is restricted to system/scheduled use only and hidden from user selection, Agent Manager, and MCP/A2A discovery."}) 
     IsRestricted?: boolean;
         
-    @Field({nullable: true, description: "Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.messageMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(50)
     MessageMode?: string;
         
-    @Field(() => Int, {nullable: true, description: "Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.maxMessages. Kept bidirectionally synced during v6.x."}) 
     MaxMessages?: number;
         
     @Field({nullable: true, description: "File storage provider for large attachments. Overrides the default from AIConfiguration. NULL uses system default."}) 
     @MaxLength(36)
     AttachmentStorageProviderID?: string;
         
-    @Field({nullable: true, description: "Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder"}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.rootPath. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(500)
     AttachmentRootPath?: string;
         
-    @Field(() => Int, {nullable: true, description: "File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.inlineStorageThresholdBytes. Kept bidirectionally synced during v6.x."}) 
     InlineStorageThresholdBytes?: number;
         
     @Field({nullable: true, description: "JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation."}) 
     AgentTypePromptParams?: string;
         
-    @Field({nullable: true, description: "JSON configuration defining scope dimensions for multi-tenant deployments. Example: {\"dimensions\":[{\"name\":\"OrganizationID\",\"entityId\":\"...\",\"isPrimary\":true,\"required\":true},{\"name\":\"ContactID\",\"entityId\":\"...\",\"isPrimary\":false,\"required\":false}],\"inheritanceMode\":\"cascading\"}"}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.scope.secondaryScopeConfig. Kept bidirectionally synced during v6.x."}) 
     ScopeConfig?: string;
         
-    @Field(() => Int, {nullable: true, description: "Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.noteRetentionDays. Kept bidirectionally synced during v6.x."}) 
     NoteRetentionDays?: number;
         
-    @Field(() => Int, {nullable: true, description: "Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.exampleRetentionDays. Kept bidirectionally synced during v6.x."}) 
     ExampleRetentionDays?: number;
         
-    @Field(() => Boolean, {nullable: true, description: "Whether automatic archival of stale notes/examples is enabled for this agent. Default true."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.autoArchiveEnabled. Kept bidirectionally synced during v6.x."}) 
     AutoArchiveEnabled?: boolean;
         
-    @Field({nullable: true, description: "JSON configuration for optional reranking of retrieved memory items. Schema: { enabled: boolean, rerankerModelId: string, retrievalMultiplier: number (default 3), minRelevanceThreshold: number (default 0.5), rerankPromptId?: string, contextFields?: string[], fallbackOnError: boolean (default true) }. When null or disabled, vector search results are used directly without reranking."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.reranker. Kept bidirectionally synced during v6.x."}) 
     RerankerConfiguration?: string;
         
     @Field({nullable: true, description: "Foreign key to AIAgentCategory. Assigns this agent to an organizational category for grouping, filtering, and inherited assignment strategy resolution."}) 
     @MaxLength(36)
     CategoryID?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.clientTools.allowEphemeral. Kept bidirectionally synced during v6.x."}) 
     AllowEphemeralClientTools?: boolean;
         
     @Field({nullable: true, description: "Default file storage account for this specific agent. Overrides both Type-level and Category-level defaults. Can be further overridden at runtime via ExecuteAgentParams.override.storageAccountId. FK to FileStorageAccount."}) 
     @MaxLength(36)
     DefaultStorageAccountID?: string;
         
-    @Field({nullable: true, description: "Controls the agent's search capability. All = may use any scope including Global; search action does not restrict. Assigned = may use ONLY scopes explicitly linked via AIAgentSearchScope; scoped search action enforces this. None = agent has no search capability; the scoped search action rejects all requests."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.scope.searchScopeAccess. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     SearchScopeAccess?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.acceptUnregisteredFiles. Kept bidirectionally synced during v6.x."}) 
     AcceptUnregisteredFiles?: boolean;
         
     @Field({nullable: true, description: "Default co-agent (a Realtime-type AI Agent) that voices THIS agent in real-time sessions — a per-agent persona. Overridden by the runtime coAgentId parameter; NULL falls through to a type-level AIAgentCoAgent default row, then the global default co-agent."}) 
@@ -10961,10 +10961,10 @@ export class MJAIAgent_ {
     @Field({nullable: true, description: "Agent-type-specific configuration JSON, validated against the agent type's ConfigSchema (when one is published) in the server-side entity subclass. For Realtime-type co-agents this holds the realtime profile: preferred model, per-provider voice settings, tone/speaking style (folded into the session system prompt at mint), user-override policy, and narration pacing. Null = type defaults apply."}) 
     TypeConfiguration?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.allowMemoryWrite. Kept bidirectionally synced during v6.x."}) 
     AllowMemoryWrite?: boolean;
         
-    @Field({nullable: true, description: "Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.recording.defaultMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     RecordingDefault?: string;
         
@@ -10976,37 +10976,37 @@ export class MJAIAgent_ {
     @MaxLength(36)
     DefaultMediaCollectionID?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "Whether this agent supports Plan Mode. Defaults ON (opt-out). Plan-mode instructions are only injected when this is on AND plan mode is enabled per-request, so default runtime behavior is unchanged. Realtime agents are seeded to 0 (they skip plan mode structurally); Remote Proxy agents will be seeded when that type ships."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.supportsPlanMode. Kept bidirectionally synced during v6.x."}) 
     SupportsPlanMode?: boolean;
         
     @Field({nullable: true, description: "Whether this agent accepts skills: None (no skills — default), All (any Active skill), or Limited (only skills assigned via AIAgentSkill). This is the per-agent gate; AISkill.Status and AIAgentSkill.Status provide catalog- and assignment-level gating on top."}) 
     @MaxLength(20)
     AcceptsSkills?: string;
         
-    @Field({nullable: true, description: "Controls whether this agent may ever self-activate skills from its prompt catalog. Auto: the agent sees its allowed skills whose own ActivationMode is Auto (double gate) and may activate them mid-run on its own judgment. RequestedOnly (default): the agent's prompt catalog is empty and skills only enter a run via an explicit user request (/skill mention). Orthogonal to AcceptsSkills, which governs which skills are available at all; this governs who may pull the activation trigger."}) 
+    @Field({nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.skills.activationMode. Kept bidirectionally synced during v6.x."}) 
     @MaxLength(20)
     SkillActivationMode?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.requirePlanMode. Kept bidirectionally synced during v6.x."}) 
     RequirePlanMode?: boolean;
         
-    @Field(() => Int, {nullable: true, description: "Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.maxTokens. Kept bidirectionally synced during v6.x."}) 
     ContextWindowMaxTokens?: number;
         
-    @Field(() => Int, {nullable: true, description: "Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compactionTriggerPercent. Kept bidirectionally synced during v6.x."}) 
     CompactionTriggerPercent?: number;
         
-    @Field(() => Int, {nullable: true, description: "Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compactionTargetPercent. Kept bidirectionally synced during v6.x."}) 
     CompactionTargetPercent?: number;
         
     @Field({nullable: true, description: "Per-agent override for the cross-turn conversation compaction prompt. Null inherits the agent type's value."}) 
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
         
-    @Field(() => Boolean, {nullable: true, description: "When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used."}) 
+    @Field(() => Boolean, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.declareActionsAsNativeTools. Kept bidirectionally synced during v6.x."}) 
     DeclareActionsAsNativeTools?: boolean;
         
-    @Field(() => Int, {nullable: true, description: "Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3)."}) 
+    @Field(() => Int, {nullable: true, description: "DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.maxConsultRounds. Kept bidirectionally synced during v6.x."}) 
     MaxSubAgentConsultRounds?: number;
         
     @Field({nullable: true, description: "Execution isolation level for workflows and graphs backed by this agent: InProcess (default for existing/upgraded rows), Worker (worker_threads with V8 heap limits - default for Workflow.Draft), Process (child_process OS containment), or Container (container runtime isolation)."}) 

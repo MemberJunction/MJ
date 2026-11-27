@@ -79,7 +79,7 @@ function seedEngine(seed: {
     engine['_agentTypes'] = seed._agentTypes ?? [];
     engine['_agentPrompts'] = [];
     engine['_agentInheritanceChainCache'] = new Map();
-    engine['GetConfigData'] = (prop: string) => engine[prop];
+    engine['GetConfigData'] = <E>(prop: string): E[] => (engine[prop] as E[] | undefined) ?? [];
     return engine;
 }
 
