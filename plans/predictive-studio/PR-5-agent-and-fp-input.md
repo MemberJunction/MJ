@@ -3519,6 +3519,15 @@ Record every decision taken in §9 and, when it changes another plan's interface
   file; no existing entry changed), under the existing allowlist line; the controller regenerates the shipped goldens
   once over the merged corpus at integration. · `milestone-exit`'s `cmd:test packages/SQLParser` went red on the
   missing entries (29 golden tests).
+- D5-B3-9 · 2026-11-27 · Wave-3 integration: `FeaturePipelineRederivationLease.RecordProcessID` carries no foreign
+  key, as D5-54 ruled for `MLBuildApprovalClaim.MLTrainingPipelineID`. The full mirror (`20261127-184541-12225`) went
+  red on `codegen-lib`'s `delete-entity-fk-coverage.test.ts` (`FKs into deleted tables with no entry in
+  entity-delete-fk-policy.json "dependents": ["FeaturePipelineRederivationLease.RecordProcessID -> RecordProcess"]`),
+  red alone too: `spDeleteEntityWithCoreDependencies` deletes an entity's Record Processes, and a PS migration never
+  copies that core body (D5-54). A lease row left by a deleted Record Process names an ID no run holds again; the key
+  would also have refused the ordinary delete of any Feature Pipeline that ever re-derived. The unique index stays (the
+  lock Query's key-range lock). · Redefining the core procedure; a cascade (the coverage test reads the generated
+  relationship, not the cascade rule).
 - D5-A5-1 · 2026-11-27 · A note's **source run tree** is its `SourceAIAgentRunID`'s root run, every earlier root of
   that session (the `LastRunID` walk, as `BuildApprovalResolver.SessionRuns`) and every descendant of those roots
   (`RootParentRunID`); the tree **links to** the pipelines its runs claimed (`MJ: ML Build Approval Claims`

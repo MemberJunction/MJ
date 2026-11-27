@@ -483,31 +483,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Feature Pipeline Rederivation Leases Section -->
-    <mj-collapsible-panel
-        SectionKey="mJFeaturePipelineRederivationLeases"
-        SectionName="Feature Pipeline Rederivation Leases"
-        Icon="fa fa-lock"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJFeaturePipelineRederivationLeases')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Feature Pipeline Rederivation Leases','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: Feature Pipeline Rederivation Leases','RecordProcessID')"
-                [AllowLoad]="IsSectionExpanded('mJFeaturePipelineRederivationLeases')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFeaturePipelineRederivationLeases', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

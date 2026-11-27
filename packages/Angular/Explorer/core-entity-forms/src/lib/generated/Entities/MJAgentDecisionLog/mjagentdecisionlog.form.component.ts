@@ -17,8 +17,7 @@ export class MJAgentDecisionLogFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'sessionAndRunInfo', sectionName: 'Session and Run Info', isExpanded: true },
             { sectionKey: 'decisionDetails', sectionName: 'Decision Details', isExpanded: true },
-            { sectionKey: 'executionContext', sectionName: 'Execution Context', isExpanded: true },
-            { sectionKey: 'payloadAndHashes', sectionName: 'Payload and Hashes', isExpanded: true },
+            { sectionKey: 'executionPayloadAndTools', sectionName: 'Execution Payload and Tools', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

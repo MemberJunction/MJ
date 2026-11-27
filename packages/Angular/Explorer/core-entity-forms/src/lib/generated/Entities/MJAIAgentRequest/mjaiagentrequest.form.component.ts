@@ -21,8 +21,8 @@ export class MJAIAgentRequestFormComponent extends BaseFormComponent {
             { sectionKey: 'executionContext', sectionName: 'Execution Context', isExpanded: true },
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAgentDecisionLogs', sectionName: 'Agent Decision Logs', isExpanded: false },
-            { sectionKey: 'mJMLBuildApprovalClaims', sectionName: 'ML Build Approval Claims', isExpanded: false }
+            { sectionKey: 'mJMLBuildApprovalClaims', sectionName: 'ML Build Approval Claims', isExpanded: false },
+            { sectionKey: 'mJAgentDecisionLogs', sectionName: 'Agent Decision Logs', isExpanded: false }
         ]);
     }
 }

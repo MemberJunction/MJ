@@ -17,7 +17,7 @@ export class MJMLSearchStrategyComparisonFormComponent extends BaseFormComponent
         this.initSections([
             { sectionKey: 'strategyConfiguration', sectionName: 'Strategy Configuration', isExpanded: true },
             { sectionKey: 'evaluationResults', sectionName: 'Evaluation Results', isExpanded: true },
-            { sectionKey: 'executionDetails', sectionName: 'Execution Details', isExpanded: true },
+            { sectionKey: 'comparisonContext', sectionName: 'Comparison Context', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

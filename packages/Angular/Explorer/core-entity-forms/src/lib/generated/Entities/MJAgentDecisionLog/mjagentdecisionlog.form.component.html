@@ -78,13 +78,22 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="BuildApprovalRequestID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Execution Context Section -->
+    <!-- Execution Payload and Tools Section -->
     <mj-collapsible-panel
-        SectionKey="executionContext"
-        SectionName="Execution Context"
+        SectionKey="executionPayloadAndTools"
+        SectionName="Execution Payload and Tools"
         Icon="fa fa-code"
         [Form]="this"
         [FormContext]="formContext">
@@ -108,33 +117,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Replay"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="BuildApprovalRequestID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Payload and Hashes Section -->
-    <mj-collapsible-panel
-        SectionKey="payloadAndHashes"
-        SectionName="Payload and Hashes"
-        Icon="fa fa-fingerprint"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="PayloadHash"
             Type="textbox"
             [EditMode]="EditMode"
@@ -145,6 +127,14 @@
             [ShowLabel]="true"
             FieldName="ResultingPayloadHash"
             Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Replay"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

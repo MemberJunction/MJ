@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Claim Information Section -->
+    <!-- Claim Details Section -->
     <mj-collapsible-panel
-        SectionKey="claimInformation"
-        SectionName="Claim Information"
-        Icon="fa fa-clipboard-check"
+        SectionKey="claimDetails"
+        SectionName="Claim Details"
+        Icon="fa fa-tasks"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -39,7 +39,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PlanHash"
-            Type="code"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>

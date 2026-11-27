@@ -28,8 +28,7 @@ export class MJRecordProcessFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMLModelScoringBindings', sectionName: 'ML Model Scoring Bindings', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
             { sectionKey: 'mJFeatureValueCaches', sectionName: 'Feature Value Caches', isExpanded: false },
-            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false },
-            { sectionKey: 'mJFeaturePipelineRederivationLeases', sectionName: 'Feature Pipeline Rederivation Leases', isExpanded: false }
+            { sectionKey: 'mJFeaturePipelineVersions', sectionName: 'Feature Pipeline Versions', isExpanded: false }
         ]);
     }
 }

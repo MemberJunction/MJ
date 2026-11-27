@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Lease Details Section -->
+    <!-- Lease Information Section -->
     <mj-collapsible-panel
-        SectionKey="leaseDetails"
-        SectionName="Lease Details"
-        Icon="fa fa-link"
+        SectionKey="leaseInformation"
+        SectionName="Lease Information"
+        Icon="fa fa-lock"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -24,7 +24,6 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
