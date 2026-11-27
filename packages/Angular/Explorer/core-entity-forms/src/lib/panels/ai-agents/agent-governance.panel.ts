@@ -45,7 +45,7 @@ export class AgentGovernancePanel extends BaseFormPanel<MJAIAgentEntity> {
 
     public OnInvocationOpenRequested(args: AgentInvocationOpenRequestedEventArgs): void {
         if (!args?.EntityName || !args?.RecordID) return;
-        SharedService.Instance.OpenEntityRecord(args.EntityName, CompositeKey.FromID(args.RecordID));
+        SharedService.Instance.OpenEntityRecord(args.EntityName, CompositeKey.FromID(args.RecordID)); // first-pk-ok: mj-agent-invocations only emits core MJ single-ID entity records
     }
 }
 

@@ -115,7 +115,7 @@ export class AgentCapabilitiesPanel extends BaseFormPanel<MJAIAgentEntity> imple
     }
 
     public OpenRecord(entityName: string, id: string): void {
-        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id));
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id)); // first-pk-ok: capability tabs only open core MJ single-ID entities (Actions, AI Agents, AI Skills, AI Client Tools)
     }
 
     public async AddAction(): Promise<void> {
