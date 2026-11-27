@@ -229,6 +229,8 @@ packages/AI/Knowledge/FeaturePipelines/**
 # Predictive Studio UI
 packages/Angular/Explorer/dashboards/src/PredictiveStudio/**
 packages/Angular/Explorer/core-entity-forms/src/lib/custom/MLModels/**
+# The Predictive Studio chunk's export line for A4's L3 panel (§9 D5-A4-13)
+packages/Angular/Explorer/dashboards/src/predictive-studio-dashboards.module.ts  (D5-A4-13)
 # The PS entity server subclasses
 packages/MJCoreEntitiesServer/src/custom/MJML*
 packages/MJCoreEntitiesServer/src/custom/MJFeature*
@@ -3658,6 +3660,13 @@ Record every decision taken in §9 and, when it changes another plan's interface
   only where a fixed ID is referenced; `git grep D1C82724-8B0A-4DAE-B146-64F7FBB7AD84` at the merged head finds it in
   the migration and this plan only — no permission, RLS filter, metadata record or code reads the ID (PR 4's virtual
   entity had to be hand-written because CodeGen creates no entity for a view). · Keeping the hand-written row.
+- D5-A4-13 · 2026-11-27 · Wave-3 integration: A4's L3 panel `PSAgentDecisionLogPanel` joins the export line of
+  `packages/Angular/Explorer/dashboards/src/predictive-studio-dashboards.module.ts` (the Predictive Studio chunk's
+  barrel, beside the four PR 3 panels), with an allowlist line. · `mj:manifest:explorer` maps a `BaseFormPanel` key to
+  the chunk through that subpath export (`lazy-feature-config.ts` gained `form-panel:MJAIAgentRuns:decision-log` →
+  the chunk), so an agent run's form opened before the Studio loads the chunk and shows the panel; the pre-push audit
+  (`allowlist … 1 outside`) named the file. · Leaving the panel unexported (the form would show it only after the
+  Studio chunk had loaded).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3790,7 +3799,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->7<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->7<!-- /gen:checks -->
-- Head: <!-- gen:head -->85100152fb<!-- /gen:head -->
+- Head: <!-- gen:head -->14dc06d5ad<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4880,7 +4889,8 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   $0.62, the bizapps job-title pipeline $0.1436). The first claudeint build's runs went with that database (dropped for
   the D5-B3-9 rebuild); its CodeGen and sync work was the same as the second's (~$0.67 CodeGen). Total measured
   **$2.71**.
-- **Rulings:** D5-A4-12 (supersedes D5-A4-1), D5-B3-9; no owner-batch item.
+- **Rulings:** D5-A4-12 (supersedes D5-A4-1), D5-A4-13 (the chunk export line, allowlisted after the push hook's
+  audit named it: `allowlist 290 paths, 1 outside`), D5-B3-9; no owner-batch item.
 
 ## 12. Refresh log (append-only)
 
