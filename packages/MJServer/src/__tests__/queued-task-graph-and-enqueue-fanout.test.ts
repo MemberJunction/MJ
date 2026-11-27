@@ -720,17 +720,36 @@ function createAwsSqsHarness(): TransportHarness {
 }
 
 /**
+ * Outer bound for the 10,000-item fan-out case: its real failure detector is the 25 s stall deadline of
+ * `pumpGraphAndQueue` (`Progress`), so this only stops a run that advances but never finishes. 1.3–3.8 s
+ * alone; above 25 s under a full-repo test run's CPU contention (D-091 item 8).
+ */
+const FANOUT_10K_TEST_TIMEOUT_MS = 300_000;
+
+/**
  * Drives pending deliveries through real `ConsumerRuntime` (against `InMemoryTransport` or
  * `AwsTransportDriver`) and real `TaskGraphDispatcher` until `Until()` resolves true.
+ *
+ * With `progress`, `timeoutMs` is a stall deadline: it restarts whenever `progress()` returns a larger
+ * number, so a CPU-bound run that keeps advancing on a loaded machine is not failed by wall-clock time
+ * alone, while a run that stops advancing still fails after `timeoutMs`.
  */
-async function waitUntil(until: () => Promise<boolean>, timeoutMs: number = 15_000, onPoll?: () => void): Promise<void> {
-    const deadline = Date.now() + timeoutMs;
+async function waitUntil(until: () => Promise<boolean>, timeoutMs: number = 15_000, onPoll?: () => void, progress?: () => number): Promise<void> {
+    let deadline = Date.now() + timeoutMs;
+    let lastProgress = progress ? progress() : 0;
     while (Date.now() < deadline) {
         if (await until()) return;
         onPoll?.();
         await new Promise<void>((r) => setTimeout(r, 15));
+        if (progress) {
+            const current = progress();
+            if (current > lastProgress) {
+                lastProgress = current;
+                deadline = Date.now() + timeoutMs;
+            }
+        }
     }
-    throw new Error(`Timed out after ${timeoutMs}ms waiting for expected TaskGraph/WorkQueue state`);
+    throw new Error(`Timed out after ${timeoutMs}ms ${progress ? 'without progress ' : ''}waiting for expected TaskGraph/WorkQueue state`);
 }
 
 async function pumpGraphAndQueue(params: {
@@ -739,6 +758,8 @@ async function pumpGraphAndQueue(params: {
     Dispatcher?: TaskGraphDispatcher;
     Until: () => Promise<boolean>;
     TimeoutMs?: number;
+    /** A monotonically increasing count of work done; makes `TimeoutMs` a stall deadline (see `waitUntil`). */
+    Progress?: () => number;
 }): Promise<void> {
     if (params.Dispatcher) {
         await params.Dispatcher.Start();
@@ -778,7 +799,7 @@ async function pumpGraphAndQueue(params: {
             params.Harness.DrainNextCycle?.();
             runtime.Kick();
             params.Dispatcher?.Kick();
-        });
+        }, params.Progress);
     } finally {
         await runtime.Stop();
         if (params.Dispatcher) {
@@ -1023,6 +1044,8 @@ describe.each(buildTransportHarnesses())('Epic 2 Slice 2 — Queued Graphs & Enq
             Dispatcher: dispatcher,
             TimeoutMs: 25_000,
             Until: async () => store.GetRow(sub.ParentTaskID!)?.Status === 'Complete',
+            // 10,000 CPU-bound items: fail on a stall, not on a slow machine (D-091 item 8).
+            Progress: () => processedItems + harness.SnapshotPublishCount(),
         });
 
         expect(processedItems).toBe(10_000);
@@ -1037,7 +1060,7 @@ describe.each(buildTransportHarnesses())('Epic 2 Slice 2 — Queued Graphs & Enq
         expect(state['totalItems']).toBe(10_000);
         expect(state['completedCount']).toBe(10_000);
         expect(String(state['completedBitmapHex']).length).toBe(2500);
-    }, 30_000);
+    }, FANOUT_10K_TEST_TIMEOUT_MS);
 
     it('(d) deduplicates duplicate WorkQueue deliveries and repeated CompleteWaitingStep calls idempotently', async () => {
         const harness = createHarness();

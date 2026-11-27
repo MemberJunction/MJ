@@ -297,6 +297,8 @@ packages/MJServer/src/__tests__/DeleteOptionsSanitize.test.ts  (D-091 item 6)
 packages/MJServer/src/__tests__/ResolverBase.deleteReturnProjection.test.ts  (D-091 item 6)
 # Owner-batch item 7: spCreateRecordChange contract test's regex over every migration (controller, 2026-11-26)
 packages/SQLServerDataProvider/src/__tests__/spCreateRecordChangeContract.test.ts  (D-091 item 7)
+# Owner-batch item 8: the 10,000-item fan-out test's wall-clock deadline under a full test run (integrator, 2026-11-26)
+packages/MJServer/src/__tests__/queued-task-graph-and-enqueue-fanout.test.ts  (D-091 item 8)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3388,6 +3390,13 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    `CREATE … PROCEDURE[\s\S]*?spCreateRecordChange_Internal` regex over all 815 migrations cost 17.8 s (one 5.7 s file
    with many procedures and no match), timing the test out under load (A2's measurement). A literal-name prefilter
    (same matches, same newest file `V202611181700`) brings the regex to ~2.5 s. Fixed by the controller.
+8. `packages/MJServer/src/__tests__/queued-task-graph-and-enqueue-fanout.test.ts` — case (c) drives a CPU-bound
+   10,000-item ForEach + Enqueue fan-out against a fixed 25 s wall-clock deadline (`waitUntil`) inside a 30 s test
+   timeout: 1.3–3.8 s alone (3/3), > 25 s in wave-1's full mirror (`20261127-014306-48349`, the only red: `Timed out
+   after 25000ms`, collect 3,310 s across the package). The deadline is now a stall deadline: `pumpGraphAndQueue` takes
+   `Progress` (items processed + published) and restarts the 25 s window while it advances, so a stalled run still fails
+   in 25 s and a slow one finishes; the outer test timeout is a documented 300 s runaway bound. Came in with `next`
+   (`90174dfd3b`); fixed by the integrator at wave-1 integration under the owner's 2026-11-26 statement; 12/12.
 
 ## 10. PR description draft
 
