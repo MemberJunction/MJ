@@ -1,6 +1,7 @@
 ---
 "@memberjunction/ai-agents": minor
 "@memberjunction/ai-bridge-livekit-native": minor
+"@memberjunction/codegen-lib": minor
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/graphql-dataprovider": minor

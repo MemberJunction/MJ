@@ -281,6 +281,8 @@ src/generated/class-registrations-manifest.ts
 pnpm-lock.yaml
 # Caller maintenance: shipped Query SQL files join sql-parser's shipped golden corpus (§9 D5-B1-5, D5-A2-12)
 packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-A2-12)
+# A new FK into a table spDeleteEntityWithCoreDependencies deletes: the proc's policy fixture (§9 D5-A2-14; PR 4 §5.9)
+packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json  (D5-A2-14)
 # Owner-approved non-PS items (§9 owner batch, 2026-11-26)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
@@ -3253,6 +3255,15 @@ Record every decision taken in §9 and, when it changes another plan's interface
   (`CancelPromptRaisedRequests`, `Status = 'Canceled'`, as the run's user), leaving the person one card. · G4.1's first
   two runs (0 of 5 failure loops, no claim of the real approval). · Leaving the prompt-raised request open (two cards,
   one of which rule 1 refuses).
+- D5-A2-14 · 2026-11-26 · `MLBuildApprovalClaim.MLTrainingPipelineID` is an FK into a table
+  `spDeleteEntityWithCoreDependencies` deletes (an entity's training pipelines), so section A2 redefines the procedure
+  (the full body from `V202611231029`, plus `UPDATE … [MLBuildApprovalClaim] SET [MLTrainingPipelineID] = NULL` for the
+  doomed pipelines before they are deleted) and `entity-delete-fk-policy.json` gains the `null` dependent; allowlist line
+  `packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json  (D5-A2-14)`. · The claim is kept whatever
+  happens to its build (its approval stays consumed), so its link is cleared, not its row; without it the proc fails on
+  the FK for any entity with a claimed pipeline. Found by the push hook: `delete-entity-fk-coverage.test.ts` → `FKs into
+  deleted tables with no entry … ["MLBuildApprovalClaim.MLTrainingPipelineID -> MLTrainingPipeline"]`, red alone too. ·
+  Deleting the claim (it would free the approval for a second build).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3353,7 +3364,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->1<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->1<!-- /gen:checks -->
-- Head: <!-- gen:head -->54e77fa63d<!-- /gen:head -->
+- Head: <!-- gen:head -->2a7fd50ddb<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3633,6 +3644,12 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - 2026-11-26 — A2: merged `ps/pr-5-agent-fp-input` @ `35d05d5ba0` (`no-status-writes.test.ts` builds its program once
   in `beforeAll`; the push had gone red only on its two 60 s scan timeouts under load); changeset unchanged, §10 by
   `pr-body.mjs`.
+- 2026-11-26 — A2: D5-A2-14 — section A2 redefines `spDeleteEntityWithCoreDependencies` (the claim's pipeline link is
+  cleared before an entity's pipelines are deleted) and the FK policy fixture gains the entry; `CodeGenLib` tests 2,614
+  passed, 66 skipped (`delete-entity-fk-coverage.test.ts` 11/11); the procedure compiled on `MJ_PS_PR5_claude1`
+  (`OBJECT_DEFINITION` carries the statement); `check-migration-entityfield-sequence` and `check:codegen-tail` ok. The
+  edit changes the A2 migration's checksum on databases that already applied it (`MJ_PS_PR5_claude1`); the integration
+  database is built from the merged file.
 
 ## 12. Refresh log (append-only)
 

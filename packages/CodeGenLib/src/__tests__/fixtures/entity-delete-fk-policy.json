@@ -1007,6 +1007,14 @@
       "reason": "Nullable reference to a MLModel row this proc deletes; cleared."
     },
     {
+      "table": "MLBuildApprovalClaim",
+      "column": "MLTrainingPipelineID",
+      "references": "MLTrainingPipeline",
+      "nullable": true,
+      "action": "null",
+      "reason": "Nullable reference to a MLTrainingPipeline row this proc deletes; cleared, so the claim (and its consumed approval) survives."
+    },
+    {
       "table": "MLModel",
       "column": "PipelineID",
       "references": "MLTrainingPipeline",
