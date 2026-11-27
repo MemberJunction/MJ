@@ -875,8 +875,20 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             else this._noteVectorService.RemoveVector(note.ID); // no usable vector — never keep a stale one
         }
         else {
-            throw new Error('note vector service not initialized, error state')
+            // The pool is built lazily from AgentNotes, which already holds this saved note, so the first build
+            // includes it. Only a build already in flight may have read AgentNotes before this save: re-apply after it.
+            this.afterEmbeddingsBuild(() => this.AddOrUpdateSingleNoteEmbedding(note));
         }
+    }
+
+    /**
+     * Runs `apply` once an in-flight vector-pool build settles; does nothing when none is in flight (a later build
+     * reads the engine's current cache and so already includes what `apply` would add).
+     */
+    private afterEmbeddingsBuild(apply: () => void): void {
+        const inFlight = this._embeddingsPromise;
+        if (!inFlight) return;
+        inFlight.then(apply, () => undefined);
     }
 
     /**
@@ -922,7 +934,8 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
             else this._exampleVectorService.RemoveVector(example.ID); // no usable vector — never keep a stale one
         }
         else {
-            throw new Error('example vector service not initialized, error state')
+            // Built lazily from the cached examples, which already hold this one (see AddOrUpdateSingleNoteEmbedding)
+            this.afterEmbeddingsBuild(() => this.AddOrUpdateSingleExampleEmbedding(example));
         }
     }
 

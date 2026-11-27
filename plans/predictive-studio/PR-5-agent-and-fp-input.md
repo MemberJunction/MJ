@@ -300,6 +300,9 @@ packages/MJServer/src/__tests__/DeleteOptionsSanitize.test.ts  (D-091 item 6)
 packages/MJServer/src/__tests__/ResolverBase.deleteReturnProjection.test.ts  (D-091 item 6)
 # Owner-batch item 7: spCreateRecordChange contract test's regex over every migration (controller, 2026-11-26)
 packages/SQLServerDataProvider/src/__tests__/spCreateRecordChangeContract.test.ts  (D-091 item 7)
+# Owner-batch item 12: AIEngine threw on a note save before its lazy vector pool existed (controller, 2026-11-27)
+packages/AI/Engine/src/AIEngine.ts  (D-091 item 12)
+packages/AI/Engine/src/__tests__/AIEngine.test.ts  (D-091 item 12)
 # Owner-batch item 8: the 10,000-item fan-out test's wall-clock deadline under a full test run (integrator, 2026-11-26)
 packages/MJServer/src/__tests__/queued-task-graph-and-enqueue-fanout.test.ts  (D-091 item 8)
 # Owner-batch item 9: the rig harness shim test's cold module load counted inside each test (integrator, 2026-11-26)
@@ -4367,6 +4370,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   prompts $0.6977 for G4.1/G4.2 ×3; CodeGen $0.64); `MJ_PS_PR5_claudefp` 662 runs, **$0.8933**, 1,809,649 tokens
   (CodeGen $0.63, bizapps job-title pipeline $0.2513). Total **$3.14**.
 - **Rulings:** none new; no owner-batch item.
+- 2026-11-27 — controller: owner-batch item 12 (A5's D5-A5-7). `AIEngine.AddOrUpdateSingleNoteEmbedding`/`…ExampleEmbedding` threw when the lazy vector pool was not built yet, so `MJAIAgentNoteEntityServer.Save` returned false after the row was written. The pool is built from the engine's cached notes, which already hold the saved one; the update now no-ops then, and re-applies after a build already in flight. AIEngine tests 165/165, build 0.
 
 ## 12. Refresh log (append-only)
 

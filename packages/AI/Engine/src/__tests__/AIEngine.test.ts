@@ -8,7 +8,7 @@
  * - packageNoteMetadata / packageExampleMetadata helpers
  * - markupUserMessage template substitution
  * - GetStringOutputFromActionResults
- * - AddOrUpdateSingleNoteEmbedding / AddOrUpdateSingleExampleEmbedding error states
+ * - AddOrUpdateSingleNoteEmbedding / AddOrUpdateSingleExampleEmbedding before the lazy pools are built
  * - Config concurrency and loading state
  */
 
@@ -1179,8 +1179,8 @@ describe('AIEngine', () => {
     // ======================================================================
 
     describe('AddOrUpdateSingleNoteEmbedding', () => {
-        it('should throw when note vector service is not initialized', () => {
-            // The engine starts with _noteVectorService = null
+        it('does not throw before the lazy note pool is built (the first build reads the cached note)', () => {
+            // The engine starts with _noteVectorService = null and no build in flight
             const mockNote = {
                 ID: 'note-1',
                 EmbeddingVector: JSON.stringify([0.1, 0.2, 0.3]),
@@ -1191,8 +1191,8 @@ describe('AIEngine', () => {
                 Note: 'test note',
             };
 
-            expect(() => engine.AddOrUpdateSingleNoteEmbedding(mockNote as never))
-                .toThrow('note vector service not initialized, error state');
+            // A throw here made MJAIAgentNoteEntityServer.Save return false after the row was written (D-091 item 12)
+            expect(() => engine.AddOrUpdateSingleNoteEmbedding(mockNote as never)).not.toThrow();
         });
     });
 
@@ -1201,7 +1201,7 @@ describe('AIEngine', () => {
     // ======================================================================
 
     describe('AddOrUpdateSingleExampleEmbedding', () => {
-        it('should throw when example vector service is not initialized', () => {
+        it('does not throw before the lazy example pool is built (the first build reads the cached example)', () => {
             const mockExample = {
                 ID: 'ex-1',
                 EmbeddingVector: JSON.stringify([0.1, 0.2]),
@@ -1214,8 +1214,7 @@ describe('AIEngine', () => {
                 SuccessScore: 1,
             };
 
-            expect(() => engine.AddOrUpdateSingleExampleEmbedding(mockExample as never))
-                .toThrow('example vector service not initialized, error state');
+            expect(() => engine.AddOrUpdateSingleExampleEmbedding(mockExample as never)).not.toThrow();
         });
     });
 
