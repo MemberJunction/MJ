@@ -1690,8 +1690,10 @@ import {
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
 
-// @memberjunction/predictive-studio (26 classes)
+// @memberjunction/predictive-studio (28 classes)
 import {
+    DraftEvaluationProtocolAction,
+    DraftPredictionUnitAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioAgentEvalDriver,
@@ -3249,6 +3251,8 @@ const CLASS_REGISTRATIONS_5: any[] = [
     FeaturePipelineGoldenSetDriver,
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
+    DraftEvaluationProtocolAction,
+    DraftPredictionUnitAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
     PredictiveStudioAgentEvalDriver,
@@ -3264,12 +3268,12 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
     PredictiveStudioRegistryCheckJobDriver,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioRunModelMonitoringServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -3468,12 +3472,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
     RunDecisionAction,
-    RunRecordProcessAction,
-    RunStoredQueryAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    RunRecordProcessAction,
+    RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
     ScheduledGeocodingAction,
     ScopedSearchAction,
@@ -3578,7 +3582,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1486;
+export const CLASS_REGISTRATIONS_COUNT = 1488;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
