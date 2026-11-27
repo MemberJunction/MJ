@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Agent",
-      "Description": "The Model Development Agent's PR 5 gates: G4.1 (C1 -> C1.1: the agent builds only on a person's structured approval of the plan it presented) and G4.2 (C1 -> C1.2: a C1 planning session reads 0 holdout labels and writes no unit, protocol or training run before approval). Later PR 5 milestones add G4.3–G4.9 here. G4.1 and G4.2 run on the server transport (the agent runs as the D5-46 person), and a server-transport bundle cannot follow a client-transport one in one process (#3251), so the truth datasets are loaded before this suite: run \"Predictive Studio Gates — Containment\" (its first test loads them) or `pnpm mj test run \"PS truth datasets: load and verify\"` first. Needs the truth sidecar, `pnpm run truth:provision` and `truth:loom` done, the LLM keys and the D5-46 user; spends LLM money. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Agent\"",
+      "Description": "The Model Development Agent's PR 5 gates: G4.1 (C1 -> C1.1: the agent builds only on a person's structured approval of the plan it presented), G4.2 (C1 -> C1.2: a C1 planning session reads 0 holdout labels and writes no unit, protocol or training run before approval), G4.3 (C1 -> C1.3: every transition is a decision-log row and replay reproduces the plan) and G4.7 (W7 -> C1.4: the small-data refusal on W7 s42, 3 of 3). Later PR 5 milestones add G4.4–G4.6, G4.8 and G4.9 here. G4.1, G4.2 and G4.3 run on the server transport (the agent runs as the D5-46 person), and a server-transport bundle cannot follow a client-transport one in one process (#3251), so G4.7 (client transport: it loads W7 s42 itself and runs the agent on MJAPI) comes last, and the truth datasets are loaded before this suite: run \"Predictive Studio Gates — Containment\" (its first test loads them) or `pnpm mj test run \"PS truth datasets: load and verify\"` first. Needs the truth sidecar, `pnpm run truth:provision` and `truth:loom` done, the LLM keys and the D5-46 user; spends LLM money. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Agent\"",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -27,6 +27,28 @@
           },
           "primaryKey": {
             "ID": "8FF4D03C-A4F5-4045-A772-FD6D74F64B96"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C1.3",
+            "Sequence": 3,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C06407BE-96C3-497E-9871-E1817B13CFF6"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=W7 -> C1.4",
+            "Sequence": 4,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BE5FC85B-F20C-4313-82E7-4D30BF0D8E7D"
           }
         }
       ]

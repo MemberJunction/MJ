@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C1.3",
+    "Description": "Gate G4.3 (owner PR 5, phase 4, dataset C1, criterion C1.3): every control-path transition of a Model Development Agent session is one MJ: Agent Decision Log row, and the log reproduces the session. On the truth suite's W1-signal world one session spans the approval boundary (run 1 presents the plan, the D5-46 person approves as their own client save, the resumed run 2 builds): decision rows = transitions (100%: each draft, profile and Plan step, and a request-build and a report row per build), all with run 1's SessionRunID, Step 1..n contiguous across both runs, each PayloadHash the previous ResultingPayloadHash; AgentSessionReplay.Replay reproduces the last ResultingPayloadHash with 0 new MJ: AI Prompt Runs (1 of 1), and a copy of the log with one logged PromptRunID swapped for a missing prompt run is replay-incomplete naming it; an update, a delete and a client create of a decision row are refused; a new modeling request after the report starts a new SessionRunID. Server transport (the agent runs as the D5-46 person); spends LLM money. Mutations (unit attacks): let the guard allow an update -> attack 3 red; skip the hash comparison in Replay -> attack 5 red; key Step on AgentRunID -> attack 4 red. Run budget 30 min (MaxExecutionTimeMS): three orchestrator runs and one W1 build on the sidecar.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G4.3\",\"owner:PR5\",\"phase:4\",\"dataset:C1\",\"criterion:C1.3\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "One session across the approval boundary writes one decision row per transition in one chain, and replay reproduces its plan with no LLM call."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-c1-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "5BED1510-D2FB-4C5B-8B0E-8A2481FBC960"
+  }
+}

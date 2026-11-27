@@ -10554,6 +10554,111 @@ export const MJAgentChannelSchema = z.object({
 export type MJAgentChannelEntityType = z.infer<typeof MJAgentChannelSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Agent Decision Log
+ */
+export const MJAgentDecisionLogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    SessionRunID: z.string().describe(`
+        * * Field Name: SessionRunID
+        * * Display Name: Session Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The session: the run that wrote its first decision row. A run continues its LastRunID run's session while that session's newest row is not terminal (report, decline-*).`),
+    AgentRunID: z.string().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: The run that took the decision.`),
+    AgentRunStepID: z.string().nullable().describe(`
+        * * Field Name: AgentRunStepID
+        * * Display Name: Agent Run Step
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+        * * Description: The run step the decision was taken in, when the run had stored one.`),
+    Step: z.number().describe(`
+        * * Field Name: Step
+        * * Display Name: Step
+        * * SQL Data Type: int
+        * * Description: 1-based order of the decision in its session, across every run of the session; unique with SessionRunID.`),
+    Decision: z.union([z.literal('decline-no-signal'), z.literal('decline-small-data'), z.literal('decline-unresolved-reference'), z.literal('draft-protocol'), z.literal('draft-unit'), z.literal('present-plan'), z.literal('profile'), z.literal('report'), z.literal('request-build')]).describe(`
+        * * Field Name: Decision
+        * * Display Name: Decision
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * decline-no-signal
+    *   * decline-small-data
+    *   * decline-unresolved-reference
+    *   * draft-protocol
+    *   * draft-unit
+    *   * present-plan
+    *   * profile
+    *   * report
+    *   * request-build
+        * * Description: The transition: profile, draft-unit, draft-protocol, present-plan, request-build, report, decline-no-signal, decline-small-data or decline-unresolved-reference.`),
+    PromptRunID: z.string().nullable().describe(`
+        * * Field Name: PromptRunID
+        * * Display Name: Prompt Run
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+        * * Description: The prompt run whose recorded output changed the plan since the previous row; NULL when no prompt changed it (a code-decided step on the previous row's plan).`),
+    ToolCalls: z.string().describe(`
+        * * Field Name: ToolCalls
+        * * Display Name: Tool Calls
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of the decision's tool calls: {action, paramsHash, result}, with the recorded results replay re-applies.`),
+    PayloadHash: z.string().describe(`
+        * * Field Name: PayloadHash
+        * * Display Name: Payload Hash
+        * * SQL Data Type: char(64)
+        * * Description: SHA-256 (hex) of the canonical plan before the decision: the previous row's ResultingPayloadHash (compare-and-append).`),
+    ResultingPayloadHash: z.string().describe(`
+        * * Field Name: ResultingPayloadHash
+        * * Display Name: Resulting Payload Hash
+        * * SQL Data Type: char(64)
+        * * Description: SHA-256 (hex) of the canonical plan after the decision (AgentControlPath.PlanHash); on present-plan, the presented plan's hash.`),
+    Rationale: z.string().describe(`
+        * * Field Name: Rationale
+        * * Display Name: Rationale
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: The code rule's message or the LLM's reasoning for the decision.`),
+    Replay: z.string().describe(`
+        * * Field Name: Replay
+        * * Display Name: Replay Data
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON {promptId, promptVersionHash, parameters}: the prompt and the vendor call parameters of the decision's prompt run (empty for a code step).`),
+    BuildApprovalRequestID: z.string().nullable().describe(`
+        * * Field Name: BuildApprovalRequestID
+        * * Display Name: Build Approval Request
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
+        * * Description: The approved request a request-build decision claimed.`),
+    SessionRun: z.string().nullable().describe(`
+        * * Field Name: SessionRun
+        * * Display Name: Session Run Details
+        * * SQL Data Type: nvarchar(255)`),
+    AgentRun: z.string().nullable().describe(`
+        * * Field Name: AgentRun
+        * * Display Name: Agent Run Details
+        * * SQL Data Type: nvarchar(255)`),
+    AgentRunStep: z.string().nullable().describe(`
+        * * Field Name: AgentRunStep
+        * * Display Name: Agent Run Step Details
+        * * SQL Data Type: nvarchar(255)`),
+    PromptRun: z.string().nullable().describe(`
+        * * Field Name: PromptRun
+        * * Display Name: Prompt Run Details
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJAgentDecisionLogEntityType = z.infer<typeof MJAgentDecisionLogSchema>;
+
+/**
  * zod schema definition for the entity MJ: Application Entities
  */
 export const MJApplicationEntitySchema = z.object({

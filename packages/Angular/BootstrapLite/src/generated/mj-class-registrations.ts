@@ -159,6 +159,7 @@ import {
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -951,6 +952,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1016,11 +1018,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationObjectEntity,
     MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
-    MJCompanyIntegrationRunAPILogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,

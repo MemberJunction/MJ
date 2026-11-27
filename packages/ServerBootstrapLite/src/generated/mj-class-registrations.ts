@@ -347,6 +347,7 @@ import {
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -523,7 +524,6 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
-    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -1584,7 +1584,7 @@ import {
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
 
-// @memberjunction/predictive-studio (28 classes)
+// @memberjunction/predictive-studio (29 classes)
 import {
     DraftEvaluationProtocolAction,
     DraftPredictionUnitAction,
@@ -1614,6 +1614,7 @@ import {
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
+    ProfilePredictionTargetAction,
 } from '@memberjunction/predictive-studio';
 
 // @memberjunction/video-studio (11 classes)
@@ -1849,6 +1850,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1862,11 +1864,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
-    MJArtifactUseEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
@@ -2029,7 +2031,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
-    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2964,6 +2965,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
+    ProfilePredictionTargetAction,
     DockerRenderDriver,
     LocalWorkerRenderDriver,
     ProduceVideoAction,
@@ -3007,7 +3009,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1303;
+export const CLASS_REGISTRATIONS_COUNT = 1304;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

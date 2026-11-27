@@ -114,6 +114,7 @@ import { MJActionParamFormComponent } from "./Entities/MJActionParam/mjactionpar
 import { MJActionResultCodeFormComponent } from "./Entities/MJActionResultCode/mjactionresultcode.form.component";
 import { MJAgentChannelFormComponent } from "./Entities/MJAgentChannel/mjagentchannel.form.component";
 import { MJAgentChannelParticipantFormComponent } from "./Entities/MJAgentChannelParticipant/mjagentchannelparticipant.form.component";
+import { MJAgentDecisionLogFormComponent } from "./Entities/MJAgentDecisionLog/mjagentdecisionlog.form.component";
 import { MJApplicationEntityFormComponent } from "./Entities/MJApplicationEntity/mjapplicationentity.form.component";
 import { MJApplicationFormComponent } from "./Entities/MJApplication/mjapplication.form.component";
 import { MJApplicationRoleFormComponent } from "./Entities/MJApplicationRole/mjapplicationrole.form.component";
@@ -572,6 +573,7 @@ declarations: [
     MJAIAgentNoteFormComponent,
     MJAIAgentSuggestionFormComponent,
     MJAIAgentTypeFormComponent,
+    MJAgentDecisionLogFormComponent,
     MJAuditLogTypeFormComponent,
     MJComponentFormComponent,
     MJContentTypeAttributeFormComponent,

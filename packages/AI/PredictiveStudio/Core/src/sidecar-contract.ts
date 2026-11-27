@@ -10,6 +10,8 @@
  * preprocessing a model trained before Prediction Units carries — it never re-fits — so models trained that way keep
  * scoring.
  */
+import { JsonParse, type JsonValue, type ParseResult } from './json-value';
+import type { MetricWithInterval } from './evaluation-protocol';
 
 /**
  * The kind of a single feature column in the matrix sent to / expected by the
@@ -291,3 +293,85 @@ export interface PredictResponse {
  * (`MLModel.FittedPreprocessing`, plan §4.3) and round-tripped unchanged.
  */
 export type FittedPreprocessing = Record<string, unknown>;
+
+// ---------------------------------------------------------------------------------------------------------------------
+// POST /profile — the read-only profile of a draft unit's development rows (PR 5, A4; D5-32, DD-4)
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** One development-row cell of a profiled feature column (a missing value is null). */
+export type ProfileCell = number | string | null;
+
+/**
+ * The body of `POST /profile`: a draft unit's development rows only, as feature columns aligned with their labels. No
+ * snapshot, training run or protocol: none exists before approval (D5-25), so `/trainer` cannot serve it (D5-32).
+ * Wire names are camelCase (D-039).
+ */
+export interface ProfileRequest {
+  /** Each candidate field's values, one per development row, in the row order of {@link labels}. */
+  readonly features: Readonly<Record<string, readonly ProfileCell[]>>;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** Each development row's resolved label (a class or a number). */
+  readonly labels: readonly (number | string)[];  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** Stratified folds the single-feature models and the GLM are scored on. */
+  readonly folds: number;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** The fold and bootstrap seed. */
+  readonly seed: number;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+}
+
+/** One field's single-feature association on the development folds. */
+export interface ProfileFieldAssociation {
+  readonly name: string;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** Out-of-fold log-loss of the dummy minus that of the field's single-feature model (> 0: the field carries signal). */
+  readonly improvement: MetricWithInterval;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** The field's distinct non-null values cover nearly every row (an identifier). */
+  readonly nearUnique: boolean;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+}
+
+/** The answer of `POST /profile`. */
+export interface ProfileResponse {
+  readonly fields: readonly ProfileFieldAssociation[];  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** The cross-validated GLM on every field against the dummy on the same folds (log-loss improvement). */
+  readonly glmVsDummy: MetricWithInterval;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+  /** Wall-clock compute the route spent, in seconds (the Action records it as the profile's compute cost, DD-4). */
+  readonly computeSeconds: number;  // case-violation-ok-legacy-back-compat: sidecar wire JSON (D-039)
+}
+
+/** Reading a `/profile` answer at the trust boundary (checked, never cast). */
+export class ProfileContract {
+  /** The answer read into a {@link ProfileResponse}, or every problem found with it. */
+  public static ParseProfileResponse(value: JsonValue): ParseResult<ProfileResponse> {
+    if (!JsonParse.IsJsonObject(value)) return { Ok: false, Errors: ['the answer is not a JSON object'] };
+    const errors: string[] = [];
+    const fields = (Array.isArray(value['fields']) ? value['fields'] : (errors.push('fields is not an array'), [])).flatMap((f, i) => ProfileContract.fieldOf(f, i, errors));
+    const glm = ProfileContract.MetricOf(value['glmVsDummy'], 'glmVsDummy', errors);
+    const seconds = JsonParse.JsonNumber(value, 'computeSeconds');
+    if (seconds === null || seconds < 0) errors.push('computeSeconds is not a non-negative number');
+    if (errors.length > 0 || glm === null || seconds === null) return { Ok: false, Errors: errors };
+    return { Ok: true, Value: { fields, glmVsDummy: glm, computeSeconds: seconds } };
+  }
+
+  /** A metric with its interval, or null with the problem recorded. */
+  public static MetricOf(value: JsonValue | undefined, path: string, errors: string[]): MetricWithInterval | null {
+    if (value === undefined || !JsonParse.IsJsonObject(value)) { errors.push(`${path} is not an object`); return null; }
+    const interval = JsonParse.JsonObjectField(value, 'interval');
+    const metric = JsonParse.JsonString(value, 'metric');
+    const v = JsonParse.JsonNumber(value, 'value');
+    const n = JsonParse.JsonNumber(value, 'n');
+    const level = interval ? JsonParse.JsonNumber(interval, 'level') : null;
+    const lower = interval ? JsonParse.JsonNumber(interval, 'lower') : null;
+    const upper = interval ? JsonParse.JsonNumber(interval, 'upper') : null;
+    if (metric !== 'log-loss' || v === null || n === null || level === null || lower === null || upper === null) {
+      errors.push(`${path} is not a log-loss metric with an interval (metric, value, n, interval.level/lower/upper)`);
+      return null;
+    }
+    return { metric, value: v, interval: { level, lower, upper }, n };
+  }
+
+  private static fieldOf(value: JsonValue, i: number, errors: string[]): ProfileFieldAssociation[] {
+    if (!JsonParse.IsJsonObject(value)) { errors.push(`fields[${i}] is not an object`); return []; }
+    const name = JsonParse.JsonString(value, 'name');
+    const nearUnique = JsonParse.JsonBoolean(value, 'nearUnique');
+    const improvement = ProfileContract.MetricOf(value['improvement'], `fields[${i}].improvement`, errors);
+    if (name === null || nearUnique === null) errors.push(`fields[${i}] needs a name and nearUnique`);
+    return name !== null && nearUnique !== null && improvement !== null ? [{ name, improvement, nearUnique }] : [];
+  }
+}

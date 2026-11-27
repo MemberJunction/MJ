@@ -1,0 +1,10 @@
+/* The decision-log widget (PR 5, A4). Semantic tokens only. */
+.ps-decision-log { display: flex; flex-direction: column; gap: 8px; color: var(--mj-text-primary); }
+.ps-decision-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.ps-decision { padding: 8px 12px; border: 1px solid var(--mj-border-subtle); border-radius: var(--mj-radius-md); background: var(--mj-bg-surface); }
+.ps-decision.terminal { border-color: var(--mj-border-default); background: var(--mj-bg-surface-hover); }
+.ps-decision-head { display: flex; align-items: baseline; gap: 8px; font-size: var(--mj-text-sm); }
+.ps-decision-step { min-width: 24px; color: var(--mj-text-muted); font-variant-numeric: tabular-nums; }
+.ps-decision-label { font-weight: var(--mj-font-semibold); }
+.ps-decision-hash { margin-left: auto; font-family: var(--mj-font-family-mono); font-size: var(--mj-text-xs); color: var(--mj-text-muted); }
+.ps-decision-rationale { margin: 4px 0 0 32px; font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }

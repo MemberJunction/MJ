@@ -13,6 +13,7 @@
 "@memberjunction/ng-dashboards": minor
 "@memberjunction/predictive-studio": minor
 "@memberjunction/predictive-studio-core": minor
+"@memberjunction/predictive-studio-sidecar": minor
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor

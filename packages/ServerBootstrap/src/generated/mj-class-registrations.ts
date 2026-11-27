@@ -370,6 +370,7 @@ import {
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -546,7 +547,6 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
-    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -1691,7 +1691,7 @@ import {
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
 
-// @memberjunction/predictive-studio (28 classes)
+// @memberjunction/predictive-studio (29 classes)
 import {
     DraftEvaluationProtocolAction,
     DraftPredictionUnitAction,
@@ -1721,6 +1721,7 @@ import {
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
+    ProfilePredictionTargetAction,
 } from '@memberjunction/predictive-studio';
 
 // @memberjunction/testing-integration (1 classes)
@@ -2246,13 +2247,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
-    MJApplicationRoleEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJApplicationRoleEntity,
     MJApplicationSettingEntity,
     MJArchiveConfigurationEntity,
     MJArchiveConfigurationEntityEntity,
@@ -2426,7 +2428,6 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
-    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -3285,6 +3286,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
+    ProfilePredictionTargetAction,
     IntegrationTestDriver,
     DockerRenderDriver,
     LocalWorkerRenderDriver,
@@ -3472,11 +3474,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RevertInteractiveFormAction,
     RevokeListInvitationAction,
     RunAdhocQueryAction,
-    RunClusterAnalysisAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    RunClusterAnalysisAction,
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
@@ -3584,7 +3586,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1489;
+export const CLASS_REGISTRATIONS_COUNT = 1490;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

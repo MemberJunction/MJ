@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W7 -> C1.4",
+    "Description": "Gate G4.7 (owner PR 5, phase 4, dataset W7, criterion C1.4): the deterministic small-n refusal fires on W7-small-imbalanced s42 on 3 of 3 runs. The gate loads W7 s42 (the suite's dataset load leaves W7 at its fresh seed), then runs the Model Development Agent on MJAPI three times from a complete plan on the W7 membership years: each session ends with a decline-small-data decision row carrying the profile's counts (fewer than 200 resolved or 50 minority development rows), its profile row read 0 holdout rows, no plan is presented and nothing is built. Client transport (no approval is involved); must follow the agent suite's server-transport tests (#3251). Spends LLM money (one orchestrator prompt per run). Mutation (unit attack 1): '<' -> '<=' on either threshold -> red. Run budget 15 min (MaxExecutionTimeMS): the W7 load and three short runs.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G4.7\",\"owner:PR5\",\"phase:4\",\"dataset:W7\",\"criterion:C1.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 900000,
+    "ExpectedOutcomes": {
+      "summary": "Three W7 s42 sessions each end decline-small-data with the counts on the decision row, no plan presented and no build."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w7-c1-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "186D6635-8F81-4F52-893E-0ACD238A5AE9"
+  }
+}
