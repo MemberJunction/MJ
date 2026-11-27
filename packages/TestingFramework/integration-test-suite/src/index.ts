@@ -123,6 +123,7 @@ export * from './checks/ps-gate-w7-s4-2.checks';
 export * from './checks/ps-gate-w1-s9-4.checks';
 export * from './checks/ps-gate-w1-s9-5.checks';
 export * from './checks/ps-gate-c1-c1-1.checks';
+export * from './checks/ps-gate-c1-c2-4.checks';
 export * from './checks/ps-gate-c1-s1-1.checks';
 export * from './checks/ps-gate-c1-s2-2.checks';
 export * from './checks/ps-gate-w5-s2-2.checks';

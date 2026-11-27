@@ -96,6 +96,17 @@
             "lastModified": "2026-11-26T09:54:18.855Z",
             "checksum": "eb551160c7199f75dca30dab3747675ca9b771a4ec9c0b28c15781babac3fca9"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.4",
+            "Sequence": 7,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B559D1F2-2B52-498D-90F4-9F46384A8C2D"
+          }
         }
       ]
     },
