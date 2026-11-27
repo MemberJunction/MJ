@@ -210,6 +210,7 @@ export async function MarkNotificationAsRead(
     return false;
   }
   const notificationId = notification.ID;
+  const previousUnread = notification.Unread;
   notification.Unread = !bRead;
   let notificationEntity: MJUserNotificationEntity;
   if (notification instanceof MJUserNotificationEntity) {
@@ -227,9 +228,32 @@ export async function MarkNotificationAsRead(
     return true;
   }
 
-  await notificationEntity.Save();
+  // Always detach any stale TransactionGroup left over from an earlier MarkAll batch so
+  // this single-record Save() executes immediately rather than enqueuing into a completed group.
+  notificationEntity.TransactionGroup = null;
   MJNotificationService.UpdateNotificationObservables();
-  return true;
+
+  try {
+    const saved = await notificationEntity.Save();
+    if (!saved) {
+      notification.Unread = previousUnread;
+      if (notificationEntity !== notification) {
+        notificationEntity.Unread = previousUnread;
+      }
+      MJNotificationService.UpdateNotificationObservables();
+      return false;
+    }
+    MJNotificationService.UpdateNotificationObservables();
+    return true;
+  } catch (error) {
+    notification.Unread = previousUnread;
+    if (notificationEntity !== notification) {
+      notificationEntity.Unread = previousUnread;
+    }
+    MJNotificationService.UpdateNotificationObservables();
+    console.error('[UserNotifications] Failed to update notification read status:', error);
+    return false;
+  }
 }
 
 /**

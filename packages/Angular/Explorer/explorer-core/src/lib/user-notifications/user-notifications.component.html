@@ -65,32 +65,28 @@
                 <span class="stat-count">{{AllNotifications.length}}</span>
               </button>
 
-              @if (UnreadNotifications.length > 0 || ReadNotifications.length === 0) {
-                <button class="stat-pill"
-                        type="button"
-                        [class.active]="radioSelected === 'Unread'"
-                        [class.has-unread]="UnreadNotifications.length > 0"
-                        (click)="selectReadOption('Unread')"
-                        [attr.aria-pressed]="radioSelected === 'Unread'"
-                        aria-label="Show unread notifications">
-                  <span class="stat-label">Unread</span>
-                  <span class="stat-count" [class.unread-count]="UnreadNotifications.length > 0">
-                    {{UnreadNotifications.length}}
-                  </span>
-                </button>
-              }
+              <button class="stat-pill"
+                      type="button"
+                      [class.active]="radioSelected === 'Unread'"
+                      [class.has-unread]="UnreadNotifications.length > 0"
+                      (click)="selectReadOption('Unread')"
+                      [attr.aria-pressed]="radioSelected === 'Unread'"
+                      aria-label="Show unread notifications">
+                <span class="stat-label">Unread</span>
+                <span class="stat-count" [class.unread-count]="UnreadNotifications.length > 0">
+                  {{UnreadNotifications.length}}
+                </span>
+              </button>
 
-              @if (ReadNotifications.length > 0 || UnreadNotifications.length === 0) {
-                <button class="stat-pill"
-                        type="button"
-                        [class.active]="radioSelected === 'Read'"
-                        (click)="selectReadOption('Read')"
-                        [attr.aria-pressed]="radioSelected === 'Read'"
-                        aria-label="Show read notifications">
-                  <span class="stat-label">Read</span>
-                  <span class="stat-count">{{ReadNotifications.length}}</span>
-                </button>
-              }
+              <button class="stat-pill"
+                      type="button"
+                      [class.active]="radioSelected === 'Read'"
+                      (click)="selectReadOption('Read')"
+                      [attr.aria-pressed]="radioSelected === 'Read'"
+                      aria-label="Show read notifications">
+                <span class="stat-label">Read</span>
+                <span class="stat-count">{{ReadNotifications.length}}</span>
+              </button>
             </div>
 
             <!-- Type filter -->
@@ -231,7 +227,7 @@
                 @if (vm.N.Unread) {
                   <button class="card-action-btn"
                           type="button"
-                          (click)="markAsRead(vm.N, true, null)"
+                          (click)="markAsRead(vm.N, true, null); $event.stopPropagation()"
                           [attr.aria-label]="'Mark ' + vm.N.Title + ' as read'"
                           title="Mark as Read">
                     <i class="fa-solid fa-check" aria-hidden="true"></i>
@@ -240,7 +236,7 @@
                 } @else {
                   <button class="card-action-btn"
                           type="button"
-                          (click)="markAsRead(vm.N, false, null)"
+                          (click)="markAsRead(vm.N, false, null); $event.stopPropagation()"
                           [attr.aria-label]="'Mark ' + vm.N.Title + ' as unread'"
                           title="Mark as Unread">
                     <i class="fa-solid fa-envelope" aria-hidden="true"></i>

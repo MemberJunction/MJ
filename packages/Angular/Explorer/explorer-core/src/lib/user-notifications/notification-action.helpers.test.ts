@@ -1,12 +1,13 @@
 import '@angular/compiler';
 import { describe, it, expect, vi } from 'vitest';
-import type { MJUserNotificationEntity } from '@memberjunction/core-entities';
+import { EntityInfo, type IMetadataProvider, type TransactionGroupBase } from '@memberjunction/core';
+import { MJUserNotificationEntity } from '@memberjunction/core-entities';
 import type { ApplicationManager } from '@memberjunction/ng-base-application';
 import type { NavigationService, SharedService } from '@memberjunction/ng-shared';
-import type { IMetadataProvider } from '@memberjunction/core';
 import {
   FormatRelativeNotificationTime,
   IsNotificationClickable,
+  MarkNotificationAsRead,
   NavigateToNotificationTarget,
 } from './notification-action.helpers';
 
@@ -104,5 +105,55 @@ describe('notification-action.helpers', () => {
     expect(FormatRelativeNotificationTime(new Date(now - 2 * 86_400_000))).toBe('2d ago');
     expect(FormatRelativeNotificationTime(new Date(now - 10 * 86_400_000))).toBe('');
     expect(FormatRelativeNotificationTime(null)).toBe('');
+  });
+
+  it('detaches a stale TransactionGroup before saving a single Read/Unread toggle', async () => {
+    const info = new EntityInfo({
+      Name: 'MJ: User Notifications',
+      Status: 'Active',
+      Fields: [
+        { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Status: 'Active' },
+        { Name: 'Unread', Type: 'bit', IsPrimaryKey: false, Status: 'Active', AllowUpdateAPI: true },
+      ],
+    });
+    const entity = new MJUserNotificationEntity(info);
+    entity.ID = 'notif-stale-tg';
+    entity.Unread = false;
+
+    const staleGroup = { Status: 'Complete' } as unknown as TransactionGroupBase;
+    entity.TransactionGroup = staleGroup;
+
+    let groupDuringSave: TransactionGroupBase | null = staleGroup;
+    vi.spyOn(entity, 'Save').mockImplementation(async () => {
+      groupDuringSave = entity.TransactionGroup;
+      return true;
+    });
+
+    const ok = await MarkNotificationAsRead(entity, false, null);
+
+    expect(ok).toBe(true);
+    expect(groupDuringSave).toBeNull();
+    expect(entity.TransactionGroup).toBeNull();
+    expect(entity.Unread).toBe(true);
+  });
+
+  it('reverts Unread and returns false when Save() fails', async () => {
+    const info = new EntityInfo({
+      Name: 'MJ: User Notifications',
+      Status: 'Active',
+      Fields: [
+        { Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, Status: 'Active' },
+        { Name: 'Unread', Type: 'bit', IsPrimaryKey: false, Status: 'Active', AllowUpdateAPI: true },
+      ],
+    });
+    const entity = new MJUserNotificationEntity(info);
+    entity.ID = 'notif-fail';
+    entity.Unread = false;
+    vi.spyOn(entity, 'Save').mockResolvedValue(false);
+
+    const ok = await MarkNotificationAsRead(entity, false, null);
+
+    expect(ok).toBe(false);
+    expect(entity.Unread).toBe(false);
   });
 });

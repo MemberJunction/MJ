@@ -71,11 +71,32 @@ describe('UserNotificationsComponent — Mark All submits only after every save 
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('Mark All Unread submits a group holding every read notification', async () => {
-    const { component, group } = createComponent(notifications([true, false, false]));
+  it('Mark All Unread submits a group holding every read notification and detaches TransactionGroup afterwards', async () => {
+    const items = notifications([true, false, false]);
+    const { component, group } = createComponent(items);
 
     await component.MarkAllAsUnread();
 
     expect(group.QueuedAtSubmit).toBe(2);
+    expect(items[1].TransactionGroup).toBeNull();
+    expect(items[2].TransactionGroup).toBeNull();
+  });
+
+  it('reverts Unread and clears TransactionGroup if Mark All Unread submission fails', async () => {
+    const items = notifications([false, false]);
+    const { component, group } = createComponent(items);
+    group.Submit = async () => false;
+    (component as unknown as Open)['MarkAsRead'] = vi.fn(async (n: MJUserNotificationEntity, bRead: boolean, tg: unknown) => {
+      n.Unread = !bRead;
+      (n as unknown as Open)['TransactionGroup'] = tg;
+      return true;
+    });
+
+    await component.MarkAllAsUnread();
+
+    expect(items.every(n => n.Unread === false)).toBe(true);
+    expect(items.every(n => n.TransactionGroup === null)).toBe(true);
+    expect((component.SharedService as unknown as { CreateSimpleNotification: ReturnType<typeof vi.fn> }).CreateSimpleNotification)
+      .toHaveBeenCalledWith('Unable to mark all notifications as unread', 'error', 5000);
   });
 });

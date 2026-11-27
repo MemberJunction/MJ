@@ -1,10 +1,13 @@
 import { Component, ChangeDetectorRef, NgZone, OnDestroy, OnInit, AfterViewInit, ViewContainerRef, inject } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { MJUserNotificationEntity, MJUserNotificationTypeEntity } from '@memberjunction/core-entities';
 import { TransactionGroupBase } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { ProfileDialogService } from '../shell/services/profile-dialog.service';
 import {
@@ -509,6 +512,8 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   private groupsKey = '';
   private vmCache = new Map<string, NotificationVM>();
   private relativeTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly destroy$ = new Subject<void>();
+  private cacheVersion = 0;
 
   constructor (
     public SharedService: SharedService,
@@ -529,6 +534,12 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   async ngOnInit() {
     this.loadNotificationTypes();
+    MJNotificationService.Notifications$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.invalidateCaches();
+        this.cdr.markForCheck();
+      });
     // Refresh the snapshot relative-time labels between change-detection passes.
     // Run outside NgZone so the 60s timer only triggers Angular CD when a label actually changes.
     const startTimer = () => {
@@ -563,9 +574,19 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
     if (this.relativeTimer != null) {
       clearInterval(this.relativeTimer);
     }
+  }
+
+  private invalidateCaches(): void {
+    this.cacheVersion = (this.cacheVersion ?? 0) + 1;
+    this.notificationsToShowKey = '';
+    this.unreadNotificationsKey = '';
+    this.readNotificationsKey = '';
+    this.groupsKey = '';
   }
 
   private loadNotificationTypes() {
@@ -590,7 +611,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
     for (let i = 0; i < all.length; i++) {
       if (all[i].Unread) unreadCount++;
     }
-    const baseKey = `${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
+    const baseKey = `${this.cacheVersion ?? 0}|${all.length}|${unreadCount}|${all[0]?.ID ?? ''}|${all[all.length - 1]?.ID ?? ''}`;
     return { all, unreadCount, baseKey };
   }
 
@@ -796,6 +817,7 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
 
   SelectReadOption(option: ReadFilterOption): void {
     this.RadioSelected = option;
+    this.cdr?.markForCheck();
   }
 
   /** @deprecated Use {@link SelectReadOption}. */
@@ -813,7 +835,19 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   async MarkAsRead(notification: MJUserNotificationEntity, bRead: boolean, transGroup: TransactionGroupBase | null): Promise<boolean> {
-    return MarkNotificationAsRead(notification, bRead, transGroup, this.ProviderToUse);
+    const saved = await MarkNotificationAsRead(notification, bRead, transGroup, this.ProviderToUse);
+    if (!transGroup) {
+      if (!saved) {
+        this.SharedService?.CreateSimpleNotification(
+          bRead ? 'Unable to mark notification as read' : 'Unable to mark notification as unread',
+          'error',
+          5000
+        );
+      }
+      this.invalidateCaches();
+      this.cdr?.markForCheck();
+    }
+    return saved;
   }
 
   /** @deprecated Use {@link MarkAsRead}. */
@@ -840,26 +874,50 @@ export class UserNotificationsComponent extends BaseAngularComponent implements 
   }
 
   public async MarkAll(bRead: boolean) {
+    const targets = this.AllNotifications.filter(
+      notification => (notification.Unread && bRead) || (!notification.Unread && !bRead)
+    );
+    if (targets.length === 0) {
+      return;
+    }
+
     // Use transaction group for batching - all saves are queued and sent in one round-trip
     const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
+    const previousUnread = new Map<MJUserNotificationEntity, boolean>(
+      targets.map(n => [n, n.Unread])
+    );
 
-    // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
-    // group, so wait for every one to be queued; submitting earlier sends an empty group that
-    // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
-    const queued: Promise<boolean>[] = [];
-    for (const notification of this.AllNotifications) {
-      if (notification.Unread && bRead || !notification.Unread && !bRead) {
-        queued.push(this.MarkAsRead(notification, bRead, transGroup));
+    try {
+      // Queue all saves. A grouped Save() runs validation and pre-save hooks before it joins the
+      // group, so wait for every one to be queued; submitting earlier sends an empty group that
+      // reports success and persists nothing. A grouped Save() resolves once queued, not once sent.
+      await Promise.all(targets.map(notification => this.MarkAsRead(notification, bRead, transGroup)));
+
+      // Submit transaction group - this is where the actual network call happens
+      if (!await transGroup.Submit()) {
+        for (const [notification, prev] of previousUnread) {
+          notification.Unread = prev;
+        }
+        this.SharedService.CreateSimpleNotification(
+          bRead ? 'Unable to mark all notifications as read' : 'Unable to mark all notifications as unread',
+          'error',
+          5000
+        );
+      } else {
+        SharedService.RefreshUserNotifications();
       }
+    } finally {
+      // Always detach the completed/failed TransactionGroup from every cached entity so
+      // subsequent single-item Read/Unread toggles persist immediately instead of enqueuing
+      // into a finished group.
+      for (const notification of targets) {
+        notification.TransactionGroup = null;
+      }
+      MJNotificationService.UpdateNotificationObservables();
+      this.invalidateCaches();
+      this.cdr?.markForCheck();
     }
-    await Promise.all(queued);
-
-    // Submit transaction group - this is where the actual network call happens
-    if (!await transGroup.Submit())
-      this.SharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
-    else
-      SharedService.RefreshUserNotifications();
   }
 
   /** @deprecated Use {@link MarkAll}. */

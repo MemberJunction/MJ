@@ -157,20 +157,28 @@ export class NotificationPopoverComponent extends BaseAngularComponent implement
     }
     this.MarkingAllRead = true;
     this.cdr.markForCheck();
+    const unread = this.AllNotifications.filter(n => n.Unread);
+    const previousUnread = new Map<MJUserNotificationEntity, boolean>(unread.map(n => [n, n.Unread]));
     try {
       const provider = this.resolveProvider() ?? Metadata.Provider;
       const transGroup = await provider.CreateTransactionGroup();
-      const unread = this.AllNotifications.filter(n => n.Unread);
       await Promise.all(unread.map(n => MarkNotificationAsRead(n, true, transGroup, provider)));
       const ok = await transGroup.Submit();
       if (!ok) {
+        for (const [notification, prev] of previousUnread) {
+          notification.Unread = prev;
+        }
         this.sharedService.CreateSimpleNotification('Unable to mark all notifications as read', 'error', 5000);
       } else {
-        await SharedService.RefreshUserNotifications();
+        await MJNotificationService.RefreshUserNotifications();
       }
+    } finally {
+      for (const notification of unread) {
+        notification.TransactionGroup = null;
+      }
+      MJNotificationService.UpdateNotificationObservables();
       this.UnreadCount = this.AllNotifications.filter(n => n.Unread).length;
       this.rebuildVisibleItems();
-    } finally {
       this.MarkingAllRead = false;
       this.cdr.markForCheck();
     }
@@ -193,7 +201,14 @@ export class NotificationPopoverComponent extends BaseAngularComponent implement
   }
 
   private async markSingleRead(notification: MJUserNotificationEntity, bRead: boolean): Promise<void> {
-    await MarkNotificationAsRead(notification, bRead, null, this.resolveProvider());
+    const saved = await MarkNotificationAsRead(notification, bRead, null, this.resolveProvider());
+    if (!saved) {
+      this.sharedService.CreateSimpleNotification(
+        bRead ? 'Unable to mark notification as read' : 'Unable to mark notification as unread',
+        'error',
+        5000
+      );
+    }
     this.UnreadCount = this.AllNotifications.filter(n => n.Unread).length;
     this.rebuildVisibleItems();
     this.cdr.markForCheck();
