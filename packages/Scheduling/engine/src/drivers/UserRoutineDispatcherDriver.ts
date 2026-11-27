@@ -33,8 +33,6 @@ import {
     MJAIPromptEntityExtended,
     AIPromptParams,
     ConversationUtility,
-    MentionContent,
-    SpecialContentToken,
 } from '@memberjunction/ai-core-plus';
 import {
     AgentRunner,
@@ -156,68 +154,6 @@ function persistedRunStatus(run: MJUserRoutineRunEntity): MJUserRoutineRunEntity
 
 /** Name of the metadata-seeded default notification template (resolved BY NAME, never hardcoded ID). */
 const DEFAULT_NOTIFICATION_TEMPLATE_NAME = 'User Routine Notification - Default';
-
-function isRecordMentionToken(token: SpecialContentToken): token is SpecialContentToken & { content: MentionContent } {
-    return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
-}
-
-/**
- * Visible label for a `record` mention token, matching `ConversationUtility`'s fallback rules.
- */
-export function ResolveRecordLinkLabel(content: MentionContent): string {
-    const explicitName = (content.name ?? '').trim();
-    return explicitName || content.entityName || 'record';
-}
-
-function endsWithRecordTitle(prefix: string, label: string): boolean {
-    if (!label) {
-        return false;
-    }
-    const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const trailingTitlePattern = new RegExp(`(?:^|[\\s(\\[\\"'*_\`>:])${escapedLabel}[*_\`"'\\]]*[ \\t]*$`, 'i');
-    return trailingTitlePattern.test(prefix);
-}
-
-/**
- * Converts `@{"_mode":...}` tokens in a routine result summary into clean plain text via
- * `ConversationUtility.ToPlainText`, omitting duplicate `record` mention pills that
- * immediately follow the same record title (e.g. `Northwind @{...}` -> `Northwind` rather
- * than `Northwind Northwind`).
- */
-export function FormatRoutinePlainResultSummary(
-    summary: string,
-    recordLinkLabel: (content: MentionContent) => string = ResolveRecordLinkLabel
-): string {
-    if (!summary) {
-        return '';
-    }
-    const tokens = ConversationUtility.ParseSpecialContent(summary);
-    if (tokens.length === 0) {
-        return ConversationUtility.ToPlainText(summary);
-    }
-
-    let deduplicated = '';
-    let cursor = 0;
-    for (const token of tokens) {
-        deduplicated += summary.slice(cursor, token.startIndex);
-        cursor = token.endIndex;
-
-        if (isRecordMentionToken(token)) {
-            const label = recordLinkLabel(token.content);
-            if (endsWithRecordTitle(deduplicated, label)) {
-                const nextChar = summary[token.endIndex] ?? '';
-                if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
-                    deduplicated = deduplicated.replace(/[ \t]+$/, '');
-                }
-                continue;
-            }
-        }
-        deduplicated += token.originalText;
-    }
-    deduplicated += summary.slice(cursor);
-
-    return ConversationUtility.ToPlainText(deduplicated);
-}
 
 /** Name of the metadata-seeded `MJ: User Notification Types` row used for in-app delivery. */
 const NOTIFICATION_TYPE_NAME = 'User Routine';
@@ -1697,7 +1633,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
             }
             const isHtml = content.Type?.trim().toLowerCase() === 'html';
             const rawSummary = run.ResultSummary ?? '';
-            const resultSummary = isHtml ? rawSummary : FormatRoutinePlainResultSummary(rawSummary);
+            const resultSummary = ConversationUtility.CleanMentions(rawSummary);
             // BaseEntity getters are not spreadable — GetAll() yields plain objects for the renderer.
             const data = {
                 routine: routine.GetAll(),
@@ -1714,7 +1650,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
                 { ContextUser: contextUser, autoescape: isHtml }
             );
             if (rendered.Success && rendered.Output) {
-                return rendered.Output;
+                return isHtml ? ConversationUtility.CleanHtmlMentions(rendered.Output) : rendered.Output;
             }
             this.logError(`Template render failed for routine "${routine.Name}": ${rendered.Message ?? 'unknown'} — using plain-text fallback`);
             return this.buildPlainTextMessage(routine, run);
@@ -1742,7 +1678,7 @@ export class UserRoutineDispatcherDriver extends BaseScheduledJob {
         const statusLine = run.Status === 'Success'
             ? `completed successfully at ${when}.`
             : `failed at ${when}.${run.ErrorMessage ? `\nError: ${run.ErrorMessage}` : ''}`;
-        const formattedSummary = run.ResultSummary ? FormatRoutinePlainResultSummary(run.ResultSummary) : '';
+        const formattedSummary = run.ResultSummary ? ConversationUtility.CleanMentions(run.ResultSummary) : '';
         const summary = formattedSummary ? `\n\n${formattedSummary}` : '';
         return `Routine "${routine.Name}" ${statusLine}${summary}`;
     }

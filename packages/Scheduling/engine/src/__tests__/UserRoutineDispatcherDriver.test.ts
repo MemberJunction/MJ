@@ -6,13 +6,9 @@ import {
     MJUserRoutineEntity,
     MJUserRoutineRunEntity,
 } from '@memberjunction/core-entities';
-import { ConversationUtility, MentionContent } from '@memberjunction/ai-core-plus';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import {
-    FormatRoutinePlainResultSummary,
-    ResolveRecordLinkLabel,
-    UserRoutineDispatcherDriver,
-} from '../drivers/UserRoutineDispatcherDriver';
+import { UserRoutineDispatcherDriver } from '../drivers/UserRoutineDispatcherDriver';
 
 class TestRoutineDispatcherDriver extends UserRoutineDispatcherDriver {
     public TemplateToResolve: MJTemplateEntityExtended | undefined;
@@ -216,24 +212,52 @@ describe('UserRoutineDispatcherDriver notification rendering', () => {
         expect(output).not.toContain('@{"_mode"');
     });
 
-    it('does not run plain-text conversion on HTML templates', async () => {
+    it('cleans mention tokens and preserves HTML autoescaping on HTML-only templates', async () => {
         const driver = new TestRoutineDispatcherDriver();
         const htmlContent = createTemplateContentEntity(
-            'content-html-raw',
+            'content-html-mentions',
             'HTML',
             '<div>{{ resultSummary }}</div>'
         );
         driver.TemplateToResolve = createTemplateEntity([htmlContent]);
 
-        const toPlainTextSpy = vi.spyOn(ConversationUtility, 'ToPlainText');
+        const cleanMentionsSpy = vi.spyOn(ConversationUtility, 'CleanMentions');
         const routine = createRoutineEntity('Account Watch');
-        const summary = `Reviewed Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"}`;
+        const summary = [
+            `Reviewed Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"}`,
+            `& Co with @{"_mode":"mention","type":"user","id":"user-2","name":"Elena <Lead>"}`,
+            `and flagged @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Contoso","ID":"acc-2"}.`,
+        ].join(' ');
         const run = createRunEntity('Success', summary);
 
         const output = await driver.RenderNotification(routine, run, TEST_USER);
 
-        expect(toPlainTextSpy).not.toHaveBeenCalled();
-        expect(output).toContain('&quot;_mode&quot;');
+        expect(cleanMentionsSpy).toHaveBeenCalledTimes(1);
+        expect(output).toBe('<div>Reviewed Northwind &amp; Co with @Elena &lt;Lead&gt; and flagged Contoso.</div>');
+        expect(output).not.toContain('_mode');
+        expect(output).not.toContain('Northwind Northwind');
+    });
+
+    it('cleans HTML-escaped mention tokens even when custom HTML templates reference run.ResultSummary directly', async () => {
+        const driver = new TestRoutineDispatcherDriver();
+        const htmlContent = createTemplateContentEntity(
+            'content-html-run-direct',
+            'HTML',
+            '<p><strong>{{ routine.Name }}</strong>: {{ run.ResultSummary }}</p>'
+        );
+        driver.TemplateToResolve = createTemplateEntity([htmlContent]);
+
+        const routine = createRoutineEntity('Account Watch');
+        const summary =
+            `Reviewed Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"acc-1"} ` +
+            `with @{"_mode":"mention","type":"user","id":"user-2","name":"Elena Vance"}.`;
+        const run = createRunEntity('Success', summary);
+
+        const output = await driver.RenderNotification(routine, run, TEST_USER);
+
+        expect(output).toBe('<p><strong>Account Watch</strong>: Reviewed Northwind with @Elena Vance.</p>');
+        expect(output).not.toContain('_mode');
+        expect(output).not.toContain('Northwind Northwind');
     });
 
     it('cleans mention tokens and deduplicates record titles in plain-text fallback when no template resolves', async () => {
@@ -250,43 +274,5 @@ describe('UserRoutineDispatcherDriver notification rendering', () => {
         expect(output).toContain('Checked Northwind');
         expect(output).not.toContain('Northwind Northwind');
         expect(output).not.toContain('@{"_mode"');
-    });
-});
-
-describe('FormatRoutinePlainResultSummary', () => {
-    it('returns empty string for empty input', () => {
-        expect(FormatRoutinePlainResultSummary('')).toBe('');
-    });
-
-    it('deduplicates record mention immediately following the same record title', () => {
-        const input = `Northwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}`;
-        expect(FormatRoutinePlainResultSummary(input)).toBe('Northwind');
-    });
-
-    it('deduplicates record mention after bold markdown title and preserves trailing punctuation', () => {
-        const input = `Updated **Northwind** @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}.`;
-        expect(FormatRoutinePlainResultSummary(input)).toBe('Updated **Northwind**.');
-    });
-
-    it('does not falsely deduplicate partial suffix matches like SuperNorthwind', () => {
-        const input = `SuperNorthwind @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}`;
-        expect(FormatRoutinePlainResultSummary(input)).toBe('SuperNorthwind Northwind');
-    });
-
-    it('supports icon-only record mentions using entityName fallback', () => {
-        const input = `Checked Accounts @{"_mode":"mention","type":"record","entityName":"Accounts","ID":"1"} for renewal`;
-        expect(FormatRoutinePlainResultSummary(input)).toBe('Checked Accounts for renewal');
-    });
-
-    it('supports custom recordLinkLabel callback', () => {
-        const customLabel = (content: MentionContent): string =>
-            content.entityName ? `${ResolveRecordLinkLabel(content)} (${content.entityName})` : ResolveRecordLinkLabel(content);
-        const input = `Northwind (Accounts) @{"_mode":"mention","type":"record","entityName":"Accounts","name":"Northwind","ID":"1"}`;
-        expect(FormatRoutinePlainResultSummary(input, customLabel)).toBe('Northwind (Accounts)');
-    });
-
-    it('converts agent, user, and entity mentions via ConversationUtility.ToPlainText', () => {
-        const input = `Asked @{"_mode":"mention","type":"agent","id":"a1","name":"Planner"} and @{"_mode":"mention","type":"user","id":"u1","name":"Elena"} about @{"_mode":"mention","type":"entity","id":"e1","name":"Accounts"}`;
-        expect(FormatRoutinePlainResultSummary(input)).toBe('Asked @Planner and @Elena about #Accounts');
     });
 });

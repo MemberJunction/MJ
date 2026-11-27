@@ -85,7 +85,7 @@ const result = await ai.ChatCompletion({
 ### Communication & Automation
 - **Multi-channel messaging** — Email (SendGrid, Gmail, MSGraph), SMS (Twilio)
 - **Actions framework** — Metadata-driven business logic for workflows and agents
-- **Durable work queues & isolated workflows** — [TaskGraph](./packages/TaskGraph/README.md) (`InProcess`/`Worker`/`Process`/`Container` isolation, queued dispatch, `Enqueue` fan-out) and [WorkQueue](./packages/WorkQueue/README.md) across Database, AWS SQS, Azure Service Bus, and Google Cloud Pub/Sub ([spec](./.mj/specs/epic-2-task-graph-isolation-and-workqueue/spec.md))
+- **Durable work queues & isolated workflows** — [TaskGraph](./packages/TaskGraph/README.md) (`InProcess`/`Worker`/`Process`/`Container` isolation, queued dispatch, `Enqueue` fan-out) and [WorkQueue](./packages/WorkQueue/README.md) across Database, AWS SQS, Azure Service Bus, and Google Cloud Pub/Sub
 - **Scheduled jobs** — Cron-based scheduling with distributed locking
 - **Template engine** — Nunjucks templates with AI-powered content generation
 

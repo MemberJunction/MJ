@@ -6,7 +6,7 @@ import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager, NavItem } from '@memberjunction/ng-base-application';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { ConversationUtility, MentionContent, SpecialContentToken } from '@memberjunction/ai-core-plus';
+import { ConversationUtility } from '@memberjunction/ai-core-plus';
 
 /**
  * Radio button filter options for notification read status
@@ -263,64 +263,10 @@ function splitMarkdownCodeSegments(text: string): MarkdownSegment[] {
   return segments;
 }
 
-function isRecordMentionToken(token: SpecialContentToken): token is SpecialContentToken & { content: MentionContent } {
-  return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
-}
-
-function resolveRecordLinkLabel(content: MentionContent): string {
-  const explicitName = (content.name ?? '').trim();
-  return explicitName || content.entityName || 'record';
-}
-
-function endsWithRecordTitle(prefix: string, label: string): boolean {
-  if (!label) {
-    return false;
-  }
-  const escapedLabel = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const trailingTitlePattern = new RegExp(`(?:^|[\\s(\\[\\"'*_\`>:])${escapedLabel}[*_\`"'\\]]*[ \\t]*$`, 'i');
-  return trailingTitlePattern.test(prefix);
-}
-
-/**
- * Converts `@{"_mode":...}` tokens into readable plain text via `ConversationUtility.ToPlainText`,
- * omitting duplicate `record` mention pills that immediately follow the same record title.
- */
-function replaceMentionTokens(text: string): string {
-  if (!text) {
-    return '';
-  }
-  const tokens = ConversationUtility.ParseSpecialContent(text);
-  if (tokens.length === 0) {
-    return text;
-  }
-
-  let deduplicated = '';
-  let cursor = 0;
-  for (const token of tokens) {
-    deduplicated += text.slice(cursor, token.startIndex);
-    cursor = token.endIndex;
-
-    if (isRecordMentionToken(token)) {
-      const label = resolveRecordLinkLabel(token.content);
-      if (endsWithRecordTitle(deduplicated, label)) {
-        const nextChar = text[token.endIndex] ?? '';
-        if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
-          deduplicated = deduplicated.replace(/[ \t]+$/, '');
-        }
-        continue;
-      }
-    }
-    deduplicated += token.originalText;
-  }
-  deduplicated += text.slice(cursor);
-
-  return ConversationUtility.ToPlainText(deduplicated);
-}
-
 function cleanNonHtmlMessage(text: string): string {
   const segments = splitMarkdownCodeSegments(text);
   return segments
-    .map(seg => (seg.isCode ? seg.text : replaceMentionTokens(decodeSafeHtmlEntities(seg.text))))
+    .map(seg => (seg.isCode ? seg.text : ConversationUtility.CleanMentions(decodeSafeHtmlEntities(seg.text))))
     .join('');
 }
 
@@ -461,16 +407,17 @@ export function StripNotificationMarkdown(text: string): string {
       }
       const decoded = decodeSafeHtmlEntities(seg.text);
       const stripped = stripMarkdownSyntaxOutsideTokens(decoded);
-      return replaceMentionTokens(stripped);
+      return ConversationUtility.CleanMentions(stripped);
     })
     .join('');
   return collapseWhitespaceValue(rendered);
 }
 
 /**
- * Classifies a notification `Message` for rendering and normalizes non-HTML previews and
+ * Classifies a notification `Message` for rendering and normalizes non-HTML previews,
  * Markdown bodies (`&amp;`/`&#39;`/`&#x27;`/`&quot;` single-pass decode outside code blocks
- * and `@{"_mode":"mention",...}` conversion with adjacent record title deduplication).
+ * and `@{"_mode":"mention",...}` conversion with adjacent record title deduplication), and
+ * HTML notification bodies via {@link ConversationUtility.CleanHtmlMentions}.
  */
 export function ClassifyNotificationMessage(message: string): ClassifiedNotificationMessage {
   const trimmed = (message ?? '').trim();
@@ -484,8 +431,12 @@ export function ClassifyNotificationMessage(message: string): ClassifiedNotifica
     for (const el of Array.from(doc.querySelectorAll('style, script, link, meta, title'))) {
       el.remove();
     }
-    const body = doc.body?.innerHTML?.trim() ?? '';
-    const text = collapseWhitespaceValue(replaceMentionTokens(doc.body?.textContent ?? ''));
+    const rawBody = doc.body?.innerHTML?.trim() ?? '';
+    const body = ConversationUtility.CleanHtmlMentions(rawBody);
+    const cleanedDoc = body !== rawBody
+      ? new DOMParser().parseFromString(body, 'text/html')
+      : doc;
+    const text = collapseWhitespaceValue(ConversationUtility.CleanMentions(cleanedDoc.body?.textContent ?? ''));
     return { Kind: 'html', Body: body, Preview: excerptValue(text), Expandable: true };
   }
 
