@@ -2177,7 +2177,7 @@ sweep run-now and is injected into the next run; `packages/AI/Agents` tests unch
 
 #### A6 — Budgets, token accounting, sidecar failure
 
-**Status:** `not-started`
+**Status:** `in-progress`
 
 **Outcome.** A session halts at its caps with at most one call of overrun, counting every iteration (failed ones
 included); `TokensUsed` is the sum of the prompt runs attributed to an iteration, so `RunCost` (computeSeconds,
@@ -2222,6 +2222,8 @@ packages/AI/PredictiveStudio/Engine/src/experiment/budget.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/index.ts
 packages/AI/PredictiveStudio/Engine/src/agent/run-cost.ts
 packages/AI/PredictiveStudio/Engine/src/agent/model-dev-orchestrator-agent.ts
+packages/AI/PredictiveStudio/Engine/src/agent/pipeline-builder-agent.ts
+packages/AI/PredictiveStudio/Engine/src/agent/__tests__/pipeline-builder-agent.test.ts
 packages/AI/PredictiveStudio/Engine/src/agent/index.ts
 packages/AI/PredictiveStudio/Sidecar/src/ml-sidecar.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/__tests__/token-accounting.test.ts
@@ -2232,6 +2234,7 @@ metadata-optional/integration-test/tests/gates/.gate-C1-C3.1.json
 metadata-optional/integration-test/test-suites/.ps-gates-agent-suite.json
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c3-4.checks.ts
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c3-1.checks.ts
+packages/TestingFramework/integration-test-suite/src/checks/ps-gates/ps-gate-traced-numbers.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 ```

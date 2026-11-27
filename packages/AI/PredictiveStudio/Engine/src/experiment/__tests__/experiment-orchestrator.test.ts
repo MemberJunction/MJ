@@ -1135,7 +1135,20 @@ describe('A6 attack 3: iteration tokens', () => {
       CurrentAgentRunID: 'STRATEGIST-RUN',
       proposeNextWave: (ctx) => ctx.remaining.slice(0, 1),
     };
-    await new ExperimentOrchestrator().runSession(plan([experiment('A', 1), experiment('B', 2)]), deps(factory, new TokenTrainer(10, false), new FakeClock(), strategist), { concurrency: 1 });
+    // A strategist other than the seeded random one runs only under a guided strategy with a passed comparison (G7.7).
+    const comparisonId = 'C1111111-1111-4111-8111-111111111111';
+    await new ExperimentOrchestrator().runSession(plan([experiment('A', 1), experiment('B', 2)]), deps(factory, new TokenTrainer(10, false), new FakeClock(), strategist), {
+      concurrency: 1,
+      searchStrategy: { kind: 'guided', method: 'bayesian', equalCostComparisonId: comparisonId },
+      searchComparisonStore: {
+        LoadComparison: async () => ({
+          ID: comparisonId, Method: 'bayesian', ComputeBudgetSecondsPerArm: 120,
+          Datasets: [{ Dataset: 'W1-signal', Seeds: [42] }, { Dataset: 'C1', Seeds: [1] }],
+          PairedDifference: { 'W1-signal': { value: 0.05, ci: [0.02, 0.08], beats: true }, 'C1': { value: 0.04, ci: [0.01, 0.07], beats: true } },
+          LowerBoundMin: 0.01, Passed: true,
+        }),
+      },
+    });
     expect(factory.Iterations.map((it) => it.AIAgentRunID)).toEqual(['STRATEGIST-RUN', 'STRATEGIST-RUN']);
   });
 });

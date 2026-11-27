@@ -32,3 +32,4 @@ export * from './decision-log';
 export * from './session-replay';
 export * from './profile-verdict';
 export * from './agent-note-policy';
+export * from './run-cost';

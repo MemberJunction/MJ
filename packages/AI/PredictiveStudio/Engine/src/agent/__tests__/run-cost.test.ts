@@ -10,7 +10,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { RunView, UserInfo, type IMetadataProvider } from '@memberjunction/core';
+import { TracedNumbers } from '@memberjunction/predictive-studio-core';
 import { RunCostReport } from '../run-cost';
+import { ExperimentReports } from '../pipeline-builder-agent';
 import { TrainerResultFixtures } from '../../training/__tests__/fixtures/trainer-result';
 import { ProtocolRowFixture } from '../../training/__tests__/fixtures/protocol-row';
 
@@ -30,9 +32,9 @@ interface Tables {
 let tables: Tables;
 const user = new UserInfo(null, { ID: 'U1', Name: 'person', Type: 'Owner' });
 const provider = {} as unknown as IMetadataProvider;
-const completed = TrainerResultFixtures.ValidationResultsFor(TrainerResultFixtures.CannedCompleted('TR1', ProtocolRowFixture.Spec()));
+const completed = TrainerResultFixtures.ValidationResultsFor(TrainerResultFixtures.CannedCompleted('7A1E0C61-3A4B-4C5D-8E6F-000000000001', ProtocolRowFixture.Spec()));
 const stopped = TrainerResultFixtures.ValidationResultsFor((() => {
-  const c = TrainerResultFixtures.CannedCompleted('TR3', ProtocolRowFixture.Spec());
+  const c = TrainerResultFixtures.CannedCompleted('7A1E0C61-3A4B-4C5D-8E6F-000000000003', ProtocolRowFixture.Spec());
   return { ...c, cost: { ...c.cost, stoppedByBudget: true } };
 })());
 
@@ -126,5 +128,35 @@ describe('A6 attack 3: RunCostReport.Of equals the stored sums', () => {
 
   it('refuses a run that does not exist', async () => {
     await expect(RunCostReport.Of('NOPE', provider, user)).rejects.toThrow(/NOPE/);
+  });
+});
+
+describe('A6 attack 3 (D5-A6-4, D5-A6-5): the ML Experiment Results report shows the training cost beside the primary metric', () => {
+  const base = { Name: 'Renewal', Goal: 'Predict renewal', TargetVariable: 'Renewed', TargetMetric: 'AUC', Run: null, Model: null, Trust: null, Status: 'held' as const };
+
+  it("renders the run's stored compute seconds, USD and tokens on the line after the primary metric, each traced to its column", () => {
+    const cost = { ID: 'TR1', ComputeSeconds: 12.5, ComputeCost: 0.00125, TokensUsed: 2000 };
+    const report = ExperimentReports.GenerateMarkdownReport({ ...base, Cost: cost });
+    const lines = report.Markdown.split('\n');
+    const primary = lines.findIndex((l) => l.startsWith('- **Primary Metric**'));
+    expect(lines[primary + 1]).toBe('- **Training cost**: 12.500 s of compute, $0.001250, 2,000 LLM tokens');
+    const traced = report.Numbers.filter((n) => ExperimentReports.IsCostPath(n.Source.Path));
+    expect(traced.map((n) => [n.Text, n.Source.EntityName, n.Source.RecordID, n.Source.Path])).toEqual([
+      ['12.500', 'MJ: ML Training Runs', 'TR1', '$.ComputeSeconds'], ['0.001250', 'MJ: ML Training Runs', 'TR1', '$.ComputeCost'], ['2,000', 'MJ: ML Training Runs', 'TR1', '$.TokensUsed'],
+    ]);
+    for (const n of traced) expect(TracedNumbers.Recompute(n, ExperimentReports.CostColumnsJson(cost))).toBe(n.Value);
+  });
+
+  it('says "not measured" for no stored cost and "not priced" for a run with no compute rate; no cost line when the input carries none', () => {
+    expect(ExperimentReports.GenerateMarkdownReport({ ...base, Cost: null }).Markdown).toContain('- **Training cost**: not measured');
+    const unpriced = ExperimentReports.GenerateMarkdownReport({ ...base, Cost: { ID: 'TR1', ComputeSeconds: 3, ComputeCost: null, TokensUsed: 0 } }).Markdown;
+    expect(unpriced).toContain('- **Training cost**: 3.000 s of compute, not priced, 0 LLM tokens');
+    expect(ExperimentReports.GenerateMarkdownReport(base).Markdown).not.toContain('Training cost');
+  });
+
+  it('InputFromRows carries the cost columns through, so a report regenerated from rows shows the same line', () => {
+    const cost = { ID: 'TR1', ComputeSeconds: 1, ComputeCost: 0.0001, TokensUsed: 0 };
+    const input = ExperimentReports.InputFromRows({ Name: 'Renewal', Goal: 'Predict renewal', TargetVariable: 'Renewed', TargetMetric: 'AUC', Run: null, Model: null, Cost: cost });
+    expect(input.Cost).toEqual(cost);
   });
 });

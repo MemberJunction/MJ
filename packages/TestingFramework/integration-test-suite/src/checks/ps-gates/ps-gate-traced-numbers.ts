@@ -79,19 +79,21 @@ export class TracedNumberChecks {
   /** The report a build delivers, regenerated from its training run and model rows read fresh. */
   public static async RegenerateReport(h: TruthHarness, words: ReportWords, runId: string, modelId: string | null): Promise<StoredReport> {
     const rv = RunView.FromMetadataProvider(h.Provider);
-    const runs = await rv.RunView<Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults'>>(
-      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', 'ValidationResults'], ResultType: 'simple', BypassCache: true }, h.User);
+    const runs = await rv.RunView<Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults' | 'ComputeSeconds' | 'ComputeCost' | 'TokensUsed'>>(
+      { EntityName: 'MJ: ML Training Runs', ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', 'ValidationResults', ...ExperimentReports.COST_COLUMNS], ResultType: 'simple', BypassCache: true }, h.User);
     const run = runs.Results[0];
     if (!runs.Success || !run) throw new Error(`reading training run ${runId}: ${runs.ErrorMessage || 'no row'}`);
     const model = modelId === null ? null : await TracedNumberChecks.modelRow(h, modelId);
-    const rows: ExperimentReportRows = { ...words, Run: { ID: run.ID, ValidationResults: run.ValidationResults }, Model: model };
+    const cost = { ID: run.ID, ComputeSeconds: run.ComputeSeconds, ComputeCost: run.ComputeCost, TokensUsed: run.TokensUsed };
+    const rows: ExperimentReportRows = { ...words, Run: { ID: run.ID, ValidationResults: run.ValidationResults }, Model: model, Cost: cost };
     const input = ExperimentReports.InputFromRows(rows);
     return { Input: input, Report: ExperimentReports.GenerateMarkdownReport(input) };
   }
 
   /**
    * One rendered number checked against its stored row, read fresh: the row's JSON column (`ValidationResults` of a
-   * training run, `FeatureImportance` of a model; any other entity fails) recomputes to `Value`; `rendered` contains
+   * training run, or its cost columns for the report's cost line (D5-A6-5); `FeatureImportance` of a model; any other
+   * entity fails) recomputes to `Value`; `rendered` contains
    * the token; the token agrees with `Value` at its printed precision.
    */
   public static async Check(h: TruthHarness, n: TracedNumber, rendered: string): Promise<NumberCheck> {
@@ -110,6 +112,13 @@ export class TracedNumberChecks {
   /** The JSON column the number was read from, read fresh by its entity and ID; null for an unknown entity or a missing row. */
   public static async StoredJson(h: TruthHarness, n: TracedNumber): Promise<string | null> {
     const id = n.Source.RecordID;
+    if (n.Source.EntityName === TrustVerdicts.RunEntityName && ExperimentReports.IsCostPath(n.Source.Path)) {
+      // The report's cost line traces to the run's cost columns (D5-A6-5), read here as the JSON the report traced them in.
+      const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLTrainingRunEntity, 'ID' | 'ComputeSeconds' | 'ComputeCost' | 'TokensUsed'>>(
+        { EntityName: 'MJ: ML Training Runs', ExtraFilter: `ID='${EscapeSQLString(id)}'`, Fields: ['ID', ...ExperimentReports.COST_COLUMNS], ResultType: 'simple', BypassCache: true }, h.User);
+      const row = r.Success ? r.Results[0] : undefined;
+      return row ? ExperimentReports.CostColumnsJson(row) : null;
+    }
     if (n.Source.EntityName === TrustVerdicts.RunEntityName) {
       const r = await RunView.FromMetadataProvider(h.Provider).RunView<Pick<MJMLTrainingRunEntity, 'ID' | 'ValidationResults'>>(
         { EntityName: 'MJ: ML Training Runs', ExtraFilter: `ID='${EscapeSQLString(id)}'`, Fields: ['ID', 'ValidationResults'], ResultType: 'simple', BypassCache: true }, h.User);

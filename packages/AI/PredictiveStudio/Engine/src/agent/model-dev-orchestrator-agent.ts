@@ -52,6 +52,8 @@ import { AgentSessionReplay, CLAIM_CALL, PRESENT_PLAN_CALL, PROMPT_OUTPUT_CALL }
 import { PredictiveStudioPipelineBuilderAgent, type PredictiveStudioBuilderPayload } from './pipeline-builder-agent';
 import { PlanMetadataValidator } from './plan-metadata-validator';
 import { CatalogRenderer } from './catalog-renderer';
+import { RunCostReport, type RunCostBreakdown } from './run-cost';
+import { MLSidecarProvider } from '../sidecar-provider';
 
 /** One action result of an Actions step, as the framework hands it back (`priorStepResult`). */
 interface ActionOutput {
@@ -476,6 +478,10 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
       await this.settleClaim(params, this.dispatchedClaimId, result);
       const reported = await this.reportBuild<P>(params, this.dispatchedClaimId, result);
       if (reported !== null) return reported;
+      if (this.payloadOf(params, result).BuildResult?.success !== true) {
+        const stopped = await this.sidecarStoppedStep<P>(params, result, 'build', false);
+        if (stopped !== null) return stopped;
+      }
     }
     if (step.step === 'Actions' && step.actions?.[0]?.name === PROFILE_ACTION_NAME) return this.absorbProfile<P>(params, result);
     if (step.step === 'Actions') return this.absorbDraft<P>(params, step, result);
@@ -520,7 +526,7 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     const profile = json ? PredictiveStudioModelDevAgent.ProfileResultOf(json) : null;
     if (json === null || profile === null) {
       this.profileFailures.set(hash, output ? output.Message || 'the profile Action returned no profile' : 'the profile Action did not run');
-      return result;
+      return (await this.sidecarStoppedStep<P>(params, result, 'profile', true)) ?? result;
     }
     const verdict = profile.verdict ? ` Verdict: ${profile.verdict.kind}.` : '';
     const rationale = `Profiled ${profile.resolvedRows} resolved development rows (${profile.minorityRows} in the smaller class, 0 holdout rows read), ${profile.computeSeconds.toFixed(2)} s of sidecar compute.${verdict}`;
@@ -603,16 +609,72 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     }, claimed);
   }
 
-  /** The `report` row of a dispatched build, once it settled: its outcome (the report text follows from the prompt). */
+  /**
+   * The `report` row of a dispatched build, once it settled: its outcome and the session's `RunCost` so far with the
+   * stored parts it sums (§5.1.7, G4.9; the report text follows from the prompt).
+   */
   private async reportBuild<P>(params: ExecuteAgentParams, claimId: string, result: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P> | null> {
     const payload = this.payloadOf(params, result);
     const outcome = payload.BuildResult;
     const built = outcome?.success === true;
     const rationale = built ? `The approved build finished (pipeline ${outcome?.pipelineId || 'unknown'}).` : `The approved build failed${outcome?.errorMessage ? `: ${outcome.errorMessage}` : '.'}`;
+    const cost = await this.runCostOf(params);
     return this.AppendDecision<P>(params, {
       Decision: 'report', Before: payload, After: payload, Rationale: rationale,
-      Calls: [{ action: 'build', paramsHash: null, result: { claimId, outcome: built ? 'built' : 'failed', pipelineId: outcome?.pipelineId || null } }],
+      Calls: [{ action: 'build', paramsHash: null, result: { claimId, outcome: built ? 'built' : 'failed', pipelineId: outcome?.pipelineId || null, runCost: cost } }],
     });
+  }
+
+  /**
+   * This run's `RunCost` as the report row records it: the cost, its budget and the stored parts it sums, with the
+   * run's in-memory totals (its own row is still being written). A failed read is logged and recorded as its error.
+   */
+  private async runCostOf(params: ExecuteAgentParams): Promise<JsonObject> {
+    const ctx = this.contextOf(params);
+    const run = this.AgentRun;
+    if (!ctx || !run) return { error: 'the run has no row or no user to read its cost as' };
+    try {
+      const parts = await RunCostReport.Breakdown(run.ID, ctx.Provider, ctx.ContextUser, { TotalTokensUsed: run.TotalTokensUsed, TotalCost: run.TotalCost });
+      return PredictiveStudioModelDevAgent.RunCostJson(parts);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      LogError(`PredictiveStudioModelDevAgent: reading the cost of run ${run.ID} failed: ${message}`);
+      return { error: message };
+    }
+  }
+
+  /** A cost breakdown as the decision row's JSON. */
+  public static RunCostJson(parts: RunCostBreakdown): JsonObject {
+    const c = parts.Cost;
+    return {
+      computeSeconds: c.computeSeconds, tokens: c.tokens, usd: c.usd, stoppedByBudget: c.stoppedByBudget,
+      budget: { maxComputeSeconds: c.budget.maxComputeSeconds, maxTokens: c.budget.maxTokens, maxCandidates: c.budget.maxCandidates, hardStop: c.budget.hardStop },
+      promptTokens: parts.PromptTokens, iterationTokens: parts.IterationTokens, promptUsd: parts.PromptUsd, computeUsd: parts.ComputeUsd,
+      trainingRunIds: [...parts.TrainingRunIDs],
+    };
+  }
+
+  /** True when the process's ML sidecar answers its health probe (G4.8); overridable so a test substitutes the probe. */
+  protected async SidecarReachable(): Promise<boolean> {
+    return MLSidecarProvider.Instance.GetSidecar().Reachable();
+  }
+
+  /**
+   * After a profile or build that failed: when the sidecar no longer answers, the turn ends `Failed` (G4.8) — a stopped
+   * sidecar is not a verdict on the plan, so it is not declined as one. The profile's failure gets its `report` row
+   * here; a build's already has one. Null when the sidecar answers (the failure was the profile's or the build's own).
+   */
+  private async sidecarStoppedStep<P>(params: ExecuteAgentParams, result: BaseAgentNextStep<P>, stage: 'profile' | 'build', logReport: boolean): Promise<BaseAgentNextStep<P> | null> {
+    if (await this.SidecarReachable()) return null;
+    const payload = this.payloadOf(params, result);
+    const message = `The ML sidecar stopped during the ${stage}, so this turn failed. Start the sidecar and ask again.`;
+    if (logReport) {
+      const refused = await this.AppendDecision<P>(params, {
+        Decision: 'report', Before: payload, After: payload, Rationale: message, Calls: [{ action: 'sidecar', paramsHash: null, result: { outcome: 'sidecar-stopped', stage } }],
+      });
+      if (refused !== null) return refused;
+    }
+    return this.codeStep<P>({ step: 'Failed', terminate: true, message, errorMessage: message }, payload);
   }
 
   /** Records the dispatched build's outcome on its claim (a failure to record is logged; the claim stays consumed). */

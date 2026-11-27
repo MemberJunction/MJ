@@ -76,6 +76,7 @@ import { RunBounded } from './concurrency';
 import { SeededRandomWaveStrategist } from './random-strategist';
 import { ExperimentBudget, TrainingAttemptFailedError } from './budget';
 import { ExperimentScores } from './scores';
+import { ExperimentTokenAccounting } from './token-accounting';
 
 /** Store seam used to load `MJ: ML Search Strategy Comparisons` rows for guided-search policy checks. */
 export interface ISearchComparisonStore {
@@ -206,6 +207,7 @@ export class ExperimentOrchestrator {
       const trimmedWave = this.trimWaveToBudget(wave, budget, budgetState);
       const waveResult = await this.runWave(
         trimmedWave,
+        ExperimentOrchestrator.proposingAgentRun(strategist),
         sequence,
         plan,
         session,
@@ -379,6 +381,7 @@ export class ExperimentOrchestrator {
    */
   private async runWave(
     wave: ProposedExperiment[],
+    proposedUnder: string | null,
     sequenceBase: number,
     plan: ModelingPlanSpec,
     session: MJExperimentSessionEntity,
@@ -394,7 +397,7 @@ export class ExperimentOrchestrator {
     // and deterministic regardless of concurrent completion order.
     const created: Array<{ iteration: MJExperimentSessionIterationEntity; experiment: ProposedExperiment }> = [];
     for (let i = 0; i < wave.length; i++) {
-      const iteration = await this.createIteration(session, wave[i], sequenceBase + i, deps);
+      const iteration = await this.createIteration(session, wave[i], sequenceBase + i, deps, proposedUnder);
       iterations.push(iteration);
       created.push({ iteration, experiment: wave[i] });
     }
@@ -475,12 +478,24 @@ export class ExperimentOrchestrator {
     return { Started: true, TimeoutSeconds: seconds, Release: release };
   }
 
-  /** Create a `Pending` iteration row for an experiment, then mark it `Running`. */
+  /**
+   * The agent run the strategist's calls for the wave it just proposed ran under (its tokens are the wave's iterations',
+   * D5-A6-1), or null for a strategist that makes no LLM call.
+   */
+  private static proposingAgentRun(strategist: IWaveStrategist): string | null {
+    return ExperimentTokenAccounting.IsAttributed(strategist) ? strategist.CurrentAgentRunID : null;
+  }
+
+  /**
+   * Create a `Pending` iteration row for an experiment, naming the agent run that made calls for it (`proposedUnder`,
+   * null when none did).
+   */
   private async createIteration(
     session: MJExperimentSessionEntity,
     experiment: ProposedExperiment,
     sequence: number,
     deps: ExperimentDeps,
+    proposedUnder: string | null,
   ): Promise<MJExperimentSessionIterationEntity> {
     const iteration = await deps.entityFactory.getEntityObject<MJExperimentSessionIterationEntity>(
       'MJ: Experiment Session Iterations',
@@ -491,6 +506,7 @@ export class ExperimentOrchestrator {
     iteration.Label = experiment.Label;
     iteration.Rationale = experiment.Rationale;
     iteration.Status = 'Pending';
+    if (proposedUnder !== null) iteration.AIAgentRunID = proposedUnder;
     await this.saveOrThrow(iteration, 'create Experiment Session Iteration');
     return iteration;
   }
@@ -498,8 +514,8 @@ export class ExperimentOrchestrator {
   /**
    * Train one iteration: mark it `Running`, call the trainer with the compute seconds claimed for it as its timeout,
    * link the run to the iteration, set the normalized Score + costs, and mark it `Completed` (or `Failed`). Returns a
-   * small outcome record for leaderboard/budget folding; a failed attempt carries the seconds and USD its run recorded
-   * ({@link TrainingAttemptFailedError}), a failure before any run existed none.
+   * small outcome record for leaderboard/budget folding; a failed attempt carries the seconds, USD and tokens its run
+   * recorded ({@link TrainingAttemptFailedError}), a failure before any run existed none.
    */
   private async trainIteration(
     iteration: MJExperimentSessionIterationEntity,
@@ -528,13 +544,14 @@ export class ExperimentOrchestrator {
       iteration.Score = result.Score;
       iteration.Rationale = ExperimentOrchestrator.withScoreMetricNote(iteration.Rationale, scoreMetric, plan.TargetDefinition.SuccessMetric);
       iteration.ComputeCost = computeCost;
-      iteration.TokensUsed = result.TokensUsed ?? 0;
+      iteration.TokensUsed = result.TokensUsed || 0;
       iteration.Status = 'Completed';
       await this.saveOrThrow(iteration, 'finalize iteration');
       return { iterationId: iteration.ID, score: result.Score, scoreMetric, computeCost, computeSeconds: result.ComputeSeconds || 0, model: result.model };
     } catch (err) {
-      const spent = err instanceof TrainingAttemptFailedError ? { Seconds: err.ComputeSeconds, Cost: err.ComputeCost } : { Seconds: 0, Cost: 0 };
+      const spent = err instanceof TrainingAttemptFailedError ? { Seconds: err.ComputeSeconds, Cost: err.ComputeCost, Tokens: err.TokensUsed } : { Seconds: 0, Cost: 0, Tokens: 0 };
       iteration.ComputeCost = spent.Cost;
+      iteration.TokensUsed = spent.Tokens;
       await this.failIteration(iteration, err);
       return { iterationId: iteration.ID, score: null, scoreMetric: null, computeCost: spent.Cost, computeSeconds: spent.Seconds, model: null };
     }

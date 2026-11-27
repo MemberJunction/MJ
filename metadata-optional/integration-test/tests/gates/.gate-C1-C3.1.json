@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C3.1",
+    "Description": "Gate G4.9 (owner PR 5, phase 4, dataset C1, criterion C3.1): a session with a low token budget halts at the budget with at most one call of overrun, and every training run logs a compute cost above 0 beside its proper score. On the truth suite's W1-signal world: (1) one planning session with the orchestrator's MaxTokensPerRun lowered in-process to 15,000 -> Failed on the tokens guardrail, the tree's TotalTokensUsed <= the cap + its last prompt call's tokens, RunCost stoppedByBudget; (2) with PS_COMPUTE_USD_PER_SECOND set in-process, an approved build -> every training run stores ComputeCost > 0 beside the trainer's holdout primary score, TokensUsed 0 or unset (no strategist or derivation call), the report row's RunCost parts equal the stored sums, and RunCostReport.Of(build run) equals the stored sums (tokens = root TotalTokensUsed + the runs' TokensUsed; usd = root TotalCost + the runs' ComputeCost). Server transport (the agent runs as the D5-46 person); spends LLM money. Mutation: revert the trainer's TokensUsed to 0, or stop counting failed iterations -> the A6 unit attacks go red. Run budget 30 min (MaxExecutionTimeMS).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G4.9\",\"owner:PR5\",\"phase:4\",\"dataset:C1\",\"criterion:C3.1\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "The low-budget session halts on its token guardrail within one call of the cap; every training run of the priced build logs ComputeCost > 0 beside its proper score; RunCost equals the stored sums."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-c3-1"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "72A869D9-4995-4607-8A9F-CA41E9E185F5"
+  }
+}
