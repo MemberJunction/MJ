@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { type EffectiveAgentProperties } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
+import { LogError } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import {
     CODE_ONLY_HELPER_SEAMS,
@@ -159,11 +160,13 @@ export class AgentHelperCache {
 
 /**
  * Safely resolves cascaded `EffectiveAgentProperties` for `agent` via `AIEngine.Instance`
- * (`Agent -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default`),
- * returning `null` cleanly when `AIEngine` is uninitialized in isolated unit tests.
+ * (`Agent -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default`).
+ * Returns `null` silently ONLY when `AIEngine` is unconfigured (isolated unit tests); logs any
+ * unexpected resolution error via `LogError` and re-throws if `failClosedOnUnexpectedError` is true.
  */
 export function SafeResolveEffectiveAgentProperties(
-    agent: MJAIAgentEntityExtended | null | undefined
+    agent: MJAIAgentEntityExtended | null | undefined,
+    failClosedOnUnexpectedError: boolean = false
 ): EffectiveAgentProperties | null {
     if (!agent) {
         return null;
@@ -172,8 +175,17 @@ export function SafeResolveEffectiveAgentProperties(
         if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
             return AIEngine.Instance.ResolveEffectiveAgentProperties(agent);
         }
-    } catch {
-        // Uninitialized engine in isolated unit tests; callers fall back to direct agent fields.
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        const isUnconfigured = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+        if (!isUnconfigured) {
+            LogError(
+                `SafeResolveEffectiveAgentProperties: unexpected error resolving cascade for agent '${agent.Name ?? agent.ID}': ${msg}`
+            );
+            if (failClosedOnUnexpectedError) {
+                throw err;
+            }
+        }
     }
     return null;
 }

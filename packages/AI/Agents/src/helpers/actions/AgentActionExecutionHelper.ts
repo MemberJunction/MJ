@@ -115,6 +115,8 @@ export class AgentActionExecutionHelper {
             return structuralRefusal;
         }
 
+        const actionWaitId = `action:${action.name}:${options?.StepID ?? Date.now()}`;
+        ctx.LivenessWatchdog?.SuspendForExternalWait(actionWaitId, `action:${action.name}`);
         try {
             const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(
                 params.agent?.ID ?? '',
@@ -146,6 +148,9 @@ export class AgentActionExecutionHelper {
                 },
             });
             throw new Error(`Error executing actions: ${errorMsg}`);
+        } finally {
+            ctx.LivenessWatchdog?.ResumeFromExternalWait(actionWaitId);
+            ctx.LivenessWatchdog?.RecordProgress({ Kind: 'action-progress', Detail: action.name });
         }
     }
 

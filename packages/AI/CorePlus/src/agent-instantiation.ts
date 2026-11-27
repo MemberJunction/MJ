@@ -46,8 +46,27 @@ export interface IAgentInstantiationConfig {
     personalityPresets?: IAgentPersonalityPreset[];
 }
 
+const FORBIDDEN_JSON_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 function isJsonObject(value: AgentConfigJsonValue | undefined): value is AgentConfigJsonObject {
     return value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeJsonValue(value: AgentConfigJsonValue): AgentConfigJsonValue {
+    if (Array.isArray(value)) {
+        return value.map((item) => sanitizeJsonValue(item));
+    }
+    if (isJsonObject(value)) {
+        const clean: AgentConfigJsonObject = {};
+        for (const key of Object.keys(value)) {
+            if (FORBIDDEN_JSON_OBJECT_KEYS.has(key)) {
+                continue;
+            }
+            clean[key] = sanitizeJsonValue(value[key]);
+        }
+        return clean;
+    }
+    return value;
 }
 
 function parseJsonObject(raw: string | null | undefined): AgentConfigJsonObject | null {
@@ -56,7 +75,7 @@ function parseJsonObject(raw: string | null | undefined): AgentConfigJsonObject 
     }
     try {
         const parsed = JSON.parse(raw) as AgentConfigJsonValue;
-        return isJsonObject(parsed) ? parsed : null;
+        return isJsonObject(parsed) ? (sanitizeJsonValue(parsed) as AgentConfigJsonObject) : null;
     } catch {
         return null;
     }
@@ -157,10 +176,16 @@ export function DeepMergeAgentConfigObjects(
 ): AgentConfigJsonObject {
     const merged: AgentConfigJsonObject = {};
     for (const key of Object.keys(base)) {
+        if (FORBIDDEN_JSON_OBJECT_KEYS.has(key)) {
+            continue;
+        }
         merged[key] = base[key];
     }
     for (const key of Object.keys(override)) {
-        const baseVal = merged[key];
+        if (FORBIDDEN_JSON_OBJECT_KEYS.has(key)) {
+            continue;
+        }
+        const baseVal = Object.prototype.hasOwnProperty.call(merged, key) ? merged[key] : undefined;
         const overVal = override[key];
         if (isJsonObject(baseVal) && isJsonObject(overVal)) {
             merged[key] = DeepMergeAgentConfigObjects(baseVal, overVal);
@@ -185,9 +210,32 @@ export interface AgentHelperPluginEntry {
 }
 
 /**
+ * Canonical `BaseAgent` helper seam keys recognized across runtime resolution and metadata validation.
+ */
+export const VALID_AGENT_HELPER_SEAMS: ReadonlySet<string> = new Set<string>([
+    'messaging',
+    'payload',
+    'compaction',
+    'realtime',
+    'iteration',
+    'skills',
+    'limits',
+    'actions',
+    'actionPolicy',
+    'prompt',
+    'subAgents',
+    'steps',
+    'setup',
+]);
+
+/**
  * Lowercased helper seam names that are strictly **code-only** — metadata overrides via
  * `helperPlugins` are rejected both at entity save time (`ValidateAgentInheritanceAndSandbox`)
  * and at runtime (`AgentHelperCache.ResetForRun` / `ResolveAgentHelper`).
+ *
+ * Includes both the security enforcement callees (`limits`, `actionPolicy`, `policy`, `permissions`)
+ * AND their orchestration callers (`setup`, `steps`, `actions`, `subAgents`) so a metadata plugin
+ * cannot bypass run-permission, plan-mode gate, action-policy, or budget checks by replacing a caller.
  */
 export const FORBIDDEN_METADATA_HELPER_SEAMS: ReadonlySet<string> = new Set<string>([
     'limits',
@@ -195,6 +243,11 @@ export const FORBIDDEN_METADATA_HELPER_SEAMS: ReadonlySet<string> = new Set<stri
     'policy',
     'permissions',
     'permission',
+    'setup',
+    'steps',
+    'actions',
+    'subagents',
+    'subagent',
 ]);
 
 /**

@@ -183,7 +183,7 @@ export class AgentTurnToolsAndFinishIfHelper {
             companyId: params.companyId,
             verbose: params.verbose,
             provider: ctx.ProviderToUse,
-            isRunTainted: ctx.TaintedSources.length > 0,
+            isRunTainted: ctx.IsRunTainted,
             taintedSources: ctx.TaintedSources,
         };
     }
@@ -256,8 +256,14 @@ export class AgentTurnToolsAndFinishIfHelper {
     }
 
     public MemoryWriteSkip(ctx: AgentRunContext, params: ExecuteAgentParams): MemoryWriteSkip | null {
-        const effectiveAllowMemoryWrite =
-            SafeResolveEffectiveAgentProperties(params.agent)?.AllowMemoryWrite ?? params.agent.AllowMemoryWrite;
+        let effectiveAllowMemoryWrite: boolean | null | undefined;
+        try {
+            effectiveAllowMemoryWrite =
+                SafeResolveEffectiveAgentProperties(params.agent, true)?.AllowMemoryWrite ?? params.agent.AllowMemoryWrite;
+        } catch {
+            // Fail closed on unexpected cascade resolution errors.
+            effectiveAllowMemoryWrite = false;
+        }
         if (effectiveAllowMemoryWrite !== true) {
             return { Reason: 'AllowMemoryWrite=false', Told: 'this agent does not have durable memory writes enabled' };
         }

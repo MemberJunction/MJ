@@ -10,27 +10,27 @@ It also provides two capability layers any agent can opt into:
 
 **Canonical Agent Guides:**
 - [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) — security & sandbox invariants, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, sliding liveness watchdog, `undici` tuning, `AgentStuckDetector`, and `MJ: AI Agent Step Types`
-- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) — 536-line `BaseAgent` + `AgentRunContext` + 13 pluggable helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, and prefix-cache discipline
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) — ~600-line `BaseAgent` facade + `AgentRunContext` + 13 pluggable helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, and prefix-cache discipline
 - [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md) — personal instances, personas, presets, memory, Plan Mode, and long-running runs
 - [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md) — exhaustive 1-to-1 map of all 494 preserved `@deprecated` `BaseAgent` methods to their new `BaseAgent<Seam>Helper` classes
 - [Agent Skills & Plan Mode Guide](../../../guides/AGENT_SKILLS_AND_PLAN_MODE_GUIDE.md) — full architecture, three-layer gate, SKILL.md format, and plan-approval flow
 
 ## Architecture
 
-`packages/AI/Agents/src/base-agent.ts` is a **536-line** public execution facade decomposed into **13 strongly-typed, pluggable `BaseAgent*Helper` seams** (`packages/AI/Agents/src/helpers/`) sharing live per-run state via `AgentRunContext`, a pluggable step-type registry (`AgentStepTypeRegistry` + `BaseAgentStepHandler`), and a zero-breakage `v6.x` compatibility shim (`BaseAgentDeprecatedDelegates*`, scheduled for removal in `v7.0`).
+`packages/AI/Agents/src/base-agent.ts` is a **~600-line** public execution facade decomposed into **13 strongly-typed, pluggable `BaseAgent*Helper` seams** (`packages/AI/Agents/src/helpers/`) sharing live per-run state via `AgentRunContext`, a pluggable step-type registry (`AgentStepTypeRegistry` + `BaseAgentStepHandler`), and a zero-breakage `v6.x` compatibility shim (`BaseAgentDeprecatedDelegates*`, scheduled for removal in `v7.0`).
 
 ```mermaid
 graph TD
     subgraph "@memberjunction/ai-agents"
         AR["AgentRunner\nOrchestration Entry Point"]
-        BA["BaseAgent (536L Facade)\nLifecycle · Permanent Hooks · 13 Seam Resolvers"]
+        BA["BaseAgent (~600L Facade)\nLifecycle · Permanent Hooks · 13 Seam Resolvers"]
         CTX["AgentRunContext\nLive Per-Run State + SubclassHooks"]
         RES["ResolveAgentHelper / AgentHelperCache\n1. Configuration.helperPlugins (Admin-Only)\n2. Global @RegisterClass\n3. Built-in Default"]
         STEPREG["AgentStepTypeRegistry (BaseSingleton)\n14 Built-in BaseAgentStepHandlers\n+ MJ: AI Agent Step Types"]
 
         subgraph "13 Pluggable Helper Seams (helpers/)"
-            H_CORE["messaging · payload · compaction · realtime\niteration · skills · actions · prompt · subAgents · steps · setup"]
-            H_SEC["CODE-ONLY Security Seams (@RegisterClass only)\nlimits (BaseAgentLimitsHelper + Watchdog + StuckDetector)\nactionPolicy (BaseAgentActionPolicyHelper)"]
+            H_CORE["Metadata-Pluggable Seams (Admin-Only)\nmessaging · payload · compaction · realtime\niteration · skills · prompt"]
+            H_SEC["CODE-ONLY Security & Invariant Seams (@RegisterClass only)\nlimits · actionPolicy · setup · steps · actions · subAgents"]
         end
 
         subgraph "Agent Types"
@@ -71,7 +71,7 @@ npm install @memberjunction/ai-agents
 
 ### BaseAgent, `AgentRunContext` & 13 Pluggable Helper Seams
 
-`BaseAgent` (`src/base-agent.ts`, 536 lines) orchestrates every agent run by resolving 13 pluggable helper seams via `ResolveAgentHelper` / `AgentHelperCache` (`src/helpers/AgentHelperResolver.ts`) and sharing live per-run state through `AgentRunContext` (`src/helpers/AgentRunContext.ts`):
+`BaseAgent` (`src/base-agent.ts`, ~600 lines) orchestrates every agent run by resolving 13 pluggable helper seams via `ResolveAgentHelper` / `AgentHelperCache` (`src/helpers/AgentHelperResolver.ts`) and sharing live per-run state through `AgentRunContext` (`src/helpers/AgentRunContext.ts`):
 
 | Seam Key (`AgentHelperSeamKey`) | Pluggable Base Class | Default Implementation | Per-Agent `helperPlugins`? |
 |---|---|---|---|
@@ -755,7 +755,7 @@ if (!result.triggered) {
 | Guide | Audience & Scope |
 |---|---|
 | [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) | Security & sandbox invariants, 3-table `IAgentConfiguration` cascade, `v6.x` → `v7.0` deprecation roadmap, sliding liveness watchdog, `undici` tuning, `AgentStuckDetector`, `MJ: AI Agent Step Types` |
-| [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) | 536L `BaseAgent` + `AgentRunContext` + 13 helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, prefix-cache discipline |
+| [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) | ~600L `BaseAgent` facade + `AgentRunContext` + 13 helper seams, copy-paste recipes for all Four Extension Points, isolated helper testing, prefix-cache discipline |
 | [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md) | Personal instances, personas, presets, memory, Plan Mode, Handoff, long-running pause/resume, and personal policy controls |
 | [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md) | Exhaustive 1-to-1 map of all 494 preserved `@deprecated` `BaseAgent` methods → `BaseAgent<Seam>Helper` classes & rebase guide for `MJ#6878` |
 

@@ -589,7 +589,7 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
         expect(CODE_FALLBACK_LIMITS.Liveness.InactivityTimeoutMs).toBe(900_000);
         expect(CODE_FALLBACK_LIMITS.Liveness.OuterMaxWallClockMs).toBe(259_200_000);
         expect(CODE_FALLBACK_LIMITS.Liveness.HttpHeadersTimeoutMs).toBe(1_800_000);
-        expect(CODE_FALLBACK_LIMITS.Liveness.HttpBodyTimeoutMs).toBe(0);
+        expect(CODE_FALLBACK_LIMITS.Liveness.HttpBodyTimeoutMs).toBe(1_800_000);
         expect(CODE_FALLBACK_LIMITS.StuckDetector.Enabled).toBe(true);
         expect(CODE_FALLBACK_LIMITS.StuckDetector.WindowSize).toBe(10);
         expect(CODE_FALLBACK_LIMITS.StuckDetector.IdenticalToolCallThreshold).toBe(3);

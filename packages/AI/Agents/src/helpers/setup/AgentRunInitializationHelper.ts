@@ -628,11 +628,12 @@ export class AgentRunInitializationHelper {
             : [params.agent.Name || 'Unknown Agent'];
         ctx.Depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
         ctx.ParentStepCounts = params.parentStepCounts || [];
-        // Re-evaluate the Plan Mode gate on checkpoint resume so resuming an unapproved Plan Mode
-        // run can never silently disable Plan Mode and allow mutating steps without approval.
-        const resumedPlanGate = await this.ResolvePlanModeGate(ctx, {
+        // Re-evaluate the Plan Mode gate on checkpoint resume via virtual hook (honoring subclass
+        // overrides) and checking the prior run (`LastRunID`, where the approved Plan Mode request
+        // lives) before falling back to the paused run's own ID.
+        const resumedPlanGate = await ctx.Hooks.ResolvePlanModeGate({
             ...params,
-            lastRunId: params.lastRunId ?? ctx.AgentRun.ID,
+            lastRunId: params.lastRunId ?? ctx.AgentRun.LastRunID ?? ctx.AgentRun.ID,
         });
         ctx.PlanModeActive = resumedPlanGate.active;
         ctx.PlanApproved = resumedPlanGate.approved;
@@ -664,7 +665,13 @@ export class AgentRunInitializationHelper {
         ctx: AgentRunContext,
         params: ExecuteAgentParams
     ): Promise<{ active: boolean; approved: boolean }> {
-        const effectivePlanProps = SafeResolveEffectiveAgentProperties(params.agent);
+        let effectivePlanProps: ReturnType<typeof SafeResolveEffectiveAgentProperties> = null;
+        try {
+            effectivePlanProps = SafeResolveEffectiveAgentProperties(params.agent, true);
+        } catch {
+            // Fail closed on unexpected cascade resolution errors: require Plan Mode approval.
+            return { active: ctx.Depth === 0, approved: false };
+        }
         const requiredByAgent = (effectivePlanProps?.RequirePlanMode ?? params.agent.RequirePlanMode) === true;
         const supportsPlan = (effectivePlanProps?.SupportsPlanMode ?? params.agent.SupportsPlanMode) !== false;
         const requestedByCaller = !!(supportsPlan && params.planMode === true);

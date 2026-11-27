@@ -441,13 +441,18 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
         }
         const allowPerm = makePerm(DEPT_ID, ALICE, null);
 
-        // Multi-hop escalation + null-clearing + narrow-only widening via Configuration + non-dirty DriverClass
+        // Multi-hop escalation + dirty null-clearing + narrow-only widening via Configuration + non-dirty DriverClass
         const escalateErrors = ValidateAgentInheritanceAndSandbox({
             Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: DEPT_ID,
+                PreSaveOwnerUserID: ALICE,
                 BaseAgentID: DEPT_ID,
                 OwnerUserID: ALICE,
                 Isolation: 'Worker', // weaker than root 'Container'
-                MaxCostPerRun: null, // null-clearing root's finite 5
+                MaxCostPerRun: null, // dirty null-clearing previously bounded 5
+                DirtyFields: new Set(['MaxCostPerRun']),
+                PreSaveLimits: { MaxCostPerRun: 5 },
                 MaxIterationsPerRun: 50, // exceeds root's 20
                 DriverClass: 'EvilDriver',
                 DriverClassDirty: false, // unconditional check still blocks!
@@ -616,5 +621,115 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
                 adminUser
             )
         ).toEqual([]);
+
+        // Built-in step types cannot be disabled (S4)
+        const disableBuiltIn = ValidateAgentStepTypeMutation(
+            {
+                Name: 'Actions',
+                DriverClass: 'ActionsStepHandler',
+                AllowedInUnapprovedPlanMode: false,
+                CountsAgainstTreeBudget: true,
+                Status: 'Disabled',
+            },
+            adminUser
+        );
+        expect(disableBuiltIn.some((e) => e.Source === 'Status')).toBe(true);
+    });
+
+    it('allows derived-instance create/edit with null inherited limits while blocking helperPlugins clears, CategoryID re-point, __proto__, and newly code-only seams (B3, B4, S2, S3)', () => {
+        const standardUser = makeUser(ALICE, 'User');
+        const adminUser = makeUser(ALICE, 'Owner');
+        const root = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            Isolation: 'Worker',
+            MaxCostPerRun: 5,
+            MaxIterationsPerRun: 25,
+            CategoryID: '00000000-0000-4000-8000-000000000201',
+            TypeID: '00000000-0000-4000-8000-000000000301',
+        });
+        const perm = Object.create(MJAIAgentPermissionEntity.prototype) as MJAIAgentPermissionEntity;
+        Object.defineProperties(perm, {
+            AgentID: { value: COS_ID },
+            UserID: { value: ALICE },
+            RoleID: { value: null },
+            CanView: { value: true },
+            CanRun: { value: true },
+            CanEdit: { value: false },
+            CanDelete: { value: false },
+        });
+
+        // B4: Fresh create with null limits under a finite ancestor cap MUST pass (inherits at runtime)
+        const createErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: false,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Worker',
+                MaxCostPerRun: null,
+                MaxIterationsPerRun: null,
+                CategoryID: root.CategoryID,
+                TypeID: root.TypeID,
+            }),
+            User: standardUser,
+            AllAgents: [root],
+            AllPermissions: [perm],
+        });
+        expect(createErrors).toEqual([]);
+
+        // S2: Non-admin cannot clear helperPlugins with [] or re-point CategoryID/TypeID
+        const escapeErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: COS_ID,
+                PreSaveOwnerUserID: ALICE,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Worker',
+                MaxCostPerRun: null,
+                MaxIterationsPerRun: null,
+                CategoryID: '00000000-0000-4000-8000-000000000999',
+                PreSaveCategoryID: root.CategoryID,
+                TypeID: '00000000-0000-4000-8000-000000000888',
+                PreSaveTypeID: root.TypeID,
+                Configuration: JSON.stringify({ helperPlugins: [] }),
+            }),
+            User: standardUser,
+            AllAgents: [root],
+            AllPermissions: [perm],
+        });
+        const sources = new Set(escapeErrors.map((e) => e.Source));
+        expect(sources.has('Configuration')).toBe(true);
+        expect(sources.has('CategoryID')).toBe(true);
+        expect(sources.has('TypeID')).toBe(true);
+
+        // S2 on Category: non-admin cannot write {"helperPlugins": []}
+        const catClearErrors = ValidateAgentScopedConfigurationJson(
+            JSON.stringify({ helperPlugins: [] }),
+            'DefaultConfiguration',
+            'AI Agent Category',
+            standardUser
+        );
+        expect(catClearErrors.some((e) => /Only administrators may configure helperPlugins/i.test(e.Message))).toBe(true);
+
+        // B3: __proto__ payload rejected on Category even for admin
+        const protoErrors = ValidateAgentScopedConfigurationJson(
+            '{"__proto__":{"helperPlugins":[{"seam":"messaging","driverClass":"Evil"}]}}',
+            'DefaultConfiguration',
+            'AI Agent Category',
+            adminUser
+        );
+        expect(protoErrors.some((e) => /forbidden prototype-pollution key/i.test(e.Message))).toBe(true);
+
+        // S3: setup, steps, actions, subAgents rejected as code-only even for admin
+        for (const seam of ['setup', 'steps', 'actions', 'subAgents']) {
+            const seamErrors = ValidateAgentScopedConfigurationJson(
+                JSON.stringify({ helperPlugins: [{ seam, driverClass: 'CustomDriver' }] }),
+                'DefaultConfiguration',
+                'AI Agent Category',
+                adminUser
+            );
+            expect(seamErrors.some((e) => /is code-only/i.test(e.Message))).toBe(true);
+        }
     });
 });

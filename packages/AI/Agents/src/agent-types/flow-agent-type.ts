@@ -43,6 +43,7 @@ import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PayloadManager } from '../PayloadManager';
+import { AgentStepTypeRegistry } from '../helpers/steps/AgentStepTypeRegistry';
 import { ConversationMessageResolver } from '../utils/ConversationMessageResolver';
 
 /**
@@ -1101,6 +1102,50 @@ export class FlowAgentType extends BaseAgentType {
                     `workflow as a top-level run with executionMode 'dispatch' (the default for a top-level run).`,
                     payload
                 );
+
+            case 'Custom': {
+                let parsedConfig: Record<string, unknown> | undefined;
+                if (typeof node.Configuration === 'string' && node.Configuration.trim().length > 0) {
+                    try {
+                        const raw = JSON.parse(node.Configuration) as unknown;
+                        if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+                            const safe: Record<string, unknown> = {};
+                            for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+                                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+                                safe[k] = v;
+                            }
+                            parsedConfig = safe;
+                        }
+                    } catch {
+                        return this.createNextStep('Failed', {
+                            errorMessage: `Custom flow step '${node.Name}' has invalid JSON in Configuration`,
+                            newPayload: payload,
+                            previousPayload: payload
+                        });
+                    }
+                }
+                const configuredKey = typeof parsedConfig?.['stepType'] === 'string'
+                    ? (parsedConfig['stepType'] as string)
+                    : null;
+                const policy =
+                    (node.StepTypeID
+                        ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicyByID(node.StepTypeID)
+                        : null) ??
+                    (configuredKey ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(configuredKey) : null);
+                if (!policy || !AgentStepTypeRegistry.Instance.DoesStepApplyToAgentType(policy.AppliesTo, 'Flow')) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Custom flow step '${node.Name}' could not resolve an active Flow-compatible step type (StepTypeID=${node.StepTypeID ?? 'null'})`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+                return this.createNextStep(policy.StepKey, {
+                    ...(policy.StepTypeID ? { stepTypeID: policy.StepTypeID } : {}),
+                    ...(parsedConfig ? { customStepData: parsedConfig } : {}),
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
 
             default:
                 return this.createNextStep('Failed', {

@@ -16,9 +16,9 @@ This document provides an exhaustive, 1-to-1 mapping of all **494** historical `
 
 ```mermaid
 flowchart LR
-    OLD["Legacy BaseAgent (26,883L monolith)"] -->|"v6.x Zero-Breakage Refactor"| NEW["BaseAgent (536L facade)"]
-    NEW --> CTX["AgentRunContext (457L live state bag)"]
-    NEW --> HELPERS["13 Pluggable BaseAgent*Helper Seams\n(all files <= 989L, 0 file-size-ok)"]
+    OLD["Legacy BaseAgent (26,883L monolith)"] -->|"v6.x Zero-Breakage Refactor"| NEW["BaseAgent (~600L facade)"]
+    NEW --> CTX["AgentRunContext (live state bag)"]
+    NEW --> HELPERS["13 Pluggable BaseAgent*Helper Seams\n(all files <= 1,000L, 0 file-size-ok)"]
     NEW -. "v6.x compat (retires v7.0)" .-> SHIM["BaseAgentDeprecatedDelegates*\n(494 logic-free 1-line delegates)"]
 ```
 
@@ -32,13 +32,13 @@ flowchart LR
 | s6 | `skills` | `BaseAgentSkillsHelper` | `packages/AI/Agents/src/helpers/skills/AgentSkillsHelper.ts` | Pluggable (`skills`) | 19 |
 | s7 + s12 (A7b) | `limits` | `BaseAgentLimitsHelper` | `packages/AI/Agents/src/helpers/limits/AgentLimitsHelper.ts (+ AgentCheckpointAndPauseHelper.ts, AgentLivenessWatchdog.ts, AgentStuckDetector.ts)` | **CODE-ONLY** (`@RegisterClass` only; `helperPlugins` rejected) | 35 |
 | s8a (D3) | `actionPolicy` | `BaseAgentActionPolicyHelper` | `packages/AI/Agents/src/helpers/actions/AgentActionPolicyHelper.ts (+ AgentRunScopeAndAudienceHelper.ts)` | **CODE-ONLY** (`@RegisterClass` only; `helperPlugins` rejected) | 52 |
-| s8b | `actions` | `BaseAgentActionsHelper` | `packages/AI/Agents/src/helpers/actions/AgentActionsHelper.ts (+ AgentActionExecutionHelper.ts, AgentActionCircuitBreakerHelper.ts)` | Pluggable (`actions`) | 53 |
+| s8b | `actions` | `BaseAgentActionsHelper` | `packages/AI/Agents/src/helpers/actions/AgentActionsHelper.ts (+ AgentActionExecutionHelper.ts, AgentActionCircuitBreakerHelper.ts)` | **CODE-ONLY** (`@RegisterClass` only; `helperPlugins` rejected) | 53 |
 | s9 | `prompt` | `BaseAgentPromptHelper` | `packages/AI/Agents/src/helpers/prompt/AgentPromptHelper.ts (+ AgentPromptExecutionHelper.ts, AgentPromptContextAndDiscoveryHelper.ts, AgentNativeToolsAndPrefixCacheHelper.ts, AgentPromptCatalogAndNarrowingHelper.ts, AgentTurnToolsAndFinishIfHelper.ts, AgentDecisionsHelper.ts)` | Pluggable (`prompt`) | 131 |
-| s10 | `subAgents` | `BaseAgentSubAgentHelper` | `packages/AI/Agents/src/helpers/subagents/AgentSubAgentHelper.ts (+ AgentSubAgentExecutionHelper.ts, AgentSubAgentValidationHelper.ts, AgentParallelSubAgentHelper.ts, AgentRelatedSubAgentAndTaskGraphHelper.ts)` | Pluggable (`subAgents`) | 52 |
-| s11a + s13 | `steps` | `BaseAgentStepExecutionHelper` | `packages/AI/Agents/src/helpers/steps/AgentStepExecutionHelper.ts (+ AgentStepValidationHelper.ts, AgentStepTypeRegistry.ts, BuiltInAgentStepHandlers.ts)` | Pluggable (`steps` + `AIAgentStepType` handlers) | 18 |
-| s11b + s14 | `setup` | `BaseAgentRunSetupHelper` | `packages/AI/Agents/src/helpers/setup/AgentRunSetupHelper.ts (+ AgentRunInitializationHelper.ts, AgentRunFinalizationHelper.ts)` | Pluggable (`setup`) | 30 |
+| s10 | `subAgents` | `BaseAgentSubAgentHelper` | `packages/AI/Agents/src/helpers/subagents/AgentSubAgentHelper.ts (+ AgentSubAgentExecutionHelper.ts, AgentSubAgentValidationHelper.ts, AgentParallelSubAgentHelper.ts, AgentRelatedSubAgentAndTaskGraphHelper.ts)` | **CODE-ONLY** (`@RegisterClass` only; `helperPlugins` rejected) | 52 |
+| s11a + s13 | `steps` | `BaseAgentStepExecutionHelper` | `packages/AI/Agents/src/helpers/steps/AgentStepExecutionHelper.ts (+ AgentStepValidationHelper.ts, AgentStepTypeRegistry.ts, BuiltInAgentStepHandlers.ts)` | **CODE-ONLY** (`@RegisterClass` only; custom step types via `AIAgentStepType`) | 18 |
+| s11b + s14 | `setup` | `BaseAgentRunSetupHelper` | `packages/AI/Agents/src/helpers/setup/AgentRunSetupHelper.ts (+ AgentRunInitializationHelper.ts, AgentRunFinalizationHelper.ts)` | **CODE-ONLY** (`@RegisterClass` only; `helperPlugins` rejected) | 30 |
 | compat | `compat` | `BaseAgentDeprecatedDelegates` | `packages/AI/Agents/src/helpers/compat/BaseAgentDeprecatedDelegates.ts (+ BaseAgentDeprecatedDelegatesCore.ts)` | Compatibility shim only (retiring in `v7.0`) | 2 |
-| **Total** | **13 Seams + Compat** | **All files `<= 989L` (`base-agent.ts` = `536L`)** | `packages/AI/Agents/src/helpers/` | **11 Pluggable + 2 Code-Only** | **494** |
+| **Total** | **13 Seams + Compat** | **All files `<= 1,000L` (`base-agent.ts` = `~600L`)** | `packages/AI/Agents/src/helpers/` | **7 Metadata-Pluggable + 6 Code-Only** | **494** |
 
 ---
 

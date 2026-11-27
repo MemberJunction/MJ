@@ -187,7 +187,7 @@ describe('#6852 Agent Instance Security & Dual-Dialect RLS Audit (§2.4 & §3.1)
         expect(errors.some((e) => e.Source === 'BaseAgentID' && /permission to run/i.test(e.Message))).toBe(true);
     });
 
-    it('verifies SQL Server AND PostgreSQL RLS filter parity and UI-role wiring for MJ: AI Agents & MJ: AI Agent Personas', () => {
+    it('audits committed SQL Server and PostgreSQL RLS filter metadata files and UI-role permission bindings (live DB RLS is verified in IT195 AEC5)', () => {
         const rlsPath = join(REPO_ROOT, 'metadata/row-level-security-filters/.agent-instance-rls-filters.json');
         const permPath = join(REPO_ROOT, 'metadata/entity-permissions/.agent-instance-permissions.json');
         const rlsRecords = JSON.parse(readFileSync(rlsPath, 'utf8')) as RlsFilterRecord[];

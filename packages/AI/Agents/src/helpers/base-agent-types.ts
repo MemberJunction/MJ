@@ -69,10 +69,17 @@ export type AgentHelperSeamKey =
 /**
  * Security-critical helper seams that are **code-only** (replaceable only via `@RegisterClass`
  * in server code, never via `AIAgent.Configuration.helperPlugins` metadata).
+ * Locks both security callees (`limits`, `actionPolicy`) and the caller seams that enforce
+ * run permissions, Plan Mode gates, action policy, and sub-agent permissions (`setup`, `steps`,
+ * `actions`, `subAgents`).
  */
 export const CODE_ONLY_HELPER_SEAMS: ReadonlySet<AgentHelperSeamKey> = new Set<AgentHelperSeamKey>([
     'limits',
     'actionPolicy',
+    'setup',
+    'steps',
+    'actions',
+    'subAgents',
 ]);
 
 /**

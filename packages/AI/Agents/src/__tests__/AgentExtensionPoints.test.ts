@@ -427,7 +427,9 @@ describe('BaseAgent Four Extension Points (s13)', () => {
             const activePolicy = AgentStepTypeRegistry.Instance.ResolveEffectivePolicy('ApprovalGate');
             expect(activePolicy).not.toBeNull();
             expect(activePolicy!.StepTypeID).toBe(APPROVAL_GATE_STEP_TYPE_ID);
-            expect(activePolicy!.AllowedInUnapprovedPlanMode).toBe(true);
+            // S4 fail-closed: MockApprovalGateStepHandler declares AllowedInUnapprovedPlanMode = false,
+            // so even when the DB row says true, row && handler clamps to false.
+            expect(activePolicy!.AllowedInUnapprovedPlanMode).toBe(false);
             expect(activePolicy!.PromptInstructions).toBe('Use ApprovalGate for approvals.');
             expect(activePolicy!.IsBuiltIn).toBe(false);
 
@@ -951,6 +953,7 @@ describe('BaseAgent Four Extension Points (s13)', () => {
             ctx.Hooks.CalculateTokenStats = vi.fn(() => ({ TotalCost: 0, TotalTokens: 0 }));
             ctx.Hooks.ValidatedRunScope = vi.fn(() => undefined);
             ctx.Hooks.RegisterActiveRunForCooperativePause = vi.fn();
+            ctx.Hooks.ResolvePlanModeGate = (p) => initHelper.ResolvePlanModeGate(ctx, p);
 
             const runViewSpy = vi.spyOn(RunView.prototype, 'RunView').mockResolvedValue({
                 Success: true,
@@ -1009,22 +1012,8 @@ describe('BaseAgent Four Extension Points (s13)', () => {
             }
         });
 
-        it('resets helperCache BEFORE resolving setup/realtime seams on Run 1 and prevents cross-run leakage (MEDIUM-7 regression)', async () => {
-            const setupInvocations: string[] = [];
+        it('resets helperCache BEFORE resolving realtime seam on Run 1, prevents cross-run leakage, and rejects code-only setup/steps/actions/subAgents (MEDIUM-7 & S3/C5 regression)', async () => {
             const realtimeInvocations: string[] = [];
-
-            class CustomSetupPlugin extends AgentRunSetupHelper {
-                public override async ExecuteRun<C, R>(
-                    _ctx: AgentRunContext,
-                    _params: ExecuteAgentParams<C>
-                ): Promise<ExecuteAgentResult<R>> {
-                    setupInvocations.push('CustomSetupPlugin');
-                    return {
-                        success: true,
-                        agentRun: {} as MJAIAgentRunEntityExtended,
-                    };
-                }
-            }
 
             class CustomRealtimePlugin extends AgentRealtimeHelper {
                 public override async StartBridgeRealtimeSession(
@@ -1036,12 +1025,6 @@ describe('BaseAgent Four Extension Points (s13)', () => {
                 }
             }
 
-            const defaultSetupSpy = vi
-                .spyOn(AgentRunSetupHelper.prototype, 'ExecuteRun')
-                .mockImplementation(async () => {
-                    setupInvocations.push('DefaultSetupHelper');
-                    return { success: true, agentRun: {} as MJAIAgentRunEntityExtended };
-                });
             const defaultRealtimeSpy = vi
                 .spyOn(AgentRealtimeHelper.prototype, 'StartBridgeRealtimeSession')
                 .mockImplementation(async () => {
@@ -1049,7 +1032,6 @@ describe('BaseAgent Four Extension Points (s13)', () => {
                     return {} as IRealtimeSession;
                 });
 
-            MJGlobal.Instance.ClassFactory.Register(BaseAgentRunSetupHelper, CustomSetupPlugin, 'CustomSetupPlugin_2_7');
             MJGlobal.Instance.ClassFactory.Register(
                 BaseAgentRealtimeHelper,
                 CustomRealtimePlugin,
@@ -1059,31 +1041,23 @@ describe('BaseAgent Four Extension Points (s13)', () => {
             try {
                 const reusedAgent = new BaseAgent();
 
-                // Run 1: per-agent setup plugin MUST take effect on the very first Execute() call
-                await reusedAgent.Execute({
-                    agent: {
-                        ID: 'a-setup-1',
-                        Name: 'SetupPluginAgent',
-                        Configuration: JSON.stringify({
-                            helperPlugins: [{ seam: 'setup', driverClass: 'CustomSetupPlugin_2_7' }],
-                        }),
-                    } as MJAIAgentEntityExtended,
-                    conversationMessages: [],
-                });
+                // S3 + C5: metadata helperPlugins targeting newly code-only seams MUST fail cleanly with { success: false }
+                for (const codeOnlySeam of ['setup', 'steps', 'actions', 'subAgents'] as const) {
+                    const blockedRes = await reusedAgent.Execute({
+                        agent: {
+                            ID: `a-code-only-${codeOnlySeam}`,
+                            Name: `Blocked-${codeOnlySeam}`,
+                            Configuration: JSON.stringify({
+                                helperPlugins: [{ seam: codeOnlySeam, driverClass: 'CustomBlockedDriver' }],
+                            }),
+                        } as MJAIAgentEntityExtended,
+                        conversationMessages: [],
+                    });
+                    expect(blockedRes.success).toBe(false);
+                    expect(blockedRes.errorMessage).toMatch(/code-only/i);
+                }
 
-                // Run 2 on the SAME BaseAgent instance WITHOUT helperPlugins MUST fall back to default (zero leak)
-                await reusedAgent.Execute({
-                    agent: {
-                        ID: 'a-setup-2',
-                        Name: 'PlainAgent',
-                        Configuration: null,
-                    } as MJAIAgentEntityExtended,
-                    conversationMessages: [],
-                });
-
-                expect(setupInvocations).toEqual(['CustomSetupPlugin', 'DefaultSetupHelper']);
-
-                // StartBridgeRealtimeSession: Run 1 uses realtime plugin, Run 2 falls back to default
+                // StartBridgeRealtimeSession: Run 1 uses realtime plugin, Run 2 falls back to default (zero leak)
                 await reusedAgent.StartBridgeRealtimeSession({
                     agent: {
                         ID: 'a-rt-1',
@@ -1105,7 +1079,6 @@ describe('BaseAgent Four Extension Points (s13)', () => {
 
                 expect(realtimeInvocations).toEqual(['CustomRealtimePlugin', 'DefaultRealtimeHelper']);
             } finally {
-                defaultSetupSpy.mockRestore();
                 defaultRealtimeSpy.mockRestore();
             }
         });

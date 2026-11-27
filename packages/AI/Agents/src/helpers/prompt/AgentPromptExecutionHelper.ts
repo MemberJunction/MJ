@@ -33,6 +33,7 @@ import {
 import type { ConversationToolCall } from '../../ConversationToolManager';
 import type { MemoryWriteRequest } from '../../MemoryWriteManager';
 import { CompactAnsweredToolCallArguments, type NativeToolResult } from '../../native-tools/tool-result-turns';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { PayloadChangeResultSummary } from '../../PayloadManager';
 import { BuildPipelineToolDocs, type PipelineStage } from '../../pipeline';
 import { ApplyScopedPromptConfig, ScopedPromptConfigResolver } from '../../scoped-prompt-config-resolver';
@@ -88,6 +89,7 @@ export class AgentPromptExecutionHelper {
         promptParams.data = promptTemplateData;
         promptParams.contextUser = params.contextUser;
         ctx.Hooks.ReconcileUnansweredToolCalls(params);
+        ctx.StuckDetector.FlushPendingDirectives(params);
         if (ctx.Hooks.GetNativeControlConfig(params).CompactToolArguments) {
             const compactionBudget = ctx.Hooks.ResolveCompactionBudget(params, config);
             if (compactionBudget.BoundedBy === 'Default' || ctx.Hooks.IsMidLoopCompactionThresholdReached(params)) {
@@ -102,12 +104,15 @@ export class AgentPromptExecutionHelper {
 
         ctx.Hooks.ApplyNativeTools(promptParams, params);
 
+        const effectiveDefaultEffortLevel =
+            SafeResolveEffectiveAgentProperties(params.agent)?.DefaultPromptEffortLevel ??
+            params.agent.DefaultPromptEffortLevel;
         if (params.effortLevel !== undefined && params.effortLevel !== null) {
             promptParams.effortLevel = params.effortLevel;
             ctx.Hooks.LogStatus(`🎯 Using runtime effort level: ${params.effortLevel}`, true, params);
-        } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
-            promptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
-            ctx.Hooks.LogStatus(`🎯 Using agent default effort level: ${params.agent.DefaultPromptEffortLevel}`, true, params);
+        } else if (effectiveDefaultEffortLevel !== undefined && effectiveDefaultEffortLevel !== null) {
+            promptParams.effortLevel = effectiveDefaultEffortLevel;
+            ctx.Hooks.LogStatus(`🎯 Using agent default effort level: ${effectiveDefaultEffortLevel}`, true, params);
         } else if (childPrompt && childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
             promptParams.effortLevel = childPrompt.EffortLevel;
             ctx.Hooks.LogStatus(`🎯 Using child prompt effort level: ${childPrompt.EffortLevel}`, true, params);
@@ -192,8 +197,8 @@ export class AgentPromptExecutionHelper {
 
             if (params.effortLevel !== undefined && params.effortLevel !== null) {
                 childPromptParams.effortLevel = params.effortLevel;
-            } else if (params.agent.DefaultPromptEffortLevel !== undefined && params.agent.DefaultPromptEffortLevel !== null) {
-                childPromptParams.effortLevel = params.agent.DefaultPromptEffortLevel;
+            } else if (effectiveDefaultEffortLevel !== undefined && effectiveDefaultEffortLevel !== null) {
+                childPromptParams.effortLevel = effectiveDefaultEffortLevel;
             }
 
             if (params.apiKeys && params.apiKeys.length > 0) {
@@ -461,7 +466,9 @@ export class AgentPromptExecutionHelper {
                 }
             };
 
-            const hasLivenessWatchdog = Boolean(ctx.LivenessWatchdog?.IsRunning);
+            const hasLivenessWatchdog = Boolean(
+                ctx.LivenessWatchdog?.IsRunning && ctx.LivenessWatchdog.IsLivenessEnabled
+            );
             promptParams.onStreaming =
                 params.onStreaming || hasLivenessWatchdog
                     ? (chunk) => {

@@ -33,6 +33,15 @@ export function ValidateAgentScopedConfigurationJson(
     }
 
     const declaredPlugins = ParseAgentHelperPlugins(configJson);
+    const hasHelperPluginsKey = (() => {
+        if (!configJson || configJson.trim().length === 0) return false;
+        try {
+            const parsed = JSON.parse(configJson) as Record<string, unknown>;
+            return Boolean(parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'helperPlugins'));
+        } catch {
+            return false;
+        }
+    })();
     const isAdmin = IsAgentAdminOrOwnerUser(contextUser);
     for (const plugin of declaredPlugins) {
         if (IsForbiddenMetadataHelperSeam(plugin.seam)) {
@@ -46,11 +55,11 @@ export function ValidateAgentScopedConfigurationJson(
             );
         }
     }
-    if (!isAdmin && contextUser && declaredPlugins.length > 0) {
+    if (!isAdmin && contextUser && (declaredPlugins.length > 0 || hasHelperPluginsKey)) {
         errors.push(
             new ValidationErrorInfo(
                 fieldName,
-                `Only administrators may configure helperPlugins on an ${entityLabel}.`,
+                `Only administrators may configure helperPlugins (including clearing/modifying the key) on an ${entityLabel}.`,
                 declaredPlugins.map((p) => `${p.seam}:${p.driverClass}`).join(', '),
                 ValidationErrorType.Failure
             )

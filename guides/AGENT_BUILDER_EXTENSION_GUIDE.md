@@ -1,6 +1,6 @@
 # MemberJunction AI Agent Builder & Extension Guide
 
-This guide is the technical handbook for **developers and OpenApp authors** building, extending, and testing MemberJunction AI Agents. It documents the refactored `< 600`-line `BaseAgent` architecture (`536` lines), `AgentRunContext`, the 13 pluggable helper seams, copy-paste TypeScript recipes for all **Four Extension Points**, isolated helper unit testing, prompt prefix-cache discipline, and migrating off `BaseAgentDeprecatedDelegates` before `v7.0`.
+This guide is the technical handbook for **developers and OpenApp authors** building, extending, and testing MemberJunction AI Agents. It documents the refactored `~600`-line `BaseAgent` architecture, `AgentRunContext`, the 13 pluggable helper seams, copy-paste TypeScript recipes for all **Four Extension Points**, isolated helper unit testing, prompt prefix-cache discipline, and migrating off `BaseAgentDeprecatedDelegates` before `v7.0`.
 
 > **Canonical Agent Documentation Suite**
 > - **Administrators & Operators:** [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md)
@@ -12,12 +12,12 @@ This guide is the technical handbook for **developers and OpenApp authors** buil
 
 ## 1. Architecture of the Refactored `BaseAgent`
 
-`packages/AI/Agents/src/base-agent.ts` is now a **536-line** public execution facade. All runtime business logic lives in **13 cohesive `BaseAgent*Helper` seams** under `packages/AI/Agents/src/helpers/` (every single file `<= 989` lines, zero `file-size-ok` exemptions), communicating through a strongly-typed live state bag (**`AgentRunContext`**) and resolving through **`MJGlobal.Instance.ClassFactory`**.
+`packages/AI/Agents/src/base-agent.ts` is now a **~600-line** public execution facade. All runtime business logic lives in **13 cohesive `BaseAgent*Helper` seams** under `packages/AI/Agents/src/helpers/` (every single file `<= 1,000` lines, zero `file-size-ok` exemptions), communicating through a strongly-typed live state bag (**`AgentRunContext`**) and resolving through **`MJGlobal.Instance.ClassFactory`**.
 
 ```mermaid
 flowchart TD
     subgraph PublicFacade["Public Execution Facade"]
-        BA["BaseAgent (536 lines)\nExecute() · ResumePausedRun() · ExecuteSingleAction()\nPermanent Protected Hooks · 13 Seam Resolvers"]
+        BA["BaseAgent (~600 lines)\nExecute() · ResumePausedRun() · ExecuteSingleAction()\nPermanent Protected Hooks · 13 Seam Resolvers"]
     end
 
     CTX["AgentRunContext\nLive Per-Run State Bag + AgentHelperSubclassHooks"]
@@ -38,11 +38,11 @@ flowchart TD
     CACHE --> H6["skills: BaseAgentSkillsHelper"]
     CACHE --> H7["limits: BaseAgentLimitsHelper (CODE-ONLY)"]
     CACHE --> H8["actionPolicy: BaseAgentActionPolicyHelper (CODE-ONLY)"]
-    CACHE --> H9["actions: BaseAgentActionsHelper"]
+    CACHE --> H9["actions: BaseAgentActionsHelper (CODE-ONLY)"]
     CACHE --> H10["prompt: BaseAgentPromptHelper"]
-    CACHE --> H11["subAgents: BaseAgentSubAgentHelper"]
-    CACHE --> H12["steps: BaseAgentStepExecutionHelper"]
-    CACHE --> H13["setup: BaseAgentRunSetupHelper"]
+    CACHE --> H11["subAgents: BaseAgentSubAgentHelper (CODE-ONLY)"]
+    CACHE --> H12["steps: BaseAgentStepExecutionHelper (CODE-ONLY)"]
+    CACHE --> H13["setup: BaseAgentRunSetupHelper (CODE-ONLY)"]
 ```
 
 ### 1.1 `AgentRunContext` & Virtual-Dispatch `Hooks`
@@ -65,11 +65,11 @@ flowchart TD
 | `'skills'` | `BaseAgentSkillsHelper` | `AgentSkillsHelper` | `skills/` | Yes (Admin-Only) |
 | `'limits'` | `BaseAgentLimitsHelper` | `AgentLimitsHelper` | `limits/` | **FORBIDDEN (Code-Only `@RegisterClass`)** |
 | `'actionPolicy'` | `BaseAgentActionPolicyHelper` | `AgentActionPolicyHelper` | `actions/` | **FORBIDDEN (Code-Only `@RegisterClass`)** |
-| `'actions'` | `BaseAgentActionsHelper` | `AgentActionsHelper` | `actions/` | Yes (Admin-Only) |
+| `'actions'` | `BaseAgentActionsHelper` | `AgentActionsHelper` | `actions/` | **FORBIDDEN (Code-Only `@RegisterClass`)** |
 | `'prompt'` | `BaseAgentPromptHelper` | `AgentPromptHelper` | `prompt/` | Yes (Admin-Only) |
-| `'subAgents'` | `BaseAgentSubAgentHelper` | `AgentSubAgentHelper` | `subagents/` | Yes (Admin-Only) |
-| `'steps'` | `BaseAgentStepExecutionHelper` | `AgentStepExecutionHelper` | `steps/` | Yes (Admin-Only) |
-| `'setup'` | `BaseAgentRunSetupHelper` | `AgentRunSetupHelper` | `setup/` | Yes (Admin-Only) |
+| `'subAgents'` | `BaseAgentSubAgentHelper` | `AgentSubAgentHelper` | `subagents/` | **FORBIDDEN (Code-Only `@RegisterClass`)** |
+| `'steps'` | `BaseAgentStepExecutionHelper` | `AgentStepExecutionHelper` | `steps/` | **FORBIDDEN (Code-Only `@RegisterClass`)** |
+| `'setup'` | `BaseAgentRunSetupHelper` | `AgentRunSetupHelper` | `setup/` | **FORBIDDEN (Code-Only `@RegisterClass`)** |
 
 ---
 

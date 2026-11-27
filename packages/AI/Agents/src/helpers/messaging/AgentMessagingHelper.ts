@@ -118,6 +118,10 @@ export class AgentMessagingHelper extends BaseAgentMessagingHelper {
         if (!originalCallback) return undefined;
 
         return (progress) => {
+            ctx.LivenessWatchdog?.RecordProgress({
+                Kind: ctx.Depth > 0 ? 'sub-agent-heartbeat' : 'action-progress',
+                Detail: progress.step,
+            });
             const hierarchicalStep = progress.metadata?.hierarchicalStep as string | undefined
                 ?? ctx.Hooks.BuildHierarchicalStep(
                     progress.metadata?.stepCount as number,

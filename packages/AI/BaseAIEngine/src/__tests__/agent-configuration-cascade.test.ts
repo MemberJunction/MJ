@@ -357,4 +357,115 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         expect(overridden.MaxExamplesToInject).toBe(7);
         expect(overridden.ExecutionMode).toBe('Parallel');
     });
+
+    it('enforces narrow-only across AgentType -> root Category -> child Category and resists {"execution": null} (B2)', () => {
+        const agentType = makeAgentType({
+            ID: TYPE_LOOP,
+            DefaultAgentConfiguration: JSON.stringify({
+                execution: { requirePlanMode: true },
+                subAgentExecution: { maxConsultRounds: 3 },
+            }),
+        });
+        const rootCat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'RootStrict',
+            DefaultConfiguration: JSON.stringify({
+                execution: { requirePlanMode: true },
+                memory: { allowMemoryWrite: false },
+                attachments: { acceptUnregisteredFiles: false },
+                subAgentExecution: { maxConsultRounds: 2 },
+            }),
+        });
+        const childCat = makeCategory({
+            ID: CAT_CHILD,
+            ParentID: CAT_ROOT,
+            Name: 'ChildTryingToLoosen',
+            DefaultConfiguration: JSON.stringify({
+                execution: null,
+                memory: { allowMemoryWrite: true },
+                attachments: { acceptUnregisteredFiles: true },
+                subAgentExecution: { maxConsultRounds: 9 },
+            }),
+        });
+        const agent = makeAgent({
+            ID: AGENT_BASE,
+            TypeID: TYPE_LOOP,
+            CategoryID: CAT_CHILD,
+            Configuration: null,
+        });
+        const engine = seedEngine({
+            _agentTypes: [agentType],
+            _agentCategories: [rootCat, childCat],
+            _agents: [agent],
+        });
+
+        const eff = engine.ResolveEffectiveAgentProperties(agent);
+        expect(eff.RequirePlanMode).toBe(true);
+        expect(eff.AllowMemoryWrite).toBe(false);
+        expect(eff.AcceptUnregisteredFiles).toBe(false);
+        expect(eff.MaxSubAgentConsultRounds).toBe(2);
+    });
+
+    it('accumulates helperPlugins across tiers so child {"helperPlugins": []} cannot strip type/parent plugins and blocks __proto__ (S2, B3)', () => {
+        const agentType = makeAgentType({
+            ID: TYPE_LOOP,
+            DefaultAgentConfiguration: JSON.stringify({
+                helperPlugins: [{ seam: 'messaging', driverClass: 'AuditMessagingHelper' }],
+            }),
+        });
+        const childCat = makeCategory({
+            ID: CAT_CHILD,
+            Name: 'EmptyPluginsCat',
+            DefaultConfiguration:
+                '{"helperPlugins":[],"__proto__":{"helperPlugins":[{"seam":"payload","driverClass":"PollutedHelper"}]}}',
+        });
+        const agent = makeAgent({
+            ID: AGENT_BASE,
+            TypeID: TYPE_LOOP,
+            CategoryID: CAT_CHILD,
+            Configuration: null,
+        });
+        const engine = seedEngine({
+            _agentTypes: [agentType],
+            _agentCategories: [childCat],
+            _agents: [agent],
+        });
+
+        const eff = engine.ResolveEffectiveAgentProperties(agent);
+        expect(eff.HelperPlugins).toEqual([{ seam: 'messaging', driverClass: 'AuditMessagingHelper' }]);
+    });
+
+    it('takes stricter-of-two JSON vs legacy column on narrow-only fields and honors explicit ArtifactCreationMode Never (S1, S6)', () => {
+        const cat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'AlwaysArtifactsCat',
+            DefaultConfiguration: JSON.stringify({
+                artifacts: { creationMode: 'Always' },
+            }),
+        });
+        const agent = makeAgent({
+            ID: AGENT_BASE,
+            CategoryID: CAT_ROOT,
+            // Direct SQL tightened legacy columns while JSON still had looser values
+            RequirePlanMode: true,
+            AllowMemoryWrite: false,
+            SearchScopeAccess: 'None',
+            ArtifactCreationMode: 'Never',
+            Configuration: JSON.stringify({
+                execution: { requirePlanMode: false },
+                memory: { allowMemoryWrite: true },
+                scope: { searchScopeAccess: 'All' },
+            }),
+        });
+        const engine = seedEngine({
+            _agentCategories: [cat],
+            _agents: [agent],
+        });
+
+        const eff = engine.ResolveEffectiveAgentProperties(agent);
+        expect(eff.RequirePlanMode).toBe(true);
+        expect(eff.AllowMemoryWrite).toBe(false);
+        expect(eff.SearchScopeAccess).toBe('None');
+        expect(eff.ArtifactCreationMode).toBe('Never');
+    });
 });

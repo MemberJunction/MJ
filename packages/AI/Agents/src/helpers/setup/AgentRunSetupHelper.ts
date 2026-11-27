@@ -119,8 +119,15 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
                         curId = anc.BaseAgentID;
                     }
                 }
-            } catch {
-                // Uninitialized AIEngine in unit tests; fall back to leaf MaxTimePerRun.
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                const isUnconfigured = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+                if (!isUnconfigured) {
+                    ctx.Hooks.LogError(
+                        `ExecuteRun: failed walking BaseAgentID ancestor MaxTimePerRun for '${agent.Name ?? agent.ID}': ${msg}`,
+                        { agent, category: 'AgentLimits' }
+                    );
+                }
             }
             return candidates.length > 0 ? Math.min(...candidates) : undefined;
         })();
@@ -140,7 +147,9 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
                 ? Math.max(0, workflowDurationCapMs - Math.max(0, Date.now() - workflowStartedAtMs))
                 : undefined;
         const livenessConfig = ctx.ActiveLimitsResolution?.Limits.Liveness;
-        const explicitBaseCapMs = explicitResolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs;
+        const subclassDefaultTimeoutMs = ctx.HasCustomDefaultAgentTimeout ? ctx.DefaultAgentTimeoutMS : undefined;
+        const explicitBaseCapMs =
+            explicitResolvedMaxWallClockMs ?? params.maxExecutionTimeMs ?? configuredMaxTimeMs ?? subclassDefaultTimeoutMs;
         const baseOuterCeilingMs =
             explicitBaseCapMs ??
             (livenessConfig?.Enabled === false
@@ -494,13 +503,35 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
                     true,
                     params
                 );
-                return await ctx.Hooks.ExecuteRealtimeSession<R>(wrappedParams, config);
+                // Realtime sessions manage their own turn/idle lifecycle; suspend the sliding
+                // inactivity timer so active audio/video sessions are not aborted at 15m while the
+                // outer wall-clock ceiling remains enforced.
+                livenessWatchdog.SuspendForExternalWait('realtime-session', 'session-driven-agent');
+                try {
+                    return await ctx.Hooks.ExecuteRealtimeSession<R>(wrappedParams, config);
+                } finally {
+                    livenessWatchdog.ResumeFromExternalWait('realtime-session');
+                }
             }
 
             await ctx.Hooks.CheckPreTurnCompaction(wrappedParams, config);
 
             ctx.Hooks.LogStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
-            const executionResult = await ctx.Hooks.ExecuteAgentInternal<R, C>(wrappedParams, config);
+            // Downstream subclasses overriding `executeAgentInternal` bypass BaseAgent's step/prompt
+            // loop and may not emit progress callbacks on every internal operation. Suspend the
+            // sliding inactivity timer for those custom drivers (outer wall-clock ceiling stays on).
+            const customLoopWaitId = ctx.HasCustomExecuteAgentInternal ? 'custom-execute-agent-internal' : null;
+            if (customLoopWaitId) {
+                livenessWatchdog.SuspendForExternalWait(customLoopWaitId, 'custom-driver-loop');
+            }
+            let executionResult: { finalStep: BaseAgentNextStep<R>; stepCount: number };
+            try {
+                executionResult = await ctx.Hooks.ExecuteAgentInternal<R, C>(wrappedParams, config);
+            } finally {
+                if (customLoopWaitId) {
+                    livenessWatchdog.ResumeFromExternalWait(customLoopWaitId);
+                }
+            }
 
             if (ctx.PausedRunOutcome) {
                 return ctx.Hooks.BuildPausedExecuteResult<R>(ctx.PausedRunOutcome);

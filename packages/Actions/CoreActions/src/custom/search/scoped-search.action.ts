@@ -750,7 +750,7 @@ export class ScopedSearchAction extends BaseAction {
         if (hostScopeIDs && hostScopeIDs.length > 0) {
             return this.resolveScopeFromHost(requestedScopeID, hostScopeIDs);
         }
-        let access = agent.SearchScopeAccess;
+        let access: MJAIAgentEntity['SearchScopeAccess'] | null | undefined = agent.SearchScopeAccess;
         try {
             if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
                 const eff = AIEngine.Instance.ResolveEffectiveAgentProperties(agent.ID);
@@ -758,8 +758,13 @@ export class ScopedSearchAction extends BaseAction {
                     access = eff.SearchScopeAccess;
                 }
             }
-        } catch {
-            // Fall back to direct column if AIEngine is uninitialized in isolated unit tests.
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isUninitialized = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+            if (!isUninitialized) {
+                LogError(`ScopedSearchAction: unexpected error resolving effective SearchScopeAccess for agent "${agent.Name}" (${agent.ID}) — failing closed to 'None': ${msg}`);
+                access = 'None';
+            }
         }
         if (access === 'None') {
             return {
@@ -771,8 +776,14 @@ export class ScopedSearchAction extends BaseAction {
         if (access === 'Assigned') {
             return this.resolveScopeAssigned(agent, requestedScopeID);
         }
-        // access === 'All'
-        return this.resolveScopeAll(requestedScopeID);
+        if (access === 'All') {
+            return this.resolveScopeAll(requestedScopeID);
+        }
+        return {
+            success: false,
+            errorCode: 'ACCESS_DENIED',
+            errorMessage: `Agent "${agent.Name}" has unrecognized SearchScopeAccess value '${String(access)}' and cannot invoke scoped search.`,
+        };
     }
 
     /**

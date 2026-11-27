@@ -28,6 +28,7 @@ import {
     ResolveRecordingStorageAccountID,
     StoreRealtimeRecording,
 } from '../../realtime/realtime-recording-store';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 
 /**
@@ -226,7 +227,9 @@ export class AgentRealtimePersistenceHelper {
             const agent = params.agent as MJAIAgentEntityExtended;
             const runtime = (params.data?.recording ?? null) as { media?: string; consent?: boolean } | null;
 
-            const rawMedia = runtime?.media ?? agent.RecordingDefault ?? 'None';
+            const effectiveRecordingDefault =
+                SafeResolveEffectiveAgentProperties(agent)?.RecordingDefault ?? agent.RecordingDefault;
+            const rawMedia = runtime?.media ?? effectiveRecordingDefault ?? 'None';
             const media: RealtimeRecordingMedia | 'None' =
                 rawMedia === 'Audio' || rawMedia === 'AudioVideo' ? rawMedia : 'None';
             if (media === 'None') {

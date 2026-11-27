@@ -1217,6 +1217,7 @@ export class LoopAgentType extends BaseAgentType {
                     if (
                         customPolicy &&
                         !customPolicy.IsBuiltIn &&
+                        customPolicy.DefaultEnabledInPrompt &&
                         (customPolicy.AppliesTo === 'Loop' || customPolicy.AppliesTo === 'Both' || customPolicy.AppliesTo === 'All')
                     ) {
                         retVal.step = customPolicy.StepKey;
@@ -1225,12 +1226,21 @@ export class LoopAgentType extends BaseAgentType {
                         }
                         const rawNextStep = response.nextStep as unknown as Record<string, unknown>;
                         const explicitData = rawNextStep['customStepData'];
+                        const sanitizeCustomData = (obj: Record<string, unknown>): Record<string, unknown> => {
+                            const safe: Record<string, unknown> = {};
+                            for (const [k, v] of Object.entries(obj)) {
+                                if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
+                                safe[k] = v;
+                            }
+                            return safe;
+                        };
                         if (explicitData && typeof explicitData === 'object' && !Array.isArray(explicitData)) {
-                            retVal.customStepData = explicitData as Record<string, unknown>;
+                            retVal.customStepData = sanitizeCustomData(explicitData as Record<string, unknown>);
                         } else {
                             const { type: _ignoredType, ...restFields } = rawNextStep;
-                            if (Object.keys(restFields).length > 0) {
-                                retVal.customStepData = restFields;
+                            const sanitized = sanitizeCustomData(restFields);
+                            if (Object.keys(sanitized).length > 0) {
+                                retVal.customStepData = sanitized;
                             }
                         }
                     } else {
@@ -1395,6 +1405,7 @@ export class LoopAgentType extends BaseAgentType {
                 const isRegisteredCustomLoopStep = Boolean(
                     customPolicy &&
                     !customPolicy.IsBuiltIn &&
+                    customPolicy.DefaultEnabledInPrompt &&
                     (customPolicy.AppliesTo === 'Loop' || customPolicy.AppliesTo === 'Both' || customPolicy.AppliesTo === 'All')
                 );
                 if (!isRegisteredCustomLoopStep) {

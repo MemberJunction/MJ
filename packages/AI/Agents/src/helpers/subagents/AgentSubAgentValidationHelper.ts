@@ -29,6 +29,7 @@ import { HostAllowedAgentIDs, KeepHostAllowedAgents } from '../../decision-disco
 import { ResolveHandoffTarget } from '../../handoff-target';
 import { SanitizeToolName } from '../../native-tools/action-tool-builder';
 import { SUB_AGENT_TOOL_PREFIX } from '../../native-tools/control-tools';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 
 /**
@@ -121,18 +122,20 @@ export class AgentSubAgentValidationHelper {
                 };
             }
 
-            if (subAgent.MaxExecutionsPerRun != null) {
+            const effectiveMaxExecutions =
+                SafeResolveEffectiveAgentProperties(subAgent)?.MaxExecutionsPerRun ?? subAgent.MaxExecutionsPerRun;
+            if (effectiveMaxExecutions != null) {
                 const executionCount = await ctx.Hooks.GetSubAgentExecutionCount(agentRun.ID, subAgent.ID);
-                if (executionCount >= subAgent.MaxExecutionsPerRun) {
+                if (executionCount >= effectiveMaxExecutions) {
                     ctx.Hooks.LogError(
-                        `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`,
+                        `Sub-agent '${name}' has reached its maximum execution limit of ${effectiveMaxExecutions}`,
                         {
                             agent: params.agent,
                             category: 'SubAgentExecution',
                             metadata: {
                                 subAgentName: name,
                                 executionCount,
-                                maxExecutions: subAgent.MaxExecutionsPerRun,
+                                maxExecutions: effectiveMaxExecutions,
                             },
                         }
                     );
@@ -142,7 +145,7 @@ export class AgentSubAgentValidationHelper {
                     return {
                         step: 'Retry',
                         terminate: false,
-                        errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${subAgent.MaxExecutionsPerRun}`,
+                        errorMessage: `Sub-agent '${name}' has reached its maximum execution limit of ${effectiveMaxExecutions}`,
                     };
                 }
             }

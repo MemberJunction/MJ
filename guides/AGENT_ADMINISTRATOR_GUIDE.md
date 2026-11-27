@@ -46,7 +46,7 @@ Every narrow-only invariant enforced by `AIEngineBase.ResolveEffectiveAgentPrope
 
 ### 1.2 Non-Admin (`UI` Role) Ownership & RLS Sandbox (`#6852`)
 
-`MJAIAgentEntityServer` (`packages/MJCoreEntitiesServer/src/custom/MJAIAgentEntityServer.server.ts`) uses `IsAgentAdminOrOwnerUser(user)` — returning `true` only for `Owner`-type users or members of the `System Administrator`, `Administrator`, `Admin`, `Administration`, or `Agent Administrator` roles — and enforces the following sandbox for all non-admin users:
+`MJAIAgentEntityServer` (`packages/MJCoreEntitiesServer/src/custom/MJAIAgentEntityServer.server.ts`) uses `IsAgentAdminOrOwnerUser(user)` — returning `true` for internal system-context saves (`user == null`), `Owner`-type users, or members of the `System Administrator`, `Administrator`, `Admin`, `Administration`, or `Agent Administrator` roles (tracked for future migration to a dedicated MJ `Authorization` per `UNIFIED_PERMISSIONS_GUIDE.md`) — and enforces the following sandbox for all non-admin users:
 
 1. **Derived Instances Only:** Non-admin users can only create, update, or delete rows with `BaseAgentID != null`. Root catalog agents (`BaseAgentID == null`) are admin-only.
 2. **Immutable Lineage & Ownership:**
@@ -63,20 +63,24 @@ Every narrow-only invariant enforced by `AIEngineBase.ResolveEffectiveAgentPrope
 
 See [Agent Permissions & Inheritance Guide](AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md) for the full 2×2 RBAC matrix and SQL RLS view details.
 
-### 1.3 Code-Only Security Seams (`BaseAgentLimitsHelper` & `BaseAgentActionPolicyHelper`)
+### 1.3 Code-Only Security Seams
 
-`BaseAgent` delegates execution across 13 pluggable helper seams (`packages/AI/Agents/src/helpers/`). Eleven behavioral seams can be overridden per agent by administrators via `Configuration.helperPlugins`. **Two security-critical seams are strictly code-only** and can **never** be overridden from database metadata — not even by System Administrators:
+`BaseAgent` delegates execution across 13 pluggable helper seams (`packages/AI/Agents/src/helpers/`). Seven behavioral seams (`messaging`, `payload`, `compaction`, `realtime`, `iteration`, `skills`, `prompt`) can be overridden per agent by administrators via `Configuration.helperPlugins`. **Six security- and invariant-critical seams are strictly code-only** and can **never** be overridden from database metadata — not even by System Administrators:
 
 | Code-Only Seam | Base Token Class | Why Metadata Override Is Forbidden |
 | --- | --- | --- |
 | **`limits`** | `BaseAgentLimitsHelper` | Owns 5-tier budget resolution, `AgentTreeBudgetTracker`, `BudgetEnforcementGuard`, runaway governance, cooperative pause, `AgentLivenessWatchdog`, and `AgentStuckDetector`. |
 | **`actionPolicy`** | `BaseAgentActionPolicyHelper` | Owns taint tracking (`TaintedSources`), tainted-egress checks, bound/hidden action parameters, per-user action policies (`CheckUserActionPolicy`), audience enforcement, and run-scope validation. |
+| **`setup`** | `BaseAgentRunSetupHelper` | Owns run-permission verification, `ResolveFullRunLimits`, liveness watchdog lifecycle, and Plan Mode gate resolution. |
+| **`steps`** | `BaseAgentStepExecutionHelper` | Owns per-step tree-budget checks, Plan Mode unapproved-step gating, and step-type dispatch. |
+| **`actions`** | `BaseAgentActionsHelper` | Invokes `CheckUserActionPolicy`, `CheckTaintedEgress`, and bound/hidden parameter enforcement around every action call. |
+| **`subAgents`** | `BaseAgentSubAgentHelper` | Invokes sub-agent execution permission checks and parent/child budget & watchdog propagation. |
 
 This invariant is enforced in **two independent layers**:
-1. **Entity Save Time (`ValidateAgentInheritanceAndSandbox`):** Checks `IsForbiddenMetadataHelperSeam(plugin.seam)` from `@memberjunction/ai-core-plus` (rejecting `'limits'`, `'actionpolicy'`, `'policy'`, `'permissions'`, and `'permission'`, case- and punctuation-insensitive) for **all** users including administrators.
-2. **Runtime Resolution (`AgentHelperCache.ResetForRun` & `ResolveAgentHelper` in `packages/AI/Agents/src/helpers/AgentHelperResolver.ts`):** Re-checks `CODE_ONLY_HELPER_SEAMS` and `IsForbiddenMetadataHelperSeam` before resolving any `DriverClass`, throwing a `Security violation` error if a tampered database row attempts to override either seam.
+1. **Entity Save Time (`ValidateAgentInheritanceAndSandbox` & `ValidateAgentConfigurationJson`):** Checks `IsForbiddenMetadataHelperSeam(plugin.seam)` from `@memberjunction/ai-core-plus` (rejecting `'limits'`, `'actionpolicy'`, `'policy'`, `'permissions'`, `'permission'`, `'setup'`, `'steps'`, `'actions'`, `'subagents'`, and `'subagent'`, case- and punctuation-insensitive) for **all** users including administrators.
+2. **Runtime Resolution (`AgentHelperCache.ResetForRun` & `ResolveAgentHelper` in `packages/AI/Agents/src/helpers/AgentHelperResolver.ts`):** Re-checks `CODE_ONLY_HELPER_SEAMS` and `IsForbiddenMetadataHelperSeam` before resolving any `DriverClass`, throwing a `Security violation` error if a tampered database row attempts to override any code-only seam.
 
-To customize limits or action policy logic organization-wide, deploy a server-side `@RegisterClass(BaseAgentLimitsHelper, 'Default', priority)` or `@RegisterClass(BaseAgentActionPolicyHelper, 'Default', priority)` subclass in audited TypeScript code (see [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md)).
+To customize any code-only seam organization-wide, deploy a server-side `@RegisterClass(BaseAgent<Seam>Helper, 'Default', priority)` subclass in audited TypeScript code (see [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md)).
 
 ### 1.4 5-Tier Limits Hierarchy & `mj.config.cjs` Ceilings
 
@@ -193,9 +197,9 @@ In accordance with `packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md`, no physical co
 
 Both `MJAIAgentEntityServer.Save()` and `MJAIAgentTypeEntityServer.Save()` invoke pure sync functions in `@memberjunction/ai-core-plus` (`SyncAgentLegacyColumnsAndConfiguration` and `SyncAgentTypeLegacyColumnsAndConfiguration`):
 
-1. **Direction 1 (`Configuration` JSON → Legacy Columns):** When a caller edits `Configuration` (or creates a new record with `Configuration`), every configured JSON value mirrors into the corresponding legacy column — **except** any legacy column that is itself dirty on the same save.
+1. **Direction 1 (`Configuration` JSON → Legacy Columns):** When a caller edits `Configuration` (or creates a new record with `Configuration`), every configured JSON value mirrors into the corresponding legacy column — **except** any legacy column that is itself dirty on the same save. Removing or explicitly nulling a previously configured JSON key also resets its corresponding legacy column back to `null`/default (using the pre-save `Configuration` diff).
 2. **Direction 2 (Dirty Legacy Columns → `Configuration` JSON):** When legacy code, SQL tools, or older metadata files modify any deprecated column (`field.Dirty === true`), only those dirty legacy columns are patched into `Configuration` via `DeepMergeAgentConfigurations`. Legacy writers are **never** silently shadowed by stale JSON values.
-3. **Read-Path Dual-Read:** `AIEngineBase.ResolveEffectiveAgentProperties` always checks `Configuration.<section>.<key>` first and falls back to the legacy column if absent, protecting direct SQL or un-synced metadata imports.
+3. **Read-Path Dual-Read (Stricter-of-Two for Narrow-Only Fields):** `AIEngineBase.ResolveEffectiveAgentProperties` takes the **stricter of JSON and legacy column** for every narrow-only security/ceiling field (so a direct SQL tightening on a legacy column is never shadowed by a looser JSON value), and falls back from `Configuration.<section>.<key>` to the legacy column for general operational fields.
 
 ### 3.2 Complete Legacy Column → `IAgentConfiguration` Deprecation Map
 

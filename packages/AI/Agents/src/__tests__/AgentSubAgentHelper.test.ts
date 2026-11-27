@@ -47,7 +47,7 @@ describe('BaseAgentSubAgentHelper / AgentSubAgentHelper', () => {
         vi.restoreAllMocks();
     });
 
-    it('resolves AgentSubAgentHelper as default implementation and supports @RegisterClass replacement override', () => {
+    it('resolves AgentSubAgentHelper as default implementation and rejects metadata override for code-only subAgents seam (S3)', () => {
         const helper = ResolveAgentHelper({
             SeamKey: 'subAgents',
             BaseClass: BaseAgentSubAgentHelper,
@@ -55,13 +55,14 @@ describe('BaseAgentSubAgentHelper / AgentSubAgentHelper', () => {
         });
         expect(helper).toBeInstanceOf(AgentSubAgentHelper);
 
-        const custom = ResolveAgentHelper({
-            SeamKey: 'subAgents',
-            BaseClass: BaseAgentSubAgentHelper,
-            DefaultClass: AgentSubAgentHelper,
-            DriverClass: 'TestCustomSubAgentHelper',
-        });
-        expect(custom).toBeInstanceOf(TestCustomSubAgentHelper);
+        expect(() =>
+            ResolveAgentHelper({
+                SeamKey: 'subAgents',
+                BaseClass: BaseAgentSubAgentHelper,
+                DefaultClass: AgentSubAgentHelper,
+                DriverClass: 'TestCustomSubAgentHelper',
+            })
+        ).toThrow(/code-only/);
     });
 
     it('GetRequestedSubAgents prefers plural subAgents array, falls back to singular subAgent, and handles null/empty', () => {

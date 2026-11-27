@@ -592,7 +592,9 @@ export function CreateMockAgentRunContext(
         LastSubAgentPayloadArtifactTypeID: undefined,
         ResolvedHandoffTarget: null,
         HandoffResult: null,
-        IsRunTainted: false,
+        get IsRunTainted(): boolean {
+            return this.TaintedSources.length > 0;
+        },
         HelperCache: new AgentHelperCache(),
         RunAbortController: null,
         CheckpointStepCostBaseline: 0,

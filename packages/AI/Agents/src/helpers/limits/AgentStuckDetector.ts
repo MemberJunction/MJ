@@ -65,7 +65,17 @@ export interface AgentStuckDetectorSnapshot {
     ConsecutiveReadOnlySteps: number;
     WrapUpDirectiveInjectedAtStep: number | null;
     DirectivesInjectedForFingerprints: readonly string[];
+    PendingDirectives: readonly string[];
 }
+
+/** Optional structured action metadata used to classify read-only vs mutating actions accurately. */
+export interface ActionReadOnlyMetadata {
+    DisallowWhenTainted?: boolean | null;
+    Verb?: string | null;
+}
+
+/** Lookup callback resolving structured metadata for an action name when available. */
+export type ActionReadOnlyMetadataLookup = (actionName: string) => ActionReadOnlyMetadata | null | undefined;
 
 /** Keywords identifying clearly mutating or side-effecting tool/action names. */
 const MUTATING_ACTION_TOKENS: readonly string[] = [
@@ -104,8 +114,11 @@ const MUTATING_ACTION_TOKENS: readonly string[] = [
     'trigger',
     'invoke',
     'execute',
-    'run',
+    'log',
 ];
+
+/** Keywords that indicate mutation only when used as a leading verb (not a noun like 'Get Agent Run'). */
+const LEADING_MUTATING_TOKENS: readonly string[] = ['run'];
 
 /** Keywords identifying read-only / investigative tool/action names. */
 const READ_ONLY_ACTION_TOKENS: readonly string[] = [
@@ -125,7 +138,6 @@ const READ_ONLY_ACTION_TOKENS: readonly string[] = [
     'count',
     'analyze',
     'diff',
-    'log',
     'cat',
     'head',
     'tail',
@@ -148,10 +160,25 @@ function tokenizeIdentifier(name: string): string[] {
 }
 
 /**
- * Classifies whether an action/tool name represents a read-only investigative operation.
- * Returns `false` if any mutating token is present (fail-safe toward recognizing progress).
+ * Classifies whether an action/tool represents a read-only investigative operation.
+ * Prefers structured action metadata (`DisallowWhenTainted`, `Verb`) when available, and falls
+ * back to conservative token classification (fail-safe toward recognizing progress/mutation).
  */
-export function IsReadOnlyToolOrActionName(name: string): boolean {
+export function IsReadOnlyToolOrActionName(
+    name: string,
+    metadata?: ActionReadOnlyMetadata | null
+): boolean {
+    if (metadata?.DisallowWhenTainted === true) {
+        return false;
+    }
+    const verb = metadata?.Verb?.trim().toLowerCase();
+    if (verb && verb.length > 0) {
+        if (MUTATING_ACTION_TOKENS.includes(verb) || LEADING_MUTATING_TOKENS.includes(verb)) {
+            return false;
+        }
+        return READ_ONLY_ACTION_TOKENS.includes(verb);
+    }
+
     const tokens = tokenizeIdentifier(name);
     if (tokens.length === 0) {
         return false;
@@ -159,7 +186,19 @@ export function IsReadOnlyToolOrActionName(name: string): boolean {
     if (tokens.some((t) => MUTATING_ACTION_TOKENS.includes(t))) {
         return false;
     }
-    return tokens.some((t) => READ_ONLY_ACTION_TOKENS.includes(t));
+    if (LEADING_MUTATING_TOKENS.includes(tokens[0])) {
+        return false;
+    }
+    const firstReadIdx = tokens.findIndex((t) => READ_ONLY_ACTION_TOKENS.includes(t));
+    if (firstReadIdx === -1) {
+        return false;
+    }
+    // Only treat 'run' as mutating if it appears BEFORE any read-only verb (e.g. 'HubSpot - Run Sync').
+    const leadingMutIdx = tokens.findIndex((t) => LEADING_MUTATING_TOKENS.includes(t));
+    if (leadingMutIdx !== -1 && leadingMutIdx < firstReadIdx) {
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -215,27 +254,61 @@ export function ComputeCanonicalToolFingerprint(toolName: string, args: unknown)
 export class AgentStuckDetector {
     private _recentToolFingerprints: string[] = [];
     private readonly _directiveInjectedFingerprints = new Set<string>();
+    private _pendingDirectives: string[] = [];
     private _consecutiveReadOnlySteps = 0;
     private _wrapUpDirectiveInjectedAtStep: number | null = null;
+    private _lastPriorResultSignature: string | null = null;
 
     /** Clears all sliding windows and counters at run start or post-approval checkpoint resume. */
     public Reset(): void {
         this._recentToolFingerprints = [];
         this._directiveInjectedFingerprints.clear();
+        this._pendingDirectives = [];
         this._consecutiveReadOnlySteps = 0;
         this._wrapUpDirectiveInjectedAtStep = null;
+        this._lastPriorResultSignature = null;
+    }
+
+    /**
+     * Flushes any deferred directives queued during native tool-calling turns once tool results
+     * have been appended to `params.conversationMessages` (preventing illegal
+     * `assistant(tool_use) -> user(directive) -> tool(results)` ordering).
+     */
+    public FlushPendingDirectives(params: ExecuteAgentParams): string[] {
+        if (this._pendingDirectives.length === 0) {
+            return [];
+        }
+        const flushed = [...this._pendingDirectives];
+        this._pendingDirectives = [];
+        if (Array.isArray(params.conversationMessages)) {
+            for (const directive of flushed) {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: directive,
+                });
+            }
+        }
+        return flushed;
     }
 
     /**
      * Records a tool/action invocation and checks whether the same canonical call has repeated
      * `>= config.IdenticalToolCallThreshold` times within the last `config.WindowSize` calls.
+     *
+     * When `resultHash` is supplied and differs across polling calls (e.g., job status changing
+     * from `queued` to `running`), calls do not collide as identical stuck loops. An intervening
+     * mutating call resets the sliding window so `list -> create -> list` never false-positives.
      */
     public RecordToolCall(
         toolName: string,
         args: unknown,
-        config: MJLimitsStuckDetectorConfig = LimitsConfigResolver.Resolve().Limits.StuckDetector
+        config: MJLimitsStuckDetectorConfig = LimitsConfigResolver.Resolve().Limits.StuckDetector,
+        resultHash?: string | null,
+        actionMetadata?: ActionReadOnlyMetadata | null
     ): StuckToolCallAssessment {
-        const fingerprint = ComputeCanonicalToolFingerprint(toolName, args);
+        const baseFingerprint = ComputeCanonicalToolFingerprint(toolName, args);
+        const fingerprint =
+            resultHash && resultHash.length > 0 ? `${baseFingerprint}::r=${resultHash}` : baseFingerprint;
         const threshold = Math.max(2, config.IdenticalToolCallThreshold);
         if (!config.Enabled) {
             return { Action: 'none', Fingerprint: fingerprint, CountInWindow: 0, Threshold: threshold };
@@ -246,12 +319,20 @@ export class AgentStuckDetector {
         if (this._recentToolFingerprints.length > windowSize) {
             this._recentToolFingerprints.splice(0, this._recentToolFingerprints.length - windowSize);
         }
+        this.pruneAgedDirectiveFingerprints();
 
         let countInWindow = 0;
         for (const fp of this._recentToolFingerprints) {
             if (fp === fingerprint) {
                 countInWindow++;
             }
+        }
+
+        // If a non-read-only (mutating) call ran with a fresh fingerprint (not itself repeating),
+        // clear older read-only fingerprints so `list -> create -> list` resets cleanly.
+        if (countInWindow === 1 && !IsReadOnlyToolOrActionName(toolName, actionMetadata)) {
+            this._recentToolFingerprints = [fingerprint];
+            this.pruneAgedDirectiveFingerprints();
         }
 
         if (countInWindow < threshold) {
@@ -290,7 +371,8 @@ export class AgentStuckDetector {
      */
     public RecordStepOutcome(
         outcome: StuckStepOutcomeInput,
-        config: MJLimitsStuckDetectorConfig = LimitsConfigResolver.Resolve().Limits.StuckDetector
+        config: MJLimitsStuckDetectorConfig = LimitsConfigResolver.Resolve().Limits.StuckDetector,
+        actionMetadataLookup?: ActionReadOnlyMetadataLookup
     ): StuckReadOnlyAssessment {
         const threshold = Math.max(1, config.ReadOnlyStepThreshold);
         if (!config.Enabled) {
@@ -299,18 +381,24 @@ export class AgentStuckDetector {
 
         if (outcome.IsTerminal || outcome.HasPayloadMutation || outcome.HasSubAgentDelegation) {
             this.resetReadOnlyStreak();
+            if (outcome.HasPayloadMutation || outcome.HasSubAgentDelegation) {
+                this.resetToolLoopWindow();
+            }
             return { Action: 'none', ConsecutiveReadOnlySteps: 0, Threshold: threshold };
         }
 
         const stepType = outcome.StepType;
         if (stepType === 'Sub-Agent' || stepType === 'Tasks' || stepType === 'Handoff' || stepType === 'Plan') {
             this.resetReadOnlyStreak();
+            this.resetToolLoopWindow();
             return { Action: 'none', ConsecutiveReadOnlySteps: 0, Threshold: threshold };
         }
 
         const actionNames = outcome.ActionNames ?? [];
         if (actionNames.length > 0) {
-            const allReadOnly = actionNames.every((name) => IsReadOnlyToolOrActionName(name));
+            const allReadOnly = actionNames.every((name) =>
+                IsReadOnlyToolOrActionName(name, actionMetadataLookup?.(name))
+            );
             if (!allReadOnly) {
                 this.resetReadOnlyStreak();
                 return { Action: 'none', ConsecutiveReadOnlySteps: 0, Threshold: threshold };
@@ -359,13 +447,15 @@ export class AgentStuckDetector {
     /**
      * Evaluates a completed non-terminal step decision for both repeated canonical tool/action
      * loops and read-only spirals, injecting any course-correction or wrap-up directives onto
-     * `params.conversationMessages` and returning a pause request only when escalation triggers.
+     * `params.conversationMessages` (or deferring them until after tool results on native
+     * tool-calling turns) and returning a pause request only when escalation triggers.
      */
     public EvaluateStepDecision<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         config: MJLimitsStuckDetectorConfig = LimitsConfigResolver.Resolve().Limits.StuckDetector,
-        circuitBrokenActionNames?: ReadonlySet<string>
+        circuitBrokenActionNames?: ReadonlySet<string>,
+        actionMetadataLookup?: ActionReadOnlyMetadataLookup
     ): StuckStepEvaluationOutcome {
         if (!config.Enabled) {
             return { InjectedDirectives: [], PauseRequest: null };
@@ -373,12 +463,23 @@ export class AgentStuckDetector {
         const injectedDirectives: string[] = [];
         let pauseRequest: StuckStepEvaluationOutcome['PauseRequest'] = null;
 
+        // If the prior step produced a DIFFERENT result payload (e.g., polling a job whose status
+        // advanced from 'queued' to 'running'), reset the identical-call window so legitimate
+        // polling with changing results never triggers a false StuckToolCallLoop pause.
+        if (nextStep.priorStepResult !== undefined) {
+            const nextResultSig = StableSortedJSON(nextStep.priorStepResult);
+            if (this._lastPriorResultSignature !== null && nextResultSig !== this._lastPriorResultSignature) {
+                this.resetToolLoopWindow();
+            }
+            this._lastPriorResultSignature = nextResultSig;
+        }
+
         const recordToolInvocation = (name: string, args: unknown): void => {
             actionNames.push(name);
             if (circuitBrokenActionNames?.has(name)) {
                 return;
             }
-            const toolEval = this.RecordToolCall(name, args, config);
+            const toolEval = this.RecordToolCall(name, args, config, undefined, actionMetadataLookup?.(name));
             if (toolEval.Action === 'inject-directive' && toolEval.Directive) {
                 injectedDirectives.push(toolEval.Directive);
             } else if (toolEval.Action === 'pause' && toolEval.PauseReason && !pauseRequest) {
@@ -448,7 +549,11 @@ export class AgentStuckDetector {
                     if (!item || typeof item !== 'object') continue;
                     const summary = item as { success?: boolean; actionName?: string; name?: string };
                     const executedName = summary.actionName ?? summary.name;
-                    if (summary.success !== false && executedName && !IsReadOnlyToolOrActionName(executedName)) {
+                    if (
+                        summary.success !== false &&
+                        executedName &&
+                        !IsReadOnlyToolOrActionName(executedName, actionMetadataLookup?.(executedName))
+                    ) {
                         priorMutated = true;
                         break;
                     }
@@ -456,6 +561,7 @@ export class AgentStuckDetector {
             }
             if (priorMutated) {
                 this.resetReadOnlyStreak();
+                this.resetToolLoopWindow();
             }
         } else {
             const readOnlyEval = this.RecordStepOutcome(
@@ -466,7 +572,8 @@ export class AgentStuckDetector {
                     HasSubAgentDelegation: nextStep.step === 'Sub-Agent' || Boolean(nextStep.subAgent),
                     IsTerminal: nextStep.terminate === true || nextStep.step === 'Success' || nextStep.step === 'Chat',
                 },
-                config
+                config,
+                actionMetadataLookup
             );
             if (readOnlyEval.Action === 'inject-wrap-up-directive' && readOnlyEval.Directive) {
                 injectedDirectives.push(readOnlyEval.Directive);
@@ -478,12 +585,22 @@ export class AgentStuckDetector {
             }
         }
 
-        if (injectedDirectives.length > 0 && Array.isArray(params.conversationMessages)) {
-            for (const directive of injectedDirectives) {
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: directive,
-                });
+        if (injectedDirectives.length > 0) {
+            const hasTrailingUnansweredToolCalls = (() => {
+                const msgs = params.conversationMessages;
+                if (!Array.isArray(msgs) || msgs.length === 0) return false;
+                const last = msgs[msgs.length - 1] as { role?: string; toolCalls?: unknown[] };
+                return last.role === 'assistant' && Array.isArray(last.toolCalls) && last.toolCalls.length > 0;
+            })();
+            if (nextStep.nativeTurn?.sendResultsNatively || hasTrailingUnansweredToolCalls) {
+                this._pendingDirectives.push(...injectedDirectives);
+            } else if (Array.isArray(params.conversationMessages)) {
+                for (const directive of injectedDirectives) {
+                    params.conversationMessages.push({
+                        role: 'user',
+                        content: directive,
+                    });
+                }
             }
         }
 
@@ -497,11 +614,29 @@ export class AgentStuckDetector {
             ConsecutiveReadOnlySteps: this._consecutiveReadOnlySteps,
             WrapUpDirectiveInjectedAtStep: this._wrapUpDirectiveInjectedAtStep,
             DirectivesInjectedForFingerprints: Array.from(this._directiveInjectedFingerprints),
+            PendingDirectives: [...this._pendingDirectives],
         };
     }
 
     private resetReadOnlyStreak(): void {
         this._consecutiveReadOnlySteps = 0;
         this._wrapUpDirectiveInjectedAtStep = null;
+    }
+
+    private resetToolLoopWindow(): void {
+        this._recentToolFingerprints = [];
+        this._directiveInjectedFingerprints.clear();
+    }
+
+    private pruneAgedDirectiveFingerprints(): void {
+        if (this._directiveInjectedFingerprints.size === 0) {
+            return;
+        }
+        const active = new Set(this._recentToolFingerprints);
+        for (const fp of this._directiveInjectedFingerprints) {
+            if (!active.has(fp)) {
+                this._directiveInjectedFingerprints.delete(fp);
+            }
+        }
     }
 }

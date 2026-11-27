@@ -876,5 +876,94 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
             );
             expect(detector.GetSnapshot().ConsecutiveReadOnlySteps).toBe(0);
         });
+
+        it('defers directives during native tool turns, allows changing poll results and list->create->list, and classifies Log Activity / Get Agent Run accurately (B5, C6)', () => {
+            const detector = new AgentStuckDetector();
+            const cfg = {
+                ...LimitsConfigResolver.Resolve().Limits.StuckDetector,
+                Enabled: true,
+                IdenticalToolCallThreshold: 3,
+                WindowSize: 10,
+                ReadOnlyStepThreshold: 30,
+                ReadOnlyPostDirectiveGraceSteps: 5,
+            };
+
+            // C6: refined read-only token & metadata classification
+            expect(IsReadOnlyToolOrActionName('HubSpot - Log Activity')).toBe(false);
+            expect(IsReadOnlyToolOrActionName('Get Agent Run')).toBe(true);
+            expect(IsReadOnlyToolOrActionName('Run Report')).toBe(false);
+            expect(IsReadOnlyToolOrActionName('CustomAction', { DisallowWhenTainted: true })).toBe(false);
+            expect(IsReadOnlyToolOrActionName('CustomAction', { Verb: 'read' })).toBe(true);
+
+            // B5: native tool turn defers user directive until FlushPendingDirectives
+            const nativeParams: ExecuteAgentParams = {
+                agent: { Name: 'NativeToolAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [
+                    {
+                        role: 'assistant',
+                        content: '',
+                        toolCalls: [{ id: 'tc-1', name: 'GetRecord', arguments: { id: 1 } }],
+                    } as unknown as ExecuteAgentParams['conversationMessages'][number],
+                ],
+            };
+            const nativeStep = {
+                step: 'Actions' as const,
+                terminate: false,
+                nativeTurn: { sendResultsNatively: true, assistantText: '', toolCalls: [] },
+                actions: [{ name: 'GetRecord', params: { id: 1 } }],
+            };
+            detector.EvaluateStepDecision(nativeParams, nativeStep, cfg);
+            detector.EvaluateStepDecision(nativeParams, nativeStep, cfg);
+            const thirdNative = detector.EvaluateStepDecision(nativeParams, nativeStep, cfg);
+            expect(thirdNative.InjectedDirectives).toHaveLength(1);
+            // Must NOT inject user message immediately while assistant toolCalls are unanswered!
+            expect(nativeParams.conversationMessages).toHaveLength(1);
+            // After tool result turn arrives, FlushPendingDirectives appends the deferred directive safely
+            nativeParams.conversationMessages.push({ role: 'tool', content: '{"ok":true}', toolCallId: 'tc-1' } as unknown as ExecuteAgentParams['conversationMessages'][number]);
+            const flushed = detector.FlushPendingDirectives(nativeParams);
+            expect(flushed).toHaveLength(1);
+            expect(nativeParams.conversationMessages).toHaveLength(3);
+            expect(nativeParams.conversationMessages[2].role).toBe('user');
+
+            // B5: polling with changing priorStepResult resets window and never pauses
+            const pollDetector = new AgentStuckDetector();
+            const pollParams: ExecuteAgentParams = {
+                agent: { Name: 'PollAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            for (let poll = 1; poll <= 6; poll++) {
+                const res = pollDetector.EvaluateStepDecision(
+                    pollParams,
+                    {
+                        step: 'Actions',
+                        terminate: false,
+                        actions: [{ name: 'Get Job Status', params: { jobId: 'j-1' } }],
+                        priorStepResult: { status: 'running', progressPct: poll * 15 },
+                    },
+                    cfg
+                );
+                expect(res.PauseRequest).toBeNull();
+            }
+
+            // B5: list -> create -> list resets window on mutating call
+            const crudDetector = new AgentStuckDetector();
+            const crudParams: ExecuteAgentParams = {
+                agent: { Name: 'CrudAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            for (let i = 0; i < 4; i++) {
+                const listRes = crudDetector.EvaluateStepDecision(
+                    crudParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'List Items', params: {} }] },
+                    cfg
+                );
+                expect(listRes.PauseRequest).toBeNull();
+                crudDetector.EvaluateStepDecision(
+                    crudParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Create Item', params: { idx: i } }] },
+                    cfg
+                );
+            }
+        });
     });
 });

@@ -101,7 +101,7 @@ describe('AgentActionPolicyHelper & AgentActionsHelper (Slice s8)', () => {
         ).toThrow(/code-only/);
     });
 
-    it('resolves default AgentActionsHelper and supports @RegisterClass keyed replacement override', () => {
+    it('resolves default AgentActionsHelper and rejects metadata helperPlugins override for code-only actions seam (S3)', () => {
         const defaultHelper = ResolveAgentHelper({
             SeamKey: 'actions',
             BaseClass: BaseAgentActionsHelper,
@@ -109,13 +109,14 @@ describe('AgentActionPolicyHelper & AgentActionsHelper (Slice s8)', () => {
         });
         expect(defaultHelper).toBeInstanceOf(AgentActionsHelper);
 
-        const customHelper = ResolveAgentHelper({
-            SeamKey: 'actions',
-            BaseClass: BaseAgentActionsHelper,
-            DefaultClass: AgentActionsHelper,
-            DriverClass: 'TestCustomActionsHelper',
-        });
-        expect(customHelper).toBeInstanceOf(TestCustomActionsHelper);
+        expect(() =>
+            ResolveAgentHelper({
+                SeamKey: 'actions',
+                BaseClass: BaseAgentActionsHelper,
+                DefaultClass: AgentActionsHelper,
+                DriverClass: 'TestCustomActionsHelper',
+            })
+        ).toThrow(/code-only/);
     });
 
     it('normalizes nested action parameter keys and arrays deterministically and handles null/circular inputs', () => {

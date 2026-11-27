@@ -142,6 +142,7 @@ export class SubAgentStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'RetryStepHandler')
 export class RetryStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Retry' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -181,6 +182,7 @@ export class RetryStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'SuccessStepHandler')
 export class SuccessStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Success' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -243,6 +245,7 @@ export class SuccessStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'FailedStepHandler')
 export class FailedStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Failed' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -321,6 +324,7 @@ export class FailedStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'ChatStepHandler')
 export class ChatStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Chat' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
     public override readonly CountsAgainstTreeBudget = false;
 
     public override Validate<P>(
@@ -348,6 +352,7 @@ export class ChatStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'ForEachStepHandler')
 export class ForEachStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'ForEach' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override async Execute<P>(
         ctx: AgentRunContext,
@@ -363,6 +368,7 @@ export class ForEachStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'WhileStepHandler')
 export class WhileStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'While' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override async Execute<P>(
         ctx: AgentRunContext,
@@ -378,6 +384,7 @@ export class WhileStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'SkillStepHandler')
 export class SkillStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Skill' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -404,6 +411,7 @@ export class SkillStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'PlanStepHandler')
 export class PlanStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Plan' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -430,6 +438,7 @@ export class PlanStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'TasksStepHandler')
 export class TasksStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Tasks' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -456,6 +465,7 @@ export class TasksStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'HandoffStepHandler')
 export class HandoffStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Handoff' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Validate<P>(
         ctx: AgentRunContext,
@@ -482,6 +492,7 @@ export class HandoffStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'ClientToolsStepHandler')
 export class ClientToolsStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'ClientTools' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override async Execute<P>(
         ctx: AgentRunContext,
@@ -502,6 +513,7 @@ export class ClientToolsStepHandler extends BaseAgentStepHandler {
 @RegisterClass(BaseAgentStepHandler, 'DecisionStepHandler')
 export class DecisionStepHandler extends BaseAgentStepHandler {
     public readonly StepKey = 'Decision' as const;
+    public override readonly AllowedInUnapprovedPlanMode = true;
 
     public override Execute<P>(
         ctx: AgentRunContext,

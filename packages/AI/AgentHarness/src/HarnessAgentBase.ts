@@ -336,11 +336,21 @@ export class HarnessAgentBase extends BaseAgent {
             let turn: HarnessTurnResult;
 
             while (true) {
-                turn = await this.runTurn(input, {
-                    limits: config.limits,
-                    onActivityHeartbeat: this.buildCombinedActivityHeartbeat(poolOpts, poolServiceOpts),
-                    accountPool: poolOpts,
-                });
+                const baseHeartbeat = this.buildCombinedActivityHeartbeat(poolOpts, poolServiceOpts);
+                const turnWaitId = `harness-turn:${this.turnIndex}`;
+                this.suspendLivenessWatchdog(turnWaitId, 'harness-turn');
+                try {
+                    turn = await this.runTurn(input, {
+                        limits: config.limits,
+                        onActivityHeartbeat: (info) => {
+                            this.recordLivenessProgress('llm-stream-chunk', `harness-turn:${this.turnIndex}`);
+                            baseHeartbeat(info);
+                        },
+                        accountPool: poolOpts,
+                    });
+                } finally {
+                    this.resumeLivenessWatchdog(turnWaitId);
+                }
 
                 const quotaCheck = turn.ErrorMessage ? ClassifyHarnessQuotaError(turn.ErrorMessage) : null;
                 if (

@@ -109,27 +109,27 @@
       "Options": {
         "MaxLines": 1000,
         "HeaderReasonPattern": "//\\s*file-size-ok:\\s*\\S+",
-        "Allowlist": [
-          "packages/AI/Agents/src/realtime/realtime-client-session-service.ts",
-          "packages/AI/Agents/src/memory-manager-agent.ts",
-          "packages/AI/Agents/src/AgentRunner.ts",
-          "packages/AI/Agents/src/ArtifactToolManager.ts",
-          "packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts",
-          "packages/AI/Agents/src/GovernedArtifactService.ts",
-          "packages/AI/Agents/src/PayloadManager.ts",
-          "packages/AI/Agents/src/agent-types/flow-agent-type.ts",
-          "packages/AI/Agents/src/artifact-tools/SlideDeckToolLibrary.ts",
-          "packages/AI/Agents/src/artifact-tools/DocumentToolLibrary.ts",
-          "packages/AI/Agents/src/AgentWakeTriggerService.ts",
-          "packages/AI/Agents/src/realtime/realtime-coagent-config.ts",
-          "packages/AI/Agents/src/agent-types/loop-agent-type.ts",
-          "packages/AI/Agents/src/GrowthCoachService.ts",
-          "packages/AI/Agents/src/BudgetEnforcementGuard.ts",
-          "packages/AI/Agents/src/artifact-tools/artifact-comment-suggestion-helper.ts",
-          "packages/AI/Agents/src/operations/LimitsOperations.ts",
-          "packages/AI/Agents/src/RunawayCheckpointManager.ts",
-          "packages/AI/Agents/src/artifact-tools/DataSnapshotToolLibrary.ts"
-        ]
+        "Allowlist": {
+          "packages/AI/Agents/src/realtime/realtime-client-session-service.ts": 5215,
+          "packages/AI/Agents/src/memory-manager-agent.ts": 4480,
+          "packages/AI/Agents/src/AgentRunner.ts": 4279,
+          "packages/AI/Agents/src/ArtifactToolManager.ts": 3980,
+          "packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts": 3973,
+          "packages/AI/Agents/src/GovernedArtifactService.ts": 3411,
+          "packages/AI/Agents/src/PayloadManager.ts": 2713,
+          "packages/AI/Agents/src/agent-types/flow-agent-type.ts": 2599,
+          "packages/AI/Agents/src/artifact-tools/SlideDeckToolLibrary.ts": 2245,
+          "packages/AI/Agents/src/artifact-tools/DocumentToolLibrary.ts": 2245,
+          "packages/AI/Agents/src/AgentWakeTriggerService.ts": 2004,
+          "packages/AI/Agents/src/realtime/realtime-coagent-config.ts": 1735,
+          "packages/AI/Agents/src/agent-types/loop-agent-type.ts": 1612,
+          "packages/AI/Agents/src/GrowthCoachService.ts": 1419,
+          "packages/AI/Agents/src/BudgetEnforcementGuard.ts": 1286,
+          "packages/AI/Agents/src/artifact-tools/artifact-comment-suggestion-helper.ts": 1127,
+          "packages/AI/Agents/src/operations/LimitsOperations.ts": 1097,
+          "packages/AI/Agents/src/RunawayCheckpointManager.ts": 1029,
+          "packages/AI/Agents/src/artifact-tools/DataSnapshotToolLibrary.ts": 1008
+        }
       }
     }
   }

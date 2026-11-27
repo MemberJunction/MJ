@@ -66,7 +66,7 @@ describe('BaseAgentStepExecutionHelper & BaseAgentRunSetupHelper (s11)', () => {
         vi.restoreAllMocks();
     });
 
-    it('resolves AgentStepExecutionHelper and AgentRunSetupHelper and supports @RegisterClass replacement overrides', () => {
+    it('resolves AgentStepExecutionHelper and AgentRunSetupHelper and rejects metadata overrides for code-only steps/setup seams (S3)', () => {
         const steps = ResolveAgentHelper({
             SeamKey: 'steps',
             BaseClass: BaseAgentStepExecutionHelper,
@@ -80,20 +80,22 @@ describe('BaseAgentStepExecutionHelper & BaseAgentRunSetupHelper (s11)', () => {
         expect(steps).toBeInstanceOf(AgentStepExecutionHelper);
         expect(setup).toBeInstanceOf(AgentRunSetupHelper);
 
-        const customSteps = ResolveAgentHelper({
-            SeamKey: 'steps',
-            BaseClass: BaseAgentStepExecutionHelper,
-            DefaultClass: AgentStepExecutionHelper,
-            DriverClass: 'TestCustomStepExecutionHelper',
-        });
-        const customSetup = ResolveAgentHelper({
-            SeamKey: 'setup',
-            BaseClass: BaseAgentRunSetupHelper,
-            DefaultClass: AgentRunSetupHelper,
-            DriverClass: 'TestCustomRunSetupHelper',
-        });
-        expect(customSteps).toBeInstanceOf(TestCustomStepExecutionHelper);
-        expect(customSetup).toBeInstanceOf(TestCustomRunSetupHelper);
+        expect(() =>
+            ResolveAgentHelper({
+                SeamKey: 'steps',
+                BaseClass: BaseAgentStepExecutionHelper,
+                DefaultClass: AgentStepExecutionHelper,
+                DriverClass: 'TestCustomStepExecutionHelper',
+            })
+        ).toThrow(/code-only/);
+        expect(() =>
+            ResolveAgentHelper({
+                SeamKey: 'setup',
+                BaseClass: BaseAgentRunSetupHelper,
+                DefaultClass: AgentRunSetupHelper,
+                DriverClass: 'TestCustomRunSetupHelper',
+            })
+        ).toThrow(/code-only/);
     });
 
     it('ValidateNextStep blocks Actions/Sub-Agent while Plan Mode is unapproved and fails on unknown step keys', async () => {

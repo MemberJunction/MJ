@@ -131,7 +131,7 @@ export class AgentActionPolicyHelper extends BaseAgentActionPolicyHelper {
     }
 
     public override GetHighestRunTaint(ctx: AgentRunContext): ActiveRunTaint | undefined {
-        if (ctx.TaintedSources.length === 0) {
+        if (!ctx.IsRunTainted) {
             return undefined;
         }
         const untrusted = ctx.TaintedSources.find((s) => s.trustLevel === 'Untrusted');
@@ -172,7 +172,7 @@ export class AgentActionPolicyHelper extends BaseAgentActionPolicyHelper {
         actionEntity: MJActionEntityExtended,
         contextUser?: UserInfo
     ): ActionResult | null {
-        if (!params.SecurityEnvelope || ctx.TaintedSources.length === 0 || actionEntity.Config_Object?.disallowWhenTainted !== true) {
+        if (!params.SecurityEnvelope || !ctx.IsRunTainted || actionEntity.Config_Object?.disallowWhenTainted !== true) {
             return null;
         }
         return {

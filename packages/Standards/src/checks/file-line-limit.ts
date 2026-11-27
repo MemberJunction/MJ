@@ -44,7 +44,10 @@ interface ParsedFileLineLimitOptions {
     MaxLines: number;
     HeaderScanLines: number;
     HeaderReasonRegex: RegExp | null;
-    Allowlist: Set<string>;
+    /** Legacy skip-list entries (grandfathered without a cap). */
+    AllowlistSkip: Set<string>;
+    /** Ratchet entries mapping normalized relative path -> maximum permitted line count. */
+    AllowlistCaps: Map<string, number>;
 }
 
 function parseOptions(raw: Readonly<Record<string, unknown>>): ParsedFileLineLimitOptions {
@@ -67,11 +70,19 @@ function parseOptions(raw: Readonly<Record<string, unknown>>): ParsedFileLineLim
     }
 
     const rawAllowlist = raw['Allowlist'];
-    const allowlist = new Set<string>();
+    const allowlistSkip = new Set<string>();
+    const allowlistCaps = new Map<string, number>();
     if (Array.isArray(rawAllowlist)) {
         for (const item of rawAllowlist) {
             if (typeof item === 'string' && item.trim().length > 0) {
-                allowlist.add(item.trim().split('\\').join('/'));
+                allowlistSkip.add(item.trim().split('\\').join('/'));
+            }
+        }
+    } else if (rawAllowlist && typeof rawAllowlist === 'object') {
+        for (const [key, val] of Object.entries(rawAllowlist as Record<string, unknown>)) {
+            const normalized = key.trim().split('\\').join('/');
+            if (normalized.length > 0 && typeof val === 'number' && Number.isFinite(val) && val > 0) {
+                allowlistCaps.set(normalized, Math.floor(val));
             }
         }
     }
@@ -80,7 +91,8 @@ function parseOptions(raw: Readonly<Record<string, unknown>>): ParsedFileLineLim
         MaxLines: maxLines,
         HeaderScanLines: headerScanLines,
         HeaderReasonRegex: headerReasonRegex,
-        Allowlist: allowlist,
+        AllowlistSkip: allowlistSkip,
+        AllowlistCaps: allowlistCaps,
     };
 }
 
@@ -137,13 +149,27 @@ async function run(context: CheckContext): Promise<CheckResult> {
 
     for (const file of files) {
         const rel = relative(context.RepoRoot, file).split('\\').join('/');
-        if (opts.Allowlist.has(rel)) {
+        if (opts.AllowlistSkip.has(rel)) {
             allowlisted++;
             continue;
         }
         scanned++;
         const text = readFileSync(file, 'utf8');
         const { LineCount, Lines } = CountSourceLines(text);
+        const ratchetCap = opts.AllowlistCaps.get(rel);
+        if (ratchetCap !== undefined) {
+            allowlisted++;
+            if (LineCount > ratchetCap) {
+                violations.push({
+                    File: rel,
+                    Line: LineCount,
+                    Message:
+                        `Grandfathered file grew to ${LineCount} lines, exceeding its ratchet cap of ${ratchetCap} lines ` +
+                        `(target limit: ${opts.MaxLines}). Extract new logic into a separate helper module instead of growing an oversized file.`,
+                });
+            }
+            continue;
+        }
         if (LineCount <= opts.MaxLines) {
             continue;
         }
@@ -179,13 +205,13 @@ export const FileLineLimitCheck: StandardCheck = {
     DocsUrl: 'https://github.com/MemberJunction/MJ/blob/next/plans/baseagent-refactor-study.md',
     Description:
         'Enforces a maximum line count (default 1,000 lines) for non-test TypeScript source files ' +
-        'under configured roots. Pre-existing oversized files may be grandfathered in Options.Allowlist ' +
-        'and legitimately large files may opt out with a top-of-file `// file-size-ok: <reason>` pragma.',
-    DefaultRoots: ['packages/AI/Agents/src'],
+        'under configured roots. Pre-existing oversized files may be grandfathered with per-file ' +
+        'ratchet caps via Options.Allowlist (Record<path, maxLines>) so they can never grow.',
+    DefaultRoots: [],
     DefaultOptions: {
         MaxLines: DEFAULT_MAX_LINES,
         HeaderReasonPattern: DEFAULT_HEADER_REASON_PATTERN,
-        Allowlist: [],
+        Allowlist: {},
     },
     Run: run,
 };

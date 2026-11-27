@@ -28,6 +28,7 @@ import _ from 'lodash';
 import { AgentRunner } from '../../AgentRunner';
 import type { PayloadChangeResultSummary } from '../../PayloadManager';
 import type { SubAgentConsultRecord } from '../../sub-agent-consult';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import type { BaseAgentSubAgentHelper } from './BaseAgentSubAgentHelper';
 
@@ -109,8 +110,9 @@ export class AgentSubAgentExecutionHelper {
             }
         }
 
-        const messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
-        const maxMessages = relationship?.MaxMessages || subAgent.MaxMessages || null;
+        const effectiveSubProps = SafeResolveEffectiveAgentProperties(subAgent);
+        const messageMode = relationship?.MessageMode || effectiveSubProps?.MessageMode || subAgent.MessageMode || 'None';
+        const maxMessages = relationship?.MaxMessages ?? effectiveSubProps?.MaxMessages ?? subAgent.MaxMessages ?? null;
 
         const history = params.conversationMessages
             .filter((m) => (m as AgentChatMessage).metadata?.volatileState !== true)
@@ -284,55 +286,82 @@ export class AgentSubAgentExecutionHelper {
                 });
             }
 
-            const result = await runner.RunAgent<SC, SR>({
-                agent: subAgent,
-                conversationMessages: subAgentMessages,
-                contextUser: params.contextUser,
-                cancellationToken: params.cancellationToken,
-                onProgress: params.onProgress,
-                onStreaming: params.onStreaming,
-                parentAgentHierarchy: ctx.AgentHierarchy,
-                parentDepth: ctx.Depth,
-                parentStepCounts: parentStepCountsToPass,
-                parentRun: ctx.AgentRun ?? undefined,
-                parentActivatedSkillIDs: ctx.Hooks.ActiveSkillIDsForRun(params),
-                policyCeilingAgentIDs: ctx.Hooks.CollectPolicyAgentChain(params),
-                payload: verifiedResumeRunId ? undefined : payload,
-                ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
-                configurationId: resolvedConfig.configurationId,
-                effortLevel: params.effortLevel,
-                apiKeys: params.apiKeys,
-                CredentialScope: params.CredentialScope,
-                Audience: params.Audience,
-                inputArtifacts: ctx.ArtifactToolManager.ExportInputArtifacts(params.inputArtifacts) ?? [],
-                data: {
-                    ...params.data,
-                    ...templateParameters,
-                },
-                TrustReservedRunData: params.TrustReservedRunData,
-                context: subAgentContext,
-                verbose: params.verbose,
-                treeBudget: ctx.Hooks.EnsureTreeBudget(params),
-                workflowMaxCostUsd: params.workflowMaxCostUsd,
-                workflowMaxDurationMs: params.workflowMaxDurationMs,
-                workflowStartedAtMs: params.workflowStartedAtMs,
-                actionChanges: subAgentActionChanges,
-                subAgentChanges: subAgentSubAgentChanges,
-                boundActionParams: params.boundActionParams,
-                PrimaryScopeEntityName: params.PrimaryScopeEntityName,
-                PrimaryScopeRecordID: params.PrimaryScopeRecordID,
-                companyId: params.companyId,
-                SecondaryScopes: params.SecondaryScopes,
-                SearchScopeIDs: params.SearchScopeIDs,
-                ...subAgentHelper.SubAgentTaint(ctx, params),
-                conversationDetailId: params.conversationDetailId,
-                onAgentRunCreated: async (agentRunId: string) => {
-                    stepEntity.TargetLogID = agentRunId;
-                    ctx.Hooks.QueueStepSave(stepEntity, (s) => {
-                        s.TargetLogID = agentRunId;
-                    });
-                },
-            });
+            const subAgentWaitId = `sub-agent:${subAgentRequest.name}:${stepEntity?.ID ?? stepCount}`;
+            const childOnProgress: ExecuteAgentParams<SC>['onProgress'] = (progress) => {
+                ctx.LivenessWatchdog?.RecordProgress({
+                    Kind: 'sub-agent-heartbeat',
+                    StepEntityId: stepEntity?.ID,
+                    Detail: `${subAgentRequest.name}:${progress.step}`,
+                });
+                params.onProgress?.(progress);
+            };
+            const childOnStreaming: ExecuteAgentParams<SC>['onStreaming'] = params.onStreaming
+                ? (chunk) => {
+                      ctx.LivenessWatchdog?.RecordProgress({
+                          Kind: 'sub-agent-heartbeat',
+                          StepEntityId: stepEntity?.ID,
+                          Bytes: chunk.content.length,
+                          Detail: subAgentRequest.name,
+                      });
+                      params.onStreaming?.(chunk);
+                  }
+                : undefined;
+
+            ctx.LivenessWatchdog?.SuspendForExternalWait(subAgentWaitId, `sub-agent:${subAgentRequest.name}`);
+            let result: ExecuteAgentResult<SR>;
+            try {
+                result = await runner.RunAgent<SC, SR>({
+                    agent: subAgent,
+                    conversationMessages: subAgentMessages,
+                    contextUser: params.contextUser,
+                    cancellationToken: params.cancellationToken,
+                    onProgress: childOnProgress,
+                    onStreaming: childOnStreaming,
+                    parentAgentHierarchy: ctx.AgentHierarchy,
+                    parentDepth: ctx.Depth,
+                    parentStepCounts: parentStepCountsToPass,
+                    parentRun: ctx.AgentRun ?? undefined,
+                    parentActivatedSkillIDs: ctx.Hooks.ActiveSkillIDsForRun(params),
+                    policyCeilingAgentIDs: ctx.Hooks.CollectPolicyAgentChain(params),
+                    payload: verifiedResumeRunId ? undefined : payload,
+                    ...(verifiedResumeRunId ? { lastRunId: verifiedResumeRunId, autoPopulateLastRunPayload: true } : {}),
+                    configurationId: resolvedConfig.configurationId,
+                    effortLevel: params.effortLevel,
+                    apiKeys: params.apiKeys,
+                    CredentialScope: params.CredentialScope,
+                    Audience: params.Audience,
+                    inputArtifacts: ctx.ArtifactToolManager.ExportInputArtifacts(params.inputArtifacts) ?? [],
+                    data: {
+                        ...params.data,
+                        ...templateParameters,
+                    },
+                    TrustReservedRunData: params.TrustReservedRunData,
+                    context: subAgentContext,
+                    verbose: params.verbose,
+                    treeBudget: ctx.Hooks.EnsureTreeBudget(params),
+                    workflowMaxCostUsd: params.workflowMaxCostUsd,
+                    workflowMaxDurationMs: params.workflowMaxDurationMs,
+                    workflowStartedAtMs: params.workflowStartedAtMs,
+                    actionChanges: subAgentActionChanges,
+                    subAgentChanges: subAgentSubAgentChanges,
+                    boundActionParams: params.boundActionParams,
+                    PrimaryScopeEntityName: params.PrimaryScopeEntityName,
+                    PrimaryScopeRecordID: params.PrimaryScopeRecordID,
+                    companyId: params.companyId,
+                    SecondaryScopes: params.SecondaryScopes,
+                    SearchScopeIDs: params.SearchScopeIDs,
+                    ...subAgentHelper.SubAgentTaint(ctx, params),
+                    conversationDetailId: params.conversationDetailId,
+                    onAgentRunCreated: async (agentRunId: string) => {
+                        stepEntity.TargetLogID = agentRunId;
+                        ctx.Hooks.QueueStepSave(stepEntity, (s) => {
+                            s.TargetLogID = agentRunId;
+                        });
+                    },
+                });
+            } finally {
+                ctx.LivenessWatchdog?.ResumeFromExternalWait(subAgentWaitId);
+            }
 
             ctx.Hooks.AbsorbSubAgentTaint(subAgentRequest.name, result, stepEntity?.StepNumber ?? stepCount + 1);
             if (result.touchedArtifacts?.length) {

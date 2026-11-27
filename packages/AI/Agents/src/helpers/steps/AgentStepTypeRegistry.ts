@@ -17,7 +17,7 @@
 import type { AgentNextStepKey, BuiltInAgentNextStepKey } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 import type { MJAIAgentStepTypeEntity } from '@memberjunction/core-entities';
-import { BaseSingleton, MJGlobal } from '@memberjunction/global';
+import { BaseSingleton, MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseAgentStepHandler } from './BaseAgentStepHandler';
 import {
     ActionsStepHandler,
@@ -197,11 +197,15 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
         }
 
         if (metadataRow) {
-            if (metadataRow.Status !== 'Active') {
+            // Built-in step types cannot be disabled or re-scoped via DB metadata edits (prevents
+            // accidentally bricking every agent with "Invalid next step").
+            if (!builtIn && metadataRow.Status !== 'Active') {
                 return null;
             }
             // Clamp built-in step type security invariants so DB metadata edits can never weaken
             // Plan Mode restrictions, skip tree-budget accounting, or hijack built-in DriverClass.
+            // For custom step types, also fail CLOSED against the code handler's declared flags
+            // (`row && handler` for AllowedInUnapprovedPlanMode; `row || handler` for budget).
             const effectiveDriverClass = builtIn ? builtIn.DriverClass : metadataRow.DriverClass;
             const handler = this.instantiateHandler(effectiveDriverClass, builtIn?.FallbackClass);
             if (!handler) {
@@ -211,13 +215,13 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
                 StepKey: builtIn ? builtIn.StepKey : metadataRow.Name,
                 StepTypeID: metadataRow.ID,
                 DriverClass: effectiveDriverClass,
-                AppliesTo: metadataRow.AppliesTo,
+                AppliesTo: builtIn ? builtIn.AppliesTo : metadataRow.AppliesTo,
                 AllowedInUnapprovedPlanMode: builtIn
                     ? builtIn.AllowedInUnapprovedPlanMode && metadataRow.AllowedInUnapprovedPlanMode
-                    : metadataRow.AllowedInUnapprovedPlanMode,
+                    : Boolean(metadataRow.AllowedInUnapprovedPlanMode) && handler.AllowedInUnapprovedPlanMode,
                 CountsAgainstTreeBudget: builtIn
                     ? builtIn.CountsAgainstTreeBudget || metadataRow.CountsAgainstTreeBudget
-                    : metadataRow.CountsAgainstTreeBudget,
+                    : Boolean(metadataRow.CountsAgainstTreeBudget) || handler.CountsAgainstTreeBudget,
                 DefaultEnabledInPrompt: metadataRow.DefaultEnabledInPrompt,
                 PromptInstructions: metadataRow.PromptDocsTemplate ?? null,
                 IsBuiltIn: Boolean(builtIn),
@@ -243,6 +247,27 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
             };
         }
 
+        return null;
+    }
+
+    /**
+     * Resolves an effective step policy by `AIAgentStepType.ID` (used by Flow `Custom` steps
+     * referencing `AIAgentStep.StepTypeID`). Returns `null` if no matching active step type exists.
+     */
+    public ResolveEffectivePolicyByID(stepTypeId: string | null | undefined): ResolvedAgentStepTypePolicy | null {
+        if (typeof stepTypeId !== 'string' || stepTypeId.trim().length === 0) {
+            return null;
+        }
+        for (const desc of this._programmatic.values()) {
+            if (desc.StepTypeID && UUIDsEqual(desc.StepTypeID, stepTypeId)) {
+                return this.ResolveEffectivePolicy(desc.StepKey);
+            }
+        }
+        for (const row of this.safeMetadataRows()) {
+            if (UUIDsEqual(row.ID, stepTypeId)) {
+                return this.ResolveEffectivePolicy(row.Name);
+            }
+        }
         return null;
     }
 

@@ -19,8 +19,8 @@
  *   - AEC5: `#6852` `UI`-role ownership/RLS enforcement & non-admin sandbox rejection
  *           (`BaseAgentID` required, `CanRun` check, custom `DriverClass`, `Isolation`
  *           loosening, `MaxCostPerRun` ceiling, `TypeConfiguration.helperPlugins`, and
- *           cross-user RLS isolation / write refusal) — runs live on BOTH SQL Server and
- *           PostgreSQL.
+ *           cross-user RLS isolation / write refusal) — executes in-process against live
+ *           SQL Server and PostgreSQL using explicit `UserInfo` fixtures.
  *
  * Self-cleaning fixtures: every check creates throwaway rows tagged
  * `(mj-integration-test — safe to delete)` and cleans them up LIFO in `finally`, keeping the
@@ -108,7 +108,9 @@ export class IT195CustomGateStepHandler extends BaseAgentStepHandler {
 
 async function runCleanups(cleanups: CleanupFn[]): Promise<void> {
     for (const fn of [...cleanups].reverse()) {
-        await fn().catch(() => undefined);
+        await fn().catch((err: unknown) => {
+            console.warn(`[${BUNDLE}] cleanup step failed:`, err instanceof Error ? err.message : String(err));
+        });
     }
 }
 
@@ -129,9 +131,21 @@ async function deleteEntityById(
     entityName: string,
     id: string
 ): Promise<void> {
-    const row = await ctx.Provider.GetEntityObject(entityName, ctx.User).catch(() => undefined);
-    if (row && (await row.InnerLoad(CompositeKey.FromID(id)).catch(() => false))) {
-        await row.Delete().catch(() => undefined);
+    try {
+        const row = await ctx.Provider.GetEntityObject(entityName, ctx.User);
+        if (row && (await row.InnerLoad(CompositeKey.FromID(id)))) {
+            const deleted = await row.Delete();
+            if (!deleted) {
+                console.warn(
+                    `[${BUNDLE}] cleanup delete returned false for ${entityName} (${id}): ${row.LatestResult?.CompleteMessage ?? 'unknown'}`
+                );
+            }
+        }
+    } catch (err: unknown) {
+        console.warn(
+            `[${BUNDLE}] cleanup failed for ${entityName} (${id}):`,
+            err instanceof Error ? err.message : String(err)
+        );
     }
 }
 
@@ -139,10 +153,10 @@ async function cleanupFixtureUser(
     ctx: IntegrationCheckContext,
     userId: string
 ): Promise<void> {
-    const rv = RunView.FromMetadataProvider(ctx.Provider);
-    const rcEntity = ctx.Provider.EntityByName('MJ: Record Changes');
-    const rcRes = await rv
-        .RunView<{ ID: string }>(
+    try {
+        const rv = RunView.FromMetadataProvider(ctx.Provider);
+        const rcEntity = ctx.Provider.EntityByName('MJ: Record Changes');
+        const rcRes = await rv.RunView<{ ID: string }>(
             {
                 EntityName: 'MJ: Record Changes',
                 ExtraFilter: `UserID='${EscapeSQLString(userId)}'`,
@@ -150,23 +164,32 @@ async function cleanupFixtureUser(
                 ResultType: 'simple',
             },
             ctx.User
-        )
-        .catch(() => null);
-    const rcIds = rcRes?.Success ? rcRes.Results.map((r) => r.ID) : [];
-    if (rcIds.length > 0 && rcEntity?.AllowDeleteAPI) {
-        for (const rcId of rcIds) {
-            await deleteEntityById(ctx, 'MJ: Record Changes', rcId);
+        );
+        const rcIds = rcRes?.Success ? rcRes.Results.map((r) => r.ID) : [];
+        if (rcIds.length > 0 && rcEntity?.AllowDeleteAPI) {
+            for (const rcId of rcIds) {
+                await deleteEntityById(ctx, 'MJ: Record Changes', rcId);
+            }
         }
-    }
-    const userRow = await ctx.Provider.GetEntityObject<MJUserEntity>('MJ: Users', ctx.User).catch(() => undefined);
-    if (userRow && (await userRow.InnerLoad(CompositeKey.FromID(userId)).catch(() => false))) {
-        const deleted = rcIds.length === 0 || rcEntity?.AllowDeleteAPI
-            ? await userRow.Delete().catch(() => false)
-            : false;
-        if (!deleted) {
-            userRow.IsActive = false;
-            await userRow.Save().catch(() => undefined);
+        const userRow = await ctx.Provider.GetEntityObject<MJUserEntity>('MJ: Users', ctx.User);
+        if (userRow && (await userRow.InnerLoad(CompositeKey.FromID(userId)))) {
+            const deleted =
+                rcIds.length === 0 || rcEntity?.AllowDeleteAPI ? await userRow.Delete() : false;
+            if (!deleted) {
+                userRow.IsActive = false;
+                const deactivated = await userRow.Save();
+                if (!deactivated) {
+                    console.warn(
+                        `[${BUNDLE}] cleanup failed to delete or deactivate fixture user ${userId}: ${userRow.LatestResult?.CompleteMessage ?? 'unknown'}`
+                    );
+                }
+            }
         }
+    } catch (err: unknown) {
+        console.warn(
+            `[${BUNDLE}] cleanupFixtureUser failed for ${userId}:`,
+            err instanceof Error ? err.message : String(err)
+        );
     }
 }
 

@@ -89,6 +89,7 @@ import { BaseAgentSkillsHelper } from './helpers/skills/BaseAgentSkillsHelper';
 import { AgentSkillsHelper } from './helpers/skills/AgentSkillsHelper';
 import { BaseAgentLimitsHelper } from './helpers/limits/BaseAgentLimitsHelper';
 import { AgentLimitsHelper } from './helpers/limits/AgentLimitsHelper';
+import type { LivenessProgressKind } from './helpers/limits/AgentLivenessWatchdog';
 import { BaseAgentActionPolicyHelper } from './helpers/actions/BaseAgentActionPolicyHelper';
 import { AgentActionPolicyHelper } from './helpers/actions/AgentActionPolicyHelper';
 import { BaseAgentActionsHelper } from './helpers/actions/BaseAgentActionsHelper';
@@ -269,11 +270,26 @@ export class BaseAgent extends BaseAgentContextBase {
 
     /** Executes an AI agent using hierarchical prompt composition and pluggable helper seams. */
     public async Execute<C = unknown, R = unknown>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
-        // Reset per-run helper bindings BEFORE resolving the `setup` (or any other) seam so
-        // per-agent helperPlugins apply on Run 1 and never leak across runs on a reused instance.
-        const plugins = ResolveAgentHelperPluginsForRun(params.agent, params.helperPlugins);
-        this.helperCache.ResetForRun(plugins.length > 0 ? plugins : undefined);
-        return ServerOperationScopeManager.Instance.RunAsServerWork(() => this.executeRun<C, R>(params));
+        try {
+            // Reset per-run helper bindings BEFORE resolving any helper seam so per-agent
+            // helperPlugins apply on Run 1 and never leak across runs on a reused instance.
+            const plugins = ResolveAgentHelperPluginsForRun(params.agent, params.helperPlugins);
+            this.helperCache.ResetForRun(plugins.length > 0 ? plugins : undefined);
+            return await ServerOperationScopeManager.Instance.RunAsServerWork(() => this.executeRun<C, R>(params));
+        } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            if (
+                errMsg.startsWith('Failed to resolve helper plugin ') ||
+                errMsg.startsWith('Security violation: helper seam ')
+            ) {
+                return {
+                    success: false,
+                    errorMessage: errMsg,
+                    agentRun: this._agentRun!,
+                } as ExecuteAgentResult<R>;
+            }
+            throw error;
+        }
     }
 
     /** Resumes a paused agent run non-destructively from its persisted checkpoint. */
@@ -368,8 +384,8 @@ export class BaseAgent extends BaseAgentContextBase {
     public get AgentRun(): MJAIAgentRunEntityExtended | null { return this._agentRun; }
     /** Resolved `BaseAgentType` instance for the executing agent. */
     public override get AgentTypeInstance(): BaseAgentType { return this._agentTypeInstance; }
-    /** Accumulated promoted and intercepted media outputs for this run. */
-    public get MediaOutputs(): MediaOutput[] { return this._mediaOutputs; }
+    /** Accumulated promoted and intercepted media outputs for this run (defensive copy). */
+    public get MediaOutputs(): MediaOutput[] { return [...this._mediaOutputs]; }
     /** Current FinalPayloadValidation retry counter. */
     public get ValidationRetryCount(): number { return this._validationRetryCount; }
 
@@ -407,6 +423,53 @@ export class BaseAgent extends BaseAgentContextBase {
             return resolved;
         }
         return CODE_FALLBACK_LIMITS.Budgets.PerRun.MaxWallClockMs ?? Number.MAX_SAFE_INTEGER;
+    }
+
+    /** True when a subclass overrides `DefaultAgentTimeoutMS` above `BaseAgent.prototype`. */
+    protected override get HasCustomDefaultAgentTimeout(): boolean {
+        let proto: object | null = Object.getPrototypeOf(this);
+        while (proto && proto !== BaseAgent.prototype) {
+            if (Object.prototype.hasOwnProperty.call(proto, 'DefaultAgentTimeoutMS')) {
+                return true;
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
+        return false;
+    }
+
+    /** True when a subclass overrides `executeAgentInternal` above `BaseAgent.prototype`. */
+    protected override get HasCustomExecuteAgentInternal(): boolean {
+        let proto: object | null = Object.getPrototypeOf(this);
+        while (proto && proto !== BaseAgent.prototype) {
+            if (Object.prototype.hasOwnProperty.call(proto, 'executeAgentInternal')) {
+                return true;
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
+        return false;
+    }
+
+    /**
+     * Records forward progress on the active run's sliding liveness watchdog so custom
+     * `BaseAgent` subclasses (`executePrompt` / `executeAgentInternal` overrides) can reset the
+     * inactivity timer during long operations. Safe no-op outside `Execute()`.
+     */
+    protected recordLivenessProgress(kind: LivenessProgressKind = 'action-progress', detail?: string): void {
+        this._livenessWatchdog?.RecordProgress({ Kind: kind, Detail: detail });
+    }
+
+    /**
+     * Suspends the sliding inactivity timer on the active run's liveness watchdog while awaiting an
+     * externally-bounded operation (outer wall-clock safety ceiling remains active). Always pair
+     * with {@link resumeLivenessWatchdog} in a `finally` block.
+     */
+    protected suspendLivenessWatchdog(waitId: string, reason?: string): void {
+        this._livenessWatchdog?.SuspendForExternalWait(waitId, reason);
+    }
+
+    /** Resumes the sliding inactivity timer after a wait started by {@link suspendLivenessWatchdog}. */
+    protected resumeLivenessWatchdog(waitId: string): void {
+        this._livenessWatchdog?.ResumeFromExternalWait(waitId);
     }
 
     // =========================================================================

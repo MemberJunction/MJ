@@ -576,14 +576,20 @@ export class AgentLimitsHelper extends BaseAgentLimitsHelper {
         }
 
         const limits = ctx.ActiveLimitsResolution?.Limits ?? ctx.Hooks.ResolvedLimits(params);
-        if (!isPromptFailureOrParseRetry) {
+        if (!isPromptFailureOrParseRetry && ctx.AgentTypeInstance?.UsesActionCircuitBreaker !== false) {
             const circuitBrokenNames = new Set<string>([
                 ...ctx.ActionFailureHistory.keys(),
                 ...ctx.FatalActionFailures,
                 ...ctx.AudienceLockedActions,
                 ...ctx.TaintLockedActions,
             ]);
-            const stuckOutcome = ctx.StuckDetector.EvaluateStepDecision(params, nextStep, limits.StuckDetector, circuitBrokenNames);
+            const effectiveActions = ctx.Hooks.GetEffectiveActionsForValidation(params.agent.ID);
+            const actionMetaByName = new Map(effectiveActions.map(a => [a.Name.trim().toLowerCase(), a.Config_Object]));
+            const lookupMeta = (name: string) => {
+                const cfg = actionMetaByName.get(name.trim().toLowerCase());
+                return cfg ? { DisallowWhenTainted: cfg.disallowWhenTainted, Verb: cfg.Verb } : null;
+            };
+            const stuckOutcome = ctx.StuckDetector.EvaluateStepDecision(params, nextStep, limits.StuckDetector, circuitBrokenNames, lookupMeta);
             if (stuckOutcome.InjectedDirectives.length > 0) {
                 ctx.Hooks.LogStatus(`⚠️ StuckDetector injected ${stuckOutcome.InjectedDirectives.length} course-correction directive(s)`, false, params);
             }

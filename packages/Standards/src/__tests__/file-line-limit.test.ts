@@ -102,4 +102,30 @@ describe('file-line-limit standard', () => {
 
         expect(res.Violations).toHaveLength(0);
     });
+
+    it('uses empty DefaultRoots and enforces per-file ratchet caps when Allowlist is a Record<string, number> (H3)', async () => {
+        expect(FileLineLimitCheck.DefaultRoots).toEqual([]);
+
+        const repo = createTempRepo({
+            'packages/AI/Agents/src/at-cap.ts': makeLines(1200),
+            'packages/AI/Agents/src/grew-past-cap.ts': makeLines(1201),
+        });
+
+        const res = await FileLineLimitCheck.Run({
+            RepoRoot: repo,
+            Roots: ['packages/AI/Agents/src'],
+            Options: {
+                MaxLines: 1000,
+                HeaderReasonPattern: '//\\s*file-size-ok:\\s*\\S+',
+                Allowlist: {
+                    'packages/AI/Agents/src/at-cap.ts': 1200,
+                    'packages/AI/Agents/src/grew-past-cap.ts': 1200,
+                },
+            },
+        });
+
+        expect(res.Violations).toHaveLength(1);
+        expect(res.Violations[0].File).toBe('packages/AI/Agents/src/grew-past-cap.ts');
+        expect(res.Violations[0].Message).toContain('ratchet cap of 1200');
+    });
 });

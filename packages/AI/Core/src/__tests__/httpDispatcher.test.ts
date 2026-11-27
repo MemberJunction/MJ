@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+    ConfigureLongRunningAIFetch,
     CreateLongRunningFetch,
     CreateLongRunningFetchDispatcher,
     DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,
@@ -7,8 +8,10 @@ import {
     DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS,
     DEFAULT_LONG_RUNNING_KEEP_ALIVE_MAX_TIMEOUT_MS,
     DEFAULT_LONG_RUNNING_KEEP_ALIVE_TIMEOUT_MS,
+    GetLongRunningAIFetch,
     InstallGlobalLongRunningFetchDispatcher,
     PrimeNodeBuiltinUndiciDispatcher,
+    ResetLongRunningAIFetch,
     ResolveLongRunningFetchDispatcherOptions,
     ResolveNodeBuiltinUndiciModule,
     type FetchDispatcherLike,
@@ -144,5 +147,60 @@ describe('httpDispatcher (long-running undici transport helpers)', () => {
         expect(install.Options.headersTimeout).toBe(1_800_000);
         expect(install.Options.bodyTimeout).toBe(1_800_000);
         await install.Restore();
+    });
+
+    it('scopes long-running fetch to AI SDKs via ConfigureLongRunningAIFetch without touching global dispatcher and skips ProxyAgent safely (B6)', async () => {
+        await ResetLongRunningAIFetch();
+        expect(GetLongRunningAIFetch()).toBeUndefined();
+
+        const symbolKey = Symbol.for('undici.globalDispatcher.1');
+        const slotHolder = globalThis as Record<PropertyKey, unknown>;
+        const originalSlot = slotHolder[symbolKey];
+
+        // 1. Simulate corporate ProxyAgent installed globally — MUST skip cleanly without throwing!
+        class ProxyAgent implements FetchDispatcherLike {
+            public constructor(opts: unknown) {
+                if (!opts || typeof opts !== 'object' || !('uri' in (opts as Record<string, unknown>))) {
+                    throw new Error('Proxy uri is mandatory');
+                }
+            }
+        }
+        try {
+            slotHolder[symbolKey] = new ProxyAgent({ uri: 'http://corp-proxy.internal:8080' });
+            expect(ResolveNodeBuiltinUndiciModule()).toBeNull();
+            const skippedScoped = ConfigureLongRunningAIFetch({ headersTimeoutMs: 1_800_000, bodyTimeoutMs: 1_800_000 });
+            expect(skippedScoped.Installed).toBe(false);
+            expect(skippedScoped.SkippedReason).toMatch(/ProxyAgent/);
+            expect(GetLongRunningAIFetch()).toBeUndefined();
+
+            const skippedGlobal = InstallGlobalLongRunningFetchDispatcher();
+            expect(skippedGlobal.Installed).toBe(false);
+            expect(skippedGlobal.SkippedReason).toMatch(/ProxyAgent/);
+        } finally {
+            slotHolder[symbolKey] = originalSlot;
+        }
+
+        // 2. Scoped AI fetch attaches dispatcher only to calls using GetLongRunningAIFetch() and leaves global slot untouched
+        const createdDispatcher: FetchDispatcherLike = { close: vi.fn(async () => undefined) };
+        const fakeUndici: UndiciModuleLike = {
+            Agent: class {
+                public constructor() {
+                    return createdDispatcher;
+                }
+            },
+        };
+        const baseFetch = vi.fn(async () => new Response('ok', { status: 200 }));
+        const scoped = ConfigureLongRunningAIFetch({ headersTimeoutMs: 2_000_000, bodyTimeoutMs: 1_500_000 }, fakeUndici, baseFetch);
+        expect(scoped.Installed).toBe(true);
+        expect(slotHolder[symbolKey]).toBe(originalSlot);
+
+        const aiFetch = GetLongRunningAIFetch();
+        expect(aiFetch).toBeTypeOf('function');
+        await aiFetch!('https://api.openai.com/v1/chat/completions', { method: 'POST' });
+        const [, init] = baseFetch.mock.calls[0] as [string, { dispatcher?: FetchDispatcherLike }];
+        expect(init.dispatcher).toBe(createdDispatcher);
+
+        await scoped.Restore();
+        expect(GetLongRunningAIFetch()).toBeUndefined();
     });
 });

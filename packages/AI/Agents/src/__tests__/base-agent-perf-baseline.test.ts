@@ -105,6 +105,8 @@ class BenchStep {
     public StartedAt = new Date(0);
     public CompletedAt: Date | null = null;
     public Success: boolean | null = null;
+    public TargetLogID: string | null = null;
+    public PromptRun: unknown = null;
     public IsSaved = false;
     constructor(private readonly seq: number) {}
     public NewRecord(): void { this.ID = `d8000000-0000-4000-8000-${String(this.seq).padStart(12, '0')}`; }
@@ -247,20 +249,36 @@ function makeBenchAgent(id: string, typeId: string): MJAIAgentEntityExtended {
     } as unknown as MJAIAgentEntityExtended;
 }
 
+let benchPromptRunSeq = 0;
+
 function makePromptResult(payload: string, promptTokens: number, completionTokens: number): AIPromptRunResult {
+    const totalTokens = promptTokens + completionTokens;
+    const promptRunId = `d8800000-0000-4000-8000-${String(++benchPromptRunSeq).padStart(12, '0')}`;
     return {
         success: true,
         result: payload,
         promptTokens,
         completionTokens,
-        combinedTokensUsed: promptTokens + completionTokens,
+        combinedTokensUsed: totalTokens,
+        promptRun: {
+            ID: promptRunId,
+            TokensPrompt: promptTokens,
+            TokensCompletion: completionTokens,
+            TokensUsed: totalTokens,
+            TokensPromptRollup: promptTokens,
+            TokensCompletionRollup: completionTokens,
+            TokensUsedRollup: totalTokens,
+            TokensCacheReadRollup: 0,
+            TokensCacheWriteRollup: 0,
+            TotalCost: 0,
+        } as unknown as AIPromptRunResult['promptRun'],
         chatResult: {
             success: true,
             data: {
                 usage: {
                     promptTokens,
                     completionTokens,
-                    totalTokens: promptTokens + completionTokens,
+                    totalTokens,
                 },
             },
         } as unknown as AIPromptRunResult['chatResult'],
@@ -323,7 +341,7 @@ async function measureScenario(
         completionTokens: lastCompletionTokens,
         totalTokens: lastTotalTokens,
         recordedMedianMs: medianMs,
-        maxAllowedMedianMs: Math.max(250, Math.ceil(medianMs * 25)),
+        maxAllowedMedianMs: Math.max(50, Math.ceil(medianMs * 30)),
     };
 }
 
@@ -362,8 +380,13 @@ describe('Stage 1 Pinning — Performance Baseline Harness (Latency, Iterations,
 
         const measured = [singleTurn, actionLoop, flowTwoStep];
 
-        if (process.env.UPDATE_PERF_BASELINE === '1' || !existsSync(BASELINE_PATH)) {
-            writeFileSync(BASELINE_PATH, `${JSON.stringify({ baselineVersion: 'stage1-pr0', benchmarks: measured }, null, 2)}\n`, 'utf8');
+        if (process.env.UPDATE_PERF_BASELINE === '1') {
+            writeFileSync(BASELINE_PATH, `${JSON.stringify({ baselineVersion: 'stage1-pr0-r2', benchmarks: measured }, null, 2)}\n`, 'utf8');
+        } else if (!existsSync(BASELINE_PATH)) {
+            throw new Error(
+                `Performance baseline fixture missing at ${BASELINE_PATH}. ` +
+                    `Re-run with UPDATE_PERF_BASELINE=1 only when intentionally refreshing the pinned baseline.`
+            );
         }
 
         const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as {
@@ -376,6 +399,10 @@ describe('Stage 1 Pinning — Performance Baseline Harness (Latency, Iterations,
             const actual = measured[i];
             const expected = baseline.benchmarks[i];
             expect(actual.scenario).toBe(expected.scenario);
+            // Guard against silent zero-token regressions where promptRun accounting breaks.
+            expect(actual.promptTokens).toBeGreaterThan(0);
+            expect(actual.completionTokens).toBeGreaterThan(0);
+            expect(actual.totalTokens).toBe(actual.promptTokens + actual.completionTokens);
             // Exact deterministic invariants — zero tolerance for extra turns/steps/tokens!
             expect(actual.iterations).toBe(expected.iterations);
             expect(actual.stepCount).toBe(expected.stepCount);

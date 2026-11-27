@@ -168,7 +168,12 @@ export class ConversationCompactionManager {
             if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
                 effectiveCompactionProps = AIEngine.Instance.ResolveEffectiveAgentProperties(agent);
             }
-        } catch {
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isUnconfigured = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+            if (!isUnconfigured) {
+                LogError(`ConversationCompactionManager: unexpected error resolving effective agent properties for '${agent.Name ?? agent.ID}': ${msg}`);
+            }
             effectiveCompactionProps = null;
         }
         const effectiveMaxTokens = effectiveCompactionProps?.ContextWindowMaxTokens ?? agent.ContextWindowMaxTokens;
@@ -473,9 +478,23 @@ export class ConversationCompactionManager {
         return { success: true, summaryText, promptId: prompt.ID, promptRunId: result.promptRun?.ID, promptRun: result.promptRun };
     }
 
-    /** Prompt resolution: agent override, else type override, else the seeded system prompt by name. */
+    /** Prompt resolution: cascaded agent/category/type override, else the seeded system prompt by name. */
     private static resolveSummaryPrompt(input: CompactIfNeededInput) {
-        const overrideId = input.Agent.ConversationSummaryPromptID || input.AgentType?.ConversationSummaryPromptID;
+        let cascadedSummaryPromptId: string | null = null;
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                cascadedSummaryPromptId =
+                    AIEngine.Instance.ResolveEffectiveAgentProperties(input.Agent)?.ConversationSummaryPromptID ?? null;
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isUnconfigured = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+            if (!isUnconfigured) {
+                LogError(`ConversationCompactionManager: error resolving cascaded ConversationSummaryPromptID: ${msg}`);
+            }
+        }
+        const overrideId =
+            cascadedSummaryPromptId || input.Agent.ConversationSummaryPromptID || input.AgentType?.ConversationSummaryPromptID;
         if (overrideId) {
             const overridePrompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, overrideId));
             if (overridePrompt) {

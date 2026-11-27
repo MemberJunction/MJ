@@ -14,6 +14,8 @@
  * @module @memberjunction/ai
  */
 
+import { GetGlobalObjectStore } from '@memberjunction/global';
+
 /** Tuning: 30-minute default headers timeout when caller does not disable it (`0`) explicitly. */
 export const DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS = 1_800_000;
 /** Tuning: 30-minute finite default body timeout so dead sockets still fail cleanly; pass `0` to defer strictly to `AbortSignal`. */
@@ -38,7 +40,7 @@ export interface LongRunningFetchDispatcherOptions {
     /**
      * Maximum time (ms) to wait between HTTP response body chunks.
      * Pass `0` to disable undici's body timeout completely and rely on `AbortSignal`.
-     * Defaults to {@link DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS} (`0`).
+     * Defaults to {@link DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS} (`1_800_000` = 30 minutes).
      */
     bodyTimeoutMs?: number;
     /**
@@ -97,16 +99,18 @@ export interface DispatcherAwareRequestInit extends RequestInit {
 export type FetchFunction = (input: RequestInfo | URL, init?: DispatcherAwareRequestInit) => Promise<Response>;
 
 /**
- * Result returned by {@link InstallGlobalLongRunningFetchDispatcher}.
+ * Result returned by {@link InstallGlobalLongRunningFetchDispatcher} and {@link ConfigureLongRunningAIFetch}.
  */
 export interface GlobalFetchDispatcherInstallation {
-    /** True when the global dispatcher was actively replaced. */
+    /** True when the dispatcher was actively created/installed. */
     Installed: boolean;
     /** Normalized timeout options applied to the dispatcher. */
     Options: ResolvedUndiciAgentOptions;
-    /** Created dispatcher instance when installed, or `null` when unavailable (e.g., browser runtime). */
+    /** Created dispatcher instance when installed, or `null` when unavailable/skipped. */
     Dispatcher: FetchDispatcherLike | null;
-    /** Restores the prior global dispatcher (no-op if not installed) and closes the created dispatcher. */
+    /** Optional diagnostic reason when installation was skipped (e.g., custom `ProxyAgent` active). */
+    SkippedReason?: string;
+    /** Restores the prior dispatcher (no-op if not installed) and closes the created dispatcher. */
     Restore: () => Promise<void>;
 }
 
@@ -115,24 +119,47 @@ export interface GlobalFetchDispatcherInstallation {
  */
 export const UNDICI_GLOBAL_DISPATCHER_SYMBOL: symbol = Symbol.for('undici.globalDispatcher.1');
 
+const AI_SCOPED_FETCH_STORE_KEY = '___MJ_AI_LONG_RUNNING_FETCH___';
+
+interface ScopedAIFetchSlot {
+    Fetch: FetchFunction;
+    Dispatcher: FetchDispatcherLike;
+    Options: ResolvedUndiciAgentOptions;
+}
+
+/**
+ * Returns true only when `dispatcher` appears to be Node's plain built-in `undici.Agent`
+ * (and NOT a `ProxyAgent`, `EnvHttpProxyAgent`, `MockAgent`, or custom interceptor/subclass).
+ */
+export function IsPlainUndiciAgentDispatcher(dispatcher: unknown): boolean {
+    if (!dispatcher || typeof dispatcher !== 'object') {
+        return false;
+    }
+    const ctor = (dispatcher as { constructor?: unknown }).constructor;
+    if (typeof ctor !== 'function') {
+        return false;
+    }
+    const ctorName = (ctor as { name?: string }).name ?? '';
+    return ctorName === 'Agent';
+}
+
 /**
  * Resolves a browser-safe {@link UndiciModuleLike} facade around Node's built-in global
  * `undici` dispatcher (`globalThis[Symbol.for('undici.globalDispatcher.1')]`) without
  * requiring an external `undici` dependency or any Node-only imports.
  *
- * Returns `null` in browser runtimes or when Node's lazy `undici` dispatcher has not been
- * initialized yet.
+ * Returns `null` in browser runtimes, when Node's lazy `undici` dispatcher has not been
+ * initialized yet, OR when the host has installed a non-`Agent` dispatcher (such as `ProxyAgent`
+ * or a custom corporate CA/mTLS/interceptor dispatcher) so we never crash or clobber host proxy
+ * settings.
  */
 export function ResolveNodeBuiltinUndiciModule(): UndiciModuleLike | null {
     const slotHolder = globalThis as Record<PropertyKey, unknown>;
     const current = slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL];
-    if (!current || typeof current !== 'object') {
+    if (!IsPlainUndiciAgentDispatcher(current)) {
         return null;
     }
-    const ctor = (current as { constructor?: unknown }).constructor;
-    if (typeof ctor !== 'function') {
-        return null;
-    }
+    const ctor = (current as { constructor: unknown }).constructor;
     return {
         Agent: ctor as UndiciModuleLike['Agent'],
         getGlobalDispatcher: () => slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL] as FetchDispatcherLike,
@@ -148,15 +175,20 @@ export function ResolveNodeBuiltinUndiciModule(): UndiciModuleLike | null {
  * `Agent` constructor during server startup. Safe no-op in browsers or when already primed.
  */
 export async function PrimeNodeBuiltinUndiciDispatcher(): Promise<boolean> {
-    if (ResolveNodeBuiltinUndiciModule()) {
-        return true;
+    const slotHolder = globalThis as Record<PropertyKey, unknown>;
+    if (slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL]) {
+        return ResolveNodeBuiltinUndiciModule() !== null;
     }
     if (typeof globalThis.fetch !== 'function' || typeof AbortController !== 'function') {
         return false;
     }
-    const ac = new AbortController();
-    ac.abort();
-    await globalThis.fetch('http://127.0.0.1:1', { signal: ac.signal }).catch(() => undefined);
+    try {
+        const ac = new AbortController();
+        ac.abort();
+        await globalThis.fetch('http://127.0.0.1:1', { signal: ac.signal }).catch(() => undefined);
+    } catch {
+        return false;
+    }
     return ResolveNodeBuiltinUndiciModule() !== null;
 }
 
@@ -189,7 +221,8 @@ export function ResolveLongRunningFetchDispatcherOptions(
  * Constructs a long-running `undici` `Agent` dispatcher configured so extended-thinking and
  * non-streaming tool-calling LLM calls do not trip Node's `300s` `UND_ERR_HEADERS_TIMEOUT` cliff.
  *
- * Returns `null` cleanly in browser runtimes or when no `undici` module is supplied.
+ * Returns `null` cleanly in browser runtimes, when no `undici` module is supplied, or if the
+ * constructor throws (e.g., an incompatible custom dispatcher constructor).
  */
 export function CreateLongRunningFetchDispatcher(
     options?: LongRunningFetchDispatcherOptions,
@@ -199,7 +232,11 @@ export function CreateLongRunningFetchDispatcher(
         return null;
     }
     const resolved = ResolveLongRunningFetchDispatcherOptions(options);
-    return new undiciModule.Agent(resolved);
+    try {
+        return new undiciModule.Agent(resolved);
+    } catch {
+        return null;
+    }
 }
 
 /**
@@ -230,15 +267,119 @@ export function CreateLongRunningFetch(
 }
 
 /**
- * Installs a long-running `undici` global dispatcher for Node host processes (such as `MJAPI`)
- * so every fetch-backed AI provider SDK inherits extended `headersTimeout` / `bodyTimeout` bounds
- * while remaining governed by per-request `AbortSignal` cancellation tokens.
+ * Configures a scoped long-running `fetch` wrapper for AI provider SDK calls ONLY — leaving
+ * Node's process-global `undici` dispatcher completely untouched so unrelated outbound traffic
+ * (OAuth, webhooks, email/SMS, CRM connectors) retains Node's standard timeouts and any host
+ * `ProxyAgent` / mTLS configuration stays intact.
+ */
+export function ConfigureLongRunningAIFetch(
+    options?: LongRunningFetchDispatcherOptions,
+    undiciModule?: UndiciModuleLike | null,
+    baseFetch?: FetchFunction
+): GlobalFetchDispatcherInstallation {
+    const resolved = ResolveLongRunningFetchDispatcherOptions(options);
+    const slotHolder = globalThis as Record<PropertyKey, unknown>;
+    const existingGlobal = slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL];
+    if (undiciModule === undefined && existingGlobal && !IsPlainUndiciAgentDispatcher(existingGlobal)) {
+        const ctorName = (existingGlobal as { constructor?: { name?: string } }).constructor?.name ?? 'unknown';
+        return {
+            Installed: false,
+            Options: resolved,
+            Dispatcher: null,
+            SkippedReason: `Host installed custom global dispatcher '${ctorName}'; preserving host transport configuration`,
+            Restore: async () => undefined,
+        };
+    }
+
+    const targetUndici = undiciModule === undefined ? ResolveNodeBuiltinUndiciModule() : undiciModule;
+    const dispatcher = CreateLongRunningFetchDispatcher(options, targetUndici);
+    if (!dispatcher) {
+        return {
+            Installed: false,
+            Options: resolved,
+            Dispatcher: null,
+            SkippedReason: 'Built-in undici Agent dispatcher unavailable in this runtime',
+            Restore: async () => undefined,
+        };
+    }
+
+    const scopedFetch = CreateLongRunningFetch(options, baseFetch, targetUndici, dispatcher);
+    const store = GetGlobalObjectStore();
+    const previousSlot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
+    const nextSlot: ScopedAIFetchSlot = { Fetch: scopedFetch, Dispatcher: dispatcher, Options: resolved };
+    store[AI_SCOPED_FETCH_STORE_KEY] = nextSlot;
+
+    let restored = false;
+    return {
+        Installed: true,
+        Options: resolved,
+        Dispatcher: dispatcher,
+        Restore: async () => {
+            if (restored) {
+                return;
+            }
+            restored = true;
+            if (store[AI_SCOPED_FETCH_STORE_KEY] === nextSlot) {
+                if (previousSlot) {
+                    store[AI_SCOPED_FETCH_STORE_KEY] = previousSlot;
+                } else {
+                    delete store[AI_SCOPED_FETCH_STORE_KEY];
+                }
+            }
+            if (dispatcher.close) {
+                await dispatcher.close();
+            }
+        },
+    };
+}
+
+/**
+ * Returns the AI-scoped long-running `fetch` wrapper configured via {@link ConfigureLongRunningAIFetch},
+ * or `undefined` when not configured (letting provider SDKs use default `globalThis.fetch`).
+ */
+export function GetLongRunningAIFetch(): FetchFunction | undefined {
+    const store = GetGlobalObjectStore();
+    const slot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
+    return slot?.Fetch;
+}
+
+/**
+ * Clears any configured AI-scoped long-running `fetch` wrapper and closes its dispatcher.
+ */
+export async function ResetLongRunningAIFetch(): Promise<void> {
+    const store = GetGlobalObjectStore();
+    const slot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
+    delete store[AI_SCOPED_FETCH_STORE_KEY];
+    if (slot?.Dispatcher?.close) {
+        await slot.Dispatcher.close();
+    }
+}
+
+/**
+ * Installs a long-running `undici` global dispatcher for Node host processes that explicitly opt in
+ * to process-wide timeout extension. Prefer {@link ConfigureLongRunningAIFetch} to scope extended
+ * timeouts strictly to AI provider SDK calls.
+ *
+ * Skips safely (never throws) when a custom non-`Agent` dispatcher (such as `ProxyAgent`) is active.
  */
 export function InstallGlobalLongRunningFetchDispatcher(
     options?: LongRunningFetchDispatcherOptions,
     undiciModule?: UndiciModuleLike | null
 ): GlobalFetchDispatcherInstallation {
     const resolved = ResolveLongRunningFetchDispatcherOptions(options);
+    const slotHolder = globalThis as Record<PropertyKey, unknown>;
+    const existingGlobal = slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL];
+    if (undiciModule === undefined && existingGlobal && !IsPlainUndiciAgentDispatcher(existingGlobal)) {
+        const ctorName = (existingGlobal as { constructor?: { name?: string } }).constructor?.name ?? 'unknown';
+        return {
+            Installed: false,
+            Options: resolved,
+            Dispatcher: null,
+            SkippedReason: `Host installed custom global dispatcher '${ctorName}'; refusing to overwrite`,
+            Restore: async () => undefined,
+        };
+    }
+
     const targetUndici = undiciModule === undefined ? ResolveNodeBuiltinUndiciModule() : undiciModule;
     const dispatcher = CreateLongRunningFetchDispatcher(options, targetUndici);
 
@@ -247,6 +388,7 @@ export function InstallGlobalLongRunningFetchDispatcher(
             Installed: false,
             Options: resolved,
             Dispatcher: dispatcher,
+            SkippedReason: 'Built-in undici Agent dispatcher unavailable in this runtime',
             Restore: async () => {
                 if (dispatcher?.close) {
                     await dispatcher.close();
@@ -257,7 +399,21 @@ export function InstallGlobalLongRunningFetchDispatcher(
 
     const previous =
         typeof targetUndici.getGlobalDispatcher === 'function' ? targetUndici.getGlobalDispatcher() : null;
-    targetUndici.setGlobalDispatcher(dispatcher);
+    try {
+        targetUndici.setGlobalDispatcher(dispatcher);
+    } catch (err) {
+        return {
+            Installed: false,
+            Options: resolved,
+            Dispatcher: null,
+            SkippedReason: err instanceof Error ? err.message : String(err),
+            Restore: async () => {
+                if (dispatcher.close) {
+                    await dispatcher.close();
+                }
+            },
+        };
+    }
 
     let restored = false;
     return {

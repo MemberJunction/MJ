@@ -1,20 +1,30 @@
 ---
+"@memberjunction/global": patch
+"@memberjunction/core": patch
 "@memberjunction/ai": patch
 "@memberjunction/ai-core-plus": patch
 "@memberjunction/ai-engine-base": patch
 "@memberjunction/ai-agents": patch
+"@memberjunction/ai-agent-harness": patch
+"@memberjunction/ai-openai": patch
+"@memberjunction/ai-anthropic": patch
 "@memberjunction/core-entities-server": patch
 "@memberjunction/core-actions": patch
 "@memberjunction/server": patch
 "@memberjunction/server-bootstrap": patch
 "@memberjunction/server-bootstrap-lite": patch
+"@memberjunction/integration-test-suite": patch
 ---
 
-Phase 2.7 adversarial review hardening, `2.8` documentation suite, and live integration coverage (`IT195`) for the BaseAgent refactor:
+Adversarial review hardening, documentation suite, and live integration coverage (`IT195`) for the BaseAgent refactor:
 
-- Enforce full multi-hop `BaseAgentID` ancestor ceilings, narrow-only security invariants, non-null limit preservation, unconditional `DriverClass` checks, and `IAgentConfiguration` JSON validation across `MJAIAgentEntityServer`, `MJAIAgentCategoryEntityServer`, `MJAIAgentTypeEntityServer`, and `MJAIAgentStepTypeEntityServer`.
-- Re-evaluate `ResolvePlanModeGate` during `RestorePausedRunFromCheckpoint` so unapproved Plan Mode runs remain gated on resume.
-- Refine `AgentStuckDetector` to distinguish synthetic post-action `Retry` continuations and track inline artifact/conversation/agent tool calls and memory writes.
-- Wire `SafeResolveEffectiveAgentProperties` across runtime cascade consumers (prompt defaults, compaction, memory context builder, scoped search, plan mode, sub-agent consult rounds, and execution limits) and reset per-run `helperPlugins` before resolving `setup`/`realtime` seams.
-- Default `httpDispatcher` `bodyTimeoutMs` to a finite 30-minute window and auto-wire Node's built-in `undici` dispatcher in `MJServer` startup; suspend `AgentLivenessWatchdog` during browser client-tool round-trips.
-- Refine `V202611271804` backfill to scope to root agents without freezing untouched defaults; deepen all 13 per-helper unit test suites; add `IT195` live integration checks; lift the temporary `BaseAgent` freeze guard; and publish the four canonical agent guides and README overhauls.
+- Enforce monotonic narrow-only configuration resolution across all tiers (`AgentType` → parent/child `Category` → `BaseAgentID` chain), stricter-of-two JSON vs. legacy column semantics, prototype-pollution guards (`__proto__`/`constructor`/`prototype` rejected and stripped), full enum/range/seam validation, and bidirectional `Save()` sync (including explicit null/key-removal reset).
+- Enforce multi-hop `BaseAgentID` ancestor ceilings (treating `null` on derived creates/edits as inherit while rejecting dirty null-clears of previously bounded limits), lock `CategoryID`/`TypeID` changes and `helperPlugins` edits/clears for non-admins, and expand code-only helper seams (`limits`, `actionPolicy`, `setup`, `steps`, `actions`, `subAgents`) across save-time and run-time checks.
+- Wire `AgentLivenessWatchdog` across sub-agent delegation, long-running actions, realtime sessions, progress callbacks, and `HarnessAgentBase` / custom `executeAgentInternal` overrides; honor subclass `DefaultAgentTimeoutMS` overrides; disable streaming-heartbeat auto-promotion when `Liveness.Enabled === false`; and scope long-running `undici` `fetch` timeouts (`ConfigureLongRunningAIFetch`) to AI provider SDK calls (`OpenAILLM`, `AnthropicLLM`) without replacing the host's process-global dispatcher or crashing on `ProxyAgent`.
+- Harden `AgentStuckDetector` to defer directives during native tool-calling turns, reset on changing poll results or intervening mutating calls/sub-agent delegations, age out injected directive fingerprints, exempt Flow agents, and incorporate action metadata (`Verb`, `DisallowWhenTainted`) alongside refined read-only token classification.
+- Fail closed on custom `BaseAgentStepHandler` `AllowedInUnapprovedPlanMode` (`false` default, `row && handler` evaluation, `row || handler` budget), prevent disabling built-in step types, add Flow `Custom` step dispatch, preserve Plan Mode approval across checkpointed resume (`ctx.AgentRun.LastRunID`), and wire all remaining cascaded properties (`DefaultPromptEffortLevel`, `MaxExecutionsPerRun`, `MessageMode`/`MaxMessages`, `ScopeConfig`, `RecordingDefault`, `ConversationSummaryPromptID`, `ArtifactCreationMode`).
+- **Behavioral & TypeScript notes:**
+  - `BaseAgent.Execute<C = unknown, R = unknown>` default type arguments changed from `<C = any, R = any>` to `<C = unknown, R = unknown>` for strict typing; callers reading `.payload` untyped should provide explicit type parameters or narrow `result.payload`.
+  - Default hard wall-clock ceiling moves from 2 h to 72 h when liveness supervision is active (paired with the 15-minute sliding inactivity timeout); subclass `DefaultAgentTimeoutMS` overrides continue to be honored, and setting `limits.Liveness.Enabled: false` restores fixed-wall-clock non-streaming behavior.
+  - Derived agents now enforce narrow-only semantics across `SearchScopeAccess` (chain minimum), `AllowMemoryWrite` (monotonic `AND`), and nearest non-default for `InjectNotes`/`DeclareActionsAsNativeTools`.
+- Deepen all per-helper unit test suites, narrow `@memberjunction/ai-agents` barrel exports to exclude `@internal` compat/sub-helper classes, add `IT195` live integration checks, upgrade `file-line-limit` to per-file ratchet caps, and publish the four canonical agent guides and README overhauls.

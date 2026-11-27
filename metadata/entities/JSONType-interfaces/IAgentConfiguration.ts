@@ -506,16 +506,17 @@ export interface IAgentConfiguration {
     /**
      * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
      * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`.
-     * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`)
-     * are strictly forbidden in metadata and rejected both at save time and at runtime.
+     * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
+     * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
+     * both at save time and at runtime.
      * Set to `null` to explicitly clear helper plugin entries at this cascade tier.
      */
     helperPlugins?: Array<{
         /**
          * Canonical `BaseAgent` helper seam key to override (for example `'messaging'`,
-         * `'payload'`, `'compaction'`, `'prompt'`, or `'actions'`). Code-only security seams
-         * (`'limits'`, `'actionPolicy'`, `'policy'`, `'permissions'`, `'permission'`) are always
-         * rejected.
+         * `'payload'`, `'compaction'`, `'realtime'`, `'iteration'`, `'skills'`, or `'prompt'`).
+         * Code-only security seams (`'limits'`, `'actionPolicy'`, `'policy'`, `'permissions'`,
+         * `'permission'`, `'setup'`, `'steps'`, `'actions'`, `'subAgents'`) are always rejected.
          */
         seam: string;
 

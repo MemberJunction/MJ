@@ -116,6 +116,24 @@ export interface AgentSandboxValidationTarget {
     Configuration?: string | null;
     /** Optional `TypeConfiguration` JSON (checked for `helperPlugins` fallback). */
     TypeConfiguration?: string | null;
+    /** Optional CategoryID / TypeID + pre-save values to prevent non-admin sandbox escapes. */
+    CategoryID?: string | null;
+    PreSaveCategoryID?: string | null;
+    TypeID?: string | null;
+    PreSaveTypeID?: string | null;
+    /** Optional dirty-field set & pre-save numeric limits so untouched null limits inherit cleanly (B4). */
+    DirtyFields?: ReadonlySet<string>;
+    PreSaveLimits?: Partial<
+        Record<
+            | 'MaxCostPerRun'
+            | 'MaxTokensPerRun'
+            | 'MaxTimePerRun'
+            | 'MaxIterationsPerRun'
+            | 'MaxExecutionsPerRun'
+            | 'MaxSubAgentConsultRounds',
+            number | null
+        >
+    >;
 }
 
 /**
@@ -145,6 +163,8 @@ export interface AgentSandboxValidationContext {
             Partial<
                 Pick<
                     MJAIAgentEntity,
+                    | 'CategoryID'
+                    | 'TypeID'
                     | 'Configuration'
                     | 'SearchScopeAccess'
                     | 'RequirePlanMode'
@@ -195,6 +215,17 @@ export function ValidateAgentInheritanceAndSandbox(
         ...ParseAgentHelperPlugins(Target.Configuration),
         ...ParseAgentHelperPlugins(Target.TypeConfiguration),
     ];
+    const jsonHasHelperPluginsKey = (raw: string | null | undefined): boolean => {
+        if (!raw || raw.trim().length === 0) return false;
+        try {
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            return Boolean(parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'helperPlugins'));
+        } catch {
+            return false;
+        }
+    };
+    const hasHelperPluginsKey =
+        jsonHasHelperPluginsKey(Target.Configuration) || jsonHasHelperPluginsKey(Target.TypeConfiguration);
     for (const plugin of declaredHelperPlugins) {
         if (IsForbiddenMetadataHelperSeam(plugin.seam)) {
             errors.push(
@@ -207,11 +238,11 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
     }
-    if (!isAdmin && User && declaredHelperPlugins.length > 0) {
+    if (!isAdmin && User && (declaredHelperPlugins.length > 0 || hasHelperPluginsKey)) {
         errors.push(
             new ValidationErrorInfo(
                 'Configuration',
-                'Only administrators may configure helperPlugins on an AI Agent.',
+                'Only administrators may configure helperPlugins (including clearing/modifying the key) on an AI Agent.',
                 declaredHelperPlugins.map((p) => `${p.seam}:${p.driverClass}`).join(', '),
                 ValidationErrorType.Failure
             )
@@ -467,7 +498,59 @@ export function ValidateAgentInheritanceAndSandbox(
         const ancestorConfigs = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
         const targetConfig = ParseAgentConfiguration(Target.Configuration);
 
-        // Multi-hop upper-bound limit ceilings: reject BOTH exceeding AND null-clearing a finite ancestor ceiling
+        // CategoryID / TypeID sandbox (S2): non-admins cannot re-point a derived instance to a
+        // different CategoryID or TypeID than its base agent chain (which would bypass category/type
+        // enforced configuration policies).
+        let effectiveAncestorCategoryId: string | null = null;
+        let effectiveAncestorTypeId: string | null = null;
+        for (let i = ancestors.length - 1; i >= 0; i--) {
+            if (!effectiveAncestorCategoryId && ancestors[i].CategoryID) {
+                effectiveAncestorCategoryId = ancestors[i].CategoryID ?? null;
+            }
+            if (!effectiveAncestorTypeId && ancestors[i].TypeID) {
+                effectiveAncestorTypeId = ancestors[i].TypeID ?? null;
+            }
+        }
+        if (Target.CategoryID !== undefined) {
+            const expectedCat = Target.IsSaved ? (Target.PreSaveCategoryID ?? effectiveAncestorCategoryId) : effectiveAncestorCategoryId;
+            if (expectedCat && Target.CategoryID && !UUIDsEqual(Target.CategoryID, expectedCat)) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'CategoryID',
+                        'Non-administrator users cannot reassign CategoryID on a derived agent instance.',
+                        Target.CategoryID,
+                        ValidationErrorType.Failure
+                    )
+                );
+            } else if (expectedCat && Target.CategoryID === null && Target.DirtyFields?.has('CategoryID')) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'CategoryID',
+                        'Non-administrator users cannot clear CategoryID on a derived agent instance.',
+                        null,
+                        ValidationErrorType.Failure
+                    )
+                );
+            }
+        }
+        if (Target.TypeID !== undefined) {
+            const expectedType = Target.IsSaved ? (Target.PreSaveTypeID ?? effectiveAncestorTypeId) : effectiveAncestorTypeId;
+            if (expectedType && Target.TypeID && !UUIDsEqual(Target.TypeID, expectedType)) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'TypeID',
+                        'Non-administrator users cannot reassign TypeID on a derived agent instance.',
+                        Target.TypeID,
+                        ValidationErrorType.Failure
+                    )
+                );
+            }
+        }
+
+        // Multi-hop upper-bound limit ceilings (B4):
+        // - Exceeding an ancestor's finite ceiling is always rejected.
+        // - `null` means "inherit ancestor ceiling" (enforced at runtime via Math.min), EXCEPT when
+        //   an existing instance explicitly dirties a previously non-null cap to clear it to null.
         const checkMultiHopUpperBound = (
             fieldName:
                 | 'MaxCostPerRun'
@@ -489,14 +572,20 @@ export function ValidateAgentInheritanceAndSandbox(
                 return;
             }
             if (childLimit === null) {
-                errors.push(
-                    new ValidationErrorInfo(
-                        fieldName,
-                        `Derived agent ${fieldName} cannot be cleared to null when an ancestor enforces ceiling (${effectiveCeiling}).`,
-                        null,
-                        ValidationErrorType.Failure
-                    )
-                );
+                const isExplicitClear =
+                    Target.IsSaved &&
+                    Target.DirtyFields?.has(fieldName) === true &&
+                    typeof Target.PreSaveLimits?.[fieldName] === 'number';
+                if (isExplicitClear) {
+                    errors.push(
+                        new ValidationErrorInfo(
+                            fieldName,
+                            `Derived agent ${fieldName} cannot be cleared to null when an ancestor enforces ceiling (${effectiveCeiling}).`,
+                            null,
+                            ValidationErrorType.Failure
+                        )
+                    );
+                }
                 return;
             }
             if (typeof childLimit === 'number' && childLimit > effectiveCeiling) {
@@ -704,7 +793,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             if (baseAgent) {
                 resolvedRootBaseId = this.findRootBaseAgentId(baseAgent, allAgents);
                 if (isCreate) {
-                    this.inheritDefaultsFromBaseAgent(baseAgent);
+                    this.inheritDefaultsFromBaseAgent(baseAgent, allAgents);
                     const primaryDirty = this.GetFieldByName('IsPrimaryInstance')?.Dirty ?? false;
                     if (!primaryDirty && !this.IsPrimaryInstance && this.OwnerUserID) {
                         const existingSiblings = this.findActiveSiblingsForOwnerAndRoot(
@@ -779,14 +868,35 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         // 1. BaseAgentID inheritance, helperPlugins & non-admin sandbox checks
         const user = this.ContextCurrentUser;
         const isAdmin = IsAgentAdminOrOwnerUser(user);
+        const hasHelperPluginsKey = (raw: string | null | undefined): boolean => {
+            if (!raw || raw.trim().length === 0) return false;
+            try {
+                const parsed = JSON.parse(raw) as Record<string, unknown>;
+                return Boolean(parsed && typeof parsed === 'object' && !Array.isArray(parsed) && Object.prototype.hasOwnProperty.call(parsed, 'helperPlugins'));
+            } catch {
+                return false;
+            }
+        };
         const hasDeclaredHelperPlugins =
             ParseAgentHelperPlugins(this.Configuration).length > 0 ||
-            ParseAgentHelperPlugins(this.TypeConfiguration).length > 0;
+            ParseAgentHelperPlugins(this.TypeConfiguration).length > 0 ||
+            hasHelperPluginsKey(this.Configuration) ||
+            hasHelperPluginsKey(this.TypeConfiguration);
         if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins) {
             const [allAgents, allPermissions] = await Promise.all([
                 this.loadAllAgentsForGuard(),
                 this.loadAllAgentPermissionsForGuard(),
             ]);
+            const dirtyFieldNames = new Set<string>();
+            for (const f of this.Fields) {
+                if (f.Dirty) {
+                    dirtyFieldNames.add(f.Name);
+                }
+            }
+            const oldNum = (name: string): number | null => {
+                const v = this.GetFieldByName(name)?.OldValue;
+                return typeof v === 'number' && Number.isFinite(v) ? v : null;
+            };
             const sandboxErrors = ValidateAgentInheritanceAndSandbox({
                 Target: {
                     ID: this.ID,
@@ -797,6 +907,12 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     OwnerUserID: this.OwnerUserID,
                     PreSaveOwnerUserID:
                         (this.GetFieldByName('OwnerUserID')?.OldValue as string | null | undefined) ?? this.OwnerUserID,
+                    CategoryID: this.CategoryID,
+                    PreSaveCategoryID:
+                        (this.GetFieldByName('CategoryID')?.OldValue as string | null | undefined) ?? this.CategoryID,
+                    TypeID: this.TypeID,
+                    PreSaveTypeID:
+                        (this.GetFieldByName('TypeID')?.OldValue as string | null | undefined) ?? this.TypeID,
                     InstantiationMode: this.InstantiationMode,
                     DriverClass: this.DriverClass,
                     DriverClassDirty: this.GetFieldByName('DriverClass')?.Dirty ?? false,
@@ -818,6 +934,15 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     MaxSubAgentConsultRounds: this.MaxSubAgentConsultRounds,
                     Configuration: this.Configuration,
                     TypeConfiguration: this.TypeConfiguration,
+                    DirtyFields: dirtyFieldNames,
+                    PreSaveLimits: {
+                        MaxCostPerRun: oldNum('MaxCostPerRun'),
+                        MaxTokensPerRun: oldNum('MaxTokensPerRun'),
+                        MaxTimePerRun: oldNum('MaxTimePerRun'),
+                        MaxIterationsPerRun: oldNum('MaxIterationsPerRun'),
+                        MaxExecutionsPerRun: oldNum('MaxExecutionsPerRun'),
+                        MaxSubAgentConsultRounds: oldNum('MaxSubAgentConsultRounds'),
+                    },
                 },
                 User: user,
                 AllAgents: allAgents,
@@ -857,15 +982,46 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
      * `ModelSelectionMode`, `Isolation`, and memory settings without requiring every caller to
      * manually copy 20 columns.
      */
-    private inheritDefaultsFromBaseAgent(baseAgent: MJAIAgentEntity): void {
-        const copyIfNotDirty = <K extends keyof MJAIAgentEntity>(fieldName: K): void => {
+    private inheritDefaultsFromBaseAgent(
+        baseAgent: MJAIAgentEntity,
+        allAgents?: readonly MJAIAgentEntity[]
+    ): void {
+        const copyIfNotDirty = <K extends keyof MJAIAgentEntity>(fieldName: K, overrideVal?: MJAIAgentEntity[K]): void => {
             const field = this.GetFieldByName(String(fieldName));
             if (field && !field.Dirty && field.NeverSet) {
-                const baseVal = baseAgent[fieldName];
-                if (baseVal !== undefined) {
-                    (this as MJAIAgentEntity)[fieldName] = baseVal;
+                const val = overrideVal !== undefined ? overrideVal : baseAgent[fieldName];
+                if (val !== undefined) {
+                    (this as MJAIAgentEntity)[fieldName] = val;
                 }
             }
+        };
+
+        // Walk full ancestor chain so newly-created derived instances inherit the strictest
+        // ancestor limits and narrow-only capability booleans (prevents DB defaults like
+        // AllowEphemeralClientTools=1 from colliding with a false ancestor in ValidateAsync).
+        const ancestors: MJAIAgentEntity[] = [baseAgent];
+        if (allAgents && allAgents.length > 0) {
+            const byId = IndexByUUID(allAgents);
+            const seen = new UUIDSet([baseAgent.ID]);
+            let cur: MJAIAgentEntity | undefined = baseAgent;
+            while (cur?.BaseAgentID && ancestors.length <= MAX_AGENT_INHERITANCE_DEPTH) {
+                if (seen.Has(cur.BaseAgentID)) break;
+                seen.Add(cur.BaseAgentID);
+                const parent = byId.Get(cur.BaseAgentID);
+                if (!parent) break;
+                ancestors.unshift(parent);
+                cur = parent;
+            }
+        }
+        const ancestorConfigs = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
+        const minFinite = (vals: Array<number | null | undefined>): number | null => {
+            let best: number | null = null;
+            for (const v of vals) {
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    best = best === null ? v : Math.min(best, v);
+                }
+            }
+            return best;
         };
 
         if (!this.TypeID && baseAgent.TypeID) {
@@ -883,11 +1039,57 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('InjectExamples');
         copyIfNotDirty('MaxExamplesToInject');
         copyIfNotDirty('ExampleInjectionStrategy');
-        copyIfNotDirty('AllowMemoryWrite');
+        copyIfNotDirty(
+            'AllowMemoryWrite',
+            ancestors.some((a, i) => (ancestorConfigs[i]?.memory?.allowMemoryWrite ?? a.AllowMemoryWrite) === false)
+                ? false
+                : baseAgent.AllowMemoryWrite
+        );
         copyIfNotDirty('DeclareActionsAsNativeTools');
-        copyIfNotDirty('Isolation');
-        copyIfNotDirty('SupportsPlanMode');
-        copyIfNotDirty('RequirePlanMode');
+        let strictestIso: MJAIAgentEntity['Isolation'] = baseAgent.Isolation ?? 'InProcess';
+        for (const a of ancestors) {
+            const iso = a.Isolation ?? 'InProcess';
+            if ((ISOLATION_RANK[iso] ?? 0) > (ISOLATION_RANK[strictestIso] ?? 0)) {
+                strictestIso = iso;
+            }
+        }
+        copyIfNotDirty('Isolation', strictestIso);
+        copyIfNotDirty(
+            'SupportsPlanMode',
+            ancestors.some((a, i) => (ancestorConfigs[i]?.execution?.supportsPlanMode ?? a.SupportsPlanMode) === false)
+                ? false
+                : baseAgent.SupportsPlanMode
+        );
+        copyIfNotDirty(
+            'RequirePlanMode',
+            ancestors.some((a, i) => (ancestorConfigs[i]?.execution?.requirePlanMode ?? a.RequirePlanMode) === true)
+                ? true
+                : baseAgent.RequirePlanMode
+        );
+        copyIfNotDirty(
+            'AllowEphemeralClientTools',
+            ancestors.some((a, i) => (ancestorConfigs[i]?.clientTools?.allowEphemeral ?? a.AllowEphemeralClientTools) === false)
+                ? false
+                : baseAgent.AllowEphemeralClientTools
+        );
+        copyIfNotDirty(
+            'AcceptUnregisteredFiles',
+            ancestors.some((a, i) => (ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles ?? a.AcceptUnregisteredFiles) === false)
+                ? false
+                : baseAgent.AcceptUnregisteredFiles
+        );
+        copyIfNotDirty('MaxCostPerRun', minFinite(ancestors.map((a) => a.MaxCostPerRun)));
+        copyIfNotDirty('MaxTokensPerRun', minFinite(ancestors.map((a) => a.MaxTokensPerRun)));
+        copyIfNotDirty('MaxTimePerRun', minFinite(ancestors.map((a) => a.MaxTimePerRun)));
+        copyIfNotDirty('MaxIterationsPerRun', minFinite(ancestors.map((a) => a.MaxIterationsPerRun)));
+        copyIfNotDirty(
+            'MaxExecutionsPerRun',
+            minFinite(ancestors.map((a, i) => ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun ?? a.MaxExecutionsPerRun))
+        );
+        copyIfNotDirty(
+            'MaxSubAgentConsultRounds',
+            minFinite(ancestors.map((a, i) => ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds ?? a.MaxSubAgentConsultRounds))
+        );
         copyIfNotDirty('EnableContextCompression');
         copyIfNotDirty('ContextCompressionMessageThreshold');
         copyIfNotDirty('ContextCompressionPromptID');
@@ -1088,9 +1290,12 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         }
         const legacyValues = this.buildLegacyConfigValues();
         const configDirty = this.isFieldExplicitlyWritten('Configuration', isCreate);
+        const previousConfigJson =
+            !isCreate && typeof configField.OldValue === 'string' ? configField.OldValue : null;
         const syncResult = SyncAgentLegacyColumnsAndConfiguration({
             IsNewRecord: isCreate,
             ConfigurationJson: this.Configuration,
+            PreviousConfigurationJson: previousConfigJson,
             ConfigurationDirty: configDirty,
             LegacyValues: legacyValues,
             DirtyLegacyFields: dirtyLegacyFields,

@@ -39,6 +39,7 @@ export interface AgentStepTypeValidationTarget {
     DriverClass: string | null | undefined;
     AllowedInUnapprovedPlanMode: boolean | null | undefined;
     CountsAgainstTreeBudget: boolean | null | undefined;
+    Status?: string | null | undefined;
 }
 
 /** Pure validation helper for `MJ: AI Agent Step Types` create/update rules. */
@@ -61,6 +62,16 @@ export function ValidateAgentStepTypeMutation(
     const key = (target.Name ?? '').trim().toLowerCase();
     const floor = BUILT_IN_STEP_FLOORS.get(key);
     if (floor) {
+        if (target.Status !== undefined && target.Status !== null && target.Status !== 'Active') {
+            errors.push(
+                new ValidationErrorInfo(
+                    'Status',
+                    `Built-in step type '${target.Name}' must remain Status='Active'.`,
+                    target.Status,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
         if (!floor.AllowedInUnapprovedPlanMode && target.AllowedInUnapprovedPlanMode === true) {
             errors.push(
                 new ValidationErrorInfo(
@@ -151,6 +162,7 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
                 DriverClass: this.DriverClass,
                 AllowedInUnapprovedPlanMode: this.AllowedInUnapprovedPlanMode,
                 CountsAgainstTreeBudget: this.CountsAgainstTreeBudget,
+                Status: this.Status,
             },
             this.ContextCurrentUser
         );

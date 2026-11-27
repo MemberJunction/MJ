@@ -34,6 +34,7 @@ import { ActionSupportsAudience } from '../../action-audience-support';
 import { AgentAudienceAddsReader, AgentAudienceProblem, AgentAudienceReaderIDs, MatchAudienceUsers } from '../../agent-audience';
 import { HostAllowedAgentIDs } from '../../decision-discovery';
 import type { PromptComponentScope } from '../../prompt-component-resolver';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import type { PromptWithholding, RunContextScope } from '../base-agent-types';
 import type { BaseAgentActionPolicyHelper } from './BaseAgentActionPolicyHelper';
@@ -217,7 +218,7 @@ export class AgentRunScopeAndAudienceHelper {
         if (params.contextUser?.TenantContext) {
             return 'a run with a tenant context';
         }
-        return ctx.TaintedSources.length > 0 || params.SecurityEnvelope?.IsRunTainted === true
+        return ctx.IsRunTainted || params.SecurityEnvelope?.IsRunTainted === true
             ? 'a run that ingested untrusted content'
             : null;
     }
@@ -472,7 +473,7 @@ export class AgentRunScopeAndAudienceHelper {
     }
 
     public ParseSecondaryScopeConfig(agent: MJAIAgentEntityExtended): SecondaryScopeConfig | null {
-        const configJson = agent.ScopeConfig;
+        const configJson = SafeResolveEffectiveAgentProperties(agent)?.ScopeConfig ?? agent.ScopeConfig;
         if (!configJson) {
             return null;
         }

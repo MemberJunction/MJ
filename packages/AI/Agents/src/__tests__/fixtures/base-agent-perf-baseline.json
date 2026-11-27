@@ -1,35 +1,35 @@
 {
-  "baselineVersion": "stage1-pr0",
+  "baselineVersion": "stage1-pr0-r2",
   "benchmarks": [
     {
       "scenario": "loop-single-turn",
       "iterations": 1,
       "stepCount": 2,
-      "promptTokens": 0,
-      "completionTokens": 0,
-      "totalTokens": 0,
-      "recordedMedianMs": 0.567,
-      "maxAllowedMedianMs": 250
+      "promptTokens": 100,
+      "completionTokens": 30,
+      "totalTokens": 130,
+      "recordedMedianMs": 0.975,
+      "maxAllowedMedianMs": 50
     },
     {
       "scenario": "loop-prompt-action-prompt",
       "iterations": 2,
       "stepCount": 4,
-      "promptTokens": 0,
-      "completionTokens": 0,
-      "totalTokens": 0,
-      "recordedMedianMs": 1.03,
-      "maxAllowedMedianMs": 250
+      "promptTokens": 370,
+      "completionTokens": 90,
+      "totalTokens": 460,
+      "recordedMedianMs": 1.33,
+      "maxAllowedMedianMs": 50
     },
     {
       "scenario": "flow-two-step",
       "iterations": 1,
       "stepCount": 4,
-      "promptTokens": 0,
-      "completionTokens": 0,
-      "totalTokens": 0,
-      "recordedMedianMs": 0.911,
-      "maxAllowedMedianMs": 250
+      "promptTokens": 80,
+      "completionTokens": 20,
+      "totalTokens": 100,
+      "recordedMedianMs": 1.195,
+      "maxAllowedMedianMs": 50
     }
   ]
 }

@@ -3,7 +3,7 @@ import { ContentBlock, MessageCreateParams, MessageParam, RedactedThinkingBlockP
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
-    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, NormalizeFinishReason } from "@memberjunction/ai";
+    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, NormalizeFinishReason, GetLongRunningAIFetch } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { BuildAnthropicThinking, ResolveSamplingParams, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
 
@@ -84,7 +84,11 @@ export class AnthropicLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._anthropic = new Anthropic({apiKey});
+        const longRunningFetch = GetLongRunningAIFetch();
+        this._anthropic = new Anthropic({
+            apiKey,
+            ...(longRunningFetch ? { fetch: longRunningFetch as unknown as typeof globalThis.fetch } : {}),
+        });
     }
 
     /**

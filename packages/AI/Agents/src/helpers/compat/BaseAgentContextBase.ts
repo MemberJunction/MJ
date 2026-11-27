@@ -43,6 +43,8 @@ export abstract class BaseAgentContextBase extends BaseAgentDeprecatedDelegates 
     protected abstract get AgentTypeState(): unknown;
     public abstract get IsRunTainted(): boolean;
     protected abstract get DefaultAgentTimeoutMS(): number;
+    protected abstract get HasCustomDefaultAgentTimeout(): boolean;
+    protected abstract get HasCustomExecuteAgentInternal(): boolean;
     protected abstract getCatalogNarrowingTimeoutMs(): number;
     protected abstract getDecisionConcurrency(): number;
     protected abstract getMaxConsecutiveFailedSteps(): number;
@@ -129,7 +131,12 @@ export abstract class BaseAgentContextBase extends BaseAgentDeprecatedDelegates 
             RunCrossTurnCompaction: (phase, params, config, budget) => self.runCrossTurnCompaction(phase, params, config, budget),
             RecordCompactionRunStep: (phase, params, budget, outcome) => self.recordCompactionRunStep(phase, params, budget, outcome),
             TriggerPostRunMemoryExtraction: (params, agentRun) => self.triggerPostRunMemoryExtraction(params, agentRun),
-            CreateMemoryManagerAgent: (agent) => CreateAgentInstance(agent),
+            CreateMemoryManagerAgent: (agent) => CreateAgentInstance({
+                ID: agent.ID,
+                Name: agent.Name,
+                BaseAgentID: agent.BaseAgentID,
+                DriverClass: agent.DriverClass?.trim() || 'MemoryManagerAgent',
+            }),
             RecoveryStrategyDropStaleVolatileState: (params, tokensToSave, currentStepCount) => self.recoveryStrategy_DropStaleVolatileState(params, tokensToSave, currentStepCount),
             RecoveryStrategyRemoveOldestToolResults: (params, tokensToSave, currentStepCount, minAge) => self.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentStepCount, minAge),
             RecoveryStrategyCompactOldToolResults: (params, tokensToSave, currentStepCount, minAge) => self.recoveryStrategy_CompactOldToolResults(params, tokensToSave, currentStepCount, minAge),
@@ -628,6 +635,8 @@ export abstract class BaseAgentContextBase extends BaseAgentDeprecatedDelegates 
             get MaxConsecutiveFailedSteps() { return self.getMaxConsecutiveFailedSteps(); },
             get MaxConsecutiveUnproductiveRetries() { return self.getMaxConsecutiveUnproductiveRetries(); },
             get DefaultAgentTimeoutMS() { return self.DefaultAgentTimeoutMS; },
+            get HasCustomDefaultAgentTimeout() { return self.HasCustomDefaultAgentTimeout; },
+            get HasCustomExecuteAgentInternal() { return self.HasCustomExecuteAgentInternal; },
             get AgentTimeoutAbortReason() { return self.getAgentTimeoutAbortReason(); },
             get AgentInactivityAbortReason() { return self.getAgentInactivityAbortReason(); },
             get LivenessWatchdog() { return self._livenessWatchdog; },

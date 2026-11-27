@@ -35,9 +35,11 @@ export abstract class BaseAgentStepHandler {
 
     /**
      * Whether this step type is permitted while Plan Mode is active and not yet approved.
-     * Mutating steps (`Actions`, `Sub-Agent`, and any mutating custom step) set this to `false`.
+     * Defaults to `false` (fail-closed) so new or mutating custom step types cannot execute
+     * before a user approves the agent's plan. Read-only, planning, or conversational steps
+     * explicitly override this to `true`.
      */
-    public readonly AllowedInUnapprovedPlanMode: boolean = true;
+    public readonly AllowedInUnapprovedPlanMode: boolean = false;
 
     /**
      * Whether executing this step checks the workflow/tree execution budget before dispatch.

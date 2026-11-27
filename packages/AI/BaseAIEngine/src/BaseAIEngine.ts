@@ -1770,15 +1770,24 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         };
 
         // 1. AgentType default layer (lowest metadata tier: legacy 7 columns merged under DefaultAgentConfiguration JSON)
+        // Keep EVERY default tier individually in `orderedDefaultLayers` so narrow-only security
+        // invariants and cumulative `helperPlugins` are folded monotonically across
+        // AgentType -> rootCategory -> ... -> directCategory -> rootAgent -> ... -> leafAgent
+        // (child categories or `{"execution": null}` can NEVER loosen an earlier tier!).
         const effectiveTypeId = nearestNonNull((a) => a.TypeID);
         const agentType = effectiveTypeId
             ? this.AgentTypes.find((at) => UUIDsEqual(at.ID, effectiveTypeId))
             : undefined;
+        const orderedDefaultLayers: IAgentConfiguration[] = [];
         let defaultsLayer: IAgentConfiguration = {};
         if (agentType) {
             const typeLegacy = BuildAgentTypeConfigurationFromLegacyFields(agentType);
             const typeJson = ParseAgentConfiguration(agentType.DefaultAgentConfiguration);
-            defaultsLayer = DeepMergeAgentConfigurations(typeLegacy, typeJson);
+            const typeLayer = DeepMergeAgentConfigurations(typeLegacy, typeJson);
+            if (Object.keys(typeLayer).length > 0) {
+                orderedDefaultLayers.push(typeLayer);
+                defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, typeLayer);
+            }
         }
 
         // 2. Category chain layer (rootCategory -> ... -> directCategory)
@@ -1787,6 +1796,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         for (const cat of categoryChain) {
             const catJson = ParseAgentConfiguration(cat.DefaultConfiguration);
             if (catJson) {
+                orderedDefaultLayers.push(catJson);
                 defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, catJson);
             }
         }
@@ -1835,25 +1845,31 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
 
-        // SkillActivationMode narrows monotonically: Auto (1) -> RequestedOnly (0).
-        // Category/AgentType defaults may supply an initial default when root omits it, but never widen.
+        // SkillActivationMode narrows monotonically across EVERY tier (AgentType -> Categories -> BaseAgent Chain -> Agent):
+        // Auto (1) -> RequestedOnly (0). On each agent node, take stricter-of-two between JSON and legacy column.
         const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
             RequestedOnly: 0,
             Auto: 1,
         };
-        const rootSkillMode = nodeConfigs[0]?.skills?.activationMode ?? root?.SkillActivationMode;
-        let effectiveSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] =
-            rootSkillMode ?? defaultsLayer.skills?.activationMode ?? 'RequestedOnly';
-        if (defaultsLayer.skills?.activationMode != null && rootSkillMode != null) {
-            // Category/Type defaults cannot loosen; if root is explicitly set, root establishes the chain start
-            effectiveSkillActivationMode = rootSkillMode;
-        }
-        for (let i = 1; i < nodes.length; i++) {
-            const nodeMode = nodeConfigs[i]?.skills?.activationMode ?? nodes[i].SkillActivationMode;
-            if (nodeMode != null && (skillModeRank[nodeMode] ?? 0) < (skillModeRank[effectiveSkillActivationMode] ?? 0)) {
-                effectiveSkillActivationMode = nodeMode;
+        let effectiveSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] | null = null;
+        const applySkillModeNarrow = (val: MJAIAgentEntity['SkillActivationMode'] | null | undefined): void => {
+            if (val == null) return;
+            if (
+                effectiveSkillActivationMode === null ||
+                (skillModeRank[val] ?? 0) < (skillModeRank[effectiveSkillActivationMode] ?? 0)
+            ) {
+                effectiveSkillActivationMode = val;
             }
+        };
+        for (const layer of orderedDefaultLayers) {
+            applySkillModeNarrow(layer.skills?.activationMode);
         }
+        for (let i = 0; i < nodes.length; i++) {
+            applySkillModeNarrow(nodeConfigs[i]?.skills?.activationMode);
+            applySkillModeNarrow(nodes[i].SkillActivationMode);
+        }
+        const resolvedSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] =
+            effectiveSkillActivationMode ?? 'RequestedOnly';
 
         // ModelSelectionMode: if leaf owns active prompts use leaf's mode; otherwise inherit from
         // the nearest prompt-owning ancestor (or root), falling back to category/type default.
@@ -1906,75 +1922,103 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
 
-        // RequirePlanMode is monotonic OR down the chain (+ defaultsLayer); SupportsPlanMode is monotonic AND.
+        // RequirePlanMode is monotonic OR across EVERY tier (AgentType -> Categories -> BaseAgent chain -> leaf)
+        // and takes stricter-of-two (JSON || legacy) on each node.
         const effectiveRequirePlanMode =
-            defaultsLayer.execution?.requirePlanMode === true ||
-            nodes.some((n, i) => (nodeConfigs[i]?.execution?.requirePlanMode ?? n.RequirePlanMode) === true);
+            orderedDefaultLayers.some((l) => l.execution?.requirePlanMode === true) ||
+            nodes.some((n, i) => nodeConfigs[i]?.execution?.requirePlanMode === true || n.RequirePlanMode === true);
+        // SupportsPlanMode is monotonic AND across EVERY tier and takes stricter-of-two (false wins) on each node.
         const effectiveSupportsPlanMode =
-            defaultsLayer.execution?.supportsPlanMode === false
+            orderedDefaultLayers.some((l) => l.execution?.supportsPlanMode === false)
                 ? false
                 : nodes.length > 0
-                    ? nodes.every((n, i) => (nodeConfigs[i]?.execution?.supportsPlanMode ?? n.SupportsPlanMode) !== false)
+                    ? nodes.every(
+                          (n, i) =>
+                              nodeConfigs[i]?.execution?.supportsPlanMode !== false && n.SupportsPlanMode !== false
+                      )
                     : (defaultsLayer.execution?.supportsPlanMode ?? true);
 
-        // SearchScopeAccess: narrow-only down chain (All: 2 > Assigned: 1 > None: 0) while allowing
-        // minimal derived rows with default legacy 'None' (and no explicit JSON override) to inherit from ancestors.
+        // SearchScopeAccess: narrow-only across EVERY tier (AgentType -> Categories -> BaseAgent chain -> leaf)
+        // (`All: 2 > Assigned: 1 > None: 0`) with stricter-of-two between JSON and legacy column on each node,
+        // while allowing minimal derived rows with untouched default legacy 'None' (and no explicit JSON) to inherit.
         const searchAccessRank: Record<MJAIAgentEntity['SearchScopeAccess'], number> = {
             None: 0,
             Assigned: 1,
             All: 2,
         };
-        let effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] =
-            defaultsLayer.scope?.searchScopeAccess ?? 'None';
+        let effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] = 'None';
         let establishedSearchAccess = false;
+        const applySearchAccessNarrow = (candidate: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
+            if (candidate == null) return;
+            if (!establishedSearchAccess) {
+                effectiveSearchScopeAccess = candidate;
+                establishedSearchAccess = true;
+            } else if (searchAccessRank[candidate] < searchAccessRank[effectiveSearchScopeAccess]) {
+                effectiveSearchScopeAccess = candidate;
+            }
+        };
+        for (const layer of orderedDefaultLayers) {
+            applySearchAccessNarrow(layer.scope?.searchScopeAccess);
+        }
         for (let i = 0; i < nodes.length; i++) {
-            const explicitJsonVal = nodeConfigs[i]?.scope?.searchScopeAccess;
-            const legacyVal = nodes[i].SearchScopeAccess;
-            const candidate = explicitJsonVal ?? (legacyVal && legacyVal !== 'None' ? legacyVal : (i === 0 ? legacyVal : null));
-            if (candidate != null) {
-                if (!establishedSearchAccess) {
-                    effectiveSearchScopeAccess = candidate;
-                    establishedSearchAccess = true;
-                } else if (searchAccessRank[candidate] < searchAccessRank[effectiveSearchScopeAccess]) {
-                    effectiveSearchScopeAccess = candidate;
-                }
+            const explicitJsonVal = nodeConfigs[i]?.scope?.searchScopeAccess ?? null;
+            const legacyVal = nodes[i].SearchScopeAccess ?? null;
+            if (explicitJsonVal != null && legacyVal != null) {
+                // Stricter-of-two: if a direct SQL edit tightened the legacy column below JSON, legacy wins.
+                const stricter =
+                    searchAccessRank[legacyVal] < searchAccessRank[explicitJsonVal] ? legacyVal : explicitJsonVal;
+                applySearchAccessNarrow(stricter);
+            } else {
+                const candidate =
+                    explicitJsonVal ?? (legacyVal && legacyVal !== 'None' ? legacyVal : (i === 0 ? legacyVal : null));
+                applySearchAccessNarrow(candidate);
             }
         }
 
-        // ArtifactCreationMode: dual-read with ancestor + category/type fallback
-        const leafArtifactMode =
-            (nodes.length > 0 ? nodeConfigs[nodes.length - 1]?.artifacts?.creationMode : null) ??
-            leaf?.ArtifactCreationMode;
-        const effectiveArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] =
-            leafArtifactMode && leafArtifactMode !== 'Never'
-                ? leafArtifactMode
-                : (nearestNonNull((a, cfg) => {
-                      const val = cfg?.artifacts?.creationMode ?? a.ArtifactCreationMode;
-                      return val && val !== 'Never' ? val : null;
-                  }) ??
-                    defaultsLayer.artifacts?.creationMode ??
-                    leafArtifactMode ??
-                    'Never');
+        // ArtifactCreationMode: explicit JSON override wins (including `'Never'`); legacy fallback treats `'Always'`
+        // as the DB default rather than misclassifying `'Never'` as unset.
+        const effectiveArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] = (() => {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const explicit = nodeConfigs[i]?.artifacts?.creationMode;
+                if (explicit != null) {
+                    return explicit;
+                }
+                const legacy = nodes[i].ArtifactCreationMode;
+                if (legacy != null && legacy !== 'Always') {
+                    return legacy;
+                }
+            }
+            if (defaultsLayer.artifacts?.creationMode != null) {
+                return defaultsLayer.artifacts.creationMode;
+            }
+            return nearestNonNull((a) => a.ArtifactCreationMode) ?? 'Always';
+        })();
 
-        // Narrow-only boolean capabilities: AllowEphemeralClientTools & AcceptUnregisteredFiles (AND down chain)
+        // Narrow-only boolean capabilities: AllowEphemeralClientTools, AcceptUnregisteredFiles, AllowMemoryWrite
+        // Monotonic AND across EVERY tier (AgentType -> Categories -> BaseAgent chain -> leaf) with stricter-of-two
+        // (`false` wins if either JSON or legacy column is `false` on any node).
         const resolveNarrowBoolean = (
             jsonPicker: (cfg: IAgentConfiguration | null) => boolean | null | undefined,
             legacyPicker: (a: MJAIAgentEntityExtended) => boolean | null | undefined,
             fallback: boolean
         ): boolean => {
-            let resolved: boolean | null = jsonPicker(defaultsLayer) ?? null;
+            let resolved: boolean | null = null;
+            const fold = (val: boolean | null | undefined): void => {
+                if (typeof val !== 'boolean') {
+                    return;
+                }
+                resolved = resolved === null ? val : resolved && val;
+            };
+            for (const layer of orderedDefaultLayers) {
+                fold(jsonPicker(layer));
+            }
             for (let i = 0; i < nodes.length; i++) {
                 const explicit = jsonPicker(nodeConfigs[i]);
                 const legacy = legacyPicker(nodes[i]);
-                const val = explicit ?? (legacy !== undefined ? legacy : null);
-                if (val === null) {
-                    continue;
-                }
-                if (resolved === null) {
-                    resolved = val;
+                if (typeof explicit === 'boolean' && typeof legacy === 'boolean') {
+                    fold(explicit && legacy);
                 } else {
-                    // Narrow-only: once false on an ancestor/category, descendants cannot widen back to true
-                    resolved = resolved && val;
+                    fold(explicit ?? legacy);
                 }
             }
             return resolved ?? fallback;
@@ -1991,7 +2035,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             false
         );
 
-        // Narrow-only numeric ceilings (min of non-null positive values across defaultsLayer + nodes)
+        // Narrow-only numeric ceilings (min of non-null finite values across EVERY default layer + EVERY agent node,
+        // taking stricter-of-two between JSON and legacy column on each node).
         const minCeiling = (
             values: Array<number | null | undefined>
         ): number | null => {
@@ -2005,12 +2050,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         };
 
         const effectiveMaxExecutionsPerRun = minCeiling([
-            defaultsLayer.subAgentExecution?.maxExecutionsPerRun,
-            ...nodes.map((n, i) => nodeConfigs[i]?.subAgentExecution?.maxExecutionsPerRun ?? n.MaxExecutionsPerRun),
+            ...orderedDefaultLayers.map((l) => l.subAgentExecution?.maxExecutionsPerRun),
+            ...nodes.flatMap((n, i) => [nodeConfigs[i]?.subAgentExecution?.maxExecutionsPerRun, n.MaxExecutionsPerRun]),
         ]);
         const effectiveMaxSubAgentConsultRounds = minCeiling([
-            defaultsLayer.subAgentExecution?.maxConsultRounds,
-            ...nodes.map((n, i) => nodeConfigs[i]?.subAgentExecution?.maxConsultRounds ?? n.MaxSubAgentConsultRounds),
+            ...orderedDefaultLayers.map((l) => l.subAgentExecution?.maxConsultRounds),
+            ...nodes.flatMap((n, i) => [nodeConfigs[i]?.subAgentExecution?.maxConsultRounds, n.MaxSubAgentConsultRounds]),
         ]);
 
         // Merge full IAgentConfiguration bag: AgentType -> Categories -> rootAgent..leafAgent
@@ -2024,12 +2069,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             delete mergedConfiguration.instantiation;
         }
 
-        // Collect admin-configured helperPlugins across AgentType -> Categories -> BaseAgent chain -> Agent
-        // Always sanitize every layer through ParseAgentHelperPlugins so malformed category/type JSON
-        // entries can never crash AgentHelperCache.ResetForRun at runtime.
+        // Collect admin-configured helperPlugins cumulatively across EVERY individual layer
+        // (`AgentType -> rootCategory -> ... -> directCategory -> BaseAgent chain -> Agent`)
+        // so a child category setting `{"helperPlugins": []}` can NEVER strip a parent-category or
+        // agent-type plugin binding!
         const helperPlugins: AgentHelperPluginEntry[] = [];
-        if (defaultsLayer.helperPlugins != null) {
-            helperPlugins.push(...ParseAgentHelperPlugins(JSON.stringify({ helperPlugins: defaultsLayer.helperPlugins })));
+        for (const layer of orderedDefaultLayers) {
+            if (Array.isArray(layer.helperPlugins) && layer.helperPlugins.length > 0) {
+                helperPlugins.push(...ParseAgentHelperPlugins(JSON.stringify({ helperPlugins: layer.helperPlugins })));
+            }
         }
         for (const node of nodes) {
             helperPlugins.push(...ParseAgentHelperPlugins(node.Configuration));
@@ -2181,7 +2229,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             SupportsPlanMode: effectiveSupportsPlanMode,
             RequirePlanMode: effectiveRequirePlanMode,
             AcceptsSkills: effectiveAcceptsSkills,
-            SkillActivationMode: effectiveSkillActivationMode,
+            SkillActivationMode: resolvedSkillActivationMode,
             SearchScopeAccess: effectiveSearchScopeAccess,
             AllowMemoryWrite: effectiveAllowMemoryWrite,
             InjectNotes: effectiveInjectNotes,

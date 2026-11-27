@@ -444,4 +444,54 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         ] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true];
         expect(checks.every(Boolean)).toBe(true);
     });
+
+    it('rejects and strips __proto__/constructor/prototype keys across parse, merge, and validate (B3)', () => {
+        const malicious = '{"__proto__":{"helperPlugins":[{"seam":"messaging","driverClass":"Evil"}]},"execution":{"requirePlanMode":true}}';
+        const validationErrors = ValidateAgentConfigurationJson(malicious);
+        expect(validationErrors.some((e) => /forbidden prototype-pollution key/i.test(e))).toBe(true);
+
+        const parsed = ParseAgentConfiguration(malicious);
+        expect(parsed?.execution?.requirePlanMode).toBe(true);
+        expect(Object.prototype.hasOwnProperty.call(parsed ?? {}, '__proto__')).toBe(false);
+        expect((parsed as Record<string, unknown> | null)?.['helperPlugins']).toBeUndefined();
+
+        const merged = DeepMergeAgentConfigurations(parsed, { execution: { supportsPlanMode: false } });
+        expect(merged.helperPlugins).toBeUndefined();
+        expect(merged.execution?.requirePlanMode).toBe(true);
+        expect(merged.execution?.supportsPlanMode).toBe(false);
+    });
+
+    it('validates enums, ranges, string arrays, and helper plugin seam names in ValidateAgentConfigurationJson (S9, C5, S3)', () => {
+        const errors = ValidateAgentConfigurationJson(
+            JSON.stringify({
+                scope: { searchScopeAccess: 'Everything' },
+                payload: { selfWritePaths: '*' },
+                contextWindow: { compactionTriggerPercent: -5 },
+                subAgentExecution: { maxExecutionsPerRun: -1 },
+                helperPlugins: [
+                    { seam: 'subagents', driverClass: 'X' },
+                    { seam: 'setup', driverClass: 'Y' },
+                    { seam: 'unknownSeam', driverClass: 'Z' },
+                ],
+            })
+        );
+        expect(errors.some((e) => /searchScopeAccess/i.test(e))).toBe(true);
+        expect(errors.some((e) => /selfWritePaths/i.test(e))).toBe(true);
+        expect(errors.some((e) => /compactionTriggerPercent/i.test(e))).toBe(true);
+        expect(errors.some((e) => /maxExecutionsPerRun/i.test(e))).toBe(true);
+        expect(errors.some((e) => /code-only/i.test(e))).toBe(true);
+        expect(errors.some((e) => /not a valid helper seam/i.test(e))).toBe(true);
+    });
+
+    it('resets legacy columns when a previously set key in PreviousConfigurationJson is removed or nulled (S1)', () => {
+        const synced = SyncAgentLegacyColumnsAndConfiguration({
+            ConfigurationJson: JSON.stringify({ scope: {} }),
+            PreviousConfigurationJson: JSON.stringify({ scope: { searchScopeAccess: 'All' } }),
+            ConfigurationDirty: true,
+            IsNewRecord: false,
+            LegacyFields: { SearchScopeAccess: 'All' },
+            DirtyLegacyFields: new Set(),
+        });
+        expect(synced.LegacyColumnUpdates.SearchScopeAccess).toBe('None');
+    });
 });

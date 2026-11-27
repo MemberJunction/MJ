@@ -443,6 +443,10 @@ export interface AgentRunContext {
     readonly MaxConsecutiveUnproductiveRetries: number;
     /** Engine-default wall-clock timeout (ms) when not overridden per run. */
     readonly DefaultAgentTimeoutMS: number;
+    /** True when a subclass overrides the `DefaultAgentTimeoutMS` getter above `BaseAgent.prototype`. */
+    readonly HasCustomDefaultAgentTimeout: boolean;
+    /** True when a subclass overrides `executeAgentInternal` above the default BaseAgent delegate chain. */
+    readonly HasCustomExecuteAgentInternal: boolean;
     /** Abort reason prefix distinguishing wall-clock timeout aborts from caller cancellations. */
     readonly AgentTimeoutAbortReason: string;
     /** Abort reason prefix distinguishing sliding-liveness inactivity aborts from wall-clock timeouts. */

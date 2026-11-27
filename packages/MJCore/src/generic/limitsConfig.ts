@@ -578,7 +578,7 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         OuterMaxWallClockMs: 259_200_000,
         StreamChunkTouchThrottleMs: 5_000,
         HttpHeadersTimeoutMs: 1_800_000,
-        HttpBodyTimeoutMs: 0,
+        HttpBodyTimeoutMs: 1_800_000,
     },
     StuckDetector: {
         Enabled: true,
