@@ -15,7 +15,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, OmitDeniedFieldKeys, RunQuery, RunView } from '@memberjunction/core';
+import { BaseEntity, type EntityInfo, GetIndexRestrictedFieldNames, type IMetadataProvider, LogError, LogStatus, Metadata, OmitDeniedFieldKeys, RunQuery, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, Canonicalize, ComputeContentHashAsync, EscapeSQLString, ResolveMappingRef, ResolveValueMapping, SafeJSONParse } from '@memberjunction/global';
 import {
     KnowledgeHubMetadataEngine,
@@ -78,6 +78,7 @@ import {
     type FeaturePipelineRunPin,
     type RecordFeatureValuesOutcome,
     type TypedFeatureValue,
+    FeatureValueWriteAuthorisations,
     ConfidenceFloor,
     type BelowConfidenceOutput,
     PromptTemplateContent,
@@ -477,11 +478,12 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
         // The capture belongs to this unit's first write, not to an earlier pass over the same record.
         this.previousFeatureValues.delete(recordID);
-        const total: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Previous: {} };
+        const total: RecordFeatureValuesOutcome = { Upserted: 0, Unchanged: 0, Closed: 0, Previous: {} };
         for (const params of queued) {
             const outcome = await this.WriteFeatureValuesOn(params, provider);
             total.Upserted += outcome.Upserted;
             total.Unchanged += outcome.Unchanged;
+            total.Closed += outcome.Closed;
         }
         total.Previous = { ...this.previousFeatureValues.get(recordID) };
         return total;
@@ -1770,7 +1772,8 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                     fv.Reasoning = annotations.Reasoning ?? null;
                 }
 
-                const saved = await fv.Save();
+                // the shadow row is a Pipeline Feature Value: saved through the write path's authorisation (PR 5 D5-30)
+                const saved = await FeatureValueWriteAuthorisations.Save(fv);
                 if (!saved) {
                     LogError(
                         `InferProcessor: failed to save Challenger FeatureValue '${output.Name}' for record '${record.RecordID}': ${fv.LatestResult?.CompleteMessage ?? 'unknown error'}`,
@@ -1963,11 +1966,42 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             source: 'Pipeline',
             // a superseded decision's row (no values) is history: it never takes the latest value back from the answer
             historyOnly: params.OmitValues === true,
+            // effective from the instant the input took its current value, not the computation time (PR 5 D5-21)
+            inputAsOf: InferProcessor.InputAsOfOf(params.Record),
             contextUser: params.Context.ContextUser,
             provider: params.Context.Provider,
         });
         this.KeepPreviousValues(params.Record.RecordID, outcome.Previous);
         return outcome;
+    }
+
+    /**
+     * The instant a record's input took its current value, as the run loop read the record: its `__mj_UpdatedAt` (the
+     * field name matched case-insensitively, a Date or the text a view returns); null when the record carries none or it
+     * does not parse, so the value is effective from its computation time (PR 5 owner-batch item 1, D5-21).
+     */
+    public static InputAsOfOf(record: RecordRef): Date | null {
+        const data = InferProcessor.recordDataOf(record);
+        if (!data) {
+            return null;
+        }
+        const key = Object.keys(data).find((k) => k.toLowerCase() === '__mj_updatedat');
+        const stamp = key === undefined ? undefined : data[key];
+        if (!(stamp instanceof Date) && typeof stamp !== 'string') {
+            return null;
+        }
+        const instant = new Date(stamp);
+        return Number.isNaN(instant.getTime()) ? null : instant;
+    }
+
+    /** The record's field values the run loop holds: an entity object's `GetAll()`, or the plain row. */
+    private static recordDataOf(record: RecordRef): Record<string, unknown> | null {
+        const held = record.Record;
+        if (!held || typeof held !== 'object') {
+            return null;
+        }
+        // fls-guard: read in-process to take one timestamp; nothing is handed onward
+        return held instanceof BaseEntity ? held.GetAll() : (held as Record<string, unknown>);
     }
 
     /** Keeps a record's pre-run values: the first write's capture per feature in this batch. */

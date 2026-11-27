@@ -26809,6 +26809,17 @@ export const MJFeatureValueSchema = z.object({
         * * Display Name: In Training
         * * SQL Data Type: bit
         * * Description: Model rows: true when the record was in the model's training snapshot, so its score is optimistic.`),
+    EffectiveTo: z.date().nullable().describe(`
+        * * Field Name: EffectiveTo
+        * * Display Name: Effective To
+        * * SQL Data Type: datetimeoffset
+        * * Description: End of the instant range in which this value is the record's value of the feature (exclusive); NULL while it is the open (current) value. Set by the Feature Pipelines write path when a later value of the same identity is recorded, or when a Human value is retired. Maintained for Pipeline and Human rows only; Model rows are keyed by their scoring as-of instant and never closed.`),
+    SourceUserID: z.string().nullable().describe(`
+        * * Field Name: SourceUserID
+        * * Display Name: Source User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: Human rows: the user who entered the value (the user of the record's newest Record Change when the entity tracks record changes); NULL when unknown and on every other row.`),
     RecordProcess: z.string().nullable().describe(`
         * * Field Name: RecordProcess
         * * Display Name: Record Process
@@ -26837,6 +26848,10 @@ export const MJFeatureValueSchema = z.object({
         * * Field Name: MLModelScoringBinding
         * * Display Name: ML Model Scoring Binding
         * * SQL Data Type: nvarchar(255)`),
+    SourceUser: z.string().nullable().describe(`
+        * * Field Name: SourceUser
+        * * Display Name: Source User Name
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJFeatureValueEntityType = z.infer<typeof MJFeatureValueSchema>;

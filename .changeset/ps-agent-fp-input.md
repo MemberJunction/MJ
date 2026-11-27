@@ -3,6 +3,8 @@
 "@memberjunction/core": minor
 "@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
+"@memberjunction/feature-pipelines": minor
+"@memberjunction/feature-pipelines-engine": minor
 "@memberjunction/graphql-dataprovider": minor
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
@@ -12,6 +14,7 @@
 "@memberjunction/server": minor
 "@memberjunction/server-bootstrap": minor
 "@memberjunction/server-bootstrap-lite": minor
+"@memberjunction/sql-parser": minor
 "@memberjunction/sqlserver-dataprovider": minor
 ---
 

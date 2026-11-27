@@ -139,7 +139,13 @@ const { store, views, FakeRunView } = vi.hoisted(() => {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
-    return { ...actual, RunView: FakeRunView };
+    /** The open-row lock Queries (PR 5 B1): every lock is acquired and holds no open row in these cases. */
+    class FakeRunQuery {
+        public async RunQuery() {
+            return { Success: true, Results: [], ErrorMessage: '' };
+        }
+    }
+    return { ...actual, RunView: FakeRunView, RunQuery: FakeRunQuery };
 });
 
 const BIND = '9f1c2a7e-0b4d-4c55-8e21-3a6f0d9b7c11';
@@ -148,7 +154,7 @@ const RUN = '5d3a9c12-8e4f-4b07-a6c1-0e2f7b9d4a55';
 const DAY1 = new Date('2026-11-16T00:00:00.000Z');
 const DAY2 = new Date('2026-11-17T00:00:00.000Z');
 const user = { ID: 'user-1', Email: 'test@example.com' } as Partial<UserInfo> as UserInfo;
-const provider = { GetEntityObject: vi.fn(async () => store.NewRow()) } as Partial<IMetadataProvider> as IMetadataProvider;
+const provider = { GetEntityObject: vi.fn(async () => store.NewRow()), RunQuery: vi.fn(), EntityByID: vi.fn(() => undefined) } as Partial<IMetadataProvider> as IMetadataProvider;
 const svc = FeatureValueCacheService.Instance;
 
 /** A numeric prediction of one record. */

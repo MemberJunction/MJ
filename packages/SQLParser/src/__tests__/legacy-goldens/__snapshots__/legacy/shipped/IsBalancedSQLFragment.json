@@ -49,6 +49,8 @@
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-lock-model.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
+  "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
+  "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"IsBalanced":false,"Reason":"it contains a comment"},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"IsBalanced":false,"Reason":"it contains a comment"},

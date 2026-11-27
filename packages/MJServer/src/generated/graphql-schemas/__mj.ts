@@ -66358,6 +66358,13 @@ export class MJFeatureValue_ {
     @Field(() => Boolean, {nullable: true, description: "Model rows: true when the record was in the model's training snapshot, so its score is optimistic."}) 
     InTraining?: boolean;
         
+    @Field({nullable: true, description: "End of the instant range in which this value is the record's value of the feature (exclusive); NULL while it is the open (current) value. Set by the Feature Pipelines write path when a later value of the same identity is recorded, or when a Human value is retired. Maintained for Pipeline and Human rows only; Model rows are keyed by their scoring as-of instant and never closed."}) 
+    EffectiveTo?: Date;
+        
+    @Field({nullable: true, description: "Human rows: the user who entered the value (the user of the record's newest Record Change when the entity tracks record changes); NULL when unknown and on every other row."}) 
+    @MaxLength(36)
+    SourceUserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     RecordProcess?: string;
@@ -66385,6 +66392,10 @@ export class MJFeatureValue_ {
     @Field({nullable: true}) 
     @MaxLength(255)
     MLModelScoringBinding?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    SourceUser?: string;
         
     @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
     ReadableFields___?: string[];
@@ -66495,6 +66506,12 @@ export class CreateMJFeatureValueInput {
     @Field(() => Boolean, { nullable: true })
     InTraining: boolean | null;
 
+    @Field({ nullable: true })
+    EffectiveTo: Date | null;
+
+    @Field({ nullable: true })
+    SourceUserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -66603,6 +66620,12 @@ export class UpdateMJFeatureValueInput {
 
     @Field(() => Boolean, { nullable: true })
     InTraining?: boolean | null;
+
+    @Field({ nullable: true })
+    EffectiveTo?: Date | null;
+
+    @Field({ nullable: true })
+    SourceUserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

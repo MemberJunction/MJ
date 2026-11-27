@@ -101,6 +101,7 @@ export * from './monitoring';
 // ModelingPlanSpec→pipeline-config mapper + PredictiveStudioPipelineBuilder (create
 // pipeline → train → publish gated on the trust verdict). Code, never LLM.
 export * from './agent';
+export * from './feature-values/effective-range-guard';
 
 // Agent eval — deterministic suite rules, paired summary statistics, rubric calibration,
 // scenario manifest metadata generation, and PredictiveStudioAgentEvalDriver (PR 5 §5.1.8).

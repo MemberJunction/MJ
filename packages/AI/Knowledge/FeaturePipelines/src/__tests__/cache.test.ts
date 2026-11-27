@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FeatureValueCacheService, FeatureValueKeyError, FeatureValueSaveError } from '../cache/FeatureValueCacheService';
 import { FeatureValueKey, type FeatureValueKeyInput } from '../spec/feature-value-key';
-import type { UserInfo, IMetadataProvider, RunViewParams } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider, RunQueryParams, RunViewParams } from '@memberjunction/core';
+import { FEATURE_VALUE_LOCK_QUERIES } from '../cache/feature-value-locks';
 
 /**
  * Wall-clock ceiling for the pathological-input check (5,000-digit string). It guards against
@@ -14,7 +15,7 @@ const PATHOLOGICAL_INPUT_CEILING_MS = 1000;
  * The RunView stand-in: each call returns the next entry of `queue` when there is one, else `mockResults`; tests read
  * the `lastParams` (and every call's params in `calls`) the service passed.
  */
-const { MockRunView, logErrorSpy } = vi.hoisted(() => {
+const { MockRunView, MockRunQuery, logErrorSpy } = vi.hoisted(() => {
     class MockRunView {
         public static mockResults: object[] = [];
         public static queue: object[][] = [];
@@ -49,7 +50,16 @@ const { MockRunView, logErrorSpy } = vi.hoisted(() => {
             return Promise.all(params.map((p) => this.RunView(p)));
         }
     }
-    return { MockRunView, logErrorSpy: vi.fn() };
+    /** The open-row lock Queries: each call returns the next entry of `queue` (the locked rows), else none. */
+    class MockRunQuery {
+        public static queue: Array<Record<string, string | number | null>[]> = [];
+        public static calls: RunQueryParams[] = [];
+        public async RunQuery(params: RunQueryParams) {
+            MockRunQuery.calls.push(params);
+            return { Success: true, Results: MockRunQuery.queue.shift() ?? [], ErrorMessage: '' };
+        }
+    }
+    return { MockRunView, MockRunQuery, logErrorSpy: vi.fn() };
 });
 
 // Mock RunView so we don't hit a real database in unit tests; LogError is captured so failures are asserted, not printed
@@ -58,13 +68,17 @@ vi.mock('@memberjunction/core', async () => {
     return {
         ...actual,
         RunView: MockRunView,
+        RunQuery: MockRunQuery,
         LogError: logErrorSpy,
     };
 });
 
-/** A provider exposing only GetEntityObject. */
+/**
+ * A provider exposing GetEntityObject, saved queries (the mocked RunQuery runs them) and no entity metadata (so a Human
+ * value's record stamp is unknown).
+ */
 function stubProvider(getEntityObject: ReturnType<typeof vi.fn>): IMetadataProvider {
-    return { GetEntityObject: getEntityObject } as Partial<IMetadataProvider> as IMetadataProvider;
+    return { GetEntityObject: getEntityObject, RunQuery: vi.fn(), EntityByID: vi.fn(() => undefined) } as Partial<IMetadataProvider> as IMetadataProvider;
 }
 
 /** The latest-value order every latest-value read shares: newest ComputedAt, ties broken by creation time, then ID. */
@@ -80,6 +94,8 @@ describe('FeatureValueCacheService', () => {
         MockRunView.calls = [];
         MockRunView.batches = [];
         MockRunView.failWith = undefined;
+        MockRunQuery.queue = [];
+        MockRunQuery.calls = [];
         logErrorSpy.mockClear();
     });
     /** The provider the cache calls run on; the mocked RunView ignores it. */
@@ -249,7 +265,7 @@ describe('FeatureValueCacheService', () => {
         });
     });
 
-    describe('RecordFeatureValues (upsert on the Feature Value key)', () => {
+    describe('RecordFeatureValues (effective-dated, on the identity\'s open row)', () => {
         const pin = { pipelineVersion: 3, aiModelID: 'm-1', parametersHash: 'ph', inputHash: 'in-1', source: 'Pipeline' as const };
         const keyInput: FeatureValueKeyInput = {
             EntityID: 'ent-1', RecordID: 'rec-1', FeatureName: 'SeniorityLevel', PipelineVersion: 3, PromptVersionHash: 'pv',
@@ -271,90 +287,88 @@ describe('FeatureValueCacheService', () => {
             outputs: [{ featureName: 'SeniorityLevel', value: 'Director', reasoning: 'Title says Director', confidence: 0.9 }],
             contextUser: mockUser, provider,
         });
+        /** The identity's open row of version 3, as the lock and the read by ID return it. */
+        const openRow = (columns: Record<string, unknown>): Record<string, unknown> => ({
+            ID: 'fv-1', RecordProcessID: 'rp-1', MLModelScoringBindingID: null, EntityID: 'ent-1', RecordID: 'rec-1', FeatureName: 'SeniorityLevel',
+            PipelineVersion: 3, Source: 'Pipeline', Role: 'Champion', InputHash: 'in-1', EffectiveAsOf: new Date('2026-10-01T00:00:00Z'), EffectiveTo: null,
+            ...noValue, Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn(), ...columns,
+        });
 
-        it('inserts a keyed Pipeline row when the key is new', async () => {
-            MockRunView.mockResults = [];
+        it('inserts a dated, keyed Pipeline row when the identity has no open row, under the Pipeline lock', async () => {
             const saved: Array<Record<string, unknown>> = [];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(providerWith(saved)));
-            expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Previous: { SeniorityLevel: null } });
-            expect(saved[0].Source).toBe('Pipeline');
-            expect(saved[0].PipelineVersion).toBe(3);
+            expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Closed: 0, Previous: { SeniorityLevel: null } });
+            expect(saved[0]).toMatchObject({ Source: 'Pipeline', PipelineVersion: 3, ValueText: 'Director', AIModelID: 'm-1', ParametersHash: 'ph', InputHash: 'in-1', EffectiveTo: null });
             expect(saved[0].ValueKeyHash).toBe(await FeatureValueKey.ComputeHash(keyInput));
-            expect(saved[0].ValueText).toBe('Director');
-            expect(saved[0].AIModelID).toBe('m-1');
-            expect(saved[0].ParametersHash).toBe('ph');
-            expect(saved[0].InputHash).toBe('in-1');
-            const filter = MockRunView.lastParams?.ExtraFilter ?? '';
-            expect(filter).toContain("RecordProcessID = 'rp-1'");
-            expect(filter).toContain(`ValueKeyHash IN ('${await FeatureValueKey.ComputeHash(keyInput)}')`);
+            expect(saved[0].EffectiveAsOf).toBeInstanceOf(Date);
+            expect(MockRunQuery.calls.map((c) => [c.QueryName, c.Parameters])).toEqual([
+                [FEATURE_VALUE_LOCK_QUERIES.LockOpenPipeline, { EntityID: 'ent-1', RecordID: 'rec-1', FeatureNames: ['SeniorityLevel'], RecordProcessID: 'rp-1' }],
+            ]);
         });
 
-        it('leaves an identical keyed row untouched (no new row, no save)', async () => {
-            const save = vi.fn();
-            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-            MockRunView.mockResults = [{
-                FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Director', ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null,
-                Reasoning: 'Title says Director', Confidence: 0.9, Save: save,
-            }];
+        it('leaves an open row holding the same value for the same input untouched (no new row, no save)', async () => {
+            const own = openRow({ ValueText: 'Director' });
+            MockRunQuery.queue = [[{ ID: 'fv-1', FeatureName: 'SeniorityLevel', PipelineVersion: 3 }]];
+            MockRunView.queue = [[own], [own]];
             const saved: Array<Record<string, unknown>> = [];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(providerWith(saved)));
-            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Director' } } });
-            expect(save).not.toHaveBeenCalled();
+            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Closed: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Director' } } });
+            expect(own.Save).not.toHaveBeenCalled();
             expect(saved).toHaveLength(0);
+            expect(MockRunView.calls[0].ExtraFilter).toBe("ID IN ('fv-1') AND EffectiveTo IS NULL");
         });
 
-        it('makes an unchanged keyed row the latest again when another key holds the latest value', async () => {
-            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-            // a newer version wrote Manager last; this version's row still holds Director, which the run computes again
-            const newer = { FeatureName: 'SeniorityLevel', ValueKeyHash: 'newer-version-key', ValueText: 'Manager', ValueNumeric: null,
-                ValueBoolean: null, ValueDate: null, ValueJSON: null };
+        it('makes an unchanged open row the latest again when another row holds the latest value, touching no range column', async () => {
+            // a newer version wrote Manager last; this version's open row still holds Director, which the run computes again
             const computedBefore = new Date('2026-10-01T00:00:00Z');
-            const own: Record<string, unknown> = { FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Director', ValueNumeric: null,
-                ValueBoolean: null, ValueDate: null, ValueJSON: null, Reasoning: 'Title says Director', Confidence: 0.9,
-                ComputedAt: computedBefore, ProcessRunID: 'run-1', Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
-            MockRunView.queue = [[newer], [own]];
+            const own = openRow({ ValueText: 'Director', ComputedAt: computedBefore, ProcessRunID: 'run-1' });
+            const newer = { ID: 'fv-9', FeatureName: 'SeniorityLevel', ValueKeyHash: 'newer-version-key', ...noValue, ValueText: 'Manager' };
+            MockRunQuery.queue = [[{ ID: 'fv-1', FeatureName: 'SeniorityLevel', PipelineVersion: 3 }]];
+            MockRunView.queue = [[own], [newer]];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(providerWith([])));
-            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
+            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Closed: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
             expect(own.Save).toHaveBeenCalledTimes(1);
-            expect(own.NewRecord).not.toHaveBeenCalled();
             expect(own.ProcessRunID).toBe('run-2');
             expect(own.ComputedAt).not.toBe(computedBefore);
+            expect([own.EffectiveAsOf, own.EffectiveTo]).toEqual([new Date('2026-10-01T00:00:00Z'), null]);
         });
 
-        it('leaves an unchanged history row (a superseded decision) untouched even when another key holds the latest value', async () => {
+        it('leaves an identical history row (a superseded decision) alone, and never opens one', async () => {
             const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-            // the escalated answer's row (another key) is the latest; the superseded decision's row is written again unchanged
-            const answer = { FeatureName: 'SeniorityLevel', ValueKeyHash: 'answer-key', ValueText: 'Manager', ValueNumeric: null,
-                ValueBoolean: null, ValueDate: null, ValueJSON: null };
-            const own: Record<string, unknown> = { FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Director', ValueNumeric: null,
-                ValueBoolean: null, ValueDate: null, ValueJSON: null, Reasoning: 'Title says Director', Confidence: 0.9,
-                ProcessRunID: 'run-1', Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
-            MockRunView.queue = [[answer], [own]];
+            const answer = { ID: 'fv-9', FeatureName: 'SeniorityLevel', ValueKeyHash: 'answer-key', ...noValue, ValueText: 'Manager' };
+            const history = openRow({ ID: 'fv-2', ValueKeyHash: keyHash, ValueText: 'Director', EffectiveTo: new Date('2026-10-01T00:00:00Z') });
+            MockRunView.queue = [[answer], [history]];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith([])), historyOnly: true });
-            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
-            expect(own.Save).not.toHaveBeenCalled();
-            expect(own.ProcessRunID).toBe('run-1');
+            expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Closed: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
+            expect(history.Save).not.toHaveBeenCalled();
+            expect(MockRunView.calls[1].ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash = '${keyHash}' AND Role = 'Champion' AND EffectiveTo IS NOT NULL`);
         });
 
-        it('updates the keyed row in place when its value changed, returning the value it had before', async () => {
-            const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-            const existing: Record<string, unknown> = { FeatureName: 'SeniorityLevel', ValueKeyHash: keyHash, ValueText: 'Manager', Reasoning: null, Confidence: null,
-                Save: vi.fn().mockResolvedValue(true), NewRecord: vi.fn() };
-            MockRunView.mockResults = [existing];
-            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(providerWith([])));
-            expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
-            expect(existing.NewRecord).not.toHaveBeenCalled();
-            expect(existing.ValueText).toBe('Director');
-            expect(existing.ProcessRunID).toBe('run-2');
+        it('writes a new historyOnly row already closed', async () => {
+            const saved: Array<Record<string, unknown>> = [];
+            await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), historyOnly: true });
+            expect(saved).toHaveLength(1);
+            expect(saved[0].EffectiveTo).toEqual(saved[0].EffectiveAsOf);
         });
 
-        it('returns the latest pipeline value of the feature as Previous when the key changed', async () => {
-            const oldRow = { FeatureName: 'SeniorityLevel', ValueKeyHash: 'old-key', ValueText: 'Manager', ValueNumeric: null,
-                ValueBoolean: null, ValueDate: null, ValueJSON: null };
-            MockRunView.queue = [[oldRow], []];
+        it('closes the open row and opens a new one when the value changed, returning the value it had before', async () => {
+            const existing = openRow({ ValueText: 'Manager' });
+            MockRunQuery.queue = [[{ ID: 'fv-1', FeatureName: 'SeniorityLevel', PipelineVersion: 3 }]];
+            MockRunView.queue = [[existing], [existing]];
+            const saved: Array<Record<string, unknown>> = [];
+            const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(providerWith(saved)));
+            expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Closed: 1, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
+            expect(existing.ValueText).toBe('Manager');
+            expect(existing.EffectiveTo).toEqual(saved[0].EffectiveAsOf);
+            expect(saved[0]).toMatchObject({ ValueText: 'Director', EffectiveTo: null, ProcessRunID: 'run-2' });
+        });
+
+        it('returns the latest pipeline value of the feature as Previous when the input changed', async () => {
+            const oldRow = { ID: 'fv-7', FeatureName: 'SeniorityLevel', ValueKeyHash: 'old-key', ...noValue, ValueText: 'Manager' };
+            MockRunView.queue = [[oldRow]];
             const saved: Array<Record<string, unknown>> = [];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), inputHash: 'in-2' });
-            expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
+            expect(outcome).toEqual({ Upserted: 1, Unchanged: 0, Closed: 0, Previous: { SeniorityLevel: { ...noValue, ValueText: 'Manager' } } });
             expect(saved[0].InputHash).toBe('in-2');
             const latest = MockRunView.calls[0];
             expect(latest.ExtraFilter).toContain("RecordProcessID = 'rp-1' AND EntityID = 'ent-1'");
@@ -364,9 +378,9 @@ describe('FeatureValueCacheService', () => {
             expect(latest.OrderBy).toBe(LATEST_ORDER);
         });
 
-        it('reads only each feature\'s newest row, and only its value columns, in one batch', async () => {
-            const row = (name: string, v: string) => ({ FeatureName: name, ValueText: v, ValueNumeric: null, ValueBoolean: null, ValueDate: null, ValueJSON: null });
-            MockRunView.queue = [[row('SeniorityLevel', 'VP')], [row('Department', 'Sales')], []];
+        it('reads only each feature\'s newest row, and only its value, ID and key columns, in one batch', async () => {
+            const row = (name: string, v: string) => ({ ID: `fv-${name}`, FeatureName: name, ...noValue, ValueText: v });
+            MockRunView.queue = [[row('SeniorityLevel', 'VP')], [row('Department', 'Sales')]];
             const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues({
                 ...params(providerWith([])),
                 outputs: [{ featureName: 'SeniorityLevel', value: 'Director' }, { featureName: 'Department', value: 'Sales' }],
@@ -378,13 +392,12 @@ describe('FeatureValueCacheService', () => {
                 expect(view.MaxRows).toBe(1);
                 expect(view.OrderBy).toBe(LATEST_ORDER);
                 expect(view.ResultType).toBeUndefined();
-                expect(view.Fields).toEqual(['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON', 'ValueKeyHash']);
+                expect(view.Fields).toEqual(['FeatureName', 'ValueText', 'ValueNumeric', 'ValueBoolean', 'ValueDate', 'ValueJSON', 'ID', 'ValueKeyHash']);
             }
             expect(second.ExtraFilter).toContain("FeatureName = 'Department'");
         });
 
         it('keys a row the same for a UUID record ID in any case', async () => {
-            MockRunView.mockResults = [];
             const saved: Array<Record<string, unknown>> = [];
             const upper = '0F1A7E00-0000-4000-8000-000000000101';
             await FeatureValueCacheService.Instance.RecordFeatureValues({ ...params(providerWith(saved)), recordID: upper });
@@ -393,7 +406,6 @@ describe('FeatureValueCacheService', () => {
         });
 
         it('writes the typed value columns for each value type', async () => {
-            MockRunView.mockResults = [];
             const saved: Array<Record<string, unknown>> = [];
             await FeatureValueCacheService.Instance.RecordFeatureValues({
                 ...params(providerWith(saved)),
@@ -410,7 +422,6 @@ describe('FeatureValueCacheService', () => {
         });
 
         it('throws when a Feature Value cannot be saved', async () => {
-            MockRunView.mockResults = [];
             const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false),
                 LatestResult: { CompleteMessage: 'FK_FeatureValue_Entity' } }));
             const failure = FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
@@ -418,31 +429,28 @@ describe('FeatureValueCacheService', () => {
             await expect(failure).rejects.toMatchObject({ FeatureName: 'SeniorityLevel', RecordID: 'rec-1', ProviderMessage: 'FK_FeatureValue_Entity' });
         });
 
-        // a concurrent run over the same scope inserted the key between this run's read and its insert
-        describe('an insert that loses the race on the Feature Value key', () => {
-            const duplicate = "Cannot insert duplicate key row in object '__mj.FeatureValue' with unique index 'UQ_FeatureValue_ValueKey'. The duplicate key value is (rp-1, abc).";
-            const stored = (valueText: string) => ({ FeatureName: 'SeniorityLevel', ValueText: valueText, ValueNumeric: null, ValueBoolean: null,
-                ValueDate: null, ValueJSON: null, Reasoning: 'another run', Confidence: 0.5 });
+        // a writer the lock did not serialise opened the identity's row between this write's lock and its insert
+        describe('an insert that fails on an open-row index', () => {
+            const duplicate = "Cannot insert duplicate key row in object '__mj.FeatureValue' with unique index 'UQ_FeatureValue_OpenPipeline'. The duplicate key value is (rp-1, abc).";
+            const stored = (valueText: string) => ({ ID: 'fv-5', FeatureName: 'SeniorityLevel', ...noValue, ValueText: valueText, Reasoning: 'another run', Confidence: 0.5 });
 
             it.each([
                 ['returns false', () => vi.fn().mockResolvedValue(false)],
                 ['rejects', () => vi.fn().mockRejectedValue(new Error(duplicate))],
-            ])('counts it Unchanged when the save %s and the row already holds the same typed value', async (_how, makeSave) => {
-                const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-                MockRunView.queue = [[], [], [{ ...stored('Director'), ValueKeyHash: keyHash }]];
+            ])('counts it Unchanged when the save %s and the open row read again holds the same typed value', async (_how, makeSave) => {
+                MockRunView.queue = [[], [stored('Director')]];
                 const save = makeSave();
                 const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: save, LatestResult: { CompleteMessage: duplicate } }));
                 const outcome = await FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
-                expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Previous: { SeniorityLevel: null } });
+                expect(outcome).toEqual({ Upserted: 0, Unchanged: 1, Closed: 0, Previous: { SeniorityLevel: null } });
                 expect(save).toHaveBeenCalledTimes(1);
-                const reread = MockRunView.calls[2];
-                expect(reread.ExtraFilter).toBe(`RecordProcessID = 'rp-1' AND ValueKeyHash IN ('${keyHash}') AND Role = 'Champion'`);
+                const reread = MockRunView.calls[1];
+                expect(reread.ExtraFilter).toBe("RecordProcessID = 'rp-1' AND EntityID = 'ent-1' AND RecordID = 'rec-1' AND FeatureName = 'SeniorityLevel' AND Source = 'Pipeline' AND Role = 'Champion' AND EffectiveTo IS NULL AND PipelineVersion = 3");
                 expect(reread.BypassCache).toBe(true);
             });
 
-            it('throws the save error when the row another run stored holds a different value', async () => {
-                const keyHash = await FeatureValueKey.ComputeHash(keyInput);
-                MockRunView.queue = [[], [], [{ ...stored('Manager'), ValueKeyHash: keyHash }]];
+            it('throws the save error when the open row another writer stored holds a different value', async () => {
+                MockRunView.queue = [[], [stored('Manager')]];
                 const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockResolvedValue(false),
                     LatestResult: { CompleteMessage: duplicate } }));
                 const failure = FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
@@ -451,11 +459,11 @@ describe('FeatureValueCacheService', () => {
             });
 
             it('throws a rejected save that is not a duplicate key without re-reading', async () => {
-                MockRunView.queue = [[], []];
+                MockRunView.queue = [[]];
                 const provider = stubProvider(vi.fn().mockResolvedValue({ NewRecord: vi.fn(), Save: vi.fn().mockRejectedValue(new Error('deadlock victim')) }));
                 const failure = FeatureValueCacheService.Instance.RecordFeatureValues(params(provider));
                 await expect(failure).rejects.toMatchObject({ ProviderMessage: 'deadlock victim' });
-                expect(MockRunView.calls).toHaveLength(2);
+                expect(MockRunView.calls).toHaveLength(1);
             });
         });
     });
@@ -550,7 +558,7 @@ describe('FeatureValueCacheService', () => {
     });
 
     describe('Human values', () => {
-        it('upserts a Human row keyed without a pin', async () => {
+        it('records a dated Human row keyed without a pin, under the Pipeline then the Human lock', async () => {
             MockRunView.mockResults = [];
             const saved: Array<Record<string, unknown>> = [];
             const provider = stubProvider(vi.fn().mockImplementation(async () => {
@@ -567,6 +575,9 @@ describe('FeatureValueCacheService', () => {
             expect(saved[0].InputHash).toBeNull();
             expect(saved[0].ValueText).toBe('board-id');
             expect(saved[0].ProcessRunID).toBe('run-9');
+            expect(saved[0].EffectiveAsOf).toBeInstanceOf(Date);
+            expect(saved[0].EffectiveTo).toBeNull();
+            expect(MockRunQuery.calls.map((c) => c.QueryName)).toEqual([FEATURE_VALUE_LOCK_QUERIES.LockOpenPipeline, FEATURE_VALUE_LOCK_QUERIES.LockOpenHuman]);
         });
 
         it('reads the newest row of one source, excluding the current run, as its typed columns', async () => {
@@ -625,23 +636,27 @@ describe('FeatureValueCacheService', () => {
 
         const humanRef = { RecordProcessID: 'rp-1', EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel', ContextUser: mockUser, Provider: lookupProvider };
 
-        it('retires the record\'s Human rows of a feature through the entity layer', async () => {
-            const rows = [{ Delete: vi.fn().mockResolvedValue(true), LatestResult: null }];
-            MockRunView.mockResults = rows;
+        it('retires the record\'s open Human row of a feature by closing it, under the locks (the history keeps it)', async () => {
+            const row = { ID: 'h-1', RecordProcessID: 'rp-1', MLModelScoringBindingID: null, EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel',
+                Source: 'Human', Role: 'Champion', PipelineVersion: null, EffectiveAsOf: new Date('2026-01-01T00:00:00Z'), EffectiveTo: null as Date | null,
+                Save: vi.fn().mockResolvedValue(true), Delete: vi.fn(), LatestResult: null };
+            MockRunQuery.queue = [[], [{ ID: 'h-1', FeatureName: 'SeniorityLevel' }]];
+            MockRunView.mockResults = [row];
             expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(1);
-            expect(rows[0].Delete).toHaveBeenCalledTimes(1);
-            const view = MockRunView.lastParams;
-            expect(view?.ExtraFilter).toContain("RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'");
-            expect(view?.ExtraFilter).toContain("Source = 'Human'");
-            expect(view?.ResultType).toBe('entity_object');
-            expect(view?.BypassCache).toBe(true);
+            expect(row.Save).toHaveBeenCalledTimes(1);
+            expect(row.Delete).not.toHaveBeenCalled();
+            expect(row.EffectiveTo).toBeInstanceOf(Date);
+            expect(MockRunQuery.calls.map((c) => c.QueryName)).toEqual([FEATURE_VALUE_LOCK_QUERIES.LockOpenPipeline, FEATURE_VALUE_LOCK_QUERIES.LockOpenHuman]);
+            expect(MockRunView.lastParams?.ExtraFilter).toBe("ID IN ('h-1') AND EffectiveTo IS NULL");
+            expect(MockRunView.lastParams?.ResultType).toBe('entity_object');
         });
 
-        it('RetireHumanValue returns 0 without a Human row, and throws when a row cannot be deleted', async () => {
-            MockRunView.mockResults = [];
+        it('RetireHumanValue returns 0 without an open Human row, and throws when a row cannot be closed', async () => {
             expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(0);
-            MockRunView.mockResults = [{ Delete: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
-            await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toThrow(/failed retiring the Human 'SeniorityLevel' value of record 'person-1': FK violation/);
+            MockRunQuery.queue = [[], [{ ID: 'h-1', FeatureName: 'SeniorityLevel' }]];
+            MockRunView.mockResults = [{ ID: 'h-1', RecordProcessID: 'rp-1', MLModelScoringBindingID: null, EntityID: 'ENT-P', RecordID: 'person-1', FeatureName: 'SeniorityLevel',
+                Source: 'Human', PipelineVersion: null, EffectiveTo: null, Save: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'FK violation' } }];
+            await expect(FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).rejects.toMatchObject({ name: 'FeatureValueSaveError', ProviderMessage: 'FK violation' });
         });
 
         describe('a Human value on a binding with no Record Process (§6.2a)', () => {
@@ -649,7 +664,7 @@ describe('FeatureValueCacheService', () => {
             const bindingRef = { ...humanRef, RecordProcessID: null, MLModelScoringBindingID: BIND };
             const scope = "RecordProcessID IS NULL AND MLModelScoringBindingID = '9f1c2a7e-0b4d-4c55-8e21-3a6f0d9b7c11'";
 
-            it('reads its key by binding, skips the Pipeline read, and saves the binding on the row', async () => {
+            it('locks by binding, skips the Pipeline lock and read, and saves the binding on the row', async () => {
                 MockRunView.mockResults = [];
                 const saved: Array<Record<string, unknown>> = [];
                 const provider = stubProvider(vi.fn().mockImplementation(async () => {
@@ -658,9 +673,9 @@ describe('FeatureValueCacheService', () => {
                 }));
                 await FeatureValueCacheService.Instance.RecordHumanValue({ ...bindingRef, Value: 'Gold', Provider: provider });
                 expect(MockRunView.batches).toHaveLength(0);
-                expect(MockRunView.calls).toHaveLength(1);
-                expect(MockRunView.calls[0].ExtraFilter).toContain(`${scope} AND ValueKeyHash IN (`);
-                expect(MockRunView.calls[0].ExtraFilter).toContain("Role = 'Champion'");
+                expect(MockRunView.calls).toHaveLength(0);
+                expect(MockRunQuery.calls.map((c) => [c.QueryName, c.Parameters])).toEqual([[FEATURE_VALUE_LOCK_QUERIES.LockOpenHuman,
+                    { EntityID: 'ENT-P', RecordID: 'person-1', FeatureNames: ['SeniorityLevel'], RecordProcessID: '', MLModelScoringBindingID: BIND }]]);
                 expect(saved[0]).toMatchObject({ Source: 'Human', RecordProcessID: null, MLModelScoringBindingID: BIND, ValueText: 'Gold' });
             });
 
@@ -689,6 +704,8 @@ describe('FeatureValueCacheService', () => {
                 MockRunView.mockResults = [];
                 await FeatureValueCacheService.Instance.GetLatestValue({ ...bindingRef, Source: 'Human' });
                 await FeatureValueCacheService.Instance.RetireHumanValue(bindingRef);
+                expect(MockRunQuery.calls.map((c) => [c.QueryName, c.Parameters?.RecordProcessID, c.Parameters?.MLModelScoringBindingID]))
+                    .toEqual([[FEATURE_VALUE_LOCK_QUERIES.LockOpenHuman, '', BIND]]);
                 for (const view of MockRunView.calls) {
                     expect(view.ExtraFilter).toContain(`${scope} AND EntityID = 'ENT-P' AND RecordID = 'person-1' AND FeatureName = 'SeniorityLevel'`);
                     expect(view.ExtraFilter).not.toContain("RecordProcessID = 'null'");
@@ -773,18 +790,14 @@ describe('FeatureValueCacheService', () => {
             expect(latestBatch.get('senioritylevel')?.ValueText).toBe('Champion-Director');
             expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
 
-            // 3. RetireHumanValue filters on Role = 'Champion' and does not delete Challenger rows
-            const challengerDelete = vi.fn().mockResolvedValue(true);
-            const championDelete = vi.fn().mockResolvedValue(true);
-            MockRunView.mockResults = [
-                { Role: 'Challenger', Delete: challengerDelete, LatestResult: null },
-                { Role: 'Champion', Delete: championDelete, LatestResult: null },
-            ];
-            const retiredCount = await FeatureValueCacheService.Instance.RetireHumanValue(humanRef);
-            expect(retiredCount).toBe(1);
-            expect(challengerDelete).not.toHaveBeenCalled();
-            expect(championDelete).toHaveBeenCalledTimes(1);
-            expect(MockRunView.lastParams?.ExtraFilter).toContain("Role = 'Champion'");
+            // 3. RetireHumanValue closes only the rows the Human lock Query returns (its WHERE is the open-Human-Champion index
+            // predicate, so a Challenger row is never among them): none returned, none closed
+            const challengerSave = vi.fn().mockResolvedValue(true);
+            MockRunView.mockResults = [{ Role: 'Challenger', Save: challengerSave, LatestResult: null }];
+            MockRunQuery.queue = [[], []];
+            expect(await FeatureValueCacheService.Instance.RetireHumanValue(humanRef)).toBe(0);
+            expect(challengerSave).not.toHaveBeenCalled();
+            expect(MockRunQuery.calls.at(-1)?.QueryName).toBe(FEATURE_VALUE_LOCK_QUERIES.LockOpenHuman);
         });
     });
 

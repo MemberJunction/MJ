@@ -49,6 +49,8 @@
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": "a8d30f0f53c97ae730a463b75ae246fcf0c20fd9a7310311e3d22d04056d8181",
   "shipped/SQL/list-conversation-detail-feedback.sql": "8776ed5993ca91b039d42bcb41b9b2496c7ad411419e10c2eead0df704b723bb",
   "shipped/SQL/predictive-studio-lock-model.sql": "86beae68b71e125142c2e3bfc2bce032fab78107c875ac55814512f7e5cdb5b3",
+  "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": "a1d40529ca5076d986fff86dee2e9ffb8df68a34ffec45953ee405fd4374960c",
+  "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": "f87040f881d7db5d836779364f8aa2ffbfb291ed0be36111564114009bde1077",
   "shipped/SQL/predictive-studio-lock-pipeline.sql": "3be0c8e50bff9a1d870cf719573f2e502f677c999ca50b8d7361bc0acead1e9a",
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": "ca031d5c3e78df3c3c25a03034772fecd55e75ae5bca82ac989d0a6363474594",
   "shipped/SQL/predictive-studio-next-model-version.sql": "1ed7c83759ab6763f71b26406d43725bd914b0fcc55bfba4eb2cd6a18d862a98",

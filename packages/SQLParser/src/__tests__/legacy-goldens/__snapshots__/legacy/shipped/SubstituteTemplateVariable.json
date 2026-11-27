@@ -49,6 +49,8 @@
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"$patch":{"keep":[1531,806],"text":"'golden'"}},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"$patch":{"keep":[2316,791],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"$patch":{"keep":[795,1],"text":"'golden'"}},
+  "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"$patch":{"keep":[1623,298],"text":"'golden'"}},
+  "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"$patch":{"keep":[1640,137],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[815,1],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"$patch":{"keep":[950,1],"text":"'golden'"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[693,1],"text":"'golden'"}},
