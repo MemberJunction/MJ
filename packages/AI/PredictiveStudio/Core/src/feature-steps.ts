@@ -26,7 +26,8 @@ export type FeatureStepKind =
   | 'flow-agent'
   | 'vision-llm'
   | 'windowed-aggregate'
-  | 'series';
+  | 'series'
+  | 'model-prediction';
 
 /**
  * Fields shared by every step in the DAG. `Inputs` lists the ids of upstream
@@ -168,8 +169,28 @@ export interface LLMDerivedFeatureStep extends FeatureStepBase {
   Kind: 'llm-derived';
   /** Reference to the upstream Feature Pipeline that persisted these features. */
   FeaturePipelineRef: string;
-  /** Explicit persisted column names populated by this Feature Pipeline. */
+  /** Explicit persisted column names populated by this Feature Pipeline (each one a Feature Value `FeatureName`). */
   Columns: string[];
+  /**
+   * Unit pipelines: declared encoding per column. Default `categorical`: a Feature Value's type is not in metadata, and
+   * a text value read as a number would refuse the assembly.
+   */
+  Encodings?: Record<string, ColumnEncodingKind>;
+}
+
+/**
+ * `model-prediction` — a model's prediction as an input (D-058, D5-B2-2): the `Source = 'Model'` Feature Values of one
+ * `MJ: ML Model Scoring Bindings` row, pinned at train time to the binding's pipeline's Published model and read as of
+ * each row's decision date. Unit pipelines only.
+ */
+export interface ModelPredictionFeatureStep extends FeatureStepBase {
+  Kind: 'model-prediction';
+  /** The `MJ: ML Model Scoring Bindings` row whose prediction feature this step reads. */
+  ScoringBindingID: string;
+  /** The binding's `FeatureName` (the matrix column); training refuses a name the binding does not carry. */
+  FeatureName: string;
+  /** Declared encoding of the column. Default `numeric` (a score or probability). */
+  Encoding?: ColumnEncodingKind;
 }
 
 /**
@@ -285,7 +306,8 @@ export type FeatureStep =
   | FlowAgentFeatureStep
   | VisionLLMFeatureStep
   | WindowedAggregateFeatureStep
-  | SeriesFeatureStep;
+  | SeriesFeatureStep
+  | ModelPredictionFeatureStep;
 
 /**
  * The whole feature-engineering DAG for a pipeline — the frozen spec the

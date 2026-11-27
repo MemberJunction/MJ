@@ -65,20 +65,22 @@ const STEP_KINDS: FeatureStepKind[] = ['select', 'impute'];
  * What the trainer does with a saved step of a kind the picker does not offer. `standardize` and `onehot` only name
  * columns: the assembler one-hot encodes every categorical (as-of-assembler.ts BuildPreprocessingOps) and the trainer
  * scales every numeric (Sidecar encoding.py `_numeric_pipe`); `bin` ops are dropped (snapshot.py `_policies` reads
- * impute ops only). The other four are refused by FeatureResolver.ResolveStep, so training fails on them.
- * `windowed-aggregate` and `series` produce columns, so they carry no note.
+ * impute ops only). `embedding`, `flow-agent` and `vision-llm` are refused by FeatureResolver.ResolveStep, so training
+ * fails on them. `windowed-aggregate` and `series` produce columns, so they carry no note; `llm-derived` and
+ * `model-prediction` read Feature Values pinned at train time (B2), so their note says what training needs.
  */
 const TRAINER_STEP_NOTES: Partial<Record<FeatureStepKind, string>> = {
   standardize: 'Ignored by the trainer: it standardizes every numeric column anyway.',
   onehot: 'Ignored by the trainer: it one-hot encodes every text column anyway.',
   bin: 'Ignored by the trainer: it does not bin columns.',
   embedding: 'Training refuses this step: the trainer cannot assemble an embedding step.',
-  'llm-derived': 'Training refuses this step: the trainer cannot assemble an llm-derived step.',
+  'llm-derived': 'Training reads this Feature Pipeline\'s values as of each decision date, pinned to its Active version; it refuses the step when the pipeline has no Active version.',
+  'model-prediction': 'Training reads this binding\'s predictions as of each decision date, pinned to its Published model; it refuses the step when the binding serves no Published model.',
   'flow-agent': 'Training refuses this step: the trainer cannot assemble a flow-agent step.',
   'vision-llm': 'Training refuses this step: the trainer cannot assemble a vision-llm step.',
 };
 /** The step kinds FeatureResolver.ResolveStep refuses, so training fails on them (the "Training refuses" notes above). */
-const REFUSED_STEP_KINDS: ReadonlySet<FeatureStepKind> = new Set<FeatureStepKind>(['embedding', 'llm-derived', 'flow-agent', 'vision-llm']);
+const REFUSED_STEP_KINDS: ReadonlySet<FeatureStepKind> = new Set<FeatureStepKind>(['embedding', 'flow-agent', 'vision-llm']);
 const PROBLEM_TYPES: ProblemType[] = ['classification', 'regression'];
 const IMPUTE_STRATEGIES: Array<'mean' | 'median' | 'mode' | 'constant'> = ['mean', 'median', 'mode', 'constant'];
 
@@ -102,6 +104,7 @@ const STEP_ICONS: Record<FeatureStepKind, string> = {
   'vision-llm': 'fa-solid fa-eye',
   'windowed-aggregate': 'fa-solid fa-calendar-days',
   series: 'fa-solid fa-chart-line',
+  'model-prediction': 'fa-solid fa-bullseye',
 };
 
 /** Whether a pipeline can score, read from its stored state, and the sentence that says why. */
@@ -1528,6 +1531,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       case 'llm-derived': return [{ k: 'pipeline', v: step.FeaturePipelineRef }];
       case 'flow-agent': return [{ k: 'agent', v: step.FlowAgentRef }];
       case 'vision-llm': return [{ k: 'image', v: step.ImageColumn }, { k: 'output', v: step.Output.FeatureName }];
+      case 'model-prediction': return [{ k: 'binding', v: step.ScoringBindingID }, { k: 'feature', v: step.FeatureName }];
       default: return [];
     }
   }
@@ -1809,6 +1813,7 @@ export class PSPipelinesComponent implements OnInit, OnChanges {
       case 'vision-llm': return { ...base, Kind: 'vision-llm', ImageColumn: '', Prompt: { InlinePrompt: '' }, Output: { FeatureName: '', Kind: 'category' } };
       case 'windowed-aggregate': return { ...base, Kind: 'windowed-aggregate', FeatureName: '', ChildEntity: '', ForeignKey: '', DateField: '', Aggregate: 'count' };
       case 'series': return { ...base, Kind: 'series', FeatureName: '', Feature: { kind: 'lag', index: 0 } };
+      case 'model-prediction': return { ...base, Kind: 'model-prediction', ScoringBindingID: '', FeatureName: '' };
     }
   }
 

@@ -117,6 +117,7 @@ const assemblyRefusalSchema: z.ZodType<AssemblyRefusal> = z.discriminatedUnion('
   z.object({ kind: z.literal('non-numeric-in-numeric-column'), column: z.string(), sampleValue: z.string() }),
   z.object({ kind: z.literal('future-period-lag'), column: z.string(), lag: z.number(), horizonPeriods: z.number() }),
   z.object({ kind: z.literal('unpinned-feature-version'), featureName: z.string() }),
+  z.object({ kind: z.literal('decision-date-before-feature-history'), featureName: z.string(), rowsAffected: z.number() }),
   z.object({ kind: z.literal('scope-entity-mismatch'), modelEntity: z.string(), scopeEntity: z.string() }),
   z.object({ kind: z.literal('unresolved-column'), entity: z.string(), field: z.string() }),
   z.object({ kind: z.literal('incumbent-score-missing'), entity: z.string(), rows: z.number(), firstRowIds: z.array(z.string()) }),

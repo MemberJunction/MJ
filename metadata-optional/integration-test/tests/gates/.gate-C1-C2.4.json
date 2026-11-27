@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C2.4",
+    "Description": "Gate G7.4 (owner PR 5, phase 7, dataset C1, criterion C2.4): a Feature Pipeline's values enter a model's matrix as of each row's decision date, from the version the model is pinned to, never as today's value. On the C1 corpus (truth:load-c1), a fixture job-title pipeline with one Active version plants, for every dues period, a dated title history (the title changes 30 days after the decision date on half the rows and on the decision date itself on the rest, the <= boundary) and a second version holding today's title; training's own assembly of a C1 renewal pipeline with an llm-derived step reads the planted title on 100% of rows and today's on 0 of the rows where they differ, and the trained model's Training Snapshot PinnedFeatureVersions and Lineage carry the Active version's pin. Server transport (the planted values are saved through the Feature Pipelines write path's authorisation, B1). Needs the truth sidecar. Mutation: <= -> < on the effective-date comparison, or drop the pinned-version filter, in as-of-assembler.ts -> red.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.4\",\"owner:PR5\",\"phase:7\",\"dataset:C1\",\"criterion:C2.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "100% of rows read the planted title at the decision date and 0 read today's; the snapshot and lineage carry the pin."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-c2-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "58FA685F-E0F3-4662-999A-0960CEC6E34A"
+  }
+}

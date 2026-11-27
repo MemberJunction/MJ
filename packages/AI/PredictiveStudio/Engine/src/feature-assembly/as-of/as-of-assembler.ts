@@ -83,11 +83,12 @@
  */
 import { createHash } from 'node:crypto';
 import type {
-  AssemblyRefusal, ChangeHistoryCoverage, ColumnEncoding, ColumnEncodingKind, ColumnProvenance, FeatureColumnSpec, FeatureVersionPin,
-  PredictionUnitSpec, PreprocessingOp, ReadPolicy, UncoveredRowsCount, ValueProvenance, WindowedAggregateSource,
+  AssemblyRefusal, ChangeHistoryCoverage, ColumnEncoding, ColumnEncodingKind, ColumnProvenance, FeatureColumnSpec, FeatureValuePin, FeatureVersionPin,
+  PredictionFeaturePin, PredictionUnitSpec, PreprocessingOp, ReadPolicy, UncoveredRowsCount, ValueProvenance, WindowedAggregateSource,
 } from '@memberjunction/predictive-studio-core';
-import { UtcDay, MS_PER_DAY, type CellValue } from '@memberjunction/predictive-studio-core';
-import { EscapeSQLString, OrdinalCompare } from '@memberjunction/global';
+import { FeatureValuePins, UtcDay, MS_PER_DAY, type CellValue } from '@memberjunction/predictive-studio-core';
+import type { MJFeatureValueEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString, OrdinalCompare, UUIDsEqual } from '@memberjunction/global';
 import type { ICountingDataAccess, SourceRow } from '../data-access';
 import type { AssemblyEntityInfo, IAssemblyMetadata } from '../assembly-metadata';
 import type { FeatureAssemblyResult } from '../feature-assembly-executor';
@@ -157,7 +158,11 @@ export type AsOfAssemblyResult =
 export type AsOfAssembledMatrix = Extract<AsOfAssemblyResult, { Status: 'assembled' }>;
 
 interface RawValue { readonly Value: CellValue; readonly Provenance: ValueProvenance }
-interface Uncovered { readonly Uncovered: true; readonly Entity: string; readonly Field: string; readonly HistoryStart: string | null }
+/**
+ * A row a reader cannot give a value as of its decision date. `Feature` is set for a Feature Value column (the value
+ * in effect is unknown there), which the `refuse` policy reports as `decision-date-before-feature-history`.
+ */
+interface Uncovered { readonly Uncovered: true; readonly Entity: string; readonly Field: string; readonly HistoryStart: string | null; readonly Feature?: string }
 type FeatureReader = (row: AssemblyRowRef) => RawValue | Uncovered;
 interface ColumnReader { readonly Spec: FeatureColumnSpec; readonly Read: FeatureReader }
 type KeyOf = (row: AssemblyRowRef) => string | null;
@@ -170,7 +175,7 @@ type FieldSource = Extract<FeatureColumnSpec['source'], { kind: 'immutable-field
 type FeatureValueSource = Extract<FeatureColumnSpec['source'], { kind: 'feature-value' }>;
 type SeriesSource = Extract<FeatureColumnSpec['source'], { kind: 'series' }>;
 type DateParts = Extract<ColumnEncoding, { kind: 'date-parts' }>['parts'];
-interface UncoveredTally { readonly Entity: string; readonly Field: string; readonly HistoryStart: string | null; Rows: number }
+interface UncoveredTally { readonly Entity: string; readonly Field: string; readonly HistoryStart: string | null; readonly Feature?: string; Rows: number }
 interface AssembledRows { readonly Rows: AssembledRow[]; readonly Excluded: Set<string>; readonly UncoveredFields: Map<string, string[]>; readonly Uncovered: UncoveredTally[] }
 /** One stored record the stable-value rule judges, with the unit rows whose values its stored fields stand for. */
 interface StableRead { readonly Key: string; readonly Rows: readonly AssemblyRowRef[] }
@@ -224,7 +229,18 @@ interface ReplaySources {
 export const OTHER_CATEGORY_LEVEL = '__other';
 
 /** The Feature Value columns a pinned read selects. */
-const FEATURE_VALUE_FIELDS = ['ID', 'RecordID', 'EffectiveAsOf', 'ComputedAt', 'ValueNumeric', 'ValueText', 'ValueBoolean', 'ValueDate'];
+const FEATURE_VALUE_FIELDS = ['ID', 'RecordID', 'Source', 'EffectiveAsOf', 'EffectiveTo', 'ComputedAt', 'InTraining', 'ValueNumeric', 'ValueText', 'ValueBoolean', 'ValueDate'];
+/** The Feature Value sources the reader selects on (`MJ: Feature Values.Source`). */
+const PIPELINE_SOURCE: MJFeatureValueEntity['Source'] = 'Pipeline';
+const HUMAN_SOURCE: MJFeatureValueEntity['Source'] = 'Human';
+const MODEL_SOURCE: MJFeatureValueEntity['Source'] = 'Model';
+/** The role whose values feed models; a `Challenger` row is a shadow value and is never read (`MJ: Feature Values.Role`). */
+const CHAMPION_ROLE: MJFeatureValueEntity['Role'] = 'Champion';
+/** The entity a Feature Value column's uncovered rows are counted against. */
+const FEATURE_VALUES_ENTITY = 'MJ: Feature Values';
+
+/** The rows a Feature Value column reads, by record, and the earliest decision day a value of it may be read for. */
+interface FeatureValueRows { readonly ByRecord: Map<string, SourceRow[]>; readonly EarliestDay: Date | null }
 
 export class AsOfFeatureAssembler {
   /** Impute (with a missing indicator) every column, one-hot every categorical, then the pipeline's explicit ops. */
@@ -275,6 +291,7 @@ export class AsOfFeatureAssembler {
     const assembled = this.assembleRows(input, readers);
     const first = assembled.Uncovered[0];
     if (input.Unit.history.onUncoveredRow === 'refuse' && first) {
+      if (first.Feature !== undefined) throw new AssemblyRefused({ kind: 'decision-date-before-feature-history', featureName: first.Feature, rowsAffected: first.Rows });
       throw new AssemblyRefused({ kind: 'decision-date-before-change-history', entity: first.Entity, field: first.Field, historyStart: first.HistoryStart, rowsAffected: first.Rows });
     }
     const counted = input.DevelopmentRowsOf ? input.DevelopmentRowsOf(assembled.Rows) : null;
@@ -419,7 +436,7 @@ export class AsOfFeatureAssembler {
     const k = `${u.Entity}|${u.Field}`;
     const existing = tallies.get(k);
     if (existing) { existing.Rows++; return; }
-    const created: UncoveredTally = { Entity: u.Entity, Field: u.Field, HistoryStart: u.HistoryStart, Rows: 1 };
+    const created: UncoveredTally = { Entity: u.Entity, Field: u.Field, HistoryStart: u.HistoryStart, ...(u.Feature !== undefined ? { Feature: u.Feature } : {}), Rows: 1 };
     tallies.set(k, created);
     ordered.push(created);
   }
@@ -1136,56 +1153,149 @@ export class AsOfFeatureAssembler {
     };
   }
 
-  /** The latest effective-dated, pinned Feature Value on or before the decision day; an unpinned source is refused. */
+  /**
+   * The Feature Value in effect at each row's decision day (DD-8, DD-11): among the rows the pin selects, those with
+   * `EffectiveAsOf` on or before the decision day and not closed by its end, the one with the greatest `EffectiveAsOf`
+   * (a `Human` row wins a tie). A row with no value in effect — decided before the first effective value, or, for a
+   * prediction, before the pinned model's `DataCutoff` — is uncovered and follows `onUncoveredRow`; today's value is
+   * never read. An unpinned source is refused.
+   */
   private async featureValueReader(spec: FeatureColumnSpec, source: FeatureValueSource, input: AsOfAssemblyInput): Promise<FeatureReader> {
     const pin = AsOfFeatureAssembler.pinOf(source);
-    const read = await CompleteReader.ReadCompletely(input.DataAccess, {
-      EntityName: 'MJ: Feature Values', KeyField: 'ID', ExtraFilter: AsOfFeatureAssembler.featureValueFilter(input.RowEntity, source.featureName, pin), Fields: FEATURE_VALUE_FIELDS,
-    }, input.Read);
-    if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
-    const byRecord = AsOfFeatureAssembler.featureValuesByRecord(read.Rows);
-    const version = AsOfFeatureAssembler.pinVersion(pin);
+    const read = FeatureValuePins.IsPrediction(pin) ? await this.predictionRows(source.featureName, pin, input) : await this.pipelineRows(source.featureName, pin, input);
+    const version = FeatureValuePins.VersionOf(pin);
+    const uncovered: Uncovered = { Uncovered: true, Entity: FEATURE_VALUES_ENTITY, Field: source.featureName, HistoryStart: null, Feature: source.featureName };
     return (row) => {
-      const asOf = AsOfFeatureAssembler.asOfInstant(row.DecisionDate).getTime();
-      const candidates = (byRecord.get(row.RowID.toLowerCase()) || []).filter((v) => AsOfFeatureAssembler.effectiveAt(v) < asOf);
-      const v = candidates[candidates.length - 1];
+      const day = AsOfFeatureAssembler.decisionDay(row.DecisionDate);
+      if (read.EarliestDay !== null && day.getTime() < read.EarliestDay.getTime()) return uncovered;
+      const v = AsOfFeatureAssembler.valueInEffect(read.ByRecord.get(row.RowID.toLowerCase()) || [], row.DecisionDate);
+      if (!v) return uncovered;
       return {
         // `??`: 0, '' and false are real feature values; only an absent typed column falls through to the next.
-        Value: v ? (v.ValueNumeric ?? v.ValueText ?? v.ValueBoolean ?? v.ValueDate ?? null) : null,
-        Provenance: { column: spec.name, source: 'feature-value', sourceRef: v ? `MJ: Feature Values/${String(v.ID).toLowerCase()}` : 'none', sourceVersion: version, computedAt: v ? AsOfFeatureAssembler.isoOf(v.ComputedAt) : '' },
+        Value: v.ValueNumeric ?? v.ValueText ?? v.ValueBoolean ?? v.ValueDate ?? null,
+        Provenance: { column: spec.name, source: 'feature-value', sourceRef: `MJ: Feature Values/${String(v.ID).toLowerCase()}`, sourceVersion: version, computedAt: AsOfFeatureAssembler.isoOf(v.ComputedAt) },
       };
     };
   }
 
+  /** A pipeline pin's rows: the pinned version's `Pipeline` rows and the same Record Process's `Human` rows (DD-8). */
+  private async pipelineRows(featureName: string, pin: FeatureVersionPin, input: AsOfAssemblyInput): Promise<FeatureValueRows> {
+    const pipeline = await this.readFeatureValues(AsOfFeatureAssembler.featureValueFilter(input.RowEntity, featureName, pin), input);
+    const human = await this.readFeatureValues(AsOfFeatureAssembler.humanValueFilter(input.RowEntity, featureName, pin), input);
+    return { ByRecord: AsOfFeatureAssembler.featureValuesByRecord([...pipeline, ...human]), EarliestDay: null };
+  }
+
   /**
-   * The source's pin, when it names a version: a whole-number pipeline version (0 included) or a prompt version hash.
-   * No pin, a fractional version, or a pin naming neither refuses: such a pin cannot select one version of a value.
+   * A prediction pin's rows (DD-11): the binding's `Model` rows scored by the pinned model, except those of records the
+   * model was trained on (`InTraining = 1`), and no value for a decision day before the model's `DataCutoff`. Read as
+   * the run's user, so PR 4's row filter applies: a user without the binding's view authorization reads none.
    */
-  private static pinOf(source: FeatureValueSource): FeatureVersionPin {
+  private async predictionRows(featureName: string, pin: PredictionFeaturePin, input: AsOfAssemblyInput): Promise<FeatureValueRows> {
+    await this.assertBindingTargetsRowEntity(featureName, pin, input);
+    const cutoff = await this.pinnedModelDataCutoff(featureName, pin, input);
+    const rows = await this.readFeatureValues(AsOfFeatureAssembler.predictionValueFilter(input.RowEntity, featureName, pin), input);
+    return { ByRecord: AsOfFeatureAssembler.featureValuesByRecord(rows.filter((v) => v.InTraining !== true && v.InTraining !== 1)), EarliestDay: cutoff };
+  }
+
+  /** The binding's predictions are about the unit's row entity; a binding on another entity names no column of this unit. */
+  private async assertBindingTargetsRowEntity(featureName: string, pin: PredictionFeaturePin, input: AsOfAssemblyInput): Promise<void> {
+    const binding = (await this.readOne('MJ: ML Model Scoring Bindings', pin.mlModelScoringBindingId, ['ID', 'TargetEntityID'], input))[0];
+    if (!binding) throw new AssemblyRefused({ kind: 'unpinned-feature-version', featureName });
+    if (!UUIDsEqual(String(binding.TargetEntityID), input.RowEntity.ID)) throw new AssemblyRefused({ kind: 'unresolved-column', entity: input.RowEntity.Name, field: featureName });
+  }
+
+  /** The pinned model's Training Snapshot `DataCutoff` as a UTC day; a pin naming no trained model is refused unpinned. */
+  private async pinnedModelDataCutoff(featureName: string, pin: PredictionFeaturePin, input: AsOfAssemblyInput): Promise<Date> {
+    const model = (await this.readOne('MJ: ML Models', pin.mlModelId, ['ID', 'TrainingSnapshotID'], input))[0];
+    const snapshotId = model?.TrainingSnapshotID;
+    const snapshot = snapshotId ? (await this.readOne('MJ: ML Training Snapshots', String(snapshotId), ['ID', 'DataCutoff'], input))[0] : undefined;
+    const cutoff = snapshot ? UtcDay.ToUtcDay(snapshot.DataCutoff) : null;
+    if (cutoff === null) throw new AssemblyRefused({ kind: 'unpinned-feature-version', featureName });
+    return cutoff;
+  }
+
+  /** One row by primary key, as the run's user. */
+  private async readOne(entityName: string, id: string, fields: string[], input: AsOfAssemblyInput): Promise<SourceRow[]> {
+    const res = await input.DataAccess.fetchRows({ EntityName: entityName, ExtraFilter: `[ID]='${EscapeSQLString(id)}'`, Fields: fields });
+    if (!res.Success) throw new Error(`As-of assembly: reading ${entityName} ${id} failed: ${res.ErrorMessage || 'unknown error'}`);
+    return res.Rows;
+  }
+
+  /** A complete read of the Feature Values a filter selects (a truncated read refuses). */
+  private async readFeatureValues(filter: string, input: AsOfAssemblyInput): Promise<readonly SourceRow[]> {
+    const read = await CompleteReader.ReadCompletely(input.DataAccess, { EntityName: 'MJ: Feature Values', KeyField: 'ID', ExtraFilter: filter, Fields: FEATURE_VALUE_FIELDS }, input.Read);
+    if (read.Status === 'refused') throw new AssemblyRefused(read.Refusal);
+    return read.Rows;
+  }
+
+  /**
+   * The value in effect at the end of the decision day among one record's rows (in effective-date order): effective on
+   * or before the day (`≤`, by UTC day) and not closed before the next day starts; the greatest `EffectiveAsOf` wins, a
+   * `Human` row on a tie.
+   */
+  private static valueInEffect(rows: readonly SourceRow[], decision: Date): SourceRow | null {
+    const day = AsOfFeatureAssembler.decisionDay(decision).getTime();
+    const endOfDay = AsOfFeatureAssembler.asOfInstant(decision).getTime();
+    let best: SourceRow | null = null;
+    for (const v of rows) {
+      const effectiveDay = UtcDay.ToUtcDay(v.EffectiveAsOf);
+      if (effectiveDay === null || effectiveDay.getTime() > day) continue;
+      const closedAt = AsOfFeatureAssembler.instantOf(v.EffectiveTo);
+      if (closedAt !== null && closedAt.getTime() < endOfDay) continue;
+      if (best === null || AsOfFeatureAssembler.effectiveAt(v) > AsOfFeatureAssembler.effectiveAt(best) || (AsOfFeatureAssembler.effectiveAt(v) === AsOfFeatureAssembler.effectiveAt(best) && v.Source === HUMAN_SOURCE)) best = v;
+    }
+    return best;
+  }
+
+  /**
+   * The source's pin, when it names a version: a prediction pin, or a pipeline pin with a whole-number pipeline version
+   * (0 included) or a prompt version hash. No pin, a fractional version, or a pipeline pin naming neither refuses: such
+   * a pin cannot select one version of a value.
+   */
+  private static pinOf(source: FeatureValueSource): FeatureValuePin {
     const pin = source.pin;
     const unpinned = new AssemblyRefused({ kind: 'unpinned-feature-version', featureName: source.featureName });
     if (pin === null) throw unpinned;
+    if (FeatureValuePins.IsPrediction(pin)) return pin;
     if (pin.pipelineVersion !== null && !Number.isInteger(pin.pipelineVersion)) throw unpinned;
     if (pin.pipelineVersion === null && !pin.promptVersionHash) throw unpinned;
     return pin;
   }
 
-  /** The version a valid Feature Value pin names: its feature pipeline and the pipeline version or prompt version it read. */
-  private static pinVersion(pin: FeatureVersionPin): string {
-    return `${pin.featurePipelineRecordProcessId}@${pin.pipelineVersion !== null ? pin.pipelineVersion : pin.promptVersionHash}`;
-  }
-
-  /** The Feature Values of one feature of the row entity that a pin selects; undated values are never read. */
-  private static featureValueFilter(rowEntity: AssemblyEntityInfo, featureName: string, pin: FeatureVersionPin): string {
+  /** The filter terms every Feature Value read of one feature of the row entity starts with; undated values are never read. */
+  private static featureTerms(rowEntity: AssemblyEntityInfo, featureName: string, source: MJFeatureValueEntity['Source']): string[] {
     // Every value interpolated here comes from metadata or a pin (JSON), so each is escaped.
     return [
       `[EntityID]='${EscapeSQLString(rowEntity.ID)}'`, `[FeatureName]='${EscapeSQLString(featureName)}'`,
-      `[RecordProcessID]='${EscapeSQLString(pin.featurePipelineRecordProcessId)}'`, '[EffectiveAsOf] IS NOT NULL',
+      `[Source]='${source}'`, `[Role]='${CHAMPION_ROLE}'`, '[EffectiveAsOf] IS NOT NULL',
+    ];
+  }
+
+  /**
+   * The `Pipeline` rows of one feature a pipeline pin selects: B1's open-row identity (D5-27), the Record Process and
+   * pipeline version, plus the version's prompt, model and parameters terms (constant within a version).
+   */
+  private static featureValueFilter(rowEntity: AssemblyEntityInfo, featureName: string, pin: FeatureVersionPin): string {
+    return [
+      ...AsOfFeatureAssembler.featureTerms(rowEntity, featureName, PIPELINE_SOURCE),
+      `[RecordProcessID]='${EscapeSQLString(pin.featurePipelineRecordProcessId)}'`,
       ...(pin.promptVersionHash ? [`[PromptVersionHash]='${EscapeSQLString(pin.promptVersionHash)}'`] : []),
-      // The Feature Value key columns: a pin names the pipeline version, model and parameters it read.
       ...(pin.pipelineVersion !== null ? [`[PipelineVersion]=${pin.pipelineVersion}`] : []),
       ...(pin.aiModelId ? [`[AIModelID]='${EscapeSQLString(pin.aiModelId)}'`] : []),
       ...(pin.parametersHash ? [`[ParametersHash]='${EscapeSQLString(pin.parametersHash)}'`] : []),
+    ].join(' AND ');
+  }
+
+  /** The `Human` rows of one feature of the pinned Record Process (DD-8): never another Record Process's (F-010). */
+  private static humanValueFilter(rowEntity: AssemblyEntityInfo, featureName: string, pin: FeatureVersionPin): string {
+    return [...AsOfFeatureAssembler.featureTerms(rowEntity, featureName, HUMAN_SOURCE), `[RecordProcessID]='${EscapeSQLString(pin.featurePipelineRecordProcessId)}'`].join(' AND ');
+  }
+
+  /** The `Model` rows of one prediction feature: the pinned binding's, scored by the pinned model only. */
+  private static predictionValueFilter(rowEntity: AssemblyEntityInfo, featureName: string, pin: PredictionFeaturePin): string {
+    return [
+      ...AsOfFeatureAssembler.featureTerms(rowEntity, featureName, MODEL_SOURCE),
+      `[MLModelScoringBindingID]='${EscapeSQLString(pin.mlModelScoringBindingId)}'`, `[MLModelID]='${EscapeSQLString(pin.mlModelId)}'`,
     ].join(' AND ');
   }
 
@@ -1324,7 +1434,7 @@ export class AsOfFeatureAssembler {
       case 'immutable-field': return 'immutable-after-create';
       case 'windowed-aggregate': return `window:${s.windowDays === null ? 'all' : s.windowDays};aggregate:${s.aggregate}`;
       case 'series': return `labelVersion:${input.Unit.label.labelVersion}`;
-      case 'feature-value': return s.pin ? AsOfFeatureAssembler.pinVersion(s.pin) : 'unpinned';
+      case 'feature-value': return s.pin ? FeatureValuePins.VersionOf(s.pin) : 'unpinned';
     }
   }
 

@@ -16,7 +16,7 @@ import {
   RegistrySchemas,
   TrainingRunResultsParser,
   type CodeVersion,
-  type FeatureVersionPin,
+  type FeatureValuePin,
   type MetricWithInterval,
   type ModelRegistryEntry,
   type ParseResult,
@@ -154,7 +154,7 @@ export class RegistryEntries {
   }
 
   /** The pins of the stored unit lineage's feature-value columns. */
-  private static pinsOf(lineageText: string): ParseResult<readonly FeatureVersionPin[]> {
+  private static pinsOf(lineageText: string): ParseResult<readonly FeatureValuePin[]> {
     const lineage = UnitModelLineageParser.ParseUnitModelLineage(lineageText);
     if (lineage.Ok === false) return lineage;
     const pins = lineage.Value.featureSpec.flatMap((c) => (c.source.kind === 'feature-value' && c.source.pin !== null ? [c.source.pin] : []));

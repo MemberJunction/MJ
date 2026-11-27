@@ -15,7 +15,7 @@ import {
   DaysSinceLastActivityAsOf,
 } from '../feature-assembly';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { ConsoleCapture } from './fakes/console-capture';
+import { AssemblyRefused } from '../feature-assembly/as-of/refusal';
 
 /** The read scope every assembly needs. Reads go through the injected `dataAccess`, so the provider is never called. */
 const testScope: Pick<FeatureAssemblyParams, 'contextUser' | 'provider'> = { contextUser: { ID: 'user-1' } as UserInfo, provider: {} as IMetadataProvider };
@@ -472,105 +472,25 @@ describe('FeatureAssemblyExecutor — anti-skew: required-column hydration + har
   });
 });
 
-describe('FeatureAssemblyExecutor — llm-derived step planning', () => {
-  it('reads explicit Columns without falling back to FeaturePipelineRef as column name', async () => {
-    const members: SourceRow[] = [
-      { ID: 'm1', JobFunction: 'Engineer', SeniorityLevel: 'Senior', Renewed: 1 },
-    ];
-    const dataAccess = new InMemoryDataAccess({ Members: members });
-    const steps: FeatureStepGraph = {
-      Steps: [
-        {
-          Id: 'llm-step-1',
-          Kind: 'llm-derived',
-          FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
-          Columns: ['JobFunction', 'SeniorityLevel'],
-        },
-      ],
-    };
-    const result = await new FeatureAssemblyExecutor().assemble({
-      ...testScope,
-      targetEntityName: 'Members',
-      records: members,
-      sources,
-      steps,
-      asOf: { Mode: 'none' },
-      leakageGuard: noLeakGuard,
-      targetVariable: 'Renewed',
-      dataAccess,
-    });
-
-    expect(result.featureSchema.map((s) => s.Name)).toEqual(['JobFunction', 'SeniorityLevel']);
-    expect(result.featureSchema[0].Kind).toBe('llm-derived');
-    expect(result.matrix.columns).toEqual(['JobFunction', 'SeniorityLevel', 'Renewed']);
-    expect(result.matrix.rows[0]).toEqual(['Engineer', 'Senior', 1]);
+describe('FeatureAssemblyExecutor — llm-derived and model-prediction steps (B2 attack 5)', () => {
+  // The legacy executor has no as-of reader and no pin, so a Feature Value step is refused typed: it never selects the
+  // persisted column off the target row (today's value), which is what it did before B2 (F-FP-11).
+  const members: SourceRow[] = [{ ID: 'm1', JobFunction: 'Engineer', SeniorityLevel: 'Senior', Renewed: 1 }];
+  const run = (steps: FeatureStepGraph) => new FeatureAssemblyExecutor().assemble({
+    ...testScope, targetEntityName: 'Members', records: members, sources, steps, asOf: { Mode: 'none' },
+    leakageGuard: noLeakGuard, targetVariable: 'Renewed', dataAccess: new InMemoryDataAccess({ Members: members }),
   });
 
-  it('deduplicates planned columns when an llm-derived column overlaps with select', async () => {
-    const members: SourceRow[] = [
-      { ID: 'm1', JobFunction: 'Engineer', SeniorityLevel: 'Senior', Renewed: 1 },
-    ];
-    const dataAccess = new InMemoryDataAccess({ Members: members });
-    const steps: FeatureStepGraph = {
-      Steps: [
-        { Id: 's1', Kind: 'select', Columns: ['JobFunction'] },
-        {
-          Id: 'llm-step-1',
-          Kind: 'llm-derived',
-          FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
-          Columns: ['JobFunction', 'SeniorityLevel'],
-        },
-      ],
-    };
-    const result = await new FeatureAssemblyExecutor().assemble({
-      ...testScope,
-      targetEntityName: 'Members',
-      records: members,
-      sources,
-      steps,
-      asOf: { Mode: 'none' },
-      leakageGuard: noLeakGuard,
-      targetVariable: 'Renewed',
-      dataAccess,
-    });
-
-    // JobFunction appears once (from select), followed by SeniorityLevel (from llm-derived)
-    expect(result.featureSchema.map((s) => s.Name)).toEqual(['JobFunction', 'SeniorityLevel']);
-    expect(result.matrix.columns).toEqual(['JobFunction', 'SeniorityLevel', 'Renewed']);
+  it('refuses an llm-derived step (unpinned-feature-version), never a select of today\'s value', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 'llm-step-1', Kind: 'llm-derived', FeaturePipelineRef: 'JobFunctionSeniorityPipeline', Columns: ['JobFunction', 'SeniorityLevel'] }] };
+    const outcome = await run(steps).then(() => null, (e: Error) => e);
+    expect(outcome).toBeInstanceOf(AssemblyRefused);
+    expect(outcome instanceof AssemblyRefused && outcome.Refusal).toEqual({ kind: 'unpinned-feature-version', featureName: 'JobFunction' });
   });
-
-  it('skips column emission when Columns is empty', async () => {
-    const status = ConsoleCapture.Status();
-    const members: SourceRow[] = [
-      { ID: 'm1', tenure: 10, Renewed: 1 },
-    ];
-    const dataAccess = new InMemoryDataAccess({ Members: members });
-    const steps: FeatureStepGraph = {
-      Steps: [
-        { Id: 's1', Kind: 'select', Columns: ['tenure'] },
-        {
-          Id: 'llm-empty',
-          Kind: 'llm-derived',
-          FeaturePipelineRef: 'JobFunctionSeniorityPipeline',
-          Columns: [],
-        },
-      ],
-    };
-    const result = await new FeatureAssemblyExecutor().assemble({
-      ...testScope,
-      targetEntityName: 'Members',
-      records: members,
-      sources,
-      steps,
-      asOf: { Mode: 'none' },
-      leakageGuard: noLeakGuard,
-      targetVariable: 'Renewed',
-      dataAccess,
-    });
-
-    expect(result.featureSchema.map((s) => s.Name)).toEqual(['tenure']);
-    expect(result.matrix.columns).toEqual(['tenure', 'Renewed']);
-    expect(ConsoleCapture.Lines(status)).toEqual([expect.stringContaining("Feature step llm-empty (llm-derived) has no Columns configured; skipping column emission.")]);
+  it('refuses a model-prediction step the same way', async () => {
+    const steps: FeatureStepGraph = { Steps: [{ Id: 'p', Kind: 'model-prediction', ScoringBindingID: 'B-1', FeatureName: 'ChurnRisk' }] };
+    const outcome = await run(steps).then(() => null, (e: Error) => e);
+    expect(outcome instanceof AssemblyRefused && outcome.Refusal).toEqual({ kind: 'unpinned-feature-version', featureName: 'ChurnRisk' });
   });
 });
 

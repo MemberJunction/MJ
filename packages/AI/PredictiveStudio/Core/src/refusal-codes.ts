@@ -18,7 +18,7 @@ const REFUSAL_CODES = [
   'INVALID_EVALUATION_SETTING',
   /** A pipeline asks for point-in-time assembly but points at no Prediction Unit, which is where that assembly lives. */
   'UNIT_REQUIRED',
-  /** A feature's source cannot be read as of a decision date: its change history does not cover the date, or it changed after it. */
+  /** A feature's source cannot be read as of a decision date: its change history does not cover the date, it changed after it, or a Feature Value has no value in effect then. */
   'AS_OF_SOURCE_UNDATED',
   /** A pipeline names an Evaluation Protocol that cannot be found; training is judged only under its protocol. */
   'PROTOCOL_REQUIRED',

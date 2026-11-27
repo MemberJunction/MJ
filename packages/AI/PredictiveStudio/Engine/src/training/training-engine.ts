@@ -53,7 +53,9 @@ import {
   type LeakageGuard,
   type ValidationStrategy,
   type ProblemType,
+  type AssemblyRefusal,
   type FeatureStepGraph,
+  type FeatureValuePin,
   type OutcomeConfig,
   resolveOutcomeConfig,
   EvaluationLineage,
@@ -100,7 +102,8 @@ import { DetectSingleFeatureDominance, type DominanceResult } from '../feature-a
 import { RunViewDataAccess, type ICountingDataAccess } from '../feature-assembly/data-access';
 import { ProviderAssemblyMetadata, type IAssemblyMetadata } from '../feature-assembly/assembly-metadata';
 import { AsOfFeatureAssembler, type AsOfAssembledMatrix, type AsOfAssemblyResult } from '../feature-assembly/as-of/as-of-assembler';
-import { FeatureResolver } from '../feature-assembly/as-of/feature-resolution';
+import { FeatureResolver, type FeaturePinsByStep } from '../feature-assembly/as-of/feature-resolution';
+import { FeaturePinResolver } from '../feature-assembly/as-of/feature-pin-resolver';
 import { RunViewRecordHistoryReader } from '../feature-assembly/as-of/record-history';
 import { SeriesFeatures, type SeriesHistory, type SeriesPoint } from '../feature-assembly/as-of/series-features';
 import { PredictionUnitRowReader, type UnitRow, type UnitRowReadResult } from '../prediction-unit/unit-row-reader';
@@ -1031,7 +1034,9 @@ export class TrainingEngine {
     const inputs = prepared || (await this.prepareUnitAssembly(pipelineId, deps));
     const { Resolved: resolved, Unit: unit, UnitRead: unitRead } = inputs;
     const exclusions = TrainingEngine.EffectiveExclusions(resolved.leakageGuard, inputs.ProtocolExclusions);
-    const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions);
+    const pins = await this.ResolveFeaturePins(resolved.featureSteps, deps);
+    if (pins.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: pins };
+    const resolution = FeatureResolver.ResolveFeatureColumns(resolved.featureSteps, unit, unitRead.RowEntity, inputs.Metadata, exclusions, pins.Pins);
     if (resolution.Status === 'refused') return { Unit: unit, UnitRead: unitRead, Features: [], Assembled: resolution };
     // The names the assembly will write (date parts included), so this check accepts exactly what the builder does.
     const columnNames = new Set(AsOfFeatureAssembler.ColumnNamesOf(resolution.Columns));
@@ -1057,6 +1062,21 @@ export class TrainingEngine {
       ...(carve ? { DevelopmentRowsOf: (rows: readonly CarvedRowRef[]) => TrainingEngine.developmentIds(carve.CarveRows(rows)) } : {}),
     });
     return { Unit: unit, UnitRead: unitRead, Features: resolution.Columns, Assembled: assembled };
+  }
+
+  /**
+   * The pin of every Feature Value step (`llm-derived`, `model-prediction`), resolved now, at train time, as the run's
+   * user (B2, I3): the pipeline's Active version, or the binding's Published model. The first step with no resolvable
+   * pin refuses the assembly; a graph with no such step reads nothing.
+   */
+  protected async ResolveFeaturePins(graph: FeatureStepGraph, deps: TrainingDeps): Promise<{ readonly Status: 'resolved'; readonly Pins: FeaturePinsByStep } | { readonly Status: 'refused'; readonly Refusal: AssemblyRefusal }> {
+    const pins = new Map<string, FeatureValuePin>();
+    for (const step of graph.Steps.filter((x) => FeaturePinResolver.NeedsPin(x))) {
+      const r = await FeaturePinResolver.Resolve(step, this.requireProvider(deps), deps.contextUser);
+      if (FeaturePinResolver.IsRefusal(r)) return { Status: 'refused', Refusal: r };
+      pins.set(step.Id, r);
+    }
+    return { Status: 'resolved', Pins: pins };
   }
 
   /** The ids a carve assigned the development role. */

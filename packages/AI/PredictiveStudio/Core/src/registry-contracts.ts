@@ -32,7 +32,7 @@ import type { Actor, HumanActor } from './prediction-unit';
 import type { StoredGateRecord } from './run-evaluation';
 import type { TaskType } from './task-type';
 import type { BaselineResult, CodeVersion, LeakageFlag, ReturnedArtifact } from './trainer-contract';
-import type { FeatureVersionPin } from './assembly-contract';
+import type { FeatureValuePin } from './assembly-contract';
 
 // ====================================================================================================== primitives ==
 
@@ -142,8 +142,8 @@ export interface ModelRegistryEntry {
     readonly CodeVersion: CodeVersion;
     /** The `MJ: ML Training Runs` row that produced the model. */
     readonly TrainingRunID: string;
-    /** The Feature Pipeline outputs the model's features were read at. */
-    readonly PinnedFeatureVersions: readonly FeatureVersionPin[];
+    /** The Feature Pipeline versions and model predictions the model's features were read at (D5-15). */
+    readonly PinnedFeatureVersions: readonly FeatureValuePin[];
   };
   /** Hash of the feature schema; scoring refuses a matrix whose schema hash differs. */
   readonly FeatureSchemaHash: string;
