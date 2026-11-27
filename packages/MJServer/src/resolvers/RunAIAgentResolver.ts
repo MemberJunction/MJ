@@ -12,6 +12,7 @@ import {
     HostAllowedAgentIDs,
     KeepHostAllowedAgents,
     LoadOpenSubAgentConsults,
+    type MJAIAgentRequestEntityServer,
 } from '@memberjunction/ai-agents';
 import {
     AttachmentData,
@@ -65,6 +66,23 @@ interface ConversationTurnRequest {
     ReplyParentId?: string;
     AnnouncedByAgentId?: string;
     ReplyBranchId?: string | null;
+}
+
+/**
+ * A Plan step's card answered in the chat (owner-batch item 3, D5-22, D5-35): the open request it answers, the person's
+ * decision and the card's fields. Explorer's chat sends the card as a `@{"_mode":"form",…}` token with no `lastRunId`;
+ * the resolver chains the turn to the run that presented the plan and saves this answer as the person's own client save
+ * before the continuation run, so that run reads an answered request.
+ */
+export interface PlanCardAnswer {
+    /** The `MJ: AI Agent Requests` row the card answers. */
+    RequestID: string;
+    /** The card's `decision` field. */
+    Decision: 'approve' | 'reject';
+    /** The card's fields by name, as the answer's `ResponseData`. */
+    ResponseData: Record<string, string>;
+    /** The message that carried the card, as the answer's `Response`. */
+    Response: string;
 }
 
 @ObjectType()
@@ -204,6 +222,20 @@ export class AgentExecutionStreamMessage {
 
 @Resolver()
 export class RunAIAgentResolver extends ResolverBase {
+    /**
+     * The plan card each conversation turn answers, keyed by the reply row the turn created (owner-batch item 3): set when
+     * the turn is chained as a plan answer, taken by `executeAIAgent` on either dispatch path. Keyed by the instance, so
+     * it is dropped with the turn.
+     */
+    private readonly planAnswers = new WeakMap<MJConversationDetailEntityExtended, PlanCardAnswer>();
+
+    /** The plan card answer a turn's reply row carries, removed as it is read; undefined for any other turn. */
+    public TakePlanAnswer(reply: MJConversationDetailEntityExtended): PlanCardAnswer | undefined {
+        const answer = this.planAnswers.get(reply);
+        this.planAnswers.delete(reply);
+        return answer;
+    }
+
     /**
      * Tracks `userPayload` instances originating from interactive user mutations (`RunAIAgent` and
      * `RunAIAgentFromConversationDetail` without API key or widget guest elevation) that may expose
@@ -478,6 +510,10 @@ export class RunAIAgentResolver extends ResolverBase {
                 }
             };
 
+            // A plan card answered in this turn is saved as the person's answer BEFORE the run, so the run reads it answered.
+            const planAnswer = replyDetail ? this.TakePlanAnswer(replyDetail) : undefined;
+            const settledPlanRequest = planAnswer ? await this.settlePlanAnswer(planAnswer, currentUser, p) : null;
+
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
             const conversationResult = await agentRunner.RunAgentInConversation(sourceParams, {
                 conversationDetailId: conversationDetailId, // Use existing if provided
@@ -498,6 +534,9 @@ export class RunAIAgentResolver extends ResolverBase {
             // Update agent run ref once available
             if (result.agentRun) {
                 agentRunRef.current = result.agentRun;
+            }
+            if (settledPlanRequest && result.agentRun?.ID) {
+                await this.linkPlanAnswer(settledPlanRequest, result.agentRun.ID);
             }
 
             await this.runPostExecutionNotifications(
@@ -1014,6 +1053,102 @@ export class RunAIAgentResolver extends ResolverBase {
         }
     }
 
+    /** The text of the newest user message in a turn's messages JSON, or undefined. */
+    private lastUserMessageOf(messagesJson: string): string | undefined {
+        const parsed = SafeJSONParse(messagesJson);
+        return this.extractUserMessage(Array.isArray(parsed) ? parsed : []);
+    }
+
+    /**
+     * The plan card a turn's message answers, read from its `@{"_mode":"form",…}` token: the card's fields and its
+     * `decision` (approve or reject). Undefined for any other message (owner-batch item 3).
+     */
+    private planCardAnswerOf(message: string | undefined): Omit<PlanCardAnswer, 'RequestID'> | undefined {
+        if (!message || !ConversationUtility.ContainsFormResponse(message)) return undefined;
+        for (const token of ConversationUtility.ParseSpecialContent(message)) {
+            if (token.mode !== 'form' || !('fields' in token.content) || !Array.isArray(token.content.fields)) continue;
+            const fields: Record<string, string> = {};
+            for (const field of token.content.fields) {
+                if (field && typeof field.name === 'string') fields[field.name] = field.value == null ? '' : String(field.value);
+            }
+            const decision = fields.decision;
+            if (decision === 'approve' || decision === 'reject') return { Decision: decision, ResponseData: fields, Response: message };
+        }
+        return undefined;
+    }
+
+    /**
+     * Owner-batch item 3, chaining (D5-35): a turn with no `lastRunId` whose message answers a plan card is chained to the
+     * originating run of the newest open (`Requested`), non-workflow, Plan-step request of this agent in this
+     * conversation on the turn's branch path (reason `'plan-answer'`). Any other turn returns null and is chained as
+     * before. Fail-soft: a lookup failure leaves the turn to the existing chaining.
+     */
+    private async findPlanAnswerPredecessor(
+        conversationId: string,
+        agentId: string,
+        branchId: string | null,
+        userMessage: string | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<{ runId: string; reason: 'plan-answer'; answer: PlanCardAnswer } | null> {
+        const card = this.planCardAnswerOf(userMessage);
+        if (!card) return null;
+        try {
+            const branches = branchId ? await ConversationEngine.LoadBranchesFresh(conversationId, contextUser, provider) : [];
+            const presentingRuns = MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(conversationId, agentId, branchId, branches);
+            const result = await RunView.FromMetadataProvider(provider).RunView<Pick<MJAIAgentRequestEntity, 'ID' | 'OriginatingAgentRunID'>>({
+                EntityName: 'MJ: AI Agent Requests',
+                ExtraFilter: `AgentID='${EscapeSQLString(agentId)}' AND Status='Requested' AND OriginatingTaskID IS NULL ` +
+                    `AND OriginatingAgentRunStepID IN (SELECT ID FROM [__mj].[vwAIAgentRunSteps] WHERE StepType='Plan') ` +
+                    `AND OriginatingAgentRunID IN (SELECT ID FROM [__mj].[vwAIAgentRuns] WHERE ${presentingRuns})`,
+                OrderBy: '__mj_CreatedAt DESC',
+                MaxRows: 1,
+                SkipTotalRowCount: true,
+                Fields: ['ID', 'OriginatingAgentRunID'],
+                ResultType: 'simple',
+                // The request was raised by the presenting run moments ago; read the database, not a cache.
+                BypassCache: true,
+            }, contextUser);
+            const request = result.Success ? result.Results?.[0] : undefined;
+            if (!request?.OriginatingAgentRunID) return null;
+            return { runId: request.OriginatingAgentRunID, reason: 'plan-answer', answer: { RequestID: request.ID, ...card } };
+        } catch (error) {
+            LogError(`findPlanAnswerPredecessor failed; the turn is chained as before: ${error instanceof Error ? error.message : String(error)}`);
+            return null;
+        }
+    }
+
+    /**
+     * Owner-batch item 3, settling (D5-22): saves the plan card's answer on its request — `Approved` or `Rejected`, with
+     * `RespondedAt`, `Response` and `ResponseData` = the card's fields — as the person's own client save, BEFORE the
+     * continuation run, marked so that save does not also resume the agent. A request no longer `Requested` (answered
+     * elsewhere) is left alone. Returns the saved request, or null when nothing was saved.
+     */
+    private async settlePlanAnswer(answer: PlanCardAnswer, contextUser: UserInfo, provider: IMetadataProvider): Promise<MJAIAgentRequestEntityServer | null> {
+        const request = await provider.GetEntityObject<MJAIAgentRequestEntityServer>('MJ: AI Agent Requests', contextUser);
+        if (!(await request.Load(answer.RequestID)) || request.Status !== 'Requested') return null;
+        request.Status = answer.Decision === 'approve' ? 'Approved' : 'Rejected';
+        request.RespondedAt = new Date();
+        request.Response = answer.Response;
+        request.ResponseData = JSON.stringify(answer.ResponseData);
+        if (typeof request.MarkAnsweredByConversationHost === 'function') request.MarkAnsweredByConversationHost();
+        const saved = await ServerOperationScopeManager.Instance.RunInClientCrudBoundary(() => request.Save());
+        if (!saved) {
+            LogError(`Failed to save the plan card answer on request ${answer.RequestID}: ${request.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            return null;
+        }
+        LogStatus(`📋 Plan card answer saved on request ${request.ID} → ${request.Status} (before the continuation run)`);
+        return request;
+    }
+
+    /** Links a settled plan answer's request to the continuation run that read it (`ResumingAgentRunID`). */
+    private async linkPlanAnswer(request: MJAIAgentRequestEntityServer, runId: string): Promise<void> {
+        request.ResumingAgentRunID = runId;
+        if (!(await request.Save())) {
+            LogError(`Failed to link plan-answer request ${request.ID} to continuation run ${runId}: ${request.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
     /**
      * Discovers whether this agent's newest root run on this conversation/branch path should be
      * chained by `LastRunID` on a chat-thread reply — either because the user stopped it
@@ -1317,6 +1452,19 @@ export class RunAIAgentResolver extends ResolverBase {
             // payload, roll the prior run's FinalPayload into this run's start.
             let effectiveLastRunId = lastRunId;
             let effectiveAutoPopulate = autoPopulateLastRunPayload;
+            // A Plan step's card answered in the chat continues the run that presented the plan (reason 'plan-answer');
+            // the answer rides on the turn's reply row to executeAIAgent, which saves it before the run.
+            if (!effectiveLastRunId) {
+                const answered = await this.findPlanAnswerPredecessor(turn.ConversationId, effectiveAgentId, branchId, this.lastUserMessageOf(turn.MessagesJson), currentUser, p);
+                if (answered) {
+                    effectiveLastRunId = answered.runId;
+                    this.planAnswers.set(reply, answered.answer);
+                    if (effectiveAutoPopulate === undefined && payload == null) {
+                        effectiveAutoPopulate = true;
+                    }
+                    LogStatus(`📋 Plan card answered (${answered.answer.Decision}): continuing from presenting run ${answered.runId} (chained by LastRunID)`);
+                }
+            }
             if (!effectiveLastRunId) {
                 const chainable = await this.findChainablePredecessor(turn.ConversationId, effectiveAgentId, branchId, currentUser, p);
                 if (chainable) {

@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,2011]}},
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"IsLegalInCTE":false,"OrderByClause":"cd.\"__mj_UpdatedAt\" DESC","Positions":[2330],"SqlWithoutOrderBy":{"$slice":[0,2329]}},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"IsLegalInCTE":false,"OrderByClause":"cd.__mj_UpdatedAt DESC","Positions":[3102],"SqlWithoutOrderBy":{"$slice":[0,3101]}},
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,884]}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,821]}},
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1954]}},
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1810]}},

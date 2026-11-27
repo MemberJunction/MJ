@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": "2a29b10ebb3f8dd977ea6eb31a4752860c2a5f51036bf6a6f142d638ccaf3b1d",
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": "6d7395c181cee6f976852206f7a1d0f323678e4ca987415b342a7bfa57f4bf8b",
   "shipped/SQL/list-conversation-detail-feedback.sql": "fc5e4fc1b775f6fb3445f81d2e8da62e195aba8ef48fbf1a71964dae4fac53a2",
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": "e82c4835fa37dd4e18806babb8fb83caeffad7722d6d17be9d699f37c1ed4cf2",
   "shipped/SQL/predictive-studio-lock-model.sql": "9811bf48356f58c47deae5243cdb93b7c740da728f5691651cc7f08c7de049f4",
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": "015e259d3a9588959954498783bdf08b4c2c118e72dc8c105f1db8960ff9a4e3",
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": "67e21e2e81cdb2f553bfdbd7ece8249a03ce04dd97aa1f79a92cf8bfe867f73d",

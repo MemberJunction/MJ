@@ -1,0 +1,27 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Gates — Agent",
+      "Description": "The Model Development Agent's PR 5 gates: G4.1 (C1 -> C1.1: the agent builds only on a person's structured approval of the plan it presented). Later PR 5 milestones add G4.2–G4.9 here. G4.1 runs on the server transport (the agent runs as the D5-46 person), and a server-transport bundle cannot follow a client-transport one in one process (#3251), so the truth datasets are loaded before this suite: run \"Predictive Studio Gates — Containment\" (its first test loads them) or `pnpm mj test run \"PS truth datasets: load and verify\"` first. Needs the truth sidecar, `pnpm run truth:provision` and `truth:loom` done, the LLM keys and the D5-46 user; spends LLM money. Run with: MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1 pnpm mj test suite \"Predictive Studio Gates — Agent\"",
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Test Suite Tests": [
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> C1.1",
+            "Sequence": 1,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7632ACDC-D5F9-486B-940F-DE33F9DB5230"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "052B7679-2C3E-4DB5-863A-90DB7CD6B7E7"
+    }
+  }
+]

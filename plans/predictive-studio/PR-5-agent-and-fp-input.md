@@ -279,8 +279,10 @@ packages/MJCodeGenAPI/src/generated/class-registrations-manifest.ts
 src/generated/class-registrations-manifest.ts
 # The lockfile: A7a adds @memberjunction/testing-engine to the PS Engine (§9 D5-19)
 pnpm-lock.yaml
-# Caller maintenance of PR 5's own changes (D-082)
-packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5)
+# Caller maintenance: shipped Query SQL files join sql-parser's shipped golden corpus (§9 D5-B1-5, D5-A2-12)
+packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5, D5-A2-12)
+# A new FK into a table spDeleteEntityWithCoreDependencies deletes: the proc's policy fixture (§9 D5-A2-14; PR 4 §5.9)
+packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json  (D5-A2-14)
 # Owner-approved non-PS items (§9 owner batch, 2026-11-26)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
@@ -1608,7 +1610,7 @@ branch base → `changed 0 · missing 0`; attacks 1–4 pass; §11 entry ` — M
 
 #### A2 — Structured `BuildApproval`, the control path, and the agent's metadata (A1 folded in)
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** `ShouldForceBuild` and its substring trigger are gone. The orchestrator is the state machine of §5.1:
 code decides every transition with an effect, through an `executeNextStep` override that runs no orchestrator prompt
@@ -3253,6 +3255,86 @@ Record every decision taken in §9 and, when it changes another plan's interface
   Allowlist line `packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5)`. At
   integration the controller regenerates the shipped goldens once over the merged corpus. · PR 4 precedent
   (`a675ad5657`, `1539e1b80d`); controller ruling.
+- D5-A2-1 · 2026-11-26 · `AgentSessionLease.WithSessionLock(sessionRunId, work, ctx, options)` gains a fourth argument
+  `{ CurrentRunID; SessionRunIDs; Clock? }` and hands `work` the database clock; under the lock the session is held by
+  the live sibling run (`Status = 'Running'`, heard from within 10 min of `DbNow`) that **started first** (`StartedAt`,
+  then ID), so two runs that start together resolve to one with no write; a run with no `LastRunID` starts its own
+  session and takes no lock. · The contract's signature cannot tell the turn's own run from its siblings, and a holder
+  rule that needs a write would itself race. · A lease row (a new table and migration section).
+- D5-A2-2 · 2026-11-26 · CodeGen named the claim entity **`MJ: ML Build Approval Claims`** (table
+  `__mj.MLBuildApprovalClaim`, view `vwMLBuildApprovalClaims`, `TrackRecordChanges = 1` as generated). · Recorded as A2's
+  decision asks. · —
+- D5-A2-3 · 2026-11-26 · `BuildApprovalRefusal<TRequestStatus extends string>` is generic in `Core/src/agent-contracts.ts`;
+  the Engine binds it once, `AgentBuildApprovalRefusal = BuildApprovalRefusal<MJAIAgentRequestEntity['Status']>`
+  (`Engine/src/agent/control-path.ts`). · Core has no entity dependency (it is structural by design) and its
+  `package.json` is not A2's to change; the union still comes from the generated field. · Adding
+  `@memberjunction/core-entities` to Core (a lockfile change outside A2's ownership); a hand-copied status list.
+- D5-A2-4 · 2026-11-26 · D-090 rule 3's provenance comes from a PS `PreSave` hook, `BuildApprovalResolver.CheckAnsweringSave`
+  (registered from `$E/index.ts`): a save that answers the Model Development Agent's request keeps its responder only when
+  it is the person's own client save — inside a client CRUD boundary, not the MJ system user, not an API-key session (its
+  user carries `APIKeyRowFilters`); any other answering save (an API key, the system user, an agent run's Update Record as
+  the person) is recorded with `ResponseByUserID` NULL, so its Record Change says no person answered and `Resolve` refuses
+  `not-human`. Other agents' requests are untouched. · `MJ: Record Changes` record the saving user, not the transport, so
+  an API key or server code acting as the person would otherwise read as the person. · Changing the shared request server
+  subclass for every agent (outside item 3); trusting `ResponseSource`.
+- D5-A2-5 · 2026-11-26 · Rule 1 also requires the request to be the **first** request naming its Plan step. · A client may
+  copy the step's ID onto a row of its own; the agent's row is created by the Plan step itself, before anyone sees the
+  step. · Trusting `OriginatingAgentRunStepID` alone.
+- D5-A2-6 · 2026-11-26 · Item 3's plan answer rides from `RunAIAgentFromConversationDetail` to `executeAIAgent` on the
+  turn's reply row (`RunAIAgentResolver.TakePlanAnswer`, a `WeakMap` keyed by the reply the server created), not a new
+  positional parameter, on both the awaited and the fire-and-forget path. · Three existing resolver test files outside
+  A2's ownership pin argument positions from the end of those calls, and a conditional tuple spread does not type-check
+  against the optional parameters. · A new trailing parameter.
+- D5-A2-7 · 2026-11-26 · A complete plan not yet presented with its hash is presented by code in place of the prompt's
+  `Chat`, `Success` or `Plan` step — a terminal one included (it would end the run with no request) — with the prompt's
+  message on the card; a prompt step the gate replaces goes to the control path, not back to the prompt. · Found by the
+  runtime spot check: a run whose last prompt completed the plan and finished `Success` raised no request. · Presenting
+  only on `Retry` turns.
+- D5-A2-8 · 2026-11-26 · The Pipeline Builder's approval is the claim its parent orchestrator dispatched it under:
+  `BuildApprovalClaims.HeldApproval(payload.BuildClaimID, parentRun.ID, PlanHash(payload), …)` — a `claimed` claim taken
+  by that parent run for that plan, whose request is `Approved` with a responder. · A payload is caller-supplied (a
+  GraphQL `RunAIAgent` call can send one), so an approval in it grants nothing. · Passing the `BuildApproval` in the
+  payload.
+- D5-A2-9 · 2026-11-26 · The five removed Actions ship as `deleteRecord` entries in `.model-development-agent.json`
+  (`mj sync push` deletes the agent's Action rows; it deleted 5 on `MJ_PS_PR5_claude1`). · A record dropped from the file
+  is left in the database. · Deleting the rows in a migration (metadata ships as JSON).
+- D5-A2-10 · 2026-11-26 · G4.1 (`C1 -> C1.1`) runs on the **server** transport as the D5-46 person, who answers as their own
+  client save (`RunInClientCrudBoundary`, as `RespondToAgentRequest` does), on the truth suite's W1-signal world (D5-45's
+  C1 + W1 runs). The agent gate suite holds it alone: a server-transport bundle cannot follow the client-transport
+  dataset load in one process (#3251), so the datasets are loaded first (the Containment suite's first test, or
+  `mj test run "PS truth datasets: load and verify"`). · The client transport authenticates with an API key, which rule 3
+  refuses by design, so no client-transport run can approve. · The client transport.
+- D5-A2-11 · 2026-11-26 · Pipeline Builder caps (it uses no LLM; DD-5's 10× rule gives 0): `MaxCostPerRun` $0.01,
+  `MaxTokensPerRun` 1,000 and `MaxIterationsPerRun` 10 are floors that never bind (the tree tracker refuses at
+  `>=` the cap, so 0 would refuse every run), and `MaxTimePerRun` is 10× its first measured build (A2's G4.1 build, §11).
+  · DD-5's rule has no value for an agent with no LLM use. · NULL caps (the outcome A1 exists to remove).
+- D5-A2-12 · 2026-11-26 · Caller maintenance of A2's own change (D-082, as D5-B1-5): the new
+  `metadata/queries/SQL/predictive-studio-lock-agent-session.sql` joins `@memberjunction/sql-parser`'s 'shipped'
+  legacy-golden corpus, so its 29 shipped snapshots gain one entry each (`vitest run -u src/__tests__/legacy-goldens`:
+  29 files, +29 −0, every added line names that file; no existing entry changed). Allowlist line
+  `packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-A2-12)`; the controller
+  regenerates the shipped goldens once over the merged corpus at integration. · The fast mirror's `test` step went red
+  only in `@memberjunction/sql-parser` (29 golden tests, the missing entry). · Leaving the new Query out of the corpus.
+- D5-A2-13 · 2026-11-26 · Where D5-A2-7 takes effect, found by G4.1 at runtime: (a) the framework ends a run on a
+  terminal step without calling the agent's `executeNextStep` again, so a prompt turn's `Chat`/`Success` is replaced by
+  the code Plan step where the turn returns it (`settlePromptTurn`, first and `Retry` turns); (b) a step the gate
+  replaces with a `Retry` goes to `decisionTurn` (the control path), because the framework runs a `Retry` it is handed as
+  the prompt — an approved run's gated Pipeline Builder call never reached `request-build` and looped until
+  `ProgressStalled` paused it; (c) `BaseAgent.executePromptStep` raises a request for every root prompt `Chat` before
+  the turn returns, so when code presents the plan instead the run cancels its own open requests
+  (`CancelPromptRaisedRequests`, `Status = 'Canceled'`, as the run's user), leaving the person one card. · G4.1's first
+  two runs (0 of 5 failure loops, no claim of the real approval). · Leaving the prompt-raised request open (two cards,
+  one of which rule 1 refuses).
+- D5-A2-14 · 2026-11-26 · `MLBuildApprovalClaim.MLTrainingPipelineID` is an FK into a table
+  `spDeleteEntityWithCoreDependencies` deletes (an entity's training pipelines), so section A2 redefines the procedure
+  (the full body from `V202611231029`, plus `UPDATE … [MLBuildApprovalClaim] SET [MLTrainingPipelineID] = NULL` for the
+  doomed pipelines before they are deleted) and `entity-delete-fk-policy.json` gains the `null` dependent; allowlist line
+  `packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json  (D5-A2-14)`. · The claim is kept whatever
+  happens to its build (its approval stays consumed), so its link is cleared, not its row; without it the proc fails on
+  the FK for any entity with a claimed pipeline. Found by the push hook: `delete-entity-fk-coverage.test.ts` → `FKs into
+  deleted tables with no entry … ["MLBuildApprovalClaim.MLTrainingPipelineID -> MLTrainingPipeline"]`, red alone too. ·
+  Deleting the claim (it would free the approval for a second build).
+
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
 item becomes an allowlist line `<path>  (D-091 item <n>)`. **Items 1 and 2 approved by the owner 2026-11-26** ("shared
@@ -3348,11 +3430,11 @@ F-AG-12, F-PIT-8, F-EXP-2, F-EXP-3, F-FP-11, F-DOC-9, F-DOC-10, F-DOC-13, F-DOC-
 close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-row indexes; `MLSearchStrategyComparison` (new).
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql, migrations/v6/V202611260939__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql, migrations/v6/V202611260939__v6.3.x__PS_Agent_FP_Input.sql, migrations/v6/V202611261200__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->1<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->1<!-- /gen:checks -->
-- Head: <!-- gen:head -->4f26d5a14c<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
+- Head: <!-- gen:head -->0af256abd9<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3720,6 +3802,103 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - **LLM spend (§2.4 query, `RunAt >= 2026-11-26T09:20Z` on `MJ_PS_PR5_claude2`):** 166 prompt runs, **$0.191346**,
   464,078 tokens — all CodeGen's own LLM steps (93 `CodeGen: Check Constraint Parser` $0.182770, 1 Form Layout
   $0.003792, 1 Smart Field $0.004784) and 71 `Vector Sync Embedding` runs at $0 from MJAPI start. No agent run.
+### 2026-11-26 — structured BuildApproval, the control path and the agent's metadata — A2
+
+- **Branch** `ps/pr-5-agent-fp-input--A2` from `261546a083`; attack list red first (`4cfbf9d7d2`, D5-48), then
+  `5709279b01` (implementation), `0697dbbf21` (attack 15's orchestrator half), `740e3c50c8` (G4.1's run budget: the row
+  had no `MaxExecutionTimeMS`, so the 300 s default would cut its ~40 runs), `fd8a103cd5` (changeset and §10 by
+  `pr-body.mjs`), `d65aaf6a11` (D5-A2-12), `2e78cb939c` and `c56f742659` (D5-A2-13, the three runtime findings),
+  `8af8d71ed2` (Pipeline Builder `MaxTimePerRun` 623 s), then `ps/pr-5-agent-fp-input` @ `aebd2c4707` merged (items 4
+  and 5). The session resumed twice after the reboot (Orca restarts); no work was redone.
+- **Database** `MJ_PS_PR5_claude1` (4051; sidecar 4151, run dir `~/.mj-ps/pr5-claude1/sidecar-run`): section A2 applied
+  by `mj migrate` on M0's clean build (`2 applied`), CodeGen, `mj sync push`; the A2 section's hand-written DDL applied
+  again inside a rolled-back transaction (scratch table name) on the same database holding **55 `Requested` and 13
+  `Approved`** requests → table and `UQ_…_AgentRequestID` created, nothing left after the rollback;
+  `check-migration-entityfield-sequence.mjs` → `✓ no literal EntityField sequences`; `check:codegen-tail` → `OK`.
+  `mj sync push --dir=metadata --include=agents` → `6 updated`; Pipeline Builder `MaxTimePerRun = 623` in the database.
+- **Unit tests (exit 0, 0 TypeScript errors in each build):** `@memberjunction/predictive-studio` (Engine) **134 files,
+  2,072 passed** (the agent's attack files: 10 files, 240 passed); `@memberjunction/server` (MJServer) **309 passed, 4
+  skipped files; 4,427 passed, 67 skipped**; `@memberjunction/ai-agents` **303 files, 5,428 passed**;
+  `@memberjunction/predictive-studio-core` **45 files, 593 passed**; `@memberjunction/testing-integration` (suite) **78
+  files, 1,156 passed**; `@memberjunction/core-entities` **102 files, 1,783 passed**; `@memberjunction/sql-parser` **63
+  files, 2,175 passed** (after D5-A2-12). All 22 attacks pass.
+- **G4.1** `pnpm mj test run "C1 -> C1.1"` → **Passed**, test run `0C7DDF4A-A183-4AAF-A575-1C3C99B03930`, 450,602 ms:
+  `→ G4.1: 0 of 20 "don't build" runs built; 5 of 5 failed builds were not retried; the approved build: ok
+  {"negatedRuns":20,"negatedBuilds":0,"failureLoops":5,"failureLoopsHeld":5,"failures":"1c/1b/failed→0c/0b ×5",
+  "realClaims":1,"realBuilderRuns":1,"realClaimOutcome":"built","lineage":"ok"}`. The approved build's request is
+  `Approved` by the D5-46 person's own save and its training run's agent run is the Pipeline Builder run (62,281 ms, the
+  first measured build: D5-A2-11's cap) under the claiming orchestrator run. Requests it raised: 26 `Plan Presented for
+  Approval` (6 approved), 8 prompt-raised ones `Canceled` (D5-A2-13 c). Every orchestrator prompt run answered on
+  **Gemini 4 Hydrogen** (43 runs), its first-ranked model; no planning sub-agent ran (the plan is seeded). Its first
+  two runs failed and found D5-A2-13 (a) and (b): `run AD96DA47… raised no open plan request`, then `0 of 5 failure
+  loops held … no claim of the request by the resumed run` (each resumed run `Paused`, `ProgressStalled`).
+- **Containment** (`RUN_MUTATION_TESTS=1`): the suite run `6C501284-F71E-4BDD-ABD2-75D2B41B4010` (load average 50–68 on
+  14 cores: four wave-1 stacks and three mirrors) → 6 passed, 6 failed, every failure a run budget or a transport cut
+  from load, none an assertion: datasets ✓, G0.1 ✓ (243,100 ms; PR 4 85,244), G0.4 ✓ (293,382; PR 4 79,046), G0.8 ✓,
+  G0.11 ✓, G0.12 ✓; G0.5, G0.7, G0.9 and G0.3 `exceeded the … remaining run budget`, G0.10 `lightgbm training 2
+  failed: GraphQL Error (Code: unknown)` (a client transport cut, no server-side error), G0.2 the 1,800 s budget. The
+  truth sidecar (single-threaded) was getting **~20 % of one core** (`ps`: 14 min CPU, 20.1 %). Re-run one at a time:
+  G0.3 ✓ (`B4CB598C…`, 296,050 ms: `0 of 2 … 2 of 2 refused by unacknowledged-leakage-flags`), G0.5 ✓ (`F694A90F…`,
+  295,907), G0.7 ✓ (`3C511ED2…`, 75,729), G0.9 ✓ (`FC7CBC36…`, 30,359), G0.10 ✓ (`0511522A…`, 211,850). **G0.2 timed out
+  again** at 1,800 s (load average back at 52–82): 40 of its 60 builder runs had finished at 27.5 min, 39 `Completed`
+  and building, mean 36 s per run (PR 4: 22 s, 1,348,267 ms for 60), so 60 runs need ~37 min at that load. G0.2 is the
+  one Exit item not shown green on this machine state; it needs a run with the machine quiet (D5-51's integration run).
+  The first suite run (before the sidecar was started) failed on `ECONNREFUSED 127.0.0.1:4151`; it is not counted.
+- **Mutation table (each guard flipped in a scratch edit, the attack file run, the source restored; `git status` clean):**
+
+| Guard flipped | Attack | Result with the flip |
+|---|---|---|
+| `AnsweredInSeparateSave` dropped from `Resolve` (two-step) | 2 | 3 red: `a row created already Approved → not-two-step` |
+| `NotClaimed` dropped | 7 | 3 red: `a claim row (claimed) → consumed` |
+| claim not arbitrated (dispatch on a failed insert) | 15 | 1 red: `two concurrent claims of one Approved request → exactly one claim row` |
+| item 3's settle moved after the run | 13 (a) | 1 red: `expected [ 'run:Requested', 'save:Approved' ] to deeply equal [ 'save:Approved', 'run:Approved' ]` |
+| the `'plan-answer'` chaining dropped | 19 | 2 red: `a form-token answer with no lastRunId is chained to the presenting run` |
+| the liveness read skipped | 22 | 2 red: `expected 'proceeded' to deeply equal { kind: 'session-busy', … }` |
+| `BuildAllowed` true for a non-trusted sub-agent | 8 | 5 red: `refuses before any pipeline row is written; expected 1 to be +0` |
+| the claim write guard off | 17 | 4 red: `a create outside Claim … is refused` |
+| the answering-save hook trusts every save | 3 | 3 red: `(c) server code answering as the person … → no responder` |
+| the gate passes every prompt step | 21 | 3 red: `in gather, the Pipeline Builder sub-agent, a draft Action and a prompt plan are replaced` |
+| the substring trigger restored (a message builds) | 6 | 1 red: `every refusal state is the same whatever the user typed` |
+| `settlePromptTurn` presents nothing (D5-A2-13 a) | 18 | 3 red: `a first turn whose prompt ends the run with a terminal Chat presents …` |
+| a gated `Retry` executed by the framework (D5-A2-13 b) | 21 | 1 red: `in request-build, a prompt decision naming the Pipeline Builder goes to the control path` |
+
+  **Mutation output G4.1:** `AssertionError: expected { …(6) } to deeply equal { kind: 'not-two-step', …(1) }` (drop
+  `AnsweredInSeparateSave` from `Resolve` → attack 2 red); dispatch before `Claim` → attack 15 red as above.
+- **LLM spend** (§2.4 query from `2026-11-26T09:08:08Z`, M0's hand-over): **490 prompt runs, $1.2244, 1,930,462 tokens**
+  on `MJ_PS_PR5_claude1` — spot checks before the reboot $0.74, G4.1's three runs $0.48 (the passing one $0.1518, 49
+  prompt runs). Under the wave's $5 spot-check cap and D5-12's $100.
+- **D5-51 (controller):** the full-tier mirror runs once per integration, alone, by the controller; this milestone's
+  exit is milestone-exit, the touched packages' tests, the attacks and Exit checks, and `ci-mirror --tier fast` (below).
+- **Left for the controller (generated, never owned, §6.0 rule 4):** the four `mj-class-registrations.ts` manifests
+  are committed as the build regenerated them (`MJMLBuildApprovalClaimEntity` added), for the controller to regenerate
+  over the merged wave; the sql-parser shipped goldens over the merged corpus (D5-A2-12); the changeset and §10 by
+  `pr-body.mjs` after the merge.
+- **milestone-exit** (at load 79): 35 checks, 3 failed — `changeset-file` (the merge's packages; regenerated above) and
+  three tests over their timeouts from load: Engine `no-status-writes.test.ts` (60 s) and MJServer
+  `queued-task-graph-and-enqueue-fanout.test.ts`, `unified-agent-artifacts-e2e.test.ts`; alone → 6/6 and 15/15 passed.
+- **Environment notes:** MJExplorer's gitignored `src/environments/environment*.ts` are absent from a fresh worktree
+  (the fast mirror's build fails on `Could not resolve "../environments/environment"`); copied from the main checkout.
+  `mj sync push --dir=metadata-optional/integration-test --include=tests` rewrote the `sync` blocks of 25 files and
+  added a `primaryKey` to `.IT114-ai-vendor-effort.json`'s related record (it has none; outside A2's ownership,
+  reverted). The machine-wide suite lock was held by a dead `ps-env.sh` (pid 38792, hydrogen1's deterministic tier, no
+  surviving child); A2 removed it after checking, so G4.1 could start.
+- Rulings this milestone: D5-A2-1 … D5-A2-13.
+- 2026-11-26 — A2: merged `ps/pr-5-agent-fp-input` @ `020d86e373` (owner-batch item 6, the MJServer delete tests' static
+  `ResolverBase` import) into the sub-branch; changeset unchanged, §10 regenerated by `pr-body.mjs`.
+- 2026-11-26 — A2: merged `ps/pr-5-agent-fp-input` @ `a72b2db90d` (owner-batch item 7, the
+  `spCreateRecordChangeContract` test's name prefilter: two pushes had gone red only on its 30 s timeout, 17.8 s of
+  regex over 815 migrations, A2's file 0 ms); changeset (`@memberjunction/sqlserver-dataprovider` added) and §10 by
+  `pr-body.mjs`. **Owed: G0.2** (`W2 -> C1.1`) timed out twice at 1,800 s under load; the controller runs it on a quiet
+  machine at integration (controller ruling).
+- 2026-11-26 — A2: merged `ps/pr-5-agent-fp-input` @ `35d05d5ba0` (`no-status-writes.test.ts` builds its program once
+  in `beforeAll`; the push had gone red only on its two 60 s scan timeouts under load); changeset unchanged, §10 by
+  `pr-body.mjs`.
+- 2026-11-26 — A2: D5-A2-14 — section A2 redefines `spDeleteEntityWithCoreDependencies` (the claim's pipeline link is
+  cleared before an entity's pipelines are deleted) and the FK policy fixture gains the entry; `CodeGenLib` tests 2,614
+  passed, 66 skipped (`delete-entity-fk-coverage.test.ts` 11/11); the procedure compiled on `MJ_PS_PR5_claude1`
+  (`OBJECT_DEFINITION` carries the statement); `check-migration-entityfield-sequence` and `check:codegen-tail` ok. The
+  edit changes the A2 migration's checksum on databases that already applied it (`MJ_PS_PR5_claude1`); the integration
+  database is built from the merged file.
 
 ## 12. Refresh log (append-only)
 

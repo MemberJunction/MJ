@@ -9,8 +9,10 @@
  * new run is created, the field is populated and the record is saved a second
  * time. The second save short-circuits because the guard is no longer null.
  *
- * Conversation-originated responses are handled by the chat resolver's
- * `syncFeedbackRequestFromConversation()` and never reach this code path.
+ * Conversation-originated responses are handled by the chat resolver: a plain reply by
+ * `syncFeedbackRequestFromConversation()` after the run, and a Plan step's card answer by a save the resolver makes
+ * before the continuation run, marked with {@link MJAIAgentRequestEntityServer.MarkAnsweredByConversationHost} so it does
+ * not resume here.
  *
  * Ownership: a request is private to the user it is for. The UI role may create and update
  * requests (granted in `metadata/entity-permissions`), so `Validate()` keeps the rows per-user:
@@ -65,6 +67,18 @@ type ProviderAnswerMark = { ProviderKey: string; RespondingUserID: string | null
 @RegisterClass(BaseEntity, 'MJ: AI Agent Requests')
 export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
     private providerAnswer: ProviderAnswerMark | null = null;
+    /** Set for the one save that records an answer the conversation host settles before its continuation run. */
+    private answeredByConversationHost = false;
+
+    /**
+     * Marks the next save as the answer a conversation host settled itself (MJServer's `RunAIAgentResolver`, for a Plan
+     * step's card answered in the chat): the host saves the person's answer BEFORE it starts the continuation run, so
+     * that save must not also start {@link resumeAgent} (which would run a second continuation). Server-side only;
+     * one-shot — cleared by the save it marks, whether that save succeeds or not.
+     */
+    public MarkAnsweredByConversationHost(): void {
+        this.answeredByConversationHost = true;
+    }
 
     /**
      * Marks the next save as the answer the request's human-task provider reported, made by
@@ -205,6 +219,8 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         }
         const answeredByProvider = this.providerAnswer != null && SameHumanTaskProvider(this.providerAnswer.ProviderKey, this.HumanTaskProvider);
         this.providerAnswer = null;
+        const answeredByHost = this.answeredByConversationHost;
+        this.answeredByConversationHost = false;
 
         const saved = await super.Save(options);
         if (!saved) return false;
@@ -225,9 +241,12 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         //    new approval. Every dashboard or API approval would both settle the step (correct) and
         //    silently start a duplicate execution — observed in the wild: approving one request at
         //    13:56 produced a second, unasked-for graph at 14:05.
+        // 5. The conversation host did not settle this answer itself (MarkAnsweredByConversationHost): it runs the
+        //    continuation run, so resuming here would start a second one.
         const shouldResume =
             wasRequested &&
             isNowResponded &&
+            !answeredByHost &&
             this.OriginatingAgentRunID != null &&
             this.ResumingAgentRunID == null &&
             this.OriginatingTaskID == null;

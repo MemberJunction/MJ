@@ -178,3 +178,71 @@ describe('MJAIAgentRequestEntityServer resume — the run takes the originating 
         expect(logErrorMock).toHaveBeenCalledWith(expect.stringContaining('reply-0'));
     });
 });
+
+/**
+ * Owner-batch item 3 (D-091, D5-22): the conversation host settles a plan card's answer as the person's own save
+ * BEFORE the continuation run, and marks that one save so it does not also start `resumeAgent` (the host runs the
+ * continuation itself). Any other answer resumes exactly as before. `BaseEntity.Save` is spied (the database write);
+ * the request double carries the fields `Save` reads.
+ */
+describe('MJAIAgentRequestEntityServer — an answer the conversation host settles does not resume (A2 attack 13a)', () => {
+    let baseSave: MockInstance;
+    let resume: MockInstance;
+
+    beforeEach(async () => {
+        const core = await import('@memberjunction/core');
+        baseSave = vi.spyOn(core.BaseEntity.prototype, 'Save').mockResolvedValue(true);
+        resume = vi.spyOn(MJAIAgentRequestEntityServer.prototype as unknown as ResumeSeam, 'resumeAgent').mockResolvedValue(undefined);
+    });
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    function answeringRequest(): MJAIAgentRequestEntityServer {
+        const request = Object.create(MJAIAgentRequestEntityServer.prototype) as MJAIAgentRequestEntityServer;
+        const state: Record<string, unknown> = {
+            ID: 'request-1', ContextCurrentUser: USER, Status: 'Approved', OriginatingAgentRunID: 'run-0',
+            ResumingAgentRunID: null, OriginatingTaskID: null, HumanTaskProvider: null, AgentID: 'agent-1', ResponseByUserID: null,
+        };
+        for (const name of Object.keys(state)) {
+            Object.defineProperty(request, name, { get: () => state[name], set: (v: unknown) => { state[name] = v; }, configurable: true });
+        }
+        Object.defineProperty(request, 'IsSaved', { get: () => true, configurable: true });
+        Object.defineProperty(request, 'GetFieldByName', {
+            value: (n: string) => (n === 'Status' ? { OldValue: 'Requested', Value: state.Status, Dirty: true } : { OldValue: state[n], Value: state[n], Dirty: false }),
+            configurable: true,
+        });
+        return request;
+    }
+
+    it('a dashboard/API answer (Requested → Approved) resumes the run, as on next', async () => {
+        const request = answeringRequest();
+        expect(await request.Save()).toBe(true);
+        expect(resume).toHaveBeenCalledTimes(1);
+    });
+
+    it('MarkAnsweredByConversationHost(): that save does not start resumeAgent', async () => {
+        const request = answeringRequest();
+        request.MarkAnsweredByConversationHost();
+        expect(await request.Save()).toBe(true);
+        expect(baseSave).toHaveBeenCalledTimes(1);
+        expect(resume).not.toHaveBeenCalled();
+    });
+
+    it('the mark is one-shot: it is cleared by that save, so a later answering save resumes again', async () => {
+        const request = answeringRequest();
+        request.MarkAnsweredByConversationHost();
+        await request.Save();
+        await request.Save();
+        expect(resume).toHaveBeenCalledTimes(1);
+    });
+
+    it('the mark is cleared even when the save fails', async () => {
+        baseSave.mockResolvedValueOnce(false);
+        const request = answeringRequest();
+        request.MarkAnsweredByConversationHost();
+        expect(await request.Save()).toBe(false);
+        await request.Save();
+        expect(resume).toHaveBeenCalledTimes(1);
+    });
+});

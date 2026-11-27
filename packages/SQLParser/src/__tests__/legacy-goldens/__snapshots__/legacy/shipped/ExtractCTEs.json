@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": {"Instance":null,"Static":null},
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"Instance":null,"Static":null},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"Instance":null,"Static":null},
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": {"Instance":null,"Static":null},
   "shipped/SQL/predictive-studio-lock-model.sql": {"Instance":null,"Static":null},
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"Instance":null,"Static":null},
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"Instance":null,"Static":null},

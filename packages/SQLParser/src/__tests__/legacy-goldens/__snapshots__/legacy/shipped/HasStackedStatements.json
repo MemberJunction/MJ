@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": false,
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": false,
   "shipped/SQL/list-conversation-detail-feedback.sql": false,
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": false,
   "shipped/SQL/predictive-studio-lock-model.sql": false,
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": false,
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": false,

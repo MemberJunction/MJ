@@ -48,6 +48,7 @@
   "shipped/SQL/list-conversation-detail-feedback-stats.sql": {"$patch":{"keep":[0,1443],"text":"\n\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/list-conversation-detail-feedback.pg.sql": {"$patch":{"keep":[0,1821],"text":"\n\n\n\n\n\n"}},
   "shipped/SQL/list-conversation-detail-feedback.sql": {"$patch":{"keep":[0,1736],"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n"}},
+  "shipped/SQL/predictive-studio-lock-agent-session.sql": {"$patch":{"keep":[0,136],"text":"\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-model.sql": {"$patch":{"keep":[0,105],"text":"\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"$patch":{"keep":[0,569],"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"$patch":{"keep":[0,406],"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n"}},

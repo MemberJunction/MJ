@@ -335,6 +335,7 @@ import { MJMCPToolFavoriteFormComponent } from "./Entities/MJMCPToolFavorite/mjm
 import { MJMLAlgorithmFormComponent } from "./Entities/MJMLAlgorithm/mjmlalgorithm.form.component";
 import { MJMLAlgorithmUseCaseFormComponent } from "./Entities/MJMLAlgorithmUseCase/mjmlalgorithmusecase.form.component";
 import { MJMLAlgorithmUseCaseRankingFormComponent } from "./Entities/MJMLAlgorithmUseCaseRanking/mjmlalgorithmusecaseranking.form.component";
+import { MJMLBuildApprovalClaimFormComponent } from "./Entities/MJMLBuildApprovalClaim/mjmlbuildapprovalclaim.form.component";
 import { MJMLEvaluationProtocolFormComponent } from "./Entities/MJMLEvaluationProtocol/mjmlevaluationprotocol.form.component";
 import { MJMLModelFormComponent } from "./Entities/MJMLModel/mjmlmodel.form.component";
 import { MJMLModelPublishRecordFormComponent } from "./Entities/MJMLModelPublishRecord/mjmlmodelpublishrecord.form.component";
@@ -1122,6 +1123,7 @@ declarations: [
     MJFileEntityRecordLinkFormComponent,
     MJLibraryItemFormComponent,
     MJListFormComponent,
+    MJMLBuildApprovalClaimFormComponent,
     MJTagScopeFormComponent,
     MJUserNotificationFormComponent,
     MJVersionInstallationFormComponent,
