@@ -1000,6 +1000,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Agent Decision Log (Session Run) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAgentDecisionLogSessionRunID"
+        SectionName="Agent Decision Log (Session Run)"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAgentDecisionLogSessionRunID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Agent Decision Log','SessionRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Agent Decision Log','SessionRunID')"
+                [AllowLoad]="IsSectionExpanded('mJAgentDecisionLogSessionRunID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAgentDecisionLogSessionRunID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Agent Decision Log (Agent Run) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAgentDecisionLogAgentRunID"
+        SectionName="Agent Decision Log (Agent Run)"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAgentDecisionLogAgentRunID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Agent Decision Log','AgentRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Agent Decision Log','AgentRunID')"
+                [AllowLoad]="IsSectionExpanded('mJAgentDecisionLogAgentRunID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAgentDecisionLogAgentRunID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

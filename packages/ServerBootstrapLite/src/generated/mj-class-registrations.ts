@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (536 classes)
+// @memberjunction/core-entities (537 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -347,6 +347,7 @@ import {
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1583,7 +1584,7 @@ import {
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
 
-// @memberjunction/predictive-studio (28 classes)
+// @memberjunction/predictive-studio (29 classes)
 import {
     DraftEvaluationProtocolAction,
     DraftPredictionUnitAction,
@@ -1613,6 +1614,7 @@ import {
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
+    ProfilePredictionTargetAction,
 } from '@memberjunction/predictive-studio';
 
 // @memberjunction/video-studio (11 classes)
@@ -1848,6 +1850,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1861,11 +1864,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArtifactPermissionEntity,
     MJArtifactPermissionEntityExtended,
     MJArtifactTypeEntity,
-    MJArtifactUseEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
     MJArtifactWorkingStateEntity,
@@ -2065,11 +2068,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionOfferEntity,
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
-    MJKnowledgeHubSavedSearchEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -2269,11 +2272,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
-    ResourcePermissionProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ResourcePermissionProvider,
     SavedQueryDocumentBlock,
     SharedConceptEdgeProvider,
     MJActionEntityExtended,
@@ -2473,11 +2476,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordComparisonCompareServerOperation,
     RubricEngineBase,
     MJScheduledJobEntityExtended,
-    TagEngineBase,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2677,11 +2680,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
-    MJResourcePermissionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
@@ -2881,11 +2884,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
-    ScheduledGeocodingAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
     SearchEntityAction,
@@ -2962,6 +2965,7 @@ const CLASS_REGISTRATIONS_6: any[] = [
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
+    ProfilePredictionTargetAction,
     DockerRenderDriver,
     LocalWorkerRenderDriver,
     ProduceVideoAction,
@@ -3005,7 +3009,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1302;
+export const CLASS_REGISTRATIONS_COUNT = 1304;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

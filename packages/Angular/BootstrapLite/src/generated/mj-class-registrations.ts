@@ -37,7 +37,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (536 classes)
+// @memberjunction/core-entities (537 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -159,6 +159,7 @@ import {
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -950,6 +951,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJActionResultCodeEntity,
     MJAgentChannelEntity,
     MJAgentChannelParticipantEntity,
+    MJAgentDecisionLogEntity,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1015,11 +1017,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationObjectEntity,
     MJCompanyIntegrationObjectFieldEntity,
     MJCompanyIntegrationRecordMapEntity,
-    MJCompanyIntegrationRunAPILogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
@@ -1219,11 +1221,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJOpenAppEntity,
     MJOpenAppInstallHistoryEntity,
     MJOutputDeliveryTypeEntity,
-    MJOutputFormatTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJOutputFormatTypeEntity,
     MJPermissionDomainEntity,
     MJPhoneNumberEntity,
     MJProcessRunDetailEntity,
@@ -1423,11 +1425,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     VideoProductionViewerComponent,
     XlsxArtifactViewerComponent,
     AgentMentionProvider,
-    ArtifactWorkspaceChannel,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ArtifactWorkspaceChannel,
     ClientContextChannel,
     IdentityVerificationChannel,
     InteractiveComponentChannel,
@@ -1554,7 +1556,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 712;
+export const CLASS_REGISTRATIONS_COUNT = 713;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

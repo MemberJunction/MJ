@@ -41,7 +41,9 @@ export class MJAIAgentRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
             { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
             { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
-            { sectionKey: 'mJMLBuildApprovalClaims', sectionName: 'ML Build Approval Claims', isExpanded: false }
+            { sectionKey: 'mJMLBuildApprovalClaims', sectionName: 'ML Build Approval Claims', isExpanded: false },
+            { sectionKey: 'mJAgentDecisionLogSessionRunID', sectionName: 'Agent Decision Log (Session Run)', isExpanded: false },
+            { sectionKey: 'mJAgentDecisionLogAgentRunID', sectionName: 'Agent Decision Log (Agent Run)', isExpanded: false }
         ]);
     }
 }

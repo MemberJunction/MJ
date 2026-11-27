@@ -1150,6 +1150,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Agent Decision Log Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAgentDecisionLog"
+        SectionName="Agent Decision Log"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAgentDecisionLog')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Agent Decision Log','PromptRunID')"
+                [NewRecordValues]="NewRecordValues('MJ: Agent Decision Log','PromptRunID')"
+                [AllowLoad]="IsSectionExpanded('mJAgentDecisionLog')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAgentDecisionLog', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

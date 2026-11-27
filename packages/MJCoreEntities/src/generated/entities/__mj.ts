@@ -101,6 +101,7 @@ import type {
   MJActionEntityType,
   MJAgentChannelParticipantEntityType,
   MJAgentChannelEntityType,
+  MJAgentDecisionLogEntityType,
   MJApplicationEntityEntityType,
   MJApplicationRoleEntityType,
   MJApplicationSettingEntityType,
@@ -33432,6 +33433,259 @@ export class MJAgentChannelEntity extends BaseEntity<MJAgentChannelEntityType> {
     }
     set ParentID(value: string | null) {
         this.Set('ParentID', value);
+    }
+}
+
+
+/**
+ * MJ: Agent Decision Log - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AgentDecisionLog
+ * * Base View: vwAgentDecisionLogs
+ * * @description One append-only row per control-path transition of a Model Development Agent session, appended before the transition's effect by AgentDecisionLog.Append and never changed afterwards; AgentSessionReplay.Replay re-executes a session from these rows and its recorded prompt results.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Agent Decision Log')
+export class MJAgentDecisionLogEntity extends BaseEntity<MJAgentDecisionLogEntityType> {
+    /**
+    * Loads the MJ: Agent Decision Log record from the database
+    * @param ID: string - primary key value to load the MJ: Agent Decision Log record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAgentDecisionLogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SessionRunID
+    * * Display Name: Session Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The session: the run that wrote its first decision row. A run continues its LastRunID run's session while that session's newest row is not terminal (report, decline-*).
+    */
+    get SessionRunID(): string {
+        return this.Get('SessionRunID');
+    }
+    set SessionRunID(value: string) {
+        this.Set('SessionRunID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: The run that took the decision.
+    */
+    get AgentRunID(): string {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunStepID
+    * * Display Name: Agent Run Step
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    * * Description: The run step the decision was taken in, when the run had stored one.
+    */
+    get AgentRunStepID(): string | null {
+        return this.Get('AgentRunStepID');
+    }
+    set AgentRunStepID(value: string | null) {
+        this.Set('AgentRunStepID', value);
+    }
+
+    /**
+    * * Field Name: Step
+    * * Display Name: Step
+    * * SQL Data Type: int
+    * * Description: 1-based order of the decision in its session, across every run of the session; unique with SessionRunID.
+    */
+    get Step(): number {
+        return this.Get('Step');
+    }
+    set Step(value: number) {
+        this.Set('Step', value);
+    }
+
+    /**
+    * * Field Name: Decision
+    * * Display Name: Decision
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * decline-no-signal
+    *   * decline-small-data
+    *   * decline-unresolved-reference
+    *   * draft-protocol
+    *   * draft-unit
+    *   * present-plan
+    *   * profile
+    *   * report
+    *   * request-build
+    * * Description: The transition: profile, draft-unit, draft-protocol, present-plan, request-build, report, decline-no-signal, decline-small-data or decline-unresolved-reference.
+    */
+    get Decision(): 'decline-no-signal' | 'decline-small-data' | 'decline-unresolved-reference' | 'draft-protocol' | 'draft-unit' | 'present-plan' | 'profile' | 'report' | 'request-build' {
+        return this.Get('Decision');
+    }
+    set Decision(value: 'decline-no-signal' | 'decline-small-data' | 'decline-unresolved-reference' | 'draft-protocol' | 'draft-unit' | 'present-plan' | 'profile' | 'report' | 'request-build') {
+        this.Set('Decision', value);
+    }
+
+    /**
+    * * Field Name: PromptRunID
+    * * Display Name: Prompt Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Prompt Runs (vwAIPromptRuns.ID)
+    * * Description: The prompt run whose recorded output changed the plan since the previous row; NULL when no prompt changed it (a code-decided step on the previous row's plan).
+    */
+    get PromptRunID(): string | null {
+        return this.Get('PromptRunID');
+    }
+    set PromptRunID(value: string | null) {
+        this.Set('PromptRunID', value);
+    }
+
+    /**
+    * * Field Name: ToolCalls
+    * * Display Name: Tool Calls
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of the decision's tool calls: {action, paramsHash, result}, with the recorded results replay re-applies.
+    */
+    get ToolCalls(): string {
+        return this.Get('ToolCalls');
+    }
+    set ToolCalls(value: string) {
+        this.Set('ToolCalls', value);
+    }
+
+    /**
+    * * Field Name: PayloadHash
+    * * Display Name: Payload Hash
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 (hex) of the canonical plan before the decision: the previous row's ResultingPayloadHash (compare-and-append).
+    */
+    get PayloadHash(): string {
+        return this.Get('PayloadHash');
+    }
+    set PayloadHash(value: string) {
+        this.Set('PayloadHash', value);
+    }
+
+    /**
+    * * Field Name: ResultingPayloadHash
+    * * Display Name: Resulting Payload Hash
+    * * SQL Data Type: char(64)
+    * * Description: SHA-256 (hex) of the canonical plan after the decision (AgentControlPath.PlanHash); on present-plan, the presented plan's hash.
+    */
+    get ResultingPayloadHash(): string {
+        return this.Get('ResultingPayloadHash');
+    }
+    set ResultingPayloadHash(value: string) {
+        this.Set('ResultingPayloadHash', value);
+    }
+
+    /**
+    * * Field Name: Rationale
+    * * Display Name: Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: The code rule's message or the LLM's reasoning for the decision.
+    */
+    get Rationale(): string {
+        return this.Get('Rationale');
+    }
+    set Rationale(value: string) {
+        this.Set('Rationale', value);
+    }
+
+    /**
+    * * Field Name: Replay
+    * * Display Name: Replay Data
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON {promptId, promptVersionHash, parameters}: the prompt and the vendor call parameters of the decision's prompt run (empty for a code step).
+    */
+    get Replay(): string {
+        return this.Get('Replay');
+    }
+    set Replay(value: string) {
+        this.Set('Replay', value);
+    }
+
+    /**
+    * * Field Name: BuildApprovalRequestID
+    * * Display Name: Build Approval Request
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
+    * * Description: The approved request a request-build decision claimed.
+    */
+    get BuildApprovalRequestID(): string | null {
+        return this.Get('BuildApprovalRequestID');
+    }
+    set BuildApprovalRequestID(value: string | null) {
+        this.Set('BuildApprovalRequestID', value);
+    }
+
+    /**
+    * * Field Name: SessionRun
+    * * Display Name: Session Run Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SessionRun(): string | null {
+        return this.Get('SessionRun');
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: AgentRunStep
+    * * Display Name: Agent Run Step Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRunStep(): string | null {
+        return this.Get('AgentRunStep');
+    }
+
+    /**
+    * * Field Name: PromptRun
+    * * Display Name: Prompt Run Details
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PromptRun(): string | null {
+        return this.Get('PromptRun');
     }
 }
 

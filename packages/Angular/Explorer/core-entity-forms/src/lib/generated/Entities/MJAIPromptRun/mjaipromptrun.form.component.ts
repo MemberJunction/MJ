@@ -33,7 +33,8 @@ export class MJAIPromptRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJUserRoutineRuns', sectionName: 'User Routine Runs', isExpanded: false },
             { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false },
             { sectionKey: 'mJRubricEvaluations', sectionName: 'Rubric Evaluations', isExpanded: false },
-            { sectionKey: 'mJFieldSuggestions', sectionName: 'Field Suggestions', isExpanded: false }
+            { sectionKey: 'mJFieldSuggestions', sectionName: 'Field Suggestions', isExpanded: false },
+            { sectionKey: 'mJAgentDecisionLog', sectionName: 'Agent Decision Log', isExpanded: false }
         ]);
     }
 }
