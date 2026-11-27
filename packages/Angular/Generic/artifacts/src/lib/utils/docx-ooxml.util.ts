@@ -4,9 +4,12 @@ const ZIP_EOCD_SIG = 0x06054b50;
 const ZIP_CD_SIG = 0x02014b50;
 const ZIP_LFH_SIG = 0x04034b50;
 
-const MAX_ZIP_ENTRIES = 512;
-const MAX_SINGLE_ENTRY_BYTES = 16 * 1024 * 1024;
-const MAX_TOTAL_EXTRACTED_BYTES = 48 * 1024 * 1024;
+// OOXML zip-bomb defense bounds: typical Word .docx archives have 15-80 XML/media parts,
+// so capping at 512 entries, 16 MiB per uncompressed XML part, and 48 MiB total extracted
+// prevents maliciously compressed archives from exhausting browser or Node heap memory.
+const MAX_ZIP_ENTRIES = 512; // Zip-bomb guard: max ZIP central-directory entries accepted from a .docx upload
+const MAX_SINGLE_ENTRY_BYTES = 16 * 1024 * 1024; // Zip-bomb guard: 16 MiB uncompressed ceiling for any single OOXML part
+const MAX_TOTAL_EXTRACTED_BYTES = 48 * 1024 * 1024; // Zip-bomb guard: 48 MiB cumulative uncompressed ceiling across all parts
 
 export const MJ_DOCX_CUSTOM_PROP_BLOCKS = 'MJBlocks';
 export const MJ_DOCX_CUSTOM_PROP_DESIGN = 'MJDesignPreset';

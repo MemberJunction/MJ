@@ -204,17 +204,21 @@ export const DOCUMENT_DESIGN_PRESETS: readonly DocumentDesignPreset[] = [
 
 export const DEFAULT_DOCUMENT_DESIGN_PRESET_ID: DocumentDesignPresetID = 'modern-clean';
 
+const DOCUMENT_DESIGN_PRESETS_BY_ID: ReadonlyMap<string, DocumentDesignPreset> = new Map(
+    DOCUMENT_DESIGN_PRESETS.map((preset) => [preset.ID, preset]),
+);
+
 export function IsValidDocumentDesignPresetID(value: string | null | undefined): value is DocumentDesignPresetID {
     if (!value) {
         return false;
     }
-    return DOCUMENT_DESIGN_PRESETS.some((p) => p.ID === value);
+    return DOCUMENT_DESIGN_PRESETS_BY_ID.has(value);
 }
 
 export function GetDocumentDesignPreset(presetId?: string | null): DocumentDesignPreset {
     if (presetId) {
         const normalized = presetId.trim().toLowerCase();
-        const found = DOCUMENT_DESIGN_PRESETS.find((p) => p.ID === normalized);
+        const found = DOCUMENT_DESIGN_PRESETS_BY_ID.get(normalized);
         if (found) {
             return found;
         }

@@ -924,8 +924,8 @@ interface DocsInlineToken {
               <button
                 type="button"
                 class="mj-docs-design-card"
-                [class.mj-docs-design-card--active]="ActiveDesignConfig.PresetID === preset.ID"
-                [attr.aria-pressed]="ActiveDesignConfig.PresetID === preset.ID"
+                [class.mj-docs-design-card--active]="IsDesignPresetActive(preset.ID)"
+                [attr.aria-pressed]="IsDesignPresetActive(preset.ID)"
                 [attr.data-testid]="'doc-preset-card-' + preset.ID"
                 [disabled]="!CanUserEdit"
                 (click)="ApplyDesignPreset(preset.ID)"
@@ -15979,6 +15979,10 @@ export class MarkdownArtifactViewerComponent
     return ExtractDocumentDesignConfig(this.MarkdownContent);
   }
 
+  public IsDesignPresetActive(presetId: DocumentDesignPresetID): boolean {
+    return this.ActiveDesignConfig.PresetID === presetId;
+  }
+
   public get ActiveDesignPreset(): DocumentDesignPreset {
     return GetDocumentDesignPreset(this.ActiveDesignConfig.PresetID);
   }
@@ -17596,7 +17600,7 @@ export class MarkdownArtifactViewerComponent
         Category: 'Design',
         Icon: 'fa-palette',
         Description: preset.Description,
-        Active: this.ActiveDesignConfig.PresetID === preset.ID,
+        Active: this.IsDesignPresetActive(preset.ID),
         Disabled: !this.CanUserEdit,
       });
     }
