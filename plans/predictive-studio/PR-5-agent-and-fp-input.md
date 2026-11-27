@@ -4517,6 +4517,8 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   rebuild → attack 8 red; appending without the hash compare → attack 11 red.
 - **Mutation output G4.7:** `AssertionError: expected { kind: 'small-data', …(4) } to be null` (`<` → `<=` on either
   threshold → attack 1 red at 200 resolved / 50 minority rows).
+- **`milestone-exit --milestone A4`** → `# checks 45 · failed 0` (after D5-A4-11; the first run failed only on the two missing
+  mutation-output lines and the dashboards assertion above).
 - Rulings this milestone: D5-A4-1 … D5-A4-11.
 
 ## 12. Refresh log (append-only)
