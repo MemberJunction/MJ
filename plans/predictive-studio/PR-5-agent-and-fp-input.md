@@ -304,6 +304,8 @@ packages/TestingFramework/integration-test-suite/src/__tests__/rig-harness-shim.
 # Owner-batch item 10: a prompt run completed during its own INSERT was never priced (integrator, 2026-11-26)
 packages/MJCoreEntitiesServer/src/custom/MJAIPromptRunEntityServer.server.ts  (D-091 item 10)
 packages/MJCoreEntitiesServer/src/__tests__/MJAIPromptRunEntityServer.completedDuringSave.test.ts  (D-091 item 10)
+# Owner-batch item 11: a complete-search grep test on the 150 ms default budget (integrator, 2026-11-27)
+packages/AI/Agents/src/__tests__/DocumentToolLibrary.test.ts  (D-091 item 11)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3423,6 +3425,14 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    landed during an unpriced save and prices on the next save. `MJAIPromptRunEntityServer.completedDuringSave.test.ts`
    4/4 (2 red with the fix removed); `MJCoreEntitiesServer` 120 files, 1709 passed; IT108 ×2, IT110, IT121, IT172 27/27.
    Fixed by the integrator at wave-1 integration under the owner's 2026-11-26 statement.
+11. `packages/AI/Agents/src/__tests__/DocumentToolLibrary.test.ts` — "R10-7: 200 lines … loses 0 matches" asserts a
+   complete grep but ran on `DocumentToolLibrary`'s 150 ms default `RegexBudgetMs`, whose contract says a test asserting a
+   complete search raises it. The second push's fast tier (`20261127-065819-91706`, the only red) got `matchCount 1`:
+   only the hit before the line-50 poison line, the rest skipped once the budget expired after its 40 ms per-call cap.
+   The test now sets 750 ms (the `SpreadsheetToolLibrary` tests' value) around its call and restores it; the poison
+   line still times out alone. Alone 5/5 before and after; under 12 busy loops on 14 cores it passed 3/3 both ways (the
+   red needs a full test run's contention); `ai-agents` 303 files, 5,428 passed. Fixed by the integrator at wave-1
+   integration under the owner's 2026-11-26 statement.
 
 ## 10. PR description draft
 
@@ -3482,7 +3492,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->aea46de77e<!-- /gen:head -->
+- Head: <!-- gen:head -->2c223ef583<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4013,6 +4023,8 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   (monitoring 10/10, serving-end-to-end 5/5); TruthSuite build 0, unit 28 files / 197 passed. The units' `refuse`
   policy is unchanged. First push `261546a083..aea46de77e` (hook: milestone-exit `# checks 23 · failed 0`, fast tier
   `20261127-062235-48465` ok 12 passed).
+- 2026-11-27 — integration: the D5-56 push (`2c223ef583`) went red in its fast tier on `ai-agents` only
+  (`20261127-065819-91706`) → owner-batch item 11 (§9), fixed and re-pushed.
 
 ## 12. Refresh log (append-only)
 

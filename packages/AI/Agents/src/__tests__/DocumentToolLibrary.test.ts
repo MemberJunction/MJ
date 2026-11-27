@@ -25,11 +25,21 @@ describe('DocumentToolLibrary & TextToolLibrary Grep Enhancements', () => {
 
         const documentContent = lines.join('\n');
 
-        const result = await docLib.InvokeTool(
-            'grep',
-            { pattern: 'TARGET_HIT|(a|b)+c', use_regex: true },
-            documentContent
-        );
+        // A complete search is asserted, so the call's wall-clock budget is raised (as the RegexBudgetMs contract asks):
+        // the 150 ms default ran out under a full-repo test run's CPU contention and skipped 4 of the 5 hits. The poison
+        // line stays bounded by the 40 ms per-call cap, so it still times out alone.
+        const defaultBudgetMs = docLib.RegexBudgetMs;
+        docLib.RegexBudgetMs = 750;
+        let result: Awaited<ReturnType<typeof docLib.InvokeTool>>;
+        try {
+            result = await docLib.InvokeTool(
+                'grep',
+                { pattern: 'TARGET_HIT|(a|b)+c', use_regex: true },
+                documentContent
+            );
+        } finally {
+            docLib.RegexBudgetMs = defaultBudgetMs;
+        }
 
         expect(result.success).toBe(true);
         const data = result.data as {
