@@ -21,11 +21,17 @@ import { BudgetEnforcementGuard } from '../../BudgetEnforcementGuard';
 import { DeterministicProgressDetector } from '../../DeterministicProgressDetector';
 import { FastConvergenceJudge } from '../../FastConvergenceJudge';
 import { AgentToolCircuitBreaker } from '../../native-tools/agent-tool-circuit-breaker';
+import { ConversationToolManager } from '../../ConversationToolManager';
+import { MemoryWriteManager } from '../../MemoryWriteManager';
 import { PayloadManager } from '../../PayloadManager';
 import { PipelineToolRegistry } from '../../pipeline';
 import { RunawayCheckpointManager } from '../../RunawayCheckpointManager';
 import { ScratchpadManager } from '../../ScratchpadManager';
 import { AgentActionPolicyHelper } from '../../helpers/actions/AgentActionPolicyHelper';
+import { AgentActionsHelper } from '../../helpers/actions/AgentActionsHelper';
+import { AgentMessagingHelper } from '../../helpers/messaging/AgentMessagingHelper';
+import { AgentPayloadHelper } from '../../helpers/payload/AgentPayloadHelper';
+import { AgentNativeToolsAndPrefixCacheHelper } from '../../helpers/prompt/AgentNativeToolsAndPrefixCacheHelper';
 import { ACTION_FAILURE_BUDGET, CircuitBreakerActionResult, IDENTICAL_FAILURE_THRESHOLD } from '../../helpers/base-agent-types';
 import type { AgentHelperSubclassHooks, AgentRunContext } from '../../helpers/AgentRunContext';
 
@@ -41,6 +47,11 @@ export function CreateMockAgentRunContext(
     const fastConvergenceJudge = new FastConvergenceJudge();
     const checkpointManager = new RunawayCheckpointManager();
     const actionPolicyHelper = new AgentActionPolicyHelper();
+    const actionsHelper = new AgentActionsHelper();
+    const messagingHelper = new AgentMessagingHelper();
+    const payloadHelper = new AgentPayloadHelper();
+    const conversationToolManager = new ConversationToolManager();
+    const memoryWriteManager = new MemoryWriteManager();
     const contextAssembler = new AgentContextAssembler();
     const agentToolBreaker = new AgentToolCircuitBreaker(IDENTICAL_FAILURE_THRESHOLD, ACTION_FAILURE_BUDGET);
     const actionSpilloverManager = new ActionResultSpilloverManager();
@@ -251,6 +262,78 @@ export function CreateMockAgentRunContext(
         FinishAfterActions: vi.fn(async () => undefined),
         SelfCheckSuccess: vi.fn(async (_p, step) => step),
         AssertLastRunIdIsUUID: vi.fn(),
+        MemoryObservability: () => undefined,
+        GetEffectiveAgentPrompts: () => [],
+        BuildAgentTypePromptParams: () => ({}),
+        ApplyResponseTypeAutoAlignment: vi.fn(),
+        ExtractSchemaDefaults: () => ({}),
+        BuildAgentBaseCatalog: () => ({
+            uniqueActiveSubAgents: [],
+            subAgentCount: 0,
+            subAgentDetails: '',
+            baseActionsRaw: [],
+            activeActions: [],
+            actionDetails: '',
+            baseAgentTypePromptParams: {},
+        }),
+        ApplySubAgentChanges: (base) => base,
+        ApplyActionChanges: (base) => ({ actions: base, dynamicLimits: {} }),
+        GetEffectiveSubAgentsForValidation: () => [],
+        IsSubAgentConsultEnabledForSubAgent: () => false,
+        ResolveSubAgentChatHandlingOption: () => 'Passthrough',
+        GetAgentTools: () => [],
+        ExecuteNativeArtifactTool: vi.fn(async () => ({ Content: '', IsError: false })),
+        ExecuteAgentToolCallsAsSteps: vi.fn(async (_c, p) => ({ payload: p, results: [] })),
+        ExecuteArtifactToolCallsAsSteps: vi.fn(async () => []),
+        ExecuteConversationToolCallsAsSteps: vi.fn(async () => []),
+        ExecuteMemoryWritesAsSteps: vi.fn(async () => []),
+        ProcessMemoryWritesForTurn: vi.fn(async () => undefined),
+        IsArtifactSupportEnabled: () => false,
+        ExecuteDecisionRequestsAsSteps: vi.fn(async () => []),
+        ExecuteSingleDecisionRequestAsStep: vi.fn(async () => ({ id: 'd1', success: true })),
+        InjectArtifactToolResultsMessage: vi.fn(),
+        InjectConversationToolResultsMessage: vi.fn(),
+        InjectMemoryWriteResultsMessage: vi.fn(),
+        InjectDecisionResultsMessage: vi.fn(),
+        InjectPipelineResultMessage: vi.fn(),
+        ExecutePipelineAsStep: vi.fn(async () => ({ success: true, stages: [], finalOutput: undefined, totalDurationMs: 0 })),
+        GetRequestedSubAgents: () => [],
+        DeriveRunOutcome: () => 'success',
+        ValidateSuccessNextStep: vi.fn(async (_p, s) => s),
+        RecordToolCallingInstrumentation: vi.fn(),
+        ApplyNativeTools: vi.fn(),
+        ResolveToolChoiceForTurn: () => 'auto',
+        IsFinalPermittedIteration: () => false,
+        PreparePromptParams: vi.fn(async () => ({}) as never),
+        ExecutePrompt: vi.fn(async () => ({ success: true }) as never),
+        DetermineNextStep: vi.fn(async () => ({ step: 'Success' as const, terminate: true })),
+        ProcessNextStep: vi.fn(async (s) => s),
+        DeclineTerminalAfterFailedWrite: (s) => s,
+        IsFatalPromptError: () => false,
+        IsConfigurationError: () => ({ isConfigError: false, detailedMessage: '' }),
+        AttemptContextRecovery: vi.fn(async (_p, payload) => ({ step: 'Retry' as const, terminate: false, previousPayload: payload, newPayload: payload })),
+        IsMidLoopCompactionThresholdReached: () => false,
+        CapturePromptStepMessages: () => ({}),
+        BuildPromptProgressMessage: () => 'Executing prompt',
+        MessageFingerprint: (m) => AgentNativeToolsAndPrefixCacheHelper.MessageFingerprint(m),
+        RestoreTurn1VolatileStateIfNeeded: vi.fn(),
+        RunHasVolatileStateMessage: () => false,
+        AssembleOutgoingMessages: (h, f) => [...h, f],
+        ShouldUseAppendOnlyTrailingState: () => false,
+        ResolveAppendOnlyState: () => false,
+        DriverRequiresStableReasoningPrefix: () => false,
+        ResolvePrefixPromptCache: () => false,
+        BuildVolatileStateMessage: vi.fn(async () => null),
+        ResolveRelocatedSpecialization: vi.fn(async () => null),
+        ResolveRuntimeStateDelivery: vi.fn(async () => 'trailing' as const),
+        VolatileTemplateMarkers: () => [],
+        TemplateTextEmbedsVolatileState: () => false,
+        LoadPromptTemplateText: vi.fn(async () => null),
+        LoadChildPromptTemplateText: vi.fn(async () => null),
+        ResolveFragmentDateTime: vi.fn(async () => null),
+        ReadScratchpadFromTemplateData: () => null,
+        GetAgentPromptParameters: () => [],
+        HideNarrowedOut: (_k, items) => items,
     };
 
     const { Hooks: hookOverrides, ...restOverrides } = overrides ?? {};
@@ -364,6 +447,33 @@ export function CreateMockAgentRunContext(
         PendingAgentToolResults: undefined,
         LastNativeTurnAppended: undefined,
         ActionResultCrushThreshold: 600,
+        ActionsHelper: actionsHelper,
+        MessagingHelper: messagingHelper,
+        PayloadHelper: payloadHelper,
+        ConversationToolManager: conversationToolManager,
+        MemoryWriteManager: memoryWriteManager,
+        InjectedMemory: { notes: [], examples: [] },
+        InjectedRAG: null,
+        OpeningRequest: '',
+        IsOpeningTurn: false,
+        EffectiveSubAgents: [],
+        CatalogNarrowing: undefined,
+        HeldDecisions: undefined,
+        ConversationToolTurn: undefined,
+        NativeControl: undefined,
+        LastVolatileStateMessage: undefined,
+        LastSentFingerprints: undefined,
+        LastSentPrefix: undefined,
+        ResolvedTrailingStateMode: undefined,
+        Turn1InsertionIndex: -1,
+        LastRuntimeStateDeliveryCache: null,
+        CachedTemplatesArrayRef: null,
+        TemplateByIdMap: null,
+        TemplateEngineConfiguredForRun: false,
+        ContextRecoveryAttempts: 0,
+        MaxRecoveryAttempts: 1,
+        CatalogNarrowingTimeoutMs: 30000,
+        DecisionConcurrency: 8,
         ...restOverrides,
         Hooks: {
             ...defaultHooks,

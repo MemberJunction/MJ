@@ -1,7 +1,8 @@
 /**
  * @fileoverview Logic-free `@deprecated` compatibility pass-through layer extending
- * {@link BaseAgentDeprecatedDelegatesMid} for seams `s8`–`s11` extracted from `BaseAgent`
- * into pluggable `BaseAgent*Helper` classes during the Phase 2 decomposition.
+ * {@link BaseAgentDeprecatedDelegatesActions} for seam `s9` (prompts, persona, context
+ * memory, RAG, decision discovery, catalog narrowing, native tools, prefix caching, and
+ * inline turn tools / decisions / finishIf gates).
  *
  * **STRICT INVARIANT:** This class holds **zero state** and **zero business logic** —
  * every member is a 1-line delegate forwarding to the corresponding helper seam via
@@ -15,835 +16,768 @@
 
 import type {
     ActionChange,
-    ActionChangeScope,
-    AgentAction,
     AgentChatMessage,
-    AgentChatMessageMetadata,
-    AgentClientToolInvocation,
     AgentConfiguration,
-    AgentPayloadChangeRequest,
-    AgentTaintedSource,
-    AgentToolCallRequest,
-    AIPromptExecutionScope,
+    AgentContextData,
+    AgentDecisionRequest,
+    AgentDecisionResult,
+    AgentFinishIf,
+    AgentScratchpad,
+    AIPromptParams,
+    AIPromptRunResult,
+    ArtifactToolArgs,
     BaseAgentNextStep,
     BoundActionParams,
-    ClientToolMetadata,
     ExecuteAgentParams,
-    ExecuteAgentResult,
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
+    MJAIModelEntityExtended,
+    MJAIPromptEntityExtended,
     SecondaryScopeConfig,
     SecondaryScopeValue,
+    SubAgentChange,
 } from '@memberjunction/ai-core-plus';
-import type {
-    ActionOutputTrustLevel,
-    ActionParam,
-    ActionResult,
-    ActionRunScope,
-    MJActionEntityExtended,
-    RunActionParams,
-    RuntimeAPIKeyResolver,
-} from '@memberjunction/actions-base';
-import type { ChatMessage } from '@memberjunction/ai';
+import type { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { ChatMessage, ChatToolChoice, DecisionQuestion } from '@memberjunction/ai';
+import type { AIEngine } from '@memberjunction/aiengine';
+import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
 import type { UserInfo } from '@memberjunction/core';
-import type { MJActionParamEntity } from '@memberjunction/core-entities';
-import type { ActiveRunTaint } from '../../ArtifactToolManager';
-import type { BoundParamsApplication } from '../../bound-action-params';
-import type { AgentToolResult } from '../../native-tools/agent-tools';
-import type { NativeToolResult } from '../../native-tools/tool-result-turns';
-import type { PromptComponentScope } from '../../prompt-component-resolver';
 import type {
-    ActionCircuitBreakerReason,
-    ActionFailureClass,
-    ActionResultCrushConfig,
+    MJAIAgentActionEntity,
+    MJAIAgentExampleEntity,
+    MJAIAgentNoteEntity,
+    MJAIAgentPromptEntity,
+    MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
+    MJAISkillEntity,
+    MJAIVendorEntity,
+    MJTemplateParamEntity,
+} from '@memberjunction/core-entities';
+import type { ActionLifecycleResolver } from '../../ActionLifecycleResolver';
+import type { AgentMemoryObservability } from '../../agent-memory-context-builder';
+import type { AgentPreExecutionRAGResult } from '../../agent-pre-execution-rag';
+import type { ArtifactToolCall, StoredToolResult } from '../../ArtifactToolManager';
+import type {
+    CatalogNarrowingCandidate,
+    CatalogNarrowingKind,
+    CatalogNarrowingLimits,
+    CatalogNarrowingOutcome,
+} from '../../catalog-narrowing';
+import type { ConversationToolCall, ConversationToolExecutionResult } from '../../ConversationToolManager';
+import type { DecisionDiscoveryOptionSet, DecisionDiscoveryOutcome } from '../../decision-discovery';
+import type { FinishIfOutcome, SubAgentStepResult } from '../../finish-if-state';
+import type { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from '../../MemoryWriteManager';
+import type { AgentToolDefinition, AgentToolResult } from '../../native-tools/agent-tools';
+import type { FrameworkToolAvailability, FrameworkToolHost } from '../../native-tools/framework-tools';
+import type { NativeControlConfig } from '../../native-tools/native-control-config';
+import type { RuntimeStateDateTime, RuntimeStateScratchpad } from '../../runtime-state-fragment';
+import type {
     ActionResultSummary,
-    CircuitBreakerActionResult,
-    ExecuteSingleActionOptions,
+    AgentBaseCatalog,
+    DecisionAnswerSummarizer,
+    DecisionCallAllowance,
+    DecisionLimitParam,
+    DecisionOutcome,
+    FinishIfSettings,
+    MemoryWriteSkip,
     PromptWithholding,
-    RunContextScope,
 } from '../base-agent-types';
-import type { BaseAgentActionPolicyHelper } from '../actions/BaseAgentActionPolicyHelper';
-import type { BaseAgentActionsHelper } from '../actions/BaseAgentActionsHelper';
-import { BaseAgentDeprecatedDelegatesMid } from './BaseAgentDeprecatedDelegatesMid';
+import type { BaseAgentPromptHelper } from '../prompt/BaseAgentPromptHelper';
+import { BaseAgentDeprecatedDelegatesActions } from './BaseAgentDeprecatedDelegatesActions';
 
 /**
  * Logic-free compatibility base class extended by `BaseAgent` throughout `v6.x`.
- * Seams `s1`–`s4` live in {@link BaseAgentDeprecatedDelegatesCore};
- * seams `s5`–`s7` live in {@link BaseAgentDeprecatedDelegatesMid};
- * seams `s8`+ live here so every compat file stays well below the `1,000`-line limit.
+ * Seam `s9` lives here so every compat file stays comfortably below the `1,000`-line limit.
  */
-export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDelegatesMid {
-    /** Provides the resolved pluggable actions & client-tools helper (`BaseAgentActionsHelper`). */
-    protected abstract getActionsHelper(): BaseAgentActionsHelper;
-
-    /** Provides the resolved code-only action policy, taint, audience & scope helper (`BaseAgentActionPolicyHelper`). */
-    protected abstract getActionPolicyHelper(): BaseAgentActionPolicyHelper;
+export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDelegatesActions {
+    /** Provides the resolved pluggable prompt, context, catalog & turn-tools helper (`BaseAgentPromptHelper`). */
+    protected abstract getPromptHelper(): BaseAgentPromptHelper;
 
     // =========================================================================
-    // Seam S8a — Action Security Policy, Taint, Bindings, Audience & Run Scope (Code-Only D3)
+    // Seam S9 — Prompt Execution, Memory/Persona/RAG, Discovery, Catalog, Native Tools & Decisions
     // =========================================================================
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ResolveActionTrustLevel` instead (slated for v7.0 removal). */
-    protected resolveActionTrustLevel(
-        actionName: string,
-        actionEntity?: MJActionEntityExtended,
-        params?: ExecuteAgentParams
-    ): ActionOutputTrustLevel {
-        return this.getActionPolicyHelper().ResolveActionTrustLevel(this.getRunContext(), actionName, actionEntity, params);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecutePromptStep` instead (slated for v7.0 removal). */
+    protected executePromptStep<P = unknown>(params: ExecuteAgentParams, config: AgentConfiguration, previousDecision?: BaseAgentNextStep, stepCount?: number): Promise<BaseAgentNextStep<P>> {
+        return this.getPromptHelper().ExecutePromptStep<P>(this.getRunContext(), params, config, previousDecision, stepCount);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RecordTaintedSource` instead (slated for v7.0 removal). */
-    protected recordTaintedSource(
-        stepNumber: number,
-        sourceName: string,
-        trustLevel: AgentTaintedSource['trustLevel']
-    ): void {
-        this.getActionPolicyHelper().RecordTaintedSource(this.getRunContext(), stepNumber, sourceName, trustLevel);
+    /** @deprecated Use `BaseAgentPromptHelper.PreparePromptParams` instead (slated for v7.0 removal). */
+    protected preparePromptParams<P>(config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
+        return this.getPromptHelper().PreparePromptParams(this.getRunContext(), config, payload, params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.GetHighestRunTaint` instead (slated for v7.0 removal). */
-    protected GetHighestRunTaint(): ActiveRunTaint | undefined {
-        return this.getActionPolicyHelper().GetHighestRunTaint(this.getRunContext());
+    /** @deprecated Use `BaseAgentPromptHelper.FinalizePromptParams` instead (slated for v7.0 removal). */
+    protected finalizePromptParams<P>(promptParams: AIPromptParams, config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams> {
+        return this.getPromptHelper().FinalizePromptParams(this.getRunContext(), promptParams, config, payload, params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.SeedTaintFromSecurityEnvelope` instead (slated for v7.0 removal). */
-    protected seedTaintFromSecurityEnvelope(params: ExecuteAgentParams): void {
-        this.getActionPolicyHelper().SeedTaintFromSecurityEnvelope(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecutePrompt` instead (slated for v7.0 removal). */
+    protected executePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult> {
+        return this.getPromptHelper().ExecutePrompt(this.getRunContext(), promptParams);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.SeedTaintFromParentRun` instead (slated for v7.0 removal). */
-    protected seedTaintFromParentRun(params: ExecuteAgentParams): void {
-        this.getActionPolicyHelper().SeedTaintFromParentRun(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.DetermineNextStep` instead (slated for v7.0 removal). */
+    protected determineNextStep<P>(params: ExecuteAgentParams, agentType: MJAIAgentTypeEntity, promptResult: AIPromptRunResult, currentPayload: P): Promise<BaseAgentNextStep<P>> {
+        return this.getPromptHelper().DetermineNextStep(this.getRunContext(), params, agentType, promptResult, currentPayload);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.AbsorbSubAgentTaint` instead (slated for v7.0 removal). */
-    protected absorbSubAgentTaint(
-        subAgentName: string,
-        subAgentResult: Pick<ExecuteAgentResult, 'taintedSources'>,
-        stepNumber: number
-    ): void {
-        this.getActionPolicyHelper().AbsorbSubAgentTaint(this.getRunContext(), subAgentName, subAgentResult, stepNumber);
+    /** @deprecated Use `BaseAgentPromptHelper.DetermineNoteScope` instead (slated for v7.0 removal). */
+    protected determineNoteScope(note: MJAIAgentNoteEntity): string {
+        return this.getPromptHelper().DetermineNoteScope(this.getRunContext(), note);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.CheckTaintedEgress` instead (slated for v7.0 removal). */
-    protected checkTaintedEgress(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        contextUser?: UserInfo
-    ): ActionResult | null {
-        return this.getActionPolicyHelper().CheckTaintedEgress(this.getRunContext(), params, action, actionEntity, contextUser);
+    /** @deprecated Use `BaseAgentPromptHelper.MemoryObservability` instead (slated for v7.0 removal). */
+    protected MemoryObservability(run: MJAIAgentRunEntityExtended | null): AgentMemoryObservability | undefined {
+        return this.getPromptHelper().MemoryObservability(this.getRunContext(), run);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ApplyActionBindings` instead (slated for v7.0 removal). */
-    protected applyActionBindings(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        options?: ExecuteSingleActionOptions
-    ): BoundParamsApplication {
-        return this.getActionPolicyHelper().ApplyActionBindings(this.getRunContext(), params, action, actionEntity, options);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.WhereInRun` instead (slated for v7.0 removal). */
-    protected whereInRun(options?: ExecuteSingleActionOptions): string {
-        return this.getActionPolicyHelper().WhereInRun(this.getRunContext(), options);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ToActionParams` instead (slated for v7.0 removal). */
-    protected toActionParams(
-        application: Pick<BoundParamsApplication, 'Params' | 'Bound'>,
-        actionEntity: MJActionEntityExtended
-    ): ActionParam[] {
-        return this.getActionPolicyHelper().ToActionParams(this.getRunContext(), application, actionEntity);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RefuseBoundAction` instead (slated for v7.0 removal). */
-    protected refuseBoundAction(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        reason: string,
-        options?: ExecuteSingleActionOptions
-    ): ActionResult {
-        return this.getActionPolicyHelper().RefuseBoundAction(this.getRunContext(), params, action, actionEntity, reason, options);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.BindsAnyAction` instead (slated for v7.0 removal). */
-    protected bindsAnyAction(actions: readonly MJActionEntityExtended[], bound: BoundActionParams | undefined): boolean {
-        return this.getActionPolicyHelper().BindsAnyAction(this.getRunContext(), actions, bound);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.HasBoundActionParams` instead (slated for v7.0 removal). */
-    protected hasBoundActionParams(bound: BoundActionParams | undefined): boolean {
-        return this.getActionPolicyHelper().HasBoundActionParams(this.getRunContext(), bound);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.BoundActionParamsError` instead (slated for v7.0 removal). */
-    protected boundActionParamsError(params: ExecuteAgentParams): string | null {
-        return this.getActionPolicyHelper().BoundActionParamsError(this.getRunContext(), params);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.InheritBoundActionParams` instead (slated for v7.0 removal). */
-    protected inheritBoundActionParams(params: ExecuteAgentParams): Promise<void> {
-        return this.getActionPolicyHelper().InheritBoundActionParams(this.getRunContext(), params);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ShownActionParamEntries` instead (slated for v7.0 removal). */
-    protected shownActionParamEntries(params: ExecuteAgentParams, aa: AgentAction): [string, unknown][] {
-        return this.getActionPolicyHelper().ShownActionParamEntries(this.getRunContext(), params, aa);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.CheckUserActionPolicy` instead (slated for v7.0 removal). */
-    protected checkUserActionPolicy(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        contextUser?: UserInfo
-    ): Promise<ActionResult | null> {
-        return this.getActionPolicyHelper().CheckUserActionPolicy(this.getRunContext(), params, action, actionEntity, contextUser);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.CollectPolicyAgentChain` instead (slated for v7.0 removal). */
-    protected collectPolicyAgentChain(params: ExecuteAgentParams): string[] {
-        return this.getActionPolicyHelper().CollectPolicyAgentChain(this.getRunContext(), params);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunPromptExecutionScope` instead (slated for v7.0 removal). */
-    protected runPromptExecutionScope(params: ExecuteAgentParams): AIPromptExecutionScope {
-        return this.getActionPolicyHelper().RunPromptExecutionScope(this.getRunContext(), params);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ActionMayUseRuntimeAPIKey` instead (slated for v7.0 removal). */
-    protected actionMayUseRuntimeAPIKey(
-        action: MJActionEntityExtended,
-        driverClass: string,
-        params: ExecuteAgentParams
-    ): boolean {
-        return this.getActionPolicyHelper().ActionMayUseRuntimeAPIKey(this.getRunContext(), action, driverClass, params);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.BuildRuntimeAPIKeyResolver` instead (slated for v7.0 removal). */
-    protected buildRuntimeAPIKeyResolver(
-        params: ExecuteAgentParams,
-        actionEntity: MJActionEntityExtended
-    ): RuntimeAPIKeyResolver {
-        return this.getActionPolicyHelper().BuildRuntimeAPIKeyResolver(this.getRunContext(), params, actionEntity);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.StampActionContext` instead (slated for v7.0 removal). */
-    protected stampActionContext(params: ExecuteAgentParams): Record<string, unknown> {
-        return this.getActionPolicyHelper().StampActionContext(this.getRunContext(), params);
-    }
-
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunBoundDispatchParams` instead (slated for v7.0 removal). */
-    protected runBoundDispatchParams(
-        params: ExecuteAgentParams,
-        actionEntity: MJActionEntityExtended,
-        audienceReaders: UserInfo[],
-        runAs: UserInfo | undefined
-    ): Pick<RunActionParams, 'RuntimeAPIKeyResolver' | 'CredentialScope' | 'Audience' | 'IsStructuralAudience' | 'RunScope'> {
-        return this.getActionPolicyHelper().RunBoundDispatchParams(
-            this.getRunContext(),
-            params,
-            actionEntity,
-            audienceReaders,
-            runAs
+    /** @deprecated Use `BaseAgentPromptHelper.InjectContextMemory` instead (slated for v7.0 removal). */
+    protected InjectContextMemory(
+        input: string, agent: MJAIAgentEntityExtended, userId?: string, companyId?: string,
+        contextUser?: UserInfo, conversationMessages?: ChatMessage[], primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string, secondaryScopes?: Record<string, SecondaryScopeValue>,
+        secondaryScopeConfig?: SecondaryScopeConfig | null, sharedOnly?: boolean
+    ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
+        return this.getPromptHelper().InjectContextMemory(
+            this.getRunContext(), input, agent, userId, companyId, contextUser, conversationMessages,
+            primaryScopeEntityId, primaryScopeRecordId, secondaryScopes, secondaryScopeConfig, sharedOnly
         );
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.AudienceReadersFor` instead (slated for v7.0 removal). */
-    protected audienceReadersFor(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }> {
-        return this.getActionPolicyHelper().AudienceReadersFor(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.GetEffectiveAgentPrompts` instead (slated for v7.0 removal). */
+    protected getEffectiveAgentPrompts(agentId: string): MJAIAgentPromptEntity[] {
+        return this.getPromptHelper().GetEffectiveAgentPrompts(this.getRunContext(), agentId);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ResolveRunAudience` instead (slated for v7.0 removal). */
-    protected resolveRunAudience(params: ExecuteAgentParams): Promise<{ Readers: UserInfo[] } | { Error: string }> {
-        return this.getActionPolicyHelper().ResolveRunAudience(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.GetEffectiveAgentActions` instead (slated for v7.0 removal). */
+    protected getEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
+        return this.getPromptHelper().GetEffectiveAgentActions(this.getRunContext(), agentId);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ResolveAudienceUsers` instead (slated for v7.0 removal). */
-    protected ResolveAudienceUsers(ids: string[], params: ExecuteAgentParams): Promise<UserInfo[]> {
-        return this.getActionPolicyHelper().ResolveAudienceUsers(this.getRunContext(), ids, params);
+    /** @deprecated Use `BaseAgentPromptHelper.IndexEffectiveAgentActions` instead (slated for v7.0 removal). */
+    protected indexEffectiveAgentActions(agentId: string): ReturnType<typeof ActionLifecycleResolver.IndexEffectiveAgentActions> {
+        return this.getPromptHelper().IndexEffectiveAgentActions(this.getRunContext(), agentId);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunAudienceAddsReader` instead (slated for v7.0 removal). */
-    protected runAudienceAddsReader(params: ExecuteAgentParams): boolean {
-        return this.getActionPolicyHelper().RunAudienceAddsReader(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.InjectAgentPersonaAndInstructions` instead (slated for v7.0 removal). */
+    protected InjectAgentPersonaAndInstructions(agent: MJAIAgentEntityExtended, conversationMessages: ChatMessage[], contextUser?: UserInfo, userPolicy?: MJAIAgentUserPolicyEntity | null): void {
+        this.getPromptHelper().InjectAgentPersonaAndInstructions(this.getRunContext(), agent, conversationMessages, contextUser, userPolicy);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.DispatchReaders` instead (slated for v7.0 removal). */
-    protected dispatchReaders(
-        params: ExecuteAgentParams,
-        readers: UserInfo[],
-        runAs: UserInfo | undefined
-    ): UserInfo[] {
-        return this.getActionPolicyHelper().DispatchReaders(this.getRunContext(), params, readers, runAs);
+    /** @deprecated Use `BaseAgentPromptHelper.InjectScopedPromptParts` instead (slated for v7.0 removal). */
+    protected InjectScopedPromptParts(agent: MJAIAgentEntityExtended, conversationMessages: ChatMessage[], primaryScopeEntityId?: string, primaryScopeRecordId?: string, secondaryScopes?: Record<string, SecondaryScopeValue>): void {
+        this.getPromptHelper().InjectScopedPromptParts(this.getRunContext(), agent, conversationMessages, primaryScopeEntityId, primaryScopeRecordId, secondaryScopes);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.CheckStructuralAudienceAction` instead (slated for v7.0 removal). */
-    protected checkStructuralAudienceAction(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        contextUser: UserInfo | undefined,
-        skipBreaker: boolean
-    ): ActionResult | null {
-        return this.getActionPolicyHelper().CheckStructuralAudienceAction(
-            this.getRunContext(),
-            params,
-            action,
-            actionEntity,
-            contextUser,
-            skipBreaker
+    /** @deprecated Use `BaseAgentPromptHelper.ReplaceScopedPartPlaceholders` instead (slated for v7.0 removal). */
+    protected replaceScopedPartPlaceholders(messages: ChatMessage[], before: ReadonlySet<ChatMessage>, contextUser?: UserInfo): Promise<void> {
+        return this.getPromptHelper().ReplaceScopedPartPlaceholders(this.getRunContext(), messages, before, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.InjectPreExecutionRAG` instead (slated for v7.0 removal). */
+    protected InjectPreExecutionRAG(
+        lastUserMessage: string, agent: MJAIAgentEntityExtended, contextUser: UserInfo | undefined,
+        conversationMessages: ChatMessage[] | undefined, originalMessages: ChatMessage[] | undefined,
+        primaryScopeEntityId?: string, primaryScopeRecordId?: string, secondaryScopes?: Record<string, SecondaryScopeValue>,
+        payload?: unknown, activeSkillIDs?: string[], audienceReaders?: UserInfo[]
+    ): Promise<AgentPreExecutionRAGResult | null> {
+        return this.getPromptHelper().InjectPreExecutionRAG(
+            this.getRunContext(), lastUserMessage, agent, contextUser, conversationMessages, originalMessages,
+            primaryScopeEntityId, primaryScopeRecordId, secondaryScopes, payload, activeSkillIDs, audienceReaders
         );
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ResolveActionSupportsAudience` instead (slated for v7.0 removal). */
-    protected resolveActionSupportsAudience(actionEntity: MJActionEntityExtended): boolean {
-        return this.getActionPolicyHelper().ResolveActionSupportsAudience(this.getRunContext(), actionEntity);
+    /** @deprecated Use `BaseAgentPromptHelper.InjectDecisionDiscovery` instead (slated for v7.0 removal). */
+    protected InjectDecisionDiscovery(agent: MJAIAgentEntityExtended, contextUser: UserInfo | undefined, conversationMessages: ChatMessage[] | undefined, data: Record<string, unknown> | undefined): Promise<void> {
+        return this.getPromptHelper().InjectDecisionDiscovery(this.getRunContext(), agent, contextUser, conversationMessages, data);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.SessionAudienceRefusal` instead (slated for v7.0 removal). */
-    protected sessionAudienceRefusal(params: ExecuteAgentParams): string | null {
-        return this.getActionPolicyHelper().SessionAudienceRefusal(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.IsDecisionDiscoveryOnFor` instead (slated for v7.0 removal). */
+    protected isDecisionDiscoveryOnFor(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): boolean {
+        return this.getPromptHelper().IsDecisionDiscoveryOnFor(this.getRunContext(), agent, overrides);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.TaskGraphConstraint` instead (slated for v7.0 removal). */
-    protected taskGraphConstraint(params: ExecuteAgentParams): string | null {
-        return this.getActionPolicyHelper().TaskGraphConstraint(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionDiscoveryPromptParams` instead (slated for v7.0 removal). */
+    protected decisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
+        return this.getPromptHelper().DecisionDiscoveryPromptParams(this.getRunContext(), agent, overrides);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.TaskGraphWithholdingReason` instead (slated for v7.0 removal). */
-    protected taskGraphWithholdingReason(params: ExecuteAgentParams): string | null {
-        return this.getActionPolicyHelper().TaskGraphWithholdingReason(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.CachedBasePromptParams` instead (slated for v7.0 removal). */
+    protected cachedBasePromptParams(agent: MJAIAgentEntityExtended): Record<string, unknown> | undefined {
+        return this.getPromptHelper().CachedBasePromptParams(this.getRunContext(), agent);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunWithholdsTaskGraphs` instead (slated for v7.0 removal). */
-    protected runWithholdsTaskGraphs(params: ExecuteAgentParams): boolean {
-        return this.getActionPolicyHelper().RunWithholdsTaskGraphs(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.BuildDecisionDiscoveryPromptParams` instead (slated for v7.0 removal). */
+    protected buildDecisionDiscoveryPromptParams(agent: MJAIAgentEntityExtended, overrides: Record<string, unknown> | undefined): Record<string, unknown> {
+        return this.getPromptHelper().BuildDecisionDiscoveryPromptParams(this.getRunContext(), agent, overrides);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.TaskGraphRefusal` instead (slated for v7.0 removal). */
-    protected taskGraphRefusal(params: ExecuteAgentParams, previousDecision: BaseAgentNextStep): BaseAgentNextStep | null {
-        return this.getActionPolicyHelper().TaskGraphRefusal(this.getRunContext(), params, previousDecision);
+    /** @deprecated Use `BaseAgentPromptHelper.RunDecisionDiscovery` instead (slated for v7.0 removal). */
+    protected runDecisionDiscovery(agent: MJAIAgentEntityExtended, contextUser: UserInfo, promptParams: Record<string, unknown>, hostAllowedIDs: string[] | undefined, rawEdgeHint?: unknown): Promise<DecisionDiscoveryOutcome> {
+        return this.getPromptHelper().RunDecisionDiscovery(this.getRunContext(), agent, contextUser, promptParams, hostAllowedIDs, rawEdgeHint);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunWithholdsHandoff` instead (slated for v7.0 removal). */
-    protected runWithholdsHandoff(params: ExecuteAgentParams): boolean {
-        return this.getActionPolicyHelper().RunWithholdsHandoff(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.BoundDecisionDiscovery` instead (slated for v7.0 removal). */
+    protected boundDecisionDiscovery(discover: (signal: AbortSignal) => Promise<DecisionDiscoveryOutcome>, step?: MJAIAgentRunStepEntityExtended): Promise<DecisionDiscoveryOutcome> {
+        return this.getPromptHelper().BoundDecisionDiscovery(this.getRunContext(), discover, step);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.PromptWithholding` instead (slated for v7.0 removal). */
-    protected promptWithholding(params: ExecuteAgentParams): PromptWithholding {
-        return this.getActionPolicyHelper().PromptWithholding(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.DiscoverAgent` instead (slated for v7.0 removal). */
+    protected discoverAgent(agent: MJAIAgentEntityExtended, contextUser: UserInfo, promptName: string, hostAllowedIDs: string[] | undefined, rawEdgeHint: unknown, signal: AbortSignal): Promise<DecisionDiscoveryOutcome> {
+        return this.getPromptHelper().DiscoverAgent(this.getRunContext(), agent, contextUser, promptName, hostAllowedIDs, rawEdgeHint, signal);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.CallerContextSections` instead (slated for v7.0 removal). */
-    protected callerContextSections(
-        agent: MJAIAgentEntityExtended,
-        extraData: Record<string, unknown> | undefined,
-        withhold: boolean
-    ): { clientToolDetails: string; appContext: string } {
-        return this.getActionPolicyHelper().CallerContextSections(this.getRunContext(), agent, extraData, withhold);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionDiscoveryOptionSet` instead (slated for v7.0 removal). */
+    protected decisionDiscoveryOptionSet(agent: MJAIAgentEntityExtended, contextUser: UserInfo, promptName: string, hostAllowedIDs: string[] | undefined, runnableAgents?: MJAIAgentEntityExtended[], declaredCap?: number, preferredCandidateIDs?: ReadonlyArray<string>): Promise<DecisionDiscoveryOptionSet> {
+        return this.getPromptHelper().DecisionDiscoveryOptionSet(this.getRunContext(), agent, contextUser, promptName, hostAllowedIDs, runnableAgents, declaredCap, preferredCandidateIDs);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ClientToolsRefusal` instead (slated for v7.0 removal). */
-    protected clientToolsRefusal(params: ExecuteAgentParams, previousDecision: BaseAgentNextStep): BaseAgentNextStep | null {
-        return this.getActionPolicyHelper().ClientToolsRefusal(this.getRunContext(), params, previousDecision);
+    /** @deprecated Use `BaseAgentPromptHelper.StartDecisionDiscoveryStep` instead (slated for v7.0 removal). */
+    protected startDecisionDiscoveryStep(contextUser: UserInfo, promptName: string): Promise<MJAIAgentRunStepEntityExtended | undefined> {
+        return this.getPromptHelper().StartDecisionDiscoveryStep(this.getRunContext(), contextUser, promptName);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.WithoutTaskGraphs` instead (slated for v7.0 removal). */
-    protected withoutTaskGraphs(promptParams: Record<string, unknown>): Record<string, unknown> {
-        return this.getActionPolicyHelper().WithoutTaskGraphs(this.getRunContext(), promptParams);
+    /** @deprecated Use `BaseAgentPromptHelper.FinishDecisionDiscoveryStep` instead (slated for v7.0 removal). */
+    protected finishDecisionDiscoveryStep(step: MJAIAgentRunStepEntityExtended | undefined, outcome: DecisionDiscoveryOutcome): Promise<void> {
+        return this.getPromptHelper().FinishDecisionDiscoveryStep(this.getRunContext(), step, outcome);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.WithoutHandoff` instead (slated for v7.0 removal). */
-    protected withoutHandoff(promptParams: Record<string, unknown>): Record<string, unknown> {
-        return this.getActionPolicyHelper().WithoutHandoff(this.getRunContext(), promptParams);
+    /** @deprecated Use `BaseAgentPromptHelper.WarnDecisionDiscovery` instead (slated for v7.0 removal). */
+    protected warnDecisionDiscovery(agent: MJAIAgentEntityExtended, reason: string): void {
+        this.getPromptHelper().WarnDecisionDiscovery(this.getRunContext(), agent, reason);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunScopeFor` instead (slated for v7.0 removal). */
-    protected runScopeFor(params: ExecuteAgentParams): ActionRunScope {
-        return this.getActionPolicyHelper().RunScopeFor(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.RecordToolCallingInstrumentation` instead (slated for v7.0 removal). */
+    protected recordToolCallingInstrumentation(stepEntity: MJAIAgentRunStepEntityExtended, promptResult: AIPromptRunResult): void {
+        this.getPromptHelper().RecordToolCallingInstrumentation(this.getRunContext(), stepEntity, promptResult);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunScopeInputs` instead (slated for v7.0 removal). */
-    protected runScopeInputs(params: ExecuteAgentParams): {
-        EntityName: string | undefined;
-        RecordID: string | undefined;
-        Secondary: Record<string, SecondaryScopeValue> | undefined;
-    } {
-        return this.getActionPolicyHelper().RunScopeInputs(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.AppendNativeAssistantTurn` instead (slated for v7.0 removal). */
+    protected appendNativeAssistantTurn(params: ExecuteAgentParams, step: BaseAgentNextStep): void {
+        this.getPromptHelper().AppendNativeAssistantTurn(this.getRunContext(), params, step);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ScopeDimensions` instead (slated for v7.0 removal). */
-    protected scopeDimensions(
-        value: unknown,
-        agentName: string | undefined
-    ): Record<string, SecondaryScopeValue> | undefined {
-        return this.getActionPolicyHelper().ScopeDimensions(this.getRunContext(), value, agentName);
+    /** @deprecated Use `BaseAgentPromptHelper.ApplyNativeTools` instead (slated for v7.0 removal). */
+    protected applyNativeTools(promptParams: AIPromptParams, params: ExecuteAgentParams): void {
+        this.getPromptHelper().ApplyNativeTools(this.getRunContext(), promptParams, params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.RunScopeForContext` instead (slated for v7.0 removal). */
-    protected runScopeForContext(params: ExecuteAgentParams): RunContextScope {
-        return this.getActionPolicyHelper().RunScopeForContext(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.GetAgentTools` instead (slated for v7.0 removal). */
+    protected GetAgentTools(params: ExecuteAgentParams): AgentToolDefinition[] {
+        return this.getPromptHelper().GetAgentTools(this.getRunContext(), params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ScopedPromptConfigScope` instead (slated for v7.0 removal). */
-    protected scopedPromptConfigScope(params: ExecuteAgentParams): PromptComponentScope {
-        return this.getActionPolicyHelper().ScopedPromptConfigScope(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.FrameworkToolAvailability` instead (slated for v7.0 removal). */
+    protected frameworkToolAvailability(promptParams: AIPromptParams, params: ExecuteAgentParams): FrameworkToolAvailability {
+        return this.getPromptHelper().FrameworkToolAvailability(this.getRunContext(), promptParams, params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ScopeText` instead (slated for v7.0 removal). */
-    protected scopeText(value: unknown): string | undefined {
-        return this.getActionPolicyHelper().ScopeText(this.getRunContext(), value);
+    /** @deprecated Use `BaseAgentPromptHelper.FrameworkToolHost` instead (slated for v7.0 removal). */
+    protected frameworkToolHost(params: ExecuteAgentParams): FrameworkToolHost {
+        return this.getPromptHelper().FrameworkToolHost(this.getRunContext(), params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ValidatedRunScope` instead (slated for v7.0 removal). */
-    protected validatedRunScope(params: ExecuteAgentParams): ActionRunScope {
-        return this.getActionPolicyHelper().ValidatedRunScope(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.ApplyScratchpadFromTool` instead (slated for v7.0 removal). */
+    protected applyScratchpadFromTool(changes: AgentScratchpad): string {
+        return this.getPromptHelper().ApplyScratchpadFromTool(this.getRunContext(), changes);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.HostSearchScopeIDs` instead (slated for v7.0 removal). */
-    protected hostSearchScopeIDs(params: ExecuteAgentParams): string[] | null {
-        return this.getActionPolicyHelper().HostSearchScopeIDs(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.WriteMemoryFromTool` instead (slated for v7.0 removal). */
+    protected writeMemoryFromTool(write: MemoryWriteRequest, params: ExecuteAgentParams): Promise<AgentToolResult> {
+        return this.getPromptHelper().WriteMemoryFromTool(this.getRunContext(), write, params);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.WriteRunScope` instead (slated for v7.0 removal). */
-    protected writeRunScope(params: ExecuteAgentParams, scope: ActionRunScope): void {
-        this.getActionPolicyHelper().WriteRunScope(this.getRunContext(), params, scope);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteNativeArtifactTool` instead (slated for v7.0 removal). */
+    protected ExecuteNativeArtifactTool(call: ArtifactToolCall): Promise<AgentToolResult> {
+        return this.getPromptHelper().ExecuteNativeArtifactTool(this.getRunContext(), call);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ParseSecondaryScopeConfig` instead (slated for v7.0 removal). */
-    protected parseSecondaryScopeConfig(agent: MJAIAgentEntityExtended): SecondaryScopeConfig | null {
-        return this.getActionPolicyHelper().ParseSecondaryScopeConfig(this.getRunContext(), agent);
+    /** @deprecated Use `BaseAgentPromptHelper.RunConversationToolFromTool` instead (slated for v7.0 removal). */
+    protected runConversationToolFromTool(tool: string, input: ArtifactToolArgs): Promise<AgentToolResult> {
+        return this.getPromptHelper().RunConversationToolFromTool(this.getRunContext(), tool, input);
     }
 
-    /** @deprecated Use `BaseAgentActionPolicyHelper.ValidateAndApplySecondaryScopes` instead (slated for v7.0 removal). */
-    protected validateAndApplySecondaryScopes(
-        secondary: Record<string, SecondaryScopeValue> | undefined,
-        scopeConfig: SecondaryScopeConfig | null,
-        agentName: string
-    ): Record<string, SecondaryScopeValue> | undefined {
-        return this.getActionPolicyHelper().ValidateAndApplySecondaryScopes(
-            this.getRunContext(),
-            secondary,
-            scopeConfig,
-            agentName
+    /** @deprecated Use `BaseAgentPromptHelper.RunDecisionsFromTool` instead (slated for v7.0 removal). */
+    protected runDecisionsFromTool(requests: AgentDecisionRequest[], payload: object, params: ExecuteAgentParams): Promise<AgentToolResult> {
+        return this.getPromptHelper().RunDecisionsFromTool(this.getRunContext(), requests, payload, params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ResolveToolChoiceForTurn` instead (slated for v7.0 removal). */
+    protected resolveToolChoiceForTurn(params: ExecuteAgentParams): ChatToolChoice {
+        return this.getPromptHelper().ResolveToolChoiceForTurn(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.GetNativeControlConfig` instead (slated for v7.0 removal). */
+    protected GetNativeControlConfig(params: ExecuteAgentParams): NativeControlConfig {
+        return this.getPromptHelper().GetNativeControlConfig(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.IsFinalPermittedIteration` instead (slated for v7.0 removal). */
+    protected isFinalPermittedIteration(params: ExecuteAgentParams): boolean {
+        return this.getPromptHelper().IsFinalPermittedIteration(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.RefreshRelocatedSpecialization` instead (slated for v7.0 removal). */
+    protected refreshRelocatedSpecialization<P>(promptParams: AIPromptParams, config: AgentConfiguration, payload: P, params: ExecuteAgentParams, previous: AgentChatMessage): Promise<void> {
+        return this.getPromptHelper().RefreshRelocatedSpecialization(this.getRunContext(), promptParams, config, payload, params, previous);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.DropReasoningBehindChangedHistory` instead (slated for v7.0 removal). */
+    protected dropReasoningBehindChangedHistory(params: ExecuteAgentParams, outgoing: ChatMessage[], promptParams: AIPromptParams): ChatMessage[] {
+        return this.getPromptHelper().DropReasoningBehindChangedHistory(this.getRunContext(), params, outgoing, promptParams);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ReplaysPrefixBoundReasoning` instead (slated for v7.0 removal). */
+    protected replaysPrefixBoundReasoning(): boolean {
+        return this.getPromptHelper().ReplaysPrefixBoundReasoning(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ShouldTrackSentFingerprints` instead (slated for v7.0 removal). */
+    protected shouldTrackSentFingerprints(outgoing: ChatMessage[]): boolean {
+        return this.getPromptHelper().ShouldTrackSentFingerprints(this.getRunContext(), outgoing);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.TrackSentPrefix` instead (slated for v7.0 removal). */
+    protected trackSentPrefix(params: ExecuteAgentParams, promptResult: AIPromptRunResult): void {
+        this.getPromptHelper().TrackSentPrefix(this.getRunContext(), params, promptResult);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.RestoreTurn1VolatileStateIfNeeded` instead (slated for v7.0 removal). */
+    protected restoreTurn1VolatileStateIfNeeded(params: ExecuteAgentParams, isAppendOnly: boolean): void {
+        this.getPromptHelper().RestoreTurn1VolatileStateIfNeeded(this.getRunContext(), params, isAppendOnly);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.RunHasVolatileStateMessage` instead (slated for v7.0 removal). */
+    protected runHasVolatileStateMessage(params: ExecuteAgentParams): boolean {
+        return this.getPromptHelper().RunHasVolatileStateMessage(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.AssembleOutgoingMessages` instead (slated for v7.0 removal). */
+    protected assembleOutgoingMessages(history: ChatMessage[], fragment: AgentChatMessage, isAppendOnly?: boolean): ChatMessage[] {
+        return this.getPromptHelper().AssembleOutgoingMessages(this.getRunContext(), history, fragment, isAppendOnly);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ShouldUseAppendOnlyTrailingState` instead (slated for v7.0 removal). */
+    protected shouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean {
+        return this.getPromptHelper().ShouldUseAppendOnlyTrailingState(this.getRunContext(), promptParams);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ResolveAppendOnlyState` instead (slated for v7.0 removal). */
+    protected ResolveAppendOnlyState(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        return this.getPromptHelper().ResolveAppendOnlyState(this.getRunContext(), model, vendor);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.DriverRequiresStableReasoningPrefix` instead (slated for v7.0 removal). */
+    protected DriverRequiresStableReasoningPrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        return this.getPromptHelper().DriverRequiresStableReasoningPrefix(this.getRunContext(), model, vendor);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ResolvePrefixPromptCache` instead (slated for v7.0 removal). */
+    protected resolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean {
+        return this.getPromptHelper().ResolvePrefixPromptCache(this.getRunContext(), model, vendor);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.BuildVolatileStateMessage` instead (slated for v7.0 removal). */
+    protected buildVolatileStateMessage<P>(params: ExecuteAgentParams, promptParams: AIPromptParams, payload: P, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, systemPrompt?: MJAIPromptEntityExtended): Promise<AgentChatMessage | null> {
+        return this.getPromptHelper().BuildVolatileStateMessage(this.getRunContext(), params, promptParams, payload, childPrompt, agentType, systemPrompt);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ResolveRelocatedSpecialization` instead (slated for v7.0 removal). */
+    protected resolveRelocatedSpecialization(promptParams: AIPromptParams, childPrompt: MJAIPromptEntityExtended | undefined, agentType: MJAIAgentTypeEntity, contextUser: UserInfo): Promise<string | null> {
+        return this.getPromptHelper().ResolveRelocatedSpecialization(this.getRunContext(), promptParams, childPrompt, agentType, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ResolveRuntimeStateDelivery` instead (slated for v7.0 removal). */
+    protected resolveRuntimeStateDelivery(systemPrompt: MJAIPromptEntityExtended | undefined, contextUser: UserInfo): Promise<'trailing' | 'embedded' | 'unsupported' | 'unknown'> {
+        return this.getPromptHelper().ResolveRuntimeStateDelivery(this.getRunContext(), systemPrompt, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.VolatileTemplateMarkers` instead (slated for v7.0 removal). */
+    protected get volatileTemplateMarkers(): readonly string[] {
+        return this.getPromptHelper().VolatileTemplateMarkers(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.TemplateTextEmbedsVolatileState` instead (slated for v7.0 removal). */
+    protected templateTextEmbedsVolatileState(templateText: string): boolean {
+        return this.getPromptHelper().TemplateTextEmbedsVolatileState(this.getRunContext(), templateText);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.EnsureTemplateEngineConfigured` instead (slated for v7.0 removal). */
+    protected ensureTemplateEngineConfigured(contextUser: UserInfo | undefined): Promise<void> {
+        return this.getPromptHelper().EnsureTemplateEngineConfigured(this.getRunContext(), contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.LoadPromptTemplateText` instead (slated for v7.0 removal). */
+    protected loadPromptTemplateText(prompt: MJAIPromptEntityExtended | undefined, contextUser: UserInfo): Promise<string | null> {
+        return this.getPromptHelper().LoadPromptTemplateText(this.getRunContext(), prompt, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.LoadChildPromptTemplateText` instead (slated for v7.0 removal). */
+    protected loadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null> {
+        return this.getPromptHelper().LoadChildPromptTemplateText(this.getRunContext(), childPrompt, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ResolveFragmentDateTime` instead (slated for v7.0 removal). */
+    protected resolveFragmentDateTime(promptParams: AIPromptParams): Promise<RuntimeStateDateTime | null> {
+        return this.getPromptHelper().ResolveFragmentDateTime(this.getRunContext(), promptParams);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ReadScratchpadFromTemplateData` instead (slated for v7.0 removal). */
+    protected readScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null {
+        return this.getPromptHelper().ReadScratchpadFromTemplateData(this.getRunContext(), data);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.GatherPromptTemplateData` instead (slated for v7.0 removal). */
+    protected gatherPromptTemplateData(
+        agent: MJAIAgentEntityExtended, contextUser?: UserInfo, extraData?: Record<string, unknown>,
+        actionChanges?: ActionChange[], subAgentChanges?: SubAgentChange[], boundActionParams?: BoundActionParams,
+        withholdingOrParentRun?: PromptWithholding | MJAIAgentRunEntityExtended, parentRun?: MJAIAgentRunEntityExtended
+    ): Promise<AgentContextData> {
+        return this.getPromptHelper().GatherPromptTemplateData(
+            this.getRunContext(), agent, contextUser, extraData, actionChanges, subAgentChanges,
+            boundActionParams, withholdingOrParentRun, parentRun
         );
     }
 
-    // =========================================================================
-    // Seam S8b — Actions, Circuit Breaker, Client Tools & Agent-Local Tools
-    // =========================================================================
-
-    /** @deprecated Use `BaseAgentActionsHelper.NormalizeActionParams` instead (slated for v7.0 removal). */
-    protected normalizeActionParams(params: Record<string, unknown> | null | undefined): string {
-        return this.getActionsHelper().NormalizeActionParams(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.EnsureCatalogNarrowing` instead (slated for v7.0 removal). */
+    protected ensureCatalogNarrowing(agent: MJAIAgentEntityExtended, contextUser: UserInfo | undefined, promptParams: Record<string, unknown>, actions: MJActionEntityExtended[], subAgents: MJAIAgentEntityExtended[], skills: MJAISkillEntity[]): Promise<void> {
+        return this.getPromptHelper().EnsureCatalogNarrowing(this.getRunContext(), agent, contextUser, promptParams, actions, subAgents, skills);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.NormalizeActionParamEntry` instead (slated for v7.0 removal). */
-    protected normalizeActionParamEntry(key: string, value: unknown): { key: string; value: unknown } | null {
-        return this.getActionsHelper().NormalizeActionParamEntry(this.getRunContext(), key, value);
+    /** @deprecated Use `BaseAgentPromptHelper.ReachableCatalogNarrowingLimits` instead (slated for v7.0 removal). */
+    protected reachableCatalogNarrowingLimits(agent: MJAIAgentEntityExtended, promptParams: Record<string, unknown>, actions: MJActionEntityExtended[]): CatalogNarrowingLimits {
+        return this.getPromptHelper().ReachableCatalogNarrowingLimits(this.getRunContext(), agent, promptParams, actions);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.NormalizeActionParamValue` instead (slated for v7.0 removal). */
-    protected normalizeActionParamValue(value: unknown): unknown {
-        return this.getActionsHelper().NormalizeActionParamValue(this.getRunContext(), value);
+    /** @deprecated Use `BaseAgentPromptHelper.CatalogNarrowingCandidates` instead (slated for v7.0 removal). */
+    protected catalogNarrowingCandidates(agent: MJAIAgentEntityExtended, actions: MJActionEntityExtended[], subAgents: MJAIAgentEntityExtended[], skills: MJAISkillEntity[]): CatalogNarrowingCandidate[] {
+        return this.getPromptHelper().CatalogNarrowingCandidates(this.getRunContext(), agent, actions, subAgents, skills);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.IsFatalActionError` instead (slated for v7.0 removal). */
-    protected isFatalActionError(message: string | null | undefined, actionParams?: Record<string, unknown> | null): boolean {
-        return this.getActionsHelper().IsFatalActionError(this.getRunContext(), message, actionParams);
+    /** @deprecated Use `BaseAgentPromptHelper.NarrowCatalog` instead (slated for v7.0 removal). */
+    protected narrowCatalog(agent: MJAIAgentEntityExtended, contextUser: UserInfo | undefined, promptParams: Record<string, unknown>, candidates: CatalogNarrowingCandidate[], asked: CatalogNarrowingCandidate[], limits: CatalogNarrowingLimits): Promise<CatalogNarrowingOutcome> {
+        return this.getPromptHelper().NarrowCatalog(this.getRunContext(), agent, contextUser, promptParams, candidates, asked, limits);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.HasCredentialShapedArguments` instead (slated for v7.0 removal). */
-    protected hasCredentialShapedArguments(actionParams?: Record<string, unknown> | null): boolean {
-        return this.getActionsHelper().HasCredentialShapedArguments(this.getRunContext(), actionParams);
+    /** @deprecated Use `BaseAgentPromptHelper.AskCatalogNarrowing` instead (slated for v7.0 removal). */
+    protected askCatalogNarrowing(agent: MJAIAgentEntityExtended, contextUser: UserInfo, questions: Record<string, DecisionQuestion>, promptName: string, step?: MJAIAgentRunStepEntityExtended): Promise<AIDecisionRunResult> {
+        return this.getPromptHelper().AskCatalogNarrowing(this.getRunContext(), agent, contextUser, questions, promptName, step);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.RecordActionFailure` instead (slated for v7.0 removal). */
-    protected recordActionFailure(
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended | undefined,
-        message: string | null | undefined,
-        normalizedParams: string
-    ): void {
-        this.getActionsHelper().RecordActionFailure(this.getRunContext(), action, actionEntity, message, normalizedParams);
+    /** @deprecated Use `BaseAgentPromptHelper.StartCatalogNarrowingStep` instead (slated for v7.0 removal). */
+    protected startCatalogNarrowingStep(contextUser: UserInfo, promptName: string, asked: CatalogNarrowingCandidate[], limits: CatalogNarrowingLimits): Promise<MJAIAgentRunStepEntityExtended | undefined> {
+        return this.getPromptHelper().StartCatalogNarrowingStep(this.getRunContext(), contextUser, promptName, asked, limits);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.LockOutAction` instead (slated for v7.0 removal). */
-    protected lockOutAction(
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended | undefined,
-        reason?: 'fatal' | 'audience' | 'tainted'
-    ): void {
-        this.getActionsHelper().LockOutAction(this.getRunContext(), action, actionEntity, reason);
+    /** @deprecated Use `BaseAgentPromptHelper.FinishCatalogNarrowingStep` instead (slated for v7.0 removal). */
+    protected finishCatalogNarrowingStep(step: MJAIAgentRunStepEntityExtended | undefined, result: AIDecisionRunResult, outcome: CatalogNarrowingOutcome | undefined, reason?: string): Promise<void> {
+        return this.getPromptHelper().FinishCatalogNarrowingStep(this.getRunContext(), step, result, outcome, reason);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ResetActionCircuitBreaker` instead (slated for v7.0 removal). */
-    protected resetActionCircuitBreaker(): void {
-        this.getActionsHelper().ResetActionCircuitBreaker(this.getRunContext());
+    /** @deprecated Use `BaseAgentPromptHelper.WarnCatalogNarrowing` instead (slated for v7.0 removal). */
+    protected warnCatalogNarrowing(agent: MJAIAgentEntityExtended, reason: string): void {
+        this.getPromptHelper().WarnCatalogNarrowing(this.getRunContext(), agent, reason);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.LockedOutActionResult` instead (slated for v7.0 removal). */
-    protected lockedOutActionResult(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended
-    ): CircuitBreakerActionResult | null {
-        return this.getActionsHelper().LockedOutActionResult(this.getRunContext(), params, action, actionEntity);
+    /** @deprecated Use `BaseAgentPromptHelper.HideNarrowedOut` instead (slated for v7.0 removal). */
+    protected hideNarrowedOut<T extends { ID: string }>(kind: CatalogNarrowingKind, items: T[]): T[] {
+        return this.getPromptHelper().HideNarrowedOut(this.getRunContext(), kind, items);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.TaintLockoutText` instead (slated for v7.0 removal). */
-    protected taintLockoutText(name: string): string {
-        return this.getActionsHelper().TaintLockoutText(this.getRunContext(), name);
+    /** @deprecated Use `BaseAgentPromptHelper.NarrowedCatalogSection` instead (slated for v7.0 removal). */
+    protected narrowedCatalogSection<T extends { ID: string; Name: string }>(kind: CatalogNarrowingKind, items: T[], full: string, format: (shown: T[]) => string): string {
+        return this.getPromptHelper().NarrowedCatalogSection(this.getRunContext(), kind, items, full, format);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ClearActionFailureRecord` instead (slated for v7.0 removal). */
-    protected clearActionFailureRecord(action: AgentAction, actionEntity: MJActionEntityExtended | undefined): void {
-        this.getActionsHelper().ClearActionFailureRecord(this.getRunContext(), action, actionEntity);
+    /** @deprecated Use `BaseAgentPromptHelper.BuildAgentBaseCatalog` instead (slated for v7.0 removal). */
+    protected buildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog {
+        return this.getPromptHelper().BuildAgentBaseCatalog(this.getRunContext(), agent, engine);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.CheckActionCircuitBreaker` instead (slated for v7.0 removal). */
-    protected checkActionCircuitBreaker(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        normalizedParams: string
-    ): CircuitBreakerActionResult | null {
-        return this.getActionsHelper().CheckActionCircuitBreaker(
-            this.getRunContext(),
-            params,
-            action,
-            actionEntity,
-            normalizedParams
-        );
+    /** @deprecated Use `BaseAgentPromptHelper.ApplySubAgentChanges` instead (slated for v7.0 removal). */
+    protected applySubAgentChanges(baseSubAgents: MJAIAgentEntityExtended[], subAgentChanges: SubAgentChange[], agentId: string, isRoot: boolean, engine: AIEngine): MJAIAgentEntityExtended[] {
+        return this.getPromptHelper().ApplySubAgentChanges(this.getRunContext(), baseSubAgents, subAgentChanges, agentId, isRoot, engine);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.BuildBlockedActionResult` instead (slated for v7.0 removal). */
-    protected buildBlockedActionResult(
-        actionEntity: MJActionEntityExtended,
-        reason: ActionCircuitBreakerReason,
-        message: string
-    ): CircuitBreakerActionResult {
-        return this.getActionsHelper().BuildBlockedActionResult(this.getRunContext(), actionEntity, reason, message);
+    /** @deprecated Use `BaseAgentPromptHelper.FilterSubAgentChangesForSubAgent` instead (slated for v7.0 removal). */
+    protected filterSubAgentChangesForSubAgent(subAgentChanges: SubAgentChange[] | undefined): SubAgentChange[] | undefined {
+        return this.getPromptHelper().FilterSubAgentChangesForSubAgent(this.getRunContext(), subAgentChanges);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ClassifyActionFailure` instead (slated for v7.0 removal). */
-    protected classifyActionFailure(summary: ActionResultSummary): ActionFailureClass {
-        return this.getActionsHelper().ClassifyActionFailure(this.getRunContext(), summary);
+    /** @deprecated Use `BaseAgentPromptHelper.BuildAgentTypePromptParams` instead (slated for v7.0 removal). */
+    protected buildAgentTypePromptParams(agentType: MJAIAgentTypeEntity | undefined, agent: MJAIAgentEntityExtended, runtimeOverrides?: Record<string, unknown>): Record<string, unknown> {
+        return this.getPromptHelper().BuildAgentTypePromptParams(this.getRunContext(), agentType, agent, runtimeOverrides);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FormatPolicyRefusalDirective` instead (slated for v7.0 removal). */
-    protected formatPolicyRefusalDirective(summary: ActionResultSummary): string {
-        return this.getActionsHelper().FormatPolicyRefusalDirective(this.getRunContext(), summary);
+    /** @deprecated Use `BaseAgentPromptHelper.WarnOnceOnUnknownFinishIfMode` instead (slated for v7.0 removal). */
+    protected warnOnceOnUnknownFinishIfMode(value: unknown, agent: MJAIAgentEntityExtended): void {
+        this.getPromptHelper().WarnOnceOnUnknownFinishIfMode(this.getRunContext(), value, agent);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FormatActionFailureDirective` instead (slated for v7.0 removal). */
-    protected formatActionFailureDirective(summary: ActionResultSummary): string {
-        return this.getActionsHelper().FormatActionFailureDirective(this.getRunContext(), summary);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionsEnabled` instead (slated for v7.0 removal). */
+    protected DecisionsEnabled(promptParams: Record<string, unknown> | undefined): boolean {
+        return this.getPromptHelper().DecisionsEnabled(this.getRunContext(), promptParams);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.RecordDispatchOutcome` instead (slated for v7.0 removal). */
-    protected recordDispatchOutcome(
-        params: ExecuteAgentParams,
-        action: AgentAction,
-        actionEntity: MJActionEntityExtended,
-        result: ActionResult,
-        normalizedParams: string,
-        skipBreaker: boolean
-    ): void {
-        this.getActionsHelper().RecordDispatchOutcome(
-            this.getRunContext(),
-            params,
-            action,
-            actionEntity,
-            result,
-            normalizedParams,
-            skipBreaker
-        );
+    /** @deprecated Use `BaseAgentPromptHelper.ApplyResponseTypeAutoAlignment` instead (slated for v7.0 removal). */
+    protected applyResponseTypeAutoAlignment(params: Record<string, unknown>, explicitResponseType?: Record<string, unknown>): void {
+        this.getPromptHelper().ApplyResponseTypeAutoAlignment(this.getRunContext(), params, explicitResponseType);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ActionOptionsForAgentType` instead (slated for v7.0 removal). */
-    protected actionOptionsForAgentType(): ExecuteSingleActionOptions | undefined {
-        return this.getActionsHelper().ActionOptionsForAgentType(this.getRunContext());
+    /** @deprecated Use `BaseAgentPromptHelper.ExtractSchemaDefaults` instead (slated for v7.0 removal). */
+    protected extractSchemaDefaults(schemaJson: string | null | undefined): Record<string, unknown> {
+        return this.getPromptHelper().ExtractSchemaDefaults(this.getRunContext(), schemaJson);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ValidateActionsNextStep` instead (slated for v7.0 removal). */
-    protected validateActionsNextStep<P>(
-        params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>,
-        currentPayload: P,
-        agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
-    ): Promise<BaseAgentNextStep<P>> {
-        return this.getActionsHelper().ValidateActionsNextStep(
-            this.getRunContext(),
-            params,
-            nextStep,
-            currentPayload,
-            agentRun,
-            currentStep
-        );
+    /** @deprecated Use `BaseAgentPromptHelper.FormatSubAgentDetails` instead (slated for v7.0 removal). */
+    protected formatSubAgentDetails(subAgents: MJAIAgentEntityExtended[]): string {
+        return this.getPromptHelper().FormatSubAgentDetails(this.getRunContext(), subAgents);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ValidateActionInAgent` instead (slated for v7.0 removal). */
-    protected validateActionInAgent(actionName: string, agentId?: string): string | null {
-        return this.getActionsHelper().ValidateActionInAgent(this.getRunContext(), actionName, agentId);
+    /** @deprecated Use `BaseAgentPromptHelper.FormatSkillsCatalog` instead (slated for v7.0 removal). */
+    protected formatSkillsCatalog(skills: MJAISkillEntity[]): string {
+        return this.getPromptHelper().FormatSkillsCatalog(this.getRunContext(), skills);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.GetEffectiveActionsForValidation` instead (slated for v7.0 removal). */
-    protected getEffectiveActionsForValidation(agentId: string): MJActionEntityExtended[] {
-        return this.getActionsHelper().GetEffectiveActionsForValidation(this.getRunContext(), agentId);
+    /** @deprecated Use `BaseAgentPromptHelper.GetAgentPromptParameters` instead (slated for v7.0 removal). */
+    protected getAgentPromptParameters(agent: MJAIAgentEntityExtended): Array<MJTemplateParamEntity> {
+        return this.getPromptHelper().GetAgentPromptParameters(this.getRunContext(), agent);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.GetFlowStepActions` instead (slated for v7.0 removal). */
-    protected getFlowStepActions(agentId: string): MJActionEntityExtended[] {
-        return this.getActionsHelper().GetFlowStepActions(this.getRunContext(), agentId);
+    /** @deprecated Use `BaseAgentPromptHelper.GetAgentPromptParametersJSON` instead (slated for v7.0 removal). */
+    protected getAgentPromptParametersJSON(agent: MJAIAgentEntityExtended): string {
+        return this.getPromptHelper().GetAgentPromptParametersJSON(this.getRunContext(), agent);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.GetAvailableActionsForAgent` instead (slated for v7.0 removal). */
-    protected getAvailableActionsForAgent(agentId: string): MJActionEntityExtended[] {
-        return this.getActionsHelper().GetAvailableActionsForAgent(this.getRunContext(), agentId);
+    /** @deprecated Use `BaseAgentPromptHelper.BuildAppContextSection` instead (slated for v7.0 removal). */
+    protected buildAppContextSection(extraData?: Record<string, unknown>): string {
+        return this.getPromptHelper().BuildAppContextSection(this.getRunContext(), extraData);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ResolveActionEntityForAgent` instead (slated for v7.0 removal). */
-    protected resolveActionEntityForAgent(
-        rawName: string | null | undefined,
-        pool: readonly MJActionEntityExtended[],
-        params?: ExecuteAgentParams,
-        logMatches?: boolean
-    ): MJActionEntityExtended | undefined {
-        return this.getActionsHelper().ResolveActionEntityForAgent(this.getRunContext(), rawName, pool, params, logMatches);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteArtifactToolCallsAsSteps` instead (slated for v7.0 removal). */
+    protected executeArtifactToolCallsAsSteps(calls: ArtifactToolCall[], params: ExecuteAgentParams): Promise<StoredToolResult[]> {
+        return this.getPromptHelper().ExecuteArtifactToolCallsAsSteps(this.getRunContext(), calls, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.DoesChangeScopeApply` instead (slated for v7.0 removal). */
-    protected doesChangeScopeApply(
-        scope: ActionChangeScope,
-        agentId: string,
-        isRoot: boolean,
-        agentIds?: string[]
-    ): boolean {
-        return this.getActionsHelper().DoesChangeScopeApply(this.getRunContext(), scope, agentId, isRoot, agentIds);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteConversationToolCallsAsSteps` instead (slated for v7.0 removal). */
+    protected executeConversationToolCallsAsSteps(calls: ConversationToolCall[], params: ExecuteAgentParams): Promise<ConversationToolExecutionResult[]> {
+        return this.getPromptHelper().ExecuteConversationToolCallsAsSteps(this.getRunContext(), calls, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ApplyActionChanges` instead (slated for v7.0 removal). */
-    protected applyActionChanges(
-        baseActions: MJActionEntityExtended[],
-        actionChanges: ActionChange[],
-        agentId: string,
-        isRoot: boolean
-    ): { actions: MJActionEntityExtended[]; dynamicLimits: Record<string, number> } {
-        return this.getActionsHelper().ApplyActionChanges(this.getRunContext(), baseActions, actionChanges, agentId, isRoot);
+    /** @deprecated Use `BaseAgentPromptHelper.MemoryWriteOptions` instead (slated for v7.0 removal). */
+    protected memoryWriteOptions(params: ExecuteAgentParams): Parameters<MemoryWriteManager['ExecuteWrite']>[1] {
+        return this.getPromptHelper().MemoryWriteOptions(this.getRunContext(), params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FilterActionChangesForSubAgent` instead (slated for v7.0 removal). */
-    protected filterActionChangesForSubAgent(actionChanges: ActionChange[] | undefined): ActionChange[] | undefined {
-        return this.getActionsHelper().FilterActionChangesForSubAgent(this.getRunContext(), actionChanges);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteMemoryWritesAsSteps` instead (slated for v7.0 removal). */
+    protected executeMemoryWritesAsSteps(writes: MemoryWriteRequest[], params: ExecuteAgentParams): Promise<MemoryWriteResult[]> {
+        return this.getPromptHelper().ExecuteMemoryWritesAsSteps(this.getRunContext(), writes, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.BuildActionInvocationMessage` instead (slated for v7.0 removal). */
-    protected buildActionInvocationMessage(actions: AgentAction[], params: ExecuteAgentParams): string {
-        return this.getActionsHelper().BuildActionInvocationMessage(this.getRunContext(), actions, params);
+    /** @deprecated Use `BaseAgentPromptHelper.ProcessMemoryWritesForTurn` instead (slated for v7.0 removal). */
+    protected processMemoryWritesForTurn(memoryWrites: MemoryWriteRequest[], params: ExecuteAgentParams): Promise<void> {
+        return this.getPromptHelper().ProcessMemoryWritesForTurn(this.getRunContext(), memoryWrites, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.BuildActionResultsMessage` instead (slated for v7.0 removal). */
-    protected buildActionResultsMessage(actionSummaries: ActionResultSummary[]): string {
-        return this.getActionsHelper().BuildActionResultsMessage(this.getRunContext(), actionSummaries);
+    /** @deprecated Use `BaseAgentPromptHelper.IsArtifactSupportEnabled` instead (slated for v7.0 removal). */
+    protected isArtifactSupportEnabled(agent: MJAIAgentEntityExtended): boolean {
+        return this.getPromptHelper().IsArtifactSupportEnabled(this.getRunContext(), agent);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FormatActionResultsAsMarkdown` instead (slated for v7.0 removal). */
-    protected formatActionResultsAsMarkdown(actionSummaries: ActionResultSummary[]): string {
-        return this.getActionsHelper().FormatActionResultsAsMarkdown(this.getRunContext(), actionSummaries);
+    /** @deprecated Use `BaseAgentPromptHelper.MemoryWriteSkip` instead (slated for v7.0 removal). */
+    protected memoryWriteSkip(params: ExecuteAgentParams): MemoryWriteSkip | null {
+        return this.getPromptHelper().MemoryWriteSkip(this.getRunContext(), params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ResolveActionResultCrush` instead (slated for v7.0 removal). */
-    protected resolveActionResultCrush(params: ExecuteAgentParams): ActionResultCrushConfig | undefined {
-        return this.getActionsHelper().ResolveActionResultCrush(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.SkipMemoryWrites` instead (slated for v7.0 removal). */
+    protected skipMemoryWrites(requestedWriteCount: number, skip: MemoryWriteSkip, params: ExecuteAgentParams): Promise<void> {
+        return this.getPromptHelper().SkipMemoryWrites(this.getRunContext(), requestedWriteCount, skip, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FormatParamValueForMessage` instead (slated for v7.0 removal). */
-    protected formatParamValueForMessage(value: unknown, maxLength?: number): string {
-        return this.getActionsHelper().FormatParamValueForMessage(this.getRunContext(), value, maxLength);
+    /** @deprecated Use `BaseAgentPromptHelper.RunWithConcurrencyLimit` instead (slated for v7.0 removal). */
+    protected runWithConcurrencyLimit<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>, onError: (error: unknown, item: T, index: number) => R): Promise<R[]> {
+        return this.getPromptHelper().RunWithConcurrencyLimit(this.getRunContext(), items, limit, fn, onError);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FormatActionDetails` instead (slated for v7.0 removal). */
-    protected formatActionDetails(actions: MJActionEntityExtended[], boundActionParams?: BoundActionParams): string {
-        return this.getActionsHelper().FormatActionDetails(this.getRunContext(), actions, boundActionParams);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteDecisionRequestsAsSteps` instead (slated for v7.0 removal). */
+    protected executeDecisionRequestsAsSteps(requests: AgentDecisionRequest[], finalPayload: unknown, agentTypePromptParams: Record<string, unknown> | undefined, params: ExecuteAgentParams): Promise<AgentDecisionResult[]> {
+        return this.getPromptHelper().ExecuteDecisionRequestsAsSteps(this.getRunContext(), requests, finalPayload, agentTypePromptParams, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ResolveClientToolsForRun` instead (slated for v7.0 removal). */
-    protected resolveClientToolsForRun(
-        agent: MJAIAgentEntityExtended,
-        data: Record<string, unknown> | undefined
-    ): ClientToolMetadata[] {
-        return this.getActionsHelper().ResolveClientToolsForRun(this.getRunContext(), agent, data);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionRequestCap` instead (slated for v7.0 removal). */
+    protected decisionRequestCap(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.getPromptHelper().DecisionRequestCap(this.getRunContext(), agentTypePromptParams);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.BuildClientToolPromptSection` instead (slated for v7.0 removal). */
-    protected buildClientToolPromptSection(
-        agent: MJAIAgentEntityExtended,
-        extraData?: Record<string, unknown>
-    ): string {
-        return this.getActionsHelper().BuildClientToolPromptSection(this.getRunContext(), agent, extraData);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionCallBudget` instead (slated for v7.0 removal). */
+    protected decisionCallBudget(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.getPromptHelper().DecisionCallBudget(this.getRunContext(), agentTypePromptParams);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.FormatActionParameter` instead (slated for v7.0 removal). */
-    protected formatActionParameter(param: MJActionParamEntity): string {
-        return this.getActionsHelper().FormatActionParameter(this.getRunContext(), param);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionMaxItems` instead (slated for v7.0 removal). */
+    protected decisionMaxItems(agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.getPromptHelper().DecisionMaxItems(this.getRunContext(), agentTypePromptParams);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.PayloadToolResult` instead (slated for v7.0 removal). */
-    protected payloadToolResult(previousDecision: BaseAgentNextStep | undefined): NativeToolResult[] {
-        return this.getActionsHelper().PayloadToolResult(this.getRunContext(), previousDecision);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionLimit` instead (slated for v7.0 removal). */
+    protected decisionLimit(agentTypePromptParams: Record<string, unknown> | undefined, name: DecisionLimitParam, fallback: number): number {
+        return this.getPromptHelper().DecisionLimit(this.getRunContext(), agentTypePromptParams, name, fallback);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.AppendActionResults` instead (slated for v7.0 removal). */
-    protected appendActionResults(
-        params: ExecuteAgentParams,
-        summaries: ActionResultSummary[],
-        resultsMessage: string,
-        metadata: AgentChatMessageMetadata | undefined,
-        previousDecision: BaseAgentNextStep,
-        failureGuidance?: ReadonlyMap<ActionResultSummary, string>
-    ): ReadonlySet<ActionResultSummary> {
-        return this.getActionsHelper().AppendActionResults(
-            this.getRunContext(),
-            params,
-            summaries,
-            resultsMessage,
-            metadata,
-            previousDecision,
-            failureGuidance
-        );
+    /** @deprecated Use `BaseAgentPromptHelper.AllotDecisionCalls` instead (slated for v7.0 removal). */
+    protected allotDecisionCalls(requests: AgentDecisionRequest[], finalPayload: unknown, agentTypePromptParams: Record<string, unknown> | undefined, budget: number, params: ExecuteAgentParams): DecisionCallAllowance[] {
+        return this.getPromptHelper().AllotDecisionCalls(this.getRunContext(), requests, finalPayload, agentTypePromptParams, budget, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ReconcileUnansweredToolCalls` instead (slated for v7.0 removal). */
-    protected reconcileUnansweredToolCalls(params: ExecuteAgentParams): void {
-        this.getActionsHelper().ReconcileUnansweredToolCalls(this.getRunContext(), params);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionCallsWanted` instead (slated for v7.0 removal). */
+    protected decisionCallsWanted(request: AgentDecisionRequest, finalPayload: unknown, agentTypePromptParams: Record<string, unknown> | undefined): number {
+        return this.getPromptHelper().DecisionCallsWanted(this.getRunContext(), request, finalPayload, agentTypePromptParams);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.PushToolResultTurn` instead (slated for v7.0 removal). */
-    protected PushToolResultTurn(params: ExecuteAgentParams, results: AgentChatMessage): void {
-        this.getActionsHelper().PushToolResultTurn(this.getRunContext(), params, results);
+    /** @deprecated Use `BaseAgentPromptHelper.OverBudgetDecisionResult` instead (slated for v7.0 removal). */
+    protected overBudgetDecisionResult(request: AgentDecisionRequest, index: number, budget: number): AgentDecisionResult {
+        return this.getPromptHelper().OverBudgetDecisionResult(this.getRunContext(), request, index, budget);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.InsertToolResultsAfterCallTurn` instead (slated for v7.0 removal). */
-    protected insertToolResultsAfterCallTurn(
-        messages: ChatMessage[],
-        callTurnIndex: number,
-        results: AgentChatMessage
-    ): void {
-        this.getActionsHelper().InsertToolResultsAfterCallTurn(this.getRunContext(), messages, callTurnIndex, results);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionRequestId` instead (slated for v7.0 removal). */
+    protected decisionRequestId(request: AgentDecisionRequest, index: number): string {
+        return this.getPromptHelper().DecisionRequestId(this.getRunContext(), request, index);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.StubToolTurn` instead (slated for v7.0 removal). */
-    protected stubToolTurn(message: AgentChatMessage, note: string): AgentChatMessage {
-        return this.getActionsHelper().StubToolTurn(this.getRunContext(), message, note);
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteDecisionStep` instead (slated for v7.0 removal). */
+    protected executeDecisionStep<P>(params: ExecuteAgentParams, decision: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P>> {
+        return this.getPromptHelper().ExecuteDecisionStep(this.getRunContext(), params, decision);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ExecuteActionsStep` instead (slated for v7.0 removal). */
-    protected executeActionsStep(
-        params: ExecuteAgentParams,
-        previousDecision: BaseAgentNextStep,
-        parentStepId: string,
-        addConversationMessage?: boolean,
-        stepCount?: number,
-        actionOptions?: ExecuteSingleActionOptions
-    ): Promise<BaseAgentNextStep> {
-        return this.getActionsHelper().ExecuteActionsStep(
-            this.getRunContext(),
-            params,
-            previousDecision,
-            parentStepId,
-            addConversationMessage,
-            stepCount,
-            actionOptions
-        );
+    /** @deprecated Use `BaseAgentPromptHelper.ExecuteSingleDecisionRequestAsStep` instead (slated for v7.0 removal). */
+    protected executeSingleDecisionRequestAsStep(request: AgentDecisionRequest, finalPayload: unknown, agentTypePromptParams: Record<string, unknown> | undefined, params: ExecuteAgentParams, callAllowance?: number, summarize?: DecisionAnswerSummarizer): Promise<AgentDecisionResult> {
+        return this.getPromptHelper().ExecuteSingleDecisionRequestAsStep(this.getRunContext(), request, finalPayload, agentTypePromptParams, params, callAllowance, summarize);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.DescribeClientToolInvocations` instead (slated for v7.0 removal). */
-    protected describeClientToolInvocations(clientTools: AgentClientToolInvocation[]): string {
-        return this.getActionsHelper().DescribeClientToolInvocations(this.getRunContext(), clientTools);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionAsker` instead (slated for v7.0 removal). */
+    protected decisionAsker(questions: Record<string, DecisionQuestion>, agentTypePromptParams: Record<string, unknown> | undefined, params: ExecuteAgentParams): (state: string) => Promise<AIDecisionRunResult> {
+        return this.getPromptHelper().DecisionAsker(this.getRunContext(), questions, agentTypePromptParams, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ExecuteClientToolsStep` instead (slated for v7.0 removal). */
-    protected executeClientToolsStep(
-        params: ExecuteAgentParams,
-        config: AgentConfiguration,
-        previousDecision: BaseAgentNextStep,
-        stepCount?: number
-    ): Promise<BaseAgentNextStep> {
-        return this.getActionsHelper().ExecuteClientToolsStep(
-            this.getRunContext(),
-            params,
-            config,
-            previousDecision,
-            stepCount
-        );
+    /** @deprecated Use `BaseAgentPromptHelper.AskOnce` instead (slated for v7.0 removal). */
+    protected askOnce(request: AgentDecisionRequest, finalPayload: unknown, step: MJAIAgentRunStepEntityExtended, ask: (state: string) => Promise<AIDecisionRunResult>, summarize: DecisionAnswerSummarizer): Promise<DecisionOutcome> {
+        return this.getPromptHelper().AskOnce(this.getRunContext(), request, finalPayload, step, ask, summarize);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ExecuteAgentToolCallsAsSteps` instead (slated for v7.0 removal). */
-    protected ExecuteAgentToolCallsAsSteps<P>(
-        calls: AgentToolCallRequest[],
-        payload: P,
-        params: ExecuteAgentParams
-    ): Promise<{ payload: P; results: NativeToolResult[] }> {
-        return this.getActionsHelper().ExecuteAgentToolCallsAsSteps(this.getRunContext(), calls, payload, params);
+    /** @deprecated Use `BaseAgentPromptHelper.AskForEachItem` instead (slated for v7.0 removal). */
+    protected askForEachItem(request: AgentDecisionRequest, finalPayload: unknown, agentTypePromptParams: Record<string, unknown> | undefined, callAllowance: number, params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended, ask: (state: string) => Promise<AIDecisionRunResult>, summarize: DecisionAnswerSummarizer): Promise<DecisionOutcome> {
+        return this.getPromptHelper().AskForEachItem(this.getRunContext(), request, finalPayload, agentTypePromptParams, callAllowance, params, step, ask, summarize);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ExecuteAgentToolCallAsStep` instead (slated for v7.0 removal). */
-    protected executeAgentToolCallAsStep<P>(
-        call: AgentToolCallRequest,
-        payload: P,
-        params: ExecuteAgentParams
-    ): Promise<{ payload: P; result: NativeToolResult }> {
-        return this.getActionsHelper().ExecuteAgentToolCallAsStep(this.getRunContext(), call, payload, params);
+    /** @deprecated Use `BaseAgentPromptHelper.AskItemAsStep` instead (slated for v7.0 removal). */
+    protected askItemAsStep(request: AgentDecisionRequest, item: unknown, index: number, parentStep: MJAIAgentRunStepEntityExtended, ask: (state: string) => Promise<AIDecisionRunResult>, params: ExecuteAgentParams): Promise<AIDecisionRunResult> {
+        return this.getPromptHelper().AskItemAsStep(this.getRunContext(), request, item, index, parentStep, ask, params);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.RunAndApplyAgentTool` instead (slated for v7.0 removal). */
-    protected runAndApplyAgentTool<P>(
-        call: AgentToolCallRequest,
-        payload: P,
-        params: ExecuteAgentParams
-    ): Promise<{ payload: P; content: string; isError: boolean }> {
-        return this.getActionsHelper().RunAndApplyAgentTool(this.getRunContext(), call, payload, params);
+    /** @deprecated Use `BaseAgentPromptHelper.AttachDecisionPromptRun` instead (slated for v7.0 removal). */
+    protected attachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void {
+        this.getPromptHelper().AttachDecisionPromptRun(this.getRunContext(), step, result);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.AgentToolBreakerKey` instead (slated for v7.0 removal). */
-    protected agentToolBreakerKey(call: AgentToolCallRequest): string | null {
-        return this.getActionsHelper().AgentToolBreakerKey(this.getRunContext(), call);
+    /** @deprecated Use `BaseAgentPromptHelper.LinkLateDecisionPromptRun` instead (slated for v7.0 removal). */
+    protected linkLateDecisionPromptRun(step: MJAIAgentRunStepEntityExtended | undefined, late: Promise<AIDecisionRunResult | undefined>): void {
+        this.getPromptHelper().LinkLateDecisionPromptRun(this.getRunContext(), step, late);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.RecordAgentToolOutcome` instead (slated for v7.0 removal). */
-    protected recordAgentToolOutcome(toolName: string, breakerKey: string | null, isError: boolean): void {
-        this.getActionsHelper().RecordAgentToolOutcome(this.getRunContext(), toolName, breakerKey, isError);
+    /** @deprecated Use `BaseAgentPromptHelper.ResolveDecisionState` instead (slated for v7.0 removal). */
+    protected resolveDecisionState(state: string | undefined, finalPayload: unknown): { State: string } | { Error: string } {
+        return this.getPromptHelper().ResolveDecisionState(this.getRunContext(), state, finalPayload);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.RunAgentTool` instead (slated for v7.0 removal). */
-    protected runAgentTool<P>(
-        call: AgentToolCallRequest,
-        payload: P,
-        params: ExecuteAgentParams
-    ): Promise<AgentToolResult<P>> {
-        return this.getActionsHelper().RunAgentTool(this.getRunContext(), call, payload, params);
+    /** @deprecated Use `BaseAgentPromptHelper.ResolvePayloadPath` instead (slated for v7.0 removal). */
+    protected resolvePayloadPath(path: string, finalPayload: unknown): unknown {
+        return this.getPromptHelper().ResolvePayloadPath(this.getRunContext(), path, finalPayload);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.ApplyAgentToolPayloadChange` instead (slated for v7.0 removal). */
-    protected applyAgentToolPayloadChange<P>(
-        payload: P,
-        change: AgentPayloadChangeRequest<P>,
-        params: ExecuteAgentParams,
-        partial?: boolean
-    ): { payload: P; error?: string } {
-        return this.getActionsHelper().ApplyAgentToolPayloadChange(this.getRunContext(), payload, change, params, partial);
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionStateText` instead (slated for v7.0 removal). */
+    protected decisionStateText(value: unknown): string {
+        return this.getPromptHelper().DecisionStateText(this.getRunContext(), value);
     }
 
-    /** @deprecated Use `BaseAgentActionsHelper.AppendAgentToolResults` instead (slated for v7.0 removal). */
-    protected appendAgentToolResults(params: ExecuteAgentParams, step: BaseAgentNextStep): void {
-        this.getActionsHelper().AppendAgentToolResults(this.getRunContext(), params, step);
+    /** @deprecated Use `BaseAgentPromptHelper.FinishDecisionStep` instead (slated for v7.0 removal). */
+    protected finishDecisionStep(step: MJAIAgentRunStepEntityExtended, request: AgentDecisionRequest, outcome: DecisionOutcome, droppedQuestions?: string[]): Promise<AgentDecisionResult> {
+        return this.getPromptHelper().FinishDecisionStep(this.getRunContext(), step, request, outcome, droppedQuestions);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.ProcessTurnDecisions` instead (slated for v7.0 removal). */
+    protected processTurnDecisions(decisions: AgentDecisionRequest[], nextStep: BaseAgentNextStep, finalPayload: unknown, agentTypePromptParams: Record<string, unknown> | undefined, params: ExecuteAgentParams): Promise<void> {
+        return this.getPromptHelper().ProcessTurnDecisions(this.getRunContext(), decisions, nextStep, finalPayload, agentTypePromptParams, params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.DecisionsHoldReason` instead (slated for v7.0 removal). */
+    protected decisionsHoldReason(step: BaseAgentNextStep): string | undefined {
+        return this.getPromptHelper().DecisionsHoldReason(this.getRunContext(), step);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.RunHeldDecisions` instead (slated for v7.0 removal). */
+    protected runHeldDecisions(params: ExecuteAgentParams): Promise<void> {
+        return this.getPromptHelper().RunHeldDecisions(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.SkipHeldDecisions` instead (slated for v7.0 removal). */
+    protected skipHeldDecisions(params: ExecuteAgentParams, runEnd: string): void {
+        this.getPromptHelper().SkipHeldDecisions(this.getRunContext(), params, runEnd);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.RunEndForHeldDecisions` instead (slated for v7.0 removal). */
+    protected runEndForHeldDecisions(): string {
+        return this.getPromptHelper().RunEndForHeldDecisions(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinishIfSettings` instead (slated for v7.0 removal). */
+    protected finishIfSettings(): FinishIfSettings {
+        return this.getPromptHelper().FinishIfSettings(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinishIfActs` instead (slated for v7.0 removal). */
+    protected finishIfActs(): boolean {
+        return this.getPromptHelper().FinishIfActs(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.GateEndsRun` instead (slated for v7.0 removal). */
+    protected gateEndsRun(outcome: FinishIfOutcome, params: ExecuteAgentParams): boolean {
+        return this.getPromptHelper().GateEndsRun(this.getRunContext(), outcome, params);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinishAfterActions` instead (slated for v7.0 removal). */
+    protected finishAfterActions<P>(params: ExecuteAgentParams, decision: BaseAgentNextStep<P>, actionResults: Array<{ success: boolean; result?: ActionResult }>, actionSummaries: ActionResultSummary[], payload: P, parentStepId: string | undefined, addConversationMessage: boolean): Promise<BaseAgentNextStep<P> | undefined> {
+        return this.getPromptHelper().FinishAfterActions(this.getRunContext(), params, decision, actionResults, actionSummaries, payload, parentStepId, addConversationMessage);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinishAfterSubAgent` instead (slated for v7.0 removal). */
+    protected finishAfterSubAgent<P>(params: ExecuteAgentParams, decision: BaseAgentNextStep<P>, result: SubAgentStepResult<P>): Promise<BaseAgentNextStep<P> | undefined> {
+        return this.getPromptHelper().FinishAfterSubAgent(this.getRunContext(), params, decision, result);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.EvaluateFinishIf` instead (slated for v7.0 removal). */
+    protected evaluateFinishIf<P>(finishIf: AgentFinishIf, state: string, params: ExecuteAgentParams, decision: BaseAgentNextStep<P>, payload: P, parentStepId?: string): Promise<FinishIfOutcome> {
+        return this.getPromptHelper().EvaluateFinishIf(this.getRunContext(), finishIf, state, params, decision, payload, parentStepId);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.AskFinishIf` instead (slated for v7.0 removal). */
+    protected askFinishIf(finishIf: AgentFinishIf, state: string, settings: FinishIfSettings, params: ExecuteAgentParams, step: MJAIAgentRunStepEntityExtended): Promise<FinishIfOutcome> {
+        return this.getPromptHelper().AskFinishIf(this.getRunContext(), finishIf, state, settings, params, step);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinishIfValidationRefusal` instead (slated for v7.0 removal). */
+    protected finishIfValidationRefusal<P>(params: ExecuteAgentParams, successStep: BaseAgentNextStep<P>, payload: P, step: MJAIAgentRunStepEntityExtended): Promise<string | undefined> {
+        return this.getPromptHelper().FinishIfValidationRefusal(this.getRunContext(), params, successStep, payload, step);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinishIfSuccessStep` instead (slated for v7.0 removal). */
+    protected finishIfSuccessStep<P>(finishIf: AgentFinishIf, decision: BaseAgentNextStep<P>, payload: P): BaseAgentNextStep<P> {
+        return this.getPromptHelper().FinishIfSuccessStep(this.getRunContext(), finishIf, decision, payload);
+    }
+
+    /** @deprecated Use `BaseAgentPromptHelper.FinalizeFinishCheckStep` instead (slated for v7.0 removal). */
+    protected finalizeFinishCheckStep(step: MJAIAgentRunStepEntityExtended | undefined, outcome: FinishIfOutcome, settings: FinishIfSettings): Promise<void> {
+        return this.getPromptHelper().FinalizeFinishCheckStep(this.getRunContext(), step, outcome, settings);
     }
 }

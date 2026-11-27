@@ -16,17 +16,24 @@ import type {
     AgentChatMessage,
     AgentChatMessageMetadata,
     AgentConfiguration,
+    AgentContextData,
+    AgentDecisionRequest,
+    AgentDecisionResult,
     AgentExecutionProgressCallback,
+    AgentPipelineRequest,
     AgentRunAudience,
     AgentRunStepSaveQueue,
     AgentSkillActivationRequest,
     AgentSkillInvocation,
+    AgentSubAgentRequest,
     AgentTreeBudget,
     AIModelSelectionInfo,
     AIPromptExecutionScope,
+    AIPromptParams,
     AIPromptRunResult,
     AgentTaintedSource,
     BaseAgentNextStep,
+    BoundActionParams,
     BudgetCostEvent,
     ExecuteAgentParams,
     ExecuteAgentResult,
@@ -38,36 +45,59 @@ import type {
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
+    MJAIModelEntityExtended,
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     PendingLoopCursorState,
     SkillAvailabilityPurpose,
+    SubAgentChange,
     WhileOperation,
 } from '@memberjunction/ai-core-plus';
 import type { ActionOutputTrustLevel, ActionParam, ActionResult, ActionRunScope, MJActionEntityExtended } from '@memberjunction/actions-base';
-import type { BaseRealtimeModel, ChatMessage, ChatMessageContent, RealtimeTranscript } from '@memberjunction/ai';
+import type { BaseRealtimeModel, ChatMessage, ChatMessageContent, ChatToolChoice, RealtimeTranscript } from '@memberjunction/ai';
 import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { IMetadataProvider, MJLimitsBudgetsConfig, MJLimitsConfig, MJLimitsResolutionResult, UserInfo } from '@memberjunction/core';
-import type { ConversationBranchRow, MJAIAgentActionEntity, MJAIAgentUserPolicyEntity, MJAIPromptRunEntity, MJAISkillEntity } from '@memberjunction/core-entities';
+import type {
+    ConversationBranchRow,
+    MJAIAgentActionEntity,
+    MJAIAgentExampleEntity,
+    MJAIAgentNoteEntity,
+    MJAIAgentPromptEntity,
+    MJAIAgentRelationshipEntity,
+    MJAIAgentTypeEntity,
+    MJAIAgentUserPolicyEntity,
+    MJAIPromptRunEntity,
+    MJAISkillEntity,
+    MJAIVendorEntity,
+    MJTemplateEntityExtended,
+    MJTemplateParamEntity,
+} from '@memberjunction/core-entities';
+import type { AIEngine } from '@memberjunction/aiengine';
 import type { ActionCompactMode, ActionLifecycleResolver } from '../ActionLifecycleResolver';
 import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
+import type { AgentPreExecutionRAGResult } from '../agent-pre-execution-rag';
+import type { AgentMemoryObservability } from '../agent-memory-context-builder';
 import type { BaseAgentType } from '../agent-types/base-agent-type';
 import type { AgentContextAssembler } from '../AgentContextAssembler';
 import type { AgentDecisionService } from '../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 import type { AgentStepDispatcher, LoopIterationError } from '../AgentStepDispatcher';
 import type { AgentRunTokenStats, AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
-import type { ArtifactToolManager } from '../ArtifactToolManager';
+import type { ArtifactToolCall, ArtifactToolManager, StoredToolResult } from '../ArtifactToolManager';
 import type { BudgetEnforcementGuard } from '../BudgetEnforcementGuard';
+import type { CatalogNarrowingKind, CatalogNarrowingOutcome } from '../catalog-narrowing';
 import type { CompactionOutcome, EffectiveContextBudget } from '../ConversationCompactionManager';
+import type { ConversationToolCall, ConversationToolExecutionResult, ConversationToolManager } from '../ConversationToolManager';
 import type { DeterministicProgressDetector } from '../DeterministicProgressDetector';
 import type { FastConvergenceJudge } from '../FastConvergenceJudge';
+import type { MemoryWriteManager, MemoryWriteRequest, MemoryWriteResult } from '../MemoryWriteManager';
 import type { AgentToolCircuitBreaker } from '../native-tools/agent-tool-circuit-breaker';
+import type { AgentToolDefinition, AgentToolResult } from '../native-tools/agent-tools';
 import type { NativeToolBinding } from '../native-tools/control-tools';
 import type { NativeControlConfig } from '../native-tools/native-control-config';
 import type { NativeToolResult } from '../native-tools/tool-result-turns';
-import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
-import type { PipelineToolRegistry } from '../pipeline';
+import type { PayloadChangeResultSummary, PayloadManager, PayloadManagerResult } from '../PayloadManager';
+import type { PipelineExecutionResult, PipelineToolRegistry } from '../pipeline';
 import type { PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
 import type { RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 import type { RealtimePlatformCredentials } from '../realtime/realtime-platform-credentials';
@@ -82,6 +112,7 @@ import type {
     RestoredCheckpointContext,
     RunawayCheckpointManager,
 } from '../RunawayCheckpointManager';
+import type { RuntimeStateDateTime, RuntimeStateScratchpad } from '../runtime-state-fragment';
 import type { ScratchpadManager } from '../ScratchpadManager';
 import type { SelfCheckLinkRow } from '../self-check';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
@@ -92,25 +123,33 @@ import type {
     ActionFailureHistoryEntry,
     ActionResultCrushConfig,
     ActionResultSummary,
+    AgentBaseCatalog,
     AgentLogErrorOptions,
     CircuitBreakerActionResult,
     CooperativePauseState,
     CreateStepEntityParams,
+    DecisionAnswerSummarizer,
     ExecuteSingleActionOptions,
     ExtendedProgressStep,
     ForEachIterationResult,
     GuardrailVerdict,
     HeldCompletionChange,
+    HeldDecisionRequests,
     InlineLoopGovernanceArgs,
     PausedRunOutcome,
     PauseNonDestructivelyDetails,
+    PromptWithholding,
     RecordedPromptMessage,
     RunLateJudgeScope,
+    RuntimeStateDeliveryCache,
     StoppedRunContinuation,
     StoppedRunStackStepRecord,
     WhileIterationResult,
 } from './base-agent-types';
 import type { BaseAgentActionPolicyHelper } from './actions/BaseAgentActionPolicyHelper';
+import type { BaseAgentActionsHelper } from './actions/BaseAgentActionsHelper';
+import type { BaseAgentMessagingHelper } from './messaging/BaseAgentMessagingHelper';
+import type { BaseAgentPayloadHelper } from './payload/BaseAgentPayloadHelper';
 import type { AgentRealtimeModelResolution } from './realtime/BaseAgentRealtimeHelper';
 
 /**
@@ -545,6 +584,150 @@ export interface AgentHelperSubclassHooks {
     ): Promise<BaseAgentNextStep<P> | undefined>;
     SelfCheckSuccess<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, payload: P): Promise<BaseAgentNextStep<P>>;
     AssertLastRunIdIsUUID(lastRunId: string | undefined): void;
+
+    // --- Prompts, persona, memory, discovery, catalog, native tools & decisions hooks (Slice s9) ---
+    MemoryObservability(run: MJAIAgentRunEntityExtended | null): AgentMemoryObservability | undefined;
+    GetEffectiveAgentPrompts(agentId: string): MJAIAgentPromptEntity[];
+    BuildAgentTypePromptParams(
+        agentType: MJAIAgentTypeEntity | undefined,
+        agent: MJAIAgentEntityExtended,
+        runtimeOverrides?: Record<string, unknown>
+    ): Record<string, unknown>;
+    ApplyResponseTypeAutoAlignment(
+        params: Record<string, unknown>,
+        explicitResponseType?: Record<string, unknown>
+    ): void;
+    ExtractSchemaDefaults(schemaJson: string | null | undefined): Record<string, unknown>;
+    BuildAgentBaseCatalog(agent: MJAIAgentEntityExtended, engine: AIEngine): AgentBaseCatalog;
+    ApplySubAgentChanges(
+        baseSubAgents: MJAIAgentEntityExtended[],
+        subAgentChanges: SubAgentChange[],
+        agentId: string,
+        isRoot: boolean,
+        engine: AIEngine
+    ): MJAIAgentEntityExtended[];
+    ApplyActionChanges(
+        baseActions: MJActionEntityExtended[],
+        actionChanges: ActionChange[],
+        agentId: string,
+        isRoot: boolean
+    ): { actions: MJActionEntityExtended[]; dynamicLimits: Record<string, number> };
+    GetEffectiveSubAgentsForValidation(agentId: string): MJAIAgentEntityExtended[];
+    IsSubAgentConsultEnabledForSubAgent(parentAgent: MJAIAgentEntityExtended, subAgent: MJAIAgentEntityExtended): boolean;
+    ResolveSubAgentChatHandlingOption(
+        parentAgent: MJAIAgentEntityExtended,
+        relationship?: MJAIAgentRelationshipEntity
+    ): string;
+    GetAgentTools(params: ExecuteAgentParams): AgentToolDefinition[];
+    ExecuteNativeArtifactTool(call: ArtifactToolCall): Promise<AgentToolResult>;
+    ExecuteAgentToolCallsAsSteps<P>(
+        calls: import('@memberjunction/ai-core-plus').AgentToolCallRequest[],
+        payload: P,
+        params: ExecuteAgentParams
+    ): Promise<{ payload: P; results: NativeToolResult[] }>;
+    ExecuteArtifactToolCallsAsSteps(calls: ArtifactToolCall[], params: ExecuteAgentParams): Promise<StoredToolResult[]>;
+    ExecuteConversationToolCallsAsSteps(
+        calls: ConversationToolCall[],
+        params: ExecuteAgentParams
+    ): Promise<ConversationToolExecutionResult[]>;
+    ExecuteMemoryWritesAsSteps(writes: MemoryWriteRequest[], params: ExecuteAgentParams): Promise<MemoryWriteResult[]>;
+    ProcessMemoryWritesForTurn(memoryWrites: MemoryWriteRequest[], params: ExecuteAgentParams): Promise<void>;
+    IsArtifactSupportEnabled(agent: MJAIAgentEntityExtended): boolean;
+    ExecuteDecisionRequestsAsSteps(
+        requests: AgentDecisionRequest[],
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<AgentDecisionResult[]>;
+    ExecuteSingleDecisionRequestAsStep(
+        request: AgentDecisionRequest,
+        finalPayload: unknown,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams,
+        callAllowance?: number,
+        summarize?: DecisionAnswerSummarizer
+    ): Promise<AgentDecisionResult>;
+    InjectArtifactToolResultsMessage(params: ExecuteAgentParams, results: StoredToolResult[]): void;
+    InjectConversationToolResultsMessage(params: ExecuteAgentParams, results: ConversationToolExecutionResult[]): void;
+    InjectMemoryWriteResultsMessage(params: ExecuteAgentParams, results: MemoryWriteResult[]): void;
+    InjectDecisionResultsMessage(params: ExecuteAgentParams, results: AgentDecisionResult[]): void;
+    InjectPipelineResultMessage(params: ExecuteAgentParams, result: PipelineExecutionResult): void;
+    ExecutePipelineAsStep(pipeline: AgentPipelineRequest, params: ExecuteAgentParams): Promise<PipelineExecutionResult>;
+    GetRequestedSubAgents(step: BaseAgentNextStep): AgentSubAgentRequest[];
+    DeriveRunOutcome(): 'success' | 'failure' | 'cancelled';
+    ValidateSuccessNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>>;
+    RecordToolCallingInstrumentation(stepEntity: MJAIAgentRunStepEntityExtended, promptResult: AIPromptRunResult): void;
+    ApplyNativeTools(promptParams: AIPromptParams, params: ExecuteAgentParams): void;
+    ResolveToolChoiceForTurn(params: ExecuteAgentParams): ChatToolChoice;
+    IsFinalPermittedIteration(params: ExecuteAgentParams): boolean;
+    PreparePromptParams<P>(config: AgentConfiguration, payload: P, params: ExecuteAgentParams): Promise<AIPromptParams>;
+    ExecutePrompt(promptParams: AIPromptParams): Promise<AIPromptRunResult>;
+    DetermineNextStep<P>(
+        params: ExecuteAgentParams,
+        agentType: MJAIAgentTypeEntity,
+        promptResult: AIPromptRunResult,
+        currentPayload: P
+    ): Promise<BaseAgentNextStep<P>>;
+    ProcessNextStep<P>(
+        nextStep: BaseAgentNextStep<P>,
+        params: ExecuteAgentParams,
+        agentType: MJAIAgentTypeEntity,
+        promptResult: AIPromptRunResult,
+        currentPayload: P,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>>;
+    DeclineTerminalAfterFailedWrite<P>(nextStep: BaseAgentNextStep<P>, results: NativeToolResult[]): BaseAgentNextStep<P>;
+    IsFatalPromptError(promptResult: AIPromptRunResult): boolean;
+    IsConfigurationError(errorMessage: string, config: AgentConfiguration): { isConfigError: boolean; detailedMessage: string };
+    AttemptContextRecovery<P>(
+        params: ExecuteAgentParams,
+        payload: P,
+        errorMessage: string,
+        modelSelectionInfo?: AIModelSelectionInfo
+    ): Promise<BaseAgentNextStep<P>>;
+    IsMidLoopCompactionThresholdReached(params: ExecuteAgentParams): boolean;
+    CapturePromptStepMessages(messages: ChatMessage[]): Record<string, unknown>;
+    BuildPromptProgressMessage(params: ExecuteAgentParams, previousDecision?: BaseAgentNextStep): string;
+    MessageFingerprint(m: ChatMessage): string;
+    RestoreTurn1VolatileStateIfNeeded(params: ExecuteAgentParams, isAppendOnly: boolean): void;
+    RunHasVolatileStateMessage(params: ExecuteAgentParams): boolean;
+    AssembleOutgoingMessages(history: ChatMessage[], fragment: AgentChatMessage, isAppendOnly?: boolean): ChatMessage[];
+    ShouldUseAppendOnlyTrailingState(promptParams: AIPromptParams): boolean;
+    ResolveAppendOnlyState(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean;
+    DriverRequiresStableReasoningPrefix(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean;
+    ResolvePrefixPromptCache(model: MJAIModelEntityExtended | undefined, vendor: MJAIVendorEntity | undefined): boolean;
+    BuildVolatileStateMessage<P>(
+        params: ExecuteAgentParams,
+        promptParams: AIPromptParams,
+        payload: P,
+        childPrompt: MJAIPromptEntityExtended | undefined,
+        agentType: MJAIAgentTypeEntity,
+        systemPrompt?: MJAIPromptEntityExtended
+    ): Promise<AgentChatMessage | null>;
+    ResolveRelocatedSpecialization(
+        promptParams: AIPromptParams,
+        childPrompt: MJAIPromptEntityExtended | undefined,
+        agentType: MJAIAgentTypeEntity,
+        contextUser: UserInfo
+    ): Promise<string | null>;
+    ResolveRuntimeStateDelivery(
+        systemPrompt: MJAIPromptEntityExtended | undefined,
+        contextUser: UserInfo
+    ): Promise<'trailing' | 'embedded' | 'unsupported' | 'unknown'>;
+    VolatileTemplateMarkers(): readonly string[];
+    TemplateTextEmbedsVolatileState(templateText: string): boolean;
+    LoadPromptTemplateText(prompt: MJAIPromptEntityExtended | undefined, contextUser: UserInfo): Promise<string | null>;
+    LoadChildPromptTemplateText(childPrompt: MJAIPromptEntityExtended, contextUser: UserInfo): Promise<string | null>;
+    ResolveFragmentDateTime(promptParams: AIPromptParams): Promise<RuntimeStateDateTime | null>;
+    ReadScratchpadFromTemplateData(data: Record<string, unknown>): RuntimeStateScratchpad | null;
+    GetAgentPromptParameters(agent: MJAIAgentEntityExtended): Array<MJTemplateParamEntity>;
+    HideNarrowedOut<T extends { ID: string }>(kind: CatalogNarrowingKind, items: T[]): T[];
 }
 
 /**
@@ -748,6 +931,60 @@ export interface AgentRunContext {
     LastNativeTurnAppended: BaseAgentNextStep['nativeTurn'] | undefined;
     /** Default character threshold before inline action-result crushing triggers. */
     readonly ActionResultCrushThreshold: number;
+    /** Resolved pluggable actions helper (`BaseAgentActionsHelper`). */
+    readonly ActionsHelper: BaseAgentActionsHelper;
+    /** Resolved pluggable messaging helper (`BaseAgentMessagingHelper`). */
+    readonly MessagingHelper: BaseAgentMessagingHelper;
+    /** Resolved pluggable payload helper (`BaseAgentPayloadHelper`). */
+    readonly PayloadHelper: BaseAgentPayloadHelper;
+    /** Conversation-history tool manager collaborator. */
+    readonly ConversationToolManager: ConversationToolManager;
+    /** In-flight memory write manager collaborator. */
+    readonly MemoryWriteManager: MemoryWriteManager;
+    /** Notes and examples injected during Phase 2 context memory injection. */
+    InjectedMemory: { notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] };
+    /** Pre-execution RAG result captured during Phase 2. */
+    InjectedRAG: AgentPreExecutionRAGResult | null;
+    /** Opening user request text extracted at run start. */
+    OpeningRequest: string;
+    /** True when this run is answering the conversation's opening turn. */
+    IsOpeningTurn: boolean;
+    /** Computed effective sub-agents for this run. */
+    EffectiveSubAgents: MJAIAgentEntityExtended[];
+    /** Per-run catalog narrowing outcome cached on first prompt. */
+    CatalogNarrowing: CatalogNarrowingOutcome | undefined;
+    /** Decision requests held back until a potentially-terminating step runs. */
+    HeldDecisions: HeldDecisionRequests | undefined;
+    /** Per-turn conversation-tool call counter. */
+    ConversationToolTurn: { turn: number; count: number } | undefined;
+    /** Cached parsed native control configuration for the active agent. */
+    NativeControl: { source: string | null; config: NativeControlConfig } | undefined;
+    /** Most recent volatile runtime-state message generated for this run. */
+    LastVolatileStateMessage: AgentChatMessage | undefined;
+    /** Outgoing message fingerprints from the previous prompt request. */
+    LastSentFingerprints: string[] | undefined;
+    /** System-prompt-and-tools prefix fingerprint from the previous prompt request. */
+    LastSentPrefix: string | undefined;
+    /** Frozen append-only vs replace trailing-state mode for this run. */
+    ResolvedTrailingStateMode: boolean | undefined;
+    /** Message array index where turn 1 began (for turn-1 volatile-state restoration). */
+    Turn1InsertionIndex: number;
+    /** Memoized runtime-state delivery analysis for the current template. */
+    LastRuntimeStateDeliveryCache: RuntimeStateDeliveryCache | null;
+    /** Memoized template array reference for O(1) template lookup. */
+    CachedTemplatesArrayRef: MJTemplateEntityExtended[] | null;
+    /** Memoized template map keyed by normalized UUID. */
+    TemplateByIdMap: Map<string, MJTemplateEntityExtended> | null;
+    /** True once TemplateEngineServer.Instance.Config has run for this agent run. */
+    TemplateEngineConfiguredForRun: boolean;
+    /** Number of context overflow recovery attempts made so far in this run. */
+    ContextRecoveryAttempts: number;
+    /** Maximum number of context overflow recovery attempts permitted per run. */
+    readonly MaxRecoveryAttempts: number;
+    /** Timeout (ms) for a catalog narrowing decision call. */
+    readonly CatalogNarrowingTimeoutMs: number;
+    /** Maximum concurrent decision calls executed in one agent turn. */
+    readonly DecisionConcurrency: number;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;

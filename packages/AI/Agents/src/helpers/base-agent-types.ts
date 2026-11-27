@@ -12,6 +12,8 @@ import type {
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
     AgentChatMessageMetadata,
+    AgentDecisionAnswerSummary,
+    AgentDecisionRequest,
     AgentExecutionProgressCallback,
     AgentPayloadChangeRequest,
     AgentSkillInvocation,
@@ -27,9 +29,11 @@ import type {
     WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
-import { ActionResult, type ActionErrorRecovery, type ActionOutputTrustLevel, type ActionParam, type AIDirective } from '@memberjunction/actions-base';
+import { ActionResult, type ActionErrorRecovery, type ActionOutputTrustLevel, type ActionParam, type AIDirective, type MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { SecondaryScopeValue } from '@memberjunction/ai-core-plus';
-import type { ChatMessage } from '@memberjunction/ai';
+import type { ChatMessage, DecisionAnswer } from '@memberjunction/ai';
+import type { AIDecisionRunResult } from '@memberjunction/ai-prompts';
+import type { FinishIfMode } from '../agent-types/loop-agent-prompt-params';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { CodeLang } from '@memberjunction/context-crush/code';
 import type { CooperativePauseResult } from '../ActiveRunGovernanceRegistry';
@@ -412,5 +416,73 @@ export class CircuitBreakerActionResult extends ActionResult {
         super();
     }
 }
+
+/** Why a turn's memory writes are not saved (`BaseAgentPromptHelper.MemoryWriteSkip`). */
+export interface MemoryWriteSkip {
+    /** For the log and the skip step's name. */
+    Reason: string;
+    /** What the model is told, before "the requested memories were NOT saved". */
+    Told: string;
+}
+
+/**
+ * The agent-invariant "base" catalog cached (process-wide) on AIEngine and reused across runs/steps.
+ */
+export interface AgentBaseCatalog {
+    uniqueActiveSubAgents: MJAIAgentEntityExtended[];
+    subAgentCount: number;
+    subAgentDetails: string;
+    baseActionsRaw: MJActionEntityExtended[];
+    activeActions: MJActionEntityExtended[];
+    actionDetails: string;
+    baseAgentTypePromptParams: Record<string, unknown>;
+}
+
+/** The finishIf settings of the current step. */
+export interface FinishIfSettings {
+    Enabled: boolean;
+    Mode: FinishIfMode;
+    Threshold: number;
+    PromptName: string;
+}
+
+/** Turns one decision call's typed answers into what its reader gets. */
+export type DecisionAnswerSummarizer = (
+    answers: Record<string, DecisionAnswer>
+) => Record<string, AgentDecisionAnswerSummary>;
+
+/** The outcome of one decision request: its answers, or why it has none. */
+export type DecisionOutcome =
+    | {
+          Answers: Record<string, AgentDecisionAnswerSummary> | Array<Record<string, AgentDecisionAnswerSummary>>;
+          Results: AIDecisionRunResult[];
+          SkippedCount?: number;
+      }
+    | { Error: string };
+
+/** Decision requests held back until a potentially-terminating step runs. */
+export interface HeldDecisionRequests {
+    Requests: AgentDecisionRequest[];
+    Payload: unknown;
+    PromptParams: Record<string, unknown> | undefined;
+    Reason: string;
+}
+
+/** How many decision calls one request of a turn may make from the turn's budget. */
+export interface DecisionCallAllowance {
+    Wanted: number;
+    Allowed: number;
+}
+
+/** Prompt param names that limit one turn's decisions. */
+export type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
+
+/** Per-instance memoization entry for runtime-state template delivery analysis. */
+export interface RuntimeStateDeliveryCache {
+    templateText: string;
+    markers: readonly string[];
+    delivery: 'trailing' | 'embedded' | 'unsupported';
+}
+
 
 
