@@ -57,13 +57,14 @@ import type { BaseAgentCompactionHelper, CompactMessageMetadata } from '../compa
 import type { BaseAgentMessagingHelper } from '../messaging/BaseAgentMessagingHelper';
 import type { BaseAgentPayloadHelper } from '../payload/BaseAgentPayloadHelper';
 import type { AgentRealtimeModelResolution, BaseAgentRealtimeHelper } from '../realtime/BaseAgentRealtimeHelper';
+import { BaseAgentStateBase } from './BaseAgentStateBase';
 
 /**
  * Logic-free compatibility base class extended by `BaseAgent` throughout `v6.x` so every
  * existing subclass, unit test, and downstream consumer continues compiling and passing
  * unchanged while `base-agent.ts` stays focused and `< 1,000` lines.
  */
-export abstract class BaseAgentDeprecatedDelegatesCore {
+export abstract class BaseAgentDeprecatedDelegatesCore extends BaseAgentStateBase {
     /** Provides the live per-run context backed by `BaseAgent`. */
     protected abstract getRunContext(): AgentRunContext;
 

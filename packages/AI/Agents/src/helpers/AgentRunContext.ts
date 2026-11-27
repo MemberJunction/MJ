@@ -151,6 +151,7 @@ import type {
 } from './base-agent-types';
 import type { BaseAgentActionPolicyHelper } from './actions/BaseAgentActionPolicyHelper';
 import type { BaseAgentActionsHelper } from './actions/BaseAgentActionsHelper';
+import type { AgentHelperCache } from './AgentHelperResolver';
 import type { BaseAgentMessagingHelper } from './messaging/BaseAgentMessagingHelper';
 import type { BaseAgentPayloadHelper } from './payload/BaseAgentPayloadHelper';
 import type { AgentRealtimeModelResolution } from './realtime/BaseAgentRealtimeHelper';
@@ -237,7 +238,7 @@ export interface AgentRunContext {
     /** Shared step/loop formatting, payload mapping, and template dispatcher collaborator. */
     readonly StepDispatcher: AgentStepDispatcher;
     /** Resolved `BaseAgentType` instance for the currently executing agent (may be undefined in unit tests). */
-    readonly AgentTypeInstance: BaseAgentType | undefined;
+    AgentTypeInstance: BaseAgentType | undefined;
     /** Action result crush config resolved for the active run. */
     ActionResultCrush: ActionResultCrushConfig | undefined;
     /** Restored loop cursor when resuming a paused `ForEach`/`While` loop. */
@@ -305,7 +306,7 @@ export interface AgentRunContext {
     /** Prompt execution scope captured for this run. */
     RunExecutionScope: AIPromptExecutionScope | undefined;
     /** Tainted external sources ingested during this run. */
-    readonly TaintedSources: AgentTaintedSource[];
+    TaintedSources: AgentTaintedSource[];
     /** Budget enforcement guard collaborator. */
     readonly BudgetEnforcementGuard: BudgetEnforcementGuard;
     /** Deterministic progress detector collaborator. */
@@ -428,6 +429,20 @@ export interface AgentRunContext {
     HandoffResult: AgentHandoffResult | null;
     /** True when the run has ingested at least one untrusted/semi-trusted source. */
     readonly IsRunTainted: boolean;
+    /** Per-run pluggable helper resolution cache (`AgentHelperCache`). */
+    readonly HelperCache: AgentHelperCache;
+    /** Active abort controller governing the current `Execute` call. */
+    RunAbortController: AbortController | null;
+    /** Baseline step cost captured on checkpoint resume. */
+    CheckpointStepCostBaseline: number;
+    /** Maximum consecutive failed non-terminating steps before forcing termination. */
+    readonly MaxConsecutiveFailedSteps: number;
+    /** Maximum consecutive unproductive retry steps before forcing termination. */
+    readonly MaxConsecutiveUnproductiveRetries: number;
+    /** Engine-default wall-clock timeout (ms) when not overridden per run. */
+    readonly DefaultAgentTimeoutMS: number;
+    /** Abort reason prefix distinguishing wall-clock timeout aborts from caller cancellations. */
+    readonly AgentTimeoutAbortReason: string;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;

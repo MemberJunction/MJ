@@ -24,10 +24,12 @@ import type {
     BudgetCostEvent,
     ExecuteAgentParams,
     ExecuteAgentResult,
+    ForEachOperation,
     ProgressEvaluationResult,
     RunawayPauseReason,
     RunawaySerializable,
     StopContinuationMode,
+    WhileOperation,
     WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentRelationshipEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
@@ -524,6 +526,26 @@ export interface ResolvedHandoffTarget {
     id: string;
     name: string;
 }
+
+/** Base iteration context for tracking ForEach and While loop execution in BaseAgent. */
+export interface BaseIterationContext {
+    loopType: 'ForEach' | 'While';
+    collection?: unknown[];
+    condition?: string;
+    currentIndex: number;
+    itemVariable: string;
+    indexVariable?: string;
+    maxIterations: number;
+    continueOnError: boolean;
+    delayBetweenIterationsMs?: number;
+    results: unknown[];
+    errors: unknown[];
+    loopConfig: ForEachOperation | WhileOperation;
+    parentStepId?: string;
+    actionOutputMapping?: string;
+    agentTypeData?: unknown;
+}
+
 
 
 
