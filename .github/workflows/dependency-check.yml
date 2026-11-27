@@ -136,7 +136,7 @@ jobs:
       - name: Comment PR with results
         if: steps.knip.outputs.knip_crashed != 'true' && github.event_name == 'pull_request'
         continue-on-error: true
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |

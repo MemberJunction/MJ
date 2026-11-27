@@ -322,7 +322,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       # No pnpm cache here: a lockfile-only install downloads no packages, so this job would
       # save a near-empty store under the cache key that the installing jobs share.
@@ -351,7 +351,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       # No pnpm cache here: the filtered install below downloads only the sidecar's subset of
       # dependencies, so enabling setup-node's shared pnpm cache saves a ~192 MB partial store
@@ -1059,7 +1059,7 @@ jobs:
 
       - name: Upload IT128 performance benchmark report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: it128-performance-benchmark-${{ github.run_attempt }}
           path: |
@@ -1078,7 +1078,7 @@ jobs:
       # log so a failed run can be diagnosed without reproducing it.
       - name: Upload MJAPI log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mjapi-log-deterministic-${{ github.run_attempt }}
           path: /tmp/mjapi.log
@@ -1988,7 +1988,7 @@ jobs:
       TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ github.event_name != 'pull_request' && secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY || '' }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
