@@ -267,6 +267,7 @@ import type {
   MJExplorerNavigationItemEntityType,
   MJExternalDataSourceTypeEntityType,
   MJExternalDataSourceEntityType,
+  MJFeaturePipelineRederivationLeaseEntityType,
   MJFeaturePipelineTypeEntityType,
   MJFeaturePipelineVersionEntityType,
   MJFeatureValueCacheEntityType,
@@ -75808,6 +75809,147 @@ export class MJExternalDataSourceEntity extends BaseEntity<MJExternalDataSourceE
 
 
 /**
+ * MJ: Feature Pipeline Rederivation Leases - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: FeaturePipelineRederivationLease
+ * * Base View: vwFeaturePipelineRederivationLeases
+ * * @description The single-flight lease of a Feature Pipeline's budgeted re-derivation slice: one row per Record Process, held by the Process Run that re-derives stale Feature Values after a version change. Taken under the Predictive Studio: Lock Rederivation Lease Query, renewed every 60 s and before each batch, released at the end of the run; a lease not renewed for 15 minutes (database clock) may be taken by the next run. A run without the lease re-derives no stale value (Yielded).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Feature Pipeline Rederivation Leases')
+export class MJFeaturePipelineRederivationLeaseEntity extends BaseEntity<MJFeaturePipelineRederivationLeaseEntityType> {
+    /**
+    * Loads the MJ: Feature Pipeline Rederivation Leases record from the database
+    * @param ID: string - primary key value to load the MJ: Feature Pipeline Rederivation Leases record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJFeaturePipelineRederivationLeaseEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: RecordProcessID
+    * * Display Name: Record Process ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+    * * Description: The Feature Pipeline (MJ: Record Processes) whose re-derivation slice this lease holds; unique.
+    */
+    get RecordProcessID(): string {
+        return this.Get('RecordProcessID');
+    }
+    set RecordProcessID(value: string) {
+        this.Set('RecordProcessID', value);
+    }
+
+    /**
+    * * Field Name: ProcessRunID
+    * * Display Name: Process Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+    * * Description: The Process Run that holds (or last held) the lease.
+    */
+    get ProcessRunID(): string {
+        return this.Get('ProcessRunID');
+    }
+    set ProcessRunID(value: string) {
+        this.Set('ProcessRunID', value);
+    }
+
+    /**
+    * * Field Name: AcquiredAt
+    * * Display Name: Acquired At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the holding run took the lease (database clock, DbNow of the lock Query).
+    */
+    get AcquiredAt(): Date {
+        return this.Get('AcquiredAt');
+    }
+    set AcquiredAt(value: Date) {
+        this.Set('AcquiredAt', value);
+    }
+
+    /**
+    * * Field Name: RenewedAt
+    * * Display Name: Renewed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the holding run last renewed the lease (database clock); 15 minutes after it the lease has expired.
+    */
+    get RenewedAt(): Date {
+        return this.Get('RenewedAt');
+    }
+    set RenewedAt(value: Date) {
+        this.Set('RenewedAt', value);
+    }
+
+    /**
+    * * Field Name: ReleasedAt
+    * * Display Name: Released At
+    * * SQL Data Type: datetimeoffset
+    * * Description: When the holding run released the lease at its end (database clock); null while it is held.
+    */
+    get ReleasedAt(): Date | null {
+        return this.Get('ReleasedAt');
+    }
+    set ReleasedAt(value: Date | null) {
+        this.Set('ReleasedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: RecordProcess
+    * * Display Name: Record Process
+    * * SQL Data Type: nvarchar(255)
+    */
+    get RecordProcess(): string | null {
+        return this.Get('RecordProcess');
+    }
+}
+
+
+/**
  * MJ: Feature Pipeline Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: FeaturePipelineType
@@ -89052,7 +89194,10 @@ export type MJMLModelPublishRecordEntity_TransitionRefusal =
   | { readonly kind: 'reason-required' }
   /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string }
+  /** The model's lineage pins a gated Feature Pipeline version with no passing golden-set result (PR 5 G7.6, D5-9, D5-31). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'feature-version-not-activated'; readonly featureName: string; readonly pipelineVersion: number };
 
 /** A lifecycle state of the contract. */
 export type MJMLModelPublishRecordEntity_LifecycleState = 'draft' | 'validated' | 'published' | 'archived';
@@ -91627,6 +91772,35 @@ export type MJMLScoringRunEntity_ScoringRefusal =
   | { readonly kind: 'leakage-unknown'; readonly modelId: string }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'artifact-unverified'; readonly modelId: string }
+  /** The model's pinned Feature Pipeline version, or the model its prediction pin names, is not the one in use (PR 5 G7.6, D5-9). */
+  | {
+      readonly kind: 'feature-version-mismatch';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly featureName: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly pinned:  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      | {
+          readonly featurePipelineRecordProcessId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly pipelineVersion: number | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly promptVersionHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly aiModelId: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly parametersHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+        }
+      | {
+          readonly mlModelScoringBindingId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+          readonly mlModelId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+        };
+      readonly active:  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      | {
+          readonly featurePipelineRecordProcessId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly pipelineVersion: number | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly promptVersionHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly aiModelId: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly parametersHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+        }
+      | {
+          readonly mlModelScoringBindingId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+          readonly mlModelId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+        };
+    }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'feature-values-not-writable'; readonly userId: string };
 

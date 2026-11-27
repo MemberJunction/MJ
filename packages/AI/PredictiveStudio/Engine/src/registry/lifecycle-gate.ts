@@ -1111,6 +1111,12 @@ export class LifecycleGate {
         return inputs.CurrentPublishedModelID === null
           ? { kind: 'not-servable', reason: `publish re-verification refused (${r.Reason}): ${r.Detail}` }
           : { kind: 'not-servable', reason: `the training run stored no comparison with ML Model ${inputs.CurrentPublishedModelID}, which is Published now; retrain to compare with it, or, when its artifact is missing (so training cannot use it as an incumbent), the registry check job archives it` };
+      case 'feature-version-not-activated': {
+        const first = inputs.PinActivations.find((p) => !p.activated);
+        return first === undefined
+          ? { kind: 'not-servable', reason: `publish re-verification refused (${r.Reason}): ${r.Detail}` }
+          : { kind: 'feature-version-not-activated', featureName: first.featureName, pipelineVersion: first.pipelineVersion };
+      }
       default:
         return { kind: 'not-servable', reason: `publish re-verification refused (${r.Reason}): ${r.Detail}` };
     }

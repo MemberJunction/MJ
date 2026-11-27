@@ -101,6 +101,7 @@ export class RegistryInputs {
       IncumbentDiff: { incumbentModelId: RegistryInputs.IncumbentID, value: 0.02, lower: 0.01, upper: 0.03 },
       CurrentPublishedModelID: RegistryInputs.IncumbentID,
       Initiator: { kind: 'human', userId: RegistryInputs.User },
+      PinActivations: [],
     };
   }
 

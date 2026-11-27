@@ -1,0 +1,19 @@
+[
+  {
+    "_comments": [
+      "Feature Pipeline Rederivation Leases - one lease row per Record Process, the single-flight lock of a Feature",
+      "Pipeline run's budgeted re-derivation slice (PR 5 §5.2.4, D5-41). Record-change tracking is off: the row is a",
+      "lock renewed every minute by RederivationLease only, and its history is not an audit record. CodeGen's default",
+      "for a new table turned tracking on; this record sets ONLY TrackRecordChanges (as .entity-ml-scoring-runs.json",
+      "does), so the entity's other attributes stay at their CodeGen values (PR 5 §9 D5-B3-1)."
+    ],
+    "fields": {
+      "Name": "MJ: Feature Pipeline Rederivation Leases",
+      "BaseView": "vwFeaturePipelineRederivationLeases",
+      "TrackRecordChanges": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Feature Pipeline Rederivation Leases"
+    }
+  }
+]

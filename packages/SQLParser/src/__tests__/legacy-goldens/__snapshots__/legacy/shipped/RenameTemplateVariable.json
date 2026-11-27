@@ -53,6 +53,7 @@
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"$patch":{"keep":[1595,300],"text":"_2 %}\n  AND RecordProcessID = {{RecordProcessID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"$patch":{"keep":[1642,139],"text":"RecordProcessID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[817,3],"text":"PipelineID_2 | sqlString"}},
+  "shipped/SQL/predictive-studio-lock-rederivation-lease.sql": {"$patch":{"keep":[1102,3],"text":"RecordProcessID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"$patch":{"keep":[952,3],"text":"BindingID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[695,3],"text":"PipelineID_2 | sqlString"}},
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": null,

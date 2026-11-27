@@ -53,6 +53,7 @@
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": [{"$slice":[0,1529]}," Source = N'Human' "," Role = N'Champion'\n{% if RecordProcessID %}\n  "," RecordProcessID = {{ RecordProcessID | sqlString }} "," MLModelScoringBindingID IS NULL\n{% else %}\n  "," RecordProcessID IS NULL ",{"$slice":[1737,1820]}," EntityID = {{ EntityID | sqlString }}\n  "," RecordID = {{ RecordID | sqlString }}\n  "," FeatureName IN {{ FeatureNames | sqlIn }}\n"],
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": [{"$slice":[0,1568]}," Source = N'Pipeline' "," Role = N'Champion'\n  "," RecordProcessID = {{ RecordProcessID | sqlString }}\n  "," EntityID = {{ EntityID | sqlString }}\n  "," RecordID = {{ RecordID | sqlString }}\n  "," FeatureName IN {{ FeatureNames | sqlIn }}\n"],
   "shipped/SQL/predictive-studio-lock-pipeline.sql": [{"$slice":[0,844]}],
+  "shipped/SQL/predictive-studio-lock-rederivation-lease.sql": [{"$slice":[0,1134]}],
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": [{"$slice":[0,978]}],
   "shipped/SQL/predictive-studio-next-model-version.sql": [{"$slice":[0,722]}],
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": [{"$slice":[0,589]}],

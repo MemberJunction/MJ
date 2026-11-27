@@ -146,7 +146,10 @@ export type TransitionRefusal =
   | { readonly kind: 'reason-required' }
   /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string }
+  /** The model's lineage pins a gated Feature Pipeline version with no passing golden-set result (PR 5 G7.6, D5-9, D5-31). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'feature-version-not-activated'; readonly featureName: string; readonly pipelineVersion: number };
 
 /** A lifecycle state of the contract. */
 export type LifecycleState = 'draft' | 'validated' | 'published' | 'archived';

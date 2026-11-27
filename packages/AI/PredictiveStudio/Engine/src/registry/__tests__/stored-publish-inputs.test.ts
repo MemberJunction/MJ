@@ -5,10 +5,14 @@
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { UUIDsEqual } from '@memberjunction/global';
-import type { Actor, StoredPublishInputs, TransitionRefusal } from '@memberjunction/predictive-studio-core';
+import { PublishRules, type Actor, type StoredPublishInputs, type TransitionRefusal } from '@memberjunction/predictive-studio-core';
 
-import { GateTestStore, GateWorld, type Row, type WorldModel } from '../../__tests__/fakes/gate-test-store';
-import { MemoryStorageAccount } from '../../__tests__/fakes/storage-fakes';
+import { FakeClock, GateTestStore, GateWorld, type Row, type WorldModel } from '../../__tests__/fakes/gate-test-store';
+import { RecordingScoringActions } from '../../__tests__/fakes/scoring-action-fakes';
+import { MemoryStorageAccount, ProviderRow, RegisterMemoryStorage, ServeStorageProviders } from '../../__tests__/fakes/storage-fakes';
+import { StorageProviderArtifactLoader } from '../../scoring/storage-provider-artifact-loader';
+import { GateContexts } from '../gate-seams';
+import { LifecycleGate } from '../lifecycle-gate';
 import { StoredPublishInputsLoader, StoredRuns } from '../stored-publish-inputs';
 
 const human: Actor = { kind: 'human', userId: GateWorld.User.ID };
@@ -86,5 +90,91 @@ describe('StoredPublishInputsLoader.Load — the inputs the evidence is built fr
     const snapshotId = String(rowOf('MJ: ML Models', model.ID)['TrainingSnapshotID']);
     store.Tables['MJ: ML Training Snapshots'] = (store.Tables['MJ: ML Training Snapshots'] || []).filter((r) => !UUIDsEqual(String(r['ID']), snapshotId));
     expect(await load()).toEqual({ kind: 'not-servable', reason: `Training Snapshot ${snapshotId} that ML Model ${model.ID} names does not exist, so no evidence can be built from it` });
+  });
+});
+
+/**
+ * PR 5 milestone B3 — attacks 4 and 8 (publish half, D5-31, F-005): `StoredPublishInputs.PinActivations` is loaded from
+ * the model's lineage pins and their version rows; `PublishRules.ReverifyPublish` refuses `validated → published` for a
+ * model pinned to a gated version with no passing golden-set result, and every publish path (they all end in
+ * `LifecycleGate.Publish`: `AutomatedPublisher`, the Promote Action, the operation) is refused with
+ * `feature-version-not-activated`; an ungated version is activated and publishes.
+ */
+describe('StoredPublishInputsLoader.Load / ReverifyPublish — pinned Feature Pipeline versions (B3, attacks 4 and 8)', () => {
+  const RP = 'B3000000-0000-4000-8000-0000000000B1';
+  const pin = { featurePipelineRecordProcessId: RP, pipelineVersion: 3, promptVersionHash: 'pvh-3', aiModelId: null, parametersHash: 'ph-3' };
+  const providerRow = ProviderRow(GateWorld.StorageProviderID, 'Gate Test Storage', 'PS Lifecycle Gate Test Storage', true);
+  const storage = new MemoryStorageAccount('stored-publish-inputs-pins', []);
+  RegisterMemoryStorage('PS Lifecycle Gate Test Storage', storage);
+  let store: GateTestStore;
+  let model: WorldModel;
+
+  /** The model's lineage pins `GateJobTitle` to version 3, whose row is gated (or not) with a result of `result`. */
+  function pinVersion(gated: boolean, result: number | null): void {
+    const row = store.Row('MJ: ML Models', model.ID);
+    if (!row) throw new Error('no model row');
+    row['Lineage'] = JSON.stringify({
+      predictionUnitId: 'unit-1', predictionUnitVersion: 1, labelVersion: 1, featureSpecVersion: 1, unitRowEntity: 'Memberships', categoryLevels: {},
+      trainingSnapshotId: 'snap-1', snapshotContentHash: 'hash-1',
+      featureSpec: [{ name: 'GateJobTitle', source: { kind: 'feature-value', featureName: 'GateJobTitle', pin }, encoding: { kind: 'categorical', cardinalityCap: 50, method: 'onehot' }, missing: { impute: 'mode', indicator: true, constant: null } }],
+    });
+    store.Tables['MJ: Feature Pipeline Versions'] = [{
+      ID: 'ver-3', RecordProcessID: RP, Version: 3, Status: 'Active', Gated: gated, Threshold: gated ? 0.9 : null, ResultValue: result,
+      GoldenSetTestRunID: result === null ? null : 'gs-3', ResultDetails: null,
+    }];
+  }
+
+  beforeEach(() => {
+    storage.Reset();
+    ServeStorageProviders([providerRow]);
+    store = new GateTestStore();
+    model = new GateWorld(store, storage).Model('Validated', 'model');
+  });
+
+  const ctx = (): { ContextUser: typeof GateWorld.User; Provider: ReturnType<GateTestStore['Provider']> } => ({ ContextUser: GateWorld.User, Provider: store.Provider() });
+
+  it('loads one PinActivations entry per pinned version: a gated version below its threshold is not activated', async () => {
+    pinVersion(true, 0.5);
+    const loaded = await StoredPublishInputsLoader.Load(model.ID, human, ctx());
+    if ('kind' in loaded) throw new Error(`the loader refused: ${loaded.kind}`);
+    expect(loaded.PinActivations).toEqual([{ featureName: 'GateJobTitle', pipelineVersion: 3, activated: false }]);
+    expect(PublishRules.ReverifyPublish(loaded)).toMatchObject({ Ok: false, Reason: 'feature-version-not-activated' });
+  });
+
+  it('attack 8: an ungated version (no golden set) is activated', async () => {
+    pinVersion(false, null);
+    const loaded = await StoredPublishInputsLoader.Load(model.ID, human, ctx());
+    if ('kind' in loaded) throw new Error(`the loader refused: ${loaded.kind}`);
+    expect(loaded.PinActivations).toEqual([{ featureName: 'GateJobTitle', pipelineVersion: 3, activated: true }]);
+    expect(PublishRules.ReverifyPublish(loaded).Ok).toBe(true);
+  });
+
+  it('a pinned version whose row is gone is not activated', async () => {
+    pinVersion(false, null);
+    store.Tables['MJ: Feature Pipeline Versions'] = [];
+    const loaded = await StoredPublishInputsLoader.Load(model.ID, human, ctx());
+    if ('kind' in loaded) throw new Error(`the loader refused: ${loaded.kind}`);
+    expect(loaded.PinActivations).toEqual([{ featureName: 'GateJobTitle', pipelineVersion: 3, activated: false }]);
+  });
+
+  it('a model with no lineage pins has no PinActivations', async () => {
+    const loaded = await StoredPublishInputsLoader.Load(model.ID, human, ctx());
+    if ('kind' in loaded) throw new Error(`the loader refused: ${loaded.kind}`);
+    expect(loaded.PinActivations).toEqual([]);
+  });
+
+  it('attack 4: LifecycleGate.Publish (every publish path) withholds the publish with feature-version-not-activated', async () => {
+    pinVersion(true, 0.5);
+    const gate = new LifecycleGate(new StorageProviderArtifactLoader(), new FakeClock(), new RecordingScoringActions());
+    const out = await gate.Publish({ modelId: model.ID, purpose: 'publish', initiator: human, signOffId: null, reason: null }, GateContexts.ForRequest(ctx()));
+    expect(out).toMatchObject({ Kind: 'withheld', Refusal: { kind: 'feature-version-not-activated', featureName: 'GateJobTitle', pipelineVersion: 3 } });
+    expect(store.Status(model.ID)).toBe('Validated');
+  });
+
+  it('attack 8: an ungated pinned version publishes', async () => {
+    pinVersion(false, null);
+    const gate = new LifecycleGate(new StorageProviderArtifactLoader(), new FakeClock(), new RecordingScoringActions());
+    const out = await gate.Publish({ modelId: model.ID, purpose: 'publish', initiator: human, signOffId: null, reason: null }, GateContexts.ForRequest(ctx()));
+    expect(out).toMatchObject({ Kind: 'published' });
   });
 });

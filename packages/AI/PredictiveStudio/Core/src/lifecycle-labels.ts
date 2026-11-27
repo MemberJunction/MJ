@@ -8,6 +8,7 @@ import type { ListsEveryMember } from './json-value';
 import type { LeakageFlag } from './trainer-contract';
 import type { PersistedLifecycleState, PersistedModelStatus, TransitionRefusal } from './registry-contracts';
 import type { ScoringRefusal } from './scoring-contracts';
+import type { FeatureVersionPin, PredictionFeaturePin } from './assembly-contract';
 
 /** Every persisted model status, in lifecycle order: the one list of them (the engine reads it through {@link LifecycleLabels.IsPersistedStatus}). */
 export const PERSISTED_MODEL_STATUSES = ['Draft', 'Validated', 'Published', 'Archived', 'KeepBaseline', 'Unevaluated'] as const satisfies readonly PersistedModelStatus[];
@@ -35,6 +36,7 @@ export const ALL_TRANSITION_REFUSAL_KINDS = [
   'model-not-found',
   'reason-required',
   'incumbent-not-current',
+  'feature-version-not-activated',
 ] as const satisfies readonly TransitionRefusal['kind'][];
 /** Compile-time completeness: a refusal kind added to `TransitionRefusal` without listing it here breaks the build. */
 const refusalKindsComplete: ListsEveryMember<TransitionRefusal['kind'], (typeof ALL_TRANSITION_REFUSAL_KINDS)[number]> = true;
@@ -158,6 +160,8 @@ export class TransitionRefusalText {
         return 'A reason is required to archive or roll back a model.';
       case 'incumbent-not-current':
         return `The run was compared with model ${refusal.comparedWith}, but model ${refusal.current} is published now. A new training run compares against it.`;
+      case 'feature-version-not-activated':
+        return `Feature ${refusal.featureName} is read at Feature Pipeline version ${refusal.pipelineVersion}, which has not passed its golden set. Publish after the version passes, or retrain on an activated version.`;
     }
   }
 
@@ -199,7 +203,14 @@ export class ScoringRefusalText {
       case 'as-of-unsupported': return `The model was trained without a Prediction Unit and scores only the run date, not ${refusal.asOf}.`;
       case 'leakage-unknown': return 'The model has no stored feature importance to test for leakage.';
       case 'feature-values-not-writable': return 'The caller may not create and update Feature Values, so the run would write nothing it scores.';
+      case 'feature-version-mismatch': return `The model reads ${refusal.featureName} at ${ScoringRefusalText.pinText(refusal.pinned)}, but ${ScoringRefusalText.pinText(refusal.active)} is in use now; retrain the model to score.`;
     }
+  }
+
+  /** A pin in words: a Feature Pipeline version, or the model whose predictions it reads. */
+  private static pinText(pin: FeatureVersionPin | PredictionFeaturePin): string {
+    if ('mlModelScoringBindingId' in pin) return pin.mlModelId ? `the predictions of model ${pin.mlModelId}` : 'no Published model';
+    return pin.pipelineVersion !== null ? `Feature Pipeline version ${pin.pipelineVersion}` : 'no Active Feature Pipeline version';
   }
 
   /** A column list, or "none". */

@@ -37,6 +37,7 @@ function RefusalOf(kind: TransitionRefusal['kind']): TransitionRefusal {
     case 'model-not-found': return { kind, modelId: 'M-404' };
     case 'reason-required': return { kind };
     case 'incumbent-not-current': return { kind, comparedWith: 'M-OLD', current: 'M-NEW' };
+    case 'feature-version-not-activated': return { kind, featureName: 'JobTitleLevel', pipelineVersion: 3 };
   }
 }
 

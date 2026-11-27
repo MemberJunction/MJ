@@ -36,7 +36,8 @@ export type PredictiveStudioTransitionRefusal =
     | { readonly kind: 'not-servable'; readonly reason: string }
     | { readonly kind: 'model-not-found'; readonly modelId: string }
     | { readonly kind: 'reason-required' }
-    | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+    | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string }
+    | { readonly kind: 'feature-version-not-activated'; readonly featureName: string; readonly pipelineVersion: number };
 
 /** Output of `PredictiveStudio.PromoteModel`: whether the gate applied the transition, the model's status, and why not. */
 export interface PredictiveStudioPromoteModelOutput {

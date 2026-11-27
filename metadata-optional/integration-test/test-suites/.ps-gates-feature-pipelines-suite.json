@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Feature Pipelines",
-      "Description": "The four Feature Pipeline gates (C1 -> C2.1, C2.2, C2.3, C2.5), the live job-title consistency measurement, W1 -> C3.2 (G7.7) and C1 -> C2.4 (G7.4: assembly reads the Feature Value in effect at each decision date, pinned at train time). C1 -> C2.4 runs on the server transport, and a server-transport bundle cannot follow a client-transport one in one process (#3251), so it is Sequence 1. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject), the truth sidecar, `pnpm run truth:provision` and `truth:load-c1`. Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1.",
+      "Description": "The four Feature Pipeline gates (C1 -> C2.1, C2.2, C2.3, C2.5), the live job-title consistency measurement, W1 -> C3.2 (G7.7), C1 -> C2.4 (G7.4: assembly reads the Feature Value in effect at each decision date, pinned at train time) and C1 -> S3.3 (G7.6: scoring a model pinned to another job-title version is refused). C1 -> C2.4 and C1 -> S3.3 run on the server transport, and a server-transport bundle cannot follow a client-transport one in one process (#3251), so they are Sequences 1 and 2. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject), the truth sidecar, `pnpm run truth:provision` and `truth:load-c1`. Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1.",
       "Status": "Active"
     },
     "relatedEntities": {
@@ -11,7 +11,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.1",
-            "Sequence": 2,
+            "Sequence": 3,
             "Status": "Active"
           },
           "primaryKey": {
@@ -26,7 +26,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.2",
-            "Sequence": 3,
+            "Sequence": 4,
             "Status": "Active"
           },
           "primaryKey": {
@@ -41,7 +41,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.3",
-            "Sequence": 4,
+            "Sequence": 5,
             "Status": "Active"
           },
           "primaryKey": {
@@ -56,7 +56,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=C1 -> C2.5",
-            "Sequence": 5,
+            "Sequence": 6,
             "Status": "Active"
           },
           "primaryKey": {
@@ -71,7 +71,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT125 - Job-title classifier consistency (live)",
-            "Sequence": 6,
+            "Sequence": 7,
             "Status": "Active"
           },
           "primaryKey": {
@@ -86,7 +86,7 @@
           "fields": {
             "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=W1 -> C3.2",
-            "Sequence": 7,
+            "Sequence": 8,
             "Status": "Active"
           },
           "primaryKey": {
@@ -106,6 +106,17 @@
           },
           "primaryKey": {
             "ID": "B559D1F2-2B52-498D-90F4-9F46384A8C2D"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=C1 -> S3.3",
+            "Sequence": 2,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5F7E49DC-5AED-40AD-92D9-9714B0EBD3FA"
           }
         }
       ]

@@ -312,6 +312,8 @@ packages/MJCoreEntitiesServer/src/custom/MJAIPromptRunEntityServer.server.ts  (D
 packages/MJCoreEntitiesServer/src/__tests__/MJAIPromptRunEntityServer.completedDuringSave.test.ts  (D-091 item 10)
 # Owner-batch item 11: a complete-search grep test on the 150 ms default budget (integrator, 2026-11-27)
 packages/AI/Agents/src/__tests__/DocumentToolLibrary.test.ts  (D-091 item 11)
+# B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
+metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -2637,7 +2639,7 @@ PR 4 at two as-of dates feeds a second model's training and its snapshot column 
 
 #### B3 — Pin enforcement, the golden-set rule, the re-derivation estimate
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** Scoring a model whose pinned feature version is not the pipeline's Active version (or, for a prediction
 pin, whose upstream binding's pipeline has another Published model) is refused in `ScoringService.Admit`, before any
@@ -2762,6 +2764,12 @@ metadata/remote-operations/types/predictive-studio-promote-model.output.ts
 metadata-optional/integration-test/tests/gates/.gate-C1-S3.3.json
 metadata-optional/integration-test/test-suites/.ps-gates-feature-pipelines-suite.json
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-s3-3.checks.ts
+metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
+packages/AI/PredictiveStudio/Engine/src/feature-pipelines/__tests__/feature-pipeline-engine.test.ts  (D5-B3-4)
+packages/AI/PredictiveStudio/Core/src/__tests__/fixtures/registry-inputs.ts  (D5-B3-5)
+packages/AI/PredictiveStudio/Core/src/__tests__/lifecycle-labels.test.ts  (D5-B3-5)
+packages/AI/PredictiveStudio/Engine/src/scoring/index.ts  (D5-B3-6)
+packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B3-8)
 ```
 
 Hands at integration: its `$C/index.ts` export and its barrel/registry lines to A4.
@@ -3463,6 +3471,50 @@ Record every decision taken in §9 and, when it changes another plan's interface
   must move to a step only the builder refuses. · Under A3 a plan with an unresolved target is never presented (attack
   7), so the old `NoSuchTargetColumn` failure could not reach an approval. · The controller changing it at integration.
   Controller ruling (sent as "D5-A3-7"; recorded as D5-A3-11 because D5-A3-7 was already taken).
+- D5-B3-1 · 2026-11-27 · The lease entity's `TrackRecordChanges = 0` is set by a new entity metadata record,
+  `metadata/entities/.entity-feature-pipeline-rederivation-leases.json` (only `TrackRecordChanges`, as PR 4's
+  `.entity-ml-scoring-runs.json`), added to B3's ownership and the §2.7 allowlist. CodeGen names the entity
+  `MJ: Feature Pipeline Rederivation Leases` (table `__mj.FeaturePipelineRederivationLease`, view
+  `vwFeaturePipelineRederivationLeases`). · CodeGen turns tracking on for a new table and a migration carries no
+  metadata update; the row is a lock renewed every minute, not an audit record. · An `UPDATE [Entity]` in section B3.
+- D5-B3-2 · 2026-11-27 · Scoring's pin check runs first in `ScoringService.RunChecksBeforeAssembly`, so every path
+  (`Score`, `Admit`, `Predict`, the live challenger) refuses a stale pin before any record; monitoring's `predecessor`
+  admission is exempt (`CheckFeaturePins`). · The predecessor is scored only to compare it with the successor that
+  replaced it, and writes nothing; refusing it would end every monitoring comparison after a retrain on a new version.
+  · Checking only in `Admit` (the bound Record Process), which leaves Score Record Set and the operation unchecked.
+- D5-B3-3 · 2026-11-27 · Training refuses a gated, not-passing version pin as the existing `AssemblyRefusal`
+  `unpinned-feature-version` {featureName} (`FeaturePinCheck.TrainingActivation`, from
+  `TrainingEngine.ResolveFeaturePins`); the typed `feature-version-not-activated` is the publish refusal (D5-9). · Only
+  an activated version is pinnable, so the version cannot be pinned; a new assembly variant would touch
+  `assembly-contract.ts` and `training-refusal.ts`, which no wave-3 milestone owns. · A new `AssemblyRefusal` kind.
+- D5-B3-4 · 2026-11-27 · Attack 6's test is in `Engine/src/feature-pipelines/__tests__/feature-pipeline-engine.test.ts`
+  (the test of `feature-pipeline-engine.ts`, which B3 owns), added to B3's ownership; its existing provider stubs gain
+  `EntityByName` (the cap's filter reads the Process Runs entity's schema and base view). No wave-3 milestone owns it.
+  · Caller maintenance of B3's own change (D-082).
+- D5-B3-5 · 2026-11-27 · Caller maintenance (D-082): `Core/src/__tests__/fixtures/registry-inputs.ts` builds a typed
+  `StoredPublishInputs` and gains `PinActivations: []`; `Core/src/__tests__/lifecycle-labels.test.ts`'s exhaustive
+  `RefusalOf` gains the new kind. Both join B3's ownership (no wave-3 owner). `IMLScoringRunJsonTypes.ts` keeps
+  `feature-values-not-writable` as the union's last member (the new variant before it), so
+  `jsontype-mirrors.compile.test.ts`'s drift fixture, which edits that last line, is unchanged.
+- D5-B3-6 · 2026-11-27 · `FeaturePinCheck` is exported through the scoring barrel `Engine/src/scoring/index.ts` (one
+  additive line, `export * from './feature-pin-check';`, added to B3's ownership; no wave-3 owner); `$E/index.ts`
+  already re-exports the barrel, so A4 is handed nothing for it. · The gate check imports it from
+  `@memberjunction/predictive-studio`.
+- D5-B3-7 · 2026-11-27 · Re-derivation (§5.2.4) counts a **record** as one stale value (one call re-derives all of its
+  features): `maxValuesPerRun` and the slice count records, `RederivationEstimate.affectedValues` counts the stale
+  Feature Value rows and the additive `affectedRecords` the records. The budget is read from the Record Process
+  `Configuration` JSON's `rederivation` member (outside the spec hash, so changing it mints no version). A run takes no
+  slice when its provider describes no `MJ: Feature Values` (a client provider or a partial test double) or on a dry
+  run. A lease is also free when its holder's Process Run has ended (not `Running`/`Pending`), so a run that ends
+  before its fire-and-forget release lands does not make the next run yield. The interim summary's
+  `FeaturePipelineRunResult.Status` is `running` (widened). · The contract named no unit for "value" and no source for
+  the budget; the release has no awaited run-end hook in `IRecordProcessor`.
+- D5-B3-8 · 2026-11-27 · Caller maintenance (D-082, as D5-B1-5 and D5-A2-12): the new
+  `metadata/queries/SQL/predictive-studio-lock-rederivation-lease.sql` joins `@memberjunction/sql-parser`'s 'shipped'
+  legacy-golden corpus (`vitest run -u src/__tests__/legacy-goldens`: 29 files, +29 −0, every added line names that
+  file; no existing entry changed), under the existing allowlist line; the controller regenerates the shipped goldens
+  once over the merged corpus at integration. · `milestone-exit`'s `cmd:test packages/SQLParser` went red on the
+  missing entries (29 golden tests).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3593,9 +3645,9 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->4<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->4<!-- /gen:checks -->
-- Head: <!-- gen:head -->48a3b3dcaa<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->5<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->5<!-- /gen:checks -->
+- Head: <!-- gen:head -->b03abdb7ab<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4371,6 +4423,74 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   (CodeGen $0.63, bizapps job-title pipeline $0.2513). Total **$3.14**.
 - **Rulings:** none new; no owner-batch item.
 - 2026-11-27 — controller: owner-batch item 12 (A5's D5-A5-7). `AIEngine.AddOrUpdateSingleNoteEmbedding`/`…ExampleEmbedding` threw when the lazy vector pool was not built yet, so `MJAIAgentNoteEntityServer.Save` returned false after the row was written. The pool is built from the engine's cached notes, which already hold the saved one; the update now no-ops then, and re-applies after a build already in flight. AIEngine tests 165/165, build 0.
+
+
+### 2026-11-27 — pin enforcement, the golden-set rule, the re-derivation estimate (council 30st24) — B3
+
+- **Branch** `ps/pr-5-agent-fp-input--B3` from the wave-2 head `16a5fe6e46` (local, D5-53; no push). Commits:
+  `65e08a9509` attack list red first (D5-48: 3 FeaturePipelines files no tests collected, the processor file 11 failed,
+  the Engine files 8 failed · 17 passed), `ca4bbf823b` Feature Pipelines side (lease table, estimator, slice, lease,
+  `InferProcessor`), `0bfc9f67b8` Predictive Studio side (refusals, pin check, publish, training, cache cap, gate),
+  `b03abdb7ab` class-registration manifests, then the records commit.
+- **`MJ_PS_PR5_claude2`** (0 sessions) dropped and rebuilt from this head with section B3 in place: `mj migrate` 207
+  applied (249.1 s); `codegen --skipfiles` 490 entities (one new: `MJ: Feature Pipeline Rederivation Leases`; its
+  `CodeGen_Run` SQL appended below the wave tail under its own banner, the standalone file deleted); `sync push`
+  256 created · 18 updated · 5 deleted · 0 errors (write-back reverse-applied); `codegen --skipdb`; D5-46 user
+  (Owner; Developer, UI, Integration, through the entity layer); `metadata-optional/integration-test` pushed (837
+  created). After the JSONType edits a second `sync push` (18 updated · 0 errors) and `codegen --skipdb` regenerated
+  `MJMLScoringRunEntity`'s refusal type and `remote_operations.ts`. `pnpm run build` exit 0. `check:codegen-tail` OK
+  (490 entities, 825 migrations); `check-migration-entityfield-sequence.mjs` no literal sequences.
+- **Unit tests** (each package's `pnpm test`, final run): FeaturePipelines 21 files · **374 passed**;
+  FeaturePipelinesEngine 18 · **340**; PS Core 46 · **602**; PS Engine 149 · **2,200**; integration-test-suite 79 ·
+  **1,160**; 0 failed, 0 skipped. Builds 0 errors. Attack files: `rederivation-lease.test.ts` 12,
+  `rederivation-slice.test.ts` 8, `rederivation-estimator.test.ts` 5, `infer-processor-rederivation-slice.test.ts` 11,
+  `feature-pin-check.test.ts` 13, `stored-publish-inputs.test.ts` +6, `feature-pipeline-engine.test.ts` +3 — all pass.
+- **Gate `C1 -> S3.3` (G7.6) → Passed**, test run `B06D90DD-6717-4B79-B7E2-A986501072B8`, 293,651 ms, on
+  `MJ_PS_PR5_claude2` (MJAPI 4052, sidecar 4152, `truth:provision` 305 immutable fields, `truth:load-c1` 2015 persons /
+  6673 dues periods): a model trained on job-title version 1 (lineage pin v1, `FeaturePinCheck` null), version 2
+  activated → `feature-version-mismatch` {pinned v1, active v2}, refused run row, **0 Feature Values written**, 0 rows.
+  It sits at Sequence 2 of the Feature Pipelines suite (server transport after C2.4; the five client bundles moved to
+  3–8); `ps-gate-suite-sequencing.test.ts` green.
+- **Runtime checks:** attack 6 through MJAPI — 60 Process Runs of one Record Process saved through the entity layer,
+  `FeaturePipelineEngine.Config` caches **50** (record process `42CB56DB…`). The lock Query on SQL Server: a
+  transaction holding it on a process with **no** lease row makes a second session fail at once (`Msg 1222`), which
+  reads again after the commit (the key-range lock covers the missing row).
+- **Mutation table** (flip, attack red, restore; every restore left the file at its committed bytes):
+  | Mutation | Red |
+  |---|---|
+  | `CheckFeaturePins` returns null (no pin comparison) | attack 3: `Score`, `Admit`, `Predict` (3 tests) |
+  | `ReverifyPublish` without `checkPinActivations` | attack 4: loader/reverify, `LifecycleGate.Publish` withheld (2) |
+  | `IsActivated` without `!v.Gated \|\|` | attack 8: publish ungated (2), training ungated (1) |
+  | the run takes the slice without the lease | attack 9: only the holder re-derives (1) |
+  | `isFree` takes a live lease | attack 9: lease single-flight, renewal, TTL, D5-44 skew (5) |
+  | `Renew` does not renew / the run loop skips `Renew` | attack 9: renewal, TTL (2); lease-lost, renew per batch (2) |
+  | `TryReserve` reserves nothing / `Reserve` records nothing | attack 7 `maxUsdPerRun` (1); attack 10 (7) |
+- **Mutation output G7.6:** with `CheckFeaturePins` returning null, `feature-pin-check.test.ts` › attack 3 ›
+  `ScoringService.Score (the binding path)`: `AssertionError: expected { Status: 'completed', …(7) } to match object {
+  Status: 'refused', …(2) }` (and the `Admit` and `Predict` cases); restored, 13/13.
+- **`milestone-exit` fixes (first run: `# checks 43 · failed 5`):** `check:guards` — `UUIDCompliance` flagged 2 nested
+  `UUIDsEqual` scans in `feature-pin-check.ts` (now `GroupByUUID` / a `UUIDMap` of Published models; the same shape in
+  `stored-publish-inputs.ts`), guards exit 0; `cmd:test packages/SQLParser` — D5-B3-8, 63 files · 2,175 passed;
+  `test:python` TruthSuite — no `.venv` in the fresh worktree, `pnpm run setup:python` then 24 passed, mypy 55 files
+  clean; `changeset-file` — an untracked scratch script under `packages/AI/AICLI/` had named `ai-cli` (removed,
+  changeset regenerated); `mutation-checks` — the output line above.
+- **Owner-batch item 2** (D5-21, `InferProcessor.ts`): the slice runs in the run loop — `Preflight` →
+  `BeginRederivation` (stale read, estimate, lease, interim `ResultSummary` stored before the first call); each batch
+  renews, skips records outside the slice (`Skipped`, `RederivationDeferred`, no watermark), reserves per call in
+  `computeSample` and settles on the call's reported cost; `BuildRunSummary` adds `Rederivation` and releases.
+- **Hands at integration** (run rule 4, D5-49/D5-B4-2): integration-suite barrel
+  `export * from './checks/ps-gate-c1-s3-3.checks';` (after `ps-gate-c1-c2-4`), `check-registry.test.ts`
+  `'ps-gate-c1-s3-3': 1`, `'ps-gate-c1-s3-3.G7.6'`, bundle count **297**; nothing for `$C/index.ts` (the new types
+  live in already-exported files) or `$E/index.ts` (D5-B3-6). The migration's B3 CodeGen block is for the controller's
+  wave-3 tail regeneration. D5-9's two variants are in place (the controller notes them under D-021).
+- **Not done here:** the guide's `FeaturePipelineEngine` paragraph (§5.2.6, line 630) is MZ's (`guides/` is not in
+  B3's ownership); the code comment says the cache is capped. `ci-mirror` not run (D5-51). The cap check's Record
+  Process save logged `MJRecordProcessEntityServer: schedule reconciliation failed … reading 'RunView'` from a
+  client-provider script (the save succeeded; not B3 code).
+- **LLM spend** (§2.4 query, `RunAt >= 2026-11-27T15:00Z`, `MJ_PS_PR5_claude2`): 235 prompt runs, **$0.6534**,
+  1,073,952 tokens (CodeGen form layout $0.2905, check constraints $0.1812, field identification $0.1759; the
+  gate made no LLM call).
+- **Rulings:** §9 D5-B3-1 … D5-B3-8; no owner-batch item.
 
 ## 12. Refresh log (append-only)
 

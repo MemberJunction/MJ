@@ -530,6 +530,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'ps-gate-c1-s2-3': 1,
         'ps-gate-c1-s2-6': 1,
         'ps-gate-c1-s3-1': 1,
+        'ps-gate-c1-s3-3': 1,
         'ps-gate-c1-s4-2': 1,
         'ps-gate-c1-s4-2-2': 1,
         'ps-gate-c1-s6-1': 1,
@@ -718,7 +719,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(296);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(297);
     });
 });
 
@@ -1007,6 +1008,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'ps-gate-c1-s2-3.G1.6',
         'ps-gate-c1-s2-6.G2.25',
         'ps-gate-c1-s3-1.G1.12',
+        'ps-gate-c1-s3-3.G7.6',
         'ps-gate-c1-s4-2-2.G3.5',
         'ps-gate-c1-s4-2.G2.7',
         'ps-gate-c1-s6-1.G2.6',

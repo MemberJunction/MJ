@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { Metadata, type IMetadataProvider } from '@memberjunction/core';
 import type { MJRecordProcessEntity, MJProcessRunEntity } from '@memberjunction/core-entities';
@@ -203,14 +205,52 @@ describe('FeaturePipelineEngine.Config — the provider it loads on', () => {
   it("loads on the caller's provider, and on the engine's own provider when the caller passes none", async () => {
     const engine = FeaturePipelineEngine.Instance;
     const load = vi.spyOn(engine as unknown as Loader, 'Load').mockResolvedValue(undefined);
-    const global = { tag: 'global' } as unknown as IMetadataProvider;
+    const global = { tag: 'global', EntityByName: processRunsEntity } as unknown as IMetadataProvider;
     const globalGetter = vi.spyOn(Metadata, 'Provider', 'get').mockReturnValue(global);
-    const caller = { tag: 'caller' } as unknown as IMetadataProvider;
+    const caller = { tag: 'caller', EntityByName: processRunsEntity } as unknown as IMetadataProvider;
     await engine.Config(true, undefined, caller);
     await engine.Config(true, undefined);
     // The engine is not bound to a provider (Load is stubbed), so its own provider is the global one.
     expect(load.mock.calls.map((c) => c[1])).toEqual([caller, global]);
     load.mockRestore();
     globalGetter.mockRestore();
+  });
+});
+
+/** The `MJ: Process Runs` entity info the cap's filter is built from (schema and base view). */
+function processRunsEntity(name: string): { SchemaName: string; BaseView: string } | undefined {
+  return name === 'MJ: Process Runs' ? { SchemaName: '__mj', BaseView: 'vwProcessRuns' } : undefined;
+}
+
+/**
+ * PR 5 milestone B3 — attack 6 (DD-9, F-DOC-10): the engine's Process Run cache holds at most
+ * {@link FeaturePipelineEngine.MAX_RUNS_PER_PIPELINE} = 50 runs per pipeline (the newest), read with one ranked filter,
+ * and the class comment says so. A runtime check on a database with 60 runs of one pipeline is in B3's §11 entry.
+ */
+describe('FeaturePipelineEngine — the Process Run cache is capped per pipeline (attack 6, DD-9)', () => {
+  type Loader = { Load: (configs: { EntityName?: string; Filter?: string; PropertyName?: string }[], provider: IMetadataProvider, forceRefresh: boolean, contextUser: unknown) => Promise<void> };
+
+  it('caps the cache at 50 runs per pipeline', () => {
+    expect(FeaturePipelineEngine.MAX_RUNS_PER_PIPELINE).toBe(50);
+  });
+
+  it('loads MJ: Process Runs through a filter that keeps the newest 50 per Record Process', async () => {
+    const engine = FeaturePipelineEngine.Instance;
+    const load = vi.spyOn(engine as unknown as Loader, 'Load').mockResolvedValue(undefined);
+    const provider = { tag: 'capped', EntityByName: processRunsEntity } as unknown as IMetadataProvider;
+    await engine.Config(true, undefined, provider);
+    const runs = load.mock.calls[0][0].find((c) => c.EntityName === 'MJ: Process Runs');
+    load.mockRestore();
+    expect(runs?.Filter).toBeDefined();
+    const filter = String(runs?.Filter);
+    expect(filter).toContain('[__mj].[vwProcessRuns]');
+    expect(filter).toMatch(/ROW_NUMBER\(\) OVER \(PARTITION BY RecordProcessID ORDER BY __mj_CreatedAt DESC/);
+    expect(filter).toContain('<= 50');
+  });
+
+  it('the class comment says the cache is capped (no "all Process Runs" claim)', () => {
+    const source = readFileSync(join(__dirname, '..', 'feature-pipeline-engine.ts'), 'utf8');
+    expect(source).toMatch(/newest 50 .*Process Runs.* per pipeline|MAX_RUNS_PER_PIPELINE/);
+    expect(source).not.toMatch(/Runs are capped to the most recent rows \(the audit headers/);
   });
 });

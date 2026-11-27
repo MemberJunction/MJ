@@ -342,6 +342,19 @@ export interface StoredPublishInputs {
   readonly CurrentPublishedModelID: string | null;
   /** Who started this publish attempt: a keep-simple-baseline outcome passes for a human without `autoPublishKeepBaseline`. */
   readonly Initiator: Actor;
+  /**
+   * Each Feature Pipeline version the model's lineage pins, and whether its version row is activated
+   * (`MJFeaturePipelineVersionEntityExtended.IsActivated`: ungated, or gated with a passing golden-set result; a row
+   * that is gone is not). A model with no pinned version has none (PR 5 D5-31).
+   */
+  readonly PinActivations: readonly PinActivation[];
+}
+
+/** One pinned Feature Pipeline version of a model and whether it is activated (PR 5 §5.2.3). */
+export interface PinActivation {
+  readonly featureName: string;  // case-violation-ok-legacy-back-compat: the contract's camelCase pin-activation shape (§6 B3)
+  readonly pipelineVersion: number;  // case-violation-ok-legacy-back-compat: the contract's camelCase pin-activation shape (§6 B3)
+  readonly activated: boolean;  // case-violation-ok-legacy-back-compat: the contract's camelCase pin-activation shape (§6 B3)
 }
 
 /** The re-derived publish, or why it is refused. */
@@ -366,7 +379,8 @@ export type PublishReverification =
         | 'keep-baseline-not-auto-published'
         | 'incumbent-not-current'
         | 'incumbent-diff-missing'
-        | 'does-not-beat-incumbent';
+        | 'does-not-beat-incumbent'
+        | 'feature-version-not-activated';
       readonly Detail: string;
     };
 
@@ -385,6 +399,8 @@ export class PublishRules {
   public static ReverifyPublish(inputs: StoredPublishInputs): PublishReverification {
     const protocol = PublishRules.checkPinnedProtocol(inputs);
     if (protocol !== null) return protocol;
+    const notActivated = PublishRules.checkPinActivations(inputs);
+    if (notActivated !== null) return notActivated;
     const margin = inputs.ProtocolRow.Promotion.margin;
     const guarded = GateRules.DecideGuardedGate(inputs.GateIntervals, margin, inputs.GateGuards);
     const gate = guarded.Decision;
@@ -403,6 +419,17 @@ export class PublishRules {
     const incumbent = PublishRules.checkIncumbent(inputs, inputs.CurrentPublishedModelID, margin);
     if (incumbent !== null) return incumbent;
     return { Ok: true, Shipped: art.candidate, ArtifactSha256: art.sha256, Replaces: inputs.CurrentPublishedModelID, Gate: gate };
+  }
+
+  /** Step 1b: every Feature Pipeline version the model's lineage pins is activated (PR 5 D5-31). */
+  private static checkPinActivations(x: StoredPublishInputs): PublishRefusal | null {
+    const first = x.PinActivations.find((p) => !p.activated);
+    if (first === undefined) return null;
+    return {
+      Ok: false,
+      Reason: 'feature-version-not-activated',
+      Detail: `feature ${first.featureName} is pinned to Feature Pipeline version ${first.pipelineVersion}, which is gated and has no passing golden-set result`,
+    };
   }
 
   /** Step 1: the protocol row is the version the run pinned. */
@@ -659,7 +686,13 @@ export type TransitionRefusal =
   | { readonly kind: 'reason-required' }
   /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string }
+  /**
+   * The model's lineage pins a Feature Pipeline version that is gated and has no passing golden-set result (PR 5 G7.6,
+   * D5-9, D5-31): `validated → published` is refused; an ungated version is activated. Final until the version passes.
+   */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'feature-version-not-activated'; readonly featureName: string; readonly pipelineVersion: number };
 
 /**
  * One row of `MJ: ML Model Publish Records` (D-029, D4-08): an optional human sign-off, an applied publish (automatic or

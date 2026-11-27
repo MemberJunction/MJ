@@ -64,6 +64,8 @@ const REFUSAL_CODES = [
   'LEAKAGE_UNKNOWN',
   /** A writing run's caller may not create and update `MJ: Feature Values` (`feature-values-not-writable`, D4-165). */
   'FEATURE_VALUES_NOT_WRITABLE',
+  /** A model reads a feature at a pinned version that is no longer the one in use; retrain it (`feature-version-mismatch`, PR 5 G7.6). */
+  'FEATURE_VERSION_MISMATCH',
   /** A scoring run stopped at a batch in which a record failed; the run row names the first errors. */
   'SCORING_RUN_FAILED',
 ] as const;

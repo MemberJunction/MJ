@@ -1,0 +1,40 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio: Lock Rederivation Lease",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=Predictive Studio",
+      "UserQuestion": "Lock this Feature Pipeline's re-derivation lease so no other run can read or take it until my transaction ends, and tell me the lease and the database's current time, or tell me at once that another run holds the lock.",
+      "Description": "Takes update and key-range locks on the MJ: Feature Pipeline Rederivation Leases row of one Record Process (or the empty key range when it has none) for the rest of the caller's transaction and returns the lease with the database clock (DbNow). The budgeted re-derivation slice of a Feature Pipeline run reads and takes, renews or releases its lease under it, so two runs of one Record Process never both hold the slice (D5-41); every lease time is written and compared on DbNow, never a host clock (D5-44). NOWAIT: a held lock fails at once and the caller retries.",
+      "SQL": "@file:SQL/predictive-studio-lock-rederivation-lease.sql",
+      "TechnicalDescription": "SELECT SYSUTCDATETIME() AS DbNow, l.ID, l.ProcessRunID, l.AcquiredAt, l.RenewedAt, l.ReleasedAt FROM (SELECT 1) clock LEFT JOIN FeaturePipelineRederivationLease l WITH (UPDLOCK, HOLDLOCK, NOWAIT) ON l.RecordProcessID = RecordProcessID. Always one row; the lease columns are null when the process has no lease row. Must run inside the caller's transaction on the caller's provider (RederivationLease, through RunInEntityTransaction): the locks are held until commit or rollback, and the seek of UQ_FeaturePipelineRederivationLease_RecordProcessID range-locks a missing row. NOWAIT raises SQL Server error 1222 immediately when another transaction holds it, which RunQuery reports as Success: false; FeatureValueLocks.Acquire retries with backoff up to 30 s. Single statement. SQL Server only (D-057).",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 1,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "primaryKey": {
+      "ID": "B6C2FEB5-D1D0-458B-857A-5740471822B9"
+    },
+    "collections": {
+      "Parameters": [
+        {
+          "fields": {
+            "Name": "RecordProcessID",
+            "Type": "string",
+            "IsRequired": true,
+            "DefaultValue": null,
+            "SampleValue": "00000000-0000-0000-0000-000000000000",
+            "Description": "The Feature Pipeline (MJ: Record Processes ID) whose re-derivation lease is locked.",
+            "IsServerSet": false,
+            "ValidationFilters": null,
+            "DetectionMethod": "Manual"
+          },
+          "primaryKey": {
+            "ID": "806AE039-4C52-403F-AD00-03BF73808EDF"
+          }
+        }
+      ]
+    }
+  }
+]
