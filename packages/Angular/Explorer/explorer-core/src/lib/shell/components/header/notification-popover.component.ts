@@ -14,7 +14,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { IMetadataProvider, Metadata } from '@memberjunction/core';
+import { IMetadataProvider } from '@memberjunction/core';
 import { MJUserNotificationEntity, MJUserNotificationTypeEntity } from '@memberjunction/core-entities';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -42,6 +42,7 @@ export interface NotificationPopoverVM {
   Clickable: boolean;
 }
 
+/** Maximum rows rendered inside the anchored header popover so the dropdown stays scannable; full history lives in the Notifications tab. */
 const MAX_POPOVER_ITEMS = 20;
 
 /**
@@ -160,7 +161,7 @@ export class NotificationPopoverComponent extends BaseAngularComponent implement
     const unread = this.AllNotifications.filter(n => n.Unread);
     const previousUnread = new Map<MJUserNotificationEntity, boolean>(unread.map(n => [n, n.Unread]));
     try {
-      const provider = this.resolveProvider() ?? Metadata.Provider;
+      const provider = this.ProviderToUse;
       const transGroup = await provider.CreateTransactionGroup();
       await Promise.all(unread.map(n => MarkNotificationAsRead(n, true, transGroup, provider)));
       const ok = await transGroup.Submit();
@@ -215,11 +216,8 @@ export class NotificationPopoverComponent extends BaseAngularComponent implement
   }
 
   private resolveProvider(): IMetadataProvider | undefined {
-    if (this.Provider) {
-      return this.Provider;
-    }
     try {
-      return Metadata.Provider;
+      return this.ProviderToUse;
     } catch {
       return undefined;
     }

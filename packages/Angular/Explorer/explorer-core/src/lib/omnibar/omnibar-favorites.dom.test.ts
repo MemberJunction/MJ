@@ -31,6 +31,8 @@ describe('OmnibarPaletteComponent (DOM) — empty-state Favorites and Recent gro
     const openEntityRecord = vi.fn();
     const recentItems$ = new BehaviorSubject<RecentAccessItem[]>([
       {
+        id: 'rec-1',
+        entityId: 'ent-accounts',
         entityName: 'Accounts',
         recordId: 'acc-1',
         recordName: 'Northwind Traders',
