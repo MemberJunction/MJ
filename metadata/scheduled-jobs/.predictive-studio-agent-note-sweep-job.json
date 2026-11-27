@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Note Sweep",
+      "Description": "Hourly at 30 minutes past: activates every Predictive Studio agent note whose source model is Published with a publish record and unflagged (and that has a user or company), and archives every note whose source model stopped qualifying or that has no scope, so no note stays injectable more than an hour after its model stops qualifying.",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=PredictiveStudioAgentNoteSweepJobDriver",
+      "CronExpression": "0 30 * * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "ConcurrencyMode": "Skip",
+      "Configuration": {}
+    },
+    "primaryKey": {
+      "ID": "98C0812D-2079-48C5-B49D-4F05FE9749B0"
+    },
+    "sync": {
+      "lastModified": "2026-11-27T15:49:01.451Z",
+      "checksum": "f0b20f88aaa9e6959a7ab39de1ce52171dbf4b7b4913edbaca84301b0e6c75e2"
+    }
+  }
+]

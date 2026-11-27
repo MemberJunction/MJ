@@ -25,3 +25,4 @@ export * from './model-dev-orchestrator-agent';
 export * from './agent-read-scope';
 export * from './plan-metadata-validator';
 export * from './catalog-renderer';
+export * from './agent-note-policy';

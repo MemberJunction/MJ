@@ -65,3 +65,4 @@ export * from './stored-prediction';
 export * from './registry-check-details';
 export * from './search-policy';
 export * from './agent-contracts';
+export * from './agent-memory-policy';

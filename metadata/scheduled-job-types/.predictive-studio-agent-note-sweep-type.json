@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Predictive Studio Agent Note Sweep",
+      "Description": "The hourly Predictive Studio agent memory sweep (AgentMemoryPolicy, D5-11). For every MJ: AI Agent Notes row of the five Predictive Studio agents that is Pending, Active or Provisional, it re-checks the activation rule from stored rows: the note's source run tree (its session's runs and their descendants) links, through its build approval claims, to at least one model, every linked model is Published with a 'publish' MJ: ML Model Publish Records row, no training run stores leakage flags and no build failed, and the note has a UserID or CompanyID. A qualifying Pending or Provisional note is made Active; a note that does not qualify is Archived, except a scoped Pending note whose tree links to no model yet, which waits. Each change is written to the note's Comments and saved through the entity layer (the note policy's PreSave hook re-checks it). The counts go to the job run's Details. No configuration.",
+      "DriverClass": "PredictiveStudioAgentNoteSweepJobDriver",
+      "DomainRunEntity": null,
+      "DomainRunEntityFKey": null,
+      "NotificationsAvailable": true
+    },
+    "primaryKey": {
+      "ID": "AA110CAC-8802-4D0D-9260-3B5C8CF95688"
+    },
+    "sync": {
+      "lastModified": "2026-11-27T15:48:53.983Z",
+      "checksum": "f4fa485884d84f0296d4f4997b55436017a2b6cbab07fab14363445050249848"
+    }
+  }
+]

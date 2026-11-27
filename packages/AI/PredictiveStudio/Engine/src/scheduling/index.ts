@@ -11,3 +11,4 @@
  */
 
 export * from './scheduled-model-scoring';
+export * from './agent-note-sweep-job';

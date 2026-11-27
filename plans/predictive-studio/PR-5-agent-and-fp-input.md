@@ -2101,7 +2101,7 @@ append at newest + 1 without the hash compare → attack 11 goes red.
 
 #### A5 — The PS memory policy (what `isRunTainted` does not cover)
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** Predictive Studio agent notes follow `AgentMemoryPolicy` (§5.1.4) whoever saves them: created only
 `Pending`; refused when their source run tree links to a leakage-flagged model, a failed build or a model that is not
@@ -3515,6 +3515,55 @@ Record every decision taken in §9 and, when it changes another plan's interface
   file; no existing entry changed), under the existing allowlist line; the controller regenerates the shipped goldens
   once over the merged corpus at integration. · `milestone-exit`'s `cmd:test packages/SQLParser` went red on the
   missing entries (29 golden tests).
+- D5-A5-1 · 2026-11-27 · A note's **source run tree** is its `SourceAIAgentRunID`'s root run, every earlier root of
+  that session (the `LastRunID` walk, as `BuildApprovalResolver.SessionRuns`) and every descendant of those roots
+  (`RootParentRunID`); the tree **links to** the pipelines its runs claimed (`MJ: ML Build Approval Claims`
+  `.MLTrainingPipelineID`), their `MJ: ML Training Runs` and their `MJ: ML Models` — the lineage G4.1 checks. A failed
+  claim or a `Failed` training run is `build-failed`; a training run whose stored `ps-run-results/v2` trainer result
+  carries leakage flags is `leakage-flagged`; any linked model not `Published` with a `publish` record is
+  `not-published`; a tree with no claimed pipeline links to no model (`Pending` accepted, never activated). · The claim
+  is the only stored link from a run to what it built (the builder's payload is self-reported); the session walk lets a
+  note from the follow-up turn reach the build its approving turn claimed. · The run tree alone (misses the claiming
+  turn); the Pipeline Builder payload's `BestModelID`.
+- D5-A5-2 · 2026-11-27 · A **create** of a PS-agent note with any status but `Pending` (`Provisional` included) is
+  `pending-only-on-create` with that status; `provisional-refused` is an **update** to `Provisional`. · Attack 1 names
+  `pending-only-on-create` for `MemoryWriteManager`'s create, which is `Provisional`; attack 4's "by any writer" is then
+  the update path (a non-PS agent's `Provisional` note is unchanged either way). · Checking `Provisional` first (attack
+  1 would read `provisional-refused`).
+- D5-A5-3 · 2026-11-27 · `NoteRefusal<TNoteStatus extends string>` is generic in `Core/src/agent-memory-policy.ts`;
+  the Engine binds it to `MJAIAgentNoteEntity['Status']` (`PredictiveStudioNoteRefusal`), as D5-A2-3. · Core has no
+  entity dependency. · A hand-copied status union.
+- D5-A5-4 · 2026-11-27 · `Sweep(provider, contextUser, scope?)` returns `NoteSweepResult { Activated; Archived;
+  Failed }` (a superset of the contract's `{ Activated; Archived }`): a failed note save is counted with its message and
+  the job run fails with it in `Details`; the optional `NoteSweepScope { UserID; CompanyID }` narrows it to the notes a
+  run of that user/company is injected (theirs, the company's and the agent-wide ones) for DD-10's call. The hook and
+  the sweep decide through one `ActivationVerdict` (with `ActivationRuleHolds` its yes/no). Sweep targets: a qualifying
+  `Pending`/`Provisional` note → `Active`; a failing one → `Archived`, except a scoped `Pending` note whose tree links
+  to no model yet (it waits). Each change is appended to the note's `Comments`. · A silently uncounted failed save
+  would report a clean run. · Changing the contract's return type.
+- D5-A5-5 · 2026-11-27 · DD-10 decided: a PS-owned call point before injection exists — `BaseAgent.InjectContextMemory`
+  is `protected` (`base-agent.ts:6687`) and runs before the framework injects notes, so the orchestrator can override
+  it to `await PredictiveStudioAgentNotePolicy.Sweep(this.ProviderToUse, contextUser, { UserID: userId ?? null,
+  CompanyID: companyId ?? null })` before `super.InjectContextMemory(...)`. A4 owns `model-dev-orchestrator-agent.ts`
+  in wave 3, so the override is handed to A4 at integration (§11 A5 entry); until it lands the hourly job alone bounds
+  a stale note to one hour. · D5-11's "plus a pre-injection call where DD-10 finds one". · The hourly job alone.
+- D5-A5-6 · 2026-11-27 · A note is accepted only after its model is published: the build stops at `Validated` /
+  `KeepBaseline` (auto-publish off, "ready to publish when you ask"), and a `Pending` note written then is refused
+  `not-published` (attack 3, as the contract says); a person publishes (`Promote ML Model` `publish`) and the note is
+  written after. The runtime Exit ran in that order. · §5.1.4 and attack 3 refuse a note whose model is not Published;
+  D5-11's "activation at note creation" rejection concerns activation, which stays the sweep's. · Accepting `Pending`
+  notes from an unpublished model.
+- D5-A5-7 · 2026-11-27 · **Proposed owner-batch item (non-PS, for the controller):** `packages/AI/Engine/src/AIEngine.ts`
+  `AddOrUpdateSingleNoteEmbedding` throws `note vector service not initialized, error state` when the process has not
+  yet built its lazy note vector pool (`ensureEmbeddingsGenerated` runs only on the first `FindSimilar*`), so
+  `MJAIAgentNoteEntityServer.Save()` returns `false` **after** the row was written (`MJCoreEntitiesServer/src/custom/
+  MJAIAgentNoteEntityServer.server.ts:47-69`, logged as `Failed to save AI Agent Note:`). Shown at runtime: the first
+  sweep run-now in a fresh process wrote the note `Active` and reported `Failed: ["A88E63A5…: unknown error"]`
+  (job run `4C9332CA`); with the pool warmed by one `FindSimilarAgentNotes` call the same step reported `Activated: 1`
+  (`A60563F2`). It hits any first `Active`/`Provisional` note save in a process (the Memory Manager's too). Proposed
+  fix: when `_noteVectorService` is null and embeddings are not generated yet, return (the lazy build reads the note
+  from the engine's cache). No PS-side route: the Engine does not depend on `@memberjunction/aiengine`. Default until
+  ruled: the sweep counts such a save as failed (the run fails, the note is `Active`), and the next run re-reads it.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -4491,6 +4540,97 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   1,073,952 tokens (CodeGen form layout $0.2905, check constraints $0.1812, field identification $0.1759; the
   gate made no LLM call).
 - **Rulings:** §9 D5-B3-1 … D5-B3-8; no owner-batch item.
+
+### 2026-11-27 — the PS agent memory policy (council 30st24) — A5
+
+- **Branch** `ps/pr-5-agent-fp-input--A5` from `16a5fe6e46` (wave-2 head), local only (D5-53). Attack list red first
+  (`0ef6038782`, D5-48: run against `16a5fe6e46` with the implementation absent, **2 files fail to load** — missing
+  `agent-note-policy` / `agent-note-sweep-job`), then `549696868b` (implementation), then this records commit.
+- **Delivered:** `Core/src/agent-memory-policy.ts` (`AgentMemoryPolicy`, `PREDICTIVE_STUDIO_AGENT_MEMORY_POLICY`,
+  `NoteSourceRefusalReason`, `NoteRefusal<TNoteStatus>`); `Engine/src/agent/agent-note-policy.ts`
+  (`PredictiveStudioAgentNotePolicy`: `Register`, `CheckNoteSave`, `Decide`, `Sweep`, `ActivationRuleHolds`,
+  `ActivationVerdict`, `SourceVerdict`, `ReadSourceFacts`, `HasLeakageFlags`, `SweepTarget`); `Engine/src/scheduling/
+  agent-note-sweep-job.ts` (`@RegisterClass(BaseScheduledJob, 'PredictiveStudioAgentNoteSweepJobDriver')`, counts in
+  `Details`); `metadata/scheduled-job-types/.predictive-studio-agent-note-sweep-type.json` and
+  `metadata/scheduled-jobs/.predictive-studio-agent-note-sweep-job.json` (Active, `0 30 * * * *` UTC, `Skip`).
+  `packages/AI/Agents` and `isRunTainted` unchanged (Non-PS list: none). What `isRunTainted` already covers: a run
+  that ingested an `Untrusted`/`SemiTrusted` action or client-tool result writes `Pending` (`MemoryWriteManager.ts:467`);
+  PS Actions resolve `Trusted`, so it covers **none** of G4.6's cases (flagged, failed, unpublished) — attack 1 proves it
+  at unit and runtime level.
+- **Hands at integration (D5-49 / D5-B4-2; each already on this branch as a one-line addition for the local build and
+  the runtime Exit):** `$C/index.ts` `export * from './agent-memory-policy';` (last line); `$E/agent/index.ts`
+  `export * from './agent-note-policy';` (last line); `$E/scheduling/index.ts` `export * from './agent-note-sweep-job';`;
+  `$E/index.ts`: `PredictiveStudioAgentNotePolicy` added to the `./agent` import and
+  `PredictiveStudioAgentNotePolicy.Register();` after `BuildApprovalResolver.Register();` (A4's file). **To A4's
+  `model-dev-orchestrator-agent.ts` (DD-10, D5-A5-5):** override `protected async InjectContextMemory(input, agent,
+  userId?, companyId?, contextUser?, …rest)` to run `await PredictiveStudioAgentNotePolicy.Sweep(this.ProviderToUse,
+  contextUser, { UserID: userId || null, CompanyID: companyId || null })` when `contextUser` is set, then return
+  `super.InjectContextMemory(...)` with the same arguments.
+- **Unit tests (exit 0; builds 0 TypeScript errors):** `@memberjunction/predictive-studio-core` **46 files, 602 passed**;
+  `@memberjunction/predictive-studio` (Engine) **150 files, 2,213 passed** (A5's 2 files: 35 passed —
+  `agent-note-policy.test.ts` 29, `agent-note-sweep-job.test.ts` 6); `packages/AI/Agents` **303 files, 5,428 passed**
+  (the framework's memory tests unchanged, the same count as wave 1). `check:guards` 16/16, `check:naming` exit 0.
+- **Attacks (all green):** 1 (MemoryWriteManager's untainted note is `Provisional` → `pending-only-on-create`; `Pending`
+  saved; every sub-agent), 2 (GraphQL create `Active`; Owner update `Pending → Active` refused/saved by the rule; the
+  Memory Manager's `Active` create; an `Update Record` save as the system user; an `Active` note re-pointed or unscoped;
+  a non-PS note moved onto a PS agent; touch/archive allowed), 3 (leakage-flagged — a real stored v2 envelope with one
+  flag —, failed build, `Validated` not Published, a child run of the flagged tree, a later session turn, a published
+  model with no publish record), 4 (update to `Provisional` by Owner/User/system; a non-PS `Provisional` note unchanged),
+  5 (activate qualifying; archive an `Active` note after its model is archived; NULL/NULL; non-PS untouched; DD-3
+  pre-policy notes; the DD-10 scoped sweep; paging past one page), 6 (no writer leaves an injectable note sourced from
+  the flagged run; a pre-existing `Active` one is archived).
+- **Mutation table** (flip, the attack that goes red, restored byte-identical — `diff` clean):
+
+  | Guard flipped (`agent-note-policy.ts`) | Red |
+  |---|---|
+  | M1 create accepts any status (drop the `Pending` check) | attack 1 (×2), attack 2 (GraphQL create, Memory Manager, moved onto a PS agent) |
+  | M2 `Provisional` accepted on update | attack 4 (×3 writers) |
+  | M3 no activation check on update | attack 2 (Owner `Pending → Active`, Update Record, re-pointed/unscoped) |
+  | M4 leakage flags ignored | attack 3 (flagged; flagged child run) |
+  | M5 failed build ignored | attack 3 (failed build) |
+  | M6 unpublished model ignored | attack 3 (Validated; no publish record), attack 2 (Owner activation), attack 5 |
+  | M7 scope ignored | attack 2 (unscoped), attack 5 (NULL/NULL) |
+  | M8 sweep never archives | attack 5 (×2), attack 6 |
+  | M9 every agent treated as PS | attack 4 (non-PS `Provisional`), attack 2 (moved onto a PS agent) |
+  | M10 session walk dropped | attack 3 (later session turn) |
+
+- **Database** `MJ_PS_PR5_claude3` (0 sessions; created fresh — it did not exist): `mj migrate` 207 applied (256.2 s);
+  `codegen --skipfiles` 489 entities, no `CodeGen_Run` SQL (A5 adds no DDL); `sync push --dir=metadata` 255 created ·
+  17 updated · 5 deleted · 0 errors (write-back reverse-applied); `codegen --skipdb` no diff; D5-46 user (Owner;
+  Developer, UI, Integration); `truth:provision` (48 pstruth entities, 305 immutable fields), `truth:loom`,
+  `metadata-optional/integration-test` pushed (835 created, write-back reversed), the A5 job type and job pushed (1 + 1
+  created); `PS truth datasets: load and verify` **Passed 68/68** (MJAPI on 4053); Sidecar and TruthSuite
+  `setup:python` (the first build failed on `No module named 'uvicorn'`, no venv in this worktree).
+- **Runtime Exit (server transport, as the D5-46 person, MJAPI 4053; a temporary untracked script, deleted):**
+  - attack 1 live: the real `MemoryWriteManager.ExecuteWrite` (untainted) → `error` "`pending-only-on-create`,
+    `Provisional`"; with the hook unregistered (as on `next`) the same write → `written`, row `Provisional` (archived after).
+  - the no-uvicorn build (orchestrator `162319FB…`, resumed `2EA4FEAA…`, claim `failed`) → a `Pending` note refused
+    `source-not-qualifying` / `build-failed` (a real failed build).
+  - W1 build: presented `1AAA8D0D…`, approved by the person's own save, resumed `5B1A9391…` (claim `built`, pipeline
+    `91F151E8…`, model `EEC03321…` **`KeepBaseline`**, 0 publish records) → a `Pending` note refused `not-published`
+    (D5-A5-6); the person published it (`ModelTransitionDelegation.Apply` `publish` → `Published`, publish record
+    `950BDFA5…`); a `Pending` note sourced from `5B1A9391…` saved; an `Active` create refused `pending-only-on-create`.
+  - **one sweep run-now** (`SchedulingEngine.ExecuteScheduledJob`): run `A60563F2…` `Completed`, `Details`
+    `{"Activated":1,"Archived":0,"Failed":[]}`; note `9A9094FD…` `Active` with the rule's outcome in `Comments`; **the
+    next run** `37358B0A…` injected it (`memoryContext.notes` holds `9A9094FD…`; the prompt run's `Messages` carry its
+    text). The first attempt in a fresh process (`4C9332CA…`) wrote the note `Active` but counted the save failed —
+    D5-A5-7, AIEngine's lazy note vector pool (proposed owner-batch item; evidence there).
+  - archive: the person archived `EEC03321…`; the next sweep run `52D75349…` → `{"Activated":0,"Archived":2,"Failed":[]}`,
+    both notes `Archived` (sqlcmd on `__mj.AIAgentNote` / `__mj.ScheduledJobRun`).
+- **`milestone-exit.mjs --milestone A5`** before this entry: `# checks 43 · failed 1` (the one: `handoff`, this entry);
+  every `cmd:test` (22 packages), `cmd:build`, the guards, `check:standards`, `check:ui`, `check:esm`, `test:types` ok.
+- **LLM spend** (§2.4 query on `MJ_PS_PR5_claude3`): A5's runtime from `2026-11-27T15:53:46Z` **14 prompt runs,
+  $0.0757, 152,085 tokens**; the database setup before it (`truth:provision`'s and `sync push`'s prompt runs) 232 /
+  $0.6246 / 1,052,033. Inside the wave's $5 spot-check cap shared with A4, and D5-12's $100.
+- **Rulings:** §9 D5-A5-1 (source run tree), D5-A5-2 (create before `Provisional`), D5-A5-3 (generic `NoteRefusal`),
+  D5-A5-4 (`NoteSweepResult`, scope, sweep targets), D5-A5-5 (DD-10 decided; override handed to A4), D5-A5-6 (notes
+  after publication), D5-A5-7 (proposed owner-batch item: AIEngine's note vector pool).
+- **Generated, left to the controller (run rule 4):** the build regenerates both tracked class manifests
+  (`ServerBootstrap` / `ServerBootstrapLite` `src/generated/mj-class-registrations.ts`) with one new class,
+  `PredictiveStudioAgentNoteSweepJobDriver` (`CLASS_REGISTRATIONS_COUNT` 1488 → 1489 and 1302 → 1303); reverse-applied
+  here, regenerated at integration.
+- **Not run (by rule):** `ci-mirror` (D5-51, the controller's at integration); no push (D5-53). A5 owns no gate suite
+  run (G4.6's suite run is A7b's); no W3 runtime run (attack 6's runtime half is G4.6's, A7b).
 
 ## 12. Refresh log (append-only)
 
