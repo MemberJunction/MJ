@@ -54,11 +54,11 @@ cd packages/AI/PredictiveStudio/TruthSuite
 pnpm run build
 pnpm run truth:loom        # clone the Loom pin (fixtures/loom.json) under .loom/
 pnpm run setup:python      # create .venv from python/requirements.txt
-pnpm run truth:provision   # create the pstruth schema, register its entities, push their direct-SQL opt-ins
+pnpm run truth:provision   # create the pstruth schema, register its entities, push their direct-SQL opt-ins, declare their immutable fields
 pnpm run truth:sidecar     # start the single-threaded sidecar; writes its URL to .run/sidecar.url
 ```
 
-To load the C1 corpus, run `npx tsx scripts/load-c1-corpus.ts` with MJAPI running (it loads the C1 tables, then declares the immutable fields through MJAPI), and restart MJAPI afterwards so it reads the changed field metadata.
+`truth:provision` declares the immutable fields (`TRUTH_IMMUTABLE_FIELDS`, `scripts/declare-immutable-fields.ts`) on every provisioned database. To load the C1 corpus, run `npx tsx scripts/load-c1-corpus.ts` with MJAPI running (it loads the C1 tables, then declares the immutable fields again through MJAPI, a no-op when they are already declared), and restart MJAPI afterwards so it reads the changed field metadata.
 
 Start MJAPI with `PREDICTIVE_STUDIO_SIDECAR_URL` set to the URL in `.run/sidecar.url`. After `truth:provision`, restart MJAPI so it loads the `pstruth` entities.
 

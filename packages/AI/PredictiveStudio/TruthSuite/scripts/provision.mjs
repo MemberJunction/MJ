@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// provision.mjs — provision the pstruth test schema: apply its DDL, register its entities with a scoped CodeGen run, and
-// push their direct-SQL opt-ins. Run after `pnpm run build` (the pool comes from the built TruthConnection).
+// provision.mjs — provision the pstruth test schema: apply its DDL, register its entities with a scoped CodeGen run,
+// push their direct-SQL opt-ins and declare their immutable fields (scripts/declare-immutable-fields.ts). Run after `pnpm run build` (the pool comes from the built TruthConnection).
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -120,7 +120,10 @@ async function main() {
     if (pushed !== 0) return pushed;
     const { sanctioned: m } = await countEntities(pool);
     console.log(`pstruth: ${n} entities, direct SQL sanctioned on ${m}`);
-    return m === n ? 0 : 1;
+    if (m !== n) return 1;
+    // The immutable-field declarations the As-of Feature Assembly reads (TRUTH_IMMUTABLE_FIELDS), on every provisioned
+    // database, not only one the C1 corpus is loaded into.
+    return run(path.join(root, 'node_modules', '.bin', 'tsx'), [path.join(root, 'scripts', 'declare-immutable-fields.ts')], root);
   } finally {
     await pool.close();
   }

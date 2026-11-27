@@ -3482,7 +3482,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->b33eafc743<!-- /gen:head -->
+- Head: <!-- gen:head -->aea46de77e<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4002,6 +4002,17 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   sub-agent prompts $0.5247; CodeGen $0.66); `MJ_PS_PR5_claudefp` 468 runs, **$0.7842**, 1,481,368 tokens (CodeGen
   $0.63, bizapps job-title pipeline $0.1436). Total **$5.46**.
 - **Rulings:** D5-53, D5-54, D5-55, D5-56 (§9); owner-batch items 8–10.
+- 2026-11-27 — integration: **D5-56 applied.** Evidence for the not-updatable branch: nothing writes `Scn_D1c` after
+  load (`git grep Scn_D1c` over TruthSuite and the gate checks: only its DDL, the loader's stamp test and
+  `TRUTH_IMMUTABLE_FIELDS`, which already declares every column but the key immutable, "loaded once and never edited").
+  Root cause: the declarations were applied only by `load-c1-corpus.ts` (README: with the C1 corpus), so a database
+  provisioned without C1 kept them updatable and the M6.9/M8.5 units refused honestly. `truth:provision` now runs
+  `scripts/declare-immutable-fields.ts` (server provider) after the entity push, so every provisioned database carries
+  them; README updated. On `MJ_PS_PR5_claudefp`: 305 fields declared, `Scn_D1c` all `AllowUpdateAPI = 0`; a second
+  `truth:provision` declared 0 (idempotent). `pnpm run test:db` (MJAPI `MJ_SERVER_ROLE=api`) **15/15 files, 182 passed**
+  (monitoring 10/10, serving-end-to-end 5/5); TruthSuite build 0, unit 28 files / 197 passed. The units' `refuse`
+  policy is unchanged. First push `261546a083..aea46de77e` (hook: milestone-exit `# checks 23 · failed 0`, fast tier
+  `20261127-062235-48465` ok 12 passed).
 
 ## 12. Refresh log (append-only)
 
