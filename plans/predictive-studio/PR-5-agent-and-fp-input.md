@@ -3341,6 +3341,12 @@ Record every decision taken in §9 and, when it changes another plan's interface
   (D5-A2-14).
 - D5-53 · 2026-11-26 · Wave-1 sub-branches stay local; only the PR branch is pushed, once, at the end of integration
   (controller ruling).
+- D5-55 · 2026-11-26 · The Feature Pipelines gate suite runs on a dedicated database `MJ_PS_PR5_claudefp` (built clean
+  from the integrated head like `claudeint`, MJAPI 4056, the D5-46 CLI user, after the full mirror is green) with PR 1
+  §2.4's database-only bizapps-common install (`mj migrate --schema __mj_BizAppsCommon`, `mj sync push` of its
+  metadata, the sync write-back reverse-applied); `MJ_PS_PR5_claudeint` stays a pure PR 5 schema. A failure (b) cannot
+  supply (missing generated classes, host CodeGen) is reported for a ruling on a fresh-clone workspace. · `mj dev
+  workspace` over `~/repos` would link 14 MJ clones and replace the main checkout's own install (controller ruling).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3437,11 +3443,11 @@ F-AG-12, F-PIT-8, F-EXP-2, F-EXP-3, F-FP-11, F-DOC-9, F-DOC-10, F-DOC-13, F-DOC-
 close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-row indexes; `MLSearchStrategyComparison` (new).
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
-- Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql, migrations/v6/V202611260939__v6.3.x__PS_Agent_FP_Input.sql, migrations/v6/V202611261200__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
+- Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->0af256abd9<!-- /gen:head -->
+- Head: <!-- gen:head -->528284e3a9<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to

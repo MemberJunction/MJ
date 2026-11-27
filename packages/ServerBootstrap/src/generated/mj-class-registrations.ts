@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (535 classes)
+// @memberjunction/core-entities (536 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -603,6 +603,7 @@ import {
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLBuildApprovalClaimEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelPublishRecordEntity,
@@ -1657,35 +1658,6 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/predictive-studio (25 classes)
-import {
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
-    PredictiveStudioGetModelEvidenceServerOperation,
-    PredictiveStudioMigratePipelinesAction,
-    PredictiveStudioMigratePreGateModelsServerOperation,
-    PredictiveStudioModelDevAgent,
-    PredictiveStudioModelMonitoringJobDriver,
-    PredictiveStudioPipelineBuilderAgent,
-    PredictiveStudioPredictionRetentionJobDriver,
-    PredictiveStudioPromoteModelAction,
-    PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRegistryCheckJobDriver,
-    PredictiveStudioRunExperimentAction,
-    PredictiveStudioRunFeaturePipelineServerOperation,
-    PredictiveStudioRunModelMonitoringServerOperation,
-    PredictiveStudioScheduleModelScoringAction,
-    PredictiveStudioScoreRecordSetAction,
-    PredictiveStudioScoreRecordSetServerOperation,
-    PredictiveStudioSignOffModelServerOperation,
-    PredictiveStudioStartExperimentSessionServerOperation,
-    PredictiveStudioTrainModelAction,
-    PredictiveStudioTrainModelServerOperation,
-    PredictiveStudioWithdrawScoringBindingServerOperation,
-} from '@memberjunction/predictive-studio';
-
 // @memberjunction/scheduling-actions (6 classes)
 import {
     CreateScheduledJobAction,
@@ -1717,6 +1689,36 @@ import {
     LLMFeaturePipelineDriver,
     StewardFeaturePipelineVersionAction,
 } from '@memberjunction/feature-pipelines-engine';
+
+// @memberjunction/predictive-studio (26 classes)
+import {
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
+    PredictiveStudioAgentEvalDriver,
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
+    PredictiveStudioGetModelEvidenceServerOperation,
+    PredictiveStudioMigratePipelinesAction,
+    PredictiveStudioMigratePreGateModelsServerOperation,
+    PredictiveStudioModelDevAgent,
+    PredictiveStudioModelMonitoringJobDriver,
+    PredictiveStudioPipelineBuilderAgent,
+    PredictiveStudioPredictionRetentionJobDriver,
+    PredictiveStudioPromoteModelAction,
+    PredictiveStudioPromoteModelServerOperation,
+    PredictiveStudioRegistryCheckJobDriver,
+    PredictiveStudioRunExperimentAction,
+    PredictiveStudioRunFeaturePipelineServerOperation,
+    PredictiveStudioRunModelMonitoringServerOperation,
+    PredictiveStudioScheduleModelScoringAction,
+    PredictiveStudioScoreRecordSetAction,
+    PredictiveStudioScoreRecordSetServerOperation,
+    PredictiveStudioSignOffModelServerOperation,
+    PredictiveStudioStartExperimentSessionServerOperation,
+    PredictiveStudioTrainModelAction,
+    PredictiveStudioTrainModelServerOperation,
+    PredictiveStudioWithdrawScoringBindingServerOperation,
+} from '@memberjunction/predictive-studio';
 
 // @memberjunction/testing-integration (1 classes)
 import {
@@ -2482,6 +2484,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJMLAlgorithmEntity,
     MJMLAlgorithmUseCaseEntity,
     MJMLAlgorithmUseCaseRankingEntity,
+    MJMLBuildApprovalClaimEntity,
     MJMLEvaluationProtocolEntity,
     MJMLModelEntity,
     MJMLModelPublishRecordEntity,
@@ -2651,11 +2654,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueDeliveryEntity,
     MJWorkQueueMessageEntity,
     MJWorkQueueSubscriptionEntity,
-    MJWorkQueueTopicEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJWorkQueueTopicEntity,
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
@@ -2855,11 +2858,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MySQLExternalDataSourceDriver,
     OracleExternalDataSourceDriver,
     PostgresExternalDataSourceDriver,
-    SnowflakeExternalDataSourceDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
     MJFeaturePipelineVersionEntityExtended,
     MJRecordProcessEntityExtended,
@@ -3059,11 +3062,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DatabaseDesignerSchemaValidator,
     CreateEntityAction,
     DescribeEntityAction,
-    ListMyEntitiesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
     RecordProcessCancelRunServerOperation,
@@ -3230,8 +3233,25 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
+    CreateScheduledJobAction,
+    DeleteScheduledJobAction,
+    ExecuteScheduledJobNowAction,
+    GetScheduledJobStatisticsAction,
+    QueryScheduledJobsAction,
+    UpdateScheduledJobAction,
+    AgentEvalDriver,
+    DecisionEvalDriver,
+    PromptEvalDriver,
+    RubricCalibrationTestDriver,
+    ComputerUseAction,
+    ComputerUseTestDriver,
+    DecisionFeaturePipelineDriver,
+    FeaturePipelineGoldenSetDriver,
+    LLMFeaturePipelineDriver,
+    StewardFeaturePipelineVersionAction,
     MLModelInferenceProcessor,
     MLModelScoreEnricher,
+    PredictiveStudioAgentEvalDriver,
     PredictiveStudioControlExperimentSessionServerOperation,
     PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
@@ -3246,6 +3266,10 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     PredictiveStudioRunModelMonitoringServerOperation,
     PredictiveStudioScheduleModelScoringAction,
     PredictiveStudioScoreRecordSetAction,
@@ -3255,26 +3279,6 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioTrainModelAction,
     PredictiveStudioTrainModelServerOperation,
     PredictiveStudioWithdrawScoringBindingServerOperation,
-    CreateScheduledJobAction,
-    DeleteScheduledJobAction,
-    ExecuteScheduledJobNowAction,
-    GetScheduledJobStatisticsAction,
-    QueryScheduledJobsAction,
-    UpdateScheduledJobAction,
-    AgentEvalDriver,
-    DecisionEvalDriver,
-    PromptEvalDriver,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
-    RubricCalibrationTestDriver,
-    ComputerUseAction,
-    ComputerUseTestDriver,
-    DecisionFeaturePipelineDriver,
-    FeaturePipelineGoldenSetDriver,
-    LLMFeaturePipelineDriver,
-    StewardFeaturePipelineVersionAction,
     IntegrationTestDriver,
     DockerRenderDriver,
     LocalWorkerRenderDriver,
@@ -3466,12 +3470,12 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
-    ScheduleNextAgentWakeAction,
-    ScheduledGeocodingAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    ScheduleNextAgentWakeAction,
+    ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
     SearchEntityAction,
@@ -3574,7 +3578,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1484;
+export const CLASS_REGISTRATIONS_COUNT = 1486;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -3698,11 +3702,11 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/scheduling-engine',
     '@memberjunction/core-entities-server',
     '@memberjunction/codegen-lib',
-    '@memberjunction/predictive-studio',
     '@memberjunction/scheduling-actions',
     '@memberjunction/testing-engine',
     '@memberjunction/computer-use-engine',
     '@memberjunction/feature-pipelines-engine',
+    '@memberjunction/predictive-studio',
     '@memberjunction/testing-integration',
     '@memberjunction/video-studio',
     '@memberjunction/web-search-engine',

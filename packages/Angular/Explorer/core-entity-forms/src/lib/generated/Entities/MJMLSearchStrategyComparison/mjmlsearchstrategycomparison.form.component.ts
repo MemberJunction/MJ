@@ -15,8 +15,8 @@ export class MJMLSearchStrategyComparisonFormComponent extends BaseFormComponent
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'searchStrategyConfiguration', sectionName: 'Search Strategy Configuration', isExpanded: true },
-            { sectionKey: 'evaluationDatasetsAndResults', sectionName: 'Evaluation Datasets and Results', isExpanded: true },
+            { sectionKey: 'strategyConfiguration', sectionName: 'Strategy Configuration', isExpanded: true },
+            { sectionKey: 'comparisonResults', sectionName: 'Comparison Results', isExpanded: true },
             { sectionKey: 'auditAndTracking', sectionName: 'Audit and Tracking', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

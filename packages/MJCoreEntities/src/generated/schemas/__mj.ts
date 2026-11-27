@@ -26850,7 +26850,7 @@ export const MJFeatureValueSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     SourceUser: z.string().nullable().describe(`
         * * Field Name: SourceUser
-        * * Display Name: Source User Name
+        * * Display Name: Source User Details
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -31177,7 +31177,7 @@ export const MJMLBuildApprovalClaimSchema = z.object({
         * * Default Value: newsequentialid()`),
     AgentRequestID: z.string().describe(`
         * * Field Name: AgentRequestID
-        * * Display Name: Agent Request
+        * * Display Name: Agent Request ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
         * * Description: The approved build request this claim consumes; unique, so a request is claimed once.`),
@@ -31213,8 +31213,7 @@ export const MJMLBuildApprovalClaimSchema = z.object({
         * * Field Name: MLTrainingPipelineID
         * * Display Name: ML Training Pipeline ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
-        * * Description: The training pipeline the build created, when it created one.`),
+        * * Description: The ID of the training pipeline the build created, when it created one: a provenance record with no foreign key, kept when that pipeline is later deleted (the claim and its consumed approval outlive the build).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -31228,10 +31227,6 @@ export const MJMLBuildApprovalClaimSchema = z.object({
     ClaimingAgentRun: z.string().nullable().describe(`
         * * Field Name: ClaimingAgentRun
         * * Display Name: Claiming Agent Run
-        * * SQL Data Type: nvarchar(255)`),
-    MLTrainingPipeline: z.string().nullable().describe(`
-        * * Field Name: MLTrainingPipeline
-        * * Display Name: ML Training Pipeline
         * * SQL Data Type: nvarchar(255)`),
 });
 

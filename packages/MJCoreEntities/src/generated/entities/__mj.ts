@@ -77267,7 +77267,7 @@ export class MJFeatureValueEntity extends BaseEntity<MJFeatureValueEntityType> {
 
     /**
     * * Field Name: SourceUser
-    * * Display Name: Source User Name
+    * * Display Name: Source User Details
     * * SQL Data Type: nvarchar(100)
     */
     get SourceUser(): string | null {
@@ -88352,7 +88352,7 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
 
     /**
     * * Field Name: AgentRequestID
-    * * Display Name: Agent Request
+    * * Display Name: Agent Request ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
     * * Description: The approved build request this claim consumes; unique, so a request is claimed once.
@@ -88428,8 +88428,7 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
     * * Field Name: MLTrainingPipelineID
     * * Display Name: ML Training Pipeline ID
     * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: ML Training Pipelines (vwMLTrainingPipelines.ID)
-    * * Description: The training pipeline the build created, when it created one.
+    * * Description: The ID of the training pipeline the build created, when it created one: a provenance record with no foreign key, kept when that pipeline is later deleted (the claim and its consumed approval outlive the build).
     */
     get MLTrainingPipelineID(): string | null {
         return this.Get('MLTrainingPipelineID');
@@ -88465,15 +88464,6 @@ export class MJMLBuildApprovalClaimEntity extends BaseEntity<MJMLBuildApprovalCl
     */
     get ClaimingAgentRun(): string | null {
         return this.Get('ClaimingAgentRun');
-    }
-
-    /**
-    * * Field Name: MLTrainingPipeline
-    * * Display Name: ML Training Pipeline
-    * * SQL Data Type: nvarchar(255)
-    */
-    get MLTrainingPipeline(): string | null {
-        return this.Get('MLTrainingPipeline');
     }
 }
 

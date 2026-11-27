@@ -10,10 +10,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Search Strategy Configuration Section -->
+    <!-- Strategy Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="searchStrategyConfiguration"
-        SectionName="Search Strategy Configuration"
+        SectionKey="strategyConfiguration"
+        SectionName="Strategy Configuration"
         Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
@@ -33,16 +33,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Evaluation Datasets and Results Section -->
-    <mj-collapsible-panel
-        SectionKey="evaluationDatasetsAndResults"
-        SectionName="Evaluation Datasets and Results"
-        Icon="fa fa-chart-line"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -51,6 +41,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Comparison Results Section -->
+    <mj-collapsible-panel
+        SectionKey="comparisonResults"
+        SectionName="Comparison Results"
+        Icon="fa fa-chart-line"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
