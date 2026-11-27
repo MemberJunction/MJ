@@ -53,6 +53,7 @@
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": "5bc216b3246a03aefdcd80ea8155caacd9be02f26751b46c79fd8295131c78c8",
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": "ae5bf607d725a8d2167bedf9f1d8390d66d3d940dcfe1b8a0cb373df9d4e6ba8",
   "shipped/SQL/predictive-studio-lock-pipeline.sql": "d535294fc34c6a5db999e004ae3df118c7269cb2d9338ae2c8a2059a54658ce7",
+  "shipped/SQL/predictive-studio-lock-rederivation-lease.sql": "6a58d1dadfeecce02d7c0655036c13c97a440b60fc80b383294e73d7a5a7cea8",
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": "b1a6ac289448c1bd10e5c474a7c82a0e64fa308d48980b5eaa65c504145e5abf",
   "shipped/SQL/predictive-studio-next-model-version.sql": "54d8f07b6f36ebb5d18aabcce042b1eff611bdf59a5ea21e2085d195d43a2d2a",
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": "a3b8acac641b1458f77f2b4883f9141ae05461d0f0e62a114b8d130f4c186525",

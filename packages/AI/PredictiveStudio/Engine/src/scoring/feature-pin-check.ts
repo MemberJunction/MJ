@@ -14,7 +14,7 @@
 import { RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJFeaturePipelineVersionEntity, MJMLModelEntity, MJMLModelScoringBindingEntity } from '@memberjunction/core-entities';
 import { MJFeaturePipelineVersionEntityExtended } from '@memberjunction/feature-pipelines';
-import { EscapeSQLString, UUIDMap, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GroupByUUID, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import {
   FeatureValuePins,
   type AssemblyRefusal,
@@ -91,9 +91,9 @@ export class FeaturePinCheck {
   public static async TrainingActivation(pins: readonly NamedFeaturePin[], provider: IMetadataProvider, contextUser: UserInfo): Promise<AssemblyRefusal | null> {
     const versionPins = pins.filter((p): p is { Name: string; Pin: FeatureVersionPin } => !FeatureValuePins.IsPrediction(p.Pin) && p.Pin.pipelineVersion !== null);
     if (versionPins.length === 0) return null;
-    const rows = await FeaturePinCheck.VersionRows(versionPins.map((p) => p.Pin.featurePipelineRecordProcessId), null, provider, contextUser);
+    const byProcess = GroupByUUID(await FeaturePinCheck.VersionRows(versionPins.map((p) => p.Pin.featurePipelineRecordProcessId), null, provider, contextUser), (r) => r.RecordProcessID);
     for (const p of versionPins) {
-      const row = rows.find((r) => UUIDsEqual(r.RecordProcessID, p.Pin.featurePipelineRecordProcessId) && r.Version === p.Pin.pipelineVersion);
+      const row = (byProcess.Get(p.Pin.featurePipelineRecordProcessId) ?? []).find((r) => r.Version === p.Pin.pipelineVersion);
       if (!row || !MJFeaturePipelineVersionEntityExtended.IsActivated(row)) return { kind: 'unpinned-feature-version', featureName: p.Name };
     }
     return null;
@@ -126,9 +126,11 @@ export class FeaturePinCheck {
     const pipelineIds = bindings.map((b) => b.MLTrainingPipelineID).filter((id): id is string => !!id);
     const models = pipelineIds.length === 0 ? [] : await FeaturePinCheck.read<Pick<MJMLModelEntity, 'ID' | 'PipelineID'>>(provider, contextUser, 'MJ: ML Models',
       `PipelineID IN (${FeaturePinCheck.inList(pipelineIds)}) AND Status='${PUBLISHED_MODEL}'`, ['ID', 'PipelineID']);
+    const publishedByPipeline = new UUIDMap<string>();
+    for (const m of models) publishedByPipeline.Set(m.PipelineID, m.ID);
     for (const b of bindings) {
-      const model = models.find((m) => !!b.MLTrainingPipelineID && UUIDsEqual(m.PipelineID, b.MLTrainingPipelineID));
-      out.Set(b.ID, { Binding: b, ModelID: model ? model.ID : null });
+      const modelId = b.MLTrainingPipelineID ? publishedByPipeline.Get(b.MLTrainingPipelineID) : undefined;
+      out.Set(b.ID, { Binding: b, ModelID: modelId ?? null });
     }
     return out;
   }

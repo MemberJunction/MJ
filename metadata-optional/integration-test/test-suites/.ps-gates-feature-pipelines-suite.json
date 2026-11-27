@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Predictive Studio Gates — Feature Pipelines",
-      "Description": "The four Feature Pipeline gates (C1 -> C2.1, C2.2, C2.3, C2.5), the live job-title consistency measurement, W1 -> C3.2 (G7.7) C1 -> C2.4 (G7.4: assembly reads the Feature Value in effect at each decision date, pinned at train time) and C1 -> S3.3 (G7.6: scoring a model pinned to another job-title version is refused). C1 -> C2.4 and C1 -> S3.3 run on the server transport, and a server-transport bundle cannot follow a client-transport one in one process (#3251), so they are Sequences 1 and 2. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject), the truth sidecar, `pnpm run truth:provision` and `truth:load-c1`. Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1.",
+      "Description": "The four Feature Pipeline gates (C1 -> C2.1, C2.2, C2.3, C2.5), the live job-title consistency measurement, W1 -> C3.2 (G7.7), C1 -> C2.4 (G7.4: assembly reads the Feature Value in effect at each decision date, pinned at train time) and C1 -> S3.3 (G7.6: scoring a model pinned to another job-title version is refused). C1 -> C2.4 and C1 -> S3.3 run on the server transport, and a server-transport bundle cannot follow a client-transport one in one process (#3251), so they are Sequences 1 and 2. Needs bizapps-common installed (its job-title Feature Pipeline is the gate subject), the truth sidecar, `pnpm run truth:provision` and `truth:load-c1`. Run with MJ_INTEGRATION_TEST=1 RUN_MUTATION_TESTS=1.",
       "Status": "Active"
     },
     "relatedEntities": {

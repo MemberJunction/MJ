@@ -53,6 +53,7 @@
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"$patch":{"keep":[0,569],"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"$patch":{"keep":[0,406],"text":"\n\n\n\n\n\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"$patch":{"keep":[0,115],"text":"\n\n\n\n\n\n\n\n"}},
+  "shipped/SQL/predictive-studio-lock-rederivation-lease.sql": {"$patch":{"keep":[0,278],"text":"\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"$patch":{"keep":[0,104],"text":"\n\n\n\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"$patch":{"keep":[0,146],"text":"\n\n\n\n\n\n"}},
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"$patch":{"keep":[0,129],"text":"\n\n\n"}},

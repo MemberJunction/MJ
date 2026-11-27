@@ -10,7 +10,7 @@
  */
 import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
 import { MJFeaturePipelineVersionEntityExtended } from '@memberjunction/feature-pipelines';
-import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, GroupByUUID, UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocol,
   JsonParse,
@@ -160,9 +160,9 @@ export class StoredPublishInputsLoader {
     const versioned = FeaturePinCheck.PinsOf(lineageText).flatMap((n) => ('featurePipelineRecordProcessId' in n.Pin && n.Pin.pipelineVersion !== null
       ? [{ Name: n.Name, ProcessID: n.Pin.featurePipelineRecordProcessId, Version: n.Pin.pipelineVersion }] : []));
     if (versioned.length === 0) return [];
-    const rows = await FeaturePinCheck.VersionRows(versioned.map((v) => v.ProcessID), null, ctx.Provider, ctx.ContextUser);
+    const byProcess = GroupByUUID(await FeaturePinCheck.VersionRows(versioned.map((v) => v.ProcessID), null, ctx.Provider, ctx.ContextUser), (r) => r.RecordProcessID);
     return versioned.map((v) => {
-      const row = rows.find((r) => UUIDsEqual(r.RecordProcessID, v.ProcessID) && r.Version === v.Version);
+      const row = (byProcess.Get(v.ProcessID) ?? []).find((r) => r.Version === v.Version);
       return { featureName: v.Name, pipelineVersion: v.Version, activated: row !== undefined && MJFeaturePipelineVersionEntityExtended.IsActivated(row) };
     });
   }

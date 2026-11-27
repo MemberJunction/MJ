@@ -53,6 +53,7 @@
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1954]}},
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1810]}},
   "shipped/SQL/predictive-studio-lock-pipeline.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,844]}},
+  "shipped/SQL/predictive-studio-lock-rederivation-lease.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,1134]}},
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,978]}},
   "shipped/SQL/predictive-studio-next-model-version.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,722]}},
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": {"IsLegalInCTE":false,"OrderByClause":null,"Positions":[],"SqlWithoutOrderBy":{"$slice":[0,589]}},

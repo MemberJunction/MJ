@@ -53,6 +53,7 @@
   "shipped/SQL/predictive-studio-lock-open-human-feature-values.sql": false,
   "shipped/SQL/predictive-studio-lock-open-pipeline-feature-values.sql": false,
   "shipped/SQL/predictive-studio-lock-pipeline.sql": false,
+  "shipped/SQL/predictive-studio-lock-rederivation-lease.sql": false,
   "shipped/SQL/predictive-studio-lock-scoring-binding-for-batch.sql": false,
   "shipped/SQL/predictive-studio-next-model-version.sql": false,
   "shipped/SQL/predictive-studio-pipelines-with-more-than-one-published-model.sql": false,
