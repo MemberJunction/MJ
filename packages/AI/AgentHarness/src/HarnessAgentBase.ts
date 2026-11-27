@@ -342,9 +342,9 @@ export class HarnessAgentBase extends BaseAgent {
                 try {
                     turn = await this.runTurn(input, {
                         limits: config.limits,
-                        onActivityHeartbeat: (info) => {
+                        onActivityHeartbeat: async (info) => {
                             this.recordLivenessProgress('llm-stream-chunk', `harness-turn:${this.turnIndex}`);
-                            baseHeartbeat(info);
+                            await baseHeartbeat?.(info);
                         },
                         accountPool: poolOpts,
                     });
