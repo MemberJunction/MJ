@@ -1,0 +1,67 @@
+name: BaseAgent Freeze Guard
+
+on:
+  pull_request:
+    branches:
+      - next
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+    # No `paths:` filter so the check always reports on PRs targeting next.
+
+concurrency:
+  group: baseagent-freeze-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  freeze-guard:
+    name: BaseAgent refactor freeze guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository metadata
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          sparse-checkout: .github
+          persist-credentials: false
+
+      - name: Check freeze-zone paths
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$PR_BASE_REF"
+          CHANGED="$(git diff --name-only --no-renames "origin/$PR_BASE_REF...HEAD")"
+
+          FREEZE_HITS="$(echo "$CHANGED" | grep -E '^(packages/AI/Agents/src/base-agent\.ts|packages/AI/Agents/src/agent-types/.*|packages/AI/Agents/src/AgentRunner\.ts|packages/AI/BaseAIEngine/src/BaseAIEngine\.ts)$' || true)"
+
+          if [ -z "$FREEZE_HITS" ]; then
+            echo "No BaseAgent freeze-zone paths modified."
+            exit 0
+          fi
+
+          # Allow BaseAgent refactor branches (epic/baseagent-* or epic-a/*) or explicitly labeled PRs.
+          if [[ "$PR_HEAD_REF" == epic/baseagent-* ]] || [[ "$PR_HEAD_REF" == epic-a/* ]]; then
+            echo "Refactor branch '$PR_HEAD_REF' is authorized to modify freeze-zone paths:"
+            echo "$FREEZE_HITS"
+            exit 0
+          fi
+
+          if [[ ",$PR_LABELS," == *",epic-baseagent-refactor,"* ]]; then
+            echo "PR carries label 'epic-baseagent-refactor' and is authorized to modify freeze-zone paths:"
+            echo "$FREEZE_HITS"
+            exit 0
+          fi
+
+          echo "::error::Temporary BaseAgent Refactor Freeze active on the following modified file(s):"
+          echo "$FREEZE_HITS"
+          echo ""
+          echo "BaseAgent (26,882 lines) is currently being decomposed into pluggable <1,000-line helper classes."
+          echo "See plans/baseagent-refactor-study.md for details, or coordinate with @AN-BC."
+          echo "Authorized refactor PRs must use an 'epic/baseagent-*' branch or carry the 'epic-baseagent-refactor' label."
+          exit 1

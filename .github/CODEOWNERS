@@ -35,3 +35,9 @@
 /metadata/graph-authority-tiers/ @AN-BC @jordanfanapour
 /metadata/graph-edge-types/ @AN-BC @jordanfanapour
 /.github/ISSUE_TEMPLATE/canon_idea.md @AN-BC @jordanfanapour
+
+# TEMPORARY FREEZE (Phase 2 — BaseAgent decomposition; remove in final refactor PR)
+/packages/AI/Agents/src/base-agent.ts @AN-BC
+/packages/AI/Agents/src/agent-types/ @AN-BC
+/packages/AI/Agents/src/AgentRunner.ts @AN-BC
+/packages/AI/BaseAIEngine/src/BaseAIEngine.ts @AN-BC

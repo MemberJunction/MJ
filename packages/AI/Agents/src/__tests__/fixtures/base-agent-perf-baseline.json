@@ -1,0 +1,35 @@
+{
+  "baselineVersion": "stage1-pr0",
+  "benchmarks": [
+    {
+      "scenario": "loop-single-turn",
+      "iterations": 1,
+      "stepCount": 2,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "recordedMedianMs": 0.567,
+      "maxAllowedMedianMs": 250
+    },
+    {
+      "scenario": "loop-prompt-action-prompt",
+      "iterations": 2,
+      "stepCount": 4,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "recordedMedianMs": 1.03,
+      "maxAllowedMedianMs": 250
+    },
+    {
+      "scenario": "flow-two-step",
+      "iterations": 1,
+      "stepCount": 4,
+      "promptTokens": 0,
+      "completionTokens": 0,
+      "totalTokens": 0,
+      "recordedMedianMs": 0.911,
+      "maxAllowedMedianMs": 250
+    }
+  ]
+}

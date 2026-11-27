@@ -100,6 +100,38 @@
           "V202611062303__v6.3.x__EntityFieldValue_OrganicKey_Source.sql"
         ]
       }
+    },
+    "file-line-limit": {
+      "Severity": "error",
+      "Roots": [
+        "packages/AI/Agents/src"
+      ],
+      "Options": {
+        "MaxLines": 1000,
+        "HeaderReasonPattern": "//\\s*file-size-ok:\\s*\\S+",
+        "Allowlist": [
+          "packages/AI/Agents/src/base-agent.ts",
+          "packages/AI/Agents/src/realtime/realtime-client-session-service.ts",
+          "packages/AI/Agents/src/memory-manager-agent.ts",
+          "packages/AI/Agents/src/AgentRunner.ts",
+          "packages/AI/Agents/src/ArtifactToolManager.ts",
+          "packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts",
+          "packages/AI/Agents/src/GovernedArtifactService.ts",
+          "packages/AI/Agents/src/PayloadManager.ts",
+          "packages/AI/Agents/src/agent-types/flow-agent-type.ts",
+          "packages/AI/Agents/src/artifact-tools/SlideDeckToolLibrary.ts",
+          "packages/AI/Agents/src/artifact-tools/DocumentToolLibrary.ts",
+          "packages/AI/Agents/src/AgentWakeTriggerService.ts",
+          "packages/AI/Agents/src/realtime/realtime-coagent-config.ts",
+          "packages/AI/Agents/src/agent-types/loop-agent-type.ts",
+          "packages/AI/Agents/src/GrowthCoachService.ts",
+          "packages/AI/Agents/src/BudgetEnforcementGuard.ts",
+          "packages/AI/Agents/src/artifact-tools/artifact-comment-suggestion-helper.ts",
+          "packages/AI/Agents/src/operations/LimitsOperations.ts",
+          "packages/AI/Agents/src/RunawayCheckpointManager.ts",
+          "packages/AI/Agents/src/artifact-tools/DataSnapshotToolLibrary.ts"
+        ]
+      }
     }
   }
 }
