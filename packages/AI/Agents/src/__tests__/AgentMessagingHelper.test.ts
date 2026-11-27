@@ -8,106 +8,23 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 import type {
     AgentChatMessage,
     BaseAgentNextStep,
     ExecuteAgentParams,
     MJAIAgentEntityExtended,
-    MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import { AgentRunStepSaveQueue } from '@memberjunction/ai-core-plus';
-import type { AIPromptRunner } from '@memberjunction/ai-prompts';
-import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
-import { AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
 import { AgentHelperCache, ResolveAgentHelper } from '../helpers/AgentHelperResolver';
 import type { AgentRunContext } from '../helpers/AgentRunContext';
 import { AgentMessagingHelper } from '../helpers/messaging/AgentMessagingHelper';
 import { AgentStoppedRunContinuationHelper } from '../helpers/messaging/AgentStoppedRunContinuationHelper';
 import { BaseAgentMessagingHelper } from '../helpers/messaging/BaseAgentMessagingHelper';
 import { CarryForwardToolFamily } from '../tool-result-format';
+import { CreateMockAgentRunContext } from './helpers/mock-agent-run-context';
 
-function createMockRunContext(overrides?: Partial<AgentRunContext>): AgentRunContext {
-    const budgetTracker = new AgentTreeBudgetTracker();
-    const stepSaveQueue = new AgentRunStepSaveQueue();
-    const ctx: AgentRunContext = {
-        ActiveProvider: {
-            GetEntityObject: vi.fn(),
-        } as unknown as IMetadataProvider,
-        get ProviderToUse() {
-            return this.ActiveProvider;
-        },
-        ExecuteParams: undefined,
-        AgentRun: {
-            ID: '11111111-1111-4111-8111-111111111111',
-            AgentID: '22222222-2222-4222-8222-222222222222',
-            Agent: 'TestAgent',
-            Status: 'Running',
-            Steps: [],
-        } as unknown as MJAIAgentRunEntityExtended,
-        StepSaveQueue: stepSaveQueue,
-        PromptRunner: {} as AIPromptRunner,
-        BudgetTracker: budgetTracker,
-        FeedbackCoordinator: {
-            CreateFeedbackRequest: vi.fn(async () => 'req-123'),
-        } as unknown as AgentFeedbackCoordinator,
-        AgentHierarchy: ['RootAgent'],
-        Depth: 0,
-        ParentStepCounts: [],
-        AllProgressSteps: [],
-        PromptTurnCount: 1,
-        LastRecordedPromptStack: null,
-        SkillInvocations: [],
-        ConversationBranches: [],
-        OpenSubAgentConsults: new Map(),
-        MessageLifecycleCallback: undefined,
-        FeedbackRequestId: undefined,
-        Hooks: {
-            LogStatus: vi.fn(),
-            LogError: vi.fn(),
-            FormatHierarchicalMessage: (msg) => msg,
-            FitStepName: (_step, name) => name.slice(0, 255),
-            BuildHierarchicalStep: (step, parents) =>
-                step == null ? undefined : parents.length === 0 ? String(step) : [...parents, step].join('.'),
-            CreateStepEntity: vi.fn(),
-            FinalizeStepEntity: vi.fn(),
-            QueueStepSave: vi.fn(),
-            SerializePayloadAtStart: (p) => (p === undefined ? null : JSON.stringify(p)),
-            SerializePayloadAtEnd: (p) => (p === undefined ? null : JSON.stringify(p)),
-            HasDefaultPayloadSerializers: () => true,
-            EnsureTreeBudget: () => ({
-                MaxTotalSteps: null,
-                MaxTotalTokens: null,
-                MaxTotalCost: null,
-                MaxWallClockMs: null,
-                StartedAtMs: Date.now(),
-                StepsExecuted: 0,
-                TokensUsed: 0,
-                CostUsed: 0,
-            }),
-            RunPromptExecutionScope: () => ({}),
-            RunAudienceAddsReader: () => false,
-            MaxStandaloneToolResultChars: () => 100_000,
-            CapStandaloneToolResultText: (t) => t,
-            FormatSubAgentResultAsMarkdown: (name, res) => `SubAgent ${name}: ${res.success}`,
-            BuildActionInvocationMessage: () => 'invoked',
-            BuildActionResultsMessage: () => 'results',
-            AppendActionResults: vi.fn(),
-            ReconcileUnansweredToolCalls: vi.fn(),
-            InterceptLargeBinaryContent: (p) => p,
-            LoadPriorTurnToolResultSteps: vi.fn(async () => []),
-            LoadStoppedRunContinuation: vi.fn(async () => null),
-            ApplyStoppedRunContinuation: vi.fn(),
-            BuildResumedStoppedRunTurns: vi.fn(() => null),
-            BuildStoppedRunTail: vi.fn(() => []),
-            RaiseFeedbackRequest: vi.fn(async () => undefined),
-            CreateFeedbackRequest: vi.fn(async () => undefined),
-        },
-        ...overrides,
-    };
-    return ctx;
-}
+const createMockRunContext = CreateMockAgentRunContext;
 
 describe('Slice s1 — AgentMessagingHelper, AgentStoppedRunContinuationHelper & AgentHelperResolver', () => {
     const helper = new AgentMessagingHelper();

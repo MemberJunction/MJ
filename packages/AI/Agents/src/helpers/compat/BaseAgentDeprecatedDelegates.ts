@@ -13,20 +13,24 @@
  * @module @memberjunction/ai-agents
  */
 
+import type { ActionParam, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { ChatMessage } from '@memberjunction/ai';
 import type {
     AgentChatMessage,
     AgentDecisionResult,
     AgentSubAgentRequest,
+    AIPromptRunResult,
     BaseAgentNextStep,
     ExecuteAgentParams,
     ExecuteAgentResult,
     MessageLifecycleEvent,
+    MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { StoredToolResult } from '../../ArtifactToolManager';
 import type { ConversationToolExecutionResult, ConversationToolSummaryHost } from '../../ConversationToolManager';
 import type { MemoryWriteResult } from '../../MemoryWriteManager';
+import type { PayloadManagerResult } from '../../PayloadManager';
 import type { PipelineExecutionResult } from '../../pipeline';
 import type { CarryForwardStepRecord } from '../../tool-result-format';
 import type { AgentRunContext } from '../AgentRunContext';
@@ -36,6 +40,7 @@ import type {
     StoppedRunStackStepRecord,
 } from '../base-agent-types';
 import type { BaseAgentMessagingHelper } from '../messaging/BaseAgentMessagingHelper';
+import type { BaseAgentPayloadHelper } from '../payload/BaseAgentPayloadHelper';
 
 /**
  * Logic-free compatibility base class extended by `BaseAgent` throughout `v6.x` so every
@@ -48,6 +53,9 @@ export abstract class BaseAgentDeprecatedDelegates {
 
     /** Provides the resolved messaging helper for this run (`BaseAgentMessagingHelper`). */
     protected abstract getMessagingHelper(): BaseAgentMessagingHelper;
+
+    /** Provides the resolved payload/validation/media helper for this run (`BaseAgentPayloadHelper`). */
+    protected abstract getPayloadHelper(): BaseAgentPayloadHelper;
 
     // =========================================================================
     // Seam S1 — Messaging, Progress, Step Logging & Stopped-Run Continuation
@@ -223,5 +231,79 @@ export abstract class BaseAgentDeprecatedDelegates {
         previousDecision: BaseAgentNextStep
     ): Promise<void> {
         return this.getMessagingHelper().CreateFeedbackRequest(this.getRunContext(), params, stepEntity, previousDecision);
+    }
+
+    // =========================================================================
+    // Seam S2 — Payload, Validation, Media Interception & Completion Drafts
+    // =========================================================================
+
+    /** @deprecated Use `BaseAgentPayloadHelper.InitializeStartingPayload` instead (slated for v7.0 removal). */
+    protected initializeStartingPayload<P = unknown>(params: ExecuteAgentParams<unknown, P>): Promise<void> {
+        return this.getPayloadHelper().InitializeStartingPayload(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.HandleStartingPayloadValidation` instead (slated for v7.0 removal). */
+    protected handleStartingPayloadValidation<P = unknown>(params: ExecuteAgentParams<unknown, P>): Promise<ExecuteAgentResult | null> {
+        return this.getPayloadHelper().HandleStartingPayloadValidation(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.HandleFinalPayloadValidationFailure` instead (slated for v7.0 removal). */
+    protected handleFinalPayloadValidationFailure<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        mode: string,
+        errorMessages: string[],
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        return this.getPayloadHelper().HandleFinalPayloadValidationFailure(
+            this.getRunContext(),
+            params,
+            nextStep,
+            currentPayload,
+            mode,
+            errorMessages,
+            agentRun,
+            currentStep
+        );
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.SerializePayloadAtStart` instead (slated for v7.0 removal). */
+    protected serializePayloadAtStart(payload: unknown): string | null {
+        return this.getPayloadHelper().SerializePayloadAtStart(this.getRunContext(), payload);
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.SerializePayloadAtEnd` instead (slated for v7.0 removal). */
+    protected serializePayloadAtEnd(payload: unknown): string | null {
+        return this.getPayloadHelper().SerializePayloadAtEnd(this.getRunContext(), payload);
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.InterceptLargeBinaryContent` instead (slated for v7.0 removal). */
+    protected interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: MJActionEntityExtended): ActionParam[] {
+        return this.getPayloadHelper().InterceptLargeBinaryContent(this.getRunContext(), actionParams, actionEntity);
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.ResolveMediaPlaceholdersInPayload` instead (slated for v7.0 removal). */
+    protected resolveMediaPlaceholdersInPayload<T>(payload: T): T {
+        return this.getPayloadHelper().ResolveMediaPlaceholdersInPayload(this.getRunContext(), payload);
+    }
+
+    /** @deprecated Use `BaseAgentPayloadHelper.CheckPayloadChangesWhenOn` instead (slated for v7.0 removal). */
+    protected checkPayloadChangesWhenOn(
+        changeResult: Pick<PayloadManagerResult, 'requiresFeedback' | 'analysis'>,
+        nextStep: BaseAgentNextStep,
+        promptResult: AIPromptRunResult,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        return this.getPayloadHelper().CheckPayloadChangesWhenOn(
+            this.getRunContext(),
+            changeResult,
+            nextStep,
+            promptResult,
+            agentTypePromptParams,
+            params
+        );
     }
 }

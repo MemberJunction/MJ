@@ -346,6 +346,7 @@ import {
     type CreateStepEntityParams,
     type ExecuteSingleActionOptions,
     type ExtendedProgressStep,
+    type HeldCompletionChange,
     type RecordedPromptMessage,
     type StoppedRunStackStepRecord,
 } from './helpers/base-agent-types';
@@ -355,6 +356,8 @@ import { BaseAgentDeprecatedDelegates } from './helpers/compat/BaseAgentDeprecat
 import { BaseAgentMessagingHelper } from './helpers/messaging/BaseAgentMessagingHelper';
 import { AgentMessagingHelper } from './helpers/messaging/AgentMessagingHelper';
 import { AgentStoppedRunContinuationHelper } from './helpers/messaging/AgentStoppedRunContinuationHelper';
+import { BaseAgentPayloadHelper } from './helpers/payload/BaseAgentPayloadHelper';
+import { AgentPayloadHelper } from './helpers/payload/AgentPayloadHelper';
 
 // Same-package type exports kept on ./base-agent for internal/direct-path import compatibility.
 export type {
@@ -656,20 +659,6 @@ interface FinishIfSettings {
     PromptName: string;
 }
 
-/** The top-level `reasoning` and `message` of a prompt's JSON response, when it has them. */
-function responseReasoningAndMessage(result: unknown): { Reasoning?: string; Message?: string } {
-    const parsed: unknown = typeof result === 'string' ? CleanAndParseJSON<unknown>(result) : result;
-    if (typeof parsed !== 'object' || parsed === null) {
-        return {};
-    }
-    const reasoning = 'reasoning' in parsed ? parsed.reasoning : undefined;
-    const message = 'message' in parsed ? parsed.message : undefined;
-    return {
-        Reasoning: typeof reasoning === 'string' ? reasoning : undefined,
-        Message: typeof message === 'string' ? message : undefined
-    };
-}
-
 /**
  * Turns one decision call's typed answers into what its reader gets. A loop turn's model reads
  * `AgentDecisionService.SummarizeAnswers`; an agent type that routes on the answers reads
@@ -705,13 +694,6 @@ interface DecisionCallAllowance {
     Wanted: number;
     /** The calls the budget leaves it, handed out in request order: `Wanted`, or fewer once the budget runs out. */
     Allowed: number;
-}
-
-/** A payload change from a refused completion, held until a completion is accepted. */
-interface HeldCompletionChange {
-    Change: AgentPayloadChangeRequest<unknown>;
-    /** Whether it was built on a payload still inherited unmodified from a prior run (see applyTurnPayloadChange). */
-    UnmodifiedInheritedPayload: boolean;
 }
 
 /** The prompt params that limit one turn's decisions. */
@@ -772,6 +754,16 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
             RaiseFeedbackRequest: (params, stepEntity, decision) => self.raiseFeedbackRequest(params, stepEntity, decision),
             CreateFeedbackRequest: (params, stepEntity, previousDecision) =>
                 self.createFeedbackRequest(params, stepEntity, previousDecision),
+            CheckMinimumExecutionRequirements: (agent, agentRun) =>
+                self.checkMinimumExecutionRequirements(agent, agentRun),
+            HandleFinalPayloadValidationFailure: (params, nextStep, currentPayload, mode, errorMessages, agentRun, currentStep) =>
+                self.handleFinalPayloadValidationFailure(params, nextStep, currentPayload, mode, errorMessages, agentRun, currentStep),
+            ResolvedLimits: (params) => self.resolvedLimits(params),
+            DecisionsEnabled: (agentTypePromptParams) => self.DecisionsEnabled(agentTypePromptParams),
+            AttachDecisionPromptRun: (step, result) => self.attachDecisionPromptRun(step, result),
+            ResolveMediaPlaceholdersInPayload: (payload) => self.resolveMediaPlaceholdersInPayload(payload),
+            CheckPayloadChangesWhenOn: (changeResult, nextStep, promptResult, agentTypePromptParams, params) =>
+                self.checkPayloadChangesWhenOn(changeResult, nextStep, promptResult, agentTypePromptParams, params),
         };
         this._cachedRunContext = {
             get ActiveProvider() { return self._activeProvider; },
@@ -806,6 +798,16 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
             set MessageLifecycleCallback(v) { self._messageLifecycleCallback = v; },
             get FeedbackRequestId() { return self._feedbackRequestId; },
             set FeedbackRequestId(v) { self._feedbackRequestId = v; },
+            get MediaOutputs() { return self._mediaOutputs; },
+            set MediaOutputs(v) { self._mediaOutputs = v; },
+            get PayloadManager() { return self._payloadManager; },
+            get AgentDecisionService() { return self._agentDecisionService; },
+            get HeldCompletionChanges() { return self._heldCompletionChanges; },
+            set HeldCompletionChanges(v) { self._heldCompletionChanges = v; },
+            get ValidationRetryCount() { return self._validationRetryCount; },
+            set ValidationRetryCount(v) { self._validationRetryCount = v; },
+            get GeneralValidationRetryCount() { return self._generalValidationRetryCount; },
+            set GeneralValidationRetryCount(v) { self._generalValidationRetryCount = v; },
             Hooks: hooks,
         };
         return this._cachedRunContext;
@@ -817,6 +819,15 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
             SeamKey: 'messaging',
             BaseClass: BaseAgentMessagingHelper,
             DefaultClass: AgentMessagingHelper,
+        });
+    }
+
+    /** Resolves the pluggable Payload, Validation & Media helper (`BaseAgentPayloadHelper`). */
+    protected override getPayloadHelper(): BaseAgentPayloadHelper {
+        return this.helperCache.GetOrResolve({
+            SeamKey: 'payload',
+            BaseClass: BaseAgentPayloadHelper,
+            DefaultClass: AgentPayloadHelper,
         });
     }
 
@@ -2095,10 +2106,7 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * ```
      */
     public PromoteMediaOutputs(mediaOutputs: MediaOutput[]): void {
-        if (mediaOutputs && mediaOutputs.length > 0) {
-            this._mediaOutputs.push(...mediaOutputs);
-            this.logStatus(`📎 Promoted ${mediaOutputs.length} media output(s) to agent results`, true);
-        }
+        this.getPayloadHelper().PromoteMediaOutputs(this.getRunContext(), mediaOutputs);
     }
 
     /** @deprecated Use {@link PromoteMediaOutputs}. */
@@ -2116,253 +2124,12 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
     }
 
     /**
-     * Minimum size in characters for binary content to be extracted as a media reference.
-     * Content smaller than this threshold is kept inline in action results.
-     * Default: 10000 (~7.5KB when decoded from base64)
-     * @private
-     */
-    private static readonly LARGE_BINARY_THRESHOLD = 10000;
-
-    /**
      * Minimum stringified length (chars) of an object/array action-result value before
      * structural JSON compression (CrushJSON) is applied. Small payloads aren't worth a
      * legend, so they pass through verbatim.
      * @private
      */
     private static readonly ACTION_RESULT_CRUSH_THRESHOLD = 600;
-
-    /**
-     * Inspects a set of action output params for any value matching the FileOutputRef shape
-     * (an object with `fileName`, `mimeType`, and either `fileData` or `fileId`).
-     * Returns all matching FileOutputRef values found across all output params.
-     *
-     * Detection is shape-based, not name-based — actions can name their file output
-     * parameter anything and it will still be detected.
-     *
-     * @param outputParams - The output parameters from an action result
-     * @private
-     * @since 5.22.0
-     */
-    private detectFileOutputs(outputParams: ActionParam[]): FileOutputRef[] {
-        const results: FileOutputRef[] = [];
-        for (const param of outputParams) {
-            if (param.Value == null) continue;
-            const ref = ParseFileOutputRef(param.Value);
-            if (ref) results.push(ref);
-        }
-        return results;
-    }
-
-    /**
-     * Intercepts large media content in action results and replaces with placeholder references.
-     * This prevents context overflow when action results contain large base64 data (images, audio, video).
-     *
-     * Uses generic ValueType=MediaOutput detection from action metadata to identify media output params.
-     *
-     * Intercepted media is stored in `_mediaOutputs` with a generated `refId` and is **always
-     * persisted** by `AgentRunner` — all media outputs are saved to `AIAgentRunMedia` +
-     * `ConversationDetailAttachment` (which auto-pairs to an artifact via the server hook).
-     * The `${media:<refId>}` placeholder injected into the action result keeps the LLM's
-     * context window small; the LLM is told the media will be displayed automatically.
-     *
-     * @param actionParams - The output parameters from an action result
-     * @param actionEntity - Optional action entity metadata for ValueType checking
-     * @returns Sanitized parameters with large media content replaced by ${media:ref-id} placeholders
-     * @private
-     * @since 3.1.0
-     */
-    private interceptLargeBinaryContent(actionParams: ActionParam[], actionEntity?: MJActionEntityExtended): ActionParam[] {
-        if (!actionParams || actionParams.length === 0) {
-            return actionParams;
-        }
-
-        const sanitizedParams: ActionParam[] = [];
-
-        for (const param of actionParams) {
-            // Only process output params
-            if (param.Type !== 'Output' && param.Type !== 'Both') {
-                sanitizedParams.push(param);
-                continue;
-            }
-
-            // Check if this param is marked as MediaOutput in action metadata
-            // Note: 'MediaOutput' ValueType is added in v3.1.x migration.
-            // Before CodeGen runs, this property may not exist on the entity type.
-            const paramMetadata = actionEntity?.Params?.Items.find(p => p.Name === param.Name);
-            const valueType = paramMetadata?.ValueType as string | undefined;
-            const isMediaOutputParam = valueType === 'MediaOutput';
-
-            // Handle MediaOutput params (e.g., Generate Image action)
-            if (isMediaOutputParam && Array.isArray(param.Value)) {
-                const mediaItems = param.Value as MediaOutput[];
-                const references: string[] = [];
-                let extractedCount = 0;
-
-                for (let i = 0; i < mediaItems.length; i++) {
-                    const media = mediaItems[i];
-                    // Intercept when already stored in MJ Storage (fileId) or when inline data exceeds threshold
-                    if (media.fileId || (media.data && media.data.length > BaseAgent.LARGE_BINARY_THRESHOLD)) {
-                        // Generate unique reference ID
-                        const refId = `media-${Date.now().toString(36)}-${i}-${Math.random().toString(36).substring(2, 8)}`;
-
-                        // Store in unified media outputs — always persisted by AgentRunner.
-                        this._mediaOutputs.push({
-                            ...media,
-                            refId,
-                        });
-
-                        references.push(`\${media:${refId}}`);
-                        extractedCount++;
-                    }
-                }
-
-                if (extractedCount > 0) {
-                    // Replace array with references
-                    sanitizedParams.push({
-                        Name: param.Name,
-                        Type: param.Type,
-                        Value: {
-                            mediaReferences: references,
-                            count: mediaItems.length,
-                            note: `${extractedCount} media item(s) extracted and will be displayed to the user automatically.`
-                        }
-                    });
-                    this.logStatus(`📦 Extracted ${extractedCount} ${param.Name} item(s) to media references`, true);
-                    continue;
-                }
-            }
-
-            // Fallback: Check for standalone Base64 strings in MediaOutput or other params
-            if (typeof param.Value === 'string' && param.Value.length > BaseAgent.LARGE_BINARY_THRESHOLD) {
-                // Check if it looks like base64 (no spaces, alphanumeric with +/=)
-                const base64Pattern = /^[A-Za-z0-9+/]+=*$/;
-                if (isMediaOutputParam || base64Pattern.test(param.Value.substring(0, 1000))) {
-                    const refId = `data-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 8)}`;
-
-                    // Store in unified media outputs — always persisted by AgentRunner.
-                    this._mediaOutputs.push({
-                        modality: 'Image', // Default to image, could be enhanced with mime detection
-                        mimeType: 'application/octet-stream',
-                        data: param.Value,
-                        label: `Media data from ${param.Name}`,
-                        refId,
-                    });
-
-                    sanitizedParams.push({
-                        Name: param.Name,
-                        Type: param.Type,
-                        Value: `\${media:${refId}}`
-                    });
-                    this.logStatus(`📦 Extracted large binary content from '${param.Name}' to media reference`, true);
-                    continue;
-                }
-            }
-
-            // Keep param as-is if no extraction needed
-            sanitizedParams.push(param);
-        }
-
-        return sanitizedParams;
-    }
-
-    /**
-     * Substitutes `${media:<refId>}` placeholders in a string with the actual
-     * data URI (`data:<mime>;base64,<bytes>`) or stored `fileId` (for `fileId`-only
-     * media items) of the matching intercepted media item.
-     *
-     * Used for payload / actionable-command resolution at the terminal step, where the
-     * LLM wants to embed image (or other media) data or a stored file ID inline at a
-     * specific position in its structured output rather than only as a trailing
-     * attachment card. The string variant of placeholder resolution; recursive walker
-     * lives in {@link resolveMediaPlaceholdersInPayload}.
-     *
-     * This function only does substitution — it has no persistence side effects.
-     *
-     * @param text - The string that may contain media placeholders
-     * @returns String with placeholders resolved to data URIs or stored file IDs (or the
-     *          original placeholder if the refId is unknown — defensive, shouldn't happen)
-     * @private
-     * @since 3.1.0
-     */
-    private resolveMediaPlaceholdersInString(text: string): string {
-        // Fast path: nothing to resolve if there are no intercepted media items.
-        const hasRefIds = this._mediaOutputs.some(m => m.refId);
-        if (!text || !hasRefIds) {
-            return text;
-        }
-
-        // Match ${media:ref-id} pattern (lowercase letters, digits, dashes only —
-        // matches the IDs generated by interceptLargeBinaryContent).
-        const placeholderRegex = /\$\{media:([a-z0-9-]+)\}/g;
-
-        return text.replace(placeholderRegex, (match, refId: string) => {
-            const media = this._mediaOutputs.find(m => m.refId === refId);
-            if (media?.data) {
-                return `data:${media.mimeType};base64,${media.data}`;
-            }
-            if (media?.fileId) {
-                return media.fileId;
-            }
-            // Unknown refId — leave the placeholder in place rather than emit a broken
-            // data URI. Defensive; this branch should not fire in normal flow.
-            this.logStatus(`⚠️ Media reference '${refId}' not found in registry`, true);
-            return match;
-        });
-    }
-
-    /**
-     * Resolves `${media:<refId>}` placeholders anywhere inside an arbitrary payload.
-     *   - Strings: resolves placeholders directly
-     *   - Objects: recursively processes every string property
-     *   - Arrays:  recursively processes every element
-     *
-     * Pure resolution — no persistence side effects.
-     *
-     * @param payload - The payload that may contain media placeholders in string values
-     * @returns Payload with all placeholders resolved to actual data URIs
-     * @private
-     * @since 3.1.0
-     */
-    private resolveMediaPlaceholdersInPayload<T>(payload: T): T {
-        // Fast path: nothing to resolve if no intercepted media exists.
-        const hasRefIds = this._mediaOutputs.some(m => m.refId);
-        if (!hasRefIds) {
-            return payload;
-        }
-        return this.resolveMediaPlaceholdersRecursive(payload);
-    }
-
-    /**
-     * Recursively resolves media placeholders in any value.
-     * @private
-     */
-    private resolveMediaPlaceholdersRecursive<T>(value: T): T {
-        if (value === null || value === undefined) {
-            return value;
-        }
-
-        // Handle strings directly
-        if (typeof value === 'string') {
-            return this.resolveMediaPlaceholdersInString(value) as T;
-        }
-
-        // Handle arrays
-        if (Array.isArray(value)) {
-            return value.map(item => this.resolveMediaPlaceholdersRecursive(item)) as T;
-        }
-
-        // Handle objects
-        if (typeof value === 'object') {
-            const result: Record<string, unknown> = {};
-            for (const key of Object.keys(value as object)) {
-                result[key] = this.resolveMediaPlaceholdersRecursive((value as Record<string, unknown>)[key]);
-            }
-            return result as T;
-        }
-
-        // Return primitives (numbers, booleans) as-is
-        return value;
-    }
 
     /**
      * Agent hierarchy for display purposes (e.g., ["Marketing Agent", "Copywriter Agent"]).
@@ -5326,11 +5093,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * Sub-classes can override this method to perform any specialized initialization
      * @param params
      */
-    protected async initializeStartingPayload<P = any>(params: ExecuteAgentParams<any, P>): Promise<void> {
-        // the base class doesn't do anything here, this allows sub-classes
-        // to do specialized initialization of the starting payload
-    }
-
     /**
      * Feeds one executed decision (never a prompt turn) to the repeated-failing-step guard (#4832).
      * The consecutive-failed-steps counter cannot see a model that re-issues the same failing step:
@@ -7349,110 +7111,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * @returns {Promise<ExecuteAgentResult | null>} Error result if validation fails and mode is 'Fail', null otherwise
      * @protected
      */
-    protected async handleStartingPayloadValidation<P = any>(params: ExecuteAgentParams<any, P>): Promise<ExecuteAgentResult | null> {
-        const agent = params.agent;
-        
-        // Skip if no validation configured or no payload provided
-        if (!agent.StartingPayloadValidation || params.payload === undefined) {
-            return null;
-        }
-
-        try {
-            // Parse the validation schema
-            let validationSchema: any;
-            try {
-                validationSchema = JSON.parse(agent.StartingPayloadValidation);
-            } catch (parseError) {
-                this.logError(`Invalid StartingPayloadValidation JSON for agent ${agent.Name}: ${parseError.message}`, {
-                    category: 'StartingPayloadValidation',
-                    metadata: {
-                        agentName: agent.Name,
-                        agentId: agent.ID,
-                        validationSchema: agent.StartingPayloadValidation
-                    }
-                });
-                // Invalid schema, skip validation
-                return null;
-            }
-
-            // Determine which payload to validate based on PayloadScope
-            let payloadToValidate = params.payload;
-
-            // Validate the payload using JSONValidator
-            const jsonValidator = new JSONValidator();
-            const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
-
-            if (!validationResult.Success) {
-                // Validation failed
-                const errorMessages = validationResult.Errors.map(e => e.Message);
-                return this.handleStartingValidationFailure(params, errorMessages);
-            }
-
-            // Validation passed
-            this.logStatus(`✅ Starting payload validation passed for agent ${agent.Name}`, true, params);
-            return null;
-
-        } catch (error) {
-            this.logError(`Unexpected error during starting payload validation: ${error.message}`, {
-                category: 'StartingPayloadValidation',
-                metadata: {
-                    agentName: agent.Name,
-                    agentId: agent.ID,
-                    error: error.message
-                }
-            });
-            // On unexpected errors, let execution proceed
-            return null;
-        }
-    }
-
-    /**
-     * Handles starting payload validation failures based on the configured mode.
-     * 
-     * @param {ExecuteAgentParams} params - The execution parameters
-     * @param {string[]} errorMessages - The validation error messages
-     * @returns {ExecuteAgentResult | null} Error result if mode is 'Fail', null if mode is 'Warn'
-     * @private
-     */
-    private handleStartingValidationFailure(
-        params: ExecuteAgentParams,
-        errorMessages: string[]
-    ): ExecuteAgentResult | null {
-        const mode = params.agent.StartingPayloadValidationMode || 'Fail';
-        const validationFeedback = `Starting payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
-
-        if (mode === 'Fail') {
-            this.logError(`Starting payload validation failed for agent ${params.agent.Name}`, {
-                agent: params.agent,
-                category: 'StartingPayloadValidation',
-                metadata: { errors: errorMessages }
-            });
-
-            // Update agent run with validation failure
-            if (this._agentRun) {
-                this._agentRun.ErrorMessage = validationFeedback;
-                this._agentRun.Status = 'Failed';
-                this._agentRun.Success = false;
-                this._agentRun.FinalStep = 'Failed';
-                // Note: We don't save here as the agent run will be saved in finalizeAgentRun()
-            }
-
-            return {
-                success: false,
-                agentRun: this._agentRun!,
-                payload: params.payload // must pass back the original payload for consistency
-            };
-        } else { // if (mode === 'Warn') {
-            // Log warning but continue execution
-            this.logStatus(
-                `⚠️ WARNING: ${validationFeedback}`,
-                false,
-                params
-            );
-            return null;
-        }
-    }
-
     /**
      * Loads all required configuration for agent execution.
      * 
@@ -8138,7 +7796,7 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
     private applyAgentToolPayloadChange<P>(payload: P, change: AgentPayloadChangeRequest<P>, params: ExecuteAgentParams, partial = false): { payload: P; error?: string } {
         const allowedPaths = params.agent.PayloadSelfWritePaths
             ? JSON.parse(params.agent.PayloadSelfWritePaths)
-            : this.getDefaultPayloadSelfWritePaths();
+            : this.getPayloadHelper().GetDefaultPayloadSelfWritePaths(this.getRunContext());
         const changeResult = this._payloadManager.applyAgentChangeRequest(payload, change, {
             validateChanges: true,
             logChanges: true,
@@ -10283,250 +9941,21 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * @param nextStep 
      * @returns 
      */
-    protected async validateSuccessNextStep<P>(
+    protected validateSuccessNextStep<P>(
         params: ExecuteAgentParams,
         nextStep: BaseAgentNextStep<P>,
         currentPayload: P,
         agentRun: MJAIAgentRunEntityExtended,
         currentStep: MJAIAgentRunStepEntityExtended
     ): Promise<BaseAgentNextStep<P>> {
-        // First check minimum execution requirements
-        const minViolations = await this.checkMinimumExecutionRequirements(params.agent, agentRun);
-        if (minViolations.length > 0) {
-            const violationMessage = `Minimum execution requirements not met:\n${minViolations.join('\n')}`;
-            this.logError(violationMessage, {
-                agent: params.agent,
-                category: 'MinimumExecutionValidation'
-            });
-            
-            // Increment validation retry count since we're changing to Retry
-            if (nextStep.step !== 'Retry') {
-                this._generalValidationRetryCount++;
-            }
-            
-            // A native complete_task keeps its turn and call id, so the refusal answers that call.
-            return {
-                step: 'Retry',
-                terminate: false,
-                errorMessage: violationMessage,
-                ...(nextStep.nativeTurn ? { nativeTurn: nextStep.nativeTurn, payloadToolCallId: nextStep.payloadToolCallId } : {})
-            };
-        }
-
-        // Check if the agent has FinalPayloadValidation configured
-        const agent = params.agent;
-        if (!agent.FinalPayloadValidation || !currentPayload) {
-            // No validation configured or no payload to validate
-            return nextStep;
-        }
-
-        try {
-            // Parse the validation schema/example
-            let validationSchema: any;
-            try {
-                validationSchema = JSON.parse(agent.FinalPayloadValidation);
-            } catch (parseError) {
-                this.logError(`Invalid FinalPayloadValidation JSON for agent ${agent.Name}: ${parseError.message}`, {
-                    category: 'PayloadValidation',
-                    metadata: {
-                        agentName: agent.Name,
-                        agentId: agent.ID,
-                        validationSchema: agent.FinalPayloadValidation
-                    }
-                });
-                // Invalid schema, skip validation
-                return nextStep;
-            }
-
-            // Determine which payload to validate based on PayloadScope
-            let payloadToValidate = currentPayload;
-            if (agent.PayloadScope) {
-                // For scoped agents, validate only the scoped portion
-                payloadToValidate = this._payloadManager.applyPayloadScope(currentPayload, agent.PayloadScope) as P;
-                if (payloadToValidate === null) {
-                    // Scope doesn't exist, this is already a validation failure
-                    const errorMessage = `PayloadScope '${agent.PayloadScope}' not found in payload`;
-                    return this.handleFinalPayloadValidationFailure(
-                        params,
-                        nextStep,
-                        currentPayload,
-                        agent.FinalPayloadValidationMode || 'Retry',
-                        [errorMessage],
-                        agentRun,
-                        currentStep
-                    );
-                }
-            }
-
-            // Validate the payload against the schema using JSONValidator
-            const jsonValidator = new JSONValidator();
-            const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
-
-            if (!validationResult.Success) {
-                // Validation failed
-                const mode = agent.FinalPayloadValidationMode || 'Retry';
-                const errorMessages = validationResult.Errors.map(e => e.Message);
-                
-                this.logStatus(`⚠️ Final payload validation failed for agent ${agent.Name} (mode: ${mode}):`, true, params);
-                errorMessages.forEach((error, index) => {
-                    this.logStatus(`   ${index + 1}. ${error}`, true, params);
-                });
-
-                return this.handleFinalPayloadValidationFailure(
-                    params,
-                    nextStep,
-                    currentPayload,
-                    mode,
-                    errorMessages,
-                    agentRun,
-                    currentStep
-                );
-            }
-
-            // Validation passed
-            this.logStatus(`✅ Final payload validation passed for agent ${agent.Name}`, true, params);
-            
-            // Save success result to step via step save queue
-            try {
-                currentStep.FinalPayloadValidationResult = 'Pass';
-                currentStep.FinalPayloadValidationMessages = null; // Clear any previous messages
-                this.queueStepSave(currentStep, (s) => {
-                    s.FinalPayloadValidationResult = 'Pass';
-                    s.FinalPayloadValidationMessages = null;
-                });
-            } catch (error) {
-                this.logError(`Failed to save validation success result: ${error.message}`, {
-                    category: 'PayloadValidation', 
-                    metadata: { stepId: currentStep.ID }
-                });
-            }
-            
-            return nextStep;
-
-        } catch (error) {
-            this.logError(`Unexpected error during final payload validation: ${error.message}`, {
-                category: 'PayloadValidation',
-                metadata: {
-                    agentName: agent.Name,
-                    agentId: agent.ID,
-                    error: error.message
-                }
-            });
-            // On unexpected errors, let the success proceed
-            return nextStep;
-        }
-    }
-
-    /**
-     * Handles final payload validation failures based on the configured mode.
-     * 
-     * @param params - Execution parameters
-     * @param nextStep - The original success next step
-     * @param currentPayload - The current payload
-     * @param mode - The validation mode (Retry, Fail, Warn)
-     * @param errorMessages - The validation error messages
-     * @returns Modified next step based on validation mode
-     */
-    protected async handleFinalPayloadValidationFailure<P>(
-        params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>,
-        currentPayload: P,
-        mode: string,
-        errorMessages: string[],
-        agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
-    ): Promise<BaseAgentNextStep<P>> {
-        const validationFeedback = `Final payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
-
-        // Always save validation results to the new fields via the step save queue
-        try {
-            const joinedMessages = errorMessages.join('; ');
-            currentStep.FinalPayloadValidationMessages = joinedMessages;
-            const queueValidationUpdate = (resultValue: MJAIAgentRunStepEntityExtended['FinalPayloadValidationResult']) => {
-                currentStep.FinalPayloadValidationResult = resultValue;
-                this.queueStepSave(currentStep, (s) => {
-                    s.FinalPayloadValidationMessages = joinedMessages;
-                    s.FinalPayloadValidationResult = resultValue;
-                });
-            };
-            
-            switch (mode) {
-                case 'Retry':
-                    // Increment retry counter
-                    this._validationRetryCount++;
-                    
-                    // Check if max retries exceeded
-                    const maxRetries = params.agent.FinalPayloadValidationMaxRetries || this.resolvedLimits(params).ResourceGuards.FinalPayloadValidationMaxRetries;
-                    if (this._validationRetryCount >= maxRetries) {
-                        // Max retries exceeded, force to Fail
-                        this.logStatus(`❌ Max validation retries (${maxRetries}) exceeded, forcing failure`, false, params);
-                        
-                        queueValidationUpdate('Fail');
-                        
-                        return {
-                            ...nextStep,
-                            step: 'Failed',
-                            message: `${validationFeedback}\n\nMax validation retries (${maxRetries}) exceeded.`,
-                            terminate: true
-                        };
-                    }
-                    
-                    // Still have retries left
-                    queueValidationUpdate('Retry');
-                    
-                    this.logStatus(`🔄 Validation retry ${this._validationRetryCount}/${maxRetries}`, true, params);
-                    
-                    return {
-                        ...nextStep,
-                        step: 'Retry',
-                        retryInstructions: `${validationFeedback}\n\nRetry attempt ${this._validationRetryCount} of ${maxRetries}`,
-                        terminate: false
-                    };
-
-                case 'Fail':
-                    // Convert success to error
-                    queueValidationUpdate('Fail');
-                    
-                    return {
-                        ...nextStep,
-                        step: 'Failed',
-                        message: validationFeedback,
-                        terminate: true
-                    };
-
-                case 'Warn':
-                    // Log warning but allow success
-                    this.logStatus(`⚠️ WARNING: ${validationFeedback}`, false, params);
-                    
-                    queueValidationUpdate('Warn');
-                    
-                    return nextStep; // Return original success
-
-                default:
-                    // Default to retry
-                    this._validationRetryCount++;
-                    queueValidationUpdate('Retry');
-                    
-                    return {
-                        ...nextStep,
-                        step: 'Retry',
-                        retryInstructions: validationFeedback,
-                        terminate: false
-                    };
-            }
-        } catch (error) {
-            this.logError(`Failed to save validation results: ${error.message}`, {
-                category: 'PayloadValidation',
-                metadata: { stepId: currentStep.ID }
-            });
-            // Still return the appropriate result even if save failed
-            return mode === 'Warn' ? nextStep : {
-                ...nextStep,
-                step: mode === 'Fail' ? 'Failed' : 'Retry',
-                message: validationFeedback,
-                terminate: mode === 'Fail'
-            };
-        }
+        return this.getPayloadHelper().ValidateSuccessNextStep(
+            this.getRunContext(),
+            params,
+            nextStep,
+            currentPayload,
+            agentRun,
+            currentStep
+        );
     }
 
     /**
@@ -11465,22 +10894,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * @returns Serialized string or null to skip logging
      * @protected
      */
-    protected serializePayloadAtStart(payload: any): string | null {
-        return payload ? JSON.stringify(payload) : null;
-    }
-
-    /**
-     * Serializes payload for logging to PayloadAtEnd
-     * Override in subclasses to customize logging behavior (e.g., summarize large payloads)
-     *
-     * @param payload - The payload to serialize
-     * @returns Serialized string or null to skip logging
-     * @protected
-     */
-    protected serializePayloadAtEnd(payload: any): string | null {
-        return payload ? JSON.stringify(payload) : null;
-    }
-
     /**
      * Recovery Strategy 0: drop stale runtime-state fragments.
      *
@@ -12121,7 +11534,7 @@ The context is now within limits. Please retry your request with the recovered c
     ): Promise<BaseAgentNextStep<P>> {
         // Read before validation: a subclass may change the step in place (turn a Chat into a Success),
         // and only a change the prompt step held as a completion draft can have been discarded.
-        const heldCompletionChange = BaseAgent.carriesCompletionChange(nextStep) ? nextStep.payloadChangeRequest : undefined;
+        const heldCompletionChange = AgentPayloadHelper.CarriesCompletionChange(nextStep) ? nextStep.payloadChangeRequest : undefined;
         const validatedNextStep = await this.validateNextStep<P>(params, nextStep, currentPayload, this._agentRun, currentStep);
         
         // Check guardrails if next step would continue execution
@@ -14492,154 +13905,6 @@ The context is now within limits. Please retry your request with the recovered c
      * Whether the merged agent-type prompt params turn the payload change check on. It is off unless
      * the master switch ({@link DecisionsEnabled}) and `payloadFeedbackCheck` are both `true`.
      */
-    private isPayloadFeedbackCheckOn(agentTypePromptParams: Record<string, unknown> | undefined): boolean {
-        return this.DecisionsEnabled(agentTypePromptParams) && agentTypePromptParams?.payloadFeedbackCheck === true;
-    }
-
-    /**
-     * Runs the payload change check ({@link checkPayloadChanges}) on a step's applied payload changes
-     * when it applies: the analyzer flagged a change for feedback, the check is on
-     * ({@link isPayloadFeedbackCheckOn}), and a turn will read the result. A step that ends the run
-     * skips it: no call to pay for, and no message left in the conversation. Never throws.
-     */
-    private async checkPayloadChangesWhenOn(
-        changeResult: Pick<PayloadManagerResult, 'requiresFeedback' | 'analysis'>,
-        nextStep: BaseAgentNextStep,
-        promptResult: AIPromptRunResult,
-        agentTypePromptParams: Record<string, unknown> | undefined,
-        params: ExecuteAgentParams
-    ): Promise<void> {
-        if (!changeResult.requiresFeedback || !this.isPayloadFeedbackCheckOn(agentTypePromptParams)) {
-            return;
-        }
-        if (this.stepEndsRun(nextStep)) {
-            this.logStatus(`[Payload check] Skipped: the ${nextStep.step} step ends the run, so no turn would read the result`, true, params);
-            return;
-        }
-        await this.checkPayloadChanges(changeResult.analysis, nextStep, promptResult, agentTypePromptParams, params);
-    }
-
-    /**
-     * Whether the step ends the run, so no turn would read the payload change check's message: it
-     * terminates, or it is a `Success` or `Chat` step, which hand the run back to the caller.
-     */
-    private stepEndsRun(step: BaseAgentNextStep): boolean {
-        return step.terminate === true || step.step === 'Success' || step.step === 'Chat';
-    }
-
-    /**
-     * The payload change check. Asks whether each change the analyzer flagged was intended, as one
-     * Likelihood per change in one decision call, and records it as a `Payload change check`
-     * Decision step. The changes judged unintended are listed in a message for the agent's next
-     * turn, which asks it to confirm or restore them.
-     *
-     * It never reverts or blocks a change: the agent decides. When the decision cannot answer,
-     * every change is accepted, as it is with the check off. Never throws.
-     */
-    private async checkPayloadChanges(
-        analysis: PayloadAnalysisResult | undefined,
-        nextStep: BaseAgentNextStep,
-        promptResult: AIPromptRunResult,
-        agentTypePromptParams: Record<string, unknown> | undefined,
-        params: ExecuteAgentParams
-    ): Promise<void> {
-        const promptName = agentTypePromptParams?.decisionPromptName;
-        const manager = new PayloadFeedbackManager(
-            { decisionPromptName: typeof promptName === 'string' ? promptName : undefined },
-            this._agentDecisionService
-        );
-        const questions = manager.GenerateQuestions(analysis?.warnings ?? []);
-        if (questions.length === 0) {
-            return;
-        }
-        let step: MJAIAgentRunStepEntityExtended | undefined;
-        try {
-            step = await this.createStepEntity({
-                stepType: 'Decision',
-                stepName: 'Payload change check',
-                contextUser: params.contextUser,
-                inputData: {
-                    questions: questions.map(q => ({ id: q.id, path: q.warning.path, type: q.warning.type, change: manager.DescribeChange(q.warning) }))
-                }
-            });
-            const responses = await manager.QueryAgent(questions, this.payloadFeedbackContext(nextStep, promptResult, params), params.contextUser);
-            // Like every decision call, it counts toward the run's cost and tokens through its step
-            if (manager.LastDecisionResult) {
-                this.attachDecisionPromptRun(step, manager.LastDecisionResult);
-            }
-            await this.finalizePayloadCheckStep(step, questions, responses, manager.IntendedThreshold);
-            const message = manager.BuildUnintendedChangesMessage(questions, responses);
-            if (message) {
-                this.injectPayloadCheckMessage(params, message);
-            }
-        } catch (error) {
-            const reason = error instanceof Error ? error.message : String(error);
-            LogError(`The payload change check failed, so every change stands: ${reason}`);
-            if (step) {
-                await this.finalizeStepEntity(step, false, reason);
-            }
-        }
-    }
-
-    /**
-     * What the payload change check's decision reads: the agent's own reasoning for the step (from its
-     * response, else from the step), its message, and the reasoning it gave with the change. The check
-     * never runs on a `Chat` or `Success` step, so the message comes from the response alone.
-     */
-    private payloadFeedbackContext(nextStep: BaseAgentNextStep, promptResult: AIPromptRunResult, params: ExecuteAgentParams): PayloadFeedbackContext {
-        const response = responseReasoningAndMessage(promptResult?.result);
-        return {
-            Reasoning: response.Reasoning ?? nextStep.reasoning,
-            ChangeReasoning: nextStep.payloadChangeRequest?.reasoning,
-            Message: response.Message,
-            AgentID: params.agent?.ID ?? this._agentRun?.AgentID,
-            CancellationToken: params.cancellationToken,
-            ExecutionScope: this.runPromptExecutionScope(params)
-        };
-    }
-
-    /**
-     * Finalizes the `Payload change check` step with each change's probability and outcome. The step
-     * fails when no decision answered, and its error says why. A failure to save it never affects the run.
-     */
-    private async finalizePayloadCheckStep(
-        step: MJAIAgentRunStepEntityExtended,
-        questions: PayloadFeedbackQuestion[],
-        responses: PayloadFeedbackResponse[],
-        threshold: number
-    ): Promise<void> {
-        const answered = responses.filter(r => typeof r.probability === 'number');
-        const unintended = responses.filter(r => !r.intended).map(r => questions.find(q => q.id === r.questionId)?.warning.path);
-        try {
-            await this.finalizeStepEntity(step, answered.length > 0, answered.length > 0 ? undefined : responses[0]?.explanation, {
-                threshold,
-                probabilities: Object.fromEntries(answered.map(r => [r.questionId, r.probability])),
-                responses,
-                unintendedPaths: unintended
-            });
-        } catch (error) {
-            LogError(`Could not save the payload change check step: ${error instanceof Error ? error.message : String(error)}`);
-        }
-    }
-
-    /** Adds the payload change check's message to the conversation, for the agent's next turn. */
-    private injectPayloadCheckMessage(params: ExecuteAgentParams, content: string): void {
-        const message: AgentChatMessage = {
-            role: 'user',
-            content,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'tool-result',
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            },
-        };
-        params.conversationMessages.push(message);
-    }
-
     /**
      * The {@link AIPromptExecutionScope} of model work this run starts outside the agent's own turn —
      * summarizing a range, compacting a message or the conversation, decision calls (FinishIf,
@@ -16585,58 +15850,6 @@ The context is now within limits. Please retry your request with the recovered c
      * @param changeResult The result from PayloadManager operations
      * @returns A serializable summary object
      */
-    private buildPayloadChangeResultSummary(changeResult: PayloadManagerResult<any>): PayloadChangeResultSummary {
-        return {
-            applied: changeResult.applied,
-            warnings: changeResult.warnings,
-            requiresFeedback: changeResult.requiresFeedback,
-            timestamp: changeResult.timestamp,
-            
-            // Include blocked operations for payload validation tracking
-            payloadValidation: changeResult.blockedOperations && changeResult.blockedOperations.length > 0 ? {
-                selfWriteViolations: {
-                    deniedOperations: changeResult.blockedOperations,
-                    timestamp: changeResult.timestamp.toISOString()
-                }
-            } : undefined,
-            
-            // Include analysis summary if available
-            analysis: changeResult.analysis ? {
-                totalWarnings: changeResult.analysis.summary.totalWarnings,
-                warningsByType: changeResult.analysis.summary.warningsByType,
-                suspiciousChanges: changeResult.analysis.summary.suspiciousChanges,
-                // Only store critical warnings to save space
-                criticalWarnings: changeResult.analysis.criticalWarnings.map(w => ({
-                    type: w.type,
-                    severity: w.severity,
-                    path: w.path,
-                    message: w.message
-                }))
-            } : undefined,
-            
-            // Store compact diff summary instead of full diff
-            diffSummary: changeResult.diff ? {
-                added: changeResult.diff.summary.added,
-                removed: changeResult.diff.summary.removed,
-                modified: changeResult.diff.summary.modified,
-                totalChanges: changeResult.diff.summary.totalPaths
-            } : undefined
-        };
-    }
-
-    /**
-     * Captures the conversation messages for a `Prompt` step's `InputData` without
-     * persisting volatile `<mj-runtime-state>` envelopes or repeating messages already
-     * recorded in an earlier `Prompt` step of the current run.
-     *
-     * - When the non-volatile stack extends the previous Prompt step's recorded stack append-only (the
-     *   same messages, unchanged, at the same positions), only the appended messages are stored, tagged
-     *   with `conversationMessagesDelta: true`.
-     * - Otherwise (the first Prompt step of the run, or a message was replaced, removed or changed by
-     *   expiry, compaction or expansion) the full non-volatile stack is stored, with no delta flag.
-     *
-     * {@link buildResumedStoppedRunTurns} rebuilds the stack from the latest full stack plus the deltas after it.
-     */
     protected finalizeStepEntity(
         stepEntity: MJAIAgentRunStepEntityExtended,
         success: boolean,
@@ -16996,10 +16209,6 @@ The context is now within limits. Please retry your request with the recovered c
      * Returns the default payload self write paths for the agent. If not specified, it will return undefined
      
      */
-    private getDefaultPayloadSelfWritePaths(): string[] | undefined {
-        return undefined;
-    }
-
     /**
      * Writes the agent type's execution routing to the run as a completed `Decision` step.
      *
@@ -17028,114 +16237,6 @@ The context is now within limits. Please retry your request with the recovered c
      * @private
      */
     /** Whether a step is a completion that carries a payload change, which is held until the completion is accepted. */
-    private static carriesCompletionChange(step: BaseAgentNextStep): boolean {
-        return step.step === 'Success' && !!step.payloadChangeRequest;
-    }
-
-    /**
-     * Applies a turn's `payloadChangeRequest` to `current` and returns the result; `current` is not
-     * changed. Honours `PayloadSelfWritePaths`. A brand-new artifact whose payload is still the one
-     * inherited from a prior run (or that uses `replaceElements`) is built on an empty object, so
-     * keys from the previous artifact cannot bleed in.
-     */
-    private applyTurnPayloadChange<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, current: P, isUnmodifiedInheritedPayload: boolean): PayloadManagerResult<P> {
-        const change = step.payloadChangeRequest!;
-        const allowedPaths = params.agent.PayloadSelfWritePaths
-            ? JSON.parse(params.agent.PayloadSelfWritePaths)
-            : this.getDefaultPayloadSelfWritePaths();
-        const basePayload = (step.artifactDirective?.behavior === 'create-new'
-            && (this._promptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(change.replaceElements)))
-            ? ({} as P)
-            : current;
-        const changeResult = this._payloadManager.applyAgentChangeRequest(basePayload, change, {
-            validateChanges: true,
-            logChanges: true,
-            agentName: params.agent.Name,
-            analyzeChanges: true,
-            generateDiff: true,
-            allowedPaths,
-            verbose: params.verbose === true || IsVerboseLoggingEnabled()
-        });
-        if (changeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
-            LogStatus(`Payload warnings: ${changeResult.warnings.join('; ')}`);
-        }
-        return changeResult;
-    }
-
-    /**
-     * The payload a completion would leave behind: the committed payload with the held changes and
-     * then the completion's own change applied. Success validation (the minimum-execution check, then
-     * `FinalPayloadValidation`) checks this draft, and it becomes the payload only if the completion is
-     * accepted. A change identical to a held one is not applied again, so a model that resends its whole
-     * refused change does not duplicate array elements. The opt-in payload change check is not asked
-     * here: it never runs on a step that ends the run.
-     */
-    private buildCompletionDraft<P>(params: ExecuteAgentParams, step: BaseAgentNextStep<P>, committed: P, isUnmodifiedInheritedPayload: boolean): { payload: P; summary: PayloadChangeResultSummary | undefined } {
-        const working = this.withHeldCompletionChanges(params, committed);
-        const change = step.payloadChangeRequest;
-        if (!change || this.isHeldCompletionChange(change)) {
-            return { payload: working, summary: undefined };
-        }
-        const changeResult = this.applyTurnPayloadChange(params, step, working, isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0);
-        return { payload: changeResult.result, summary: this.buildPayloadChangeResultSummary(changeResult) };
-    }
-
-    /** `payload` with the held completion changes applied in order; `payload` itself when none are held. */
-    private withHeldCompletionChanges<P>(params: ExecuteAgentParams, payload: P): P {
-        return this._heldCompletionChanges.reduce<P>((current, held) => {
-            const step: BaseAgentNextStep<P> = { step: 'Success', terminate: false, payloadChangeRequest: held.Change as AgentPayloadChangeRequest<P> };
-            return this.applyTurnPayloadChange(params, step, current, held.UnmodifiedInheritedPayload).result;
-        }, payload);
-    }
-
-    /**
-     * After a completion: an accepted one commits the held changes (they were in its draft), so the
-     * list is cleared; a refused one adds its own change to the list, unless the same change is held.
-     */
-    private updateHeldCompletionChanges<P>(step: BaseAgentNextStep<P>, committedDraft: boolean, isUnmodifiedInheritedPayload: boolean): void {
-        if (committedDraft) {
-            this._heldCompletionChanges = [];
-            return;
-        }
-        const change = BaseAgent.carriesCompletionChange(step) ? step.payloadChangeRequest : undefined;
-        if (change && !this.isHeldCompletionChange(change)) {
-            this._heldCompletionChanges.push({
-                Change: change as AgentPayloadChangeRequest<unknown>,
-                UnmodifiedInheritedPayload: isUnmodifiedInheritedPayload && this._heldCompletionChanges.length === 0
-            });
-        }
-    }
-
-    /** Whether `change` is, key order aside, one of the held completion changes. */
-    private isHeldCompletionChange<P>(change: AgentPayloadChangeRequest<P>): boolean {
-        const key = BaseAgent.stableJSON(change);
-        return this._heldCompletionChanges.some((held) => BaseAgent.stableJSON(held.Change) === key);
-    }
-
-    /** JSON with object keys sorted, so two equal values serialize the same. */
-    private static stableJSON(value: unknown): string {
-        return JSON.stringify(value, (_key, v: unknown) =>
-            v && typeof v === 'object' && !Array.isArray(v)
-                ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
-                : v);
-    }
-
-    /**
-     * The payload a turn leaves behind. A held completion draft is committed only when the step is
-     * still `Success` after validation; on a refusal the committed payload stands (a subclass that
-     * set a payload of its own still wins). Without a draft, a subclass's `newPayload` wins as before.
-     */
-    private resolveTurnPayload<P>(step: BaseAgentNextStep<P>, committed: P, draft: { payload: P } | undefined): { payload: P; committedDraft: boolean } {
-        if (!draft) {
-            return { payload: step.newPayload || committed, committedDraft: false };
-        }
-        if (step.step === 'Success') {
-            return { payload: step.newPayload || draft.payload, committedDraft: true };
-        }
-        const own = step.newPayload && step.newPayload !== draft.payload ? step.newPayload : undefined;
-        return { payload: own || committed, committedDraft: false };
-    }
-
     private async executePromptStep<P = any>(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
@@ -17193,7 +16294,7 @@ The context is now within limits. Please retry your request with the recovered c
             // above (payloadAtStart: payload) — no need to re-serialize the (potentially large) payload here.
 
             // The model sees the payload with any held completion changes applied (see _heldCompletionChanges).
-            const workingPayload = this.withHeldCompletionChanges(params, payload);
+            const workingPayload = this.getPayloadHelper().WithHeldCompletionChanges(this.getRunContext(), params, payload);
             let downstreamPayload = workingPayload; // Start with current payload
             if (params.agent.PayloadSelfReadPaths) {
                 const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
@@ -17421,12 +16522,12 @@ The context is now within limits. Please retry your request with the recovered c
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             // A completion's payload change is held as a draft until Success validation accepts it
             // (see buildCompletionDraft); every other step's change is applied now, as it always was.
-            const holdsCompletionChange = BaseAgent.carriesCompletionChange(initialNextStep)
+            const holdsCompletionChange = AgentPayloadHelper.CarriesCompletionChange(initialNextStep)
                 || (initialNextStep.step === 'Success' && this._heldCompletionChanges.length > 0);
             if (initialNextStep.payloadChangeRequest && !holdsCompletionChange) {
-                const changeResult = this.applyTurnPayloadChange(params, initialNextStep, payload, isUnmodifiedInheritedPayload);
+                const changeResult = this.getPayloadHelper().ApplyTurnPayloadChange(this.getRunContext(), params, initialNextStep, payload, isUnmodifiedInheritedPayload);
                 // Store payload change metadata for audit trail; merged into outputData later
-                currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(changeResult);
+                currentStepPayloadChangeResult = this.getPayloadHelper().BuildPayloadChangeResultSummary(this.getRunContext(), changeResult);
                 // The changeResult already respects the allowed paths
                 finalPayload = changeResult.result;
 
@@ -17524,7 +16625,7 @@ The context is now within limits. Please retry your request with the recovered c
             // A completion's change is validated as a draft (the committed payload with the change
             // applied), and committed only if the completion is accepted.
             const draft = holdsCompletionChange && initialNextStep.step === 'Success'
-                ? this.buildCompletionDraft(params, initialNextStep, finalPayload, finalPayload === params.payload)
+                ? this.getPayloadHelper().BuildCompletionDraft(this.getRunContext(), params, initialNextStep, finalPayload, finalPayload === params.payload)
                 : undefined;
             currentStepPayloadChangeResult = draft?.summary ?? currentStepPayloadChangeResult;
 
@@ -17533,10 +16634,10 @@ The context is now within limits. Please retry your request with the recovered c
             const updatedNextStep = await this.processNextStep<P>(initialNextStep, params, config.agentType!, promptResult, draft ? draft.payload : finalPayload, stepEntity);
 
             // sub-classes may have modified the payload, and we allow that, and so we need to update finalPayload to map to the updatedNextStep.newPayload
-            const resolved = this.resolveTurnPayload(updatedNextStep, finalPayload, draft);
+            const resolved = this.getPayloadHelper().ResolveTurnPayload(this.getRunContext(), updatedNextStep, finalPayload, draft);
             finalPayload = resolved.payload;
             const heldCompletionChange = holdsCompletionChange && !resolved.committedDraft;
-            this.updateHeldCompletionChanges(initialNextStep, resolved.committedDraft, finalPayload === params.payload);
+            this.getPayloadHelper().UpdateHeldCompletionChanges(this.getRunContext(), initialNextStep, resolved.committedDraft, finalPayload === params.payload);
             if (heldCompletionChange && currentStepPayloadChangeResult) {
                 currentStepPayloadChangeResult = { ...currentStepPayloadChangeResult, applied: { additions: 0, updates: 0, deletions: 0 } };
             }
@@ -18001,7 +17102,7 @@ The context is now within limits. Please retry your request with the recovered c
                     );
                     
                     // Store merge analysis with upstream violations
-                    currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeAnalysis);
+                    currentStepPayloadChangeResult = this.getPayloadHelper().BuildPayloadChangeResultSummary(this.getRunContext(), mergeAnalysis);
                     
                     // Add upstream merge violations if any occurred
                     if (mergeResult.blockedOperations && mergeResult.blockedOperations.length > 0) {
@@ -19437,7 +18538,7 @@ The context is now within limits. Please retry your request with the recovered c
                     mergedPayload = mergeResult.result;
 
                     // Track the mapping operation
-                    currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeResult);
+                    currentStepPayloadChangeResult = this.getPayloadHelper().BuildPayloadChangeResultSummary(this.getRunContext(), mergeResult);
 
                     if (mergeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
                         LogStatus(`Related sub-agent mapping warnings: ${mergeResult.warnings.join('; ')}`);
@@ -19968,7 +19069,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const sanitizedParams = this.interceptLargeBinaryContent(outputParams, result.actionEntity);
 
                 // Collect file outputs (PDF, Excel, Word, etc.) for post-run artifact processing
-                const fileOutputs = this.detectFileOutputs(outputParams);
+                const fileOutputs = this.getPayloadHelper().DetectFileOutputs(this.getRunContext(), outputParams);
                 this._fileOutputs.push(...fileOutputs);
 
                 const stepNum = result.stepEntity?.StepNumber ?? (stepCount + 1);
@@ -20100,7 +19201,7 @@ The context is now within limits. Please retry your request with the recovered c
                 if (payloadChangeRequest) {
                     const allowedPaths = params.agent.PayloadSelfWritePaths 
                         ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                        : this.getDefaultPayloadSelfWritePaths();
+                        : this.getPayloadHelper().GetDefaultPayloadSelfWritePaths(this.getRunContext());
                     
                     const changeResult = this._payloadManager.applyAgentChangeRequest(
                         currentPayload,
@@ -22974,39 +22075,7 @@ The context is now within limits. Please retry your request with the recovered c
             PayloadAtEndSourceStepID?: string | null;
         }> | null | undefined
     ): string | null {
-        if (!steps || steps.length === 0) {
-            return null;
-        }
-        const ordered = [...steps].sort((a, b) => (b.StepNumber ?? 0) - (a.StepNumber ?? 0));
-        for (const s of ordered) {
-            if (typeof s.PayloadAtEnd === 'string' && s.PayloadAtEnd.length > 0) {
-                return s.PayloadAtEnd;
-            }
-            if (s.PayloadAtEndSourceStepID && s.ID) {
-                const stepsWithIds = steps.filter((item): item is {
-                    ID: string;
-                    StepNumber: number;
-                    PayloadAtStart: string | null;
-                    PayloadAtEnd: string | null;
-                    PayloadAtStartSourceStepID: string | null;
-                    PayloadAtEndSourceStepID: string | null;
-                } => typeof item.ID === 'string' && item.ID.length > 0);
-                const resolved = ResolvePayloadAtEnd(
-                    s as {
-                        ID: string;
-                        PayloadAtStart: string | null;
-                        PayloadAtEnd: string | null;
-                        PayloadAtStartSourceStepID: string | null;
-                        PayloadAtEndSourceStepID: string | null;
-                    },
-                    IndexByUUID(stepsWithIds)
-                );
-                if (typeof resolved === 'string' && resolved.length > 0) {
-                    return resolved;
-                }
-            }
-        }
-        return null;
+        return AgentPayloadHelper.LastStepPayload(steps);
     }
 
     /**

@@ -20,6 +20,8 @@ export * from './helpers/AgentHelperResolver';
 export * from './helpers/messaging/BaseAgentMessagingHelper';
 export * from './helpers/messaging/AgentMessagingHelper';
 export * from './helpers/messaging/AgentStoppedRunContinuationHelper';
+export * from './helpers/payload/BaseAgentPayloadHelper';
+export * from './helpers/payload/AgentPayloadHelper';
 export * from './helpers/compat/BaseAgentDeprecatedDelegates';
 export * from './base-agent';
 export * from './agent-persona-prompt';

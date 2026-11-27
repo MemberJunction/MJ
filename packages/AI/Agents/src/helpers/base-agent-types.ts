@@ -12,6 +12,7 @@ import type {
     MJAIAgentRunStepEntityExtended,
     AgentChatMessageMetadata,
     AgentExecutionProgressCallback,
+    AgentPayloadChangeRequest,
     AgentSkillInvocation,
     StopContinuationMode,
 } from '@memberjunction/ai-core-plus';
@@ -204,3 +205,13 @@ export interface ActionResultCrushConfig {
     /** Actions whose results are never crushed, by Action name. */
     exemptActions?: ReadonlySet<string>;
 }
+
+/**
+ * A payload change from a refused completion, held until a completion is accepted.
+ */
+export interface HeldCompletionChange {
+    Change: AgentPayloadChangeRequest<unknown>;
+    /** Whether it was built on a payload still inherited unmodified from a prior run. */
+    UnmodifiedInheritedPayload: boolean;
+}
+

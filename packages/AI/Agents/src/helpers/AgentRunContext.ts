@@ -17,20 +17,25 @@ import type {
     AgentSkillInvocation,
     AgentTreeBudget,
     AIPromptExecutionScope,
+    AIPromptRunResult,
     BaseAgentNextStep,
     ExecuteAgentParams,
     ExecuteAgentResult,
+    MediaOutput,
     MessageLifecycleCallback,
+    MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { ActionParam, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { ChatMessage } from '@memberjunction/ai';
-import type { AIPromptRunner } from '@memberjunction/ai-prompts';
-import type { IMetadataProvider } from '@memberjunction/core';
+import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
+import type { IMetadataProvider, MJLimitsConfig } from '@memberjunction/core';
 import type { ConversationBranchRow } from '@memberjunction/core-entities';
+import type { AgentDecisionService } from '../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 import type { AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
+import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { CarryForwardStepRecord } from '../tool-result-format';
 import type {
@@ -38,6 +43,7 @@ import type {
     AgentLogErrorOptions,
     CreateStepEntityParams,
     ExtendedProgressStep,
+    HeldCompletionChange,
     RecordedPromptMessage,
     StoppedRunContinuation,
     StoppedRunStackStepRecord,
@@ -120,6 +126,32 @@ export interface AgentHelperSubclassHooks {
         stepEntity: MJAIAgentRunStepEntityExtended,
         previousDecision: BaseAgentNextStep
     ): Promise<void>;
+
+    // --- Payload, validation & decision hooks (Slice s2) ---
+    CheckMinimumExecutionRequirements(
+        agent: MJAIAgentEntityExtended,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<string[]>;
+    HandleFinalPayloadValidationFailure<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        mode: string,
+        errorMessages: string[],
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>>;
+    ResolvedLimits(params?: ExecuteAgentParams): MJLimitsConfig;
+    DecisionsEnabled(agentTypePromptParams: Record<string, unknown> | undefined): boolean;
+    AttachDecisionPromptRun(step: MJAIAgentRunStepEntityExtended, result: AIDecisionRunResult): void;
+    ResolveMediaPlaceholdersInPayload<T>(payload: T): T;
+    CheckPayloadChangesWhenOn(
+        changeResult: Pick<PayloadManagerResult, 'requiresFeedback' | 'analysis'>,
+        nextStep: BaseAgentNextStep,
+        promptResult: AIPromptRunResult,
+        agentTypePromptParams: Record<string, unknown> | undefined,
+        params: ExecuteAgentParams
+    ): Promise<void>;
 }
 
 /**
@@ -168,6 +200,19 @@ export interface AgentRunContext {
     MessageLifecycleCallback: MessageLifecycleCallback | undefined;
     /** Persisted `AIAgentRequest.ID` when a Chat/Plan step raises a feedback request. */
     FeedbackRequestId: string | undefined;
+
+    /** Accumulated promoted & intercepted media outputs for this run. */
+    MediaOutputs: MediaOutput[];
+    /** Payload change manager collaborator. */
+    readonly PayloadManager: PayloadManager;
+    /** Decision service collaborator used for payload feedback checks. */
+    readonly AgentDecisionService: AgentDecisionService;
+    /** Held completion payload changes from refused completion attempts. */
+    HeldCompletionChanges: HeldCompletionChange[];
+    /** Final payload validation retry counter. */
+    ValidationRetryCount: number;
+    /** General validation retry counter. */
+    GeneralValidationRetryCount: number;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;
