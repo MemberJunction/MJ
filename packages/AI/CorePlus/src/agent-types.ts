@@ -2245,7 +2245,8 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     /**
      * Optional per-run helper plugin overrides (Extension Point #3).
      * Merged after any admin-configured `helperPlugins` on the agent's configuration JSON.
-     * Code-only security seams (`limits`, `actionPolicy`) are always rejected regardless of source.
+     * Code-only security/invariant seams (`limits`, `actionPolicy`, `setup`, `steps`, `actions`, `subAgents`)
+     * are always rejected regardless of source.
      */
     helperPlugins?: ReadonlyArray<AgentHelperPluginEntry>;
 

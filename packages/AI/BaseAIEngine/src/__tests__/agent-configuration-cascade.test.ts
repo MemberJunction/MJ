@@ -468,4 +468,45 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         expect(eff.SearchScopeAccess).toBe('None');
         expect(eff.ArtifactCreationMode).toBe('Never');
     });
+
+    it('folds base-agent ancestor categories monotonically even if a derived leaf points at a looser category (R2-4)', () => {
+        const strictCat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'StrictBaseCategory',
+            DefaultConfiguration: JSON.stringify({
+                execution: { requirePlanMode: true },
+                memory: { allowMemoryWrite: false },
+                subAgentExecution: { maxConsultRounds: 2 },
+            }),
+        });
+        const looseCat = makeCategory({
+            ID: CAT_CHILD,
+            Name: 'LooseLeafCategory',
+            DefaultConfiguration: JSON.stringify({
+                execution: { requirePlanMode: false },
+                memory: { allowMemoryWrite: true },
+                subAgentExecution: { maxConsultRounds: 10 },
+            }),
+        });
+        const baseAgent = makeAgent({
+            ID: AGENT_BASE,
+            CategoryID: CAT_ROOT,
+            Configuration: null,
+        });
+        const derivedLeaf = makeAgent({
+            ID: AGENT_LEAF,
+            BaseAgentID: AGENT_BASE,
+            CategoryID: CAT_CHILD,
+            Configuration: null,
+        });
+        const engine = seedEngine({
+            _agentCategories: [strictCat, looseCat],
+            _agents: [baseAgent, derivedLeaf],
+        });
+
+        const eff = engine.ResolveEffectiveAgentProperties(derivedLeaf);
+        expect(eff.RequirePlanMode).toBe(true);
+        expect(eff.AllowMemoryWrite).toBe(false);
+        expect(eff.MaxSubAgentConsultRounds).toBe(2);
+    });
 });

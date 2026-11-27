@@ -382,7 +382,7 @@ export class AgentSubAgentExecutionHelper {
                 ctx.Hooks.LogStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
             } else {
                 ctx.Hooks.LogStatus(
-                    `Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || 'Unknown error'}`
+                    `Sub-agent '${subAgentRequest.name}' failed: ${result.errorMessage || result.agentRun?.ErrorMessage || 'Unknown error'}`
                 );
             }
 

@@ -134,7 +134,12 @@ export interface EffectiveAgentProperties {
     IconClass: string | null;
     TypeConfiguration: string | null;
     AgentTypePromptParams: string | null;
-    /** Fully resolved 3-table cascade configuration (`Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType`). */
+    /**
+     * Raw merged 3-table cascade JSON snapshot (`Instance -> BaseAgent Chain -> Categories -> AgentType`).
+     * Note: this field preserves raw last-writer-wins merged JSON; always read the narrowed scalar
+     * properties on `EffectiveAgentProperties` (e.g. `RequirePlanMode`, `AllowMemoryWrite`,
+     * `SearchScopeAccess`, `MaxSubAgentConsultRounds`) for security and narrow-only decisions.
+     */
     Configuration: IAgentConfiguration;
     /** Merged admin-configured `helperPlugins` across AgentType -> Category -> BaseAgent chain -> Agent. */
     HelperPlugins: AgentHelperPluginEntry[];
@@ -1790,14 +1795,26 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
 
-        // 2. Category chain layer (rootCategory -> ... -> directCategory)
-        const effectiveCategoryId = nearestNonNull((a) => a.CategoryID);
-        const categoryChain = this.resolveCategoryChain(effectiveCategoryId);
-        for (const cat of categoryChain) {
-            const catJson = ParseAgentConfiguration(cat.DefaultConfiguration);
-            if (catJson) {
-                orderedDefaultLayers.push(catJson);
-                defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, catJson);
+        // 2. Category chain layers (rootAgent's categories -> ... -> leafAgent's categories).
+        // Folding categories from every node along the BaseAgentID chain (deduplicated by ID)
+        // guarantees a derived instance's CategoryID can never drop narrow-only policies enforced
+        // by an ancestor's category (defense-in-depth alongside MJAIAgentEntityServer's lock).
+        const seenCategoryIds = new UUIDSet();
+        for (const node of nodes) {
+            if (!node.CategoryID) {
+                continue;
+            }
+            const nodeCategoryChain = this.resolveCategoryChain(node.CategoryID);
+            for (const cat of nodeCategoryChain) {
+                if (seenCategoryIds.Has(cat.ID)) {
+                    continue;
+                }
+                seenCategoryIds.Add(cat.ID);
+                const catJson = ParseAgentConfiguration(cat.DefaultConfiguration);
+                if (catJson) {
+                    orderedDefaultLayers.push(catJson);
+                    defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, catJson);
+                }
             }
         }
 

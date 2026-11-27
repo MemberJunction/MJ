@@ -46,7 +46,9 @@ export interface IAgentInstantiationConfig {
     personalityPresets?: IAgentPersonalityPreset[];
 }
 
-const FORBIDDEN_JSON_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+// Only `__proto__` is dangerous for own-key assignment on plain objects; preserve legitimate
+// free-form user schema keys like `constructor` or `prototype` in TypeConfiguration/promptParams.
+const FORBIDDEN_JSON_OBJECT_KEYS = new Set(['__proto__']);
 
 function isJsonObject(value: AgentConfigJsonValue | undefined): value is AgentConfigJsonObject {
     return value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value);

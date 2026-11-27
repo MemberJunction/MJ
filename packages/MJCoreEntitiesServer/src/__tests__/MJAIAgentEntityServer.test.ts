@@ -451,7 +451,7 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
                 OwnerUserID: ALICE,
                 Isolation: 'Worker', // weaker than root 'Container'
                 MaxCostPerRun: null, // dirty null-clearing previously bounded 5
-                DirtyFields: new Set(['MaxCostPerRun']),
+                DirtyFields: new Set(['MaxCostPerRun', 'Isolation', 'Configuration']),
                 PreSaveLimits: { MaxCostPerRun: 5 },
                 MaxIterationsPerRun: 50, // exceeds root's 20
                 DriverClass: 'EvilDriver',
@@ -731,5 +731,74 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             );
             expect(seamErrors.some((e) => /is code-only/i.test(e.Message))).toBe(true);
         }
+
+        // R2-3 + Minor: unrelated rename (`DirtyFields = {'Name'}`) on an existing saved instance
+        // succeeds even if an admin tightened the base agent or left `helperPlugins: []` in JSON!
+        const tightenedRoot = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            Isolation: 'Container',
+            RequirePlanMode: true,
+            AllowEphemeralClientTools: false,
+            CategoryID: root.CategoryID,
+            TypeID: root.TypeID,
+        });
+        const renameErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: COS_ID,
+                PreSaveOwnerUserID: ALICE,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'InProcess',
+                RequirePlanMode: false,
+                AllowEphemeralClientTools: true,
+                CategoryID: root.CategoryID,
+                PreSaveCategoryID: root.CategoryID,
+                TypeID: root.TypeID,
+                PreSaveTypeID: root.TypeID,
+                Configuration: JSON.stringify({ helperPlugins: [] }),
+                DirtyFields: new Set(['Name']),
+            }),
+            User: standardUser,
+            AllAgents: [tightenedRoot],
+            AllPermissions: [perm],
+        });
+        expect(renameErrors).toEqual([]);
+
+        // R2-4: saved instance with PreSaveCategoryID = null CANNOT assign a loose CategoryID when base has a strict category (or no category)
+        const nullPreSaveCatErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: COS_ID,
+                PreSaveOwnerUserID: ALICE,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Worker',
+                CategoryID: '00000000-0000-4000-8000-000000000777',
+                PreSaveCategoryID: null,
+                TypeID: root.TypeID,
+                PreSaveTypeID: root.TypeID,
+                DirtyFields: new Set(['CategoryID']),
+            }),
+            User: standardUser,
+            AllAgents: [root],
+            AllPermissions: [perm],
+        });
+        expect(nullPreSaveCatErrors.some((e) => e.Source === 'CategoryID')).toBe(true);
+
+        // R2-11: invalid seam name inside TypeConfiguration.helperPlugins is rejected at save time
+        const badTypeConfigSeam = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: false,
+                BaseAgentID: null,
+                OwnerUserID: null,
+                TypeConfiguration: JSON.stringify({ helperPlugins: [{ seam: 'bogusSeam', driverClass: 'X' }] }),
+            }),
+            User: adminUser,
+            AllAgents: [root],
+            AllPermissions: [],
+        });
+        expect(badTypeConfigSeam.some((e) => /not a valid helper seam/i.test(e.Message))).toBe(true);
     });
 });

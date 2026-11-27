@@ -86,6 +86,12 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
             return result;
         }
 
+        // Only run strict JSON validation on creates or when DefaultConfiguration was modified (R2-2)
+        const configDirty = !this.IsSaved || (this.GetFieldByName('DefaultConfiguration')?.Dirty ?? false);
+        if (!configDirty) {
+            return result;
+        }
+
         const errors = ValidateAgentScopedConfigurationJson(
             this.DefaultConfiguration,
             'DefaultConfiguration',

@@ -202,5 +202,30 @@ describe('httpDispatcher (long-running undici transport helpers)', () => {
 
         await scoped.Restore();
         expect(GetLongRunningAIFetch()).toBeUndefined();
+
+        // R2-9: explicit disabled opt-out, host-supplied custom dispatcher, and constructor error surfacing
+        const disabledRes = ConfigureLongRunningAIFetch({ disabled: true }, fakeUndici, baseFetch);
+        expect(disabledRes.Installed).toBe(false);
+        expect(disabledRes.SkippedReason).toMatch(/disabled/i);
+
+        const hostClose = vi.fn(async () => undefined);
+        const hostDispatcher: FetchDispatcherLike = { close: hostClose };
+        const hostRes = ConfigureLongRunningAIFetch({ dispatcher: hostDispatcher }, undefined, baseFetch);
+        expect(hostRes.Installed).toBe(true);
+        expect(hostRes.Dispatcher).toBe(hostDispatcher);
+        await hostRes.Restore();
+        // Must NOT close a host-supplied dispatcher on Restore
+        expect(hostClose).not.toHaveBeenCalled();
+
+        const throwingUndici: UndiciModuleLike = {
+            Agent: class {
+                public constructor() {
+                    throw new Error('custom-ctor-boom');
+                }
+            },
+        };
+        const failedRes = ConfigureLongRunningAIFetch({}, throwingUndici, baseFetch);
+        expect(failedRes.Installed).toBe(false);
+        expect(failedRes.SkippedReason).toContain('custom-ctor-boom');
     });
 });

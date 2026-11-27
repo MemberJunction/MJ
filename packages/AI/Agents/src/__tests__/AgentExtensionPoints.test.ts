@@ -966,11 +966,15 @@ describe('BaseAgent Four Extension Points (s13)', () => {
             });
 
             try {
+                const priorApprovedRunId = 'prior-plan-run-id-1234';
+                restoredAgentRun.LastRunID = priorApprovedRunId;
+                restoredAgentRun.PlanMode = true;
+
                 const params: ExecuteAgentParams = {
                     agent: {
                         ID: 'agent-plan-1',
-                        Name: 'PlanRequiredAgent',
-                        RequirePlanMode: true,
+                        Name: 'PlanOptionalAgent',
+                        RequirePlanMode: false,
                         SupportsPlanMode: true,
                     } as MJAIAgentEntityExtended,
                     conversationMessages: [],
@@ -978,12 +982,16 @@ describe('BaseAgent Four Extension Points (s13)', () => {
                 };
                 const mockProvider = {} as IMetadataProvider;
 
-                // Without any approved Plan request, Plan Mode MUST stay active and UNAPPROVED
+                // R2-6 + R2-13: Caller-requested PlanMode stored on AgentRun.PlanMode MUST keep Plan Mode active
+                // even when RequirePlanMode=false, and MUST query LastRunID (not the paused run's own ID)!
                 await initHelper.RestorePausedRunFromCheckpoint(ctx, params, mockProvider);
                 expect(ctx.PlanModeActive).toBe(true);
                 expect(ctx.PlanApproved).toBe(false);
+                expect(runViewSpy).toHaveBeenCalled();
+                const firstFilter = String((runViewSpy.mock.calls[0]?.[0] as { ExtraFilter?: string } | undefined)?.ExtraFilter ?? '');
+                expect(firstFilter).toContain(priorApprovedRunId);
 
-                // With an Approved Plan request on the resumed run, PlanApproved flips to true
+                // With an Approved Plan request on the prior run (`LastRunID`), PlanApproved flips to true
                 runViewSpy
                     .mockResolvedValueOnce({
                         Success: true,
@@ -1041,7 +1049,11 @@ describe('BaseAgent Four Extension Points (s13)', () => {
             try {
                 const reusedAgent = new BaseAgent();
 
-                // S3 + C5: metadata helperPlugins targeting newly code-only seams MUST fail cleanly with { success: false }
+                // S3 + C5 + R2-7: metadata helperPlugins targeting newly code-only seams MUST fail cleanly
+                // with { success: false } AND clear stale _agentRun on a reused instance!
+                (reusedAgent as unknown as { _agentRun: MJAIAgentRunEntityExtended | null })._agentRun = {
+                    ID: 'stale-previous-run',
+                } as MJAIAgentRunEntityExtended;
                 for (const codeOnlySeam of ['setup', 'steps', 'actions', 'subAgents'] as const) {
                     const blockedRes = await reusedAgent.Execute({
                         agent: {
@@ -1055,6 +1067,114 @@ describe('BaseAgent Four Extension Points (s13)', () => {
                     });
                     expect(blockedRes.success).toBe(false);
                     expect(blockedRes.errorMessage).toMatch(/code-only/i);
+                    expect(blockedRes.agentRun).toBeNull();
+                }
+
+                // R2-13: parity check between CODE_ONLY_HELPER_SEAMS (AI/Agents) and IsForbiddenMetadataHelperSeam (AI/CorePlus)
+                const { IsForbiddenMetadataHelperSeam } = await import('@memberjunction/ai-core-plus');
+                const { CODE_ONLY_HELPER_SEAMS } = await import('../helpers/base-agent-types');
+                for (const seam of CODE_ONLY_HELPER_SEAMS) {
+                    expect(IsForbiddenMetadataHelperSeam(seam)).toBe(true);
+                }
+
+                // R2-12: Flow Custom step resolves active non-built-in Flow step and rejects built-in keys
+                const { FlowAgentType } = await import('../agent-types/flow-agent-type');
+                const flowType = new FlowAgentType();
+                const createStepFn = (flowType as unknown as {
+                    createStepForFlowNode: (
+                        params: ExecuteAgentParams,
+                        node: Record<string, unknown>,
+                        payload: Record<string, unknown>,
+                        flowState: Record<string, unknown>
+                    ) => Promise<BaseAgentNextStep<Record<string, unknown>>>;
+                }).createStepForFlowNode.bind(flowType);
+                AgentStepTypeRegistry.Instance.RegisterStepType({
+                    StepKey: 'BudgetedAuditStep',
+                    DriverClass: 'MockBudgetedCustomStepHandler',
+                    AppliesTo: 'Flow',
+                    AllowedInUnapprovedPlanMode: true,
+                    CountsAgainstTreeBudget: true,
+                });
+                try {
+                    const flowParams: ExecuteAgentParams = {
+                        agent: { ID: 'flow-a1', Name: 'FlowAgent' } as MJAIAgentEntityExtended,
+                        conversationMessages: [],
+                    };
+                    const customFlowStep = await createStepFn(
+                        flowParams,
+                        {
+                            ID: 'flow-step-custom-1',
+                            Name: 'Audit Step',
+                            StepType: 'Custom',
+                            StepTypeID: null,
+                            Configuration: JSON.stringify({ stepType: 'BudgetedAuditStep', level: 'strict' }),
+                        },
+                        { ok: true },
+                        { executionMode: 'inRun', completedStepIds: new Set<string>() }
+                    );
+                    expect(customFlowStep.step).toBe('BudgetedAuditStep');
+                    expect(customFlowStep.customStepData).toEqual({ stepType: 'BudgetedAuditStep', level: 'strict' });
+
+                    const builtInRejected = await createStepFn(
+                        flowParams,
+                        {
+                            ID: 'flow-step-builtin-1',
+                            Name: 'Sneaky Actions',
+                            StepType: 'Custom',
+                            StepTypeID: null,
+                            Configuration: JSON.stringify({ stepType: 'Actions' }),
+                        },
+                        { ok: true },
+                        { executionMode: 'inRun', completedStepIds: new Set<string>() }
+                    );
+                    expect(builtInRejected.step).toBe('Failed');
+                } finally {
+                    AgentStepTypeRegistry.Instance.UnregisterStepType('BudgetedAuditStep');
+                }
+
+                // R2-13: Execute() Run-1 plugin applies and Run-2 falls back to default (using messaging seam)
+                const msgInvocations: string[] = [];
+                class CustomMsgPlugin extends AgentMessagingHelper {
+                    public override WrapProgressCallback(
+                        _ctx: AgentRunContext,
+                        userCb?: ExecuteAgentParams['onProgress']
+                    ): ExecuteAgentParams['onProgress'] {
+                        msgInvocations.push('CustomMsgPlugin');
+                        return userCb;
+                    }
+                }
+                MJGlobal.Instance.ClassFactory.Register(BaseAgentMessagingHelper, CustomMsgPlugin, 'CustomMsgPlugin_R2');
+                const setupExecSpy = vi
+                    .spyOn(AgentRunSetupHelper.prototype, 'ExecuteRun')
+                    .mockImplementation(async (ctx, params) => {
+                        ctx.MessagingHelper.WrapProgressCallback(ctx, params.onProgress);
+                        return { success: true, agentRun: {} as MJAIAgentRunEntityExtended };
+                    });
+                const defaultWrapSpy = vi
+                    .spyOn(AgentMessagingHelper.prototype, 'WrapProgressCallback')
+                    .mockImplementation((_ctx, cb) => {
+                        msgInvocations.push('DefaultMsgHelper');
+                        return cb;
+                    });
+                try {
+                    await reusedAgent.Execute({
+                        agent: {
+                            ID: 'a-msg-1',
+                            Name: 'MsgPluginAgent',
+                            Configuration: JSON.stringify({
+                                helperPlugins: [{ seam: 'messaging', driverClass: 'CustomMsgPlugin_R2' }],
+                            }),
+                        } as MJAIAgentEntityExtended,
+                        conversationMessages: [],
+                    });
+                    await reusedAgent.Execute({
+                        agent: { ID: 'a-msg-2', Name: 'PlainAgent', Configuration: null } as MJAIAgentEntityExtended,
+                        conversationMessages: [],
+                    });
+                    expect(msgInvocations).toEqual(['CustomMsgPlugin', 'DefaultMsgHelper']);
+                } finally {
+                    setupExecSpy.mockRestore();
+                    defaultWrapSpy.mockRestore();
                 }
 
                 // StartBridgeRealtimeSession: Run 1 uses realtime plugin, Run 2 falls back to default (zero leak)

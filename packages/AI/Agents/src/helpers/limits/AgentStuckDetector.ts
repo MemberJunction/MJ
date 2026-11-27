@@ -257,7 +257,8 @@ export class AgentStuckDetector {
     private _pendingDirectives: string[] = [];
     private _consecutiveReadOnlySteps = 0;
     private _wrapUpDirectiveInjectedAtStep: number | null = null;
-    private _lastPriorResultSignature: string | null = null;
+    private _lastInvokedBaseFingerprints: string[] = [];
+    private readonly _lastResultSigByFingerprint = new Map<string, string>();
 
     /** Clears all sliding windows and counters at run start or post-approval checkpoint resume. */
     public Reset(): void {
@@ -266,7 +267,8 @@ export class AgentStuckDetector {
         this._pendingDirectives = [];
         this._consecutiveReadOnlySteps = 0;
         this._wrapUpDirectiveInjectedAtStep = null;
-        this._lastPriorResultSignature = null;
+        this._lastInvokedBaseFingerprints = [];
+        this._lastResultSigByFingerprint.clear();
     }
 
     /**
@@ -463,22 +465,13 @@ export class AgentStuckDetector {
         const injectedDirectives: string[] = [];
         let pauseRequest: StuckStepEvaluationOutcome['PauseRequest'] = null;
 
-        // If the prior step produced a DIFFERENT result payload (e.g., polling a job whose status
-        // advanced from 'queued' to 'running'), reset the identical-call window so legitimate
-        // polling with changing results never triggers a false StuckToolCallLoop pause.
-        if (nextStep.priorStepResult !== undefined) {
-            const nextResultSig = StableSortedJSON(nextStep.priorStepResult);
-            if (this._lastPriorResultSignature !== null && nextResultSig !== this._lastPriorResultSignature) {
-                this.resetToolLoopWindow();
-            }
-            this._lastPriorResultSignature = nextResultSig;
-        }
-
+        const invokedBaseFingerprints: string[] = [];
         const recordToolInvocation = (name: string, args: unknown): void => {
             actionNames.push(name);
             if (circuitBrokenActionNames?.has(name)) {
                 return;
             }
+            invokedBaseFingerprints.push(ComputeCanonicalToolFingerprint(name, args));
             const toolEval = this.RecordToolCall(name, args, config, undefined, actionMetadataLookup?.(name));
             if (toolEval.Action === 'inject-directive' && toolEval.Directive) {
                 injectedDirectives.push(toolEval.Directive);
@@ -542,6 +535,38 @@ export class AgentStuckDetector {
             nextStep.priorStepResult !== undefined &&
             actionNames.length === 0;
 
+        if (invokedBaseFingerprints.length > 0) {
+            this._lastInvokedBaseFingerprints = invokedBaseFingerprints;
+        }
+
+        // Per-fingerprint result tracking (R2-1): if a step carries `priorStepResult` (either on
+        // the synthetic post-action Retry continuation or directly on the step), compare the
+        // result signature ONLY against the previous result for the same canonical fingerprint(s).
+        // When a specific polled call returns a NEW result (e.g. job status queued -> running),
+        // evict prior entries for THAT fingerprint only — preserving other fingerprints in the
+        // window so two-call A-B-A-B oscillations and repeated identical mutating calls are still caught!
+        if (nextStep.priorStepResult !== undefined && this._lastInvokedBaseFingerprints.length > 0) {
+            const resultSig = StableSortedJSON(nextStep.priorStepResult);
+            for (const baseFp of this._lastInvokedBaseFingerprints) {
+                const prevSig = this._lastResultSigByFingerprint.get(baseFp);
+                if (prevSig !== undefined && prevSig !== resultSig) {
+                    // Keep only the latest entry for this advancing fingerprint so it counts as 1 fresh call.
+                    let keptLatest = false;
+                    for (let i = this._recentToolFingerprints.length - 1; i >= 0; i--) {
+                        if (this._recentToolFingerprints[i] === baseFp) {
+                            if (!keptLatest) {
+                                keptLatest = true;
+                            } else {
+                                this._recentToolFingerprints.splice(i, 1);
+                            }
+                        }
+                    }
+                    this._directiveInjectedFingerprints.delete(baseFp);
+                }
+                this._lastResultSigByFingerprint.set(baseFp, resultSig);
+            }
+        }
+
         if (isSyntheticPostStepRetry) {
             let priorMutated = hasPayloadMutation;
             if (!priorMutated && Array.isArray(nextStep.priorStepResult)) {
@@ -560,8 +585,10 @@ export class AgentStuckDetector {
                 }
             }
             if (priorMutated) {
+                // Only reset the read-only streak here — do NOT wipe `_recentToolFingerprints`,
+                // otherwise repeated identical mutating calls (`Send Email {same args}` x4) would
+                // never accumulate above 1! (`RecordToolCall` already handles `list -> create -> list`.)
                 this.resetReadOnlyStreak();
-                this.resetToolLoopWindow();
             }
         } else {
             const readOnlyEval = this.RecordStepOutcome(

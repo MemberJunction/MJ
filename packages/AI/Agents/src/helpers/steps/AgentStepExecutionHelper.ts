@@ -47,6 +47,10 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
         params: ExecuteAgentParams<C>,
         config: AgentConfiguration
     ): Promise<{ finalStep: BaseAgentNextStep<P>; stepCount: number }> {
+        // If a wrapper subclass overrode `executeAgentInternal` and delegated to `super.executeAgentInternal`,
+        // immediately resume the sliding inactivity watchdog so the standard BaseAgent loop stays
+        // supervised (while custom non-delegating loops remain suspended until their finally block).
+        ctx.LivenessWatchdog?.ResumeFromExternalWait('custom-execute-agent-internal');
         let continueExecution = true;
         let currentNextStep: BaseAgentNextStep<P> | null =
             (ctx.ResumedCheckpointContext?.RestoredNextStep as BaseAgentNextStep<P> | null) ?? null;

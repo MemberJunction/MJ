@@ -50,10 +50,33 @@ export interface ResolveAgentHelperOptions<TBase> {
 export const DEFAULT_AGENT_HELPER_KEY = 'Default';
 
 /**
+ * Typed error thrown when a configured agent helper plugin cannot be resolved (either because
+ * the requested seam is strictly code-only or because the `driverClass` is not registered).
+ */
+export class AgentHelperResolutionError extends Error {
+    public readonly SeamKey: string;
+    public readonly DriverClass: string;
+    public readonly Reason: 'code-only' | 'unregistered';
+
+    public constructor(
+        message: string,
+        seamKey: string,
+        driverClass: string,
+        reason: 'code-only' | 'unregistered'
+    ) {
+        super(message);
+        this.name = 'AgentHelperResolutionError';
+        this.SeamKey = seamKey;
+        this.DriverClass = driverClass;
+        this.Reason = reason;
+    }
+}
+
+/**
  * Resolves a helper instance for the requested seam via `MJGlobal.Instance.ClassFactory`.
  *
- * Enforces the hard security invariant that code-only seams (`limits`, `actionPolicy`)
- * can **never** be replaced via metadata `DriverClass` configuration.
+ * Enforces the hard security invariant that code-only seams (`limits`, `actionPolicy`, `setup`,
+ * `steps`, `actions`, `subAgents`) can **never** be replaced via metadata `DriverClass` configuration.
  *
  * Resolution order when `DriverClass` is omitted:
  * 1. Global unkeyed `@RegisterClass(BaseClass)` override (if registered by a consumer).
@@ -64,19 +87,25 @@ export function ResolveAgentHelper<TBase>(options: ResolveAgentHelperOptions<TBa
     const trimmedDriver = options.DriverClass?.trim();
     if (trimmedDriver && trimmedDriver.length > 0) {
         if (CODE_ONLY_HELPER_SEAMS.has(options.SeamKey) || IsForbiddenMetadataHelperSeam(options.SeamKey)) {
-            throw new Error(
+            throw new AgentHelperResolutionError(
                 `Security violation: helper seam '${options.SeamKey}' is code-only and cannot be overridden ` +
                 `via agent metadata helperPlugins (requested driverClass '${trimmedDriver}'). ` +
-                `Use @RegisterClass in server code instead.`
+                `Use @RegisterClass in server code instead.`,
+                options.SeamKey,
+                trimmedDriver,
+                'code-only'
             );
         }
         const keyed = MJGlobal.Instance.ClassFactory.TryCreateInstance<TBase>(options.BaseClass, trimmedDriver);
         if (keyed.Resolved && keyed.Instance) {
             return keyed.Instance;
         }
-        throw new Error(
+        throw new AgentHelperResolutionError(
             `Failed to resolve helper plugin '${trimmedDriver}' for seam '${options.SeamKey}': ` +
-            (keyed.Reason ?? 'no matching @RegisterClass registration found')
+            (keyed.Reason ?? 'no matching @RegisterClass registration found'),
+            options.SeamKey,
+            trimmedDriver,
+            'unregistered'
         );
     }
 
@@ -128,9 +157,12 @@ export class AgentHelperCache {
         for (const plugin of sorted) {
             const seamKey = plugin.seam.trim();
             if (CODE_ONLY_HELPER_SEAMS.has(seamKey as AgentHelperSeamKey) || IsForbiddenMetadataHelperSeam(seamKey)) {
-                throw new Error(
+                throw new AgentHelperResolutionError(
                     `Security violation: helper seam '${plugin.seam}' is code-only and cannot be configured ` +
-                    `in agent helperPlugins (driverClass '${plugin.driverClass}').`
+                    `in agent helperPlugins (driverClass '${plugin.driverClass}').`,
+                    plugin.seam,
+                    plugin.driverClass ?? '',
+                    'code-only'
                 );
             }
             if (plugin.driverClass?.trim()) {

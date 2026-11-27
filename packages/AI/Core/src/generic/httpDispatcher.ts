@@ -56,6 +56,18 @@ export interface LongRunningFetchDispatcherOptions {
      * Maximum keep-alive socket age (ms). Defaults to {@link DEFAULT_LONG_RUNNING_KEEP_ALIVE_MAX_TIMEOUT_MS} (`600_000`).
      */
     keepAliveMaxTimeoutMs?: number;
+
+    /**
+     * Optional host-supplied `undici` dispatcher (e.g., custom CA / mTLS `Agent` or corporate
+     * `ProxyAgent`) to bind directly instead of constructing a default `undici.Agent`.
+     */
+    dispatcher?: FetchDispatcherLike | null;
+
+    /**
+     * Explicit opt-out: when `true`, `ConfigureLongRunningAIFetch` leaves AI SDKs on Node's
+     * ambient global `fetch` / dispatcher untouched.
+     */
+    disabled?: boolean;
 }
 
 /**
@@ -278,32 +290,57 @@ export function ConfigureLongRunningAIFetch(
     baseFetch?: FetchFunction
 ): GlobalFetchDispatcherInstallation {
     const resolved = ResolveLongRunningFetchDispatcherOptions(options);
-    const slotHolder = globalThis as Record<PropertyKey, unknown>;
-    const existingGlobal = slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL];
-    if (undiciModule === undefined && existingGlobal && !IsPlainUndiciAgentDispatcher(existingGlobal)) {
-        const ctorName = (existingGlobal as { constructor?: { name?: string } }).constructor?.name ?? 'unknown';
+    if (options?.disabled === true) {
         return {
             Installed: false,
             Options: resolved,
             Dispatcher: null,
-            SkippedReason: `Host installed custom global dispatcher '${ctorName}'; preserving host transport configuration`,
+            SkippedReason: 'Disabled via options.disabled',
             Restore: async () => undefined,
         };
     }
 
-    const targetUndici = undiciModule === undefined ? ResolveNodeBuiltinUndiciModule() : undiciModule;
-    const dispatcher = CreateLongRunningFetchDispatcher(options, targetUndici);
+    let dispatcher: FetchDispatcherLike | null = options?.dispatcher ?? null;
+    const ownsDispatcher = !dispatcher;
     if (!dispatcher) {
-        return {
-            Installed: false,
-            Options: resolved,
-            Dispatcher: null,
-            SkippedReason: 'Built-in undici Agent dispatcher unavailable in this runtime',
-            Restore: async () => undefined,
-        };
+        const slotHolder = globalThis as Record<PropertyKey, unknown>;
+        const existingGlobal = slotHolder[UNDICI_GLOBAL_DISPATCHER_SYMBOL];
+        if (undiciModule === undefined && existingGlobal && !IsPlainUndiciAgentDispatcher(existingGlobal)) {
+            const ctorName = (existingGlobal as { constructor?: { name?: string } }).constructor?.name ?? 'unknown';
+            return {
+                Installed: false,
+                Options: resolved,
+                Dispatcher: null,
+                SkippedReason: `Host installed custom global dispatcher '${ctorName}'; preserving host transport configuration`,
+                Restore: async () => undefined,
+            };
+        }
+
+        const targetUndici = undiciModule === undefined ? ResolveNodeBuiltinUndiciModule() : undiciModule;
+        if (!targetUndici || typeof targetUndici.Agent !== 'function') {
+            return {
+                Installed: false,
+                Options: resolved,
+                Dispatcher: null,
+                SkippedReason: 'Built-in undici Agent dispatcher unavailable in this runtime',
+                Restore: async () => undefined,
+            };
+        }
+        try {
+            dispatcher = new targetUndici.Agent(resolved);
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            return {
+                Installed: false,
+                Options: resolved,
+                Dispatcher: null,
+                SkippedReason: `Failed to construct undici Agent dispatcher: ${errMsg}`,
+                Restore: async () => undefined,
+            };
+        }
     }
 
-    const scopedFetch = CreateLongRunningFetch(options, baseFetch, targetUndici, dispatcher);
+    const scopedFetch = CreateLongRunningFetch(options, baseFetch, null, dispatcher);
     const store = GetGlobalObjectStore();
     const previousSlot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
     const nextSlot: ScopedAIFetchSlot = { Fetch: scopedFetch, Dispatcher: dispatcher, Options: resolved };
@@ -326,7 +363,7 @@ export function ConfigureLongRunningAIFetch(
                     delete store[AI_SCOPED_FETCH_STORE_KEY];
                 }
             }
-            if (dispatcher.close) {
+            if (ownsDispatcher && dispatcher?.close) {
                 await dispatcher.close();
             }
         },

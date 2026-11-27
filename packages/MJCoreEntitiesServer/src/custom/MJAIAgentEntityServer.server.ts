@@ -20,6 +20,7 @@ import {
     ParseAgentHelperPlugins,
     ParseAgentInstantiationConfig,
     SyncAgentLegacyColumnsAndConfiguration,
+    VALID_AGENT_HELPER_SEAMS,
     ValidateAgentConfigurationJson,
     type LegacyAIAgentConfigColumns,
 } from '@memberjunction/ai-core-plus';
@@ -236,9 +237,23 @@ export function ValidateAgentInheritanceAndSandbox(
                     ValidationErrorType.Failure
                 )
             );
+        } else if (!VALID_AGENT_HELPER_SEAMS.has(plugin.seam.trim())) {
+            errors.push(
+                new ValidationErrorInfo(
+                    'Configuration',
+                    `Helper seam '${plugin.seam}' is not a valid helper seam (driverClass '${plugin.driverClass}'). Valid seams: ${Array.from(VALID_AGENT_HELPER_SEAMS).join(', ')}.`,
+                    plugin.seam,
+                    ValidationErrorType.Failure
+                )
+            );
         }
     }
-    if (!isAdmin && User && (declaredHelperPlugins.length > 0 || hasHelperPluginsKey)) {
+    const helperConfigDirty =
+        !Target.IsSaved ||
+        !Target.DirtyFields ||
+        Target.DirtyFields.has('Configuration') ||
+        Target.DirtyFields.has('TypeConfiguration');
+    if (!isAdmin && User && helperConfigDirty && (declaredHelperPlugins.length > 0 || hasHelperPluginsKey)) {
         errors.push(
             new ValidationErrorInfo(
                 'Configuration',
@@ -475,6 +490,17 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
+        // Helper for R2-3: on existing saved instances where DirtyFields is tracked, only re-check
+        // narrow-only columns that were actually modified (or when Configuration itself was modified)
+        // so an admin tightening a base agent never breaks unrelated edits (rename/persona) on
+        // pre-existing derived instances (runtime cascade still enforces the tightened ancestor).
+        const shouldEnforceField = (fieldName: string): boolean => {
+            if (!Target.IsSaved || !Target.DirtyFields) {
+                return true;
+            }
+            return Target.DirtyFields.has(fieldName) || Target.DirtyFields.has('Configuration');
+        };
+
         // Isolation: strictest across the entire ancestor chain
         let strictestAncestorIsolation: MJAIAgentEntity['Isolation'] = 'InProcess';
         for (const anc of ancestors) {
@@ -484,7 +510,7 @@ export function ValidateAgentInheritanceAndSandbox(
             }
         }
         const targetIsoRank = ISOLATION_RANK[Target.Isolation ?? 'InProcess'] ?? 0;
-        if (targetIsoRank < (ISOLATION_RANK[strictestAncestorIsolation] ?? 0)) {
+        if (shouldEnforceField('Isolation') && targetIsoRank < (ISOLATION_RANK[strictestAncestorIsolation] ?? 0)) {
             errors.push(
                 new ValidationErrorInfo(
                     'Isolation',
@@ -498,9 +524,9 @@ export function ValidateAgentInheritanceAndSandbox(
         const ancestorConfigs = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
         const targetConfig = ParseAgentConfiguration(Target.Configuration);
 
-        // CategoryID / TypeID sandbox (S2): non-admins cannot re-point a derived instance to a
-        // different CategoryID or TypeID than its base agent chain (which would bypass category/type
-        // enforced configuration policies).
+        // CategoryID / TypeID sandbox (S2, R2-4): non-admins cannot re-point or assign a derived
+        // instance's CategoryID or TypeID away from its base agent chain (or assign a loose category
+        // when the pre-save value was null).
         let effectiveAncestorCategoryId: string | null = null;
         let effectiveAncestorTypeId: string | null = null;
         for (let i = ancestors.length - 1; i >= 0; i--) {
@@ -518,6 +544,15 @@ export function ValidateAgentInheritanceAndSandbox(
                     new ValidationErrorInfo(
                         'CategoryID',
                         'Non-administrator users cannot reassign CategoryID on a derived agent instance.',
+                        Target.CategoryID,
+                        ValidationErrorType.Failure
+                    )
+                );
+            } else if (!expectedCat && Target.CategoryID && (!Target.IsSaved || !Target.DirtyFields || Target.DirtyFields.has('CategoryID'))) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'CategoryID',
+                        'Non-administrator users cannot assign CategoryID on a derived agent instance.',
                         Target.CategoryID,
                         ValidationErrorType.Failure
                     )
@@ -540,6 +575,15 @@ export function ValidateAgentInheritanceAndSandbox(
                     new ValidationErrorInfo(
                         'TypeID',
                         'Non-administrator users cannot reassign TypeID on a derived agent instance.',
+                        Target.TypeID,
+                        ValidationErrorType.Failure
+                    )
+                );
+            } else if (!expectedType && Target.TypeID && (!Target.IsSaved || !Target.DirtyFields || Target.DirtyFields.has('TypeID'))) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'TypeID',
+                        'Non-administrator users cannot assign TypeID on a derived agent instance.',
                         Target.TypeID,
                         ValidationErrorType.Failure
                     )
@@ -634,6 +678,7 @@ export function ValidateAgentInheritanceAndSandbox(
         }
         const targetSearchAccess = targetConfig?.scope?.searchScopeAccess ?? Target.SearchScopeAccess ?? null;
         if (
+            shouldEnforceField('SearchScopeAccess') &&
             ancestorSearchAccess !== null &&
             targetSearchAccess !== null &&
             SEARCH_ACCESS_RANK[targetSearchAccess] > SEARCH_ACCESS_RANK[ancestorSearchAccess]
@@ -659,6 +704,7 @@ export function ValidateAgentInheritanceAndSandbox(
             }
         }
         if (
+            shouldEnforceField('AcceptsSkills') &&
             ancestorAcceptsSkills !== null &&
             Target.AcceptsSkills != null &&
             ACCEPTS_SKILLS_RANK[Target.AcceptsSkills] > ACCEPTS_SKILLS_RANK[ancestorAcceptsSkills]
@@ -685,6 +731,7 @@ export function ValidateAgentInheritanceAndSandbox(
         }
         const targetSkillMode = targetConfig?.skills?.activationMode ?? Target.SkillActivationMode ?? null;
         if (
+            shouldEnforceField('SkillActivationMode') &&
             ancestorSkillMode !== null &&
             targetSkillMode !== null &&
             SKILL_ACTIVATION_RANK[targetSkillMode] > SKILL_ACTIVATION_RANK[ancestorSkillMode]
@@ -704,7 +751,7 @@ export function ValidateAgentInheritanceAndSandbox(
             (a, i) => (ancestorConfigs[i]?.execution?.requirePlanMode ?? a.RequirePlanMode) === true
         );
         const targetRequirePlan = targetConfig?.execution?.requirePlanMode ?? Target.RequirePlanMode;
-        if (ancestorRequiresPlan && targetRequirePlan === false) {
+        if (shouldEnforceField('RequirePlanMode') && ancestorRequiresPlan && targetRequirePlan === false) {
             errors.push(
                 new ValidationErrorInfo(
                     'RequirePlanMode',
@@ -721,7 +768,7 @@ export function ValidateAgentInheritanceAndSandbox(
             ancestorVals: Array<boolean | null | undefined>,
             targetVal: boolean | null | undefined
         ): void => {
-            if (ancestorVals.some((v) => v === false) && targetVal === true) {
+            if (shouldEnforceField(fieldName) && ancestorVals.some((v) => v === false) && targetVal === true) {
                 errors.push(
                     new ValidationErrorInfo(
                         fieldName,
@@ -853,16 +900,21 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         const result = await super.ValidateAsync();
         if (!result.Success) return result;
 
-        // 0. Configuration JSON syntax & scalar-type validation
-        const configErrors = ValidateAgentConfigurationJson(this.Configuration, 'Configuration');
-        if (configErrors.length > 0) {
-            for (const msg of configErrors) {
-                result.Errors.push(
-                    new ValidationErrorInfo('Configuration', msg, this.Configuration, ValidationErrorType.Failure)
-                );
+        // 0. Configuration JSON syntax & scalar-type validation (R2-2: only on create or when
+        // Configuration was actually modified, so pre-existing legacy rows remain saveable on
+        // unrelated edits such as renames).
+        const configDirtyForValidation = !this.IsSaved || (this.GetFieldByName('Configuration')?.Dirty ?? false);
+        if (configDirtyForValidation) {
+            const configErrors = ValidateAgentConfigurationJson(this.Configuration, 'Configuration');
+            if (configErrors.length > 0) {
+                for (const msg of configErrors) {
+                    result.Errors.push(
+                        new ValidationErrorInfo('Configuration', msg, this.Configuration, ValidationErrorType.Failure)
+                    );
+                }
+                result.Success = false;
+                return result;
             }
-            result.Success = false;
-            return result;
         }
 
         // 1. BaseAgentID inheritance, helperPlugins & non-admin sandbox checks
@@ -909,10 +961,10 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                         (this.GetFieldByName('OwnerUserID')?.OldValue as string | null | undefined) ?? this.OwnerUserID,
                     CategoryID: this.CategoryID,
                     PreSaveCategoryID:
-                        (this.GetFieldByName('CategoryID')?.OldValue as string | null | undefined) ?? this.CategoryID,
+                        (this.GetFieldByName('CategoryID')?.OldValue as string | null | undefined) ?? null,
                     TypeID: this.TypeID,
                     PreSaveTypeID:
-                        (this.GetFieldByName('TypeID')?.OldValue as string | null | undefined) ?? this.TypeID,
+                        (this.GetFieldByName('TypeID')?.OldValue as string | null | undefined) ?? null,
                     InstantiationMode: this.InstantiationMode,
                     DriverClass: this.DriverClass,
                     DriverClassDirty: this.GetFieldByName('DriverClass')?.Dirty ?? false,
@@ -986,13 +1038,24 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         baseAgent: MJAIAgentEntity,
         allAgents?: readonly MJAIAgentEntity[]
     ): void {
-        const copyIfNotDirty = <K extends keyof MJAIAgentEntity>(fieldName: K, overrideVal?: MJAIAgentEntity[K]): void => {
+        const copyIfNotDirty = <K extends keyof MJAIAgentEntity>(
+            fieldName: K,
+            overrideVal?: MJAIAgentEntity[K],
+            clampLooseDbDefault?: MJAIAgentEntity[K]
+        ): void => {
             const field = this.GetFieldByName(String(fieldName));
-            if (field && !field.Dirty && field.NeverSet) {
-                const val = overrideVal !== undefined ? overrideVal : baseAgent[fieldName];
-                if (val !== undefined) {
-                    (this as MJAIAgentEntity)[fieldName] = val;
-                }
+            if (!field) return;
+            const val = overrideVal !== undefined ? overrideVal : baseAgent[fieldName];
+            if (val === undefined) return;
+            // On GraphQL/client creates, the client sends every writable field populated with its
+            // schema DB default (marking field.Dirty = true / field.NeverSet = false). For narrow-only
+            // security fields, auto-clamp incoming loose DB defaults to the stricter ancestor value
+            // so personal instances can be created cleanly from the Explorer modal (R2-3).
+            const isUntouched = !field.Dirty && field.NeverSet;
+            const isLooseDbDefault =
+                clampLooseDbDefault !== undefined && (this as MJAIAgentEntity)[fieldName] === clampLooseDbDefault;
+            if (isUntouched || isLooseDbDefault) {
+                (this as MJAIAgentEntity)[fieldName] = val;
             }
         };
 
@@ -1043,7 +1106,8 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             'AllowMemoryWrite',
             ancestors.some((a, i) => (ancestorConfigs[i]?.memory?.allowMemoryWrite ?? a.AllowMemoryWrite) === false)
                 ? false
-                : baseAgent.AllowMemoryWrite
+                : baseAgent.AllowMemoryWrite,
+            true
         );
         copyIfNotDirty('DeclareActionsAsNativeTools');
         let strictestIso: MJAIAgentEntity['Isolation'] = baseAgent.Isolation ?? 'InProcess';
@@ -1053,30 +1117,34 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 strictestIso = iso;
             }
         }
-        copyIfNotDirty('Isolation', strictestIso);
+        copyIfNotDirty('Isolation', strictestIso, 'InProcess');
         copyIfNotDirty(
             'SupportsPlanMode',
             ancestors.some((a, i) => (ancestorConfigs[i]?.execution?.supportsPlanMode ?? a.SupportsPlanMode) === false)
                 ? false
-                : baseAgent.SupportsPlanMode
+                : baseAgent.SupportsPlanMode,
+            true
         );
         copyIfNotDirty(
             'RequirePlanMode',
             ancestors.some((a, i) => (ancestorConfigs[i]?.execution?.requirePlanMode ?? a.RequirePlanMode) === true)
                 ? true
-                : baseAgent.RequirePlanMode
+                : baseAgent.RequirePlanMode,
+            false
         );
         copyIfNotDirty(
             'AllowEphemeralClientTools',
             ancestors.some((a, i) => (ancestorConfigs[i]?.clientTools?.allowEphemeral ?? a.AllowEphemeralClientTools) === false)
                 ? false
-                : baseAgent.AllowEphemeralClientTools
+                : baseAgent.AllowEphemeralClientTools,
+            true
         );
         copyIfNotDirty(
             'AcceptUnregisteredFiles',
             ancestors.some((a, i) => (ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles ?? a.AcceptUnregisteredFiles) === false)
                 ? false
-                : baseAgent.AcceptUnregisteredFiles
+                : baseAgent.AcceptUnregisteredFiles,
+            false
         );
         copyIfNotDirty('MaxCostPerRun', minFinite(ancestors.map((a) => a.MaxCostPerRun)));
         copyIfNotDirty('MaxTokensPerRun', minFinite(ancestors.map((a) => a.MaxTokensPerRun)));

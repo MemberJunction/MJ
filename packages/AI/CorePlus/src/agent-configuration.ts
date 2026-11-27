@@ -441,13 +441,23 @@ export function ValidateAgentConfigurationJson(
         }
     }
 
-    const checkNum = (section: string, key: string, val: unknown, min?: number, max?: number): void => {
+    const checkNum = (
+        section: string,
+        key: string,
+        val: unknown,
+        min?: number,
+        max?: number,
+        integer: boolean = false
+    ): void => {
         if (val === undefined || val === null) {
             return;
         }
         if (typeof val !== 'number' || !Number.isFinite(val)) {
             errors.push(`${fieldLabel}.${section}.${key} must be a finite number or null.`);
             return;
+        }
+        if (integer && !Number.isInteger(val)) {
+            errors.push(`${fieldLabel}.${section}.${key} must be an integer (got ${val}).`);
         }
         if (min !== undefined && val < min) {
             errors.push(`${fieldLabel}.${section}.${key} must be >= ${min} (got ${val}).`);
@@ -491,7 +501,7 @@ export function ValidateAgentConfigurationJson(
     if (IsPlainObject(obj.execution)) {
         const ex = obj.execution as { [key: string]: unknown };
         checkEnum('execution', 'modelSelectionMode', ex.modelSelectionMode, ['Agent', 'Agent Type']);
-        checkNum('execution', 'defaultPromptEffortLevel', ex.defaultPromptEffortLevel, 0, 100);
+        checkNum('execution', 'defaultPromptEffortLevel', ex.defaultPromptEffortLevel, 0, 100, true);
         checkEnum('execution', 'chatHandlingOption', ex.chatHandlingOption, ['Consult', 'Failed', 'Retry', 'Success']);
         checkBool('execution', 'supportsPlanMode', ex.supportsPlanMode);
         checkBool('execution', 'requirePlanMode', ex.requirePlanMode);
@@ -500,35 +510,24 @@ export function ValidateAgentConfigurationJson(
     if (IsPlainObject(obj.contextWindow)) {
         const cw = obj.contextWindow as { [key: string]: unknown };
         checkBool('contextWindow', 'enableCompression', cw.enableCompression);
-        checkNum('contextWindow', 'compressionMessageThreshold', cw.compressionMessageThreshold, 1);
+        checkNum('contextWindow', 'compressionMessageThreshold', cw.compressionMessageThreshold, 1, undefined, true);
         checkStr('contextWindow', 'compressionPromptID', cw.compressionPromptID);
-        checkNum('contextWindow', 'compressionMessageRetentionCount', cw.compressionMessageRetentionCount, 0);
-        checkNum('contextWindow', 'maxTokens', cw.maxTokens, 1);
+        checkNum('contextWindow', 'compressionMessageRetentionCount', cw.compressionMessageRetentionCount, 0, undefined, true);
+        checkNum('contextWindow', 'maxTokens', cw.maxTokens, 1, undefined, true);
         checkNum('contextWindow', 'compactionTriggerPercent', cw.compactionTriggerPercent, 0, 100);
         checkNum('contextWindow', 'compactionTargetPercent', cw.compactionTargetPercent, 0, 100);
-        if (
-            typeof cw.compactionTriggerPercent === 'number' &&
-            typeof cw.compactionTargetPercent === 'number' &&
-            Number.isFinite(cw.compactionTriggerPercent) &&
-            Number.isFinite(cw.compactionTargetPercent) &&
-            cw.compactionTargetPercent >= cw.compactionTriggerPercent
-        ) {
-            errors.push(
-                `${fieldLabel}.contextWindow.compactionTargetPercent (${cw.compactionTargetPercent}) must be less than compactionTriggerPercent (${cw.compactionTriggerPercent}).`
-            );
-        }
         checkStr('contextWindow', 'summaryPromptID', cw.summaryPromptID);
     }
     if (IsPlainObject(obj.memory)) {
         const mem = obj.memory as { [key: string]: unknown };
         checkBool('memory', 'injectNotes', mem.injectNotes);
-        checkNum('memory', 'maxNotesToInject', mem.maxNotesToInject, 0);
+        checkNum('memory', 'maxNotesToInject', mem.maxNotesToInject, 0, undefined, true);
         checkEnum('memory', 'noteInjectionStrategy', mem.noteInjectionStrategy, ['All', 'Recent', 'Relevant']);
         checkBool('memory', 'injectExamples', mem.injectExamples);
-        checkNum('memory', 'maxExamplesToInject', mem.maxExamplesToInject, 0);
+        checkNum('memory', 'maxExamplesToInject', mem.maxExamplesToInject, 0, undefined, true);
         checkEnum('memory', 'exampleInjectionStrategy', mem.exampleInjectionStrategy, ['Rated', 'Recent', 'Semantic']);
-        checkNum('memory', 'noteRetentionDays', mem.noteRetentionDays, 0);
-        checkNum('memory', 'exampleRetentionDays', mem.exampleRetentionDays, 0);
+        checkNum('memory', 'noteRetentionDays', mem.noteRetentionDays, 0, undefined, true);
+        checkNum('memory', 'exampleRetentionDays', mem.exampleRetentionDays, 0, undefined, true);
         checkBool('memory', 'autoArchiveEnabled', mem.autoArchiveEnabled);
         checkBool('memory', 'allowMemoryWrite', mem.allowMemoryWrite);
         checkPlainObj('memory', 'reranker', mem.reranker);
@@ -544,21 +543,32 @@ export function ValidateAgentConfigurationJson(
         checkEnum('payload', 'startingValidationMode', pl.startingValidationMode, ['Fail', 'Warn']);
         checkStr('payload', 'finalValidationSchema', pl.finalValidationSchema);
         checkEnum('payload', 'finalValidationMode', pl.finalValidationMode, ['Fail', 'Retry', 'Warn']);
-        checkNum('payload', 'finalValidationMaxRetries', pl.finalValidationMaxRetries, 0);
+        checkNum('payload', 'finalValidationMaxRetries', pl.finalValidationMaxRetries, 0, undefined, true);
     }
     if (IsPlainObject(obj.subAgentExecution)) {
         const sub = obj.subAgentExecution as { [key: string]: unknown };
         checkEnum('subAgentExecution', 'mode', sub.mode, ['Parallel', 'Sequential']);
-        checkNum('subAgentExecution', 'minExecutionsPerRun', sub.minExecutionsPerRun, 0);
-        checkNum('subAgentExecution', 'maxExecutionsPerRun', sub.maxExecutionsPerRun, 0);
-        checkNum('subAgentExecution', 'maxConsultRounds', sub.maxConsultRounds, 0);
+        checkNum('subAgentExecution', 'minExecutionsPerRun', sub.minExecutionsPerRun, 0, undefined, true);
+        checkNum('subAgentExecution', 'maxExecutionsPerRun', sub.maxExecutionsPerRun, 1, undefined, true);
+        if (
+            typeof sub.minExecutionsPerRun === 'number' &&
+            typeof sub.maxExecutionsPerRun === 'number' &&
+            Number.isFinite(sub.minExecutionsPerRun) &&
+            Number.isFinite(sub.maxExecutionsPerRun) &&
+            sub.minExecutionsPerRun > sub.maxExecutionsPerRun
+        ) {
+            errors.push(
+                `${fieldLabel}.subAgentExecution.minExecutionsPerRun (${sub.minExecutionsPerRun}) must be <= maxExecutionsPerRun (${sub.maxExecutionsPerRun}).`
+            );
+        }
+        checkNum('subAgentExecution', 'maxConsultRounds', sub.maxConsultRounds, 0, undefined, true);
     }
     if (IsPlainObject(obj.attachments)) {
         const att = obj.attachments as { [key: string]: unknown };
         checkEnum('attachments', 'messageMode', att.messageMode, ['All', 'Bookend', 'Latest', 'None']);
-        checkNum('attachments', 'maxMessages', att.maxMessages, 0);
+        checkNum('attachments', 'maxMessages', att.maxMessages, 0, undefined, true);
         checkStr('attachments', 'rootPath', att.rootPath);
-        checkNum('attachments', 'inlineStorageThresholdBytes', att.inlineStorageThresholdBytes, 0);
+        checkNum('attachments', 'inlineStorageThresholdBytes', att.inlineStorageThresholdBytes, 0, undefined, true);
         checkBool('attachments', 'acceptUnregisteredFiles', att.acceptUnregisteredFiles);
     }
     if (IsPlainObject(obj.artifacts)) {
@@ -588,7 +598,7 @@ export function ValidateAgentConfigurationJson(
         checkStrArray('instantiation', 'suggestedNames', inst.suggestedNames);
         checkStrArray('instantiation', 'suggestedIcons', inst.suggestedIcons);
         checkStrArray('instantiation', 'suggestedPersonaNames', inst.suggestedPersonaNames);
-        checkNum('instantiation', 'maxInstancesPerUser', inst.maxInstancesPerUser, 1);
+        checkNum('instantiation', 'maxInstancesPerUser', inst.maxInstancesPerUser, 1, undefined, true);
         checkStr('instantiation', 'onboardingGreeting', inst.onboardingGreeting);
         if (inst.personalityPresets !== undefined && inst.personalityPresets !== null) {
             if (!Array.isArray(inst.personalityPresets)) {
@@ -660,15 +670,32 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
             }
         };
 
-        // Reset legacy columns whose JSON keys were explicitly nulled or removed relative to PreviousConfigurationJson
-        // so deleting e.g. `scope.searchScopeAccess: "All"` resets the mirrored legacy column back to its DB default.
+        // Narrow-only security columns MUST NOT be loosened by an explicit JSON `null` when the
+        // previous JSON never configured that key (protects SQL-tightened columns like RequirePlanMode=true).
+        // Non-security columns reset to their DB default on explicit `null` or removal relative to PreviousConfigurationJson.
+        const NARROW_ONLY_LEGACY_KEYS = new Set<keyof LegacyAIAgentConfigColumns>([
+            'RequirePlanMode',
+            'SupportsPlanMode',
+            'AllowMemoryWrite',
+            'AcceptUnregisteredFiles',
+            'SearchScopeAccess',
+            'SkillActivationMode',
+            'AllowEphemeralClientTools',
+        ]);
         const resetIfCleared = <K extends keyof LegacyAIAgentConfigColumns>(
             key: K,
             nextVal: unknown,
             prevVal: unknown,
             dbDefault: LegacyAIAgentConfigColumns[K]
         ): void => {
-            if (nextVal === null || (nextVal === undefined && prevVal !== undefined && prevVal !== null)) {
+            const hadPriorJsonKey = prevVal !== undefined && prevVal !== null;
+            if (NARROW_ONLY_LEGACY_KEYS.has(key)) {
+                if ((nextVal === null || nextVal === undefined) && hadPriorJsonKey) {
+                    setLegacy(key, dbDefault);
+                }
+                return;
+            }
+            if (nextVal === null || (nextVal === undefined && hadPriorJsonKey)) {
                 setLegacy(key, dbDefault);
             }
         };
@@ -734,10 +761,10 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
         else resetIfCleared('ExampleInjectionStrategy', mem?.exampleInjectionStrategy, pMem?.exampleInjectionStrategy, 'Semantic');
         if (mem?.noteRetentionDays === null || typeof mem?.noteRetentionDays === 'number') {
             setLegacy('NoteRetentionDays', mem.noteRetentionDays);
-        } else resetIfCleared('NoteRetentionDays', mem?.noteRetentionDays, pMem?.noteRetentionDays, null);
+        } else resetIfCleared('NoteRetentionDays', mem?.noteRetentionDays, pMem?.noteRetentionDays, 90);
         if (mem?.exampleRetentionDays === null || typeof mem?.exampleRetentionDays === 'number') {
             setLegacy('ExampleRetentionDays', mem.exampleRetentionDays);
-        } else resetIfCleared('ExampleRetentionDays', mem?.exampleRetentionDays, pMem?.exampleRetentionDays, null);
+        } else resetIfCleared('ExampleRetentionDays', mem?.exampleRetentionDays, pMem?.exampleRetentionDays, 180);
         if (typeof mem?.autoArchiveEnabled === 'boolean') setLegacy('AutoArchiveEnabled', mem.autoArchiveEnabled);
         else resetIfCleared('AutoArchiveEnabled', mem?.autoArchiveEnabled, pMem?.autoArchiveEnabled, true);
         if (typeof mem?.allowMemoryWrite === 'boolean') setLegacy('AllowMemoryWrite', mem.allowMemoryWrite);
@@ -828,7 +855,7 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
 
         if (typeof parsedConfig?.clientTools?.allowEphemeral === 'boolean') {
             setLegacy('AllowEphemeralClientTools', parsedConfig.clientTools.allowEphemeral);
-        } else resetIfCleared('AllowEphemeralClientTools', parsedConfig?.clientTools?.allowEphemeral, prevConfig?.clientTools?.allowEphemeral, false);
+        } else resetIfCleared('AllowEphemeralClientTools', parsedConfig?.clientTools?.allowEphemeral, prevConfig?.clientTools?.allowEphemeral, true);
 
         if (parsedConfig?.recording && (parsedConfig.recording.defaultMode === null || typeof parsedConfig.recording.defaultMode === 'string')) {
             setLegacy('RecordingDefault', parsedConfig.recording.defaultMode);
@@ -869,6 +896,7 @@ export function SyncAgentLegacyColumnsAndConfiguration(args: {
 export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
     IsNewRecord: boolean;
     DefaultAgentConfigurationJson: string | null | undefined;
+    PreviousDefaultAgentConfigurationJson?: string | null | undefined;
     DefaultAgentConfigurationDirty: boolean;
     LegacyValues: Partial<LegacyAIAgentTypeConfigColumns>;
     DirtyLegacyFields: ReadonlySet<keyof LegacyAIAgentTypeConfigColumns>;
@@ -876,12 +904,14 @@ export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
     const {
         IsNewRecord,
         DefaultAgentConfigurationJson,
+        PreviousDefaultAgentConfigurationJson,
         DefaultAgentConfigurationDirty,
         LegacyValues,
         DirtyLegacyFields,
     } = args;
     const hasRawJson = typeof DefaultAgentConfigurationJson === 'string' && DefaultAgentConfigurationJson.trim().length > 0;
     const parsedConfig = ParseAgentConfiguration(DefaultAgentConfigurationJson);
+    const prevConfig = ParseAgentConfiguration(PreviousDefaultAgentConfigurationJson);
     const legacyUpdates: Partial<LegacyAIAgentTypeConfigColumns> = {};
 
     if (hasRawJson && !parsedConfig) {
@@ -892,9 +922,10 @@ export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
         };
     }
 
-    // Direction 1: DefaultAgentConfiguration JSON -> non-dirty legacy columns
-    if (parsedConfig?.contextWindow && (DefaultAgentConfigurationDirty || IsNewRecord)) {
-        const cw = parsedConfig.contextWindow;
+    // Direction 1: DefaultAgentConfiguration JSON -> non-dirty legacy columns (including reset on removal)
+    if (DefaultAgentConfigurationDirty || IsNewRecord) {
+        const cw = parsedConfig?.contextWindow;
+        const pCw = prevConfig?.contextWindow;
         const setLegacy = <K extends keyof LegacyAIAgentTypeConfigColumns>(
             key: K,
             value: LegacyAIAgentTypeConfigColumns[K] | undefined
@@ -903,23 +934,37 @@ export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
                 legacyUpdates[key] = value;
             }
         };
-        if (cw.compressionMessageThreshold === null || typeof cw.compressionMessageThreshold === 'number') {
+        const resetIfCleared = <K extends keyof LegacyAIAgentTypeConfigColumns>(
+            key: K,
+            nextVal: unknown,
+            prevVal: unknown,
+            dbDefault: LegacyAIAgentTypeConfigColumns[K]
+        ): void => {
+            if ((nextVal === null || nextVal === undefined) && prevVal !== undefined && prevVal !== null) {
+                setLegacy(key, dbDefault);
+            }
+        };
+        if (cw?.compressionMessageThreshold === null || typeof cw?.compressionMessageThreshold === 'number') {
             setLegacy('ContextCompressionMessageThreshold', cw.compressionMessageThreshold);
-        }
-        if (cw.compressionPromptID === null || typeof cw.compressionPromptID === 'string') {
+        } else resetIfCleared('ContextCompressionMessageThreshold', cw?.compressionMessageThreshold, pCw?.compressionMessageThreshold, null);
+        if (cw?.compressionPromptID === null || typeof cw?.compressionPromptID === 'string') {
             setLegacy('ContextCompressionPromptID', cw.compressionPromptID);
-        }
-        if (cw.compressionMessageRetentionCount === null || typeof cw.compressionMessageRetentionCount === 'number') {
+        } else resetIfCleared('ContextCompressionPromptID', cw?.compressionPromptID, pCw?.compressionPromptID, null);
+        if (cw?.compressionMessageRetentionCount === null || typeof cw?.compressionMessageRetentionCount === 'number') {
             setLegacy('ContextCompressionMessageRetentionCount', cw.compressionMessageRetentionCount);
-        }
-        if (cw.maxTokens === null || typeof cw.maxTokens === 'number') {
+        } else resetIfCleared('ContextCompressionMessageRetentionCount', cw?.compressionMessageRetentionCount, pCw?.compressionMessageRetentionCount, null);
+        if (cw?.maxTokens === null || typeof cw?.maxTokens === 'number') {
             setLegacy('ContextWindowMaxTokens', cw.maxTokens);
-        }
-        if (typeof cw.compactionTriggerPercent === 'number') setLegacy('CompactionTriggerPercent', cw.compactionTriggerPercent);
-        if (typeof cw.compactionTargetPercent === 'number') setLegacy('CompactionTargetPercent', cw.compactionTargetPercent);
-        if (cw.summaryPromptID === null || typeof cw.summaryPromptID === 'string') {
+        } else resetIfCleared('ContextWindowMaxTokens', cw?.maxTokens, pCw?.maxTokens, null);
+        if (typeof cw?.compactionTriggerPercent === 'number') {
+            setLegacy('CompactionTriggerPercent', cw.compactionTriggerPercent);
+        } else resetIfCleared('CompactionTriggerPercent', cw?.compactionTriggerPercent, pCw?.compactionTriggerPercent, 80);
+        if (typeof cw?.compactionTargetPercent === 'number') {
+            setLegacy('CompactionTargetPercent', cw.compactionTargetPercent);
+        } else resetIfCleared('CompactionTargetPercent', cw?.compactionTargetPercent, pCw?.compactionTargetPercent, 40);
+        if (cw?.summaryPromptID === null || typeof cw?.summaryPromptID === 'string') {
             setLegacy('ConversationSummaryPromptID', cw.summaryPromptID);
-        }
+        } else resetIfCleared('ConversationSummaryPromptID', cw?.summaryPromptID, pCw?.summaryPromptID, null);
     }
 
     // Direction 2: Dirty legacy columns -> DefaultAgentConfiguration JSON

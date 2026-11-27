@@ -629,10 +629,12 @@ export class AgentRunInitializationHelper {
         ctx.Depth = params.parentDepth !== undefined ? params.parentDepth + 1 : 0;
         ctx.ParentStepCounts = params.parentStepCounts || [];
         // Re-evaluate the Plan Mode gate on checkpoint resume via virtual hook (honoring subclass
-        // overrides) and checking the prior run (`LastRunID`, where the approved Plan Mode request
-        // lives) before falling back to the paused run's own ID.
+        // overrides), preserving caller-requested `planMode: true` stored on `AgentRun.PlanMode`
+        // and checking the prior run (`LastRunID`, where the approved Plan Mode request lives)
+        // before falling back to the paused run's own ID.
         const resumedPlanGate = await ctx.Hooks.ResolvePlanModeGate({
             ...params,
+            planMode: params.planMode ?? (ctx.AgentRun.PlanMode === true ? true : undefined),
             lastRunId: params.lastRunId ?? ctx.AgentRun.LastRunID ?? ctx.AgentRun.ID,
         });
         ctx.PlanModeActive = resumedPlanGate.active;

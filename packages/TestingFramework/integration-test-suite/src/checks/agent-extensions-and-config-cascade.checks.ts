@@ -636,7 +636,7 @@ async function checkAec4HelperPluginsAndCodeOnlySeamGuards(ctx: IntegrationCheck
         const loopTypeId = await getLoopAgentTypeId(ctx);
 
         // 1. Even an Administrator/Owner is rejected when attempting code-only seams in Configuration
-        for (const forbiddenSeam of ['limits', 'actionPolicy'] as const) {
+        for (const forbiddenSeam of ['limits', 'actionPolicy', 'setup', 'steps', 'actions', 'subAgents'] as const) {
             const badAdminAgent = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
             badAdminAgent.NewRecord();
             badAdminAgent.Name = `IT195-BadSeam-${forbiddenSeam}-${tag}`;

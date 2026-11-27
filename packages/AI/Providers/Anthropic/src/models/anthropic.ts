@@ -85,9 +85,13 @@ export class AnthropicLLM extends BaseLLM {
     constructor(apiKey: string) {
         super(apiKey);
         const longRunningFetch = GetLongRunningAIFetch();
+        const anthropicFetch: NonNullable<ConstructorParameters<typeof Anthropic>[0]['fetch']> | undefined =
+            longRunningFetch
+                ? (url, init) => longRunningFetch(url, init)
+                : undefined;
         this._anthropic = new Anthropic({
             apiKey,
-            ...(longRunningFetch ? { fetch: longRunningFetch as unknown as typeof globalThis.fetch } : {}),
+            ...(anthropicFetch ? { fetch: anthropicFetch } : {}),
         });
     }
 

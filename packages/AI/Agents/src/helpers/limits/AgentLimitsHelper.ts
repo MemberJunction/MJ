@@ -41,7 +41,7 @@ import type { MJAIAgentUserPolicyEntity, MJAIPromptRunEntity } from '@memberjunc
 import { RegisterClass } from '@memberjunction/global';
 import { ProviderRubricEngine } from '@memberjunction/rubrics';
 import type { CooperativePauseResult } from '../../ActiveRunGovernanceRegistry';
-import type { AgentRunTokenStats } from '../../AgentTreeBudgetTracker';
+import { AgentTreeBudgetTracker, type AgentRunTokenStats } from '../../AgentTreeBudgetTracker';
 import type { BudgetEnforcementInput } from '../../BudgetEnforcementGuard';
 import type { IterationProgressSample } from '../../DeterministicProgressDetector';
 import type { FastJudgeUsageSettlement } from '../../FastConvergenceJudge';
@@ -533,6 +533,10 @@ export class AgentLimitsHelper extends BaseAgentLimitsHelper {
             ValidationRetryCount: ctx.GeneralValidationRetryCount,
             MaxValidationRetries: maxValidationRetries,
             EffectiveBudgets: ctx.ActiveBudgets,
+            EffectiveMaxIterationsPerRun: AgentTreeBudgetTracker.ResolveEffectiveMaxIterationsPerRun(
+                params.agent,
+                (id) => (AIEngine.Instance?.Loaded ? AIEngine.Instance.GetAgentByID(id) : undefined)
+            ),
             PausedIntervals: ctx.ResumedCheckpointContext?.PausedIntervals,
             EnsureTreeBudgetFn: p => ctx.Hooks.EnsureTreeBudget(p),
             CheckTreeBudgetLimitFn: p => ctx.Hooks.CheckTreeBudgetLimit(p),

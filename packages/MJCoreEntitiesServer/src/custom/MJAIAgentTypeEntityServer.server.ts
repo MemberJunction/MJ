@@ -30,6 +30,12 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
             return result;
         }
 
+        // Only run strict JSON validation on creates or when DefaultAgentConfiguration was modified (R2-2)
+        const configDirty = !this.IsSaved || (this.GetFieldByName('DefaultAgentConfiguration')?.Dirty ?? false);
+        if (!configDirty) {
+            return result;
+        }
+
         const errors = ValidateAgentScopedConfigurationJson(
             this.DefaultAgentConfiguration,
             'DefaultAgentConfiguration',
@@ -79,9 +85,11 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
         }
 
         const configDirty = isExplicitlyWritten('DefaultAgentConfiguration');
+        const prevConfigJson = (configField.OldValue as string | null | undefined) ?? null;
         const syncResult = SyncAgentTypeLegacyColumnsAndConfiguration({
             IsNewRecord: isCreate,
             DefaultAgentConfigurationJson: this.DefaultAgentConfiguration,
+            PreviousDefaultAgentConfigurationJson: isCreate ? null : prevConfigJson,
             DefaultAgentConfigurationDirty: configDirty,
             LegacyValues: legacyValues,
             DirtyLegacyFields: dirtyLegacyFields,

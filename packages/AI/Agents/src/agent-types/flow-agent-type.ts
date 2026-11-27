@@ -1132,9 +1132,9 @@ export class FlowAgentType extends BaseAgentType {
                         ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicyByID(node.StepTypeID)
                         : null) ??
                     (configuredKey ? AgentStepTypeRegistry.Instance.ResolveEffectivePolicy(configuredKey) : null);
-                if (!policy || !AgentStepTypeRegistry.Instance.DoesStepApplyToAgentType(policy.AppliesTo, 'Flow')) {
+                if (!policy || policy.IsBuiltIn || !AgentStepTypeRegistry.Instance.DoesStepApplyToAgentType(policy.AppliesTo, 'Flow')) {
                     return this.createNextStep('Failed', {
-                        errorMessage: `Custom flow step '${node.Name}' could not resolve an active Flow-compatible step type (StepTypeID=${node.StepTypeID ?? 'null'})`,
+                        errorMessage: `Custom flow step '${node.Name}' could not resolve an active non-built-in Flow-compatible custom step type (StepTypeID=${node.StepTypeID ?? 'null'})`,
                         newPayload: payload,
                         previousPayload: payload
                     });

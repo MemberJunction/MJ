@@ -45,6 +45,7 @@ import type { BaseAgentActionsHelper } from './BaseAgentActionsHelper';
  * Execution collaborator owned by {@link AgentActionsHelper}.
  */
 export class AgentActionExecutionHelper {
+    private _actionWaitSeq = 0;
     // -------------------------------------------------------------------------
     // Single-Action Dispatch
     // -------------------------------------------------------------------------
@@ -115,7 +116,7 @@ export class AgentActionExecutionHelper {
             return structuralRefusal;
         }
 
-        const actionWaitId = `action:${action.name}:${options?.StepID ?? Date.now()}`;
+        const actionWaitId = `action:${action.name}:${options?.StepID ?? `seq-${++this._actionWaitSeq}`}`;
         ctx.LivenessWatchdog?.SuspendForExternalWait(actionWaitId, `action:${action.name}`);
         try {
             const result = await AgentUserPolicyEngine.Instance.RunWithExecutingAgentContext(

@@ -1172,7 +1172,7 @@ export class MJAIAgentArtifactTypeEntity extends BaseEntity<MJAIAgentArtifactTyp
  *
  * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
  * `@memberjunction/ai-core-plus`, which auto-copies it into
- * `packages/AI/CorePlus/src/JSONType-interfaces/MJAIAgentCategoryEntity_IAgentConfiguration.ts` during `prebuild`
+ * `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild`
  * (`npm run sync:json-types`). Do not maintain separate physical copies.
  */
 export interface MJAIAgentCategoryEntity_IAgentConfiguration {
@@ -1639,7 +1639,7 @@ export interface MJAIAgentCategoryEntity_IAgentConfiguration {
          * client tools advertised by the caller UI/runtime. **Narrow-only security invariant**
          * (monotonic logical `AND` down the `BaseAgentID` chain and defaults cascade): once
          * `false` on an ancestor or default tier, descendants cannot widen back to `true`.
-         * Default: `false`. Supersedes `AIAgent.AllowEphemeralClientTools`.
+         * Default: `true`. Supersedes `AIAgent.AllowEphemeralClientTools`.
          */
         allowEphemeral?: boolean | null;
     } | null;
@@ -1663,11 +1663,12 @@ export interface MJAIAgentCategoryEntity_IAgentConfiguration {
 
     /**
      * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
-     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`.
+     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (child tiers cannot strip plugins bound by an ancestor or default tier; higher-priority
+     * or more specific entries for the same seam take precedence).
      * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
      * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
      * both at save time and at runtime.
-     * Set to `null` to explicitly clear helper plugin entries at this cascade tier.
      */
     helperPlugins?: Array<{
         /**
@@ -12742,7 +12743,7 @@ export class MJAIAgentSuggestionEntity extends BaseEntity<MJAIAgentSuggestionEnt
  *
  * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
  * `@memberjunction/ai-core-plus`, which auto-copies it into
- * `packages/AI/CorePlus/src/JSONType-interfaces/MJAIAgentTypeEntity_IAgentConfiguration.ts` during `prebuild`
+ * `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild`
  * (`npm run sync:json-types`). Do not maintain separate physical copies.
  */
 export interface MJAIAgentTypeEntity_IAgentConfiguration {
@@ -13209,7 +13210,7 @@ export interface MJAIAgentTypeEntity_IAgentConfiguration {
          * client tools advertised by the caller UI/runtime. **Narrow-only security invariant**
          * (monotonic logical `AND` down the `BaseAgentID` chain and defaults cascade): once
          * `false` on an ancestor or default tier, descendants cannot widen back to `true`.
-         * Default: `false`. Supersedes `AIAgent.AllowEphemeralClientTools`.
+         * Default: `true`. Supersedes `AIAgent.AllowEphemeralClientTools`.
          */
         allowEphemeral?: boolean | null;
     } | null;
@@ -13233,11 +13234,12 @@ export interface MJAIAgentTypeEntity_IAgentConfiguration {
 
     /**
      * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
-     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`.
+     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (child tiers cannot strip plugins bound by an ancestor or default tier; higher-priority
+     * or more specific entries for the same seam take precedence).
      * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
      * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
      * both at save time and at runtime.
-     * Set to `null` to explicitly clear helper plugin entries at this cascade tier.
      */
     helperPlugins?: Array<{
         /**
@@ -14460,7 +14462,7 @@ export class MJAIAgentUserPolicyEntity extends BaseEntity<MJAIAgentUserPolicyEnt
  *
  * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
  * `@memberjunction/ai-core-plus`, which auto-copies it into
- * `packages/AI/CorePlus/src/JSONType-interfaces/MJAIAgentEntity_IAgentConfiguration.ts` during `prebuild`
+ * `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild`
  * (`npm run sync:json-types`). Do not maintain separate physical copies.
  */
 export interface MJAIAgentEntity_IAgentConfiguration {
@@ -14927,7 +14929,7 @@ export interface MJAIAgentEntity_IAgentConfiguration {
          * client tools advertised by the caller UI/runtime. **Narrow-only security invariant**
          * (monotonic logical `AND` down the `BaseAgentID` chain and defaults cascade): once
          * `false` on an ancestor or default tier, descendants cannot widen back to `true`.
-         * Default: `false`. Supersedes `AIAgent.AllowEphemeralClientTools`.
+         * Default: `true`. Supersedes `AIAgent.AllowEphemeralClientTools`.
          */
         allowEphemeral?: boolean | null;
     } | null;
@@ -14951,11 +14953,12 @@ export interface MJAIAgentEntity_IAgentConfiguration {
 
     /**
      * Admin-only per-agent pluggable `BaseAgent` helper seam overrides (Extension Point #3).
-     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`.
+     * Collected cumulatively across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (child tiers cannot strip plugins bound by an ancestor or default tier; higher-priority
+     * or more specific entries for the same seam take precedence).
      * Code-only security seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`,
      * `setup`, `steps`, `actions`, `subAgents`) are strictly forbidden in metadata and rejected
      * both at save time and at runtime.
-     * Set to `null` to explicitly clear helper plugin entries at this cascade tier.
      */
     helperPlugins?: Array<{
         /**

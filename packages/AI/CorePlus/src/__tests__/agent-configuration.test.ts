@@ -483,15 +483,67 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         expect(errors.some((e) => /not a valid helper seam/i.test(e))).toBe(true);
     });
 
-    it('resets legacy columns when a previously set key in PreviousConfigurationJson is removed or nulled (S1)', () => {
+    it('resets legacy columns to exact schema defaults on removal, does not loosen on explicit null when key was absent, and supports type-tier reset (S1, R2-5, R2-11, R2-13)', () => {
         const synced = SyncAgentLegacyColumnsAndConfiguration({
             ConfigurationJson: JSON.stringify({ scope: {} }),
-            PreviousConfigurationJson: JSON.stringify({ scope: { searchScopeAccess: 'All' } }),
+            PreviousConfigurationJson: JSON.stringify({
+                scope: { searchScopeAccess: 'All' },
+                clientTools: { allowEphemeral: false },
+                memory: { noteRetentionDays: 30, exampleRetentionDays: 60 },
+            }),
             ConfigurationDirty: true,
             IsNewRecord: false,
-            LegacyFields: { SearchScopeAccess: 'All' },
+            LegacyValues: {
+                SearchScopeAccess: 'All',
+                AllowEphemeralClientTools: false,
+                NoteRetentionDays: 30,
+                ExampleRetentionDays: 60,
+            },
             DirtyLegacyFields: new Set(),
         });
         expect(synced.LegacyColumnUpdates.SearchScopeAccess).toBe('None');
+        expect(synced.LegacyColumnUpdates.AllowEphemeralClientTools).toBe(true);
+        expect(synced.LegacyColumnUpdates.NoteRetentionDays).toBe(90);
+        expect(synced.LegacyColumnUpdates.ExampleRetentionDays).toBe(180);
+
+        // R2-5: explicit null when key was NEVER in PreviousConfigurationJson MUST NOT loosen a SQL-tightened column
+        const nonLoosening = SyncAgentLegacyColumnsAndConfiguration({
+            ConfigurationJson: JSON.stringify({ execution: { requirePlanMode: null } }),
+            PreviousConfigurationJson: JSON.stringify({}),
+            ConfigurationDirty: true,
+            IsNewRecord: false,
+            LegacyValues: { RequirePlanMode: true },
+            DirtyLegacyFields: new Set(),
+        });
+        expect(nonLoosening.LegacyColumnUpdates.RequirePlanMode).toBeUndefined();
+
+        // R2-5: SyncAgentTypeLegacyColumnsAndConfiguration resets removed context-window keys
+        const typeReset = SyncAgentTypeLegacyColumnsAndConfiguration({
+            IsNewRecord: false,
+            DefaultAgentConfigurationJson: JSON.stringify({ contextWindow: {} }),
+            PreviousDefaultAgentConfigurationJson: JSON.stringify({
+                contextWindow: { maxTokens: 32000, compactionTriggerPercent: 75, compactionTargetPercent: 35 },
+            }),
+            DefaultAgentConfigurationDirty: true,
+            LegacyValues: {
+                ContextWindowMaxTokens: 32000,
+                CompactionTriggerPercent: 75,
+                CompactionTargetPercent: 35,
+            },
+            DirtyLegacyFields: new Set(),
+        });
+        expect(typeReset.LegacyColumnUpdates.ContextWindowMaxTokens).toBeNull();
+        expect(typeReset.LegacyColumnUpdates.CompactionTriggerPercent).toBe(80);
+        expect(typeReset.LegacyColumnUpdates.CompactionTargetPercent).toBe(40);
+
+        // R2-11: integer checks, maxExecutionsPerRun >= 1, and minExecutionsPerRun <= maxExecutionsPerRun
+        const intErrors = ValidateAgentConfigurationJson(
+            JSON.stringify({
+                subAgentExecution: { minExecutionsPerRun: 5, maxExecutionsPerRun: 0, maxConsultRounds: 0.5 },
+            })
+        );
+        expect(intErrors.some((e) => /maxExecutionsPerRun.*>= 1/i.test(e))).toBe(true);
+        expect(intErrors.some((e) => /minExecutionsPerRun.*<= maxExecutionsPerRun/i.test(e))).toBe(true);
+        expect(intErrors.some((e) => /maxConsultRounds.*integer/i.test(e))).toBe(true);
     });
 });

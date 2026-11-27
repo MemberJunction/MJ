@@ -925,27 +925,113 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
             expect(nativeParams.conversationMessages).toHaveLength(3);
             expect(nativeParams.conversationMessages[2].role).toBe('user');
 
-            // B5: polling with changing priorStepResult resets window and never pauses
+            // B5 + R2-1: polling with changing priorStepResult arriving on synthetic post-action Retry (real runtime flow)
             const pollDetector = new AgentStuckDetector();
             const pollParams: ExecuteAgentParams = {
                 agent: { Name: 'PollAgent' } as MJAIAgentEntityExtended,
                 conversationMessages: [],
             };
             for (let poll = 1; poll <= 6; poll++) {
-                const res = pollDetector.EvaluateStepDecision(
+                const actRes = pollDetector.EvaluateStepDecision(
                     pollParams,
                     {
                         step: 'Actions',
                         terminate: false,
                         actions: [{ name: 'Get Job Status', params: { jobId: 'j-1' } }],
-                        priorStepResult: { status: 'running', progressPct: poll * 15 },
                     },
                     cfg
                 );
-                expect(res.PauseRequest).toBeNull();
+                expect(actRes.PauseRequest).toBeNull();
+                const retryRes = pollDetector.EvaluateStepDecision(
+                    pollParams,
+                    {
+                        step: 'Retry',
+                        terminate: false,
+                        priorStepResult: [{ actionName: 'Get Job Status', success: true, progressPct: poll * 15 }],
+                    },
+                    cfg
+                );
+                expect(retryRes.PauseRequest).toBeNull();
             }
 
-            // B5: list -> create -> list resets window on mutating call
+            // R2-1: repeated identical MUTATING calls (`Send Email` x4) with synthetic post-action Retry MUST still trigger directive & pause!
+            const mutDetector = new AgentStuckDetector();
+            const mutParams: ExecuteAgentParams = {
+                agent: { Name: 'MutatingLoopAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            for (let i = 1; i <= 2; i++) {
+                const res = mutDetector.EvaluateStepDecision(
+                    mutParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Send Email', params: { to: 'a@b.com' } }] },
+                    cfg
+                );
+                expect(res.InjectedDirectives).toEqual([]);
+                expect(res.PauseRequest).toBeNull();
+                mutDetector.EvaluateStepDecision(
+                    mutParams,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Send Email', success: true }] },
+                    cfg
+                );
+            }
+            const thirdMut = mutDetector.EvaluateStepDecision(
+                mutParams,
+                { step: 'Actions', terminate: false, actions: [{ name: 'Send Email', params: { to: 'a@b.com' } }] },
+                cfg
+            );
+            expect(thirdMut.InjectedDirectives).toHaveLength(1);
+            mutDetector.EvaluateStepDecision(
+                mutParams,
+                { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Send Email', success: true }] },
+                cfg
+            );
+            const fourthMut = mutDetector.EvaluateStepDecision(
+                mutParams,
+                { step: 'Actions', terminate: false, actions: [{ name: 'Send Email', params: { to: 'a@b.com' } }] },
+                cfg
+            );
+            expect(fourthMut.PauseRequest?.PauseReason).toBe('StuckToolCallLoop');
+
+            // R2-1: two-call A-B-A-B alternation with static per-call results MUST NOT clear the window and MUST pause!
+            const altDetector = new AgentStuckDetector();
+            const altParams: ExecuteAgentParams = {
+                agent: { Name: 'AlternatingAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            let altPaused = false;
+            for (let cycle = 0; cycle < 4 && !altPaused; cycle++) {
+                const aRes = altDetector.EvaluateStepDecision(
+                    altParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'ReadA', params: { id: 1 } }] },
+                    cfg
+                );
+                if (aRes.PauseRequest) {
+                    altPaused = true;
+                    break;
+                }
+                altDetector.EvaluateStepDecision(
+                    altParams,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'ReadA', result: 'static-A' }] },
+                    cfg
+                );
+                const bRes = altDetector.EvaluateStepDecision(
+                    altParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'ReadB', params: { id: 2 } }] },
+                    cfg
+                );
+                if (bRes.PauseRequest) {
+                    altPaused = true;
+                    break;
+                }
+                altDetector.EvaluateStepDecision(
+                    altParams,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'ReadB', result: 'static-B' }] },
+                    cfg
+                );
+            }
+            expect(altPaused).toBe(true);
+
+            // B5: list -> create -> list resets window on fresh mutating call
             const crudDetector = new AgentStuckDetector();
             const crudParams: ExecuteAgentParams = {
                 agent: { Name: 'CrudAgent' } as MJAIAgentEntityExtended,
@@ -964,6 +1050,70 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
                     cfg
                 );
             }
+        });
+
+        it('enforces MaxIterationsPerRun ancestor clamp at runtime and honors Liveness.Enabled=false & DefaultAgentTimeoutMS overrides (R2-3, R2-8)', async () => {
+            const { AgentTreeBudgetTracker } = await import('../AgentTreeBudgetTracker');
+            const baseAgent = {
+                ID: 'base-iter-1',
+                Name: 'Capped Base',
+                BaseAgentID: null,
+                MaxIterationsPerRun: 5,
+            } as unknown as MJAIAgentEntityExtended;
+            const derivedAgent = {
+                ID: 'derived-iter-1',
+                Name: 'Derived Instance',
+                BaseAgentID: 'base-iter-1',
+                MaxIterationsPerRun: null,
+            } as unknown as MJAIAgentEntityExtended;
+
+            const effectiveMaxIter = AgentTreeBudgetTracker.ResolveEffectiveMaxIterationsPerRun(
+                derivedAgent,
+                (id) => (id === 'base-iter-1' ? baseAgent : undefined)
+            );
+            expect(effectiveMaxIter).toBe(5);
+
+            const tracker = new AgentTreeBudgetTracker();
+            const { Result } = tracker.CheckRunAndTreeGuardrails({
+                Params: { agent: derivedAgent, conversationMessages: [] },
+                AgentRun: {
+                    ID: 'run-iter-1',
+                    TotalPromptIterations: 5,
+                    TotalCost: 0,
+                    TotalTokensUsed: 0,
+                } as unknown as ExecuteAgentParams['parentRun'] & { TotalPromptIterations: number; TotalCost: number; TotalTokensUsed: number },
+                AbsoluteMaxIterations: 100,
+                ValidationRetryCount: 0,
+                MaxValidationRetries: 3,
+                EffectiveMaxIterationsPerRun: effectiveMaxIter,
+            });
+            expect(Result.Exceeded).toBe(true);
+            expect(Result.Type).toBe('iterations');
+            expect(Result.Limit).toBe(5);
+
+            // R2-8: subclass overriding DefaultAgentTimeoutMS is detected and Liveness.Enabled=false does NOT force streaming
+            class CustomTimeoutAgent extends BaseAgent {
+                protected override get DefaultAgentTimeoutMS(): number {
+                    return 60_000;
+                }
+                public get ExposedHasCustomDefaultTimeout(): boolean {
+                    return this.HasCustomDefaultAgentTimeout;
+                }
+            }
+            const customTimeoutAgent = new CustomTimeoutAgent();
+            expect(customTimeoutAgent.ExposedHasCustomDefaultTimeout).toBe(true);
+
+            const disabledWatchdog = new AgentLivenessWatchdog({
+                AgentName: 'DisabledLivenessAgent',
+                Enabled: false,
+                InactivityTimeoutMs: 1_000,
+                OuterMaxWallClockMs: 5_000,
+            });
+            const ac = new AbortController();
+            disabledWatchdog.Start(ac);
+            expect(disabledWatchdog.IsRunning).toBe(true);
+            expect(disabledWatchdog.IsLivenessEnabled).toBe(false);
+            disabledWatchdog.Stop();
         });
     });
 });

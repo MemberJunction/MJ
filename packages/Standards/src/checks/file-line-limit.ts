@@ -143,6 +143,7 @@ async function run(context: CheckContext): Promise<CheckResult> {
     }
 
     const violations: Violation[] = [];
+    const shrinkNotes: string[] = [];
     let scanned = 0;
     let allowlisted = 0;
     let headerExempt = 0;
@@ -167,6 +168,8 @@ async function run(context: CheckContext): Promise<CheckResult> {
                         `Grandfathered file grew to ${LineCount} lines, exceeding its ratchet cap of ${ratchetCap} lines ` +
                         `(target limit: ${opts.MaxLines}). Extract new logic into a separate helper module instead of growing an oversized file.`,
                 });
+            } else if (LineCount < ratchetCap) {
+                shrinkNotes.push(`${rel} shrank to ${LineCount} lines (ratchet cap ${ratchetCap} can be lowered).`);
             }
             continue;
         }
@@ -192,6 +195,7 @@ async function run(context: CheckContext): Promise<CheckResult> {
         Notes: [
             `${scanned} source file(s) checked against ${opts.MaxLines}-line limit ` +
                 `(${allowlisted} allowlisted, ${headerExempt} header-exempt).`,
+            ...shrinkNotes,
         ],
     };
 }

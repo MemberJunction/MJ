@@ -172,17 +172,19 @@ Key merge semantics implemented in `DeepMergeAgentConfigurations` and `ResolveEf
 | `execution` | `modelSelectionMode`, `defaultPromptEffortLevel`, `chatHandlingOption`, `supportsPlanMode`, `requirePlanMode`, `declareActionsAsNativeTools` | `requirePlanMode` is monotonic `OR`; `supportsPlanMode` is monotonic `AND`. |
 | `contextWindow` | `enableCompression`, `compressionMessageThreshold`, `compressionPromptID`, `compressionMessageRetentionCount`, `maxTokens`, `compactionTriggerPercent`, `compactionTargetPercent`, `summaryPromptID` | Also populated from `AIAgentType.DefaultAgentConfiguration.contextWindow`. |
 | `memory` | `injectNotes`, `maxNotesToInject`, `noteInjectionStrategy`, `injectExamples`, `maxExamplesToInject`, `exampleInjectionStrategy`, `noteRetentionDays`, `exampleRetentionDays`, `autoArchiveEnabled`, `allowMemoryWrite`, `reranker` | `reranker` is a parsed JSON object (replaces stringified `RerankerConfiguration`). |
-| `payload` | `downstreamPaths`, `upstreamPaths`, `selfReadPaths`, `selfWritePaths`, `scope`, `startingValidationSchema`, `startingValidationMode`, `finalValidationSchema`, `finalValidationMode`, `finalValidationMaxRetries` | Path fields are typed `string[]` (replaces JSON-encoded strings). |
-| `subAgentExecution` | `mode`, `minExecutionsPerRun`, `maxExecutionsPerRun`, `maxConsultRounds` | `maxExecutionsPerRun` and `maxConsultRounds` clamp via `Math.min`. |
-| `attachments` | `messageMode`, `maxMessages`, `rootPath`, `inlineStorageThresholdBytes`, `acceptUnregisteredFiles` | `acceptUnregisteredFiles` is narrow-only (`AND`). |
-| `artifacts` | `creationMode`, `defaultArtifactTypeID` | Controls output artifact lifecycle (`Always`, `Never`, `System Only`). |
-| `scope` | `searchScopeAccess`, `secondaryScopeConfig` | `searchScopeAccess` is narrow-only (`All > Assigned > None`). |
+| `payload` | `downstreamPaths`, `upstreamPaths`, `selfReadPaths`, `selfWritePaths`, `scope`, `startingValidationSchema`, `startingValidationMode`, `finalValidationSchema`, `finalValidationMode`, `finalValidationMaxRetries` | Path fields are typed `string[]` (replaces JSON-encoded strings). *(Direct-column reads today; cascading via `EffectiveAgentProperties` is tracked as a follow-up.)* |
+| `subAgentExecution` | `mode`, `minExecutionsPerRun`, `maxExecutionsPerRun`, `maxConsultRounds` | `maxExecutionsPerRun` (≥ 1) and `maxConsultRounds` clamp via `Math.min`. *(`minExecutionsPerRun` remains a direct-column read today.)* |
+| `attachments` | `messageMode`, `maxMessages`, `rootPath`, `inlineStorageThresholdBytes`, `acceptUnregisteredFiles` | `acceptUnregisteredFiles` is narrow-only (`AND`). *(`inlineStorageThresholdBytes` remains a direct-column read today.)* |
+| `artifacts` | `creationMode`, `defaultArtifactTypeID` | Controls output artifact lifecycle (`Always`, `Never`, `System Only`). *(`defaultArtifactTypeID` remains a direct-column read today.)* |
+| `scope` | `searchScopeAccess`, `secondaryScopeConfig` | `searchScopeAccess` is narrow-only (`All > Assigned > None`). *(Note: root `AIAgent` NOT NULL legacy columns participate at the root tier, so category/type defaults for `searchScopeAccess`, `skills.activationMode`, and `modelSelectionMode` only tighten below the root column value.)* |
 | `skills` | `activationMode` | Narrow-only (`Auto > RequestedOnly`). |
-| `clientTools` | `allowEphemeral` | Narrow-only (`AND`). |
+| `clientTools` | `allowEphemeral` | Narrow-only (`AND`). Default: `true`. |
 | `recording` | `defaultMode` | Realtime session recording default (`Audio`, `AudioVideo`, `None`). |
-| `helperPlugins` | `Array<{ seam: string; driverClass: string; priority?: number }>` | **Admin-only.** `limits` and `actionPolicy` are forbidden in metadata. |
+| `helperPlugins` | `Array<{ seam: string; driverClass: string; priority?: number }>` | **Admin-only, cumulative.** Code-only seams (`limits`, `actionPolicy`, `setup`, `steps`, `actions`, `subAgents`) are forbidden in metadata. |
 | `instantiation` | `suggestedNames`, `suggestedIcons`, `suggestedPersonaNames`, `maxInstancesPerUser`, `onboardingGreeting`, `personalityPresets` | Canonical location (dual-read fallback to `TypeConfiguration.instantiation`). |
 | `promptDefaults` | `Record<string, unknown>` | Category/type defaults merged beneath `AIAgent.AgentTypePromptParams`. |
+
+> **Note on `EffectiveAgentProperties.Configuration`:** `EffectiveAgentProperties.Configuration` holds the raw merged JSON snapshot; always read the narrowed scalar fields on `EffectiveAgentProperties` for security/narrow-only decisions. Direct `InjectNotes`/`InjectExamples` reads in `AgentCompactionHelper` and `memory-manager-agent` are tracked as follow-ups alongside the non-cascading columns noted above.
 
 ---
 
@@ -331,19 +333,19 @@ Implemented in `packages/AI/Agents/src/helpers/limits/AgentLivenessWatchdog.ts`:
 
 ### 4.2 Always-On Liveness Streaming & Node `undici` `headersTimeout` Tuning
 
-1. **Always-On Liveness Sink:** When `LivenessWatchdog` is active, headless runs (`params.onStreaming === undefined`) automatically attach an internal `onStreaming` callback so streaming-capable LLM drivers stream tokens continuously and feed `'llm-stream-chunk'` heartbeats into the watchdog.
-2. **Long-Running `undici` Dispatcher (`packages/AI/Core/src/generic/httpDispatcher.ts`):** For extended-thinking models or native tool-calling turns where streaming is suppressed, Node's default `undici` `headersTimeout` of `300_000` ms (5 minutes) would throw `UND_ERR_HEADERS_TIMEOUT`. `MJServer` automatically primes Node's built-in `undici` dispatcher at startup with finite 30-minute `headersTimeout` and `bodyTimeout` bounds (zero external `undici` dependency; stalled sockets still fail cleanly). Custom Node workers can call the same helper:
+1. **Always-On Liveness Sink:** When `LivenessWatchdog` is active (`Liveness.Enabled === true`), headless runs (`params.onStreaming === undefined`) automatically attach an internal `onStreaming` callback so streaming-capable LLM drivers stream tokens continuously and feed `'llm-stream-chunk'` heartbeats into the watchdog. Setting `limits.Liveness.Enabled: false` disables automatic streaming promotion.
+2. **AI-Scoped Long-Running `undici` Fetch (`packages/AI/Core/src/generic/httpDispatcher.ts`):** For extended-thinking models or native tool-calling turns where streaming is suppressed, Node's default `undici` `headersTimeout` of `300_000` ms (5 minutes) would throw `UND_ERR_HEADERS_TIMEOUT`. `MJServer` calls `ConfigureLongRunningAIFetch(...)` at startup using `Liveness.HttpHeadersTimeoutMs` / `Liveness.HttpBodyTimeoutMs` (default 30 minutes) without replacing Node's process-global dispatcher, so unrelated outbound HTTP (OAuth, webhooks, connectors) retains Node defaults and corporate `ProxyAgent` / mTLS setups are preserved (hosts with custom CA/mTLS `Agent` instances can also pass `options.dispatcher` or `options.disabled: true`). Currently `OpenAILLM` (and OpenAI-compatible subclasses) and `AnthropicLLM` consume `GetLongRunningAIFetch()`; wiring remaining provider SDKs (Gemini, Vertex, Groq, Mistral, Cerebras, Azure, Fireworks) is tracked as a follow-up. Custom Node workers can call the same helper:
 
 ```typescript
 import {
+    ConfigureLongRunningAIFetch,
     DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,
     DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS,
-    InstallGlobalLongRunningFetchDispatcher,
     PrimeNodeBuiltinUndiciDispatcher,
 } from '@memberjunction/ai';
 
 await PrimeNodeBuiltinUndiciDispatcher();
-const handle = InstallGlobalLongRunningFetchDispatcher({
+const handle = ConfigureLongRunningAIFetch({
     headersTimeoutMs: DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS, // Default: 1_800_000 (30m); pass 0 to disable
     bodyTimeoutMs: DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,       // Default: 1_800_000 (30m); pass 0 to defer to AbortSignal
 });
@@ -383,7 +385,7 @@ Fourteen core step types ship active out of the box:
 | --- | --- | --- | :---: | :---: |
 | `Actions` | `ActionsStepHandler` | `Both` | `false` | `true` |
 | `Sub-Agent` | `SubAgentStepHandler` | `Both` | `false` | `true` |
-| `Retry` | `RetryStepHandler` | `Loop` | `true` | `true` |
+| `Retry` | `RetryStepHandler` | `All` | `true` | `true` |
 | `Success` | `SuccessStepHandler` | `All` | `true` | `true` |
 | `Failed` | `FailedStepHandler` | `All` | `true` | `true` |
 | `Chat` | `ChatStepHandler` | `Both` | `true` | `false` |
@@ -391,7 +393,7 @@ Fourteen core step types ship active out of the box:
 | `While` | `WhileStepHandler` | `Both` | `true` | `true` |
 | `Skill` | `SkillStepHandler` | `Loop` | `true` | `true` |
 | `Plan` | `PlanStepHandler` | `Loop` | `true` | `true` |
-| `Tasks` | `TasksStepHandler` | `Loop` | `true` | `true` |
+| `Tasks` | `TasksStepHandler` | `Both` | `true` | `true` |
 | `Handoff` | `HandoffStepHandler` | `Loop` | `true` | `true` |
 | `ClientTools` | `ClientToolsStepHandler` | `Loop` | `true` | `true` |
 | `Decision` | `DecisionStepHandler` | `Both` | `true` | `true` |
@@ -399,11 +401,11 @@ Fourteen core step types ship active out of the box:
 ### 5.2 Governance Controls for Custom OpenApp Step Types
 
 When reviewing or activating a custom `MJ: AI Agent Step Types` row from an OpenApp:
-- **Kill Switch (`Status`):** Setting `Status` to anything other than `'Active'` immediately disables that step type across all agents (`AgentStepTypeRegistry.ResolveEffectivePolicy` returns `null`).
-- **Plan Mode Safety (`AllowedInUnapprovedPlanMode`):** Set to `false` for **any** custom step that performs external writes, mutations, or side effects so Plan Mode automatically blocks it until human approval is granted.
-- **Budget Accounting (`CountsAgainstTreeBudget`):** Keep `true` for any step that executes compute, actions, or LLM work; set `false` only for pure human-wait / conversational pause steps.
-- **Prompt Visibility (`DefaultEnabledInPrompt` & `PromptDocsTemplate`):** Controls whether `AgentStepTypeRegistry.GetActiveCustomStepPolicies(scope)` automatically advertises the custom step's usage instructions in Loop/Flow prompts.
-- **Run Observability:** Custom step executions are logged on `MJ: AI Agent Run Steps` with `StepType = 'Custom'` and `StepTypeID` linked to the `AIAgentStepType.ID` row.
+- **Kill Switch (`Status`) — Custom Step Types Only:** Setting `Status` to anything other than `'Active'` immediately disables a **custom** step type across all agents (`AgentStepTypeRegistry.ResolveEffectivePolicy` returns `null`). Built-in step types cannot be disabled via `Status` (both `MJAIAgentStepTypeEntityServer` and `AgentStepTypeRegistry` prevent disabling built-ins so core agent loops cannot be bricked).
+- **Plan Mode Safety (`AllowedInUnapprovedPlanMode`):** Fails closed (`false` by default on `BaseAgentStepHandler`, evaluated as `row.AllowedInUnapprovedPlanMode && handler.AllowedInUnapprovedPlanMode`). Set to `false` for **any** custom step that performs external writes, mutations, or side effects so Plan Mode automatically blocks it until human approval is granted.
+- **Budget Accounting (`CountsAgainstTreeBudget`):** Evaluated conservatively as `row.CountsAgainstTreeBudget || handler.CountsAgainstTreeBudget`. Keep `true` for any step that executes compute, actions, or LLM work; set `false` only for pure human-wait / conversational pause steps.
+- **Prompt Visibility (`DefaultEnabledInPrompt` & `PromptDocsTemplate`):** Controls whether `AgentStepTypeRegistry.GetActiveCustomStepPolicies(scope)` advertises the custom step in prompts and whether Loop agents may invoke it globally. *(Note: per-agent custom-step allow-lists and JSON Schema validation of `customStepData` are tracked as follow-up enhancements; custom handlers should validate `customStepData` inside `BaseAgentStepHandler.Validate`.)*
+- **Flow & Run Observability:** Flow agents support `AIAgentStep.StepType = 'Custom'` (referencing a non-built-in `StepTypeID` or `Configuration.stepType` whose `AppliesTo` includes `'Flow'`). Custom step executions are logged on `MJ: AI Agent Run Steps` with `StepType = 'Custom'` and `StepTypeID` linked to the `AIAgentStepType.ID` row.
 
 ---
 

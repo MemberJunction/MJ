@@ -73,7 +73,7 @@ import {
     type StoppedRunStackStepRecord,
 } from './helpers/base-agent-types';
 import { BaseAgentContextBase } from './helpers/compat/BaseAgentContextBase';
-import { ResolveAgentHelperPluginsForRun } from './helpers/AgentHelperResolver';
+import { AgentHelperResolutionError, ResolveAgentHelperPluginsForRun } from './helpers/AgentHelperResolver';
 import { BaseAgentMessagingHelper } from './helpers/messaging/BaseAgentMessagingHelper';
 import { AgentMessagingHelper } from './helpers/messaging/AgentMessagingHelper';
 import { AgentStoppedRunContinuationHelper } from './helpers/messaging/AgentStoppedRunContinuationHelper';
@@ -270,6 +270,9 @@ export class BaseAgent extends BaseAgentContextBase {
 
     /** Executes an AI agent using hierarchical prompt composition and pluggable helper seams. */
     public async Execute<C = unknown, R = unknown>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
+        // Clear any prior run reference BEFORE helper plugin reset so a failure during
+        // ResetForRun on a reused BaseAgent instance never returns a stale previous agentRun.
+        this._agentRun = null;
         try {
             // Reset per-run helper bindings BEFORE resolving any helper seam so per-agent
             // helperPlugins apply on Run 1 and never leak across runs on a reused instance.
@@ -277,15 +280,11 @@ export class BaseAgent extends BaseAgentContextBase {
             this.helperCache.ResetForRun(plugins.length > 0 ? plugins : undefined);
             return await ServerOperationScopeManager.Instance.RunAsServerWork(() => this.executeRun<C, R>(params));
         } catch (error) {
-            const errMsg = error instanceof Error ? error.message : String(error);
-            if (
-                errMsg.startsWith('Failed to resolve helper plugin ') ||
-                errMsg.startsWith('Security violation: helper seam ')
-            ) {
+            if (error instanceof AgentHelperResolutionError) {
                 return {
                     success: false,
-                    errorMessage: errMsg,
-                    agentRun: this._agentRun!,
+                    errorMessage: error.message,
+                    agentRun: this._agentRun as unknown as MJAIAgentRunEntityExtended,
                 } as ExecuteAgentResult<R>;
             }
             throw error;
@@ -437,8 +436,14 @@ export class BaseAgent extends BaseAgentContextBase {
         return false;
     }
 
-    /** True when a subclass overrides `executeAgentInternal` above `BaseAgent.prototype`. */
-    protected override get HasCustomExecuteAgentInternal(): boolean {
+    /**
+     * Whether `AgentRunSetupHelper` should automatically suspend the sliding inactivity watchdog
+     * while a subclass `executeAgentInternal` override runs. Defaults to `true` when overridden;
+     * `BaseAgent`'s default `ExecuteAgentInternal` immediately resumes supervision when called
+     * via `super.executeAgentInternal(...)`, so wrapper subclasses keep full 15-minute supervision.
+     * Override to `false` to enforce strict inactivity timeouts even inside custom non-delegating loops.
+     */
+    protected get autoSuspendLivenessDuringExecuteInternal(): boolean {
         let proto: object | null = Object.getPrototypeOf(this);
         while (proto && proto !== BaseAgent.prototype) {
             if (Object.prototype.hasOwnProperty.call(proto, 'executeAgentInternal')) {
@@ -447,6 +452,11 @@ export class BaseAgent extends BaseAgentContextBase {
             proto = Object.getPrototypeOf(proto);
         }
         return false;
+    }
+
+    /** True when a subclass overrides `executeAgentInternal` and opts into auto-suspend. */
+    protected override get HasCustomExecuteAgentInternal(): boolean {
+        return this.autoSuspendLivenessDuringExecuteInternal;
     }
 
     /**

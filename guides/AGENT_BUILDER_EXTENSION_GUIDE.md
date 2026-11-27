@@ -52,6 +52,7 @@ flowchart TD
 - **Zero state divergence:** Mutating `ctx.MediaOutputs`, `ctx.PromptTurnCount`, `ctx.PlanModeActive`, `ctx.LivenessWatchdog`, etc. updates the exact live state on the running `BaseAgent`.
 - **Virtual-dispatch preservation (`ctx.Hooks`):** Whenever one helper invokes another seam method that a `BaseAgent` subclass might override (e.g., `ctx.Hooks.ValidateSuccessNextStep(...)`, `ctx.Hooks.ExecutePrompt(...)`, `ctx.Hooks.FilterAvailableSkills(...)`), it calls through `ctx.Hooks` (`AgentHelperSubclassHooks`), preserving exact virtual-dispatch semantics for custom subclasses and unit-test spies.
 - **Per-run helper resolution (`AgentHelperCache`):** At the start of every `Execute()` run, `AgentHelperCache.ResetForRun(effectiveProps.HelperPlugins)` clears cached helper instances and binds any admin-configured per-agent `helperPlugins` for that run.
+- **Protected Liveness Watchdog Hooks for Custom Subclasses:** Subclasses overriding `executePrompt` or `executeAgentInternal` (e.g., `HarnessAgentBase` or custom drivers) can feed or suspend the run's sliding inactivity watchdog directly via `this.recordLivenessProgress(kind, detail)`, `this.suspendLivenessWatchdog(waitId, reason)`, and `this.resumeLivenessWatchdog(waitId)`. Subclasses wrapping `super.executeAgentInternal(...)` automatically resume standard 15-minute supervision when `super.executeAgentInternal` enters, and any subclass may override `protected get autoSuspendLivenessDuringExecuteInternal(): boolean` to control auto-suspend explicitly.
 
 ### 1.2 The 13 Pluggable Helper Seams
 
