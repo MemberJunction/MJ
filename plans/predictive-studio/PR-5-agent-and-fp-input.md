@@ -3285,7 +3285,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->none<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->0<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->0<!-- /gen:checks -->
-- Head: <!-- gen:head -->ef641d95a0<!-- /gen:head -->
+- Head: <!-- gen:head -->9053014833<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -3524,6 +3524,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   - `CI=true node /Users/arieglazier/repos/ps-rebuild-plans/tools/ci-mirror.mjs --mj ... --tier fast --pr 5` (at `77bec97c21`) -> `summary: ok (12 passed)` (`20261126-183634-43737`).
   - Merged `ps/pr-5-agent-fp-input` (`aebd2c4707`, carrying D-091 item 4 LiveKitNative `-threads 1` and item 5 GraphQLDataProvider WS fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input`; re-verifying `milestone-exit` and fast tier via pre-push hook.
   - Merged `ps/pr-5-agent-fp-input` (`020d86e373`, carrying D-091 item 6 MJServer delete-test timeout fixes) cleanly via `git merge --no-edit ps/pr-5-agent-fp-input` (`ef641d95a0`); regenerated §10 and changeset with `pr-body.mjs`; fast tier re-run via pre-push hook.
+  - Push of `2668294b3e` went red on `@memberjunction/sqlserver-dataprovider#test` only (`spCreateRecordChangeContract.test.ts` timeout, 1 failed / 446 passed / 17 skipped; D-091 item 7; `sql-parser` showed only a load-only `onTaskUpdate` RPC timeout, 2175/2175 passed, and passes alone: 63 files / 2175 tests, 0 errors). Merged `ps/pr-5-agent-fp-input` (`35d05d5ba0`, carrying item 7 fix `a72b2db90d`) cleanly (`9053014833`); regenerated §10 and changeset; re-pushing through the D5-52 own-package hook.
 - **Mutation table (ruling S1):**
 
   | Guard | Mutation | Red attack | Restored |
