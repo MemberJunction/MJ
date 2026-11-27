@@ -311,7 +311,7 @@ export class ConversationUtility {
         if (this.endsWithRecordTitle(deduplicated, label)) {
           const nextChar = text[token.endIndex] ?? '';
           if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
-            deduplicated = deduplicated.replace(/[ \t]+$/, '');
+            deduplicated = this.trimTrailingHorizontalWhitespace(deduplicated);
           }
           continue;
         }
@@ -855,13 +855,35 @@ export class ConversationUtility {
     return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
   }
 
+  private static trimTrailingHorizontalWhitespace(text: string): string {
+    let end = text.length;
+    while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '\t')) {
+      end--;
+    }
+    return end === text.length ? text : text.slice(0, end);
+  }
+
   private static endsWithRecordTitle(prefix: string, label: string): boolean {
     if (!label) {
       return false;
     }
-    const escapedLabel = this.escapeRegex(label);
-    const trailingTitlePattern = new RegExp(`(?:^|[\\s(\\[\\"'*_\`>:])${escapedLabel}[*_\`"'\\]]*[ \\t]*$`, 'i');
-    return trailingTitlePattern.test(prefix);
+    const trimmed = this.trimTrailingHorizontalWhitespace(prefix);
+    let end = trimmed.length;
+    while (end > 0 && '*_`"\']'.includes(trimmed[end - 1])) {
+      end--;
+    }
+    const start = end - label.length;
+    if (start < 0) {
+      return false;
+    }
+    if (trimmed.slice(start, end).toLowerCase() !== label.toLowerCase()) {
+      return false;
+    }
+    if (start === 0) {
+      return true;
+    }
+    const boundary = trimmed[start - 1];
+    return /\s/.test(boundary) || '(["\'*_`>:'.includes(boundary);
   }
 
   private static decodeHtmlEntities(text: string): string {
@@ -980,8 +1002,8 @@ export class ConversationUtility {
               ? nextFollowingHtml === '' || /^<\s*\//.test(nextFollowingHtml) || this.startsWithBlockBoundaryTag(nextFollowingHtml)
               : /^[\s.,;:!?)\]}'"]/.test(nextChar);
           if (followedByClosingOrBoundary) {
-            output = output.replace(/[ \t]+$/, '');
-            visiblePrefix = visiblePrefix.replace(/[ \t]+$/, '');
+            output = this.trimTrailingHorizontalWhitespace(output);
+            visiblePrefix = this.trimTrailingHorizontalWhitespace(visiblePrefix);
           }
           index = endIndex + 1;
           continue;
