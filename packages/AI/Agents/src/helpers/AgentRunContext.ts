@@ -15,6 +15,7 @@ import type {
     AgentChatMessageMetadata,
     AgentConfiguration,
     AgentRunStepSaveQueue,
+    AgentSkillActivationRequest,
     AgentSkillInvocation,
     AgentTreeBudget,
     AIModelSelectionInfo,
@@ -34,13 +35,14 @@ import type {
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     PendingLoopCursorState,
+    SkillAvailabilityPurpose,
     WhileOperation,
 } from '@memberjunction/ai-core-plus';
 import type { ActionOutputTrustLevel, ActionParam, ActionResult, ActionRunScope, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { BaseRealtimeModel, ChatMessage, ChatMessageContent, RealtimeTranscript } from '@memberjunction/ai';
 import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { IMetadataProvider, MJLimitsConfig, UserInfo } from '@memberjunction/core';
-import type { ConversationBranchRow, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import type { ConversationBranchRow, MJAIAgentActionEntity, MJAIPromptRunEntity, MJAISkillEntity } from '@memberjunction/core-entities';
 import type { ActionCompactMode, ActionLifecycleResolver } from '../ActionLifecycleResolver';
 import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
 import type { BaseAgentType } from '../agent-types/base-agent-type';
@@ -392,6 +394,57 @@ export interface AgentHelperSubclassHooks {
         params: ExecuteAgentParams,
         config: AgentConfiguration
     ): Promise<WhileIterationResult>;
+
+    // --- Skills activation, policy & persistence hooks (Slice s6) ---
+    ExecutePromptStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision?: BaseAgentNextStep,
+        stepCount?: number
+    ): Promise<BaseAgentNextStep>;
+    EnsureTemplateEngineConfigured(contextUser: UserInfo | undefined): Promise<void>;
+    GetEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[];
+    FilterAvailableSkills(
+        skills: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
+    ): Promise<MJAISkillEntity[]>;
+    AvailableSkills(
+        gated: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
+    ): Promise<MJAISkillEntity[]>;
+    ResolveSkillActivations(
+        requested: AgentSkillActivationRequest[],
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
+    ): MJAISkillEntity[];
+    BuildSkillActivationMessage(
+        skills: MJAISkillEntity[],
+        resolvedInstructions?: ReadonlyMap<string, string>
+    ): string;
+    ResolveSkillInstructions(skill: MJAISkillEntity, params: ExecuteAgentParams, payload: unknown): Promise<string>;
+    BuildSkillTemplateData(params: ExecuteAgentParams, payload: unknown): Promise<Record<string, unknown>>;
+    EnableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void;
+    BuildSkillInvocation(
+        skill: MJAISkillEntity,
+        agent: MJAIAgentEntityExtended,
+        activationType: AgentSkillInvocation['ActivationType'],
+        reason?: string
+    ): AgentSkillInvocation;
+    RecordSkillActivationStep(
+        skill: MJAISkillEntity,
+        currentPayload: unknown,
+        params: ExecuteAgentParams,
+        invocation?: AgentSkillInvocation
+    ): Promise<void>;
+    LoadConversationSkillIDs(params: ExecuteAgentParams): Promise<string[]>;
+    PersistConversationSkillActivation(skill: MJAISkillEntity, params: ExecuteAgentParams): Promise<void>;
+    NotifyDroppedSkillRequests(droppedIds: string[], params: ExecuteAgentParams): void;
+    ActivateRequestedSkills(newlyActivated: MJAISkillEntity[], params: ExecuteAgentParams): Promise<void>;
+    MergeSkillIDs(explicit: readonly string[], persisted: readonly string[]): string[];
 }
 
 /**
@@ -481,6 +534,14 @@ export interface AgentRunContext {
     PendingLoopCursorToResume: PendingLoopCursorState | null;
     /** Non-destructive pause outcome if the run paused mid-loop. */
     PausedRunOutcome: PausedRunOutcome | null;
+    /** IDs of skills activated so far in this run. */
+    ActivatedSkillIDs: string[];
+    /** Persisted conversation-scoped skill IDs loaded for this run. */
+    ConversationSkillIDs: string[];
+    /** Whether Plan Mode is active for this run. */
+    PlanModeActive: boolean;
+    /** Whether Plan Mode approval has been granted for this run. */
+    PlanApproved: boolean;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;

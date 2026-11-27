@@ -31,6 +31,8 @@ export * from './helpers/realtime/AgentRealtimePersistenceHelper';
 export * from './helpers/iteration/BaseAgentIterationHelper';
 export * from './helpers/iteration/AgentIterationHelper';
 export * from './helpers/iteration/AgentLoopBodyExecutor';
+export * from './helpers/skills/BaseAgentSkillsHelper';
+export * from './helpers/skills/AgentSkillsHelper';
 export * from './helpers/compat/BaseAgentDeprecatedDelegatesCore';
 export * from './helpers/compat/BaseAgentDeprecatedDelegates';
 export * from './base-agent';

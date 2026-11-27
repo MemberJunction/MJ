@@ -17,12 +17,19 @@ import type {
     AgentChatMessageMetadata,
     AgentConfiguration,
     AgentPipelineRequest,
+    AgentSkillActivationRequest,
+    AgentSkillInvocation,
     BaseAgentNextStep,
     ExecuteAgentParams,
     ForEachOperation,
+    MJAIAgentEntityExtended,
+    MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
+    SkillAvailabilityPurpose,
     WhileOperation,
 } from '@memberjunction/ai-core-plus';
+import type { UserInfo } from '@memberjunction/core';
+import type { MJAISkillEntity } from '@memberjunction/core-entities';
 import type { LoopIterationError } from '../../AgentStepDispatcher';
 import type { PipelineExecutionResult, PipelineToolRegistry } from '../../pipeline';
 import type {
@@ -32,6 +39,7 @@ import type {
     WhileLoopResults,
 } from '../base-agent-types';
 import type { BaseAgentIterationHelper } from '../iteration/BaseAgentIterationHelper';
+import type { BaseAgentSkillsHelper } from '../skills/BaseAgentSkillsHelper';
 import { BaseAgentDeprecatedDelegatesCore } from './BaseAgentDeprecatedDelegatesCore';
 
 /**
@@ -42,6 +50,9 @@ import { BaseAgentDeprecatedDelegatesCore } from './BaseAgentDeprecatedDelegates
 export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDelegatesCore {
     /** Provides the resolved iteration (`ForEach`/`While`/`Pipeline`) helper (`BaseAgentIterationHelper`). */
     protected abstract getIterationHelper(): BaseAgentIterationHelper;
+
+    /** Provides the resolved skills activation & grants helper (`BaseAgentSkillsHelper`). */
+    protected abstract getSkillsHelper(): BaseAgentSkillsHelper;
 
     // =========================================================================
     // Seam S5 — Iteration Constructs (ForEach, While, Pipeline, Templates)
@@ -289,6 +300,161 @@ export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDe
             loopResults,
             previousDecision,
             params
+        );
+    }
+
+    // =========================================================================
+    // Seam S6 — Skills Activation, Grants, Conversation Scope & Attribution
+    // =========================================================================
+
+    /** @deprecated Use `BaseAgentSkillsHelper.ActiveSkillIDsForRun` instead (slated for v7.0 removal). */
+    protected activeSkillIDsForRun(params: ExecuteAgentParams): string[] {
+        return this.getSkillsHelper().ActiveSkillIDsForRun(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.ValidateSkillNextStep` instead (slated for v7.0 removal). */
+    protected validateSkillNextStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        return this.getSkillsHelper().ValidateSkillNextStep(
+            this.getRunContext(),
+            params,
+            nextStep,
+            currentPayload,
+            agentRun,
+            currentStep
+        );
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.ExecuteSkillStep` instead (slated for v7.0 removal). */
+    protected executeSkillStep(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep,
+        stepCount?: number
+    ): Promise<BaseAgentNextStep> {
+        return this.getSkillsHelper().ExecuteSkillStep(this.getRunContext(), params, config, previousDecision, stepCount);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.AvailableSkills` instead (slated for v7.0 removal). */
+    protected availableSkills(
+        gated: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
+    ): Promise<MJAISkillEntity[]> {
+        return this.getSkillsHelper().AvailableSkills(this.getRunContext(), gated, purpose, agent, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.PreActivateRequestedSkills` instead (slated for v7.0 removal). */
+    protected preActivateRequestedSkills(params: ExecuteAgentParams): Promise<void> {
+        return this.getSkillsHelper().PreActivateRequestedSkills(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.ActivateRequestedSkills` instead (slated for v7.0 removal). */
+    protected activateRequestedSkills(newlyActivated: MJAISkillEntity[], params: ExecuteAgentParams): Promise<void> {
+        return this.getSkillsHelper().ActivateRequestedSkills(this.getRunContext(), newlyActivated, params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.MergeSkillIDs` instead (slated for v7.0 removal). */
+    protected mergeSkillIDs(explicit: readonly string[], persisted: readonly string[]): string[] {
+        return this.getSkillsHelper().MergeSkillIDs(this.getRunContext(), explicit, persisted);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.LoadConversationSkillIDs` instead (slated for v7.0 removal). */
+    protected loadConversationSkillIDs(params: ExecuteAgentParams): Promise<string[]> {
+        return this.getSkillsHelper().LoadConversationSkillIDs(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.PersistConversationSkillActivation` instead (slated for v7.0 removal). */
+    protected persistConversationSkillActivation(skill: MJAISkillEntity, params: ExecuteAgentParams): Promise<void> {
+        return this.getSkillsHelper().PersistConversationSkillActivation(this.getRunContext(), skill, params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.NotifyDroppedSkillRequests` instead (slated for v7.0 removal). */
+    protected notifyDroppedSkillRequests(droppedIds: string[], params: ExecuteAgentParams): void {
+        this.getSkillsHelper().NotifyDroppedSkillRequests(this.getRunContext(), droppedIds, params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.ResolveSkillActivations` instead (slated for v7.0 removal). */
+    protected resolveSkillActivations(
+        requested: AgentSkillActivationRequest[],
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo
+    ): MJAISkillEntity[] {
+        return this.getSkillsHelper().ResolveSkillActivations(this.getRunContext(), requested, agent, contextUser);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.BuildSkillActivationMessage` instead (slated for v7.0 removal). */
+    protected buildSkillActivationMessage(
+        skills: MJAISkillEntity[],
+        resolvedInstructions?: ReadonlyMap<string, string>
+    ): string {
+        return this.getSkillsHelper().BuildSkillActivationMessage(this.getRunContext(), skills, resolvedInstructions);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.ResolveSkillInstructions` instead (slated for v7.0 removal). */
+    protected resolveSkillInstructions(
+        skill: MJAISkillEntity,
+        params: ExecuteAgentParams,
+        payload: unknown
+    ): Promise<string> {
+        return this.getSkillsHelper().ResolveSkillInstructions(this.getRunContext(), skill, params, payload);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.BuildSkillTemplateData` instead (slated for v7.0 removal). */
+    protected buildSkillTemplateData(params: ExecuteAgentParams, payload: unknown): Promise<Record<string, unknown>> {
+        return this.getSkillsHelper().BuildSkillTemplateData(this.getRunContext(), params, payload);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.EnableSkillCapabilities` instead (slated for v7.0 removal). */
+    protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
+        this.getSkillsHelper().EnableSkillCapabilities(this.getRunContext(), skill, params);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.BuildSkillInvocation` instead (slated for v7.0 removal). */
+    protected buildSkillInvocation(
+        skill: MJAISkillEntity,
+        agent: MJAIAgentEntityExtended,
+        activationType: AgentSkillInvocation['ActivationType'],
+        reason?: string
+    ): AgentSkillInvocation {
+        return this.getSkillsHelper().BuildSkillInvocation(this.getRunContext(), skill, agent, activationType, reason);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.GetSkillAttributionForAction` instead (slated for v7.0 removal). */
+    protected getSkillAttributionForAction(
+        actionId: string,
+        agent: MJAIAgentEntityExtended
+    ): AgentSkillInvocation[] | undefined {
+        return this.getSkillsHelper().GetSkillAttributionForAction(this.getRunContext(), actionId, agent);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.GetSkillAttributionForSubAgent` instead (slated for v7.0 removal). */
+    protected getSkillAttributionForSubAgent(
+        subAgent: MJAIAgentEntityExtended,
+        agent: MJAIAgentEntityExtended
+    ): AgentSkillInvocation[] | undefined {
+        return this.getSkillsHelper().GetSkillAttributionForSubAgent(this.getRunContext(), subAgent, agent);
+    }
+
+    /** @deprecated Use `BaseAgentSkillsHelper.RecordSkillActivationStep` instead (slated for v7.0 removal). */
+    protected recordSkillActivationStep(
+        skill: MJAISkillEntity,
+        currentPayload: unknown,
+        params: ExecuteAgentParams,
+        invocation?: AgentSkillInvocation
+    ): Promise<void> {
+        return this.getSkillsHelper().RecordSkillActivationStep(
+            this.getRunContext(),
+            skill,
+            currentPayload,
+            params,
+            invocation
         );
     }
 }
