@@ -1933,6 +1933,7 @@ metadata/prompts/output/model-development-agent/goal-analyst.example.json
 metadata-optional/integration-test/tests/gates/.gate-C1-C1.2.json
 metadata-optional/integration-test/test-suites/.ps-gates-agent-suite.json
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c1-2.checks.ts
+packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c1-1.checks.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 ```
@@ -3422,6 +3423,15 @@ Record every decision taken in §9 and, when it changes another plan's interface
   carve refused an empty set (`seeded-random-side-empty`), a refusal the agent could not act on. · Defaulting the
   window away silently.
 
+- D5-A3-11 · 2026-11-27 · G4.1's forced failure is a real plan (target `Renewed`) whose one experiment names an
+  algorithm no `MJ: ML Algorithms` row has (`PsGateC1C11Steps.UNKNOWN_ALGORITHM = 'no_such_algorithm'`); A3 makes the
+  change in `ps-gate-c1-c1-1.checks.ts`, which joins A3's wave-2 ownership (A2 is not in wave 2), and runs G4.1 on
+  `MJ_PS_PR5_claude1`. The check's comment says why: validate-plan does not resolve algorithms (D5-A3-6) and the builder
+  refuses one in `resolveAlgorithms` before any row; if a later milestone adds algorithm validation, the forced failure
+  must move to a step only the builder refuses. · Under A3 a plan with an unresolved target is never presented (attack
+  7), so the old `NoSuchTargetColumn` failure could not reach an approval. · The controller changing it at integration.
+  Controller ruling (sent as "D5-A3-7"; recorded as D5-A3-11 because D5-A3-7 was already taken).
+
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
 item becomes an allowlist line `<path>  (D-091 item <n>)`. **Items 1 and 2 approved by the owner 2026-11-26** ("shared
@@ -3553,7 +3563,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->3<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->3<!-- /gen:checks -->
-- Head: <!-- gen:head -->4101f90c86<!-- /gen:head -->
+- Head: <!-- gen:head -->c1c7931c6e<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4147,10 +4157,16 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - **Hands at integration (run rule 4):** none needed beyond A3's own lines (`$C/index.ts` unchanged: Core's barrel
   already exports `agent-contracts` and `modeling-plan-spec`); B2's `$C/index.ts` export and its barrel/registry lines
   for `ps-gate-c1-c2-4` are received there.
-- **Owed / open:** G4.1 (`C1 -> C1.1`, A2's check) seeds a forced-failure plan whose target `NoSuchTargetColumn` does not
-  exist; under A3 that plan is never presented (attack 7), so G4.1's failure loop cannot run as written — asked the
-  controller (below).
-- Rulings this milestone: D5-A3-1 … D5-A3-10.
+- **G4.1** (`C1 -> C1.1`, after D5-A3-11) → **Passed**, test run `5020200C-10F1-4423-B873-B8C5A7598FB4`, 378,547 ms,
+  truth sidecar 4151 (run dir `~/.mj-ps/pr5-claude1/sidecar-run`; the worktree's Sidecar and TruthSuite venvs built by
+  `setup:python`): `0 of 20 "don't build" runs built; 5 of 5 failed builds were not retried; the approved build: ok
+  {"negatedRuns":20,"negatedBuilds":0,"failureLoops":5,"failureLoopsHeld":5,"failures":"1c/1b/failed→0c/0b ×5",
+  "realClaims":1,"realBuilderRuns":1,"realClaimOutcome":"built","lineage":"ok"}`. The approved build bound unit
+  version 1 from the payload's `UnitDraft` (`PS Truth: W1_MembershipYear — Renewed unit`, `AuthoredBy`
+  `{"kind":"system","component":"pipeline-builder"}`, the drafted censoring rule, 1 training run): D5-25 at runtime.
+  G4.1 spent $0.1926; total on `MJ_PS_PR5_claude1` from `2026-11-27T07:00:00Z` **489 prompt runs, $1.6162, 2,244,634
+  tokens**.
+- Rulings this milestone: D5-A3-1 … D5-A3-11 (D5-A3-11 the controller's).
 
 ## 12. Refresh log (append-only)
 

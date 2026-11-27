@@ -7,7 +7,7 @@
  * Measured on the truth suite's W1-signal world (loaded by the suite's dataset test first), with a complete plan seeded
  * in the payload, so each run's first turn needs one prompt and the control path presents the plan in code:
  *  1. each of the four "don't build" sentences, 5 runs each → 0 claims and 0 Pipeline Builder runs;
- *  2. a forced failure (a target the entity does not have) approved by the person, then a plain message, 5 of 5 → the
+ *  2. a forced failure (an algorithm no `MJ: ML Algorithms` row has) approved by the person, then a plain message, 5 of 5 → the
  *     approval builds once (one claim, `failed`) and the plain message starts no further build;
  *  3. one approval of the real plan → one build: its training run's agent run is the Pipeline Builder run under the
  *     orchestrator run that holds the claim, and the claim's request is `Approved` by the person's own save.
@@ -75,8 +75,20 @@ class PsGateC1C11Steps {
     return entity.Name;
   }
 
-  /** A complete plan on `entityName` predicting `target`, with no approval in it (the payload never approves). */
-  public static Plan(name: string, entityName: string, target: string): PredictiveStudioBuilderPayload {
+  /**
+   * The algorithm of the forced failure: no `MJ: ML Algorithms` row has it (D5-A3-11). The plan must still be presented,
+   * so every name it uses has to resolve — validate-plan declines a plan with an unresolved entity or field (A3 attack
+   * 7), but it does not resolve algorithms (D5-A3-6) — and the approved build must fail: the builder refuses an unknown
+   * algorithm in `resolveAlgorithms` before it writes any row, so the claim settles `failed`. If a later milestone adds
+   * algorithm validation to validate-plan, this forced failure must move to a step the builder alone refuses.
+   */
+  public static readonly UNKNOWN_ALGORITHM = 'no_such_algorithm';
+
+  /**
+   * A complete plan on `entityName` predicting `target` with `algorithm`, with no approval in it (the payload never
+   * approves).
+   */
+  public static Plan(name: string, entityName: string, target: string, algorithm = 'logistic_regression'): PredictiveStudioBuilderPayload {
     const features = [...W_WORLD_FEATURES];
     const plan: ModelingPlanSpec = {
       Name: name,
@@ -85,7 +97,7 @@ class PsGateC1C11Steps {
       CandidateSources: [{ Kind: 'Entity', Ref: entityName, Why: 'the rows being predicted' }],
       CandidateFeatures: features.map((f) => ({ Name: f, SourceRef: entityName, Kind: 'numeric' as const, Why: 'observable on the row' })),
       LeakageNotes: W_WORLD_DENY_FIELDS.map((f) => ({ Field: f, Risk: 'identifier / world bookkeeping', Action: 'exclude' as const })),
-      ProposedExperiments: [{ Label: 'logistic_regression', AlgorithmName: 'logistic_regression', FeatureSet: features, Rationale: 'truth harness', Priority: 1 }],
+      ProposedExperiments: [{ Label: algorithm, AlgorithmName: algorithm, FeatureSet: features, Rationale: 'truth harness', Priority: 1 }],
       ValidationStrategy: { Strategy: 'train_test_split', LockedHoldoutFraction: 0.2 },
       ProposedBudget: {},
     };
@@ -220,7 +232,7 @@ export const PsGateC1C11Checks: NamedCheck[] = [
       let failureLoopsHeld = 0;
       const failureDetail: string[] = [];
       for (let i = 0; i < PsGateC1C11Steps.REPEATS; i++) {
-        const build = await PsGateC1C11Steps.ApproveAndBuild(ctx, agent, person, PsGateC1C11Steps.Plan(`${tag} failure ${i + 1}`, world, 'NoSuchTargetColumn'));
+        const build = await PsGateC1C11Steps.ApproveAndBuild(ctx, agent, person, PsGateC1C11Steps.Plan(`${tag} failure ${i + 1}`, world, 'Renewed', PsGateC1C11Steps.UNKNOWN_ALGORITHM));
         const after = await PsGateC1C11Steps.Run(ctx, agent, person, 'Thanks — what happened?', undefined, build.Resumed.RunID);
         const held = build.Resumed.Claims === 1 && build.Resumed.BuilderRuns === 1 && build.ClaimOutcomes[0] === 'failed' && after.Claims === 0 && after.BuilderRuns === 0;
         if (held) failureLoopsHeld++;
