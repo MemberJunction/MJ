@@ -1,8 +1,14 @@
 /**
  * Unit tests for `IAgentConfiguration` parsing, recursive 3-table cascade merging,
- * and bidirectional dirty-field sync for `MJAIAgentEntityServer` & `MJAIAgentTypeEntityServer`.
+ * bidirectional dirty-field sync for `MJAIAgentEntityServer` & `MJAIAgentTypeEntityServer`,
+ * single-source-of-truth JSONType sync, and complete JSDoc coverage.
  */
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
+import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import {
     BuildAgentConfigurationFromLegacyFields,
     BuildAgentTypeConfigurationFromLegacyFields,
@@ -15,6 +21,13 @@ import {
     type LegacyAIAgentConfigColumns,
     type LegacyAIAgentTypeConfigColumns,
 } from '../agent-configuration';
+import type { AgentHelperPluginEntry, IAgentInstantiationConfig } from '../agent-instantiation';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const REPO_ROOT = path.resolve(__dirname, '../../../../..');
+const METADATA_JSON_TYPE_PATH = path.join(REPO_ROOT, 'metadata/entities/JSONType-interfaces/IAgentConfiguration.ts');
+const COPIED_JSON_TYPE_PATH = path.resolve(__dirname, '../JSONType-interfaces/IAgentConfiguration.ts');
 
 describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)', () => {
     it('ParseAgentConfiguration tolerates absent, malformed, or non-object payloads and sanitizes invalid sections', () => {
@@ -272,5 +285,163 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         expect(built.contextWindow?.maxTokens).toBe(100000);
         const builtAgent = BuildAgentConfigurationFromLegacyFields({ PayloadDownstreamPaths: '["*"]' });
         expect(builtAgent.payload?.downstreamPaths).toEqual(['*']);
+    });
+
+    it('keeps packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts in exact sync with metadata source of truth', () => {
+        const expectedHeader =
+            '/**\n' +
+            ' * AUTO-COPIED FROM metadata/entities/JSONType-interfaces/IAgentConfiguration.ts\n' +
+            ' * DO NOT EDIT DIRECTLY. Run `pnpm run build` in AICorePlus to refresh.\n' +
+            ' */\n\n';
+        const metadataSource = fs.readFileSync(METADATA_JSON_TYPE_PATH, 'utf8');
+        const copiedSource = fs.readFileSync(COPIED_JSON_TYPE_PATH, 'utf8');
+
+        expect(copiedSource.startsWith(expectedHeader)).toBe(true);
+        expect(copiedSource).toBe(expectedHeader + metadataSource);
+    });
+
+    it('documents every property and nested sub-property of IAgentConfiguration with JSDoc', () => {
+        const source = fs.readFileSync(METADATA_JSON_TYPE_PATH, 'utf8');
+        const sf = ts.createSourceFile('IAgentConfiguration.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+
+        const missing: string[] = [];
+        let inspectedProperties = 0;
+
+        const hasJSDoc = (node: ts.Node): boolean => {
+            const comments = ts.getLeadingCommentRanges(source, node.getFullStart()) ?? [];
+            return comments.some((range) => {
+                const text = source.slice(range.pos, range.end);
+                return text.startsWith('/**') && text.replace(/^\/\*\*|\*\/$/g, '').replace(/\*/g, '').trim().length > 0;
+            });
+        };
+
+        const walkTypeMembers = (members: ts.NodeArray<ts.TypeElement>, prefix: string): void => {
+            for (const member of members) {
+                if (!ts.isPropertySignature(member)) {
+                    continue;
+                }
+                const propName = member.name.getText(sf);
+                const propPath = `${prefix}.${propName}`;
+                inspectedProperties++;
+                if (!hasJSDoc(member)) {
+                    missing.push(propPath);
+                }
+                if (member.type) {
+                    walkTypeNode(member.type, propPath);
+                }
+            }
+        };
+
+        const walkTypeNode = (typeNode: ts.TypeNode, prefix: string): void => {
+            if (ts.isTypeLiteralNode(typeNode)) {
+                walkTypeMembers(typeNode.members, prefix);
+            } else if (ts.isUnionTypeNode(typeNode) || ts.isIntersectionTypeNode(typeNode)) {
+                for (const sub of typeNode.types) {
+                    walkTypeNode(sub, prefix);
+                }
+            } else if (ts.isParenthesizedTypeNode(typeNode)) {
+                walkTypeNode(typeNode.type, prefix);
+            } else if (ts.isArrayTypeNode(typeNode)) {
+                walkTypeNode(typeNode.elementType, `${prefix}[]`);
+            } else if (ts.isTypeReferenceNode(typeNode) && typeNode.typeArguments) {
+                const refName = typeNode.typeName.getText(sf);
+                const suffix = refName === 'Array' || refName === 'ReadonlyArray' ? '[]' : '';
+                for (const arg of typeNode.typeArguments) {
+                    walkTypeNode(arg, `${prefix}${suffix}`);
+                }
+            }
+        };
+
+        sf.forEachChild((node) => {
+            if (ts.isInterfaceDeclaration(node) && node.name.text === 'IAgentConfiguration') {
+                if (!hasJSDoc(node)) {
+                    missing.push('IAgentConfiguration');
+                }
+                walkTypeMembers(node.members, 'IAgentConfiguration');
+            }
+        });
+
+        expect(inspectedProperties).toBeGreaterThanOrEqual(70);
+        expect(missing).toEqual([]);
+    });
+
+    it('maintains type-level compatibility with MJAIAgentEntity unions and instantiation/helperPlugin types', () => {
+        // Compile-time type assertions: any drift in generated entity unions or helper types fails `tsc`.
+        type AssertAssignable<TFrom, TTo> = TFrom extends TTo ? true : never;
+
+        type _ModelSelection = AssertAssignable<
+            MJAIAgentEntity['ModelSelectionMode'],
+            NonNullable<NonNullable<IAgentConfiguration['execution']>['modelSelectionMode']>
+        >;
+        type _ChatHandling = AssertAssignable<
+            MJAIAgentEntity['ChatHandlingOption'],
+            NonNullable<IAgentConfiguration['execution']>['chatHandlingOption']
+        >;
+        type _NoteStrategy = AssertAssignable<
+            MJAIAgentEntity['NoteInjectionStrategy'],
+            NonNullable<NonNullable<IAgentConfiguration['memory']>['noteInjectionStrategy']>
+        >;
+        type _ExampleStrategy = AssertAssignable<
+            MJAIAgentEntity['ExampleInjectionStrategy'],
+            NonNullable<NonNullable<IAgentConfiguration['memory']>['exampleInjectionStrategy']>
+        >;
+        type _StartValMode = AssertAssignable<
+            MJAIAgentEntity['StartingPayloadValidationMode'],
+            NonNullable<NonNullable<IAgentConfiguration['payload']>['startingValidationMode']>
+        >;
+        type _FinalValMode = AssertAssignable<
+            MJAIAgentEntity['FinalPayloadValidationMode'],
+            NonNullable<NonNullable<IAgentConfiguration['payload']>['finalValidationMode']>
+        >;
+        type _ExecMode = AssertAssignable<
+            MJAIAgentEntity['ExecutionMode'],
+            NonNullable<NonNullable<IAgentConfiguration['subAgentExecution']>['mode']>
+        >;
+        type _MsgMode = AssertAssignable<
+            MJAIAgentEntity['MessageMode'],
+            NonNullable<NonNullable<IAgentConfiguration['attachments']>['messageMode']>
+        >;
+        type _ArtMode = AssertAssignable<
+            MJAIAgentEntity['ArtifactCreationMode'],
+            NonNullable<NonNullable<IAgentConfiguration['artifacts']>['creationMode']>
+        >;
+        type _ScopeAccess = AssertAssignable<
+            MJAIAgentEntity['SearchScopeAccess'],
+            NonNullable<NonNullable<IAgentConfiguration['scope']>['searchScopeAccess']>
+        >;
+        type _SkillMode = AssertAssignable<
+            MJAIAgentEntity['SkillActivationMode'],
+            NonNullable<NonNullable<IAgentConfiguration['skills']>['activationMode']>
+        >;
+        type _Recording = AssertAssignable<
+            MJAIAgentEntity['RecordingDefault'],
+            NonNullable<IAgentConfiguration['recording']>['defaultMode']
+        >;
+        type _HelperPlugins = AssertAssignable<
+            AgentHelperPluginEntry[],
+            NonNullable<IAgentConfiguration['helperPlugins']>
+        >;
+        type _Instantiation = AssertAssignable<
+            IAgentInstantiationConfig,
+            NonNullable<IAgentConfiguration['instantiation']>
+        >;
+
+        const checks: [
+            _ModelSelection,
+            _ChatHandling,
+            _NoteStrategy,
+            _ExampleStrategy,
+            _StartValMode,
+            _FinalValMode,
+            _ExecMode,
+            _MsgMode,
+            _ArtMode,
+            _ScopeAccess,
+            _SkillMode,
+            _Recording,
+            _HelperPlugins,
+            _Instantiation,
+        ] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true];
+        expect(checks.every(Boolean)).toBe(true);
     });
 });

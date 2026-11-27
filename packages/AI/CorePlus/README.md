@@ -326,7 +326,7 @@ Provider mappings:
 
 ### Unified 3-Table `IAgentConfiguration` (`agent-configuration.ts`)
 
-`IAgentConfiguration` mirrors `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts` in lockstep and powers the 3-table cascade (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` → `AIAgent.Configuration`), absorbing 49 operational columns from `MJ: AI Agents` and 7 context-window columns from `MJ: AI Agent Types` (kept bidirectionally synchronized through `v6.x` and slated for column removal in `v7.0`):
+`IAgentConfiguration` is defined canonically in `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts`, auto-copied into `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild` (`npm run sync:json-types`), and re-exported from `agent-configuration.ts`. It powers the 3-table cascade (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` → `AIAgent.Configuration`), absorbing 49 operational columns from `MJ: AI Agents` and 7 context-window columns from `MJ: AI Agent Types` (kept bidirectionally synchronized through `v6.x` and slated for column removal in `v7.0`):
 
 | Export | Purpose |
 | --- | --- |

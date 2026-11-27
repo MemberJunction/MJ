@@ -132,7 +132,7 @@ module.exports = {
 
 ## 2. Three-Table `IAgentConfiguration` Cascade
 
-Operational agent settings live in a single strongly-typed JSON contract — **`IAgentConfiguration`** (defined in `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts` and mirrored in lockstep in `packages/AI/CorePlus/src/agent-configuration.ts`) — stored across three tables:
+Operational agent settings live in a single strongly-typed JSON contract — **`IAgentConfiguration`** (defined canonically in `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts` and auto-copied into `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` at build time via `sync:json-types`) — stored across three tables:
 
 | Table (Entity Name) | JSON Column | Role in Cascade |
 | --- | --- | --- |

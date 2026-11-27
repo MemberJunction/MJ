@@ -1,114 +1,21 @@
 /**
- * @fileoverview Package-side lockstep mirror of `IAgentConfiguration`, tolerant parser,
- * recursive 3-table cascade merger, and bidirectional legacy-column <-> JSON sync helpers
+ * @fileoverview Runtime helpers for `IAgentConfiguration`: tolerant parser, recursive 3-table
+ * cascade merger, and bidirectional legacy-column <-> JSON sync helpers
  * (`AIAgent.Configuration`, `AIAgentCategory.DefaultConfiguration`, `AIAgentType.DefaultAgentConfiguration`).
  *
- * **Lockstep contract:** {@link IAgentConfiguration} mirrors
- * `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts` field for field. Edit both in
- * the same commit.
+ * **Single source of truth:** {@link IAgentConfiguration} is authored in
+ * `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts` and auto-copied into
+ * `./JSONType-interfaces/IAgentConfiguration.ts` by `scripts/sync-json-types.mjs` during
+ * `prebuild` (matching `@memberjunction/core`'s JSONType sync pattern).
  *
  * @module @memberjunction/ai-core-plus
  */
 
 import type { MJAIAgentEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { IsPlainObject } from '@memberjunction/global';
-import type { AgentHelperPluginEntry, IAgentInstantiationConfig } from './agent-instantiation';
+import type { IAgentConfiguration } from './JSONType-interfaces/IAgentConfiguration';
 
-/**
- * Unified typed AI Agent configuration bag stored across:
- *   - `MJ: AI Agents.Configuration`
- *   - `MJ: AI Agent Categories.DefaultConfiguration`
- *   - `MJ: AI Agent Types.DefaultAgentConfiguration`
- */
-export interface IAgentConfiguration {
-    execution?: {
-        modelSelectionMode?: MJAIAgentEntity['ModelSelectionMode'] | null;
-        defaultPromptEffortLevel?: number | null;
-        chatHandlingOption?: MJAIAgentEntity['ChatHandlingOption'] | null;
-        supportsPlanMode?: boolean | null;
-        requirePlanMode?: boolean | null;
-        declareActionsAsNativeTools?: boolean | null;
-    } | null;
-
-    contextWindow?: {
-        enableCompression?: boolean | null;
-        compressionMessageThreshold?: number | null;
-        compressionPromptID?: string | null;
-        compressionMessageRetentionCount?: number | null;
-        maxTokens?: number | null;
-        compactionTriggerPercent?: number | null;
-        compactionTargetPercent?: number | null;
-        summaryPromptID?: string | null;
-    } | null;
-
-    memory?: {
-        injectNotes?: boolean | null;
-        maxNotesToInject?: number | null;
-        noteInjectionStrategy?: MJAIAgentEntity['NoteInjectionStrategy'] | null;
-        injectExamples?: boolean | null;
-        maxExamplesToInject?: number | null;
-        exampleInjectionStrategy?: MJAIAgentEntity['ExampleInjectionStrategy'] | null;
-        noteRetentionDays?: number | null;
-        exampleRetentionDays?: number | null;
-        autoArchiveEnabled?: boolean | null;
-        allowMemoryWrite?: boolean | null;
-        reranker?: { [key: string]: unknown } | null;
-    } | null;
-
-    payload?: {
-        downstreamPaths?: string[] | null;
-        upstreamPaths?: string[] | null;
-        selfReadPaths?: string[] | null;
-        selfWritePaths?: string[] | null;
-        scope?: string | null;
-        startingValidationSchema?: string | null;
-        startingValidationMode?: MJAIAgentEntity['StartingPayloadValidationMode'] | null;
-        finalValidationSchema?: string | null;
-        finalValidationMode?: MJAIAgentEntity['FinalPayloadValidationMode'] | null;
-        finalValidationMaxRetries?: number | null;
-    } | null;
-
-    subAgentExecution?: {
-        mode?: MJAIAgentEntity['ExecutionMode'] | null;
-        minExecutionsPerRun?: number | null;
-        maxExecutionsPerRun?: number | null;
-        maxConsultRounds?: number | null;
-    } | null;
-
-    attachments?: {
-        messageMode?: MJAIAgentEntity['MessageMode'] | null;
-        maxMessages?: number | null;
-        rootPath?: string | null;
-        inlineStorageThresholdBytes?: number | null;
-        acceptUnregisteredFiles?: boolean | null;
-    } | null;
-
-    artifacts?: {
-        creationMode?: MJAIAgentEntity['ArtifactCreationMode'] | null;
-        defaultArtifactTypeID?: string | null;
-    } | null;
-
-    scope?: {
-        searchScopeAccess?: MJAIAgentEntity['SearchScopeAccess'] | null;
-        secondaryScopeConfig?: { [key: string]: unknown } | null;
-    } | null;
-
-    skills?: {
-        activationMode?: MJAIAgentEntity['SkillActivationMode'] | null;
-    } | null;
-
-    clientTools?: {
-        allowEphemeral?: boolean | null;
-    } | null;
-
-    recording?: {
-        defaultMode?: MJAIAgentEntity['RecordingDefault'] | null;
-    } | null;
-
-    helperPlugins?: AgentHelperPluginEntry[] | null;
-    instantiation?: IAgentInstantiationConfig | null;
-    promptDefaults?: { [key: string]: unknown } | null;
-}
+export * from './JSONType-interfaces/IAgentConfiguration';
 
 /** The 49 deprecated legacy columns on `MJAIAgentEntity` + 2 optional FK mirrors. */
 export type LegacyAIAgentConfigColumns = Pick<
