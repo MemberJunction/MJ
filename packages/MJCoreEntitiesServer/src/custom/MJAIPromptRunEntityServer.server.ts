@@ -206,16 +206,26 @@ export function normalizeRecordedUsage(
  */
 @RegisterClass(BaseEntity, "MJ: AI Prompt Runs")
 export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
-    
+    /**
+     * True when the run's completion (`CompletedAt`) was set on this instance while a save that started without it was
+     * in flight. That save could not price the run (it decided before the completion arrived), and its completion
+     * leaves `CompletedAt` clean, so without this the next save would not see the completion either and the run would
+     * stay unpriced. The prompt runners queue a run's INSERT and its completion UPDATE fire-and-forget, so a fast
+     * model call completes during its own INSERT.
+     */
+    private completedDuringSave = false;
+
     /**
      * Override Save to calculate costs when status changes to Complete or Error
      */
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
         try {
+            const completedAtAtStart = this.CompletedAt;
             // Check if we need to calculate costs
             const shouldCalculateCost = this.ShouldCalculateCost();
             
             if (shouldCalculateCost) {
+                this.completedDuringSave = false;
                 await this.CalculateAndSetCost();
             }
 
@@ -229,6 +239,7 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
             
             // Now save the entity with the calculated costs
             const result = await super.Save(options);
+            this.noteCompletionDuringSave(result, completedAtAtStart);
             
             // If save was successful and this is a child prompt run with costs, trigger parent rollup
             // only do it if we have just calculated costs
@@ -245,6 +256,16 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
     }
     
     /**
+     * Records that the completion arrived during a save that started without it and left the run unpriced, so the
+     * next save prices it (see {@link completedDuringSave}).
+     */
+    private noteCompletionDuringSave(saved: boolean, completedAtAtStart: Date | null): void {
+        if (saved && completedAtAtStart == null && this.CompletedAt != null && this.Cost == null) {
+            this.completedDuringSave = true;
+        }
+    }
+
+    /**
      * Determines if we should calculate costs for this run
      * @returns true if costs should be calculated
      */
@@ -257,7 +278,8 @@ export class MJAIPromptRunEntityServer extends MJAIPromptRunEntityExtended {
         // Check if CompletedAt was just set (either new record or just changed)
         // For existing records, check if any fields have changed
         const f = this.GetFieldByName('CompletedAt');
-        const completedAtChanged = !this.IsSaved || f?.Dirty;
+        // A completion that landed during an earlier, unpriced save counts as a change (completedDuringSave).
+        const completedAtChanged = !this.IsSaved || f?.Dirty || this.completedDuringSave;
         
         if (!completedAtChanged) {
             return false;

@@ -301,6 +301,9 @@ packages/SQLServerDataProvider/src/__tests__/spCreateRecordChangeContract.test.t
 packages/MJServer/src/__tests__/queued-task-graph-and-enqueue-fanout.test.ts  (D-091 item 8)
 # Owner-batch item 9: the rig harness shim test's cold module load counted inside each test (integrator, 2026-11-26)
 packages/TestingFramework/integration-test-suite/src/__tests__/rig-harness-shim.test.ts  (D-091 item 9)
+# Owner-batch item 10: a prompt run completed during its own INSERT was never priced (integrator, 2026-11-26)
+packages/MJCoreEntitiesServer/src/custom/MJAIPromptRunEntityServer.server.ts  (D-091 item 10)
+packages/MJCoreEntitiesServer/src/__tests__/MJAIPromptRunEntityServer.completedDuringSave.test.ts  (D-091 item 10)
 # Records
 .changeset/ps-agent-fp-input.md
 plans/predictive-studio/**
@@ -3406,6 +3409,16 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    300 s hook timeout (`Promise.allSettled`, so a failed load still fails its test with the reason); the tests assert on
    the result. Mutation: a dead binding added to `rigs/lib/harness.ts` turns both checks red (`NotARealBinding`),
    restored. Fixed by the integrator at wave-1 integration under the owner's 2026-11-26 statement; 3/3.
+10. `packages/MJCoreEntitiesServer/src/custom/MJAIPromptRunEntityServer.server.ts` (+ a new test) — the prompt runners
+   queue a run's INSERT and its completion UPDATE fire-and-forget; when the model call finished while the INSERT was in
+   flight, the INSERT had already decided not to price (no `CompletedAt` when it started) and its completion left
+   `CompletedAt` clean, so the UPDATE saw nothing dirty and `Cost` stayed NULL for good. Shown with a temporary log on
+   IT108 (`AA62FA1A…`: INSERT `should=false`, returned `completedAt=set`; UPDATE `dirty=false should=false`; the runs
+   whose INSERT finished first were priced); it reddened IT108/IT110/IT121/IT172 in wave-1's fourth full mirror
+   (`20261127-023900-40166`, 7 checks `run Cost … got null`) and IT108 alone. The entity now notes a completion that
+   landed during an unpriced save and prices on the next save. `MJAIPromptRunEntityServer.completedDuringSave.test.ts`
+   4/4 (2 red with the fix removed); `MJCoreEntitiesServer` 120 files, 1709 passed; IT108 ×2, IT110, IT121, IT172 27/27.
+   Fixed by the integrator at wave-1 integration under the owner's 2026-11-26 statement.
 
 ## 10. PR description draft
 
@@ -3465,7 +3478,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->528284e3a9<!-- /gen:head -->
+- Head: <!-- gen:head -->e40867bd1f<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
