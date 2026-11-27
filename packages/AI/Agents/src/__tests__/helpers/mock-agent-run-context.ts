@@ -10,10 +10,13 @@ import type {
 } from '@memberjunction/ai-core-plus';
 import { AgentRunStepSaveQueue } from '@memberjunction/ai-core-plus';
 import type { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { ActionResultSpilloverManager } from '../../ActionResultSpilloverManager';
 import type { AgentDecisionService } from '../../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../../AgentFeedbackCoordinator';
 import { AgentTreeBudgetTracker } from '../../AgentTreeBudgetTracker';
+import { ArtifactToolManager } from '../../ArtifactToolManager';
 import { PayloadManager } from '../../PayloadManager';
+import { ScratchpadManager } from '../../ScratchpadManager';
 import type { AgentHelperSubclassHooks, AgentRunContext } from '../../helpers/AgentRunContext';
 
 export function CreateMockAgentRunContext(
@@ -22,6 +25,11 @@ export function CreateMockAgentRunContext(
     const budgetTracker = new AgentTreeBudgetTracker();
     const stepSaveQueue = new AgentRunStepSaveQueue();
     const payloadManager = new PayloadManager();
+    const actionSpilloverManager = new ActionResultSpilloverManager();
+    const artifactToolManager = new ArtifactToolManager({
+        AgentRunId: '11111111-1111-4111-8111-111111111111',
+    });
+    const scratchpadManager = new ScratchpadManager();
     const defaultHooks: AgentHelperSubclassHooks = {
         LogStatus: vi.fn(),
         LogError: vi.fn(),
@@ -69,6 +77,54 @@ export function CreateMockAgentRunContext(
         AttachDecisionPromptRun: vi.fn(),
         ResolveMediaPlaceholdersInPayload: <T>(p: T) => p,
         CheckPayloadChangesWhenOn: vi.fn(async () => undefined),
+        EmitMessageLifecycleEvent: vi.fn(),
+        AreArtifactToolsEnabled: () => false,
+        StubToolTurn: (msg, text) => ({ ...msg, content: text }),
+        GetNativeControlConfig: () => ({ NativeOnly: false, DualChannel: false, EmitJsonEnvelope: true, SendToolResultsNatively: false }),
+        RecordPromptUsageInTreeBudget: vi.fn(),
+        FlushPromptRunnerSaves: vi.fn(async () => undefined),
+        CalculateTokenStats: () => ({
+            totalPromptTokens: 0,
+            totalCompletionTokens: 0,
+            totalTokensUsed: 0,
+            totalCost: 0,
+            totalCostRollup: 0,
+            totalPromptTokensRollup: 0,
+            totalCompletionTokensRollup: 0,
+            totalTokensUsedRollup: 0,
+        }),
+        ApplyTokenStatsToRun: vi.fn(),
+        EstimateTokens: (c) => Math.ceil((typeof c === 'string' ? c.length : JSON.stringify(c).length) / 4),
+        EstimateConversationTokens: (msgs) => msgs.reduce((s, m) => s + Math.ceil((typeof m.content === 'string' ? m.content.length : JSON.stringify(m.content).length) / 4), 0),
+        HeuristicTokenCount: (t) => Math.ceil(t.length / 4),
+        TryGetModelMaxInputTokens: () => null,
+        GetModelContextLimit: () => 128_000,
+        IsToolResultMessage: (m) => m.role === 'tool',
+        IsVolatileResultMessage: () => false,
+        ContentToString: (c) => (typeof c === 'string' ? c : JSON.stringify(c)),
+        SmartTrimContent: (c) => ({ trimmed: c, strategy: 'none', originalLength: c.length }),
+        CompactMessage: vi.fn(async (m) => (typeof m.content === 'string' ? m.content : JSON.stringify(m.content))),
+        GetSystemDefaultCompactPromptId: () => '',
+        CreateCompactionStep: vi.fn(),
+        UpdateCompactionStep: vi.fn(async () => undefined),
+        ResolveCompactionBudget: () => ({
+            ContextWindowTokens: 128_000,
+            TriggerTokens: 100_000,
+            TargetTokens: 60_000,
+            MaxCompactionTokens: 10_000,
+            KeepRecentMessages: 4,
+            Enabled: false,
+            Source: 'default',
+        }),
+        RunCrossTurnCompaction: vi.fn(async () => undefined),
+        RecordCompactionRunStep: vi.fn(async () => undefined),
+        TriggerPostRunMemoryExtraction: vi.fn(async () => undefined),
+        CreateMemoryManagerAgent: vi.fn(async () => ({ Execute: vi.fn(async () => ({ success: true, agentRun: {} })) })),
+        RecoveryStrategy_DropStaleVolatileState: () => ({ tokensSaved: 0, strategyName: 'DropStaleVolatileState' }),
+        RecoveryStrategy_RemoveOldestToolResults: () => ({ tokensSaved: 0, strategyName: 'RemoveOldestToolResults' }),
+        RecoveryStrategy_CompactOldToolResults: vi.fn(async () => ({ tokensSaved: 0, strategyName: 'CompactOldToolResults' })),
+        RecoveryStrategy_CompactAllToolResults: vi.fn(async () => ({ tokensSaved: 0, strategyName: 'CompactAllToolResults' })),
+        RecoveryStrategy_TrimLastUserMessage: () => ({ tokensSaved: 0, strategyName: 'TrimLastUserMessage' }),
     };
 
     const { Hooks: hookOverrides, ...restOverrides } = overrides ?? {};
@@ -111,6 +167,11 @@ export function CreateMockAgentRunContext(
         HeldCompletionChanges: [],
         ValidationRetryCount: 0,
         GeneralValidationRetryCount: 0,
+        AgentConfig: undefined,
+        LastModelSelectionInfo: undefined,
+        ActionSpilloverManager: actionSpilloverManager,
+        ArtifactToolManager: artifactToolManager,
+        ScratchpadManager: scratchpadManager,
         ...restOverrides,
         Hooks: {
             ...defaultHooks,

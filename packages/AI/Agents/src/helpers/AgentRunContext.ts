@@ -13,9 +13,11 @@ import type {
     AgentAction,
     AgentChatMessage,
     AgentChatMessageMetadata,
+    AgentConfiguration,
     AgentRunStepSaveQueue,
     AgentSkillInvocation,
     AgentTreeBudget,
+    AIModelSelectionInfo,
     AIPromptExecutionScope,
     AIPromptRunResult,
     BaseAgentNextStep,
@@ -23,19 +25,27 @@ import type {
     ExecuteAgentResult,
     MediaOutput,
     MessageLifecycleCallback,
+    MessageLifecycleEvent,
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
+    MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { ActionParam, MJActionEntityExtended } from '@memberjunction/actions-base';
-import type { ChatMessage } from '@memberjunction/ai';
+import type { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
 import type { IMetadataProvider, MJLimitsConfig } from '@memberjunction/core';
-import type { ConversationBranchRow } from '@memberjunction/core-entities';
+import type { ConversationBranchRow, MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import type { ActionCompactMode } from '../ActionLifecycleResolver';
+import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
 import type { AgentDecisionService } from '../AgentDecisionService';
 import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
-import type { AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
+import type { AgentRunTokenStats, AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
+import type { ArtifactToolManager } from '../ArtifactToolManager';
+import type { CompactionOutcome, EffectiveContextBudget } from '../ConversationCompactionManager';
+import type { NativeControlConfig } from '../native-tools/native-control-config';
 import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
+import type { ScratchpadManager } from '../ScratchpadManager';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { CarryForwardStepRecord } from '../tool-result-format';
 import type {
@@ -152,6 +162,92 @@ export interface AgentHelperSubclassHooks {
         agentTypePromptParams: Record<string, unknown> | undefined,
         params: ExecuteAgentParams
     ): Promise<void>;
+
+    // --- Compaction, recovery & token accounting hooks (Slice s3) ---
+    EmitMessageLifecycleEvent(event: MessageLifecycleEvent): void;
+    AreArtifactToolsEnabled(params?: ExecuteAgentParams): boolean;
+    StubToolTurn(message: AgentChatMessage, text: string): AgentChatMessage;
+    GetNativeControlConfig(params: ExecuteAgentParams): NativeControlConfig;
+    RecordPromptUsageInTreeBudget(
+        promptRun?: MJAIPromptRunEntity | null,
+        promptResult?: AIPromptRunResult,
+        params?: ExecuteAgentParams
+    ): void;
+    FlushPromptRunnerSaves(): Promise<void>;
+    CalculateTokenStats(): AgentRunTokenStats;
+    ApplyTokenStatsToRun(run: MJAIAgentRunEntityExtended, stats: AgentRunTokenStats): void;
+    EstimateTokens(content: ChatMessage['content'], modelName?: string): number;
+    EstimateConversationTokens(messages: ChatMessage[]): number;
+    HeuristicTokenCount(text: string): number;
+    TryGetModelMaxInputTokens(modelSelectionInfo: AIModelSelectionInfo): number | null;
+    GetModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number;
+    IsToolResultMessage(msg: ChatMessage): boolean;
+    IsVolatileResultMessage(msg: ChatMessage): boolean;
+    ContentToString(content: ChatMessageContent): string;
+    SmartTrimContent(content: string, maxLength?: number): { trimmed: string; strategy: string; originalLength: number };
+    CompactMessage(
+        message: AgentChatMessage,
+        metadata: {
+            compactMode: ActionCompactMode;
+            compactLength: number;
+            compactPromptId: string;
+            originalLength: number;
+            includeArtifactHints?: boolean;
+        },
+        params: ExecuteAgentParams
+    ): Promise<string>;
+    GetSystemDefaultCompactPromptId(): string;
+    CreateCompactionStep(
+        prompt: MJAIPromptEntityExtended,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<MJAIAgentRunStepEntityExtended>;
+    UpdateCompactionStep(
+        step: MJAIAgentRunStepEntityExtended,
+        result: AIPromptRunResult<{ summary: string }>,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<void>;
+    ResolveCompactionBudget(params: ExecuteAgentParams, config: AgentConfiguration | undefined): EffectiveContextBudget;
+    RunCrossTurnCompaction(
+        phase: 'pre-turn' | 'post-turn',
+        params: ExecuteAgentParams,
+        config: AgentConfiguration | undefined,
+        budget: EffectiveContextBudget
+    ): Promise<CompactionOutcome | undefined>;
+    RecordCompactionRunStep(
+        phase: 'pre-turn' | 'post-turn',
+        params: ExecuteAgentParams,
+        budget: EffectiveContextBudget,
+        outcome: CompactionOutcome
+    ): Promise<void>;
+    TriggerPostRunMemoryExtraction(params: ExecuteAgentParams, agentRun: MJAIAgentRunEntityExtended): Promise<void>;
+    CreateMemoryManagerAgent(agent: MJAIAgentEntityExtended): Promise<{ Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> }>;
+    RecoveryStrategy_DropStaleVolatileState(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number
+    ): { tokensSaved: number; strategyName: string };
+    RecoveryStrategy_RemoveOldestToolResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge?: number
+    ): { tokensSaved: number; strategyName: string };
+    RecoveryStrategy_CompactOldToolResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge?: number
+    ): Promise<{ tokensSaved: number; strategyName: string }>;
+    RecoveryStrategy_CompactAllToolResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): Promise<{ tokensSaved: number; strategyName: string }>;
+    RecoveryStrategy_TrimLastUserMessage(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): { tokensSaved: number; strategyName: string };
 }
 
 /**
@@ -213,6 +309,16 @@ export interface AgentRunContext {
     ValidationRetryCount: number;
     /** General validation retry counter. */
     GeneralValidationRetryCount: number;
+    /** Loaded agent configuration for this run (cached for cross-turn compaction). */
+    AgentConfig: AgentConfiguration | undefined;
+    /** Model selection from the most recent prompt execution of this run. */
+    LastModelSelectionInfo: AIModelSelectionInfo | undefined;
+    /** Deferred action-output spillover manager. */
+    readonly ActionSpilloverManager: ActionResultSpilloverManager;
+    /** Ephemeral artifact workspace tool manager. */
+    readonly ArtifactToolManager: ArtifactToolManager;
+    /** Scratchpad manager for notes & tasks. */
+    readonly ScratchpadManager: ScratchpadManager;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;

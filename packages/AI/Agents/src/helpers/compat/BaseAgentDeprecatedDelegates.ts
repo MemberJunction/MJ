@@ -17,8 +17,10 @@ import type { ActionParam, MJActionEntityExtended } from '@memberjunction/action
 import type { ChatMessage } from '@memberjunction/ai';
 import type {
     AgentChatMessage,
+    AgentConfiguration,
     AgentDecisionResult,
     AgentSubAgentRequest,
+    AIModelSelectionInfo,
     AIPromptRunResult,
     BaseAgentNextStep,
     ExecuteAgentParams,
@@ -26,8 +28,10 @@ import type {
     MessageLifecycleEvent,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
+    MJAIPromptEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { StoredToolResult } from '../../ArtifactToolManager';
+import type { CompactionOutcome, EffectiveContextBudget } from '../../ConversationCompactionManager';
 import type { ConversationToolExecutionResult, ConversationToolSummaryHost } from '../../ConversationToolManager';
 import type { MemoryWriteResult } from '../../MemoryWriteManager';
 import type { PayloadManagerResult } from '../../PayloadManager';
@@ -39,6 +43,7 @@ import type {
     StoppedRunContinuation,
     StoppedRunStackStepRecord,
 } from '../base-agent-types';
+import type { BaseAgentCompactionHelper, CompactMessageMetadata } from '../compaction/BaseAgentCompactionHelper';
 import type { BaseAgentMessagingHelper } from '../messaging/BaseAgentMessagingHelper';
 import type { BaseAgentPayloadHelper } from '../payload/BaseAgentPayloadHelper';
 
@@ -56,6 +61,9 @@ export abstract class BaseAgentDeprecatedDelegates {
 
     /** Provides the resolved payload/validation/media helper for this run (`BaseAgentPayloadHelper`). */
     protected abstract getPayloadHelper(): BaseAgentPayloadHelper;
+
+    /** Provides the resolved compaction/recovery/token helper for this run (`BaseAgentCompactionHelper`). */
+    protected abstract getCompactionHelper(): BaseAgentCompactionHelper;
 
     // =========================================================================
     // Seam S1 — Messaging, Progress, Step Logging & Stopped-Run Continuation
@@ -305,5 +313,228 @@ export abstract class BaseAgentDeprecatedDelegates {
             agentTypePromptParams,
             params
         );
+    }
+
+    // =========================================================================
+    // Seam S3 — Compaction, Pruning, Token Estimation & Context Recovery
+    // =========================================================================
+
+    /** @deprecated Use `BaseAgentCompactionHelper.SmartTrimContent` instead (slated for v7.0 removal). */
+    protected smartTrimContent(
+        content: string,
+        maxLength?: number
+    ): { trimmed: string; strategy: string; originalLength: number } {
+        return this.getCompactionHelper().SmartTrimContent(this.getRunContext(), content, maxLength);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_DropStaleVolatileState` instead (slated for v7.0 removal). */
+    protected recoveryStrategy_DropStaleVolatileState(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number
+    ): { tokensSaved: number; strategyName: string } {
+        return this.getCompactionHelper().RecoveryStrategy_DropStaleVolatileState(
+            this.getRunContext(),
+            params,
+            tokensToSave,
+            currentStepCount
+        );
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_RemoveOldestToolResults` instead (slated for v7.0 removal). */
+    protected recoveryStrategy_RemoveOldestToolResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge?: number
+    ): { tokensSaved: number; strategyName: string } {
+        return this.getCompactionHelper().RecoveryStrategy_RemoveOldestToolResults(
+            this.getRunContext(),
+            params,
+            tokensToSave,
+            currentStepCount,
+            minAge
+        );
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_CompactOldToolResults` instead (slated for v7.0 removal). */
+    protected recoveryStrategy_CompactOldToolResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge?: number
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        return this.getCompactionHelper().RecoveryStrategy_CompactOldToolResults(
+            this.getRunContext(),
+            params,
+            tokensToSave,
+            currentStepCount,
+            minAge
+        );
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_CompactAllToolResults` instead (slated for v7.0 removal). */
+    protected recoveryStrategy_CompactAllToolResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        return this.getCompactionHelper().RecoveryStrategy_CompactAllToolResults(this.getRunContext(), params, tokensToSave);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_TrimLastUserMessage` instead (slated for v7.0 removal). */
+    protected recoveryStrategy_TrimLastUserMessage(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): { tokensSaved: number; strategyName: string } {
+        return this.getCompactionHelper().RecoveryStrategy_TrimLastUserMessage(this.getRunContext(), params, tokensToSave);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.AttemptContextRecovery` instead (slated for v7.0 removal). */
+    protected attemptContextRecovery<P>(
+        params: ExecuteAgentParams,
+        payload: P,
+        errorMessage: string,
+        modelSelectionInfo?: AIModelSelectionInfo
+    ): Promise<BaseAgentNextStep<P>> {
+        return this.getCompactionHelper().AttemptContextRecovery(
+            this.getRunContext(),
+            params,
+            payload,
+            errorMessage,
+            modelSelectionInfo
+        );
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.IsMidLoopCompactionThresholdReached` instead (slated for v7.0 removal). */
+    protected isMidLoopCompactionThresholdReached(params: ExecuteAgentParams): boolean {
+        return this.getCompactionHelper().IsMidLoopCompactionThresholdReached(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.ResolveCompactionBudget` instead (slated for v7.0 removal). */
+    protected resolveCompactionBudget(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration | undefined
+    ): EffectiveContextBudget {
+        return this.getCompactionHelper().ResolveCompactionBudget(this.getRunContext(), params, config);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.CheckPreTurnCompaction` instead (slated for v7.0 removal). */
+    protected checkPreTurnCompaction(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration | undefined
+    ): Promise<void> {
+        return this.getCompactionHelper().CheckPreTurnCompaction(this.getRunContext(), params, config);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.StartPostTurnCompaction` instead (slated for v7.0 removal). */
+    protected startPostTurnCompaction(): void {
+        this.getCompactionHelper().StartPostTurnCompaction(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RunCrossTurnCompaction` instead (slated for v7.0 removal). */
+    protected runCrossTurnCompaction(
+        phase: 'pre-turn' | 'post-turn',
+        params: ExecuteAgentParams,
+        config: AgentConfiguration | undefined,
+        budget: EffectiveContextBudget
+    ): Promise<CompactionOutcome | undefined> {
+        return this.getCompactionHelper().RunCrossTurnCompaction(this.getRunContext(), phase, params, config, budget);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RecordCompactionRunStep` instead (slated for v7.0 removal). */
+    protected recordCompactionRunStep(
+        phase: 'pre-turn' | 'post-turn',
+        params: ExecuteAgentParams,
+        budget: EffectiveContextBudget,
+        outcome: CompactionOutcome
+    ): Promise<void> {
+        return this.getCompactionHelper().RecordCompactionRunStep(this.getRunContext(), phase, params, budget, outcome);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.RunPostRunCompaction` instead (slated for v7.0 removal). */
+    protected runPostRunCompaction(params: ExecuteAgentParams, agentRun: MJAIAgentRunEntityExtended): Promise<void> {
+        return this.getCompactionHelper().RunPostRunCompaction(this.getRunContext(), params, agentRun);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.TriggerPostRunMemoryExtraction` instead (slated for v7.0 removal). */
+    protected triggerPostRunMemoryExtraction(params: ExecuteAgentParams, agentRun: MJAIAgentRunEntityExtended): Promise<void> {
+        return this.getCompactionHelper().TriggerPostRunMemoryExtraction(this.getRunContext(), params, agentRun);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.CreateCompactionStep` instead (slated for v7.0 removal). */
+    protected createCompactionStep(
+        prompt: MJAIPromptEntityExtended,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<MJAIAgentRunStepEntityExtended> {
+        return this.getCompactionHelper().CreateCompactionStep(this.getRunContext(), prompt, message, params);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.UpdateCompactionStep` instead (slated for v7.0 removal). */
+    protected updateCompactionStep(
+        step: MJAIAgentRunStepEntityExtended,
+        result: AIPromptRunResult<{ summary: string }>,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        return this.getCompactionHelper().UpdateCompactionStep(this.getRunContext(), step, result, message, params);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.CompactMessage` instead (slated for v7.0 removal). */
+    protected compactMessage(
+        message: AgentChatMessage,
+        metadata: CompactMessageMetadata,
+        params: ExecuteAgentParams
+    ): Promise<string> {
+        return this.getCompactionHelper().CompactMessage(this.getRunContext(), message, metadata, params);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.GetSystemDefaultCompactPromptId` instead (slated for v7.0 removal). */
+    protected getSystemDefaultCompactPromptId(): string {
+        return this.getCompactionHelper().GetSystemDefaultCompactPromptId(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.IsToolResultMessage` instead (slated for v7.0 removal). */
+    protected IsToolResultMessage(msg: ChatMessage): boolean {
+        return this.getCompactionHelper().IsToolResultMessage(this.getRunContext(), msg);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.IsVolatileResultMessage` instead (slated for v7.0 removal). */
+    protected IsVolatileResultMessage(msg: ChatMessage): boolean {
+        return this.getCompactionHelper().IsVolatileResultMessage(this.getRunContext(), msg);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.EstimateTokens` instead (slated for v7.0 removal). */
+    protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
+        return this.getCompactionHelper().EstimateTokens(this.getRunContext(), content, modelName);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.HeuristicTokenCount` instead (slated for v7.0 removal). */
+    protected heuristicTokenCount(text: string): number {
+        return this.getCompactionHelper().HeuristicTokenCount(this.getRunContext(), text);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.GetModelContextLimit` instead (slated for v7.0 removal). */
+    protected getModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number {
+        return this.getCompactionHelper().GetModelContextLimit(this.getRunContext(), modelSelectionInfo);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.TryGetModelMaxInputTokens` instead (slated for v7.0 removal). */
+    protected tryGetModelMaxInputTokens(modelSelectionInfo: AIModelSelectionInfo): number | null {
+        return this.getCompactionHelper().TryGetModelMaxInputTokens(this.getRunContext(), modelSelectionInfo);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.EstimateConversationTokens` instead (slated for v7.0 removal). */
+    protected estimateConversationTokens(messages: ChatMessage[]): number {
+        return this.getCompactionHelper().EstimateConversationTokens(this.getRunContext(), messages);
+    }
+
+    /** @deprecated Use `BaseAgentCompactionHelper.ExecuteExpandMessageStep` instead (slated for v7.0 removal). */
+    protected executeExpandMessageStep(
+        request: BaseAgentNextStep,
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): string | null {
+        return this.getCompactionHelper().ExecuteExpandMessageStep(this.getRunContext(), request, params, currentTurn);
     }
 }
