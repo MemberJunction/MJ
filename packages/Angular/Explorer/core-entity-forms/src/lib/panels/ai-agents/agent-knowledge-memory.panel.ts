@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject } from '@angular/core';
 import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJAIAgentEntity } from '@memberjunction/core-entities';
-import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
+import { GroupByUUID, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import type { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -146,16 +146,15 @@ export class AgentKnowledgeMemoryPanel extends BaseFormPanel<MJAIAgentEntity> im
                 ResultType: 'simple',
             });
             const rows = perms.Success ? (perms.Results ?? []) : [];
+            const permsByScope = GroupByUUID(rows, (r) => r.SearchScopeID);
             this.PermissionSummary = scopeIds.map((scopeId) => ({
                 ScopeID: scopeId,
                 ScopeName: scopeNames.get(scopeId) ?? scopeId,
-                Permissions: rows
-                    .filter((r) => UUIDsEqual(r.SearchScopeID, scopeId))
-                    .map((r) => ({
-                        Principal: r.UserID ? (r.User ?? 'Unknown user') : (r.Role ?? 'Unknown role'),
-                        PrincipalType: r.UserID ? 'User' : 'Role',
-                        Level: r.PermissionLevel,
-                    })),
+                Permissions: (permsByScope.Get(scopeId) ?? []).map((r) => ({
+                    Principal: r.UserID ? (r.User ?? 'Unknown user') : (r.Role ?? 'Unknown role'),
+                    PrincipalType: r.UserID ? 'User' : 'Role',
+                    Level: r.PermissionLevel,
+                })),
             }));
         } catch (err) {
             console.error('Error loading search scope permission summary:', err);

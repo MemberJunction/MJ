@@ -10,7 +10,7 @@ import {
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
-import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClassEx, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from '../../custom/AIAgents/ai-agent-management.service';
@@ -132,8 +132,10 @@ export class AgentCapabilitiesPanel extends BaseFormPanel<MJAIAgentEntity> imple
 
         const host = this.FormComponent as MJAIAgentFormComponentExtended;
         const provider = this.FormComponent.ProviderToUse;
+        const existingActionIds = new UUIDSet(this.Actions.map((a) => a.ID));
         for (const action of selected) {
-            if (this.Actions.some((existing) => UUIDsEqual(existing.ID, action.ID))) continue;
+            if (existingActionIds.Has(action.ID)) continue;
+            existingActionIds.Add(action.ID);
             const link = await provider.GetEntityObject<MJAIAgentActionEntity>(
                 'MJ: AI Agent Actions',
                 provider.CurrentUser,
@@ -180,8 +182,10 @@ export class AgentCapabilitiesPanel extends BaseFormPanel<MJAIAgentEntity> imple
 
         const host = this.FormComponent as MJAIAgentFormComponentExtended;
         const provider = this.FormComponent.ProviderToUse;
+        const existingSubAgentIds = new UUIDSet(this.SubAgents.map((s) => s.Agent.ID));
         for (const sub of result.SelectedAgents) {
-            if (this.SubAgents.some((existing) => UUIDsEqual(existing.Agent.ID, sub.ID))) continue;
+            if (existingSubAgentIds.Has(sub.ID)) continue;
+            existingSubAgentIds.Add(sub.ID);
             const rel = await provider.GetEntityObject<MJAIAgentRelationshipEntity>(
                 'MJ: AI Agent Relationships',
                 provider.CurrentUser,

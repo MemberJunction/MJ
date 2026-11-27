@@ -4,7 +4,7 @@ import { CompositeKey } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentPromptEntity } from '@memberjunction/core-entities';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClassEx, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SharedService } from '@memberjunction/ng-shared';
@@ -86,8 +86,10 @@ export class AgentPromptsPanel extends BaseFormPanel<MJAIAgentEntity> implements
 
         const host = this.FormComponent as MJAIAgentFormComponentExtended;
         const provider = this.FormComponent.ProviderToUse;
+        const existingPromptIds = new UUIDSet(this.Prompts.map((p) => p.ID));
         for (const prompt of result.SelectedPrompts) {
-            if (this.Prompts.some((existing) => UUIDsEqual(existing.ID, prompt.ID))) continue;
+            if (existingPromptIds.Has(prompt.ID)) continue;
+            existingPromptIds.Add(prompt.ID);
             const link = await provider.GetEntityObject<MJAIAgentPromptEntity>(
                 'MJ: AI Agent Prompts',
                 provider.CurrentUser,
