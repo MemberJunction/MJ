@@ -42,7 +42,9 @@ const asPrompt = (p: PromptDouble): MJAIPromptEntityExtended => p as MJAIPromptE
 
 const USER = new UserInfo();
 const PEOPLE = new EntityInfo({ ID: 'ENT-P', Name: 'People', Fields: [{ Name: 'Title', TSType: 'string' }] });
-const provider = new EntitiesOnlyProvider([PEOPLE]);
+/** The Feature Value store the run's stale values live in (a provider without it holds none). */
+const FEATURE_VALUES = new EntityInfo({ ID: 'ENT-FV', Name: 'MJ: Feature Values', Fields: [] });
+const provider = new EntitiesOnlyProvider([PEOPLE, FEATURE_VALUES]);
 const OUTCOME: RecordFeatureValuesOutcome = { Upserted: 1, Unchanged: 0, Closed: 0, Previous: {} };
 /** The mean cost of the prompt's priced runs, and what each faked call costs. */
 const MEAN = 0.01;
@@ -157,7 +159,10 @@ describe('attack 7: three runs re-derive 10, 10 and 5 values, oldest first; a fo
         const done: string[][] = [];
         for (const run of ['run-1', 'run-2', 'run-3', 'run-4']) {
             const before = world.calls.length;
-            const r = await runOnce(run, records, { maxValuesPerRun: 10 });
+            // the run loop's watermark skips a record already computed under the current pin (its basis hash holds
+            // the pin), so a later run is handed only the records not yet at version 2
+            const handed = records.filter((x) => world.values.get(x.RecordID)?.Version !== 2);
+            const r = await runOnce(run, handed, { maxValuesPerRun: 10 });
             done.push(world.calls.slice(before));
             if (run !== 'run-4') {
                 expect(r.Summary.Rederivation).toMatchObject({ Rederived: done[done.length - 1].length, Yielded: false });

@@ -24,7 +24,8 @@ export class MJProcessRunFormComponent extends BaseFormComponent {
             { sectionKey: 'mJProcessRunDetails', sectionName: 'Process Run Details', isExpanded: false },
             { sectionKey: 'mJFeatureValues', sectionName: 'Feature Values', isExpanded: false },
             { sectionKey: 'mJRecordCloneLogs', sectionName: 'Record Clone Logs', isExpanded: false },
-            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false }
+            { sectionKey: 'mJMLScoringRuns', sectionName: 'ML Scoring Runs', isExpanded: false },
+            { sectionKey: 'mJFeaturePipelineRederivationLeases', sectionName: 'Feature Pipeline Rederivation Leases', isExpanded: false }
         ]);
     }
 }

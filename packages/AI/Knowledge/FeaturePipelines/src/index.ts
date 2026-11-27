@@ -24,4 +24,7 @@ export * from './entities/MJRecordProcessEntityExtended.js';
 export * from './entities/MJFeaturePipelineVersionEntityExtended.js';
 export * from './versions/FeaturePipelineVersionService.js';
 export * from './versions/feature-pipeline-run-results.js';
+export * from './versions/rederivation-estimator.js';
+export * from './versions/rederivation-slice.js';
+export * from './versions/rederivation-lease.js';
 export * from './templates/PromptTemplateContent.js';

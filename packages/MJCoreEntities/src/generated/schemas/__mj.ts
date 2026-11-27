@@ -26257,6 +26257,60 @@ export const MJExternalDataSourceSchema = z.object({
 export type MJExternalDataSourceEntityType = z.infer<typeof MJExternalDataSourceSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Feature Pipeline Rederivation Leases
+ */
+export const MJFeaturePipelineRederivationLeaseSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    RecordProcessID: z.string().describe(`
+        * * Field Name: RecordProcessID
+        * * Display Name: Record Process ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Record Processes (vwRecordProcesses.ID)
+        * * Description: The Feature Pipeline (MJ: Record Processes) whose re-derivation slice this lease holds; unique.`),
+    ProcessRunID: z.string().describe(`
+        * * Field Name: ProcessRunID
+        * * Display Name: Process Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Process Runs (vwProcessRuns.ID)
+        * * Description: The Process Run that holds (or last held) the lease.`),
+    AcquiredAt: z.date().describe(`
+        * * Field Name: AcquiredAt
+        * * Display Name: Acquired At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the holding run took the lease (database clock, DbNow of the lock Query).`),
+    RenewedAt: z.date().describe(`
+        * * Field Name: RenewedAt
+        * * Display Name: Renewed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the holding run last renewed the lease (database clock); 15 minutes after it the lease has expired.`),
+    ReleasedAt: z.date().nullable().describe(`
+        * * Field Name: ReleasedAt
+        * * Display Name: Released At
+        * * SQL Data Type: datetimeoffset
+        * * Description: When the holding run released the lease at its end (database clock); null while it is held.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    RecordProcess: z.string().nullable().describe(`
+        * * Field Name: RecordProcess
+        * * Display Name: Record Process
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJFeaturePipelineRederivationLeaseEntityType = z.infer<typeof MJFeaturePipelineRederivationLeaseSchema>;
+
+/**
  * zod schema definition for the entity MJ: Feature Pipeline Types
  */
 export const MJFeaturePipelineTypeSchema = z.object({

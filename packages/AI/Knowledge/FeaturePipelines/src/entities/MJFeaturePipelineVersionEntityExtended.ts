@@ -33,6 +33,15 @@ export class MJFeaturePipelineVersionEntityExtended extends MJFeaturePipelineVer
         return !!v.GoldenSetTestRunID && typeof v.ResultValue === 'number' && typeof v.Threshold === 'number' && v.ResultValue >= v.Threshold;
     }
 
+    /**
+     * Whether a version may be read by a model: an ungated version (no golden set) always may; a gated one only with a
+     * stored golden-set result at or above its threshold. The one rule training, scoring's pin check and publishing
+     * read (PR 5 D5-31); {@link HasPassingResult} alone is false for every ungated version, which has no golden-set run.
+     */
+    public static IsActivated(v: VersionActivationFields): boolean {
+        return !v.Gated || MJFeaturePipelineVersionEntityExtended.HasPassingResult(v);
+    }
+
     /** Why a version may not be saved as Active; empty when it may. Only gated, Active rows are constrained. */
     public static GetActivationProblems(v: VersionActivationFields): string[] {
         if (v.Status !== 'Active' || !v.Gated || MJFeaturePipelineVersionEntityExtended.HasPassingResult(v)) {

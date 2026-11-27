@@ -225,6 +225,47 @@ EXEC sp_addextendedproperty
 GO
 -- end section: B4
 
+-- section: B3
+-- ------------------------------------------------------------------------------------------------------------
+-- The re-derivation lease (PR 5 §5.2.4, D5-28, D5-41, D5-42, D5-44).
+--
+-- After a Feature Pipeline's version changes, each run of its Record Process re-derives a budgeted slice of the
+-- stale values (oldest first, D5-14). One run at a time holds that slice: the run that holds this row's lease. A row
+-- is taken (inserted, or updated over a released or expired lease) only under the stored lock Query
+-- `Predictive Studio: Lock Rederivation Lease` (UPDLOCK, HOLDLOCK, NOWAIT on UQ_FeaturePipelineRederivationLease_
+-- RecordProcessID), in the same transaction as the read, by RederivationLease in @memberjunction/feature-pipelines.
+-- Every timestamp is written from the database clock the lock Query returns (DbNow), never a host clock (D5-44), and
+-- a lease whose RenewedAt is 15 minutes (RederivationLease.TTL_MINUTES) older than DbNow has expired.
+-- Record-change tracking is off (the entity metadata sets it): the row is a lock, renewed every minute.
+-- ------------------------------------------------------------------------------------------------------------
+CREATE TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] (
+    [ID]              UNIQUEIDENTIFIER NOT NULL CONSTRAINT [DF_FeaturePipelineRederivationLease_ID] DEFAULT (newsequentialid()),
+    [RecordProcessID] UNIQUEIDENTIFIER NOT NULL,
+    [ProcessRunID]    UNIQUEIDENTIFIER NOT NULL,
+    [AcquiredAt]      DATETIMEOFFSET   NOT NULL,
+    [RenewedAt]       DATETIMEOFFSET   NOT NULL,
+    [ReleasedAt]      DATETIMEOFFSET   NULL,
+    CONSTRAINT [PK_FeaturePipelineRederivationLease] PRIMARY KEY ([ID]),
+    CONSTRAINT [FK_FeaturePipelineRederivationLease_RecordProcess] FOREIGN KEY ([RecordProcessID]) REFERENCES [${flyway:defaultSchema}].[RecordProcess] ([ID]),
+    CONSTRAINT [FK_FeaturePipelineRederivationLease_ProcessRun] FOREIGN KEY ([ProcessRunID]) REFERENCES [${flyway:defaultSchema}].[ProcessRun] ([ID])
+);
+GO
+
+-- One lease row per Record Process; the lock Query seeks this index, so its key-range lock also covers a process
+-- with no row yet (two first runs cannot both insert one).
+CREATE UNIQUE INDEX [UQ_FeaturePipelineRederivationLease_RecordProcessID]
+    ON [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ([RecordProcessID]);
+GO
+
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The single-flight lease of a Feature Pipeline''s budgeted re-derivation slice: one row per Record Process, held by the Process Run that re-derives stale Feature Values after a version change. Taken under the Predictive Studio: Lock Rederivation Lease Query, renewed every 60 s and before each batch, released at the end of the run; a lease not renewed for 15 minutes (database clock) may be taken by the next run. A run without the lease re-derives no stale value (Yielded).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineRederivationLease';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Feature Pipeline (MJ: Record Processes) whose re-derivation slice this lease holds; unique.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineRederivationLease', @level2type = N'COLUMN', @level2name = N'RecordProcessID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'The Process Run that holds (or last held) the lease.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineRederivationLease', @level2type = N'COLUMN', @level2name = N'ProcessRunID';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the holding run took the lease (database clock, DbNow of the lock Query).', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineRederivationLease', @level2type = N'COLUMN', @level2name = N'AcquiredAt';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the holding run last renewed the lease (database clock); 15 minutes after it the lease has expired.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineRederivationLease', @level2type = N'COLUMN', @level2name = N'RenewedAt';
+EXEC sp_addextendedproperty @name = N'MS_Description', @value = N'When the holding run released the lease at its end (database clock); null while it is held.', @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}', @level1type = N'TABLE', @level1name = N'FeaturePipelineRederivationLease', @level2type = N'COLUMN', @level2name = N'ReleasedAt';
+GO
+-- end section: B3
+
 
 
 
@@ -8654,4 +8695,1197 @@ IF NOT EXISTS (
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
          WHERE [EntityID] = 'B059708C-1A34-4F4A-8A3A-9A8FA4251DBB';
+
+
+
+/**************************************************************************************************
+ * CODEGEN OUTPUT FOR SECTION B3 (wave 3) — GENERATED BY THE MEMBERJUNCTION CODEGEN TOOL, DO NOT EDIT.
+ *
+ * The new entity MJ: Feature Pipeline Rederivation Leases (its Entity and EntityField rows, the two
+ * relationships, the base view, spCreate/spUpdate/spDelete and their permission grants), generated on
+ * B3's clean database (MJ_PS_PR5_claude2, built from the wave-2 head). The controller regenerates the whole
+ * CodeGen tail once at wave-3 integration and replaces this block with it.
+ **************************************************************************************************/
+/* SQL generated to create new entity MJ: Feature Pipeline Rederivation Leases */
+
+      INSERT INTO [${flyway:defaultSchema}].[Entity] (
+         [ID],
+         [Name],
+         [DisplayName],
+         [Description],
+         [NameSuffix],
+         [BaseTable],
+         [BaseView],
+         [SchemaName],
+         [IncludeInAPI],
+         [AllowUserSearchAPI],
+         [AllowCaching],
+         [TrackRecordChanges],
+         [AuditRecordAccess],
+         [AuditViewRuns],
+         [AllowAllRowsAPI],
+         [AllowCreateAPI],
+         [AllowUpdateAPI],
+         [AllowDeleteAPI],
+         [UserViewMaxRows]
+         , [__mj_CreatedAt]
+         , [__mj_UpdatedAt]
+      )
+      VALUES (
+         '6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf',
+         'MJ: Feature Pipeline Rederivation Leases',
+         'Feature Pipeline Rederivation Leases',
+         'The single-flight lease of a Feature Pipeline''s budgeted re-derivation slice: one row per Record Process, held by the Process Run that re-derives stale Feature Values after a version change. Taken under the Predictive Studio: Lock Rederivation Lease Query, renewed every 60 s and before each batch, released at the end of the run; a lease not renewed for 15 minutes (database clock) may be taken by the next run. A run without the lease re-derives no stale value (Yielded).',
+         NULL,
+         'FeaturePipelineRederivationLease',
+         'vwFeaturePipelineRederivationLeases',
+         '${flyway:defaultSchema}',
+         1,
+         1,
+         1,
+         1,
+         0,
+         0,
+         0,
+         1,
+         1,
+         1,
+         1000
+         , GETUTCDATE()
+         , GETUTCDATE()
+      );
+
+/* SQL generated to add entity MJ: Feature Pipeline Rederivation Leases to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
+                                    ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
+                                    ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+
+/* SQL generated to add new permission for entity MJ: Feature Pipeline Rederivation Leases for role UI */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf' AS uniqueidentifier), CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf' AS uniqueidentifier) AND [RoleID] = CAST('E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: Feature Pipeline Rederivation Leases for role Developer */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf' AS uniqueidentifier), CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf' AS uniqueidentifier) AND [RoleID] = CAST('DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL generated to add new permission for entity MJ: Feature Pipeline Rederivation Leases for role Integration */
+INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
+                ([EntityID], [RoleID], [Type], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt])
+              SELECT CAST('6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf' AS uniqueidentifier), CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier), 'Allow', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE()
+              WHERE NOT EXISTS (
+                SELECT 1 FROM [${flyway:defaultSchema}].[EntityPermission]
+                WHERE [EntityID] = CAST('6f9edbb4-97ba-4b81-ba8d-e0f31b7edbaf' AS uniqueidentifier) AND [RoleID] = CAST('DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' AS uniqueidentifier) AND [Type] = 'Allow'
+              );
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+ALTER TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+UPDATE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] SET [__mj_CreatedAt] = GETUTCDATE() WHERE [__mj_CreatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+ALTER TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ALTER COLUMN [__mj_CreatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+ALTER TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ADD CONSTRAINT [DF___mj_FeaturePipelineRederivationLease___mj_CreatedAt] DEFAULT GETUTCDATE() FOR [__mj_CreatedAt];
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+ALTER TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ADD [__mj_UpdatedAt] DATETIMEOFFSET NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+UPDATE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] SET [__mj_UpdatedAt] = GETUTCDATE() WHERE [__mj_UpdatedAt] IS NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+ALTER TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ALTER COLUMN [__mj_UpdatedAt] DATETIMEOFFSET NOT NULL;
+GO
+
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.FeaturePipelineRederivationLease */
+ALTER TABLE [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ADD CONSTRAINT [DF___mj_FeaturePipelineRederivationLease___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
+GO
+
+/* SQL text to insert 8 new entity field(s) */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '44fbecaa-4773-403e-9c59-e662d8366e86' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'ID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '44fbecaa-4773-403e-9c59-e662d8366e86',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            1,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '986c0bff-bbc9-40dd-8871-7fbf50e71bf2' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'RecordProcessID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '986c0bff-bbc9-40dd-8871-7fbf50e71bf2',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'RecordProcessID',
+            'Record Process ID',
+            'The Feature Pipeline (MJ: Record Processes) whose re-derivation slice this lease holds; unique.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            'BDE34DF9-7B59-4921-9B80-E94BC013A5BB',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b82827ab-ffca-4278-a49c-18788f4aaa23' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'ProcessRunID')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'b82827ab-ffca-4278-a49c-18788f4aaa23',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'ProcessRunID',
+            'Process Run ID',
+            'The Process Run that holds (or last held) the lease.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            '9989A9A4-5546-4552-A765-B27EE399BFEA',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '6440561d-39cb-4a47-b98b-ba30905c36da' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'AcquiredAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '6440561d-39cb-4a47-b98b-ba30905c36da',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'AcquiredAt',
+            'Acquired At',
+            'When the holding run took the lease (database clock, DbNow of the lock Query).',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '11da0c80-a9e3-4823-a8f1-497420027710' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'RenewedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '11da0c80-a9e3-4823-a8f1-497420027710',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'RenewedAt',
+            'Renewed At',
+            'When the holding run last renewed the lease (database clock); 15 minutes after it the lease has expired.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'c91f3c6d-fba2-4bd4-8ea1-4b587a58123e' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'ReleasedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'c91f3c6d-fba2-4bd4-8ea1-4b587a58123e',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'ReleasedAt',
+            'Released At',
+            'When the holding run released the lease at its end (database clock); null while it is held.',
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            1,
+            NULL,
+            0,
+            1,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '26a2d4df-d0ba-4926-8979-2d0355aaebb6' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = '__mj_CreatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '26a2d4df-d0ba-4926-8979-2d0355aaebb6',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '1aaaad5f-6afb-43ea-a8a5-e1387533a9da' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = '__mj_UpdatedAt')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            '1aaaad5f-6afb-43ea-a8a5-e1387533a9da',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* SQL text to sync entity unique keys (1 added, 0 updated, 0 removed) */
+INSERT INTO [${flyway:defaultSchema}].[EntityUniqueKey] ([ID], [EntityID], [Name], [FieldNames], [FilterDefinition]) VALUES ('b9cea5fa-c968-4b11-8517-8ce9b0e1b24d', '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', 'UQ_FeaturePipelineRederivationLease_RecordProcessID', 'RecordProcessID', NULL);
+
+/* Deterministic search-flag hygiene — clear AllowUserSearchAPI */
+
+         UPDATE [${flyway:defaultSchema}].[Entity]
+         SET [AllowUserSearchAPI] = 0
+         WHERE [ID] IN (
+            SELECT e.[ID]
+            FROM [${flyway:defaultSchema}].[Entity] e
+            WHERE e.[AllowUserSearchAPI] = 1
+              AND e.[AutoUpdateAllowUserSearchAPI] = 1
+              AND e.[VirtualEntity] = 0
+              AND ISNULL(e.[FullTextSearchEnabled], 0) = 0
+              AND e.[SchemaName] NOT IN ('sys','staging')
+              AND NOT EXISTS (
+               SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] f2
+               WHERE f2.[EntityID] = e.[ID]
+                 AND f2.[IncludeInUserSearchAPI] = 1
+            )
+         );
+
+
+/* Create Entity Relationship: MJ: Process Runs -> MJ: Feature Pipeline Rederivation Leases (One To Many via ProcessRunID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'aed357e1-bf1e-4974-b25a-e694383712aa' OR ([EntityID] = '9989A9A4-5546-4552-A765-B27EE399BFEA' AND [RelatedEntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND [RelatedEntityJoinField] = 'ProcessRunID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('aed357e1-bf1e-4974-b25a-e694383712aa', '9989A9A4-5546-4552-A765-B27EE399BFEA', '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', 'ProcessRunID', 'One To Many', 1, 1, 5, GETUTCDATE(), GETUTCDATE())
+   END;
+
+
+/* Create Entity Relationship: MJ: Record Processes -> MJ: Feature Pipeline Rederivation Leases (One To Many via RecordProcessID) */
+   IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '2a8cf909-a1a4-4e52-9ac9-7c7c2ffcab21' OR ([EntityID] = 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB' AND [RelatedEntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND [RelatedEntityJoinField] = 'RecordProcessID')
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
+                    VALUES ('2a8cf909-a1a4-4e52-9ac9-7c7c2ffcab21', 'BDE34DF9-7B59-4921-9B80-E94BC013A5BB', '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', 'RecordProcessID', 'One To Many', 1, 1, 7, GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* SQL text to update entity field related entity name field map for entity field ID 986C0BFF-BBC9-40DD-8871-7FBF50E71BF2 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='986C0BFF-BBC9-40DD-8871-7FBF50E71BF2', @RelatedEntityNameFieldMap='RecordProcess';
+
+/* Index for Foreign Keys for FeaturePipelineRederivationLease */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Feature Pipeline Rederivation Leases
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key RecordProcessID in table FeaturePipelineRederivationLease
+-- Skipped when the index exists or another unfiltered index already leads with the column.
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_FeaturePipelineRederivationLease_RecordProcessID'
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[FeaturePipelineRederivationLease]')
+    UNION ALL
+    SELECT 1
+    FROM sys.indexes i
+    WHERE i.object_id = OBJECT_ID('[${flyway:defaultSchema}].[FeaturePipelineRederivationLease]')
+    AND i.has_filter = 0
+    AND i.is_disabled = 0
+    AND i.is_hypothetical = 0
+    AND (
+        SELECT COUNT(*)
+        FROM sys.index_columns ic
+        WHERE ic.object_id = i.object_id
+        AND ic.index_id = i.index_id
+        AND ic.is_included_column = 0
+        AND ((ic.key_ordinal = 1 AND COL_NAME(ic.object_id, ic.column_id) = 'RecordProcessID'))
+    ) = 1
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_FeaturePipelineRederivationLease_RecordProcessID ON [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ([RecordProcessID]);
+
+-- Index for foreign key ProcessRunID in table FeaturePipelineRederivationLease
+-- Skipped when the index exists or another unfiltered index already leads with the column.
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_FeaturePipelineRederivationLease_ProcessRunID'
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[FeaturePipelineRederivationLease]')
+    UNION ALL
+    SELECT 1
+    FROM sys.indexes i
+    WHERE i.object_id = OBJECT_ID('[${flyway:defaultSchema}].[FeaturePipelineRederivationLease]')
+    AND i.has_filter = 0
+    AND i.is_disabled = 0
+    AND i.is_hypothetical = 0
+    AND (
+        SELECT COUNT(*)
+        FROM sys.index_columns ic
+        WHERE ic.object_id = i.object_id
+        AND ic.index_id = i.index_id
+        AND ic.is_included_column = 0
+        AND ((ic.key_ordinal = 1 AND COL_NAME(ic.object_id, ic.column_id) = 'ProcessRunID'))
+    ) = 1
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_FeaturePipelineRederivationLease_ProcessRunID ON [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] ([ProcessRunID]);
+
+/* Base View SQL for MJ: Feature Pipeline Rederivation Leases */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Feature Pipeline Rederivation Leases
+-- Item: vwFeaturePipelineRederivationLeases
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Feature Pipeline Rederivation Leases
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  FeaturePipelineRederivationLease
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases];
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases]
+AS
+SELECT
+    f.*,
+    MJRecordProcess_RecordProcessID.[Name] AS [RecordProcess]
+FROM
+    [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] AS f
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[RecordProcess] AS MJRecordProcess_RecordProcessID
+  ON
+    [f].[RecordProcessID] = MJRecordProcess_RecordProcessID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* Base View Permissions SQL for MJ: Feature Pipeline Rederivation Leases */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Feature Pipeline Rederivation Leases
+-- Item: Permissions for vwFeaturePipelineRederivationLeases
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases] TO [cdp_UI], [cdp_Developer], [cdp_Integration];
+
+/* spCreate SQL for MJ: Feature Pipeline Rederivation Leases */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Feature Pipeline Rederivation Leases
+-- Item: spCreateFeaturePipelineRederivationLease
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR FeaturePipelineRederivationLease
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateFeaturePipelineRederivationLease]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateFeaturePipelineRederivationLease];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateFeaturePipelineRederivationLease]
+    @ID uniqueidentifier = NULL,
+    @RecordProcessID uniqueidentifier,
+    @ProcessRunID uniqueidentifier,
+    @AcquiredAt datetimeoffset,
+    @RenewedAt datetimeoffset,
+    @ReleasedAt_Clear bit = 0,
+    @ReleasedAt datetimeoffset = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[FeaturePipelineRederivationLease]
+            (
+                [ID],
+                [RecordProcessID],
+                [ProcessRunID],
+                [AcquiredAt],
+                [RenewedAt],
+                [ReleasedAt]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @RecordProcessID,
+                @ProcessRunID,
+                @AcquiredAt,
+                @RenewedAt,
+                CASE WHEN @ReleasedAt_Clear = 1 THEN NULL ELSE ISNULL(@ReleasedAt, NULL) END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[FeaturePipelineRederivationLease]
+            (
+                [RecordProcessID],
+                [ProcessRunID],
+                [AcquiredAt],
+                [RenewedAt],
+                [ReleasedAt]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @RecordProcessID,
+                @ProcessRunID,
+                @AcquiredAt,
+                @RenewedAt,
+                CASE WHEN @ReleasedAt_Clear = 1 THEN NULL ELSE ISNULL(@ReleasedAt, NULL) END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateFeaturePipelineRederivationLease] TO [cdp_Developer], [cdp_Integration];
+
+/* spCreate Permissions for MJ: Feature Pipeline Rederivation Leases */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateFeaturePipelineRederivationLease] TO [cdp_Developer], [cdp_Integration];
+
+/* spUpdate SQL for MJ: Feature Pipeline Rederivation Leases */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Feature Pipeline Rederivation Leases
+-- Item: spUpdateFeaturePipelineRederivationLease
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR FeaturePipelineRederivationLease
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateFeaturePipelineRederivationLease]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateFeaturePipelineRederivationLease];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateFeaturePipelineRederivationLease]
+    @ID uniqueidentifier,
+    @RecordProcessID uniqueidentifier = NULL,
+    @ProcessRunID uniqueidentifier = NULL,
+    @AcquiredAt datetimeoffset = NULL,
+    @RenewedAt datetimeoffset = NULL,
+    @ReleasedAt_Clear bit = 0,
+    @ReleasedAt datetimeoffset = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[FeaturePipelineRederivationLease]
+    SET
+        [RecordProcessID] = ISNULL(@RecordProcessID, [RecordProcessID]),
+        [ProcessRunID] = ISNULL(@ProcessRunID, [ProcessRunID]),
+        [AcquiredAt] = ISNULL(@AcquiredAt, [AcquiredAt]),
+        [RenewedAt] = ISNULL(@RenewedAt, [RenewedAt]),
+        [ReleasedAt] = CASE WHEN @ReleasedAt_Clear = 1 THEN NULL ELSE ISNULL(@ReleasedAt, [ReleasedAt]) END,
+        [__mj_UpdatedAt] = GETUTCDATE()
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwFeaturePipelineRederivationLeases]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateFeaturePipelineRederivationLease] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the FeaturePipelineRederivationLease table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateFeaturePipelineRederivationLease]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateFeaturePipelineRederivationLease];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateFeaturePipelineRederivationLease
+ON [${flyway:defaultSchema}].[FeaturePipelineRederivationLease]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT UPDATE([__mj_UpdatedAt])
+    BEGIN
+        UPDATE
+            [${flyway:defaultSchema}].[FeaturePipelineRederivationLease]
+        SET
+            __mj_UpdatedAt = GETUTCDATE()
+        FROM
+            [${flyway:defaultSchema}].[FeaturePipelineRederivationLease] AS _organicTable
+        INNER JOIN
+            INSERTED AS I ON
+            _organicTable.[ID] = I.[ID];
+    END
+END;
+GO
+
+/* spUpdate Permissions for MJ: Feature Pipeline Rederivation Leases */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateFeaturePipelineRederivationLease] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete SQL for MJ: Feature Pipeline Rederivation Leases */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Feature Pipeline Rederivation Leases
+-- Item: spDeleteFeaturePipelineRederivationLease
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR FeaturePipelineRederivationLease
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteFeaturePipelineRederivationLease]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteFeaturePipelineRederivationLease];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteFeaturePipelineRederivationLease]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[FeaturePipelineRederivationLease]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteFeaturePipelineRederivationLease] TO [cdp_Developer], [cdp_Integration];
+
+/* spDelete Permissions for MJ: Feature Pipeline Rederivation Leases */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteFeaturePipelineRederivationLease] TO [cdp_Developer], [cdp_Integration];
+
+/* SQL text to insert 1 new entity field(s) */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'e4019db4-ca7d-4c41-a6f3-6df603dc10a8' OR (EntityID = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND Name = 'RecordProcess')) BEGIN
+         INSERT INTO [${flyway:defaultSchema}].[EntityField]
+         (
+            [ID],
+            [EntityID],
+            [Sequence],
+            [Name],
+            [DisplayName],
+            [Description],
+            [Type],
+            [Length],
+            [Precision],
+            [Scale],
+            [AllowsNull],
+            [DefaultValue],
+            [AutoIncrement],
+            [AllowUpdateAPI],
+            [IsVirtual],
+            [IsComputed],
+            [RelatedEntityID],
+            [RelatedEntityFieldName],
+            [IsNameField],
+            [IncludeInUserSearchAPI],
+            [IncludeRelatedEntityNameFieldInBaseView],
+            [DefaultInView],
+            [IsPrimaryKey],
+            [IsUnique],
+            [RelatedEntityDisplayType],
+            [__mj_CreatedAt],
+            [__mj_UpdatedAt]
+         )
+         VALUES
+         (
+            'e4019db4-ca7d-4c41-a6f3-6df603dc10a8',
+            '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', -- Entity: MJ: Feature Pipeline Rederivation Leases
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF'),
+            'RecordProcess',
+            'Record Process',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            NULL,
+            0,
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search',
+            GETUTCDATE(),
+            GETUTCDATE()
+         )
+      END;
+
+/* Set field properties for entity */
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'C91F3C6D-FBA2-4BD4-8EA1-4B587A58123E'
+               AND AutoUpdateDefaultInView = 1;
+
+               UPDATE [${flyway:defaultSchema}].[EntityField]
+               SET DefaultInView = 1
+               WHERE ID = 'E4019DB4-CA7D-4C41-A6F3-6DF603DC10A8'
+               AND AutoUpdateDefaultInView = 1;
+
+/* Set categories for 9 fields */
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '44FBECAA-4773-403E-9C59-E662D8366E86';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.RecordProcessID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lease Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '986C0BFF-BBC9-40DD-8871-7FBF50E71BF2';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.ProcessRunID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lease Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'B82827AB-FFCA-4278-A49C-18788F4AAA23';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.RecordProcess 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lease Information',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'E4019DB4-CA7D-4C41-A6F3-6DF603DC10A8';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.AcquiredAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lease Timeline',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '6440561D-39CB-4A47-B98B-BA30905C36DA';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.RenewedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lease Timeline',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '11DA0C80-A9E3-4823-A8F1-497420027710';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.ReleasedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Lease Timeline',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'C91F3C6D-FBA2-4BD4-8EA1-4B587A58123E';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.__mj_CreatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '26A2D4DF-D0BA-4926-8979-2D0355AAEBB6';
+
+-- UPDATE Entity Field Category Info MJ: Feature Pipeline Rederivation Leases.__mj_UpdatedAt 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '1AAAAD5F-6AFB-43EA-A8A5-E1387533A9DA';
+
+/* Set entity icon to fa fa-lock */
+
+               UPDATE [${flyway:defaultSchema}].[Entity]
+               SET [Icon] = 'fa fa-lock', [__mj_UpdatedAt] = GETUTCDATE()
+               WHERE [ID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF';
+
+/* Insert FieldCategoryInfo setting for entity */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('2dc49ee6-4622-5f0b-937f-5e0fa488905d', '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', 'FieldCategoryInfo', '{
+  "Lease Information": {
+    "description": "Identifiers and references linking the lease to specific record processes and process runs",
+    "icon": "fa fa-link"
+  },
+  "Lease Timeline": {
+    "description": "Timestamps tracking the acquisition, renewal, and release of the re-derivation lease",
+    "icon": "fa fa-clock"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Insert FieldCategoryIcons setting (legacy) */
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('9e6a7158-93eb-5617-8ffc-ba241cc9267b', '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF', 'FieldCategoryIcons', '{
+  "Lease Information": "fa fa-link",
+  "Lease Timeline": "fa fa-clock",
+  "System Metadata": "fa fa-cog"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
+
+/* Set DefaultForNewUser=false for NEW entity (category: supporting, confidence: high) */
+
+         UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
+         SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
+         WHERE [EntityID] = '6F9EDBB4-97BA-4B81-BA8D-E0F31B7EDBAF';
 

@@ -74,6 +74,9 @@ import {
     type FeaturePipelinePinData,
     FeaturePipelineVersionService,
     FeaturePipelineRunResults,
+    RederivationRun,
+    RederivationSlice,
+    type RederivationConfig,
     type FeaturePipelineRecordResult,
     type FeaturePipelineRunPin,
     type RecordFeatureValuesOutcome,
@@ -139,6 +142,8 @@ interface ComputedSample {
     Sample: RecordRef;
     Computed: FeaturePipelineComputeResult;
     BelowFloor: BelowFloorOutput[];
+    /** The sample is a stale value the run's re-derivation budget could not pay for: no call was made. */
+    Deferred?: boolean;
 }
 
 /** What {@link InferProcessor.UpsertFeatureValues} writes for one record; the key parts (pin, input hash) are required. */
@@ -177,6 +182,13 @@ function isPlainRecord(value: unknown): value is Record<string, unknown> {
 
 /**
  * Runs an AI Prompt per record and returns its structured output (write-back is the wrapper's job).
+ * After a version change the run re-derives only a budgeted, single-flight slice of the stale values (PR 5 owner-batch
+ * item 2, D5-14, D5-21): {@link Preflight} estimates the re-derivation, stores the estimate on the run before its first
+ * prompt call, takes the Record Process's re-derivation lease and picks the slice (the oldest stale values, up to
+ * `maxValuesPerRun`); a stale record outside the slice is `Skipped` with no call, each call of a stale record reserves
+ * its estimated cost first (`maxUsdPerRun`), the lease is renewed before each batch, and the run summary carries
+ * `Rederivation`.
+ *
  * A pipeline whose spec sets `Escalation` computes a whole batch before recording any of it, so its batch
  * path does not call {@link ProcessRecord} once per record: an extension that overrides `ProcessRecord`
  * does not see those records.
@@ -249,6 +261,18 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
     private championUserMessageByRecord = new Map<string, string | null>();
 
     private _challengerConfig: MJRecordProcessEntity_IRecordProcessChallengerConfig | null = null;
+
+    /** The per-run re-derivation budget (`rederivation` in the Record Process configuration; D5-14 defaults when absent). */
+    public RederivationConfig: RederivationConfig = RederivationSlice.ConfigOf(null);
+
+    /** This run's re-derivation slice, when the pipeline had stale values at {@link Preflight}. */
+    private rederivation: RederivationRun | null = null;
+
+    /** The release of this run's re-derivation lease, started by {@link BuildRunSummary}. */
+    private rederivationSettled: Promise<void> = Promise.resolve();
+
+    /** Each record's prompt-call cost, as its prompt result reported it (the re-derivation budget settles on it). */
+    private readonly callCosts = new Map<string, number>();
 
     /**
      * Optional WS-4.4 shadow challenger configuration read from `RecordProcess.ChallengerConfigurationObject`.
@@ -338,6 +362,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         } else {
             processor = new InferProcessor(rp.PromptID, inputMapping, spec, rp.OutputMapping || null);
         }
+        processor.RederivationConfig = RederivationSlice.ConfigOf(rp.Configuration);
 
         try {
             if (rp.ChallengerConfigurationObject) {
@@ -445,7 +470,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
 
     /** Builds the Feature Pipeline run summary (and `WouldRefuse` on a dry run) from the run's counts and per-record results. */
     public BuildRunSummary(context: ProcessorRunSummaryContext): { ResultSummary?: unknown; WouldRefuse?: string } {
-        return FeaturePipelineRunResults.Build(
+        const built = FeaturePipelineRunResults.Build(
             context.RecordProcessID || '',
             context.Counts,
             context.Results,
@@ -454,6 +479,17 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             this.CurrentRunRefusal(),
             context.DryRun,
         );
+        if (this.rederivation) {
+            built.ResultSummary.Rederivation = this.rederivation.Result();
+            // the run is over: stop renewing and release the lease (an unreleased lease is free once the run has ended)
+            this.rederivationSettled = this.rederivation.End();
+        }
+        return built;
+    }
+
+    /** Resolves once this run's re-derivation lease is released (after {@link BuildRunSummary}); at once when it took none. */
+    public get RederivationSettled(): Promise<void> {
+        return this.rederivationSettled;
     }
 
     /** Queues this processor's Feature Value writes for the write-back unit that wraps it ({@link WriteDeferredFeatureValues}). */
@@ -486,6 +522,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             total.Closed += outcome.Closed;
         }
         total.Previous = { ...this.previousFeatureValues.get(recordID) };
+        this.rederivation?.MarkRederived(recordID);
         return total;
     }
 
@@ -539,6 +576,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
         if (this.WritesHistory) {
             await this.ResolvePipelineVersion(context, context.RecordProcessID, run.Pin, run.PinHash);
+            await this.BeginRederivation(context, context.RecordProcessID, run);
         } else if (this.spec?.Activation) {
             // an escalation target registers no versions of its own; a gated one may still only compute a passed version
             await FeaturePipelineVersionService.Instance.AssertRunnable({
@@ -546,6 +584,43 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
                 ContextUser: context.ContextUser, Provider: context.Provider,
             });
         }
+    }
+
+    /**
+     * The re-derivation slice of a real run after a version change (PR 5 owner-batch item 2): reads the stale values,
+     * estimates them, takes the lease and stores the estimate on the run's own Process Run before any prompt call. A
+     * dry run, a run with no Process Run or no version, and a pipeline with nothing stale take no slice.
+     * @throws Error when a read, the lease or the store fails (the run is refused before its first record)
+     */
+    protected async BeginRederivation(context: RecordProcessorContext, recordProcessID: string, run: PipelineRunState): Promise<void> {
+        this.rederivation = null;
+        // a provider that describes no Feature Value store holds no stale value (a client provider, a partial test double)
+        const hasValueStore = typeof context.Provider?.EntityByName === 'function' && context.Provider.EntityByName('MJ: Feature Values') !== undefined;
+        if (context.DryRun === true || !context.ProcessRunID || this.PipelineVersion === null || !hasValueStore) {
+            return;
+        }
+        this.rederivation = await RederivationRun.Begin({
+            RecordProcessID: recordProcessID, ProcessRunID: context.ProcessRunID, Config: this.RederivationConfig,
+            Change: {
+                ToVersion: this.PipelineVersion, PromptID: run.Pin.PromptID, PromptVersionHash: run.Pin.PromptVersionHash, ConstraintHash: run.ConstraintHash,
+                AIModelID: run.Pin.AIModelID, ParametersHash: run.Pin.ParametersHash,
+            },
+            Provider: context.Provider, ContextUser: context.ContextUser,
+        });
+        if (this.rederivation) {
+            const interim = FeaturePipelineRunResults.Interim(recordProcessID, this.RunPinOf(run.Pin), this.rederivation.Result());
+            await FeaturePipelineRunResults.StoreInterim(context.ProcessRunID, interim, context.Provider, context.ContextUser);
+        }
+    }
+
+    /** The result of a stale record this run does not re-derive: Skipped, no call, no watermark (a later run continues). */
+    protected static DeferredResult(): FeaturePipelineRecordResult {
+        return { Status: 'Skipped', RederivationDeferred: true };
+    }
+
+    /** True when this run's re-derivation slice keeps `recordID` from being computed now. */
+    protected IsRederivationDeferred(recordID: string): boolean {
+        return this.rederivation !== null && !this.rederivation.Admits(recordID);
     }
 
     /**
@@ -590,6 +665,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         context: RecordProcessorContext,
         options?: { skipLookup?: boolean; keyInfo?: CacheKeyResult }
     ): Promise<FeaturePipelineRecordResult> {
+        if (this.IsRederivationDeferred(record.RecordID)) {
+            return InferProcessor.DeferredResult();
+        }
         try {
             return await this.processOneRecord(record, context, options);
         } finally {
@@ -690,15 +768,44 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             recordData: this.recordToPlain(sample),
         });
         const fieldValues = this.buildFieldValuesLookup(context);
-        const computed = await run.Driver.ComputeOutputs({
-            Record: sample,
-            Context: context,
-            Prompt: run.Prompt,
-            Spec: this.spec,
-            Hooks: this.buildComputeHooks(),
-            FieldValues: fieldValues,
-        });
+        const reserved = this.reserveRederivationCall(sample.RecordID);
+        if (reserved === null) {
+            return { Group: group, Sample: sample, Computed: { Success: false, ErrorMessage: 'over the re-derivation budget' }, BelowFloor: [], Deferred: true };
+        }
+        let computed: FeaturePipelineComputeResult;
+        try {
+            computed = await run.Driver.ComputeOutputs({
+                Record: sample,
+                Context: context,
+                Prompt: run.Prompt,
+                Spec: this.spec,
+                Hooks: this.buildComputeHooks(),
+                FieldValues: fieldValues,
+            });
+        } finally {
+            this.settleRederivationCall(sample.RecordID, reserved);
+        }
         return { Group: group, Sample: sample, Computed: computed, BelowFloor: this.belowFloor(computed) };
+    }
+
+    /**
+     * Reserves a stale record's call in this run's re-derivation budget: the amount reserved, null when the call would
+     * pass the budget (or the lease is lost), undefined when the record is not budgeted (not stale, or no slice).
+     */
+    private reserveRederivationCall(recordID: string): number | null | undefined {
+        if (!this.rederivation || !this.rederivation.IsStale(recordID)) {
+            return undefined;
+        }
+        return this.rederivation.TryReserve();
+    }
+
+    /** Replaces a reserved call's reservation with what the call cost (the reservation when its cost is unknown). */
+    private settleRederivationCall(recordID: string, reserved: number | undefined): void {
+        const cost = this.callCosts.get(recordID);
+        this.callCosts.delete(recordID);
+        if (reserved !== undefined && this.rederivation) {
+            this.rederivation.Settle(reserved, cost ?? null);
+        }
     }
 
     /**
@@ -712,6 +819,9 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         run: PipelineRunState
     ): Promise<FinalizedSample> {
         const computed = sample.Computed;
+        if (sample.Deferred) {
+            return { Result: InferProcessor.DeferredResult() };
+        }
         if ('ErrorMessage' in computed) {
             return {
                 Result: {
@@ -830,8 +940,22 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
      * and fans results back across all matching rows.
      */
     public async ProcessBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, FeaturePipelineRecordResult>> {
-        const dry = context.DryRun === true;
         this.ResetBatchState();
+        // renew before each batch (D5-41): a lost lease makes no further re-derivation call
+        await this.rederivation?.Renew();
+        const admitted = records.filter((r) => !this.IsRederivationDeferred(r.RecordID));
+        const results = await this.processAdmittedBatch(admitted, context);
+        for (const r of records) {
+            if (!results.has(r.RecordID) && this.IsRederivationDeferred(r.RecordID)) {
+                results.set(r.RecordID, InferProcessor.DeferredResult());
+            }
+        }
+        return results;
+    }
+
+    /** {@link ProcessBatch}'s work over the records the re-derivation slice admits. */
+    private async processAdmittedBatch(records: RecordRef[], context: RecordProcessorContext): Promise<Map<string, FeaturePipelineRecordResult>> {
+        const dry = context.DryRun === true;
         await this.ensureRecordsLoaded(records, context);
         const results = new Map<string, FeaturePipelineRecordResult>();
         if (!this.spec?.Caching?.Cacheable || records.length === 0) {
@@ -1510,6 +1634,7 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         if (this.deferFeatureValues) {
             return pinned; // the write-back sets Outcome once it wrote them
         }
+        this.rederivation?.MarkRederived(featureValues.Record.RecordID);
         const unchanged = outcome !== null && outcome.Upserted === 0 && outcome.Unchanged > 0;
         return { ...pinned, Outcome: unchanged ? 'Unchanged' : 'Upserted' };
     }
@@ -2144,6 +2269,14 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
         }
     }
 
+    /** Keeps what a record's prompt call cost (the model's usage, else its prompt run row), for the re-derivation budget. */
+    private noteCallCost(record: RecordRef, result: AIPromptRunResult<unknown>): void {
+        const cost = result.chatResult?.data?.usage?.cost ?? result.promptRun?.Cost ?? null;
+        if (record.RecordID && typeof cost === 'number' && Number.isFinite(cost)) {
+            this.callCosts.set(record.RecordID, cost);
+        }
+    }
+
     /** The driver's callbacks into this processor's overridable steps, so extensions keep working. */
     private buildComputeHooks(): FeaturePipelineComputeHooks {
         return {
@@ -2156,7 +2289,10 @@ export class InferProcessor implements IRecordProcessor, HumanValueGuardSource, 
             },
             BeforeBuildContext: (record, ctx) => this.beforeBuildContext(record, ctx),
             BeforePromptExecute: (params, record, ctx) => this.beforePromptExecute(params, record, ctx),
-            AfterPromptExecute: (result, record, ctx) => this.afterPromptExecute(result, record, ctx),
+            AfterPromptExecute: (result, record, ctx) => {
+                this.noteCallCost(record, result);
+                return this.afterPromptExecute(result, record, ctx);
+            },
             BuildUserMessage: async (record) => {
                 const msg = await this.BuildUserMessage(record);
                 if (record.RecordID && this.capturesChampionInputs) {

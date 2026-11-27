@@ -280,6 +280,7 @@ import { MJExperimentSessionIterationFormComponent } from "./Entities/MJExperime
 import { MJExplorerNavigationItemFormComponent } from "./Entities/MJExplorerNavigationItem/mjexplorernavigationitem.form.component";
 import { MJExternalDataSourceFormComponent } from "./Entities/MJExternalDataSource/mjexternaldatasource.form.component";
 import { MJExternalDataSourceTypeFormComponent } from "./Entities/MJExternalDataSourceType/mjexternaldatasourcetype.form.component";
+import { MJFeaturePipelineRederivationLeaseFormComponent } from "./Entities/MJFeaturePipelineRederivationLease/mjfeaturepipelinerederivationlease.form.component";
 import { MJFeaturePipelineTypeFormComponent } from "./Entities/MJFeaturePipelineType/mjfeaturepipelinetype.form.component";
 import { MJFeaturePipelineVersionFormComponent } from "./Entities/MJFeaturePipelineVersion/mjfeaturepipelineversion.form.component";
 import { MJFeatureValueCacheFormComponent } from "./Entities/MJFeatureValueCache/mjfeaturevaluecache.form.component";
@@ -1184,6 +1185,7 @@ declarations: [
     MJCompanyIntegrationSyncWatermarkFormComponent,
     MJComponentLibraryLinkFormComponent,
     MJExternalDataSourceTypeFormComponent,
+    MJFeaturePipelineRederivationLeaseFormComponent,
     MJMCPToolFavoriteFormComponent,
     MJMLMonitoringResultFormComponent,
     MJMLPredictionUnitFormComponent,
