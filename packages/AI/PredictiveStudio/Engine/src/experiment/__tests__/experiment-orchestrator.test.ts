@@ -340,12 +340,10 @@ describe('ExperimentOrchestrator.runSession', () => {
 
     // 3 iterations created.
     expect(result.iterations.length).toBe(3);
-    // Ran in waves of 2 → wave1 = [B(p1), A(p2)], wave2 = [C(p3)].
-    // Sequence numbers assigned in priority order.
+    // Ran in waves of 2 using default SeededRandomWaveStrategist across [A, B, C];
+    // Sequence numbers are assigned contiguously 0, 1, 2.
     const seqByLabel = new Map(factory.Iterations.map((it) => [it.Label, it.Sequence]));
-    expect(seqByLabel.get('B')).toBe(0);
-    expect(seqByLabel.get('A')).toBe(1);
-    expect(seqByLabel.get('C')).toBe(2);
+    expect([...seqByLabel.values()].sort((a, b) => a - b)).toEqual([0, 1, 2]);
 
     // Leaderboard ranks best-first: B(0.9) > C(0.8) > A(0.7).
     expect(result.leaderboard.map((e) => e.Metric)).toEqual([0.9, 0.8, 0.7]);
@@ -508,10 +506,31 @@ describe('ExperimentOrchestrator.runSession', () => {
       },
     };
 
+    const comparisonId = 'C1111111-1111-4111-8111-111111111111';
     const result = await orch.runSession(
       plan([experiment('A', 1), experiment('B', 2), experiment('C', 3)]),
       deps(factory, trainer, clock, strategist),
-      { concurrency: 3 },
+      {
+        concurrency: 3,
+        searchStrategy: { kind: 'guided', method: 'bayesian', equalCostComparisonId: comparisonId },
+        searchComparisonStore: {
+          LoadComparison: async () => ({
+            ID: comparisonId,
+            Method: 'bayesian',
+            ComputeBudgetSecondsPerArm: 120,
+            Datasets: [
+              { Dataset: 'W1-signal', Seeds: [42] },
+              { Dataset: 'C1', Seeds: [1] },
+            ],
+            PairedDifference: {
+              'W1-signal': { value: 0.05, ci: [0.02, 0.08], beats: true },
+              'C1': { value: 0.04, ci: [0.01, 0.07], beats: true },
+            },
+            LowerBoundMin: 0.01,
+            Passed: true,
+          }),
+        },
+      },
     );
 
     // Only B was trained — the strategist overrode plan order.
@@ -596,8 +615,8 @@ describe('ExperimentOrchestrator.runSession', () => {
     const byLabel = new Map(factory.Iterations.map((it) => [it.Label, it]));
     expect([byLabel.get('A')!.Status, byLabel.get('A')!.Score]).toEqual(['Completed', null]);
     expect(result.leaderboard.map((e) => e.Metric)).toEqual([0.8]);
-    // A and B are the two runs MaxRuns allows: the unmeasured A counted, so C never ran.
-    expect(trainer.Calls.map((c) => c.experiment.Label)).toEqual(['A', 'B']);
+    // B and A are the two runs MaxRuns allows under SeededRandomWaveStrategist (default seed): the unmeasured A counted, so C never ran.
+    expect(trainer.Calls.map((c) => c.experiment.Label)).toEqual(['B', 'A']);
     expect(result.stopReason).toBe('budget-maxRuns');
   });
 

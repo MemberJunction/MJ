@@ -32359,6 +32359,81 @@ export const MJMLScoringRunSchema = z.object({
 export type MJMLScoringRunEntityType = z.infer<typeof MJMLScoringRunSchema>;
 
 /**
+ * zod schema definition for the entity MJ: ML Search Strategy Comparisons
+ */
+export const MJMLSearchStrategyComparisonSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()
+        * * Description: Primary key of the search-strategy comparison record.`),
+    Method: z.union([z.literal('bayesian'), z.literal('successive-halving')]).describe(`
+        * * Field Name: Method
+        * * Display Name: Method
+        * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * bayesian
+    *   * successive-halving
+        * * Description: Guided search method compared against seeded random search: bayesian or successive-halving.`),
+    ComputeBudgetSecondsPerArm: z.number().describe(`
+        * * Field Name: ComputeBudgetSecondsPerArm
+        * * Display Name: Compute Budget Seconds Per Arm
+        * * SQL Data Type: decimal(18, 4)
+        * * Description: Equal-cost compute budget (seconds per arm) allocated to both the guided method and the seeded random baseline.`),
+    Datasets: z.string().describe(`
+        * * Field Name: Datasets
+        * * Display Name: Datasets
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of {Dataset, Seeds} entries documenting the datasets and random seeds evaluated (must include W1-signal and C1).`),
+    PairedDifference: z.string().describe(`
+        * * Field Name: PairedDifference
+        * * Display Name: Paired Difference
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON map from dataset name to PairedComparison ({value, ci, beats}) comparing the guided method against seeded random search.`),
+    LowerBoundMin: z.number().describe(`
+        * * Field Name: LowerBoundMin
+        * * Display Name: Lower Bound Min
+        * * SQL Data Type: decimal(18, 6)
+        * * Description: Minimum of the paired lower bounds (ci[0]) across W1-signal and C1; never an average.`),
+    Passed: z.boolean().describe(`
+        * * Field Name: Passed
+        * * Display Name: Passed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Computed server-side as LowerBoundMin > 0; client writes supplying a different value are refused.`),
+    ComparedAt: z.date().describe(`
+        * * Field Name: ComparedAt
+        * * Display Name: Compared At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp when the paired comparison was recorded.`),
+    ComparedByUserID: z.string().describe(`
+        * * Field Name: ComparedByUserID
+        * * Display Name: Compared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who recorded or initiated the search-strategy comparison.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ComparedByUser: z.string().nullable().describe(`
+        * * Field Name: ComparedByUser
+        * * Display Name: Compared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJMLSearchStrategyComparisonEntityType = z.infer<typeof MJMLSearchStrategyComparisonSchema>;
+
+/**
  * zod schema definition for the entity MJ: ML Training Pipelines
  */
 export const MJMLTrainingPipelineSchema = z.object({

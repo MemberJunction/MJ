@@ -343,6 +343,7 @@ import { MJMLMonitoringResultFormComponent } from "./Entities/MJMLMonitoringResu
 import { MJMLOutputBindingFormComponent } from "./Entities/MJMLOutputBinding/mjmloutputbinding.form.component";
 import { MJMLPredictionUnitFormComponent } from "./Entities/MJMLPredictionUnit/mjmlpredictionunit.form.component";
 import { MJMLScoringRunFormComponent } from "./Entities/MJMLScoringRun/mjmlscoringrun.form.component";
+import { MJMLSearchStrategyComparisonFormComponent } from "./Entities/MJMLSearchStrategyComparison/mjmlsearchstrategycomparison.form.component";
 import { MJMLTrainingPipelineFormComponent } from "./Entities/MJMLTrainingPipeline/mjmltrainingpipeline.form.component";
 import { MJMLTrainingRunFormComponent } from "./Entities/MJMLTrainingRun/mjmltrainingrun.form.component";
 import { MJMLTrainingSnapshotFormComponent } from "./Entities/MJMLTrainingSnapshot/mjmltrainingsnapshot.form.component";
@@ -644,7 +645,8 @@ declarations: [
     MJDiagnosticSessionFormComponent,
     MJEntityRelationshipFormComponent,
     MJExperimentSessionFormComponent,
-    MJMCPServerConnectionToolFormComponent
+    MJMCPServerConnectionToolFormComponent,
+    MJMLSearchStrategyComparisonFormComponent
 ],
 imports: [
     CommonModule,

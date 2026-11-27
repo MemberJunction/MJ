@@ -331,6 +331,7 @@ import type {
   MJMLOutputBindingEntityType,
   MJMLPredictionUnitEntityType,
   MJMLScoringRunEntityType,
+  MJMLSearchStrategyComparisonEntityType,
   MJMLTrainingPipelineEntityType,
   MJMLTrainingRunEntityType,
   MJMLTrainingSnapshotEntityType,
@@ -91997,6 +91998,192 @@ export class MJMLScoringRunEntity extends BaseEntity<MJMLScoringRunEntityType> {
     */
     get ScheduledJobRun(): string | null {
         return this.Get('ScheduledJobRun');
+    }
+}
+
+
+/**
+ * MJ: ML Search Strategy Comparisons - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: MLSearchStrategyComparison
+ * * Base View: vwMLSearchStrategyComparisons
+ * * @description Equal-cost paired comparison ledger between a guided search strategy (bayesian or successive-halving) and seeded random search across W1-signal and scenario C1. A guided protocol is accepted only when referencing a row with Passed = 1.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: ML Search Strategy Comparisons')
+export class MJMLSearchStrategyComparisonEntity extends BaseEntity<MJMLSearchStrategyComparisonEntityType> {
+    /**
+    * Loads the MJ: ML Search Strategy Comparisons record from the database
+    * @param ID: string - primary key value to load the MJ: ML Search Strategy Comparisons record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJMLSearchStrategyComparisonEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    * * Description: Primary key of the search-strategy comparison record.
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Method
+    * * Display Name: Method
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * bayesian
+    *   * successive-halving
+    * * Description: Guided search method compared against seeded random search: bayesian or successive-halving.
+    */
+    get Method(): 'bayesian' | 'successive-halving' {
+        return this.Get('Method');
+    }
+    set Method(value: 'bayesian' | 'successive-halving') {
+        this.Set('Method', value);
+    }
+
+    /**
+    * * Field Name: ComputeBudgetSecondsPerArm
+    * * Display Name: Compute Budget Seconds Per Arm
+    * * SQL Data Type: decimal(18, 4)
+    * * Description: Equal-cost compute budget (seconds per arm) allocated to both the guided method and the seeded random baseline.
+    */
+    get ComputeBudgetSecondsPerArm(): number {
+        return this.Get('ComputeBudgetSecondsPerArm');
+    }
+    set ComputeBudgetSecondsPerArm(value: number) {
+        this.Set('ComputeBudgetSecondsPerArm', value);
+    }
+
+    /**
+    * * Field Name: Datasets
+    * * Display Name: Datasets
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of {Dataset, Seeds} entries documenting the datasets and random seeds evaluated (must include W1-signal and C1).
+    */
+    get Datasets(): string {
+        return this.Get('Datasets');
+    }
+    set Datasets(value: string) {
+        this.Set('Datasets', value);
+    }
+
+    /**
+    * * Field Name: PairedDifference
+    * * Display Name: Paired Difference
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON map from dataset name to PairedComparison ({value, ci, beats}) comparing the guided method against seeded random search.
+    */
+    get PairedDifference(): string {
+        return this.Get('PairedDifference');
+    }
+    set PairedDifference(value: string) {
+        this.Set('PairedDifference', value);
+    }
+
+    /**
+    * * Field Name: LowerBoundMin
+    * * Display Name: Lower Bound Min
+    * * SQL Data Type: decimal(18, 6)
+    * * Description: Minimum of the paired lower bounds (ci[0]) across W1-signal and C1; never an average.
+    */
+    get LowerBoundMin(): number {
+        return this.Get('LowerBoundMin');
+    }
+    set LowerBoundMin(value: number) {
+        this.Set('LowerBoundMin', value);
+    }
+
+    /**
+    * * Field Name: Passed
+    * * Display Name: Passed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Computed server-side as LowerBoundMin > 0; client writes supplying a different value are refused.
+    */
+    get Passed(): boolean {
+        return this.Get('Passed');
+    }
+    set Passed(value: boolean) {
+        this.Set('Passed', value);
+    }
+
+    /**
+    * * Field Name: ComparedAt
+    * * Display Name: Compared At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when the paired comparison was recorded.
+    */
+    get ComparedAt(): Date {
+        return this.Get('ComparedAt');
+    }
+    set ComparedAt(value: Date) {
+        this.Set('ComparedAt', value);
+    }
+
+    /**
+    * * Field Name: ComparedByUserID
+    * * Display Name: Compared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who recorded or initiated the search-strategy comparison.
+    */
+    get ComparedByUserID(): string {
+        return this.Get('ComparedByUserID');
+    }
+    set ComparedByUserID(value: string) {
+        this.Set('ComparedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ComparedByUser
+    * * Display Name: Compared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ComparedByUser(): string | null {
+        return this.Get('ComparedByUser');
     }
 }
 

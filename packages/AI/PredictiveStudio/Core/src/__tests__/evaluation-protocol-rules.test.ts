@@ -384,7 +384,7 @@ describe('ChangedGuardFields', () => {
     expect(EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: lowered(human), Previous: v1, AuthoredBy: human })).toEqual([]);
     const both = protocol({ ...draftFor(u), minMinorityClassRows: 1, guardFieldsEditableBy: 'human-only' }, 2, human);
     expect(EvaluationProtocolRules.ChangedGuardFields(v1, both)).toEqual(['minMinorityClassRows', 'guardFieldsEditableBy']);
-    expect(GUARD_FIELDS).toEqual(['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'minMinorityClassRows', 'guardFieldsEditableBy']);
+    expect(GUARD_FIELDS).toEqual(['holdout', 'promotion', 'leakageAudit', 'exclusions', 'budgets', 'minMinorityClassRows', 'search', 'guardFieldsEditableBy']);
   });
   it('ignores key order inside a guard field', () => {
     const u = unit(binary);

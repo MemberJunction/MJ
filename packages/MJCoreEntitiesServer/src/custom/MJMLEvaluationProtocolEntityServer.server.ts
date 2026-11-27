@@ -1,7 +1,18 @@
 import { BaseEntity, LogStatus, type EntitySaveOptions, type IMetadataProvider, type ValidationResult } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJMLEvaluationProtocolEntity } from '@memberjunction/core-entities';
-import { EvaluationProtocol, EvaluationProtocolRules, type Actor, type EvaluationProtocolColumns, type EvaluationProtocolSpec, type ProtocolRefusal } from '@memberjunction/predictive-studio-core';
+import {
+  EvaluationProtocol,
+  EvaluationProtocolRules,
+  SearchPolicy,
+  type Actor,
+  type EqualCostComparison,
+  type EvaluationProtocolColumns,
+  type EvaluationProtocolSpec,
+  type ParsedEvaluationProtocolSpec,
+  type ProtocolRefusal,
+  type SearchComparisonColumns,
+} from '@memberjunction/predictive-studio-core';
 import { VersionedRowGuard, type RowRead } from './MJMLPredictionUnitEntityServer.server';
 
 /**
@@ -62,7 +73,42 @@ export class MJMLEvaluationProtocolEntityServer extends MJMLEvaluationProtocolEn
     for (const r of EvaluationProtocolRules.ValidateEvaluationProtocol({ Protocol: parsed.Value, Previous: previous === null ? null : previous.Spec, AuthoredBy: parsed.Value.authoredBy })) {
       VersionedRowGuard.Fail(result, MJMLEvaluationProtocolEntityServer.refusalField(r), EvaluationProtocolRules.DescribeProtocolRefusal(r));
     }
+    if (!result.Success) return result;
+    await this.checkSearchPolicy(result, provider, parsed.Value);
     return result;
+  }
+
+  /** Enforces §5.2.5 guided-search comparison requirements via {@link SearchPolicy.Decide}. */
+  private async checkSearchPolicy(
+    result: ValidationResult,
+    provider: IMetadataProvider,
+    parsed: ParsedEvaluationProtocolSpec,
+  ): Promise<void> {
+    if (parsed.search.kind !== 'guided') return;
+    const comparisonId = parsed.search.equalCostComparisonId;
+    const read = await VersionedRowGuard.ReadOneRow<SearchComparisonColumns>(
+      provider,
+      'MJ: ML Search Strategy Comparisons',
+      `ID='${EscapeSQLString(comparisonId)}'`,
+      this.ActiveUser,
+    );
+    if (read.Error !== null) {
+      VersionedRowGuard.Fail(result, 'SearchStrategy', `Reading MJ: ML Search Strategy Comparisons row ${comparisonId} failed: ${read.Error}`);
+      return;
+    }
+    let comparison: EqualCostComparison | null = null;
+    if (read.Row !== null) {
+      const parsedComp = SearchPolicy.ParseComparisonRow(read.Row);
+      if (parsedComp.Ok === false) {
+        VersionedRowGuard.Fail(result, 'SearchStrategy', `Comparison ${comparisonId} is invalid: ${parsedComp.Errors.join('; ')}`);
+        return;
+      }
+      comparison = parsedComp.Value;
+    }
+    const refusal = parsed.ValidateSearchPolicy(comparison);
+    if (refusal !== null) {
+      VersionedRowGuard.Fail(result, 'SearchStrategy', SearchPolicy.DescribeRefusal(refusal));
+    }
   }
 
   /**

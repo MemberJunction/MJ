@@ -1,0 +1,25 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "W1 -> C3.2",
+    "Description": "Gate G7.7 (owner PR 5 B4, phase 7, datasets W1 and C1, criterion C3.2): only random search is enabled on W1-signal and C1; enabling bayesian without a passing equal-cost comparison (LowerBoundMin > 0 across W1-signal and C1) is refused by both the protocol Validate() and the orchestrator, 1 of 1. Also verifies that every writer of Passed (GraphQL create, GraphQL update, Update Record action) computes Passed = LowerBoundMin > 0 and refuses client attempts to forge Passed = 1 when LowerBoundMin <= 0.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.7\",\"owner:PR5\",\"phase:7\",\"dataset:W1\",\"dataset:C1\",\"criterion:C3.2\"]",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Bayesian guided search without a passing equal-cost comparison is refused, and Passed cannot be forced true by any writer when LowerBoundMin <= 0."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "ps-gate-w1-c3-2"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "52CB4165-5463-4DA1-BA44-707F83B3D8AD"
+  }
+}

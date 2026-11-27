@@ -122,6 +122,7 @@ export * from './custom/MJMLTrainingSnapshotEntityServer.server';
 export * from './custom/MJMLModelPublishRecordEntityServer.server';
 export * from './custom/MJMLOutputBindingEntityServer.server';
 export * from './custom/MJMLModelScoringBindingEntityServer.server';
+export * from './custom/MJMLSearchStrategyComparisonEntityServer.server';
 export * from './custom/MJBrandKitEntityServer.server';
 export * from './custom/MJGraphConceptEntityServer.server';
 export * from './custom/MJGraphEdgeEntityServer.server';

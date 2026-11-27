@@ -158,7 +158,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCommunicationPrincipalPreferences', sectionName: 'Communication Principal Preferences', isExpanded: false },
             { sectionKey: 'mJCommunicationConsentAuditLogs', sectionName: 'Communication Consent Audit Logs', isExpanded: false },
             { sectionKey: 'mJCommunicationSuppressionsRevokedByUserID', sectionName: 'Communication Suppressions (Revoked By User ID)', isExpanded: false },
-            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false }
+            { sectionKey: 'mJCommunicationSuppressionsCreatedByUserID', sectionName: 'Communication Suppressions (Created By User ID)', isExpanded: false },
+            { sectionKey: 'mJMLSearchStrategyComparisons', sectionName: 'ML Search Strategy Comparisons', isExpanded: false }
         ]);
     }
 }

@@ -270,6 +270,7 @@ export * from './checks/ps-gate-c2-s2-5.checks';
 export * from './checks/ps-gate-t2p-s2-6.checks';
 export * from './checks/ps-gate-c1-s2-6.checks';
 export * from './checks/ps-gate-w1-s5-3.checks';
+export * from './checks/ps-gate-w1-c3-2.checks';
 export * from './checks/ps-gate-w2-s5-2.checks';
 export * from './checks/ps-gate-n1c-s6-5.checks';
 export * from './checks/ps-gate-n1r-s6-5.checks';

@@ -38,9 +38,16 @@
  * is unit-testable with no live database, no live sidecar, and no real clock.
  */
 
-import { LogError } from '@memberjunction/core';
-import { IndexByUUID } from '@memberjunction/global';
-import { MetricDirections } from '@memberjunction/predictive-studio-core';
+import { LogError, RunView } from '@memberjunction/core';
+import { EscapeSQLString, IndexByUUID } from '@memberjunction/global';
+import {
+  MetricDirections,
+  SearchPolicy,
+  type EqualCostComparison,
+  type SearchComparisonColumns,
+  type SearchPolicyRefusal,
+  type SearchStrategy,
+} from '@memberjunction/predictive-studio-core';
 import type {
   ModelingPlanSpec,
   Budget,
@@ -66,9 +73,24 @@ import {
 } from './types';
 import { RankLeaderboard, BestEntry, SelectPrunedIterationIds } from './leaderboard';
 import { RunBounded } from './concurrency';
-import { PlanOrderWaveStrategist } from './wave-strategist';
+import { SeededRandomWaveStrategist } from './random-strategist';
 import { ExperimentBudget, TrainingAttemptFailedError } from './budget';
 import { ExperimentScores } from './scores';
+
+/** Store seam used to load `MJ: ML Search Strategy Comparisons` rows for guided-search policy checks. */
+export interface ISearchComparisonStore {
+  /** Load the stored equal-cost comparison row by ID, or return null when absent. */
+  LoadComparison(comparisonId: string): Promise<EqualCostComparison | null>;
+}
+
+/** Thrown before any session or training run starts when {@link SearchPolicy.Decide} refuses the search strategy. */
+export class SearchPolicyRefusedError extends Error {
+  /** @param Refusal structured refusal returned by {@link SearchPolicy.Decide} */
+  public constructor(public readonly Refusal: SearchPolicyRefusal) {
+    super(SearchPolicy.DescribeRefusal(Refusal));
+    this.name = 'SearchPolicyRefusedError';
+  }
+}
 
 /**
  * A budget check result — whether the session may continue and, if not, why.
@@ -136,17 +158,27 @@ export class ExperimentOrchestrator {
   ): Promise<ExperimentSessionResult> {
     this.assertApproved(plan);
 
+    const strategy: SearchStrategy = options.searchStrategy ?? { kind: 'random', candidates: plan.ProposedExperiments.length };
+    const seed = this.resolveSearchSeed(plan, deps, options);
+    const strategist = deps.waveStrategist ?? new SeededRandomWaveStrategist(seed);
+    const strategistName = this.resolveStrategistName(strategist);
+    const comparison = await this.loadComparisonForStrategy(strategy, deps, options);
+    const policyRefusal = SearchPolicy.Decide(strategy, strategistName, comparison);
+    if (policyRefusal !== null) {
+      throw new SearchPolicyRefusedError(policyRefusal);
+    }
+
     const experiment = await this.resolveExperiment(plan, deps, options);
     const budget = this.resolveBudget(plan, options);
-    const session = await this.createSession(plan, experiment, budget, deps, options);
+    const session = await this.createSession(plan, experiment, budget, seed, deps, options);
 
     const concurrency = options.concurrency ?? DEFAULT_WAVE_CONCURRENCY;
-    const strategist = deps.waveStrategist ?? new PlanOrderWaveStrategist();
 
     const iterations: MJExperimentSessionIterationEntity[] = [];
     const leaderboard: ExperimentLeaderboardEntry[] = [];
     const modelsByIteration = new Map<string, MJMLModelEntity>();
     const remaining = [...plan.ProposedExperiments];
+    let remainingCandidatesBudget = strategy.kind === 'random' ? strategy.candidates : Number.POSITIVE_INFINITY;
     const budgetState: BudgetState = { runs: 0, computeCost: 0, computeSeconds: 0, reservedSeconds: 0, startedAtMs: deps.clock.now() };
 
     let stopReason: SessionStopReason = 'completed';
@@ -154,11 +186,16 @@ export class ExperimentOrchestrator {
     let waveIndex = 0;
 
     while (true) {
-      const wave = await this.nextWave(strategist, { plan, remaining, leaderboard, waveIndex, maxWaveSize: concurrency });
+      const waveCap = Math.min(concurrency, remainingCandidatesBudget);
+      if (waveCap <= 0) {
+        break;
+      }
+      const wave = await this.nextWave(strategist, { plan, remaining, leaderboard, waveIndex, maxWaveSize: waveCap });
       if (wave.length === 0) {
         break;
       }
       this.removeFromRemaining(remaining, wave);
+      remainingCandidatesBudget -= wave.length;
 
       const gate = this.gateBeforeWave(budget, budgetState, deps);
       if (gate.exceeded) {
@@ -254,10 +291,58 @@ export class ExperimentOrchestrator {
    * and (optional) agent run. The session moves straight to `Running` (approval
    * already happened, §9.1).
    */
+  private resolveSearchSeed(plan: ModelingPlanSpec, deps: ExperimentDeps, options: ExperimentRunOptions): number {
+    if (options.searchSeed !== undefined) {
+      return SeededRandomWaveStrategist.NormalizeSeed(options.searchSeed);
+    }
+    if (deps.waveStrategist instanceof SeededRandomWaveStrategist) {
+      return deps.waveStrategist.Seed;
+    }
+    return SeededRandomWaveStrategist.DefaultSeed;
+  }
+
+  private resolveStrategistName(strategist: IWaveStrategist): string {
+    if (strategist instanceof SeededRandomWaveStrategist) {
+      return SearchPolicy.SeededRandomStrategistName;
+    }
+    const named = (strategist as { readonly Name?: string }).Name;
+    if (typeof named === 'string' && named.trim().length > 0) {
+      return named;
+    }
+    const ctorName = strategist.constructor?.name;
+    return ctorName && ctorName !== 'Object' ? ctorName : 'CustomWaveStrategist';
+  }
+
+  private async loadComparisonForStrategy(
+    strategy: SearchStrategy,
+    deps: ExperimentDeps,
+    options: ExperimentRunOptions,
+  ): Promise<EqualCostComparison | null> {
+    if (strategy.kind !== 'guided') return null;
+    if (options.searchComparisonStore) {
+      return options.searchComparisonStore.LoadComparison(strategy.equalCostComparisonId);
+    }
+    if (!deps.provider) return null;
+    const rv = RunView.FromMetadataProvider(deps.provider);
+    const result = await rv.RunView<SearchComparisonColumns>(
+      {
+        EntityName: 'MJ: ML Search Strategy Comparisons',
+        ExtraFilter: `ID='${EscapeSQLString(strategy.equalCostComparisonId)}'`,
+        ResultType: 'simple',
+        BypassCache: true,
+      },
+      deps.contextUser,
+    );
+    if (!result.Success || result.Results.length === 0) return null;
+    const parsed = SearchPolicy.ParseComparisonRow(result.Results[0]);
+    return parsed.Ok ? parsed.Value : null;
+  }
+
   private async createSession(
     plan: ModelingPlanSpec,
     experiment: MJExperimentEntity,
     budget: Budget,
+    searchSeed: number,
     deps: ExperimentDeps,
     options: ExperimentRunOptions,
   ): Promise<MJExperimentSessionEntity> {
@@ -266,7 +351,7 @@ export class ExperimentOrchestrator {
     session.Name = options.sessionName ?? this.deriveName(plan);
     session.Goal = plan.Goal;
     session.Budget = JSON.stringify(budget);
-    session.PlanSpec = JSON.stringify(plan);
+    session.PlanSpec = JSON.stringify({ ...plan, SearchSeed: searchSeed });
     if (options.agentRunID) {
       session.AgentRunID = options.agentRunID;
     }
