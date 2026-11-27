@@ -4150,8 +4150,9 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   `pnpm install` on this head rewrote `pnpm-lock.yaml` (the PS Engine importer's `testing-engine` entry dropped though
   its `package.json` declares it and the link exists; an `avatar-studio` importer added for an untracked folder holding
   only `node_modules`) — not B2's change, not committed.
-- **milestone-exit** and changeset: see the records commit (`pr-body.mjs` regenerated the changeset, now naming
-  `@memberjunction/ng-dashboards`, and §10's gen spans).
+- **milestone-exit** (`--milestone B2`, head `a80b56f050`): `# checks 43 · failed 0` (an earlier run failed only
+  `mutation-checks G7.4 (no §11 output)`, closed by the database mutation run above). `pr-body.mjs` regenerated the
+  changeset (now naming `@memberjunction/ng-dashboards`) and §10's gen spans.
 - **Not done here (by rule):** `ci-mirror` (D5-51/run rules: the controller's, at integration); D5-9's entry in
   `program/decisions.md` (plans repository).
 - **LLM spend (§2.4 query, `RunAt >= 2026-11-27T07:00Z` on `MJ_PS_PR5_claude2`):** 192 prompt runs, **$0.633405**,
