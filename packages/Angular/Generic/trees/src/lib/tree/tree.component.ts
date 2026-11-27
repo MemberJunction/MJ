@@ -463,24 +463,56 @@ export class TreeComponent extends BaseAngularComponent implements OnInit, OnDes
     }
 
     /**
-     * Expand to specific node (expands all ancestors)
+     * Expand to specific node (expands all ancestors).
+     * @param detectChanges - pass false when the caller runs change detection itself, e.g. after
+     *   expanding many nodes; see {@link ExpandToNodes}.
      */
-    public ExpandToNode(id: string): TreeNode | null {
+    public ExpandToNode(id: string, detectChanges = true): TreeNode | null {
         const target = this.nodeMap.get(id);
         if (!target) {
             return null;
         }
+        this.expandAncestorsOf(target);
+        if (detectChanges) {
+            this.cdr.detectChanges();
+        }
+        return target;
+    }
 
-        // Walk up the tree and expand each ancestor
+    /**
+     * Expands the ancestors of every listed node, then runs change detection once (unless
+     * `detectChanges` is false). Use this instead of calling {@link ExpandToNode} per node: each of
+     * those calls runs change detection on the whole tree.
+     * @returns the nodes found, in the order given; unknown IDs are skipped.
+     */
+    public ExpandToNodes(ids: readonly string[], detectChanges = true): TreeNode[] {
+        const found: TreeNode[] = [];
+        for (const id of ids) {
+            const target = this.nodeMap.get(id);
+            if (target) {
+                this.expandAncestorsOf(target);
+                found.push(target);
+            }
+        }
+        if (detectChanges) {
+            this.cdr.detectChanges();
+        }
+        return found;
+    }
+
+    /**
+     * Walks up from `target` and expands each ancestor. Stops when an ID repeats, so a parent
+     * cycle in the data (A -> B -> A) cannot loop forever.
+     */
+    private expandAncestorsOf(target: TreeNode): void {
+        const visited = new Set<string>([target.ID]);
         let current = target;
-        while (current.ParentID && this.nodeMap.has(current.ParentID)) {
+        while (current.ParentID && this.nodeMap.has(current.ParentID) && !visited.has(current.ParentID)) {
             const parent = this.nodeMap.get(current.ParentID)!;
+            visited.add(parent.ID);
             parent.Expanded = true;
             current = parent;
         }
-
-        this.cdr.detectChanges();
-        return target;
     }
 
     /**

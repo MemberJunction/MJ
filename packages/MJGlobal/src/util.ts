@@ -1364,6 +1364,47 @@ function getSingularForm(word: string): string | null {
 
 
 /**
+ * Converts a plural name to its singular form, the reverse of {@link GeneratePluralName}.
+ * The head of the name is kept verbatim and only the tail word is singularized, keeping its
+ * case. A name the rules do not recognize as plural is returned unchanged (trimmed), so the
+ * result is always usable as a label.
+ *
+ * Built on the same rules {@link GeneratePluralName} uses to detect a plural, with three
+ * guards those rules lack: a word ending in "us", "is" or "ss" is already singular
+ * ("Status", "Analysis", "Address"), and "-ses" drops only the "s" unless the word ends in
+ * "sses" or a consonant + "uses" ("Licenses" -> "License", "Classes" -> "Class",
+ * "Statuses" -> "Status").
+ *
+ * @param pluralName - The plural form of the name, e.g. an entity name.
+ * @returns The singular form, or the input when no singular form is found.
+ *
+ * @example
+ * ```typescript
+ * GenerateSingularName('Deals'); // returns 'Deal'
+ * GenerateSingularName('Contact People'); // returns 'Contact Person'
+ * GenerateSingularName('Companies'); // returns 'Company'
+ * GenerateSingularName('Status'); // returns 'Status'
+ * ```
+ */
+export function GenerateSingularName(pluralName: string): string {
+    const name = pluralName.trim();
+    if (name.length === 0) return name;
+    const { head, tail } = splitPluralTail(name);
+    if (tail.length === 0) return name;
+    return head + singularizeOneWord(tail);
+}
+
+function singularizeOneWord(word: string): string {
+    const lower = word.toLowerCase();
+    if (/(us|is|ss)$/.test(lower)) return word;
+    if (/(sses|[^aeiou]uses)$/.test(lower)) return word.slice(0, -2);
+    if (lower.endsWith('ses')) return word.slice(0, -1);
+    const singular = getSingularForm(word);
+    if (!singular || singular.toLowerCase() === lower) return word;
+    return matchTailCase(word, singular.toLowerCase());
+}
+
+/**
  * Converts a singular name to its plural form. The head of the name is kept
  * verbatim, including the separator that ends it, and only the tail is pluralized.
  * The tail keeps its own case. A linear scan finds the tail: the last space,

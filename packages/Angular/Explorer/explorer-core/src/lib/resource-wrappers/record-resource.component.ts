@@ -4,7 +4,7 @@ import { filter, observeOn, take, takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, FormatEntityRecordDisplayTitle } from '@memberjunction/ng-shared';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { ResourceData } from '@memberjunction/core-entities';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, GenerateSingularName } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId, LogError } from '@memberjunction/core';
 import { FormModeFromQueryParams, FormModeQueryParams, IsRecordTabOwner, ReconcileFormMode } from './record-form-mode';
 import { SingleRecordComponent } from '../single-record/single-record.component';
@@ -261,7 +261,7 @@ export class EntityRecordResource extends BaseResourceComponent implements OnIni
             const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
             return FormatEntityRecordDisplayTitle(e, data.Configuration.Entity, pk, name);
         } else {
-            return `New ${e.DisplayNameOrName} Record`;
+            return `New ${GenerateSingularName(e.DisplayNameOrName)}`;
         }
     }
 

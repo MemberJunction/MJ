@@ -55,6 +55,14 @@ export class MJColumnDescriptor extends ColumnDescriptor {
     /** Field name in that entity (e.g., "ID", "FirstName") */
     sourceFieldName?: string;
 
+    /**
+     * The row field holding the key of the record this column links to. Set it on a column that
+     * shows something other than the key (for example a name) so the link opens the record by the
+     * key while the cell shows the name. Viewers infer it for an entity's name field when the
+     * result also carries that entity's primary key; an explicit value wins.
+     */
+    linkKeyField?: string;
+
     /** True for calculated expressions: CASE, ROUND, CONCAT, etc. */
     isComputed?: boolean;
 

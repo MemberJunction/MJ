@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
-import { CompositeKey, type BaseEntity, type EntityInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, type BaseEntity, type FormChromeRule } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
 import {
@@ -43,6 +43,19 @@ vi.mock('../panel-slot/collect-form-contribution-registrations', async (importOr
       collector.options.push(args[2]);
       return collector.answer(args[2]);
     },
+  };
+});
+
+/** Lets a test hold the chrome-rule read open and answer it later; every other test gets the real loader. */
+const chromeRules = vi.hoisted(() => ({
+  answer: null as null | (() => Promise<FormChromeRule[]>),
+}));
+vi.mock('../chrome/load-form-chrome-rules', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../chrome/load-form-chrome-rules')>();
+  return {
+    ...actual,
+    LoadFormChromeRules: (...args: Parameters<typeof actual.LoadFormChromeRules>) =>
+      chromeRules.answer ? chromeRules.answer() : actual.LoadFormChromeRules(...args),
   };
 });
 
@@ -1434,5 +1447,89 @@ describe('MjRecordFormContainerComponent (DOM) — mobile rail', () => {
     expect(picker(f)).toBeNull();
     expect(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item').length).toBeGreaterThan(0);
     expect(f.nativeElement.querySelectorAll('.mj-forms-chrome-rail-item.is-more-child').length).toBe(2);
+  });
+});
+
+/**
+ * A section ruled `None` by a Form Chrome Rule must not load (#5000). The container owns the
+ * coordinator, so it pushes the suppression state to the form, whose `IsSectionExpanded` every
+ * lazy loader asks: pending before the rules arrive, then the suppressed keys once applied —
+ * including when the rules arrive after the first chrome resolve.
+ */
+describe('MjRecordFormContainerComponent — chrome-rule suppression reaches the form', () => {
+  const PARENT_ID = '78787878-7878-7878-7878-787878787878';
+  const RELATED_ID = '89898989-8989-8989-8989-898989898989';
+  const ENTITY = new EntityInfo({
+    ID: PARENT_ID,
+    Name: 'Sample_Common: People',
+    SchemaName: 'Sample_Common',
+    RelatedEntities: [{
+      ID: '9a9a9a9a-9a9a-9a9a-9a9a-9a9a9a9a9a9a',
+      RelatedEntity: 'Sample_Orders: Order Headers',
+      RelatedEntityID: RELATED_ID,
+      RelatedEntityJoinField: 'PersonID',
+      DisplayInForm: true,
+      DisplayName: 'Orders',
+    }],
+  });
+  const PEOPLE_RECORD = { EntityInfo: ENTITY } as unknown as BaseEntity;
+  const PROVIDER = { EntityByID: () => undefined, EntityByName: () => undefined, Entities: [], CurrentUser: null, RunViews: async (params: unknown[]) => params.map(() => ({ Success: true, Results: [], TotalRowCount: 0 })) };
+
+  interface PushedState { RulesResolved: boolean; Keys: string[] }
+
+  function formWithSpy(pushed: PushedState[], record: BaseEntity = PEOPLE_RECORD): BaseFormComponent {
+    return {
+      record,
+      formContext: { showValidation: false, validationErrors: [] },
+      RecordReady: new Subject<void>(),
+      RecordRefreshed: new Subject<unknown>(),
+      CompositionChanged: new EventEmitter<unknown>(),
+      SetChromeSuppression: (state: { RulesResolved: boolean; SuppressedSectionKeys: ReadonlySet<string> } | null) => {
+        pushed.push({ RulesResolved: !!state?.RulesResolved, Keys: [...(state?.SuppressedSectionKeys ?? [])].sort() });
+      },
+    } as unknown as BaseFormComponent;
+  }
+
+  const flush = async () => {
+    for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 0));
+  };
+
+  afterEach(() => { chromeRules.answer = null; });
+
+  it('pushes pending before the rules load, then the suppressed key once a late None rule applies', async () => {
+    let release!: (rules: FormChromeRule[]) => void;
+    chromeRules.answer = () => new Promise<FormChromeRule[]>((r) => { release = r; });
+    const pushed: PushedState[] = [];
+    const f = renderComponentFixture(MjRecordFormContainerComponent, {
+      imports: CHILD_STUBS,
+      declarations: [MjRecordFormContainerComponent],
+      inputs: { Record: PEOPLE_RECORD, EntityInfo: ENTITY, Provider: PROVIDER, FormComponent: formWithSpy(pushed) },
+    });
+    await flush();
+    f.detectChanges();
+    expect(pushed[0]).toEqual({ RulesResolved: false, Keys: [] });
+    expect(pushed.every((p) => !p.RulesResolved), 'nothing resolves while the rules are still loading').toBe(true);
+
+    release([{ EntityID: PARENT_ID, TargetKind: 'Relationship', RelatedEntityID: RELATED_ID, Inclusion: 'None' }]);
+    await flush();
+
+    const last = pushed[pushed.length - 1];
+    expect(last.RulesResolved).toBe(true);
+    expect(last.Keys).toHaveLength(1);
+    expect(f.debugElement.injector.get(FormChromeCoordinator).IsSuppressed(last.Keys[0])).toBe(true);
+  });
+
+  it('resolves with nothing suppressed when the entity has no rules (More, Primary and no rule are unchanged)', async () => {
+    chromeRules.answer = async () => [
+      { EntityID: PARENT_ID, TargetKind: 'Relationship', RelatedEntityID: RELATED_ID, Inclusion: 'More' },
+    ];
+    const pushed: PushedState[] = [];
+    renderComponentFixture(MjRecordFormContainerComponent, {
+      imports: CHILD_STUBS,
+      declarations: [MjRecordFormContainerComponent],
+      inputs: { Record: PEOPLE_RECORD, EntityInfo: ENTITY, Provider: PROVIDER, FormComponent: formWithSpy(pushed) },
+    });
+    await flush();
+    expect(pushed[pushed.length - 1]).toEqual({ RulesResolved: true, Keys: [] });
   });
 });

@@ -1,0 +1,19 @@
+<p class="sampling-note">Empty uses the provider's default; 0 is a set value.</p>
+<div class="sampling-grid">
+  @for (field of Fields; track field) {
+    @if (EditMode || !IsProviderDefault(field)) {
+      <mj-form-field
+        [Record]="Record"
+        [ShowLabel]="true"
+        [FieldName]="field"
+        Type="numerictextbox"
+        [EditMode]="EditMode">
+      </mj-form-field>
+    } @else {
+      <div class="sampling-default" [attr.data-field]="field">
+        <span class="sampling-default-label">{{ Label(field) }}</span>
+        <span class="sampling-default-value">Provider default</span>
+      </div>
+    }
+  }
+</div>

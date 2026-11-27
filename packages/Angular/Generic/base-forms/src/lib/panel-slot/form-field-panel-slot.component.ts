@@ -17,6 +17,7 @@ import { BaseFormComponent } from '../base-form-component';
 import { FormContext } from '../types/form-types';
 import { BaseFormPanel } from './base-form-panel';
 import {
+    RegistrationsForRecordState,
     ContributionSectionPosition,
     PlacedInSectionKey,
     ResolveFormContributionWinners,
@@ -154,8 +155,9 @@ export class FormFieldPanelSlotComponent implements OnInit, OnChanges, OnDestroy
         const fields = new Set(this.FieldNames.filter((name) => !!name));
         const sectionKey = this.SectionKey.trim();
         if (fields.size === 0 && !sectionKey) return [];
-        const all = CollectFormContributionRegistrations(
-            this.Record?.EntityInfo ?? null, this.FormComponent?.ProviderToUse ?? null, { Preview: this.preview });
+        // A contribution whose `visibleWhen` does not match the record's state is not mounted.
+        const all = RegistrationsForRecordState(CollectFormContributionRegistrations(
+            this.Record?.EntityInfo ?? null, this.FormComponent?.ProviderToUse ?? null, { Preview: this.preview }), this.Record?.IsSaved);
         // A field claim belongs to this section when any of its fields is one this section draws.
         // Any, not every: a claim naming a field the form stopped drawing still belongs where its
         // remaining fields are, and dropping it there would leave the panel nowhere while its

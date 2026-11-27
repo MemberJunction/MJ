@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
 import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges, ReplacedSectionChromeGroup, DefaultContributionChromeGroup, FieldGroupsInDetails, RailGroupSectionKeys, SlotChromeGroup, SectionDrawingAnyField } from '../form-chrome';
-import { ApplyEmptySectionBehavior, ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
+import { ApplyEmptySectionBehavior, ApplyFormChromeRuleTitles, EmptyRelatedGroupKeys, GatherEmptyRelatedGroups, NO_RECORDS_GROUP_KEY, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
 
@@ -1512,5 +1512,113 @@ describe('ApplyEmptySectionBehavior', () => {
         expect(before.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTasks'))).toBe(true);
         expect(after.Spec.Groups.some((g) => g.SectionKeys.includes('mJBizAppsTasksTasks'))).toBe(false);
         expect(after.Spec.Layout).toBe(before.Spec.Layout);
+    });
+});
+
+describe('ResolveFormChrome SuppressedSectionKeys', () => {
+    const parentId = '12121212-1212-1212-1212-121212121212';
+    const relatedId = '34343434-3434-3434-3434-343434343434';
+    const entity = () => new EntityInfo({
+        ID: parentId,
+        Name: 'Sample_Common: People',
+        SchemaName: 'Sample_Common',
+        RelatedEntities: [{
+            ID: '56565656-5656-5656-5656-565656565656',
+            RelatedEntity: 'Sample_Orders: Order Headers',
+            RelatedEntityID: relatedId,
+            RelatedEntityJoinField: 'PersonID',
+            DisplayInForm: true,
+            DisplayName: 'Orders',
+        }],
+    });
+    const panels = [
+        { SectionKey: 'identity', SectionName: 'Identity', Variant: 'default' as const },
+        { SectionKey: 'sampleOrdersOrderHeaders', SectionName: 'Orders', Variant: 'related-entity' as const },
+        { SectionKey: 'forms', SectionName: 'Forms', Variant: 'default' as const },
+    ];
+    const resolve = (rules: Parameters<typeof ResolveFormChrome>[0]['ChromeRules']) => ResolveFormChrome({
+        Entity: entity(),
+        Panels: panels,
+        RelatedSchemaByEntityId: new Map([[relatedId, 'Sample_Orders']]),
+        ContributionSectionKeys: ['forms'],
+        ChromeRules: rules,
+    });
+
+    it('lists a relationship and a contribution ruled None', () => {
+        const result = resolve([
+            { EntityID: parentId, TargetKind: 'Relationship', RelatedEntityID: relatedId, Inclusion: 'None' },
+            { EntityID: parentId, TargetKind: 'Contribution', ContributionKey: 'forms', Inclusion: 'None' },
+        ]);
+        expect([...result.SuppressedSectionKeys].sort()).toEqual(['forms', 'sampleOrdersOrderHeaders']);
+    });
+
+    it('lists nothing for More, Primary or no rule', () => {
+        expect(resolve([]).SuppressedSectionKeys).toEqual([]);
+        expect(resolve([
+            { EntityID: parentId, TargetKind: 'Relationship', RelatedEntityID: relatedId, Inclusion: 'More' },
+            { EntityID: parentId, TargetKind: 'Contribution', ContributionKey: 'forms', Inclusion: 'Primary' },
+        ]).SuppressedSectionKeys).toEqual([]);
+    });
+});
+
+/**
+ * Populated-first related sections (#5087): once every count is known, related groups with no
+ * rows gather into one "No records" group after the others, so the ones with data come first.
+ */
+describe('EmptyRelatedGroupKeys / GatherEmptyRelatedGroups', () => {
+    const group = (key: string, extra: Partial<FormChromeGroup> = {}): FormChromeGroup =>
+        ({ Key: key, Title: key, Icon: 'fa fa-table', SectionKeys: [key], IsMore: false, ...extra });
+    const spec = (): FormChromeSpec => ({
+        Layout: 'left-nav',
+        Groups: [
+            group('overview', { IsLead: true }),
+            group(DETAILS_SECTION_KEY, { SectionKeys: ['identity'] }),
+            group('orders'),
+            group('tickets'),
+            group('notesPanel'),
+            group('payments'),
+            group('addresses'),
+            group(MORE_SECTION_KEY, { SectionKeys: ['audit'], IsMore: true }),
+        ],
+        RelatedRoles: new Map<string, FormRole>([
+            ['orders', 'Primary'], ['tickets', 'Primary'], ['payments', 'Primary'], ['addresses', 'Primary'], ['audit', 'Detail'],
+        ]),
+        MoreSectionKeys: ['audit'],
+    });
+    const counts: Record<string, number | undefined> = { orders: 0, tickets: 4, payments: 0, addresses: undefined, notesPanel: 0 };
+
+    it('names related groups whose every count is a known 0, never contributions, leads, Details or More', () => {
+        expect(EmptyRelatedGroupKeys(spec(), (k) => counts[k])).toEqual(['orders', 'payments']);
+    });
+
+    it('keeps the group the user is on', () => {
+        expect(EmptyRelatedGroupKeys(spec(), (k) => counts[k], new Set(['orders']))).toEqual(['payments']);
+    });
+
+    it('gathers the empty groups after the others, keeping every other group in order, More last', () => {
+        const result = GatherEmptyRelatedGroups(spec(), new Set(['orders', 'payments']));
+        expect(result.Groups.map((g) => g.Key)).toEqual([
+            'overview', DETAILS_SECTION_KEY, 'tickets', 'notesPanel', 'addresses', NO_RECORDS_GROUP_KEY, MORE_SECTION_KEY,
+        ]);
+        const noRecords = result.Groups.find((g) => g.Key === NO_RECORDS_GROUP_KEY);
+        expect(noRecords?.SectionKeys).toEqual(['orders', 'payments']);
+        expect(noRecords?.Title).toBe('No records');
+    });
+
+    it('leaves the spec unchanged when nothing is empty (and so when the form has not opted in)', () => {
+        const before = spec();
+        const order = before.Groups.map((g) => g.Key);
+        expect(GatherEmptyRelatedGroups(before, new Set()).Groups.map((g) => g.Key)).toEqual(order);
+    });
+
+    it('the coordinator keeps the reordered spec instead of restoring the previous order', () => {
+        const c = new FormChromeCoordinator();
+        c.Apply(spec());
+        const reordered = GatherEmptyRelatedGroups(spec(), new Set(['orders', 'payments']));
+        c.Apply(reordered, { Reordered: true });
+        expect(c.Spec.Groups.map((g) => g.Key).indexOf(NO_RECORDS_GROUP_KEY)).toBe(5);
+        // A later resolve with the same gathering stays put.
+        c.Apply(GatherEmptyRelatedGroups(spec(), new Set(['orders', 'payments'])));
+        expect(c.Spec.Groups.map((g) => g.Key)).toEqual(reordered.Groups.map((g) => g.Key));
     });
 });

@@ -19,12 +19,16 @@ vi.mock('@memberjunction/ng-shared', () => ({
   },
 }));
 vi.mock('@memberjunction/core-entities', () => ({ ResourceData: class {} }));
-vi.mock('@memberjunction/global', () => ({ RegisterClass: () => (target: Function) => target }));
+vi.mock('@memberjunction/global', async () => ({
+  RegisterClass: () => (target: Function) => target,
+  // The real pure helper, so the tab title test checks the wording users see.
+  GenerateSingularName: (await vi.importActual<typeof import('@memberjunction/global')>('@memberjunction/global')).GenerateSingularName,
+}));
 vi.mock('@memberjunction/core', () => ({
   Metadata: class {},
   CompositeKey: class {},
   EntityInfo: class {},
-  IsNewEntityRecordUrlId: vi.fn(() => false),
+  IsNewEntityRecordUrlId: vi.fn((id: string | undefined) => !id),
 }));
 vi.mock('../single-record/single-record.component', () => ({ SingleRecordComponent: class {} }));
 
@@ -48,5 +52,18 @@ describe('EntityRecordResource.ResourceEditModeChanged', () => {
     const r = new EntityRecordResource();
     (r as unknown as { singleRecord: { IsEditing(): boolean } }).singleRecord = { IsEditing: () => true };
     expect(r.IsEditing()).toBe(true);
+  });
+});
+
+/** A new record's tab reads "New Deal" — the singular display name, without a trailing "Record". */
+describe('EntityRecordResource.GetResourceDisplayName for a new record', () => {
+  it('uses the singular display name of the entity', async () => {
+    const entity = { Name: 'Sales: Deals', DisplayName: 'Deals', DisplayNameOrName: 'Deals' };
+    const provider = { EntityByName: () => entity, Entities: [entity] };
+    const r = new EntityRecordResource();
+    (r as unknown as { ProviderToUse: typeof provider }).ProviderToUse = provider;
+    const data = { Configuration: { Entity: 'Sales: Deals' }, ResourceRecordID: '' };
+    const title = await r.GetResourceDisplayName(data as unknown as Parameters<EntityRecordResource['GetResourceDisplayName']>[0]);
+    expect(title).toBe('New Deal');
   });
 });

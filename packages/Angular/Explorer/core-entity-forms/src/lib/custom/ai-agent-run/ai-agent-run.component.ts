@@ -14,6 +14,7 @@ import {
 import { WorkflowSaveOperation } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import type { TabConfig } from '@memberjunction/ng-ui-components';
 import { MJGlobal, MJEvent, MJEventType, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { SharedService, NavigationService } from '@memberjunction/ng-shared';
 import { TimelineItem, AIAgentRunTimelineComponent } from './ai-agent-run-timeline.component';
@@ -612,6 +613,14 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
     }
   }
   
+  /** The run's views, rendered by `mj-tab-nav`. */
+  readonly Tabs: TabConfig[] = [
+    { key: 'timeline', label: 'Timeline', icon: 'fas fa-stream' },
+    { key: 'visualization', label: 'Visualization', icon: 'fas fa-diagram-project' },
+    { key: 'analytics', label: 'Analytics', icon: 'fas fa-chart-line' },
+    { key: 'details', label: 'Details', icon: 'fas fa-info-circle' },
+  ];
+
   ChangeTab(tab: string) {
     this.ActiveTab = tab;
     

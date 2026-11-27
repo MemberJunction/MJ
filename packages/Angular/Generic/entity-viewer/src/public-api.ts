@@ -22,6 +22,7 @@ export * from './lib/pill/pill.component';
 export * from './lib/entity-data-grid/entity-data-grid.component';
 export * from './lib/entity-data-grid/models/grid-types';
 export * from './lib/entity-data-grid/events/grid-events';
+export * from './lib/entity-data-grid/template-cell-renderer.component';
 
 // View Config Panel (sliding panel for view configuration)
 export * from './lib/view-config-panel/view-config-panel.component';

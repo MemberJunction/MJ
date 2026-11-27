@@ -36,6 +36,7 @@ const TAB_ID = 'data-explorer-tab';
 class FakeTabParams {
   private readonly params$ = new BehaviorSubject<Record<string, string>>({});
   public readonly QueryParamChanged$ = new Subject<{ TabId: string; Params: Record<string, string>; Force?: boolean }>();
+  public readonly ResourceReattached$ = new Subject<never>();
 
   public get Current(): Record<string, string> {
     return this.params$.value;

@@ -94,6 +94,10 @@ export class MyResourceComponent extends BaseResourceComponent implements AfterV
 ### What Happens Without It
 The shell component waits for `onFirstResourceLoadComplete()` before hiding the loading screen. That event is driven by `NotifyLoadComplete()`. If no resource component calls it, the user sees the loading animation indefinitely with only a "Reset" button (which clears all local data) as recovery.
 
+### Re-rendering and reattach (attached views)
+- Resource components are root views (`ApplicationRef.attachView`), so state changed from async work (awaits, timers, RxJS) outside the load lifecycle reaches the DOM only after `this.RefreshView()`. `NotifyLoadStarted`/`NotifyLoadComplete` and `OnQueryParamsChanged` deliveries call it for you.
+- A cached tab reattaches without re-running init. Override `OnReattached()` to react on every return, or call `this.WatchEntities('MJ: …')` once and override `OnStaleOnReattach()` to reload only when those entities were saved or deleted meanwhile. Details: [Dashboard Best Practices](../../../../guides/DASHBOARD_BEST_PRACTICES.md#re-rendering-and-cache-reattach).
+
 ## 🚨 Agent Context & Client Tools — REQUIRED FOR EVERY DASHBOARD 🚨
 
 **This is the baseline for ALL MJ Explorer dashboards, not just Knowledge Hub.** Every `BaseResourceComponent` / `BaseDashboard` subclass MUST report its state to the agent and register the operations the agent can invoke. A surface that skips this leaves the agent — the conversational chat agent **and** the realtime co-agent — blind to what the user is doing and unable to act in it.

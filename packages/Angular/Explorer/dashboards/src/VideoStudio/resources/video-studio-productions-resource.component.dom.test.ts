@@ -20,6 +20,7 @@ ExpectConsoleLines({
 
 function createNavigationServiceStub(): {
   QueryParamChanged$: typeof EMPTY;
+  ResourceReattached$: typeof EMPTY;
   ObserveTabQueryParams: ReturnType<typeof vi.fn>;
   GetTabQueryParams: ReturnType<typeof vi.fn>;
   SetAgentContext: ReturnType<typeof vi.fn>;
@@ -30,6 +31,7 @@ function createNavigationServiceStub(): {
 } {
   return {
     QueryParamChanged$: EMPTY,
+    ResourceReattached$: EMPTY,
     ObserveTabQueryParams: vi.fn().mockReturnValue(EMPTY),
     GetTabQueryParams: vi.fn().mockReturnValue({}),
     SetAgentContext: vi.fn(),

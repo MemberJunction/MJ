@@ -100,7 +100,8 @@
     }
   </div>
 
-  <!-- Panel Body -->
+  <!-- Panel Body: not rendered for a section a chrome rule suppressed -->
+  @if (!SuppressedByChrome) {
   <div class="mj-forms-panel-body" [class.mj-forms-panel-body--collapsed]="!Expanded">
     <div class="mj-forms-panel-content"
          #panelContent
@@ -133,4 +134,5 @@
       }
     </div>
   </div>
+  }
 </div>

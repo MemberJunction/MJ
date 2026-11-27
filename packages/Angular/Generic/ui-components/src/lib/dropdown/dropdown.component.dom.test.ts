@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { renderComponentFixture, query, capture, overlayQuery, overlayQueryAll, overlayText, clearOverlayContainers } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, capture, overlayQuery, overlayQueryAll, overlayText, clearOverlayContainers, ExpectNoAxeViolations } from '@memberjunction/ng-test-utils';
 import { Component, Input } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
@@ -46,7 +46,7 @@ describe('MJDropdownComponent (DOM)', () => {
     const f = render();
     open(f);
     expect(trigger(f).getAttribute('aria-expanded')).toBe('true');
-    expect(overlayQuery('.mj-dropdown-panel[role="listbox"]')).not.toBeNull();
+    expect(overlayQuery('.mj-dropdown-panel [role="listbox"]')).not.toBeNull();
     const opts = overlayQueryAll('.mj-dropdown-option');
     expect(opts.length).toBe(3);
     expect(opts.map((o) => o.textContent?.trim())).toEqual(['Alpha', 'Beta', 'Gamma']);
@@ -112,7 +112,7 @@ describe('MJDropdownComponent (DOM)', () => {
     const f = render({ AriaLabel: 'Interview persona' });
     expect(trigger(f).getAttribute('aria-label')).toBe('Interview persona');
     open(f);
-    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-label')).toBe('Interview persona');
+    expect(overlayQuery('[role="listbox"]')?.getAttribute('aria-label')).toBe('Interview persona');
   });
 
   it('names the combobox from a visible label via AriaLabelledBy — trigger AND popup listbox', () => {
@@ -121,7 +121,7 @@ describe('MJDropdownComponent (DOM)', () => {
     const f = render({ AriaLabelledBy: 'persona-label' });
     expect(trigger(f).getAttribute('aria-labelledby')).toBe('persona-label');
     open(f);
-    expect(overlayQuery('.mj-dropdown-panel')?.getAttribute('aria-labelledby')).toBe('persona-label');
+    expect(overlayQuery('[role="listbox"]')?.getAttribute('aria-labelledby')).toBe('persona-label');
   });
 
   it('exposes InputId so other markup can reference the trigger', () => {
@@ -206,7 +206,7 @@ describe('MJDropdownComponent (DOM)', () => {
 
     open(f);
 
-    const listboxId = overlayQuery('.mj-dropdown-panel')?.getAttribute('id');
+    const listboxId = overlayQuery('[role="listbox"]')?.getAttribute('id');
     expect(listboxId).toBeTruthy();
     expect(trigger(f).getAttribute('aria-controls')).toBe(listboxId);
   });
@@ -641,5 +641,76 @@ describe('MJDropdownComponent — Escape (DOM)', () => {
     expect(f.componentInstance.HostKeys).toEqual(['Escape']);
     expect(pageKeys).toEqual(['Escape']);
     expect(field.getAttribute('aria-expanded')).toBe('false');
+  });
+});
+
+// ── #4115: combobox structure, active descendant, close behaviour ────────────────────────────────
+
+describe('MJDropdownComponent — combobox structure (DOM)', () => {
+  const press = (el: HTMLElement, key: string): void => {
+    el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+  };
+  const openFilterable = async (inputs: Record<string, unknown> = {}) => {
+    const f = render({ Filterable: true, AriaLabel: 'Role', ...inputs });
+    open(f);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    return f;
+  };
+
+  it('keeps the filter box and the empty state out of the listbox', async () => {
+    await openFilterable({ Data: [] });
+    const listbox = overlayQuery('[role="listbox"]') as HTMLElement;
+    expect(listbox.querySelector('input')).toBeNull();
+    expect(listbox.querySelector('.mj-dropdown-no-data')).toBeNull();
+    expect(overlayQuery('.mj-dropdown-no-data')?.getAttribute('role')).toBe('status');
+  });
+
+  it('has no axe violations with the filterable panel open', async () => {
+    const f = await openFilterable();
+    await ExpectNoAxeViolations(f, { IncludeOverlayContainer: true });
+  });
+
+  it('moves aria-activedescendant with the arrow keys, on the field and the filter box', async () => {
+    const f = await openFilterable();
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    const options = overlayQueryAll('.mj-dropdown-option');
+    expect(options.every((o) => !!o.id)).toBe(true);
+
+    press(filter, 'ArrowDown');
+    f.detectChanges();
+    expect(filter.getAttribute('aria-activedescendant')).toBe(options[0].id);
+    expect(trigger(f).getAttribute('aria-activedescendant')).toBe(options[0].id);
+
+    press(filter, 'ArrowDown');
+    f.detectChanges();
+    expect(filter.getAttribute('aria-activedescendant')).toBe(options[1].id);
+    expect(filter.getAttribute('aria-controls')).toBe(overlayQuery('[role="listbox"]')?.id);
+  });
+
+  it('describes the filter box with AriaDescribedBy', async () => {
+    await openFilterable({ AriaDescribedBy: 'role-hint' });
+    expect(overlayQuery('.mj-dropdown-filter')?.getAttribute('aria-describedby')).toBe('role-hint');
+  });
+
+  it('clears the filter with FilterChange("") and focuses the field when it closes', async () => {
+    const f = await openFilterable();
+    const changes = capture(f.componentInstance.FilterChange);
+    const filter = overlayQuery('.mj-dropdown-filter') as HTMLInputElement;
+    expect(document.activeElement).toBe(filter);
+    filter.value = 'Al';
+    filter.dispatchEvent(new Event('input'));
+
+    f.componentInstance.Close();
+    f.detectChanges();
+
+    expect(changes).toEqual(['Al', '']);
+    expect(document.activeElement).toBe(trigger(f));
+  });
+
+  it('does not emit FilterChange on close when nothing was typed', async () => {
+    const f = await openFilterable();
+    const changes = capture(f.componentInstance.FilterChange);
+    f.componentInstance.Close();
+    expect(changes).toEqual([]);
   });
 });

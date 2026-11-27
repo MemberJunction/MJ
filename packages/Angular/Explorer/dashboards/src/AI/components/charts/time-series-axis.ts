@@ -56,3 +56,33 @@ export function AxisTickFormat(timestamps: readonly Date[], daily: boolean): (da
 export function TooltipTimeFormat(daily: boolean): (date: Date) => string {
   return daily ? d3.utcFormat('%a %b %d, %Y') : d3.timeFormat('%a %b %d, %H:%M');
 }
+
+/**
+ * The left y-axis tick label, chosen from the series shown on that axis (Cost in dollars, Avg Time
+ * in seconds). With one of them shown, ticks carry its unit; with both, the axis mixes units, so
+ * ticks are plain numbers and the axis label names both.
+ */
+export function LeftAxisTickFormat(shownMetrics: readonly string[]): (value: number) => string {
+  const cost = shownMetrics.includes('cost');
+  const time = shownMetrics.includes('avgTime');
+  if (cost && !time) {
+    return (value) => `$${value.toFixed(2)}`;
+  }
+  if (time && !cost) {
+    return (value) => `${value.toFixed(1)}s`;
+  }
+  return (value) => `${Number(value.toFixed(2))}`;
+}
+
+/** The left y-axis title for the series shown on it; see {@link LeftAxisTickFormat}. */
+export function LeftAxisLabel(shownMetrics: readonly string[]): string {
+  const cost = shownMetrics.includes('cost');
+  const time = shownMetrics.includes('avgTime');
+  if (cost && !time) {
+    return 'Cost ($)';
+  }
+  if (time && !cost) {
+    return 'Avg Time (s)';
+  }
+  return 'Cost ($) / Avg Time (s)';
+}

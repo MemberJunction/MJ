@@ -99,6 +99,13 @@ export interface QueryGridColumnConfig {
     targetEntityId?: string;
 
     /**
+     * The row field that holds the key of the record this column links to. When set, the cell
+     * shows its own value (for example a name) and the link opens the record whose key is in this
+     * field. When unset, the cell's own value is the key.
+     */
+    linkKeyField?: string;
+
+    /**
      * Whether this field is a primary key of the source entity
      */
     isPrimaryKey?: boolean;
@@ -405,12 +412,81 @@ export function resolveTargetEntity(
 }
 
 /**
- * Builds column configs from QueryFieldInfo metadata
+ * Links each entity's name column to the record its row is about. A column whose source field is
+ * its entity's name field (`IsNameField`) becomes an entity link when another column in the same
+ * result maps to that entity's single-field primary key; the link shows the name and opens the
+ * record by the key column's value (`linkKeyField`). A column that already links (a primary or
+ * foreign key) or already names its key field is left as it is, and the key column keeps its own
+ * link.
+ *
+ * @param columns The result's columns.
+ * @param provider The metadata provider used to read the entities' name and key fields.
+ * @returns The columns, with name columns linked where a key column exists.
+ */
+export function InferNameFieldLinks(columns: QueryGridColumnConfig[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
+    const md = provider ?? Metadata.Provider;
+    return columns.map(column => {
+        if (column.isEntityLink || column.linkKeyField || !column.sourceEntityName || !column.sourceFieldName) {
+            return column;
+        }
+        const entity = md.EntityByName(column.sourceEntityName);
+        if (!entity || entity.PrimaryKeys.length !== 1) {
+            return column;
+        }
+        const sourceField = entity.Fields.find(f => namesMatch(f.Name, column.sourceFieldName));
+        if (!sourceField?.IsNameField) {
+            return column;
+        }
+        const keyName = entity.FirstPrimaryKey.Name; // first-pk-ok: single-key entities only (checked above)
+        const keyColumn = columns.find(c =>
+            c !== column && namesMatch(c.sourceEntityName, entity.Name) && namesMatch(c.sourceFieldName, keyName));
+        if (!keyColumn) {
+            return column;
+        }
+        return {
+            ...column,
+            isEntityLink: true,
+            targetEntityName: entity.Name,
+            targetEntityId: entity.ID,
+            targetEntityIcon: entity.Icon || undefined,
+            linkKeyField: keyColumn.field
+        };
+    });
+}
+
+/** Compares two entity or field names ignoring case; a missing name matches nothing. */
+function namesMatch(a: string | undefined | null, b: string | undefined | null): boolean {
+    return !!a && !!b && a.trim().toLowerCase() === b.trim().toLowerCase();
+}
+
+/**
+ * The key of the record an entity-link cell opens: the row's `linkKeyField` value when the column
+ * names one, else the cell's own value. Null when there is no key to open.
+ *
+ * @param column The link column.
+ * @param row The row the cell belongs to.
+ * @param value The cell's own value.
+ */
+export function EntityLinkRecordKey(column: Pick<QueryGridColumnConfig, 'linkKeyField'>, row: Record<string, unknown> | null | undefined, value: unknown): string | null {
+    const key = column.linkKeyField ? row?.[column.linkKeyField] : value;
+    if (key === null || key === undefined || key === '') {
+        return null;
+    }
+    return String(key);
+}
+
+/**
+ * Builds column configs from QueryFieldInfo metadata. A column holding its entity's name links to
+ * the record when the query also returns that entity's key (see {@link InferNameFieldLinks}).
  */
 export function BuildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
     // Metadata.Provider IS the global IMetadataProvider — no cast needed, and it names the fallback.
     const md = provider ?? Metadata.Provider;
+    return InferNameFieldLinks(buildColumnsFromFieldMetadata(fields, md), md);
+}
 
+/** One column per query field, in sequence order, with the field's own entity link (no name-field inference). */
+function buildColumnsFromFieldMetadata(fields: MJQueryFieldEntity[], md: IMetadataProvider): QueryGridColumnConfig[] {
     return fields
         .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))
         .map((field, index) => {
@@ -591,13 +667,17 @@ export function BuildColumnsForResult(
 ): QueryGridColumnConfig[] {
     const names = ResultColumnNames(data);
     if (names.length === 0) return [];
-    const described = new Map(BuildColumnsFromQueryFields([...(fields ?? [])], provider).map(c => [c.field.toLowerCase(), c]));
+    const md = provider ?? Metadata.Provider;
+    const described = new Map(buildColumnsFromFieldMetadata([...(fields ?? [])], md).map(c => [c.field.toLowerCase(), c]));
     // One inferred column per name, in the same order: the values row's keys are `names`.
     const inferred = BuildColumnsFromData([valuesRow(data, names)]);
-    return inferred.map((column, index) => {
+    const columns = inferred.map((column, index) => {
         const fromField = described.get(column.field.toLowerCase());
         return fromField ? { ...fromField, field: column.field, title: column.field, order: index } : { ...column, order: index };
     });
+    // Name links are inferred from the columns the result carries, so a link's key field is
+    // always a column of this result, spelled as the result spells it.
+    return InferNameFieldLinks(columns, md);
 }
 
 /** One row holding, for each column, the first non-null value any row has, so inference sees a value where one exists. */

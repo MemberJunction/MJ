@@ -88,6 +88,30 @@ export const PRELOAD_OVERLAY_CSS_KEY = 'mj-theme-overlay-css';
 /** Attribute on the `<style>` that carries a restored overlay until bootstrap loads the real one. */
 export const PRELOAD_STYLE_ATTR = 'data-mj-brand-overlay-preload';
 
+/**
+ * localStorage key: the page background the applied theme resolved to, as JSON
+ * `{ bg, scheme, overlay }` ({@link PrePaintPageEntry}). A production build inlines only the
+ * critical CSS before the bundle's stylesheet loads, and that subset drops the
+ * `[data-theme="dark"]` override of `--mj-bg-page`, so the first frame painted the light page
+ * for dark-mode users. The head pre-paint script ({@link PAGE_BACKGROUND_PREPAINT_SCRIPT}) sets
+ * this value inline on `<html>` before first paint; the service removes it once the real
+ * stylesheet is in place.
+ */
+export const PRELOAD_PAGE_KEY = 'mj-theme-page';
+
+/** Attribute the pre-paint script sets on `<html>` while its inline page background is in place. */
+export const PREPAINT_PAGE_ATTR = 'data-mj-prepaint-page';
+
+/** What {@link PRELOAD_PAGE_KEY} holds. */
+export interface PrePaintPageEntry {
+    /** The resolved `--mj-bg-page` value. */
+    bg: string;  // case-violation-ok-legacy-back-compat: read by the dependency-free pre-paint script, which carries no types and cannot share a renamed member
+    /** The base theme it was resolved under. */
+    scheme: 'light' | 'dark';  // case-violation-ok-legacy-back-compat: read by the dependency-free pre-paint script, which carries no types and cannot share a renamed member
+    /** The brand overlay id it was resolved under, or null. */
+    overlay: string | null;  // case-violation-ok-legacy-back-compat: read by the dependency-free pre-paint script, which carries no types and cannot share a renamed member
+}
+
 /** User-settings key: JSON array of the user's starred (favorited) brand theme ids. */
 const STARRED_THEMES_KEY = 'Explorer.StarredThemes';
 
@@ -373,6 +397,12 @@ export class ThemeService {
     public async ApplyBrandOverlay(id: string, options?: { persist?: boolean }): Promise<void> {
         const def = this.brandRegistry.get(id);
         if (!def || !def.CssUrl) {
+            // A failed brand bootstrap leaves the persisted overlay restored but never registered.
+            // Re-applying that id (Theme Studio ending a workspace preview) restores it from
+            // localStorage instead of leaving whatever was painted since.
+            if (this.isPersistedOverlayId(id) && this.RestorePersistedBrandOverlay()) {
+                return;
+            }
             console.warn(`ApplyBrandOverlay: no registered brand theme "${id}" with CSS.`);
             return;
         }
@@ -395,6 +425,16 @@ export class ThemeService {
             }
         } catch (e) {
             // non-fatal: a brief brand flash on next reload at worst
+        }
+        await this.persistPrePaintPage();
+    }
+
+    /** True when `id` is the overlay id persisted for the pre-paint scripts. */
+    private isPersistedOverlayId(id: string): boolean {
+        try {
+            return window.localStorage.getItem(PRELOAD_OVERLAY_KEY) === id;
+        } catch (e) {
+            return false;
         }
     }
 
@@ -497,6 +537,69 @@ export class ThemeService {
         } catch (e) {
             // non-fatal
         }
+        void this.persistPrePaintPage();
+    }
+
+    // ========================================
+    // PRE-PAINT PAGE BACKGROUND
+    // ========================================
+
+    /**
+     * Records the page background the applied theme resolved to, for the head pre-paint script,
+     * and drops the script's inline copy now that the real stylesheet paints the page.
+     *
+     * Waits for a stylesheet that is still loading (a production build loads the full stylesheet
+     * after the critical subset): read before it applies, the computed value would be the critical
+     * subset's light one, the very value this record exists to avoid.
+     */
+    private async persistPrePaintPage(): Promise<void> {
+        if (typeof window === 'undefined' || typeof document === 'undefined') return;
+        await this.whenStylesheetsLoaded();
+        this.clearPrePaintPage();
+        const root = document.documentElement;
+        const bg = getComputedStyle(root).getPropertyValue('--mj-bg-page').trim();
+        if (!bg) return; // no stylesheet defines it (a host without MJ's tokens): nothing to record
+        const entry: PrePaintPageEntry = {
+            bg,
+            scheme: root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light',
+            overlay: root.getAttribute('data-theme-overlay'),
+        };
+        try {
+            const value = JSON.stringify(entry);
+            if (window.localStorage.getItem(PRELOAD_PAGE_KEY) !== value) {
+                window.localStorage.setItem(PRELOAD_PAGE_KEY, value);
+            }
+        } catch (e) {
+            // non-fatal: the next cold load paints the critical CSS's background for a frame
+        }
+    }
+
+    /** Removes the inline page background the head pre-paint script set on `<html>`, if any. */
+    private clearPrePaintPage(): void {
+        const root = document.documentElement;
+        if (!root.hasAttribute(PREPAINT_PAGE_ATTR)) return;
+        root.style.removeProperty('--mj-bg-page');
+        root.style.removeProperty('background-color');
+        root.style.removeProperty('color-scheme');
+        root.removeAttribute(PREPAINT_PAGE_ATTR);
+    }
+
+    /**
+     * Resolves once no stylesheet link is still loading. A deferred stylesheet (critical-CSS
+     * inlining emits `media="print"` with an onload that switches it to `all`) counts as loading
+     * until that switch.
+     */
+    private whenStylesheetsLoaded(): Promise<void> {
+        const pending = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"][media="print"][onload]'));
+        if (pending.length === 0) return Promise.resolve();
+        return Promise.all(pending.map((link) => new Promise<void>((resolve) => {
+            const done = (): void => resolve();
+            link.addEventListener('load', done, { once: true });
+            link.addEventListener('error', done, { once: true });
+            // A load that already fired switched media to `all`, which the selector excluded;
+            // a safety timeout covers a link that never reports.
+            setTimeout(done, 5000);
+        }))).then(() => undefined);
     }
 
     // ========================================
@@ -645,6 +748,7 @@ export class ThemeService {
         }
 
         this._appliedTheme$.next(themeId);
+        await this.persistPrePaintPage();
     }
 
     /**

@@ -159,7 +159,27 @@ shows an inline autocomplete add field and per-chip remove buttons.
   [Editable]="true"
   [MaxDisplay]="20">
 </mj-tag-chips>
+
+<!-- Editable chips limited to one tenant's tags -->
+<mj-tag-chips
+  [Provider]="provider"
+  EntityName="MJ: Lists"
+  [RecordID]="listId"
+  [Editable]="true"
+  [ScopeContext]="{ scopes: [{ entityName: 'Companies', recordId: companyId }] }"
+  [AllowCreate]="false">
+</mj-tag-chips>
 ```
+
+Suggestions only offer active tags (`Status='Active'`). Without
+`ScopeContext` they come from every tag in the instance, and a tag
+created inline is global. With a `ScopeContext` (a `TagScopeContext`
+from `@memberjunction/tag-engine-base`), suggestions are limited to
+global tags plus tags scoped to its records, and a tag created inline
+is saved with `IsGlobal = false` and one `MJ: Tag Scopes` row per scope
+entry. If a scope row fails to save, the tag is not applied to the
+record. Set `[AllowCreate]="false"` to hide "Create '…'" when tags are
+curated elsewhere.
 
 ### `mj-audience-source-picker` + `mj-audience-source-summary`
 

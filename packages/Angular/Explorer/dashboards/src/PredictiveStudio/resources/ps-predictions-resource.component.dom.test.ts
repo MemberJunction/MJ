@@ -179,6 +179,7 @@ async function fakeEngine(validationResults: string | null = storedResults(SHIPP
 function fakeNavigation() {
   return {
     QueryParamChanged$: new Subject<never>(),
+    ResourceReattached$: new Subject<never>(),
     ObserveTabQueryParams: () => of({}),
     UpdateTabQueryParams: vi.fn(),
     SetAgentContext: vi.fn(),
