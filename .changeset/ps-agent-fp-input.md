@@ -10,6 +10,7 @@
 "@memberjunction/ng-bootstrap": minor
 "@memberjunction/ng-bootstrap-lite": minor
 "@memberjunction/ng-core-entity-forms": minor
+"@memberjunction/ng-dashboards": minor
 "@memberjunction/predictive-studio": minor
 "@memberjunction/predictive-studio-core": minor
 "@memberjunction/server": minor

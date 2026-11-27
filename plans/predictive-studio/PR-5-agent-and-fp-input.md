@@ -2540,7 +2540,7 @@ result as an empty set → attack 15 goes red.
 
 #### B2 — Assembly reads the value in effect; pins in lineage
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** An `llm-derived` or `decision-derived` step, and a prediction-feature input (`Source = 'Model'`, D-058),
 resolve to PR 3's `feature-value` `DatedSource` with a pin resolved at train time from the pipeline's Active
@@ -3519,9 +3519,9 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->2<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->2<!-- /gen:checks -->
-- Head: <!-- gen:head -->2c223ef583<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->3<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->3<!-- /gen:checks -->
+- Head: <!-- gen:head -->91215728df<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4054,6 +4054,109 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   `20261127-062235-48465` ok 12 passed).
 - 2026-11-27 — integration: the D5-56 push (`2c223ef583`) went red in its fast tier on `ai-agents` only
   (`20261127-065819-91706`) → owner-batch item 11 (§9), fixed and re-pushed.
+
+### 2026-11-27 — assembly reads the Feature Value in effect; pins in lineage (council 30st24) — B2
+
+- **Branch / commits:** `ps/pr-5-agent-fp-input--B2` from `5a3d5f0809` (local only, D5-53); `b8b73c486e` (attack list,
+  red first, D5-48: run against `5a3d5f0809`, 4 files, **17 failed**, 43 passed), `07ac75bbc9` (implementation),
+  `e870e90b58` (gate G7.4), then this records commit. Database `MJ_PS_PR5_claude2` (dropped and rebuilt clean from the
+  head, 0 sessions first), MJAPI port 4052 (not started: every runtime check here is in-process), truth sidecar 4152
+  with its own run directory.
+- **What shipped.** `PredictionFeaturePin` and the D5-15 union (`FeatureValuePin`, `FeatureValuePins.IsPrediction` /
+  `VersionOf`) in `$C/assembly-contract.ts`; `AssemblyRefusal.decision-date-before-feature-history` (D5-9) in the
+  contract, its zod schema, `IMLScoringRunJsonTypes.ts`, its message and `AS_OF_SOURCE_UNDATED` (D5-B2-1). The typed
+  `model-prediction` step (D5-B2-2) and `LLMDerivedFeatureStep.Encodings`. `FeaturePinResolver.Resolve(step, provider,
+  contextUser)`: an `llm-derived` step pins its Record Process's one Active `MJ: Feature Pipeline Versions` row, a
+  `model-prediction` step its Active binding and that pipeline's Published model; anything else refuses typed.
+  `TrainingEngine.AssembleForTraining` resolves the pins at train time (`ResolveFeaturePins`) and
+  `FeatureResolver.ResolveFeatureColumns` takes them (`FeaturePinsByStep`); its switch gains both kinds and a `default`
+  that refuses an unknown stored kind. The as-of reader (`featureValueReader`) reads, per row, the row in effect at the
+  end of the decision day — `EffectiveAsOf` on or before it (by UTC day), not closed before the next day — among the
+  pinned version's `Pipeline` rows (B1's identity: Record Process + pipeline version, D5-27; `Role = 'Champion'`) and
+  that Record Process's `Human` rows, the greatest `EffectiveAsOf` winning (a `Human` row on a tie; DD-8); for a
+  prediction the pinned binding's `Model` rows of the pinned model, never `InTraining = 1`, and no value for a decision
+  day before the model's snapshot `DataCutoff` (DD-11), read as the run's user. No value in effect → `onUncoveredRow`
+  (`decision-date-before-feature-history`, or excluded and counted against `MJ: Feature Values.<feature>`). The legacy
+  executor refuses both step kinds (`unpinned-feature-version`) instead of selecting today's column. The lineage parser,
+  the snapshot's `PinnedFeatureVersions` and the registry entry carry either pin. The Explorer pipeline editor knows the
+  new kind (icon, row, default step) and no longer lists `llm-derived` as refused.
+- **Rulings:** D5-B2-1 (ownership of `training-engine.ts`, `registry-contracts.ts`, `registry-entry.ts`,
+  `refusals.ts`), D5-B2-2 (controller: the typed `model-prediction` kind; the ruling's attack is in
+  `feature-pin-resolver.test.ts`), D5-B2-3 (caller maintenance of `feature-assembly.test.ts` and
+  `as-of-assembler.test.ts`). `ps-pipelines.component.ts` joined the ownership block under D5-B2-2 (it switches on
+  `FeatureStepKind`). DD-8 and DD-11 decided as §8.5's defaults, plus: a row closed (`EffectiveTo`) before the decision
+  day ends is not in effect (a retired `Human` value gives way; a history-only row is never read).
+- **Hands at integration (run rule 4, D5-B4-2):** `integration-test-suite/src/index.ts`
+  `export * from './checks/ps-gate-c1-c2-4.checks';` after `ps-gate-c1-c1-1`; `check-registry.test.ts`
+  `'ps-gate-c1-c2-4': 2`, the two check ids `ps-gate-c1-c2-4.G7.4` and `ps-gate-c1-c2-4.G7.4-pins`, bundle count
+  294 → **295**. `$C/index.ts` needs no line (`assembly-contract` is already exported); the resolver is exported from
+  B2's own `as-of/index.ts`. The Feature Pipelines gate suite gains `C1 -> C2.4` as Sequence 7.
+- **Tests (pass/fail/skip):** `PredictiveStudio/Core` 602/0/0 (46 files); `PredictiveStudio/Engine` 2130/0/0 (143
+  files); `integration-test-suite` 1156/0/0 (78 files); `Angular/Explorer/dashboards` 3202/0/0 (267 files). Builds:
+  full `pnpm run build` 355/355 and 325/325 tasks, 0 TypeScript errors; `integration-test-suite` rebuilt after each gate
+  edit, 0 errors.
+- **Attacks:** all 8 pass, plus the D5-B2-2 attack. Unit half: `as-of-feature-value.test.ts` 15 (attacks 1–4, 6, 8, and
+  two closed-row cases added when mutation M9 survived), `feature-pin-resolver.test.ts` 11 (attack 5, the D5-B2-2
+  missing-serving-model refusal, attack 7's lineage half), `feature-resolution.test.ts` +5, `feature-assembly.test.ts`
+  attack 5's legacy half (2). Database half: gate **`C1 -> C2.4` passed 2/2**, test run
+  `E93B3DA1-2B08-4EC7-9088-02B71903C779`: on every C1 dues period (truth:load-c1; the title changes 30 days after the
+  decision date on half the rows and on the decision date itself on the other half, the `≤` boundary), **4873/4873 rows
+  read the planted title at the decision date; 0/2437 rows whose title changed after it read today's**; the trained model's
+  snapshot `PinnedFeatureVersions` and Lineage carry the Active version's pin; teardown left 0 fixture rows (attacks 1
+  and 7). Defects the gate found in itself and fixed before commit: concurrent checks built the fixture twice
+  (the build promise is now shared), and teardown's `LIKE` on a name holding "→" needed an `N'…'` literal.
+- **Mutation table (ruling S1)** — each flipped in the source, the named attack red, restored byte-identical (`cmp`):
+
+  | Guard flipped | Attack that went red | Restored |
+  |---|---|---|
+  | `≤` → `<` on the effective-date comparison (`valueInEffect`) | 2 — "at, a day before … (≤)" | ✓ |
+  | drop the pinned-version filter (`[PipelineVersion]=…` in `featureValueFilter`) | 1 — 100% planted / 0 today's | ✓ |
+  | drop the `InTraining` exclusion (`predictionRows`) | 6 — "never reads an InTraining = 1 row" | ✓ |
+  | drop the `Human` branch | 3 and 8 (2 cases) | ✓ |
+  | `Human` rows of any Record Process | 8 — "reads only the first's pipeline and Human values" | ✓ |
+  | drop `Role = 'Champion'` | 8 — "never reads a Challenger (shadow) row" | ✓ |
+  | drop the `DataCutoff` rule | 6 — "decision date before the pinned model's DataCutoff" | ✓ |
+  | no value in effect read as missing (a today's-value path) | 4 (2 cases) and 6's view-authorization case | ✓ |
+  | ignore `EffectiveTo` | 3 (closed rows, 2 cases; first run survived → attacks added) | ✓ |
+  | `refuse` reports the change-history kind | 4 and 6 (3 cases) | ✓ |
+  | any version, not the Active one (`FeaturePinResolver`) | 5 — the pipeline-pin cases (2) | ✓ |
+  | any model, not the Published one | the prediction-pin case | ✓ |
+  | a withdrawn binding accepted | "refuses a withdrawn or unknown binding" | ✓ |
+  | the legacy executor accepts `llm-derived` | 5 — legacy half | ✓ |
+
+- **Mutation output G7.4:** with `≤` → `<` in `valueInEffect` (Engine rebuilt), test run
+  `EF309971-9786-4EC3-A932-FD31C107358F` failed 0/2: `✗ ps-gate-c1-c2-4.G7.4: training's assembly refused:
+  {"kind":"decision-date-before-feature-history","featureName":"GateJobTitle","rowsAffected":2436}` (the rows whose
+  title changes on the decision date itself); restored (no diff against HEAD), rebuilt, and the green run above followed.
+  The gate's first fixture changed the title 30 days before the decision date on those rows, which no `≤`/`<` flip can
+  see; the boundary rows were added for this check.
+- **Exit items:** `sync push` before `codegen` on the rebuilt database (no CodeGen SQL, no generated-file diff; the
+  JSONType interface change is type-only). Runtime (Exit): a D1c model U (11A7D89A…) trained, published through
+  `LifecycleGate` and scored by PR 4's `ScoringService` through a binding (135201C8…) as of 2023-01-01 and 2024-01-01; a
+  second pipeline on the same rows with a `model-prediction` step trained (run 5A9EA358…, snapshot 3DE35DE9…): the stored
+  snapshot matrix, read back through `StorageProviderSnapshotFileStore`, holds **8000 rows (4000 per decision day), 8000
+  equal to the as-of prediction, 0 different, 0 reading a later prediction**; 16000 rows with no prediction in effect
+  excluded and counted (`UncoveredHistoryRowsExcluded` = `MJ: Feature Values.<binding feature>` 16000);
+  `PinnedFeatureVersions` = `[{mlModelScoringBindingId: 135201C8…, mlModelId: 11A7D89A…}]`. `sqlcmd` on
+  `__mj.FeatureValue WHERE Source = 'Model'` for the binding: 24000 rows as of 2023-01-01 and 24000 as of 2024-01-01,
+  8000 of each `InTraining = 1`; U's snapshot `DataCutoff` 2022-01-01. (The check ran as an uncommitted DB-tier file in
+  TruthSuite, deleted after the run; TruthSuite is not B2's.) `Predictive Studio Gates — Feature Pipelines` as a suite:
+  only `C1 -> C2.4` run here; C2.1/C2.2/C2.3/C2.5 need bizapps-common (D5-55: `MJ_PS_PR5_claudefp`), not installed on
+  `MJ_PS_PR5_claude2` — the controller runs the suite at integration.
+- **Environment notes:** `mj` on PATH is the global CLI **5.51.1**; its CodeGen regenerated views without newer
+  columns (`ParentIDChildCount`), so `sync push` failed. The database was rebuilt with the repository's CLI
+  (`pnpm mj …`, which ps-env.sh also guards), clean. The truth sidecar needs `setup:python` in `Sidecar` and
+  `truth:loom` in TruthSuite in a fresh worktree; its first start timed out at 30 s on cold imports and started on retry.
+  `pnpm install` on this head rewrote `pnpm-lock.yaml` (the PS Engine importer's `testing-engine` entry dropped though
+  its `package.json` declares it and the link exists; an `avatar-studio` importer added for an untracked folder holding
+  only `node_modules`) — not B2's change, not committed.
+- **milestone-exit** and changeset: see the records commit (`pr-body.mjs` regenerated the changeset, now naming
+  `@memberjunction/ng-dashboards`, and §10's gen spans).
+- **Not done here (by rule):** `ci-mirror` (D5-51/run rules: the controller's, at integration); D5-9's entry in
+  `program/decisions.md` (plans repository).
+- **LLM spend (§2.4 query, `RunAt >= 2026-11-27T07:00Z` on `MJ_PS_PR5_claude2`):** 192 prompt runs, **$0.633405**,
+  932,817 tokens — all CodeGen's own steps (48 Form Layout $0.2867, 94 Check Constraint Parser $0.1798, 48 Smart Field
+  $0.1647) and two parameter extractions; no agent run.
 
 ## 12. Refresh log (append-only)
 
