@@ -36,6 +36,7 @@ import type {
   MJScheduledJobRunEntity,
   MJScheduledJobTypeEntity,
 } from '@memberjunction/core-entities';
+import { FeatureValueWriteAuthorisations } from '@memberjunction/feature-pipelines';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import { EvaluationProtocol, JsonParse, type Actor } from '@memberjunction/predictive-studio-core';
@@ -150,6 +151,18 @@ async function createRow<T extends BaseEntity>(entityName: string, fill: (row: T
   row.NewRecord();
   fill(row);
   if (!(await row.Save())) throw new Error(`fixture ${entityName} did not save: ${row.LatestResult?.CompleteMessage}`);
+  return row;
+}
+
+/**
+ * Save a new `Human` Feature Value through the write path's one-shot authorisation: the PS Engine's
+ * `FeatureValueEffectiveRangeGuard` refuses any other create of a `Pipeline`/`Human` row (PR 5 B1, D5-30).
+ */
+async function createAuthorisedFeatureValue(fill: (row: MJFeatureValueEntity) => void): Promise<MJFeatureValueEntity> {
+  const row = await server.Provider.GetEntityObject<MJFeatureValueEntity>('MJ: Feature Values', server.User);
+  row.NewRecord();
+  fill(row);
+  if (!(await FeatureValueWriteAuthorisations.Save(row))) throw new Error(`fixture MJ: Feature Values did not save: ${row.LatestResult?.CompleteMessage}`);
   return row;
 }
 
@@ -526,7 +539,7 @@ describe('the M7.8 harness: the data section committed, then the Registry Check 
       x.CronExpression = '0 3 * * *';
     });
     columnProcessId = rp.ID;
-    const human = await createRow<MJFeatureValueEntity>('MJ: Feature Values', (v) => {
+    const human = await createAuthorisedFeatureValue((v) => {
       v.EntityID = w1.Entity.ID;
       v.RecordID = 'pre-change-human-1';
       v.FeatureName = active.FeatureName;

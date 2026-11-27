@@ -38,7 +38,7 @@ import {
   type MJUserEntity,
   type MJUserRoleEntity,
 } from '@memberjunction/core-entities';
-import { FeatureValueCacheService, type ModelValueRow } from '@memberjunction/feature-pipelines';
+import { FeatureValueCacheService, FeatureValueWriteAuthorisations, type ModelValueRow } from '@memberjunction/feature-pipelines';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
@@ -326,7 +326,8 @@ describe('model Feature Values carry their lineage', () => {
 
   it('accepts a Human row that names a binding and no Record Process', async () => {
     const human = await NewHumanRow({ RecordProcessID: null, MLModelScoringBindingID: fixtures.Binding.ID });
-    expect(await human.Save()).toBe(true);
+    // A Human row saves only through the write path's authorisation (FeatureValueEffectiveRangeGuard, PR 5 B1).
+    expect(await FeatureValueWriteAuthorisations.Save(human)).toBe(true);
   });
 
   it('refuses a Pipeline row without a Record Process', async () => {

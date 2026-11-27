@@ -281,8 +281,6 @@ src/generated/class-registrations-manifest.ts
 pnpm-lock.yaml
 # Caller maintenance: shipped Query SQL files join sql-parser's shipped golden corpus (§9 D5-B1-5, D5-A2-12)
 packages/SQLParser/src/__tests__/legacy-goldens/__snapshots__/legacy/shipped/**  (D5-B1-5, D5-A2-12)
-# A new FK into a table spDeleteEntityWithCoreDependencies deletes: the proc's policy fixture (§9 D5-A2-14; PR 4 §5.9)
-packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json  (D5-A2-14)
 # Owner-approved non-PS items (§9 owner batch, 2026-11-26)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/processors/InferProcessor.ts  (D-091 item 1)
 packages/AI/Knowledge/FeaturePipelinesEngine/src/__tests__/infer-processor-*.test.ts  (D-091 items 1, 2)
@@ -3334,6 +3332,15 @@ Record every decision taken in §9 and, when it changes another plan's interface
   the FK for any entity with a claimed pipeline. Found by the push hook: `delete-entity-fk-coverage.test.ts` → `FKs into
   deleted tables with no entry … ["MLBuildApprovalClaim.MLTrainingPipelineID -> MLTrainingPipeline"]`, red alone too. ·
   Deleting the claim (it would free the approval for a second build).
+- D5-54 · 2026-11-26 · Controller ruling, applied at wave-1 integration: a PS migration never copies a core procedure
+  body. Section A2 no longer redefines `spDeleteEntityWithCoreDependencies`, `entity-delete-fk-policy.json` is back at
+  its `next` bytes and its allowlist line is removed; `MLBuildApprovalClaim.MLTrainingPipelineID` is a plain provenance
+  column with no foreign key, so the core procedure deletes a pipeline with no PS statement and the claim (and its
+  consumed approval) survives with the ID it recorded. Supersedes D5-A2-14. · A copied body silently reverts any later
+  `next` change to that procedure, and it is a non-PS change nobody approved. · Keeping the FK and the redefinition
+  (D5-A2-14).
+- D5-53 · 2026-11-26 · Wave-1 sub-branches stay local; only the PR branch is pushed, once, at the end of integration
+  (controller ruling).
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved

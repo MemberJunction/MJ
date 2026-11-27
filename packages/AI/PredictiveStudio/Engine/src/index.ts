@@ -14,6 +14,7 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 
 import { PredictiveStudioEvidenceGuard, PredictiveStudioPublishRecordGuard, PredictiveStudioStatusGuard } from './registry';
 import { PredictiveStudioScoringBindingGuard } from './governance';
+import { FeatureValueEffectiveRangeGuard } from './feature-values/effective-range-guard';
 import { BuildApprovalClaims, BuildApprovalResolver } from './agent';
 
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
@@ -63,6 +64,9 @@ export * from './governance';
 PredictiveStudioStatusGuard.Register();
 PredictiveStudioEvidenceGuard.Register();
 PredictiveStudioPublishRecordGuard.Register();
+// The Feature Value effective-range guard: a Pipeline/Human row's create, or a change of its EffectiveAsOf, EffectiveTo
+// or SourceUserID, only through FeatureValueWriteAuthorisations (PR 5 B1, D5-30).
+FeatureValueEffectiveRangeGuard.Register();
 // The scoring binding guard: a binding's Status changes only through ScoringBindings.Withdraw, its ViewAuthorizationID
 // only for a caller holding the stored authorization.
 PredictiveStudioScoringBindingGuard.Register();
