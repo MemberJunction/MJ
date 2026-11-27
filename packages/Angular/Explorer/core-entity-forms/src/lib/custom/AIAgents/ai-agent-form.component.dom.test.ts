@@ -15,7 +15,7 @@ import { AIAgentFormPolicy, MJAIAgentFormComponentExtended } from './ai-agent-fo
  * queue helpers, and test harness / permissions dialog guards.
  */
 
-function createForm(harnessSpy = vi.fn()): MJAIAgentFormComponentExtended {
+function createForm(harnessSpy: (agentId: string) => void = vi.fn()): MJAIAgentFormComponentExtended {
     TestBed.configureTestingModule({
         providers: [
             { provide: ChangeDetectorRef, useValue: { markForCheck: vi.fn(), detectChanges: vi.fn() } },
@@ -37,12 +37,12 @@ describe('AIAgentFormPolicy', () => {
 });
 
 describe('MJAIAgentFormComponentExtended', () => {
-    let harnessOpenSpy: ReturnType<typeof vi.fn>;
+    let harnessOpenSpy: ReturnType<typeof vi.fn<(agentId: string) => void>>;
     let notifySpy: ReturnType<typeof vi.fn>;
     let form: MJAIAgentFormComponentExtended;
 
     beforeEach(() => {
-        harnessOpenSpy = vi.fn();
+        harnessOpenSpy = vi.fn<(agentId: string) => void>();
         notifySpy = vi.fn();
         vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({
             CreateSimpleNotification: notifySpy,

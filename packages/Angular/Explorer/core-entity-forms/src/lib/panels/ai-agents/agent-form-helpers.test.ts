@@ -107,6 +107,7 @@ describe('ComputeAgentTelemetry', () => {
         const t = ComputeAgentTelemetry(
             [
                 {
+                    ID: 'r1',
                     Status: 'Completed',
                     StartedAt: '2026-01-01T00:00:00.000Z',
                     CompletedAt: '2026-01-01T00:00:01.000Z',
@@ -116,6 +117,7 @@ describe('ComputeAgentTelemetry', () => {
                     TotalTokensUsedRollup: 2000,
                 },
                 {
+                    ID: 'r2',
                     Status: 'Completed',
                     StartedAt: '2026-01-01T00:00:00.000Z',
                     CompletedAt: '2026-01-01T00:00:03.000Z',
@@ -125,6 +127,7 @@ describe('ComputeAgentTelemetry', () => {
                     TotalTokensUsedRollup: null,
                 },
                 {
+                    ID: 'r3',
                     Status: 'Failed',
                     StartedAt: '2026-01-01T00:00:00.000Z',
                     CompletedAt: '2026-01-01T00:00:02.000Z',
@@ -135,6 +138,7 @@ describe('ComputeAgentTelemetry', () => {
                 },
                 {
                     // Running should not affect Completed/(Completed+Failed)
+                    ID: 'r4',
                     Status: 'Running',
                     StartedAt: '2026-01-01T00:00:00.000Z',
                     CompletedAt: null,
