@@ -274,6 +274,150 @@ export class ConversationUtility {
   ] as const;
 
   /**
+   * Visible label for a `record` mention token: explicit `name`, else `entityName`, else `'record'`.
+   */
+  public static ResolveRecordLinkLabel(content: MentionContent): string {
+    const n = (content.name ?? '').trim();
+    return n || content.entityName || 'record';
+  }
+
+  /**
+   * Converts `@{"_mode":...}` tokens in plain text or Markdown into readable plain text via
+   * {@link ToPlainText}, omitting duplicate `record` mention pills that immediately follow the
+   * same record title (e.g. `Northwind @{...}` → `Northwind`, `**Northwind** @{...}.` → `**Northwind**.`).
+   *
+   * @param text - Plain-text or Markdown string that may contain `@{...}` tokens
+   * @param options - Optional agent/user lookup lists and custom record link label resolver
+   * @returns Cleaned plain-text string with duplicate adjacent record pills removed
+   */
+  public static CleanMentions(text: string, options?: CleanMentionsOptions): string {
+    if (!text) return '';
+
+    const tokens = this.ParseSpecialContent(text);
+    if (tokens.length === 0) {
+      return this.ToPlainText(text, options?.agents, options?.users);
+    }
+
+    const resolveLabel = options?.recordLinkLabel ?? ConversationUtility.ResolveRecordLinkLabel;
+    let deduplicated = '';
+    let cursor = 0;
+
+    for (const token of tokens) {
+      deduplicated += text.slice(cursor, token.startIndex);
+      cursor = token.endIndex;
+
+      if (this.isRecordMentionToken(token)) {
+        const label = resolveLabel(token.content);
+        if (this.endsWithRecordTitle(deduplicated, label)) {
+          const nextChar = text[token.endIndex] ?? '';
+          if (nextChar === '' || /^[\s.,;:!?)\]}'"]/.test(nextChar)) {
+            deduplicated = this.trimTrailingHorizontalWhitespace(deduplicated);
+          }
+          continue;
+        }
+      }
+
+      deduplicated += token.originalText;
+    }
+    deduplicated += text.slice(cursor);
+
+    return this.ToPlainText(deduplicated, options?.agents, options?.users);
+  }
+
+  /**
+   * Sanitizes `@{"_mode":...}` (and HTML-entity-escaped `@{&quot;_mode&quot;:...}`) mention tokens
+   * inside an HTML notification or message body without depending on DOM APIs.
+   *
+   * - Preserves HTML tags, attributes, comments, and `<script>` / `<style>` / `<code>` / `<pre>` blocks verbatim.
+   * - Tracks visible text across inline formatting tags (e.g. `<strong>Northwind</strong> @{...}`)
+   *   so adjacent duplicate record pills are omitted, while resetting across block boundaries.
+   * - Escapes every rendered token replacement with HTML entities so mention labels cannot inject markup.
+   *
+   * @param html - HTML string (fragment or document body) that may contain mention tokens
+   * @param options - Optional agent/user lookup lists and custom record link label resolver
+   * @returns HTML string with mention tokens converted cleanly and safely
+   */
+  public static CleanHtmlMentions(html: string, options?: CleanMentionsOptions): string {
+    if (!html) return '';
+    if (!html.includes('@{')) return html;
+
+    const resolveLabel = options?.recordLinkLabel ?? ConversationUtility.ResolveRecordLinkLabel;
+    let out = '';
+    let visiblePrefix = '';
+    let cursor = 0;
+    const len = html.length;
+    const rawTagStack: string[] = [];
+
+    while (cursor < len) {
+      if (html[cursor] === '<') {
+        // HTML comment: <!-- ... -->
+        if (html.startsWith('<!--', cursor)) {
+          const commentEnd = html.indexOf('-->', cursor + 4);
+          const nextPos = commentEnd === -1 ? len : commentEnd + 3;
+          out += html.slice(cursor, nextPos);
+          cursor = nextPos;
+          continue;
+        }
+
+        const tagEnd = this.findHtmlTagEnd(html, cursor);
+        if (tagEnd === -1) {
+          // Malformed unclosed '<' — treat remainder as text
+          const chunk = html.slice(cursor);
+          const cleaned = rawTagStack.length > 0
+            ? { output: chunk, visiblePrefix }
+            : this.cleanHtmlTextSegment(chunk, visiblePrefix, '', resolveLabel, options);
+          out += cleaned.output;
+          visiblePrefix = cleaned.visiblePrefix;
+          break;
+        }
+
+        const rawTag = html.slice(cursor, tagEnd + 1);
+        out += rawTag;
+
+        const tagMatch = /^<\s*(\/)?\s*([a-zA-Z][a-zA-Z0-9:-]*)/.exec(rawTag);
+        if (tagMatch) {
+          const isClosing = Boolean(tagMatch[1]);
+          const tagName = tagMatch[2].toLowerCase();
+          const isSelfClosing = !isClosing && /\/\s*>$/.test(rawTag);
+
+          if (ConversationUtility.HTML_RAW_SKIP_TAGS.has(tagName)) {
+            if (isClosing) {
+              const stackIdx = rawTagStack.lastIndexOf(tagName);
+              if (stackIdx !== -1) {
+                rawTagStack.splice(stackIdx);
+              }
+            } else if (!isSelfClosing) {
+              rawTagStack.push(tagName);
+            }
+          } else if (ConversationUtility.HTML_BLOCK_BOUNDARY_TAGS.has(tagName)) {
+            visiblePrefix = '';
+          }
+        }
+
+        cursor = tagEnd + 1;
+        continue;
+      }
+
+      const nextTagIdx = html.indexOf('<', cursor);
+      const textEnd = nextTagIdx === -1 ? len : nextTagIdx;
+      const textSegment = html.slice(cursor, textEnd);
+      const nextFollowing = nextTagIdx === -1 ? '' : html.slice(nextTagIdx, Math.min(len, nextTagIdx + 32));
+
+      if (rawTagStack.length > 0) {
+        out += textSegment;
+      } else {
+        const cleaned = this.cleanHtmlTextSegment(textSegment, visiblePrefix, nextFollowing, resolveLabel, options);
+        out += cleaned.output;
+        visiblePrefix = cleaned.visiblePrefix;
+      }
+
+      cursor = textEnd;
+    }
+
+    return out;
+  }
+
+  /**
    * Create a clickable record-link token for Chat `message`.
    * Primary-key fields are siblings named as in entity metadata.
    * Reserved names land in nested `keys`.
@@ -697,10 +841,187 @@ export class ConversationUtility {
     return content._mode || 'mention';
   }
 
-  /** Visible label for a record link: explicit `name`, else the entity name. */
-  private static recordLinkLabel(content: MentionContent): string {
-    const n = (content.name ?? '').trim();
-    return n || content.entityName || 'record';
+  private static readonly HTML_RAW_SKIP_TAGS = new Set(['script', 'style', 'code', 'pre']);
+
+  private static readonly HTML_BLOCK_BOUNDARY_TAGS = new Set([
+    'address', 'article', 'aside', 'blockquote', 'br', 'dd', 'div', 'dl', 'dt',
+    'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'section', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'ul',
+  ]);
+
+  private static isRecordMentionToken(
+    token: SpecialContentToken
+  ): token is SpecialContentToken & { content: MentionContent } {
+    return token.mode === 'mention' && 'type' in token.content && token.content.type === 'record';
+  }
+
+  private static trimTrailingHorizontalWhitespace(text: string): string {
+    let end = text.length;
+    while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '\t')) {
+      end--;
+    }
+    return end === text.length ? text : text.slice(0, end);
+  }
+
+  private static endsWithRecordTitle(prefix: string, label: string): boolean {
+    if (!label) {
+      return false;
+    }
+    const trimmed = this.trimTrailingHorizontalWhitespace(prefix);
+    let end = trimmed.length;
+    while (end > 0 && '*_`"\']'.includes(trimmed[end - 1])) {
+      end--;
+    }
+    const start = end - label.length;
+    if (start < 0) {
+      return false;
+    }
+    if (trimmed.slice(start, end).toLowerCase() !== label.toLowerCase()) {
+      return false;
+    }
+    if (start === 0) {
+      return true;
+    }
+    const boundary = trimmed[start - 1];
+    return /\s/.test(boundary) || '(["\'*_`>:'.includes(boundary);
+  }
+
+  private static decodeHtmlEntities(text: string): string {
+    return text.replace(/&(amp|quot|apos|lt|gt|#34|#x22|#39|#x27);/gi, (match, entity: string) => {
+      switch (entity.toLowerCase()) {
+        case 'amp': return '&';
+        case 'quot':
+        case '#34':
+        case '#x22': return '"';
+        case 'apos':
+        case '#39':
+        case '#x27': return "'";
+        case 'lt': return '<';
+        case 'gt': return '>';
+        default: return match;
+      }
+    });
+  }
+
+  private static findHtmlTagEnd(html: string, start: number): number {
+    let quote: '"' | "'" | null = null;
+    for (let i = start + 1; i < html.length; i++) {
+      const ch = html[i];
+      if (quote) {
+        if (ch === quote) {
+          quote = null;
+        }
+      } else if (ch === '"' || ch === "'") {
+        quote = ch;
+      } else if (ch === '>') {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private static cleanHtmlTextSegment(
+    segment: string,
+    initialVisiblePrefix: string,
+    nextFollowingHtml: string,
+    resolveLabel: (content: MentionContent) => string,
+    options?: CleanMentionsOptions
+  ): { output: string; visiblePrefix: string } {
+    if (!segment.includes('@{')) {
+      return {
+        output: segment,
+        visiblePrefix: initialVisiblePrefix + this.decodeHtmlEntities(segment),
+      };
+    }
+
+    let output = '';
+    let visiblePrefix = initialVisiblePrefix;
+    let index = 0;
+
+    while (index < segment.length) {
+      const atIndex = segment.indexOf('@{', index);
+      if (atIndex === -1) {
+        const tail = segment.slice(index);
+        output += tail;
+        visiblePrefix += this.decodeHtmlEntities(tail);
+        break;
+      }
+
+      const before = segment.slice(index, atIndex);
+      output += before;
+      visiblePrefix += this.decodeHtmlEntities(before);
+
+      let braceDepth = 0;
+      let endIndex = -1;
+      for (let i = atIndex + 2; i < segment.length; i++) {
+        if (segment[i] === '{') {
+          braceDepth++;
+        } else if (segment[i] === '}') {
+          if (braceDepth === 0) {
+            endIndex = i;
+            break;
+          }
+          braceDepth--;
+        }
+      }
+
+      if (endIndex === -1) {
+        const rest = segment.slice(atIndex);
+        output += rest;
+        visiblePrefix += this.decodeHtmlEntities(rest);
+        break;
+      }
+
+      const fullMatch = segment.slice(atIndex, endIndex + 1);
+      const rawJson = fullMatch.slice(2, -1);
+      const decodedJson = this.decodeHtmlEntities(rawJson);
+      const content = this.parseToken(decodedJson);
+
+      if (!content) {
+        output += fullMatch;
+        visiblePrefix += this.decodeHtmlEntities(fullMatch);
+        index = endIndex + 1;
+        continue;
+      }
+
+      const mode = this.getMode(content);
+      const token: SpecialContentToken = {
+        mode,
+        content,
+        startIndex: atIndex,
+        endIndex: endIndex + 1,
+        originalText: `@{${decodedJson}}`,
+      };
+
+      if (this.isRecordMentionToken(token)) {
+        const label = resolveLabel(token.content);
+        if (this.endsWithRecordTitle(visiblePrefix, label)) {
+          const nextChar = segment[endIndex + 1] ?? '';
+          const followedByClosingOrBoundary =
+            nextChar === ''
+              ? nextFollowingHtml === '' || /^<\s*\//.test(nextFollowingHtml) || this.startsWithBlockBoundaryTag(nextFollowingHtml)
+              : /^[\s.,;:!?)\]}'"]/.test(nextChar);
+          if (followedByClosingOrBoundary) {
+            output = this.trimTrailingHorizontalWhitespace(output);
+            visiblePrefix = this.trimTrailingHorizontalWhitespace(visiblePrefix);
+          }
+          index = endIndex + 1;
+          continue;
+        }
+      }
+
+      const plainReplacement = this.ToPlainText(token.originalText, options?.agents, options?.users);
+      output += this.escapeHtml(plainReplacement);
+      visiblePrefix += plainReplacement;
+      index = endIndex + 1;
+    }
+
+    return { output, visiblePrefix };
+  }
+
+  private static startsWithBlockBoundaryTag(htmlFragment: string): boolean {
+    const match = /^<\s*([a-zA-Z][a-zA-Z0-9:-]*)/.exec(htmlFragment);
+    return match ? ConversationUtility.HTML_BLOCK_BOUNDARY_TAGS.has(match[1].toLowerCase()) : false;
   }
 
   /**
@@ -733,7 +1054,7 @@ export class ConversationUtility {
     let name = content.name ?? '';
 
     if (content.type === 'record') {
-      return ConversationUtility.recordLinkLabel(content);
+      return ConversationUtility.ResolveRecordLinkLabel(content);
     }
 
     // Try to look up actual name if ID provided
@@ -760,7 +1081,7 @@ export class ConversationUtility {
     if (content.type === 'record') {
       const keys = this.RecordLinkKeyMap(content);
       const pk = Object.entries(keys).map(([k, v]) => `${k}=${v}`).join(', ');
-      return `${ConversationUtility.recordLinkLabel(content)} [${content.entityName || 'record'}${pk ? '; ' + pk : ''}]`;
+      return `${ConversationUtility.ResolveRecordLinkLabel(content)} [${content.entityName || 'record'}${pk ? '; ' + pk : ''}]`;
     }
 
     // Try to look up actual name if ID provided
@@ -809,6 +1130,18 @@ export class ConversationUtility {
 }
 
 // ==================== Type Definitions ====================
+
+/**
+ * Options for {@link ConversationUtility.CleanMentions} and {@link ConversationUtility.CleanHtmlMentions}.
+ */
+export interface CleanMentionsOptions {
+  /** Optional agent lookup list for resolving agent mention IDs to current names. */
+  agents?: AgentInfo[];
+  /** Optional user lookup list for resolving user mention IDs to current names. */
+  users?: UserInfo[];
+  /** Optional custom resolver for `record` mention labels (defaults to {@link ConversationUtility.ResolveRecordLinkLabel}). */
+  recordLinkLabel?: (content: MentionContent) => string;
+}
 
 /**
  * Parsed token with position information

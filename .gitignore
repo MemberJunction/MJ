@@ -278,3 +278,6 @@ dist-stricttmpl/
 # hard-coded test data, so they never belong in the repo.
 scratch-*.mjs
 gen-lang-client-0516550786-6a039e3b0346.json
+
+# Internal Software Factory run specs — never committed to the public MJ repo
+.mj/specs/
