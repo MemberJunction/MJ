@@ -14,7 +14,7 @@
  */
 
 import type { ActionParam, MJActionEntityExtended } from '@memberjunction/actions-base';
-import type { ChatMessage } from '@memberjunction/ai';
+import type { BaseRealtimeModel, ChatMessage, RealtimeTranscript } from '@memberjunction/ai';
 import type {
     AgentChatMessage,
     AgentConfiguration,
@@ -26,9 +26,11 @@ import type {
     ExecuteAgentParams,
     ExecuteAgentResult,
     MessageLifecycleEvent,
+    MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
     MJAIPromptEntityExtended,
+    MJAIPromptRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { StoredToolResult } from '../../ArtifactToolManager';
 import type { CompactionOutcome, EffectiveContextBudget } from '../../ConversationCompactionManager';
@@ -36,6 +38,14 @@ import type { ConversationToolExecutionResult, ConversationToolSummaryHost } fro
 import type { MemoryWriteResult } from '../../MemoryWriteManager';
 import type { PayloadManagerResult } from '../../PayloadManager';
 import type { PipelineExecutionResult } from '../../pipeline';
+import type { PrepareClientSessionInput } from '../../realtime/realtime-client-session-service';
+import type { RealtimeCoAgentConfig } from '../../realtime/realtime-coagent-config';
+import type { RealtimePlatformCredentials } from '../../realtime/realtime-platform-credentials';
+import type {
+    DelegatedResult,
+    DelegateToTargetRequest,
+    RealtimeSessionRunnerDeps,
+} from '../../realtime/realtime-session-runner';
 import type { CarryForwardStepRecord } from '../../tool-result-format';
 import type { AgentRunContext } from '../AgentRunContext';
 import type {
@@ -46,6 +56,7 @@ import type {
 import type { BaseAgentCompactionHelper, CompactMessageMetadata } from '../compaction/BaseAgentCompactionHelper';
 import type { BaseAgentMessagingHelper } from '../messaging/BaseAgentMessagingHelper';
 import type { BaseAgentPayloadHelper } from '../payload/BaseAgentPayloadHelper';
+import type { AgentRealtimeModelResolution, BaseAgentRealtimeHelper } from '../realtime/BaseAgentRealtimeHelper';
 
 /**
  * Logic-free compatibility base class extended by `BaseAgent` throughout `v6.x` so every
@@ -64,6 +75,9 @@ export abstract class BaseAgentDeprecatedDelegates {
 
     /** Provides the resolved compaction/recovery/token helper for this run (`BaseAgentCompactionHelper`). */
     protected abstract getCompactionHelper(): BaseAgentCompactionHelper;
+
+    /** Provides the resolved realtime session helper for this run (`BaseAgentRealtimeHelper`). */
+    protected abstract getRealtimeHelper(): BaseAgentRealtimeHelper;
 
     // =========================================================================
     // Seam S1 — Messaging, Progress, Step Logging & Stopped-Run Continuation
@@ -536,5 +550,94 @@ export abstract class BaseAgentDeprecatedDelegates {
         currentTurn: number
     ): string | null {
         return this.getCompactionHelper().ExecuteExpandMessageStep(this.getRunContext(), request, params, currentTurn);
+    }
+
+    // =========================================================================
+    // Seam S4 — Realtime Voice/Bridge Sessions, Transcripts & Audio Recording
+    // =========================================================================
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.ExecuteRealtimeSession` instead (slated for v7.0 removal). */
+    protected executeRealtimeSession<R = unknown>(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<ExecuteAgentResult<R>> {
+        return this.getRealtimeHelper().ExecuteRealtimeSession<R>(this.getRunContext(), params, config);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.BuildBridgePrepInput` instead (slated for v7.0 removal). */
+    protected buildBridgePrepInput(params: ExecuteAgentParams): PrepareClientSessionInput {
+        return this.getRealtimeHelper().BuildBridgePrepInput(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.ResolveRealtimeModel` instead (slated for v7.0 removal). */
+    protected resolveRealtimeModel(
+        params: ExecuteAgentParams,
+        overrideModelID?: string
+    ): Promise<AgentRealtimeModelResolution | null> {
+        return this.getRealtimeHelper().ResolveRealtimeModel(this.getRunContext(), params, overrideModelID);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.ResolveRealtimePlatformCredentials` instead (slated for v7.0 removal). */
+    protected resolveRealtimePlatformCredentials(
+        modelIDs: string[],
+        params: ExecuteAgentParams
+    ): Promise<RealtimePlatformCredentials> {
+        return this.getRealtimeHelper().ResolveRealtimePlatformCredentials(this.getRunContext(), modelIDs, params);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.ResolveRealtimeEffectiveConfig` instead (slated for v7.0 removal). */
+    protected resolveRealtimeEffectiveConfig(agent: MJAIAgentEntityExtended): RealtimeCoAgentConfig {
+        return this.getRealtimeHelper().ResolveRealtimeEffectiveConfig(this.getRunContext(), agent);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.BuildRealtimeSessionDeps` instead (slated for v7.0 removal). */
+    protected buildRealtimeSessionDeps(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        modelResolution: {
+            model: BaseRealtimeModel;
+            apiName: string;
+            driverClass?: string;
+            modelID?: string;
+            modelVendorID?: string;
+        },
+        promptRun: MJAIPromptRunEntityExtended | null
+    ): Promise<RealtimeSessionRunnerDeps> {
+        return this.getRealtimeHelper().BuildRealtimeSessionDeps(
+            this.getRunContext(),
+            params,
+            config,
+            modelResolution,
+            promptRun
+        );
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.DelegateRealtimeToTarget` instead (slated for v7.0 removal). */
+    protected delegateRealtimeToTarget(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        request: DelegateToTargetRequest
+    ): Promise<DelegatedResult> {
+        return this.getRealtimeHelper().DelegateRealtimeToTarget(this.getRunContext(), params, config, request);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.ResolveRealtimeTargetAgent` instead (slated for v7.0 removal). */
+    protected resolveRealtimeTargetAgent(params: ExecuteAgentParams): MJAIAgentEntityExtended | null {
+        return this.getRealtimeHelper().ResolveRealtimeTargetAgent(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.ParseDelegateRequestText` instead (slated for v7.0 removal). */
+    protected parseDelegateRequestText(argumentsJson: string): string {
+        return this.getRealtimeHelper().ParseDelegateRequestText(this.getRunContext(), argumentsJson);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.PersistRealtimeTranscript` instead (slated for v7.0 removal). */
+    protected persistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null> {
+        return this.getRealtimeHelper().PersistRealtimeTranscript(this.getRunContext(), params, transcript);
+    }
+
+    /** @deprecated Use `BaseAgentRealtimeHelper.FinalizeRealtimeRecording` instead (slated for v7.0 removal). */
+    protected finalizeRealtimeRecording(params: ExecuteAgentParams): Promise<void> {
+        return this.getRealtimeHelper().FinalizeRealtimeRecording(this.getRunContext(), params);
     }
 }

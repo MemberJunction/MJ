@@ -30,11 +30,12 @@ import type {
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
     MJAIPromptEntityExtended,
+    MJAIPromptRunEntityExtended,
 } from '@memberjunction/ai-core-plus';
-import type { ActionParam, MJActionEntityExtended } from '@memberjunction/actions-base';
-import type { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
+import type { ActionParam, ActionResult, ActionRunScope, MJActionEntityExtended } from '@memberjunction/actions-base';
+import type { BaseRealtimeModel, ChatMessage, ChatMessageContent, RealtimeTranscript } from '@memberjunction/ai';
 import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
-import type { IMetadataProvider, MJLimitsConfig } from '@memberjunction/core';
+import type { IMetadataProvider, MJLimitsConfig, UserInfo } from '@memberjunction/core';
 import type { ConversationBranchRow, MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import type { ActionCompactMode } from '../ActionLifecycleResolver';
 import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
@@ -45,6 +46,15 @@ import type { ArtifactToolManager } from '../ArtifactToolManager';
 import type { CompactionOutcome, EffectiveContextBudget } from '../ConversationCompactionManager';
 import type { NativeControlConfig } from '../native-tools/native-control-config';
 import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
+import type { PrepareClientSessionInput } from '../realtime/realtime-client-session-service';
+import type { RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
+import type { RealtimePlatformCredentials } from '../realtime/realtime-platform-credentials';
+import type { RealtimeRecordingController } from '../realtime/realtime-recording-capture';
+import type {
+    DelegatedResult,
+    DelegateToTargetRequest,
+    RealtimeSessionRunnerDeps,
+} from '../realtime/realtime-session-runner';
 import type { ScratchpadManager } from '../ScratchpadManager';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { CarryForwardStepRecord } from '../tool-result-format';
@@ -52,12 +62,14 @@ import type {
     ActionResultSummary,
     AgentLogErrorOptions,
     CreateStepEntityParams,
+    ExecuteSingleActionOptions,
     ExtendedProgressStep,
     HeldCompletionChange,
     RecordedPromptMessage,
     StoppedRunContinuation,
     StoppedRunStackStepRecord,
 } from './base-agent-types';
+import type { AgentRealtimeModelResolution } from './realtime/BaseAgentRealtimeHelper';
 
 /**
  * Virtual-dispatch hooks back into `BaseAgent` so subclass overrides (and test spies) on
@@ -248,6 +260,46 @@ export interface AgentHelperSubclassHooks {
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string };
+
+    // --- Realtime session hooks (Slice s4) ---
+    SessionAudienceRefusal(params: ExecuteAgentParams): string | null;
+    RunScopeFor(params: ExecuteAgentParams): ActionRunScope;
+    ActiveSkillIDsForRun(params: ExecuteAgentParams): string[];
+    GetEffectiveActionsForValidation(agentId: string): MJActionEntityExtended[];
+    ExecuteSingleAction(
+        params: ExecuteAgentParams,
+        action: AgentAction,
+        actionEntity: MJActionEntityExtended,
+        contextUser?: UserInfo,
+        options?: ExecuteSingleActionOptions
+    ): Promise<ActionResult>;
+    CreateFailureResult(errorMessage: string, contextUser?: UserInfo): Promise<ExecuteAgentResult>;
+    FinalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>>;
+    BuildBridgePrepInput(params: ExecuteAgentParams): PrepareClientSessionInput;
+    ResolveRealtimeModel(params: ExecuteAgentParams, overrideModelID?: string): Promise<AgentRealtimeModelResolution | null>;
+    ResolveRealtimePlatformCredentials(modelIDs: string[], params: ExecuteAgentParams): Promise<RealtimePlatformCredentials>;
+    ResolveRealtimeEffectiveConfig(agent: MJAIAgentEntityExtended): RealtimeCoAgentConfig;
+    BuildRealtimeSessionDeps(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        modelResolution: {
+            model: BaseRealtimeModel;
+            apiName: string;
+            driverClass?: string;
+            modelID?: string;
+            modelVendorID?: string;
+        },
+        promptRun: MJAIPromptRunEntityExtended | null
+    ): Promise<RealtimeSessionRunnerDeps>;
+    DelegateRealtimeToTarget(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        request: DelegateToTargetRequest
+    ): Promise<DelegatedResult>;
+    ResolveRealtimeTargetAgent(params: ExecuteAgentParams): MJAIAgentEntityExtended | null;
+    ParseDelegateRequestText(argumentsJson: string): string;
+    PersistRealtimeTranscript(params: ExecuteAgentParams, transcript: RealtimeTranscript): Promise<string | null>;
+    FinalizeRealtimeRecording(params: ExecuteAgentParams): Promise<void>;
 }
 
 /**
@@ -319,6 +371,14 @@ export interface AgentRunContext {
     readonly ArtifactToolManager: ArtifactToolManager;
     /** Scratchpad manager for notes & tasks. */
     readonly ScratchpadManager: ScratchpadManager;
+    /** Active realtime turn rows keyed by role (`'user'` / `'assistant'`). */
+    RealtimeInFlightTurns: Map<string, { id: string; open: boolean }>;
+    /** Per-role serialized transcript persistence promise queues for realtime sessions. */
+    RealtimePersistQueues: Map<string, Promise<void>>;
+    /** Active audio recording controller for the current realtime session, or `null`. */
+    RealtimeRecording: RealtimeRecordingController | null;
+    /** Storage account id for the active realtime audio recording, or `null`. */
+    RealtimeRecordingAccountId: string | null;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;
