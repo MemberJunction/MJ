@@ -1,0 +1,192 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Runs & Sessions"
+    Icon="fa-solid fa-clock-rotate-left"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [BadgeCount]="TotalRunCount > 0 ? TotalRunCount : null"
+    [DefaultExpanded]="true">
+
+    @if (!Record?.ID) {
+        <mj-empty-state
+            Icon="fa-solid fa-clock-rotate-left"
+            Title="No Execution History Yet"
+            Message="Save and run this agent to inspect execution traces, token usage, and costs."
+            Size="compact" />
+    } @else {
+        <div class="ars-shell">
+            <div class="ars-header">
+                <div class="ars-tabs" role="tablist" aria-label="Execution history view">
+                    <button
+                        type="button"
+                        role="tab"
+                        class="ars-tab"
+                        [class.is-active]="ActiveView === 'runs'"
+                        [attr.aria-selected]="ActiveView === 'runs'"
+                        (click)="SetView('runs')">
+                        <i class="fa-solid fa-person-running" aria-hidden="true"></i>
+                        Runs
+                        @if (TotalRunCount > 0) {
+                            <span class="ars-tab-count">{{ TotalRunCount }}</span>
+                        }
+                    </button>
+                    <button
+                        type="button"
+                        role="tab"
+                        class="ars-tab"
+                        [class.is-active]="ActiveView === 'sessions'"
+                        [attr.aria-selected]="ActiveView === 'sessions'"
+                        (click)="SetView('sessions')">
+                        <i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>
+                        Voice Sessions
+                        @if (TotalSessionCount > 0) {
+                            <span class="ars-tab-count">{{ TotalSessionCount }}</span>
+                        }
+                    </button>
+                </div>
+
+                @if (ActiveView === 'runs' && TotalRunCount > 0) {
+                    <div class="ars-search">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                        <input
+                            type="text"
+                            class="mj-input ars-search-input"
+                            [(ngModel)]="SearchText"
+                            [ngModelOptions]="{ standalone: true }"
+                            placeholder="Filter by Run ID, status, or config..."
+                            aria-label="Filter runs" />
+                    </div>
+                }
+            </div>
+
+            <div class="ars-body">
+                @if (ActiveView === 'sessions') {
+                    @if (LoadingSessions) {
+                        <mj-loading text="Loading voice sessions..." size="medium"></mj-loading>
+                    } @else if (Sessions.length === 0) {
+                        <mj-empty-state
+                            Icon="fa-solid fa-tower-broadcast"
+                            Title="No Voice Sessions"
+                            Message="This agent has not participated in any realtime voice sessions yet."
+                            Size="compact" />
+                    } @else {
+                        <div class="ars-list">
+                            @for (session of Sessions; track session.ID) {
+                                <div class="ars-card" (click)="OpenSession(session.ID)">
+                                    <div class="ars-card-head">
+                                        <div class="ars-status-dot"
+                                            [class.ars-status-dot--ok]="session.Status === 'Closed' || session.Status === 'Active'">
+                                            <i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>
+                                        </div>
+                                        <div class="ars-card-main">
+                                            <div class="ars-card-title">
+                                                Session #{{ session.ID.substring(0, 8) }}
+                                                <span class="ars-pill">{{ session.Status }}</span>
+                                            </div>
+                                            <div class="ars-card-meta">
+                                                <span>{{ session.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
+                                                <span><i class="fa-solid fa-stopwatch" aria-hidden="true"></i> {{ SessionDuration(session) }}</span>
+                                                @if (session.User) {
+                                                    <span><i class="fa-solid fa-user" aria-hidden="true"></i> {{ session.User }}</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <button mjButton variant="flat" size="sm" type="button" (click)="OpenSession(session.ID, $event)" title="Open session">
+                                            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                } @else {
+                    @if (LoadingRuns) {
+                        <mj-loading text="Loading execution history..." size="medium"></mj-loading>
+                    } @else if (FilteredRuns.length === 0) {
+                        <mj-empty-state
+                            Icon="fa-solid fa-clock-rotate-left"
+                            [Title]="SearchText ? 'No Matching Runs' : 'No Execution History'"
+                            [Message]="SearchText ? 'No runs match your current filter.' : 'Click Run in the toolbar to test this agent and see traces here.'"
+                            Size="compact" />
+                    } @else {
+                        <div class="ars-list">
+                            @for (run of FilteredRuns; track run.ID) {
+                                <div class="ars-card" [class.is-expanded]="IsExpanded(run.ID)">
+                                    <div class="ars-card-head" (click)="ToggleExpanded(run.ID)">
+                                        <div class="ars-status-dot"
+                                            [class.ars-status-dot--ok]="run.Status === 'Completed'"
+                                            [class.ars-status-dot--err]="run.Status === 'Failed'"
+                                            [class.ars-status-dot--warn]="run.Status === 'Running' || run.Status === 'Cancelled'">
+                                            <i class="fa-solid"
+                                                [class.fa-check]="run.Status === 'Completed'"
+                                                [class.fa-xmark]="run.Status === 'Failed'"
+                                                [class.fa-spinner]="run.Status === 'Running'"
+                                                [class.fa-spin]="run.Status === 'Running'"
+                                                [class.fa-ban]="run.Status === 'Cancelled'"
+                                                aria-hidden="true"></i>
+                                        </div>
+                                        <div class="ars-card-main">
+                                            <div class="ars-card-title">
+                                                <i class="fa-solid fa-chevron-right ars-chevron" [class.is-open]="IsExpanded(run.ID)" aria-hidden="true"></i>
+                                                Run #{{ run.ID.substring(0, 8) }}
+                                                <span class="ars-pill"
+                                                    [class.ars-pill--ok]="run.Status === 'Completed'"
+                                                    [class.ars-pill--err]="run.Status === 'Failed'">
+                                                    {{ run.Status }}
+                                                </span>
+                                                <span class="ars-date">{{ run.__mj_CreatedAt | date:'MMM d, h:mm a' }}</span>
+                                            </div>
+                                            <div class="ars-card-meta">
+                                                <span><i class="fa-solid fa-stopwatch" aria-hidden="true"></i> {{ RunDuration(run) }}</span>
+                                                @if (run.TotalTokensUsedRollup || run.TotalTokensUsed) {
+                                                    <span><i class="fa-solid fa-microchip" aria-hidden="true"></i> {{ TokensLabel(run.TotalTokensUsedRollup || run.TotalTokensUsed) }} tokens</span>
+                                                }
+                                                @if (run.TotalCostRollup || run.TotalCost) {
+                                                    <span><i class="fa-solid fa-dollar-sign" aria-hidden="true"></i> {{ CostLabel(run.TotalCostRollup || run.TotalCost) }}</span>
+                                                }
+                                                @if (run.Configuration) {
+                                                    <span><i class="fa-solid fa-cog" aria-hidden="true"></i> {{ run.Configuration }}</span>
+                                                }
+                                            </div>
+                                        </div>
+                                        <button mjButton variant="outline" size="sm" type="button" (click)="OpenRun(run.ID, $event)" title="Open full run trace">
+                                            Trace
+                                            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                        </button>
+                                    </div>
+
+                                    @if (IsExpanded(run.ID)) {
+                                        <div class="ars-card-detail">
+                                            @if (run.ErrorMessage) {
+                                                <mj-alert Variant="error" Size="sm">{{ run.ErrorMessage }}</mj-alert>
+                                            }
+                                            @if (HasResult(run)) {
+                                                <div class="ars-result-block">
+                                                    <div class="ars-result-label">Result Payload</div>
+                                                    <pre class="ars-result-pre">{{ ResultPreview(run) }}</pre>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (TotalPages > 1) {
+                            <div class="ars-pagination">
+                                <button mjButton variant="outline" size="sm" type="button" [disabled]="CurrentPage <= 1 || LoadingRuns" (click)="GoToPage(CurrentPage - 1)">
+                                    <i class="fa-solid fa-chevron-left" aria-hidden="true"></i> Previous
+                                </button>
+                                <span class="ars-page-label">Page {{ CurrentPage }} of {{ TotalPages }} ({{ TotalRunCount }} total)</span>
+                                <button mjButton variant="outline" size="sm" type="button" [disabled]="CurrentPage >= TotalPages || LoadingRuns" (click)="GoToPage(CurrentPage + 1)">
+                                    Next <i class="fa-solid fa-chevron-right" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        }
+                    }
+                }
+            </div>
+        </div>
+    }
+</mj-collapsible-panel>

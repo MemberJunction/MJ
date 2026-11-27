@@ -1,0 +1,117 @@
+@if (Studio.HasStudio) {
+    <mj-collapsible-panel
+        [SectionKey]="SectionKey"
+        [Order]="DisplayOrder"
+        [SectionName]="Studio.Title"
+        [Icon]="Studio.Icon"
+        [Indicators]="StudioIndicators"
+        [Form]="FormComponent"
+        [FormContext]="FormContext"
+        [DefaultExpanded]="true">
+
+        <!-- Hidden binding read keeps dynamically mounted section's EditMode in sync -->
+        <div class="ats-shell" [attr.data-edit-mode]="SyncedEditMode">
+            <div class="ats-toolbar">
+                <div class="ats-toolbar-left">
+                    <span class="ats-title">
+                        <i [class]="Studio.Icon" aria-hidden="true"></i>
+                        {{ Studio.Title }}
+                    </span>
+                    <span class="ats-type-pill">{{ Studio.TypeName || 'Custom Type' }}</span>
+                    @if (StudioIndicators.DirtyCount > 0) {
+                        <span class="ats-dirty-pill">
+                            <i class="fa-solid fa-circle" aria-hidden="true"></i>
+                            Unsaved edits (saves with agent)
+                        </span>
+                    }
+                </div>
+                <div class="ats-toolbar-right">
+                    <button
+                        mjButton
+                        [variant]="ShowRunOverlay ? 'primary' : 'outline'"
+                        size="sm"
+                        type="button"
+                        (click)="ToggleRunOverlay()">
+                        <i class="fa-solid fa-wave-square" aria-hidden="true"></i>
+                        {{ ShowRunOverlay ? 'Hide Latest Run' : 'Overlay Latest Run' }}
+                    </button>
+                    <button
+                        mjButton
+                        variant="flat"
+                        size="sm"
+                        type="button"
+                        (click)="BackToOverview()">
+                        <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
+                        Overview
+                    </button>
+                </div>
+            </div>
+
+            <!-- Optional Latest Run Trace Ribbon (Option C cross-link inside Option B Studio) -->
+            @if (ShowRunOverlay) {
+                <div class="ats-run-ribbon"
+                    [class.ats-run-ribbon--error]="LatestRun?.Status === 'Failed'"
+                    [class.ats-run-ribbon--success]="LatestRun?.Status === 'Completed'">
+                    @if (LoadingRunOverlay) {
+                        <span class="ats-run-loading">
+                            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i>
+                            Loading latest execution trace...
+                        </span>
+                    } @else if (!LatestRun) {
+                        <span class="ats-run-empty">No runs recorded for this agent yet. Click <strong>Run</strong> in the toolbar to test it.</span>
+                    } @else {
+                        <div class="ats-run-summary">
+                            <span class="ats-run-badge">
+                                <i class="fa-solid"
+                                    [class.fa-circle-check]="LatestRun.Status === 'Completed'"
+                                    [class.fa-circle-exclamation]="LatestRun.Status === 'Failed'"
+                                    [class.fa-clock]="LatestRun.Status !== 'Completed' && LatestRun.Status !== 'Failed'"
+                                    aria-hidden="true"></i>
+                                Run #{{ LatestRun.ID.substring(0, 8) }} · {{ LatestRun.Status }} · {{ RunDuration(LatestRun) }}
+                            </span>
+                            @if (LatestRun.ErrorMessage) {
+                                <span class="ats-run-error-text">{{ LatestRun.ErrorMessage }}</span>
+                            }
+                            <button mjButton variant="flat" size="sm" type="button" (click)="OpenLatestRun()">
+                                Full Trace
+                                <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                            </button>
+                        </div>
+                        @if (LatestRunSteps.length > 0) {
+                            <div class="ats-run-steps">
+                                @for (step of LatestRunSteps; track step.ID; let last = $last) {
+                                    <span class="ats-step-chip"
+                                        [class.ats-step-chip--ok]="step.Status === 'Completed'"
+                                        [class.ats-step-chip--fail]="step.Status === 'Failed'"
+                                        [title]="step.ErrorMessage || (step.StepName + ' (' + StepDuration(step) + ')')">
+                                        <i class="fa-solid"
+                                            [class.fa-check]="step.Status === 'Completed'"
+                                            [class.fa-xmark]="step.Status === 'Failed'"
+                                            [class.fa-circle-dot]="step.Status !== 'Completed' && step.Status !== 'Failed'"
+                                            aria-hidden="true"></i>
+                                        {{ step.StepName }}
+                                        <span class="ats-step-dur">{{ StepDuration(step) }}</span>
+                                    </span>
+                                    @if (!last) {
+                                        <i class="fa-solid fa-chevron-right ats-step-sep" aria-hidden="true"></i>
+                                    }
+                                }
+                            </div>
+                        }
+                    }
+                </div>
+            }
+
+            @if (LoadingSection) {
+                <mj-loading [text]="'Loading ' + Studio.Title + '...'" size="medium"></mj-loading>
+            }
+            @if (LoadError) {
+                <mj-alert Variant="error">{{ LoadError }}</mj-alert>
+            }
+
+            <div class="ats-canvas-host">
+                <ng-container #studioAnchor></ng-container>
+            </div>
+        </div>
+    </mj-collapsible-panel>
+}

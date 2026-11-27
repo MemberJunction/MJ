@@ -1,0 +1,45 @@
+.agov-shell {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-md);
+    overflow: hidden;
+}
+
+.agov-subtabs {
+    display: flex;
+    align-items: center;
+    gap: var(--mj-space-2);
+    padding: var(--mj-space-2-5) var(--mj-space-4);
+    background: var(--mj-bg-surface-card);
+    border-bottom: 1px solid var(--mj-border-default);
+}
+
+.agov-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mj-space-1-5);
+    padding: var(--mj-space-1-5) var(--mj-space-3);
+    border-radius: var(--mj-radius-full);
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: var(--mj-text-xs);
+    font-weight: var(--mj-font-medium);
+    cursor: pointer;
+}
+
+.agov-tab:hover {
+    color: var(--mj-text-primary);
+    border-color: var(--mj-border-strong);
+}
+
+.agov-tab.is-active {
+    background: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-on-primary);
+    font-weight: var(--mj-font-semibold);
+}
+
+.agov-body {
+    padding: var(--mj-space-4);
+}

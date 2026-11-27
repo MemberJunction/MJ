@@ -1,0 +1,116 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Guardrails & Payload"
+    Icon="fa-solid fa-shield-halved"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [DefaultExpanded]="true">
+
+    @if (Record) {
+        <div class="agp-stack">
+            <!-- Execution Guardrails + Headroom Summary -->
+            <section class="agp-card">
+                <header class="agp-card-head">
+                    <div class="agp-head-title">
+                        <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                        <h3>Execution Guardrails</h3>
+                    </div>
+                    @if (Telemetry.RunCount > 0) {
+                        <span class="agp-headroom-meta">
+                            Recent runs avg {{ FormattedAvgCost }} · p95 {{ FormattedP95Tokens }} tokens
+                        </span>
+                    }
+                </header>
+                <div class="agp-card-body">
+                    <div class="agp-grid">
+                        <div class="agp-field-box">
+                            <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxCostPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                            @if (Telemetry.CostHeadroomPct != null) {
+                                <div class="agp-meter-track">
+                                    <div class="agp-meter-fill" [class.agp-meter-fill--warn]="Telemetry.CostHeadroomPct >= 75" [style.width.%]="Telemetry.CostHeadroomPct"></div>
+                                </div>
+                                <span class="agp-meter-caption">Avg cost uses {{ Telemetry.CostHeadroomPct }}% of cap</span>
+                            }
+                        </div>
+                        <div class="agp-field-box">
+                            <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxTokensPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                            @if (Telemetry.TokenHeadroomPct != null) {
+                                <div class="agp-meter-track">
+                                    <div class="agp-meter-fill" [class.agp-meter-fill--warn]="Telemetry.TokenHeadroomPct >= 75" [style.width.%]="Telemetry.TokenHeadroomPct"></div>
+                                </div>
+                                <span class="agp-meter-caption">p95 usage is {{ Telemetry.TokenHeadroomPct }}% of cap</span>
+                            }
+                        </div>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxIterationsPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxTimePerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MinExecutionsPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxExecutionsPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="ContextWindowMaxTokens" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="DefaultPromptEffortLevel" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Runtime Execution, Planning, Tools & Skills Settings -->
+            <section class="agp-card">
+                <header class="agp-card-head">
+                    <div class="agp-head-title">
+                        <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                        <h3>Runtime Behavior, Planning &amp; Skills</h3>
+                    </div>
+                </header>
+                <div class="agp-card-body">
+                    <div class="agp-grid">
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="ChatHandlingOption" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MessageMode" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxMessages" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="AcceptsSkills" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="SkillActivationMode" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="RecordingDefault" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="DefaultCoAgentID" Type="textbox" [EditMode]="EditMode" [FormContext]="FormContext" LinkType="Record"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="DefaultMediaCollectionID" Type="textbox" [EditMode]="EditMode" [FormContext]="FormContext" LinkType="Record"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="SupportsPlanMode" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="RequirePlanMode" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="DeclareActionsAsNativeTools" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="AllowEphemeralClientTools" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="AcceptUnregisteredFiles" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                    </div>
+                    <div class="agp-code-block">
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="TypeConfiguration" Type="code" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Payload Routing, Injection & Validation -->
+            <section class="agp-card">
+                <header class="agp-card-head">
+                    <div class="agp-head-title">
+                        <i class="fa-solid fa-exchange-alt" aria-hidden="true"></i>
+                        <h3>Payload Data Flow &amp; Validation</h3>
+                    </div>
+                </header>
+                <div class="agp-card-body">
+                    <div class="agp-grid">
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="PayloadScope" Type="textarea" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="PayloadSelfReadPaths" Type="textarea" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="PayloadSelfWritePaths" Type="textarea" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="PayloadDownstreamPaths" Type="code" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="PayloadUpstreamPaths" Type="code" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="StartingPayloadValidationMode" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="StartingPayloadValidation" Type="code" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="FinalPayloadValidationMode" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="FinalPayloadValidationMaxRetries" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="FinalPayloadValidation" Type="code" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="InjectNotes" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxNotesToInject" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="NoteInjectionStrategy" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="InjectExamples" Type="checkbox" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxExamplesToInject" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="ExampleInjectionStrategy" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+</mj-collapsible-panel>

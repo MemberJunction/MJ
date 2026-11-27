@@ -1,0 +1,385 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKeys.Overview"
+    [Order]="DisplayOrder"
+    SectionName="Overview"
+    Icon="fa-solid fa-gauge-high"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [DefaultExpanded]="true">
+
+    @if (Record) {
+        <div class="ao-cockpit">
+            <!-- 1. Cockpit Hero Header (inline-editable in EditMode) -->
+            <header class="ao-hero">
+                <div class="ao-hero-identity">
+                    <div class="ao-avatar">
+                        @if (HasLogoURL) {
+                            <img [src]="Record.LogoURL" [alt]="(Record.Name || 'Agent') + ' logo'" class="ao-avatar-img" />
+                        } @else {
+                            <i [class]="AgentIcon" aria-hidden="true"></i>
+                        }
+                    </div>
+                    <div class="ao-hero-main">
+                        <div class="ao-hero-title-row">
+                            @if (EditMode) {
+                                <input
+                                    type="text"
+                                    class="mj-input ao-name-input"
+                                    [(ngModel)]="Record.Name"
+                                    name="agentOverviewName"
+                                    placeholder="Agent name..."
+                                    aria-label="Agent Name" />
+                                <select
+                                    class="mj-input ao-status-select"
+                                    [(ngModel)]="Record.Status"
+                                    name="agentOverviewStatus"
+                                    aria-label="Agent Status">
+                                    @for (opt of StatusOptions; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <h1 class="ao-title">{{ Record.Name || 'Untitled AI Agent' }}</h1>
+                                @if (Record.Status) {
+                                    <span class="ao-pill"
+                                        [class.ao-pill--success]="Record.Status === 'Active'"
+                                        [class.ao-pill--warning]="Record.Status === 'Pending'"
+                                        [class.ao-pill--error]="Record.Status === 'Disabled'">
+                                        <i class="fa-solid fa-circle ao-dot" aria-hidden="true"></i>
+                                        {{ Record.Status }}
+                                    </span>
+                                }
+                            }
+                            @if (Record.Type || AgentType?.Name) {
+                                <span class="ao-pill ao-pill--violet">
+                                    <i [class]="AgentIcon" aria-hidden="true"></i>
+                                    {{ Record.Type || AgentType?.Name }} Agent
+                                </span>
+                            }
+                            @if (Record.Category) {
+                                <span class="ao-pill ao-pill--neutral">
+                                    <i class="fa-solid fa-folder-tree" aria-hidden="true"></i>
+                                    {{ Record.Category }}
+                                </span>
+                            }
+                        </div>
+
+                        @if (EditMode) {
+                            <textarea
+                                class="mj-input ao-desc-input"
+                                [(ngModel)]="Record.Description"
+                                name="agentOverviewDescription"
+                                rows="3"
+                                placeholder="Describe what this agent does..."
+                                aria-label="Agent Description"></textarea>
+                        } @else if (Record.Description) {
+                            <p class="ao-desc">{{ Record.Description }}</p>
+                        }
+
+                        <div class="ao-hero-meta">
+                            @if (Record.Parent) {
+                                <button type="button" class="ao-meta-link" (click)="OpenParentAgent()">
+                                    <i class="fa-solid fa-sitemap" aria-hidden="true"></i>
+                                    Child of {{ Record.Parent }}
+                                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                </button>
+                            }
+                            @if (Record.OwnerUser) {
+                                <span class="ao-meta-item">
+                                    <i class="fa-solid fa-user" aria-hidden="true"></i>
+                                    Owner: {{ Record.OwnerUser }}
+                                </span>
+                            }
+                            @if (Record.ExposeAsAction) {
+                                <span class="ao-meta-item">
+                                    <i class="fa-solid fa-bolt" aria-hidden="true"></i>
+                                    Exposed as Action
+                                </span>
+                            }
+                            @if (Record.IsSaved) {
+                                <button type="button" class="ao-meta-link" (click)="OpenPermissions()">
+                                    <i class="fa-solid" [class.fa-lock-open]="IsOpenToEveryone" [class.fa-lock]="!IsOpenToEveryone" aria-hidden="true"></i>
+                                    {{ IsOpenToEveryone ? 'Open to everyone' : 'Restricted access' }}
+                                </button>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- 2. Non-Blocking Health KPI Strip (saved records) -->
+            @if (Record.IsSaved) {
+                <section class="ao-kpi-grid" aria-label="Agent 30-day telemetry">
+                    <button type="button" class="ao-kpi-card" (click)="NavigateToSection(SectionKeys.Runs)">
+                        <div class="ao-kpi-label">
+                            <span>30-Day Runs</span>
+                            <i class="fa-solid fa-person-running ao-kpi-icon" aria-hidden="true"></i>
+                        </div>
+                        @if (LoadingTelemetry) {
+                            <div class="ao-skeleton"></div>
+                        } @else {
+                            <div class="ao-kpi-value">{{ Telemetry.RunCount }}</div>
+                        }
+                        <div class="ao-kpi-sub">
+                            @if (Telemetry.FailedCount > 0) {
+                                <span class="ao-text-error">{{ Telemetry.FailedCount }} failed</span>
+                            } @else {
+                                <span>Inspect execution traces</span>
+                            }
+                        </div>
+                    </button>
+
+                    <button type="button" class="ao-kpi-card" (click)="NavigateToSection(SectionKeys.Runs)">
+                        <div class="ao-kpi-label">
+                            <span>Success Rate</span>
+                            <i class="fa-solid fa-circle-check ao-kpi-icon ao-kpi-icon--success" aria-hidden="true"></i>
+                        </div>
+                        @if (LoadingTelemetry) {
+                            <div class="ao-skeleton"></div>
+                        } @else {
+                            <div class="ao-kpi-value">{{ FormattedSuccessRate }}</div>
+                        }
+                        <div class="ao-kpi-sub">{{ Telemetry.CompletedCount }} completed</div>
+                    </button>
+
+                    <button type="button" class="ao-kpi-card" (click)="NavigateToSection(SectionKeys.Runs)">
+                        <div class="ao-kpi-label">
+                            <span>Avg Duration</span>
+                            <i class="fa-solid fa-stopwatch ao-kpi-icon" aria-hidden="true"></i>
+                        </div>
+                        @if (LoadingTelemetry) {
+                            <div class="ao-skeleton"></div>
+                        } @else {
+                            <div class="ao-kpi-value">{{ FormattedAvgDuration }}</div>
+                        }
+                        <div class="ao-kpi-sub">
+                            @if (Record.MaxTimePerRun) {
+                                Limit: {{ Record.MaxTimePerRun }}s
+                            } @else {
+                                No time cap set
+                            }
+                        </div>
+                    </button>
+
+                    <button type="button" class="ao-kpi-card" (click)="NavigateToSection(SectionKeys.Guardrails)">
+                        <div class="ao-kpi-label">
+                            <span>Avg Cost / Run</span>
+                            <i class="fa-solid fa-shield-halved ao-kpi-icon ao-kpi-icon--warning" aria-hidden="true"></i>
+                        </div>
+                        @if (LoadingTelemetry) {
+                            <div class="ao-skeleton"></div>
+                        } @else {
+                            <div class="ao-kpi-value">{{ FormattedAvgCost }}</div>
+                        }
+                        <div class="ao-kpi-sub">Cap: {{ FormattedCostCap }}</div>
+                    </button>
+                </section>
+            }
+
+            <!-- 3. Dynamic Agent-Type Architecture Preview Card -->
+            <section class="ao-arch-card" aria-label="Agent architecture blueprint">
+                <div class="ao-arch-head">
+                    <div class="ao-arch-title-wrap">
+                        <i [class]="Studio.HasStudio ? Studio.Icon : AgentIcon" class="ao-arch-icon" aria-hidden="true"></i>
+                        <h2 class="ao-arch-title">
+                            @switch (AgentKind) {
+                                @case ('flow') { Flow Agent Topology }
+                                @case ('realtime') { Realtime Voice &amp; Bridge Pipeline }
+                                @case ('loop') { Loop Reasoning Blueprint }
+                                @default { {{ AgentType?.Name || Record.Type || 'Agent' }} Architecture }
+                            }
+                        </h2>
+                        @if (Studio.HasStudio) {
+                            <span class="ao-pill ao-pill--violet">Agent-Type Panel</span>
+                        }
+                    </div>
+                    <div class="ao-arch-actions">
+                        @if (Studio.HasStudio) {
+                            <button mjButton variant="primary" size="sm" type="button" (click)="NavigateToSection(SectionKeys.TypeStudio)">
+                                <i class="fa-solid fa-expand" aria-hidden="true"></i>
+                                Open {{ Studio.Title }}
+                            </button>
+                        } @else if (AgentKind === 'realtime') {
+                            <button mjButton variant="outline" size="sm" type="button" (click)="NavigateToSection(SectionKeys.Realtime)">
+                                <i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>
+                                Open Realtime Setup
+                            </button>
+                        } @else {
+                            <button mjButton variant="outline" size="sm" type="button" (click)="NavigateToSection(SectionKeys.Guardrails)">
+                                <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                                Tune Execution Limits
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <div class="ao-arch-canvas">
+                    @if (AgentKind === 'flow') {
+                        @if (FlowSteps.length > 0) {
+                            <div class="ao-flow-strip">
+                                @for (step of FlowSteps; track step.ID; let last = $last) {
+                                    <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.TypeStudio)">
+                                        <span class="ao-stage-tag" [class.ao-stage-tag--start]="step.StartingStep">
+                                            <i [class]="StepIcon(step)" aria-hidden="true"></i>
+                                            {{ step.StartingStep ? 'Start · ' + step.StepType : step.StepType }}
+                                        </span>
+                                        <span class="ao-stage-name">{{ step.Name }}</span>
+                                    </button>
+                                    @if (!last) {
+                                        <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
+                                    }
+                                }
+                                @if (TotalFlowStepCount > FlowSteps.length) {
+                                    <button type="button" class="ao-stage-more" (click)="NavigateToSection(SectionKeys.TypeStudio)">
+                                        +{{ TotalFlowStepCount - FlowSteps.length }} more steps
+                                    </button>
+                                }
+                            </div>
+                        } @else {
+                            <div class="ao-arch-empty">
+                                <span>No flow steps defined yet. Open <strong>{{ Studio.Title }}</strong> to author the visual workflow graph.</span>
+                            </div>
+                        }
+                    } @else if (AgentKind === 'realtime') {
+                        <div class="ao-flow-strip">
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Realtime)">
+                                <span class="ao-stage-tag"><i class="fa-solid fa-id-card" aria-hidden="true"></i> Channels &amp; Bridges</span>
+                                <span class="ao-stage-name">{{ BridgeIdentityCount }} {{ BridgeIdentityCount === 1 ? 'Identity' : 'Identities' }}</span>
+                                <span class="ao-stage-sub">Inbound phone &amp; meetings</span>
+                            </button>
+                            <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Prompts)">
+                                <span class="ao-stage-tag ao-stage-tag--start"><i class="fa-solid fa-microphone-lines" aria-hidden="true"></i> Realtime Co-Agent</span>
+                                <span class="ao-stage-name">{{ Record.Name || 'Voice Agent' }}</span>
+                                <span class="ao-stage-sub">{{ PromptCount }} {{ PromptCount === 1 ? 'prompt' : 'prompts' }}</span>
+                            </button>
+                            <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Realtime)">
+                                <span class="ao-stage-tag"><i class="fa-solid fa-people-arrows" aria-hidden="true"></i> Delegation</span>
+                                <span class="ao-stage-name">{{ CoAgentPairingCount }} {{ CoAgentPairingCount === 1 ? 'Pairing' : 'Pairings' }}</span>
+                                <span class="ao-stage-sub">{{ ActionCount }} actions · {{ SubAgentCount }} sub-agents</span>
+                            </button>
+                        </div>
+                    } @else {
+                        <div class="ao-flow-strip">
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Prompts)">
+                                <span class="ao-stage-tag"><i class="fa-solid fa-comment-dots" aria-hidden="true"></i> 1 · Reason</span>
+                                <span class="ao-stage-name">{{ PromptCount }} {{ PromptCount === 1 ? 'Prompt' : 'Prompts' }}</span>
+                                <span class="ao-stage-sub">{{ Record.SupportsPlanMode ? 'Plan Mode ON' : (Record.ModelSelectionMode || 'Agent Type') }}</span>
+                            </button>
+                            <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Capabilities)">
+                                <span class="ao-stage-tag"><i class="fa-solid fa-bolt" aria-hidden="true"></i> 2 · Act</span>
+                                <span class="ao-stage-name">{{ ActionCount }} Actions · {{ SkillCount }} Skills</span>
+                                <span class="ao-stage-sub">{{ Record.DeclareActionsAsNativeTools ? 'Native tools ON' : 'Standard tools' }}</span>
+                            </button>
+                            <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Capabilities)">
+                                <span class="ao-stage-tag"><i class="fa-solid fa-sitemap" aria-hidden="true"></i> 3 · Delegate</span>
+                                <span class="ao-stage-name">{{ SubAgentCount }} {{ SubAgentCount === 1 ? 'Sub-Agent' : 'Sub-Agents' }}</span>
+                                <span class="ao-stage-sub">{{ Record.ExecutionMode || 'Sequential' }}</span>
+                            </button>
+                            <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
+                            <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Knowledge)">
+                                <span class="ao-stage-tag"><i class="fa-solid fa-brain" aria-hidden="true"></i> 4 · Ground</span>
+                                <span class="ao-stage-name">{{ SearchScopeCount }} Search {{ SearchScopeCount === 1 ? 'Scope' : 'Scopes' }}</span>
+                                <span class="ao-stage-sub">{{ Record.AllowMemoryWrite ? 'Memory write ON' : (Record.SearchScopeAccess || 'All') }}</span>
+                            </button>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <!-- 4. Clickable 3-Column Capability Bento Grid -->
+            <section class="ao-bento-grid" aria-label="Agent configuration summary">
+                <button type="button" class="ao-bento-card" (click)="NavigateToSection(SectionKeys.Prompts)">
+                    <div class="ao-bento-head">
+                        <span class="ao-bento-title"><i class="fa-solid fa-comment-dots" aria-hidden="true"></i> Prompts &amp; Models</span>
+                        <span class="ao-pill ao-pill--neutral">{{ PromptCount }}</span>
+                    </div>
+                    <div class="ao-bento-body">
+                        @if (TopPrompts.length > 0) {
+                            @for (p of TopPrompts; track p.ID) {
+                                <div class="ao-bento-row">
+                                    <span class="ao-bento-row-label">{{ p.Name }}</span>
+                                    @if (p.PromptRole) {
+                                        <span class="ao-pill ao-pill--violet">{{ p.PromptRole }}</span>
+                                    }
+                                </div>
+                            }
+                        } @else {
+                            <div class="ao-bento-empty">No prompts linked yet.</div>
+                        }
+                    </div>
+                    <div class="ao-bento-foot">
+                        <span>Model selection: {{ Record.ModelSelectionMode || 'Agent Type' }}</span>
+                        <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                    </div>
+                </button>
+
+                <button type="button" class="ao-bento-card" (click)="NavigateToSection(SectionKeys.Capabilities)">
+                    <div class="ao-bento-head">
+                        <span class="ao-bento-title"><i class="fa-solid fa-cubes" aria-hidden="true"></i> Capabilities</span>
+                        <span class="ao-pill ao-pill--neutral">{{ ActionCount + SkillCount + SubAgentCount }}</span>
+                    </div>
+                    <div class="ao-bento-body">
+                        <div class="ao-bento-row"><span>Actions</span><strong>{{ ActionCount }}</strong></div>
+                        <div class="ao-bento-row"><span>Sub-Agents (Child &amp; Related)</span><strong>{{ SubAgentCount }}</strong></div>
+                        <div class="ao-bento-row"><span>Assigned Skills</span><strong>{{ SkillCount }}</strong></div>
+                    </div>
+                    <div class="ao-bento-foot">
+                        <span>Manage tools &amp; delegation</span>
+                        <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                    </div>
+                </button>
+
+                <button type="button" class="ao-bento-card" (click)="NavigateToSection(SectionKeys.Guardrails)">
+                    <div class="ao-bento-head">
+                        <span class="ao-bento-title"><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Guardrail Headroom</span>
+                        <span class="ao-pill"
+                            [class.ao-pill--warning]="(Telemetry.TokenHeadroomPct ?? 0) >= 80 || (Telemetry.CostHeadroomPct ?? 0) >= 80"
+                            [class.ao-pill--success]="(Telemetry.TokenHeadroomPct ?? 0) < 80 && (Telemetry.CostHeadroomPct ?? 0) < 80">
+                            {{ ((Telemetry.TokenHeadroomPct ?? 0) >= 80 || (Telemetry.CostHeadroomPct ?? 0) >= 80) ? 'Watch' : 'Healthy' }}
+                        </span>
+                    </div>
+                    <div class="ao-bento-body">
+                        <div class="ao-meter">
+                            <div class="ao-meter-label">
+                                <span>p95 Tokens vs Cap</span>
+                                <strong>{{ FormattedP95Tokens }} / {{ FormattedTokenCap }}</strong>
+                            </div>
+                            <div class="ao-meter-track">
+                                <div class="ao-meter-fill"
+                                    [class.ao-meter-fill--warn]="(Telemetry.TokenHeadroomPct ?? 0) >= 75"
+                                    [style.width.%]="Telemetry.TokenHeadroomPct ?? 0"></div>
+                            </div>
+                        </div>
+                        <div class="ao-meter">
+                            <div class="ao-meter-label">
+                                <span>Avg Cost vs Cap</span>
+                                <strong>{{ FormattedAvgCost }} / {{ FormattedCostCap }}</strong>
+                            </div>
+                            <div class="ao-meter-track">
+                                <div class="ao-meter-fill"
+                                    [class.ao-meter-fill--warn]="(Telemetry.CostHeadroomPct ?? 0) >= 75"
+                                    [style.width.%]="Telemetry.CostHeadroomPct ?? 0"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="ao-bento-foot">
+                        <span>Limits, skills &amp; payload</span>
+                        <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
+                    </div>
+                </button>
+            </section>
+        </div>
+    }
+</mj-collapsible-panel>
+
+@if (ShowPermissionsDialog && Record) {
+    <mj-agent-permissions-dialog
+        [Agent]="Record"
+        (Closed)="OnPermissionsClosed()"
+        (PermissionsChanged)="OnPermissionsChanged()">
+    </mj-agent-permissions-dialog>
+}

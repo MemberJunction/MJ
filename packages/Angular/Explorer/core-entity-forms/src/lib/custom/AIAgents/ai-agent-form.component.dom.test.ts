@@ -1,99 +1,181 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ChangeDetectorRef, ElementRef, ViewContainerRef } from '@angular/core';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { ChangeDetectorRef, ElementRef } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { EntityInfo } from '@memberjunction/core';
-import { MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
-import { SharedService } from '@memberjunction/ng-shared';
-import { MJDialogService } from '@memberjunction/ng-ui-components';
+import { BaseEntity, type IMetadataProvider, type TransactionGroupBase } from '@memberjunction/core';
+import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
-import { CreateAgentService } from '@memberjunction/ng-agents';
-import { AIAgentManagementService } from './ai-agent-management.service';
-import { MJAIAgentFormComponentExtended } from './ai-agent-form.component';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import type { BaseFormSectionComponent, FormChromeContext, FormChromeSpec } from '@memberjunction/ng-base-forms';
+import { AIAgentFormPolicy, MJAIAgentFormComponentExtended } from './ai-agent-form.component';
 
 /**
- * The AI Agent form's execution history shows a run's result from `FinalPayload` (`Result` on older
- * runs), and only once the run is no longer Running: a running run can already have a partial
- * `FinalPayload`.
- *
- * The form is constructed in an injection context (this is a class-behaviour spec, so no template
- * renders), and each run is a REAL `MJAIAgentRunEntityExtended`.
+ * Class-behaviour tests for the modernized `MJAIAgentFormComponentExtended` host and
+ * `AIAgentFormPolicy`. Verifies chrome policy, full-width default, dynamic agent-type section
+ * dirty tracking, atomic `TransactionGroup` commit with `ContributeToSave`, pending-record
+ * queue helpers, and test harness / permissions dialog guards.
  */
 
-const AGENT_RUN_ENTITY = new EntityInfo({
-    ID: 'agent-run-entity',
-    Name: 'MJ: AI Agent Runs',
-    Fields: ['ID', 'Status', 'Result', 'FinalPayload'].map((Name) => ({
-        Name,
-        Type: Name === 'ID' ? 'uniqueidentifier' : 'nvarchar',
-        IsPrimaryKey: Name === 'ID',
-        AllowUpdateAPI: Name !== 'ID',
-        AllowsNull: true,
-    })),
-});
-
-function makeRun(columns: { Status: MJAIAgentRunEntityExtended['Status']; Result?: string; FinalPayload?: string }): MJAIAgentRunEntityExtended {
-    const run = new MJAIAgentRunEntityExtended(AGENT_RUN_ENTITY);
-    run.Status = columns.Status;
-    if (columns.Result) run.Result = columns.Result;
-    if (columns.FinalPayload) run.FinalPayload = columns.FinalPayload;
-    return run;
+function createForm(harnessSpy = vi.fn()): MJAIAgentFormComponentExtended {
+    TestBed.configureTestingModule({
+        providers: [
+            { provide: ChangeDetectorRef, useValue: { markForCheck: vi.fn(), detectChanges: vi.fn() } },
+            { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
+            { provide: AITestHarnessDialogService, useValue: { openForAgent: harnessSpy } },
+        ],
+    });
+    return TestBed.runInInjectionContext(() => new MJAIAgentFormComponentExtended());
 }
 
-describe('MJAIAgentFormComponentExtended execution history result', () => {
+describe('AIAgentFormPolicy', () => {
+    it('forces left-nav layout while preserving all other chrome spec properties', () => {
+        const policy = new AIAgentFormPolicy();
+        const spec = { Layout: 'accordion', Density: 'comfortable' } as unknown as FormChromeSpec;
+        const result = policy.DecorateChrome(spec, {} as FormChromeContext);
+        expect(result.Layout).toBe('left-nav');
+        expect((result as unknown as { Density: string }).Density).toBe('comfortable');
+    });
+});
+
+describe('MJAIAgentFormComponentExtended', () => {
+    let harnessOpenSpy: ReturnType<typeof vi.fn>;
+    let notifySpy: ReturnType<typeof vi.fn>;
     let form: MJAIAgentFormComponentExtended;
 
     beforeEach(() => {
-        TestBed.configureTestingModule({
-            providers: [
-                { provide: ChangeDetectorRef, useValue: { markForCheck: () => undefined, detectChanges: () => undefined } },
-                { provide: ElementRef, useValue: new ElementRef(document.createElement('div')) },
-                { provide: ViewContainerRef, useValue: {} },
-                { provide: SharedService, useValue: {} },
-                { provide: MJDialogService, useValue: {} },
-                { provide: AIAgentManagementService, useValue: {} },
-                { provide: AITestHarnessDialogService, useValue: {} },
-                { provide: CreateAgentService, useValue: {} },
-            ],
-        });
-        form = TestBed.runInInjectionContext(() => new MJAIAgentFormComponentExtended());
+        harnessOpenSpy = vi.fn();
+        notifySpy = vi.fn();
+        vi.spyOn(MJNotificationService, 'Instance', 'get').mockReturnValue({
+            CreateSimpleNotification: notifySpy,
+        } as unknown as MJNotificationService);
+        form = createForm(harnessOpenSpy);
     });
 
-    it("shows a finished run's result from FinalPayload", () => {
-        const run = makeRun({ Status: 'Completed', FinalPayload: '{"answer":42}' });
-
-        expect(form.HasExecutionResult(run)).toBe(true);
-        expect(JSON.parse(form.GetExecutionResultPreview(run, false))).toEqual({ answer: 42 });
-        expect(JSON.parse(form.GetExecutionResultMessage(run))).toEqual({ answer: 42 });
+    afterEach(() => {
+        vi.restoreAllMocks();
+        TestBed.resetTestingModule();
     });
 
-    it('falls back to Result on an older run that has no FinalPayload', () => {
-        const run = makeRun({ Status: 'Completed', Result: '{"legacy":true}' });
-
-        expect(form.HasExecutionResult(run)).toBe(true);
-        expect(JSON.parse(form.GetExecutionResultPreview(run, false))).toEqual({ legacy: true });
-        expect(JSON.parse(form.GetExecutionResultMessage(run))).toEqual({ legacy: true });
+    it('defaults to full-width mode for Overview cockpit and Studio canvas', () => {
+        expect(form.getDefaultFormWidthMode()).toBe('full-width');
     });
 
-    it('prefers FinalPayload over Result when a run has both', () => {
-        const run = makeRun({ Status: 'Completed', Result: '{"legacy":true}', FinalPayload: '{"answer":42}' });
+    it('surfaces HasAdditionalUnsavedChanges from the registered agent-type section', () => {
+        expect(form.HasAdditionalUnsavedChanges).toBe(false);
 
-        expect(JSON.parse(form.GetExecutionResultPreview(run, false))).toEqual({ answer: 42 });
-        expect(JSON.parse(form.GetExecutionResultMessage(run))).toEqual({ answer: 42 });
+        const cleanSection = { HasPendingChanges: false } as unknown as BaseFormSectionComponent;
+        form.RegisterAgentTypeSection(cleanSection);
+        expect(form.HasAdditionalUnsavedChanges).toBe(false);
+
+        const dirtySection = { HasPendingChanges: true } as unknown as BaseFormSectionComponent;
+        form.RegisterAgentTypeSection(dirtySection);
+        expect(form.HasAdditionalUnsavedChanges).toBe(true);
+
+        form.RegisterAgentTypeSection(null);
+        expect(form.HasAdditionalUnsavedChanges).toBe(false);
     });
 
-    it('hides the result of a run that is still Running, even when it already has a FinalPayload', () => {
-        expect(form.HasExecutionResult(makeRun({ Status: 'Running', FinalPayload: '{"partial":true}' }))).toBe(false);
+    it('queues, updates, and unqueues pending child records without duplicates', () => {
+        const child = { ID: 'child-1' } as unknown as BaseEntity;
+        form.QueuePendingRecord(child, 'save');
+        form.QueuePendingRecord(child, 'delete');
+
+        const pending = (form as unknown as { PendingRecords: Array<{ entityObject: BaseEntity; action: string }> }).PendingRecords;
+        expect(pending).toHaveLength(1);
+        expect(pending[0].action).toBe('delete');
+
+        form.UnqueuePendingRecord(child);
+        expect(pending).toHaveLength(0);
     });
 
-    it('shows the result of a run that ended without completing', () => {
-        expect(form.HasExecutionResult(makeRun({ Status: 'Cancelled', FinalPayload: '{"partial":true}' }))).toBe(true);
+    it('guards OpenTestHarness for unsaved and inactive agents, and opens for Active agents', () => {
+        form.record = { ID: '', Status: 'Active' } as unknown as MJAIAgentEntityExtended;
+        form.OpenTestHarness();
+        expect(harnessOpenSpy).not.toHaveBeenCalled();
+        expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('save'), 'warning', 3500);
+
+        notifySpy.mockClear();
+        form.record = { ID: 'agent-1', Status: 'Disabled' } as unknown as MJAIAgentEntityExtended;
+        form.OpenTestHarness();
+        expect(harnessOpenSpy).not.toHaveBeenCalled();
+        expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('Active'), 'warning', 3500);
+
+        form.record = { ID: 'agent-1', Status: 'Active' } as unknown as MJAIAgentEntityExtended;
+        form.OpenTestHarness();
+        expect(harnessOpenSpy).toHaveBeenCalledWith('agent-1');
     });
 
-    it('hides the result section for a finished run with neither column', () => {
-        const run = makeRun({ Status: 'Failed' });
+    it('opens permissions dialog only when the record is saved', () => {
+        form.record = { ID: '' } as unknown as MJAIAgentEntityExtended;
+        form.OpenPermissionsDialog();
+        expect(form.ShowPermissionsDialog).toBe(false);
+        expect(notifySpy).toHaveBeenCalled();
 
-        expect(form.HasExecutionResult(run)).toBe(false);
-        expect(form.GetExecutionResultPreview(run, true)).toBe('No result');
-        expect(form.GetExecutionResultMessage(run)).toBe('No result');
+        form.record = { ID: 'agent-1' } as unknown as MJAIAgentEntityExtended;
+        form.OpenPermissionsDialog();
+        expect(form.ShowPermissionsDialog).toBe(true);
+    });
+
+    it('atomically commits record, pending children, and agent-type section in one TransactionGroup', async () => {
+        const submitSpy = vi.fn().mockResolvedValue(true);
+        const tg = { Submit: submitSpy } as unknown as TransactionGroupBase;
+        const provider = {
+            CreateTransactionGroup: vi.fn().mockResolvedValue(tg),
+        } as unknown as IMetadataProvider;
+        vi.spyOn(form, 'ProviderToUse', 'get').mockReturnValue(provider);
+        vi.spyOn(form, 'ResolveAgentType').mockResolvedValue(null);
+
+        const recordSave = vi.fn().mockResolvedValue(true);
+        form.record = {
+            ID: 'agent-1',
+            TransactionGroup: null,
+            Save: recordSave,
+        } as unknown as MJAIAgentEntityExtended;
+
+        const childSave = vi.fn().mockResolvedValue(true);
+        const child = { TransactionGroup: null, Save: childSave } as unknown as BaseEntity;
+        form.QueuePendingRecord(child, 'save');
+
+        const contributeSpy = vi.fn().mockResolvedValue(true);
+        const completedSpy = vi.fn();
+        form.RegisterAgentTypeSection({
+            HasPendingChanges: true,
+            ContributeToSave: contributeSpy,
+            OnHostSaveCompleted: completedSpy,
+        } as unknown as BaseFormSectionComponent);
+
+        const saved = await (form as unknown as { InternalSaveRecord(): Promise<boolean> }).InternalSaveRecord();
+        expect(saved).toBe(true);
+        expect(recordSave).toHaveBeenCalledTimes(1);
+        expect(childSave).toHaveBeenCalledTimes(1);
+        expect(contributeSpy).toHaveBeenCalledWith(tg);
+        expect(submitSpy).toHaveBeenCalledTimes(1);
+        expect(completedSpy).toHaveBeenCalledTimes(1);
+        expect(form.record.TransactionGroup).toBeNull();
+    });
+
+    it('aborts TransactionGroup submission when agent-type ContributeToSave returns false', async () => {
+        const submitSpy = vi.fn().mockResolvedValue(true);
+        const tg = { Submit: submitSpy } as unknown as TransactionGroupBase;
+        const provider = {
+            CreateTransactionGroup: vi.fn().mockResolvedValue(tg),
+        } as unknown as IMetadataProvider;
+        vi.spyOn(form, 'ProviderToUse', 'get').mockReturnValue(provider);
+
+        form.record = {
+            ID: 'agent-1',
+            TransactionGroup: null,
+            Save: vi.fn().mockResolvedValue(true),
+        } as unknown as MJAIAgentEntityExtended;
+
+        form.RegisterAgentTypeSection({
+            HasPendingChanges: true,
+            ContributeToSave: vi.fn().mockResolvedValue(false),
+            OnHostSaveCompleted: vi.fn(),
+        } as unknown as BaseFormSectionComponent);
+
+        const saved = await (form as unknown as { InternalSaveRecord(): Promise<boolean> }).InternalSaveRecord();
+        expect(saved).toBe(false);
+        expect(submitSpy).not.toHaveBeenCalled();
+        expect(notifySpy).toHaveBeenCalledWith(expect.stringContaining('Nothing was saved'), 'error', 4000);
     });
 });

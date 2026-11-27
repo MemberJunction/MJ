@@ -1,0 +1,119 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Knowledge & Memory"
+    Icon="fa-solid fa-brain"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [DefaultExpanded]="true">
+
+    @if (!Record?.ID) {
+        <mj-empty-state
+            Icon="fa-solid fa-brain"
+            Title="Save Agent First"
+            Message="Save this agent to configure scoped search, RAG permissions, and memory notes."
+            Size="compact" />
+    } @else {
+        <div class="akm-stack">
+            <!-- Scoped Search Access -->
+            <section class="akm-card">
+                <header class="akm-card-head">
+                    <h3><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i> Scoped Search &amp; RAG Access</h3>
+                </header>
+                <div class="akm-card-body">
+                    <div class="akm-radio-grid">
+                        <label class="akm-radio-card" [class.is-active]="Record.SearchScopeAccess === 'All'">
+                            <input type="radio" name="akmSearchScopeAccess" value="All" [checked]="Record.SearchScopeAccess === 'All'" [disabled]="!EditMode" (change)="SetSearchScopeAccess('All')" />
+                            <div class="akm-radio-title"><i class="fa-solid fa-globe" aria-hidden="true"></i> All</div>
+                            <div class="akm-radio-desc">Can search any scope including Global with no scope restriction.</div>
+                        </label>
+                        <label class="akm-radio-card" [class.is-active]="Record.SearchScopeAccess === 'Assigned'">
+                            <input type="radio" name="akmSearchScopeAccess" value="Assigned" [checked]="Record.SearchScopeAccess === 'Assigned'" [disabled]="!EditMode" (change)="SetSearchScopeAccess('Assigned')" />
+                            <div class="akm-radio-title"><i class="fa-solid fa-user-check" aria-hidden="true"></i> Assigned</div>
+                            <div class="akm-radio-desc">Restricted strictly to the assigned scopes below and their user/role grants.</div>
+                        </label>
+                        <label class="akm-radio-card" [class.is-active]="Record.SearchScopeAccess === 'None'">
+                            <input type="radio" name="akmSearchScopeAccess" value="None" [checked]="Record.SearchScopeAccess === 'None'" [disabled]="!EditMode" (change)="SetSearchScopeAccess('None')" />
+                            <div class="akm-radio-title"><i class="fa-solid fa-ban" aria-hidden="true"></i> None</div>
+                            <div class="akm-radio-desc">Scoped search and pre-execution retrieval are disabled.</div>
+                        </label>
+                    </div>
+
+                    @if (Record.SearchScopeAccess !== 'None') {
+                        <div class="akm-subblock">
+                            <h4>Assigned Search Scopes</h4>
+                            <mj-search-scope-child-grid
+                                [ParentID]="Record.ID"
+                                ChildEntityName="MJ: AI Agent Search Scopes"
+                                ParentFieldName="AgentID"
+                                [Columns]="SearchScopeColumns"
+                                [Disabled]="!EditMode"
+                                AddButtonLabel="+ Assign scope"
+                                EmptyMessage="No scopes assigned yet."
+                                (RowsChanged)="LoadPermissionSummary()">
+                            </mj-search-scope-child-grid>
+                        </div>
+
+                        <div class="akm-subblock">
+                            <h4><i class="fa-solid fa-shield-halved" aria-hidden="true"></i> Effective Scope Permissions</h4>
+                            @if (LoadingPermissions) {
+                                <div class="akm-muted">Loading scope grants...</div>
+                            } @else if (PermissionSummary.length === 0) {
+                                <div class="akm-muted">No scopes assigned yet — grants will appear once scopes are linked above.</div>
+                            } @else {
+                                <div class="akm-perm-list">
+                                    @for (scope of PermissionSummary; track scope.ScopeID) {
+                                        <div class="akm-perm-card">
+                                            <div class="akm-perm-title">{{ scope.ScopeName }}</div>
+                                            @if (scope.Permissions.length === 0) {
+                                                <div class="akm-muted">No explicit grants (users need a Search grant unless access is All).</div>
+                                            } @else {
+                                                <ul class="akm-perm-ul">
+                                                    @for (p of scope.Permissions; track p.Principal + p.Level) {
+                                                        <li>
+                                                            <i class="fa-solid" [class.fa-user]="p.PrincipalType === 'User'" [class.fa-users]="p.PrincipalType === 'Role'" aria-hidden="true"></i>
+                                                            <strong>{{ p.Principal }}</strong>
+                                                            <span class="akm-muted">({{ p.PrincipalType }})</span>
+                                                            — {{ p.Level }}
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <!-- Memory & Recent Notes Summary -->
+            <section class="akm-card">
+                <header class="akm-card-head">
+                    <h3><i class="fa-solid fa-sticky-note" aria-hidden="true"></i> Memory &amp; Recent Notes</h3>
+                    <span class="akm-pill" [class.akm-pill--ok]="Record.AllowMemoryWrite">
+                        Memory Write: {{ Record.AllowMemoryWrite ? 'ON' : 'OFF' }}
+                    </span>
+                </header>
+                <div class="akm-card-body">
+                    @if (RecentNotes.length === 0) {
+                        <div class="akm-muted">No agent memory notes recorded yet. View or add notes under More → AIAgent Notes.</div>
+                    } @else {
+                        <div class="akm-note-list">
+                            @for (note of RecentNotes; track note.ID) {
+                                <button type="button" class="akm-note-row" (click)="OpenNote(note.ID)">
+                                    <div class="akm-note-main">
+                                        <span class="akm-note-title">{{ note.Type || 'Memory Note' }}</span>
+                                        <span class="akm-note-snippet">{{ NoteSnippet(note) }}</span>
+                                    </div>
+                                    <span class="akm-muted">{{ note.__mj_CreatedAt | date:'MMM d' }}</span>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+    }
+</mj-collapsible-panel>

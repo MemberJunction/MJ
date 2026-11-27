@@ -11,7 +11,7 @@ export { MJFileFormComponentExtended } from './lib/custom/Files/file-form.compon
 export { MJEntityActionFormComponentExtended } from './lib/custom/EntityActions/entityaction.form.component';
 export { MJTemplateFormComponentExtended } from './lib/custom/Templates/templates-form.component';
 export { MJAIPromptFormComponentExtended } from './lib/custom/AIPrompts/ai-prompt-form.component';
-export { MJAIAgentFormComponentExtended } from './lib/custom/AIAgents/ai-agent-form.component';
+export { MJAIAgentFormComponentExtended, AIAgentFormPolicy, LoadMJAIAgentFormComponentExtended } from './lib/custom/AIAgents/ai-agent-form.component';
 export { MJAIPromptRunFormComponentExtended } from './lib/custom/AIPromptRuns/ai-prompt-run-form.component';
 export { MJActionFormComponentExtended } from './lib/custom/Actions/action-form.component';
 export { MJActionExecutionLogFormComponentExtended } from './lib/custom/Actions/action-execution-log-form.component';
@@ -66,6 +66,19 @@ export { NewAgentDialogService } from './lib/custom/AIAgents/new-agent-dialog.se
 
 // Flow Agent components
 export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentType/flow-agent-form-section.component';
+
+// AI Agent Form Panels, Toolbar Actions, and Helpers
+export { AgentOverviewPanel } from './lib/panels/ai-agents/agent-overview.panel';
+export { AgentTypeStudioPanel } from './lib/panels/ai-agents/agent-type-studio.panel';
+export { AgentPromptsPanel } from './lib/panels/ai-agents/agent-prompts.panel';
+export { AgentCapabilitiesPanel } from './lib/panels/ai-agents/agent-capabilities.panel';
+export { AgentKnowledgeMemoryPanel } from './lib/panels/ai-agents/agent-knowledge-memory.panel';
+export { AgentGuardrailsPayloadPanel } from './lib/panels/ai-agents/agent-guardrails-payload.panel';
+export { AgentRunsSessionsPanel } from './lib/panels/ai-agents/agent-runs-sessions.panel';
+export { AgentGovernancePanel } from './lib/panels/ai-agents/agent-governance.panel';
+export { AgentRealtimePanel, LoadAgentRealtimePanel } from './lib/panels/ai-agents/agent-realtime.panel';
+export { AIAgentRunToolbarAction, AIAgentPermissionsToolbarAction, LoadAIAgentToolbarActions } from './lib/panels/ai-agents/agent-toolbar-actions';
+export * from './lib/panels/ai-agents/agent-form-helpers';
 
 // Visual Hierarchy & Taxonomy Form Panels
 export * from './lib/custom/HierarchyPanels/hierarchy-form-panels';
