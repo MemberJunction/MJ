@@ -32,6 +32,7 @@ export * from './scoring-checks';
 export * from './model-value-rows';
 export * from './binding-human-value-guard';
 export * from './scoring-service';
+export * from './feature-pin-check';
 export * from './parity-check';
 export * from './ml-model-score-enricher';
 export * from './scoring-process';

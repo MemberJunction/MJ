@@ -41,6 +41,7 @@ import { PUBLISH_LOCK_QUERIES, PublishLocks } from '../registry/publish-locks';
 import { PublishRecords } from '../registry/publish-records';
 import { StoredRowReads } from '../registry/stored-row-reads';
 import { BindingHumanValueGuard, type BindingGuardSnapshot } from './binding-human-value-guard';
+import { FeaturePinCheck } from './feature-pin-check';
 import { MatrixToFeatureRows } from './ml-model-inference-processor';
 import { ModelNeedsTrainingError, ModelNeedsTrainingMessage } from './model-readiness';
 import { ModelValueRows, type ScoredRowContext } from './model-value-rows';
@@ -294,6 +295,17 @@ export class ScoringService {
     return replaced !== null && UUIDsEqual(replaced, model.ID) ? 'predecessor' : 'published';
   }
 
+  /**
+   * Pin enforcement (PR 5 G7.6, §5.2.3): a model whose pinned Feature Pipeline version is not the pipeline's Active
+   * version, or whose prediction pin's binding serves another Published model now, is refused
+   * `feature-version-mismatch` before any record is read. Monitoring's predecessor model is exempt (D5-B3-2): it is
+   * scored only to compare it with its successor, on the rows the successor reads, and writes nothing.
+   */
+  protected async CheckFeaturePins(resolved: ResolvedModel): Promise<ScoringRefusal | null> {
+    if (resolved.Admission === 'predecessor') return null;
+    return FeaturePinCheck.ForModel(resolved.Model, this.ctx.Provider, this.ctx.ContextUser);
+  }
+
   /** The run row, `running`, before any record is read. */
   protected async OpenRun(model: MJMLModelEntity, binding: MJMLModelScoringBindingEntity | null, scope: ScoringScope, asOf: Date, dryRun: boolean): Promise<MJMLScoringRunEntity> {
     return ScoringRunRecorder.Open(model, binding, scope, asOf, dryRun, this.ctx);
@@ -302,12 +314,15 @@ export class ScoringService {
   /**
    * Checks 1–3: status and flags, a verified artifact (then the model is prepared), an as-of date its assembly can
    * serve, and the scope entity. Returns the ready model or the refusal. A non-verified load is recorded on the model
-   * (`ArtifactStatus`, `ArtifactCheckedAt`) unless the model is the shadow challenger.
+   * (`ArtifactStatus`, `ArtifactCheckedAt`) unless the model is the shadow challenger. First of all, the model's
+   * Feature Value pins are compared with the versions in use ({@link CheckFeaturePins}), on every path.
    *
    * @throws ModelNeedsTrainingError when the model has no artifact file (it was never trained)
    */
   protected async RunChecksBeforeAssembly(resolved: ResolvedModel, bindingEntity: string | null, scope: ScoringScope, asOf: Date): Promise<ReadyModel | ScoringRefusal> {
     const model = resolved.Model;
+    const pins = await this.CheckFeaturePins(resolved);
+    if (pins !== null) return pins;
     const status = ScoringChecks.StatusAndFlags(model, resolved.Admission, resolved.Admission === 'serving-while-unevaluated' ? await this.pipelineLeakageGuard(model.PipelineID) : null);
     if (status !== null) return status;
     if (!model.ArtifactFileID) throw new ModelNeedsTrainingError(`ScoringService: ${ModelNeedsTrainingMessage(model.ID)}`);

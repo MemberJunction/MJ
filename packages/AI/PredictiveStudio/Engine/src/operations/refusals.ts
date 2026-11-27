@@ -51,6 +51,7 @@ export class PredictiveStudioRefusals {
       case 'as-of-unsupported': return 'AS_OF_UNSUPPORTED';
       case 'leakage-unknown': return 'LEAKAGE_UNKNOWN';
       case 'feature-values-not-writable': return 'FEATURE_VALUES_NOT_WRITABLE';
+      case 'feature-version-mismatch': return 'FEATURE_VERSION_MISMATCH';
       default: return PredictiveStudioRefusals.unknownScoringRefusal(reason);
     }
   }

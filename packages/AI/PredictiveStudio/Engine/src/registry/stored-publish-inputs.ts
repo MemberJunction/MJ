@@ -9,6 +9,7 @@
  * read runs on `ctx.Provider` as `ctx.ContextUser` and every ID comparison uses `UUIDsEqual`.
  */
 import type { MJMLEvaluationProtocolEntity, MJMLModelEntity, MJMLTrainingRunEntity, MJMLTrainingSnapshotEntity } from '@memberjunction/core-entities';
+import { MJFeaturePipelineVersionEntityExtended } from '@memberjunction/feature-pipelines';
 import { EscapeSQLString, UUIDsEqual } from '@memberjunction/global';
 import {
   EvaluationProtocol,
@@ -19,6 +20,7 @@ import {
   type EvaluationProtocolColumns,
   type EvaluationProtocolSpec,
   type ListsEveryMember,
+  type PinActivation,
   type RegisteredDeliveryView,
   type StoredGateRecord,
   type StoredPublishInputs,
@@ -28,6 +30,7 @@ import {
   type UnitResolutionCounts,
 } from '@memberjunction/predictive-studio-core';
 
+import { FeaturePinCheck } from '../scoring/feature-pin-check';
 import type { RegistryContext } from './registry-context';
 import { StoredRowReads } from './stored-row-reads';
 
@@ -43,7 +46,7 @@ const protocolColumnsComplete: ListsEveryMember<keyof EvaluationProtocolColumns,
 void protocolColumnsComplete;
 
 /** The model columns publish re-verification reads. */
-type PublishModelColumns = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'TrainingRunID' | 'TrainingSnapshotID' | 'OutputSemantics' | 'Delivery' | 'ArtifactSha256'>;
+type PublishModelColumns = Pick<MJMLModelEntity, 'ID' | 'PipelineID' | 'TrainingRunID' | 'TrainingSnapshotID' | 'OutputSemantics' | 'Delivery' | 'ArtifactSha256' | 'Lineage'>;
 
 /** A completed training run as stored: its gate record, trainer result and unit counts (each null when absent). */
 export interface StoredRunRecord {
@@ -141,14 +144,34 @@ export class StoredPublishInputsLoader {
     const delivery = StoredPublishInputsLoader.deliveryOf(model.Delivery);
     if (delivery === null) return StoredPublishInputsLoader.notServable('its Delivery is missing or not a registered delivery');
     const current = await StoredPublishInputsLoader.readCurrentPublished(model, ctx);
-    return StoredPublishInputsLoader.build(model, run.Gate, run.Trainer, protocol, pinnedVersion, task.Value.task, delivery, current, initiator);
+    const pins = await StoredPublishInputsLoader.PinActivations(model.Lineage, ctx);
+    return { ...StoredPublishInputsLoader.build(model, run.Gate, run.Trainer, protocol, pinnedVersion, task.Value.task, delivery, current, initiator), PinActivations: pins };
   }
 
-  /** The inputs, assembled. Pure. */
+  /**
+   * Each Feature Pipeline version a model's lineage pins, and whether its version row is activated
+   * (`MJFeaturePipelineVersionEntityExtended.IsActivated`: ungated, or gated with a passing golden-set result; a row
+   * that is gone is not), read past the RunView cache (PR 5 D5-31). A prediction pin, or a pin with no version number,
+   * names no version row and is not listed.
+   *
+   * @throws Error when the read fails
+   */
+  public static async PinActivations(lineageText: string | null, ctx: RegistryContext): Promise<PinActivation[]> {
+    const versioned = FeaturePinCheck.PinsOf(lineageText).flatMap((n) => ('featurePipelineRecordProcessId' in n.Pin && n.Pin.pipelineVersion !== null
+      ? [{ Name: n.Name, ProcessID: n.Pin.featurePipelineRecordProcessId, Version: n.Pin.pipelineVersion }] : []));
+    if (versioned.length === 0) return [];
+    const rows = await FeaturePinCheck.VersionRows(versioned.map((v) => v.ProcessID), null, ctx.Provider, ctx.ContextUser);
+    return versioned.map((v) => {
+      const row = rows.find((r) => UUIDsEqual(r.RecordProcessID, v.ProcessID) && r.Version === v.Version);
+      return { featureName: v.Name, pipelineVersion: v.Version, activated: row !== undefined && MJFeaturePipelineVersionEntityExtended.IsActivated(row) };
+    });
+  }
+
+  /** The inputs, assembled, except the pin activations ({@link PinActivations}). Pure. */
   private static build(
     model: PublishModelColumns, gate: StoredGateRecord, trainer: StoredTrainerResult, protocol: StoredProtocolRow, pinnedVersion: number,
     task: TaskType, delivery: RegisteredDeliveryView, current: string | null, initiator: Actor,
-  ): StoredPublishInputs {
+  ): Omit<StoredPublishInputs, 'PinActivations'> {
     return {
       ModelID: model.ID,
       Task: task,
@@ -180,7 +203,7 @@ export class StoredPublishInputsLoader {
     const r = await StoredRowReads.Run<PublishModelColumns>(
       {
         EntityName: 'MJ: ML Models', ExtraFilter: `ID='${EscapeSQLString(modelId)}'`,
-        Fields: ['ID', 'PipelineID', 'TrainingRunID', 'TrainingSnapshotID', 'OutputSemantics', 'Delivery', 'ArtifactSha256'], MaxRows: 1, ResultType: 'simple',
+        Fields: ['ID', 'PipelineID', 'TrainingRunID', 'TrainingSnapshotID', 'OutputSemantics', 'Delivery', 'ArtifactSha256', 'Lineage'], MaxRows: 1, ResultType: 'simple',
       },
       ctx,
     );

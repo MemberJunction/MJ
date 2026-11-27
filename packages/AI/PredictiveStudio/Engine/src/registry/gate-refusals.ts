@@ -50,6 +50,8 @@ export class GateRefusals {
         return 'A reason is required.';
       case 'incumbent-not-current':
         return `The training run was compared with model ${refusal.comparedWith}, but model ${refusal.current} is Published now; retrain to compare with it.`;
+      case 'feature-version-not-activated':
+        return `The model reads ${refusal.featureName} at Feature Pipeline version ${refusal.pipelineVersion}, which is gated and has no passing golden-set result.`;
       default: {
         const unknown: never = refusal;
         return `Refused: ${JSON.stringify(unknown)}`;

@@ -7,7 +7,7 @@
  * the message states the refusal in plain words with its columns or counts and the scoring run's ID. The structured
  * refusal is also stored on the `MJ: ML Scoring Runs` row the ID names.
  */
-import type { ScoringRefusal, ScoringResult } from '@memberjunction/predictive-studio-core';
+import { FeatureValuePins, type ScoringRefusal, type ScoringResult } from '@memberjunction/predictive-studio-core';
 
 /** A scoring result that did not complete. */
 export type ScoringNotCompleted = Extract<ScoringResult, { readonly Status: 'refused' | 'failed' }>;
@@ -50,6 +50,7 @@ export class ScoringRefusedError extends Error {
       case 'as-of-unsupported': return `the model ${reason.modelId} was trained without a Prediction Unit and scores only the run date, not ${reason.asOf}`;
       case 'leakage-unknown': return `the model ${reason.modelId} has no stored feature importance to test for leakage`;
       case 'feature-values-not-writable': return `the caller ${reason.userId} may not create and update MJ: Feature Values, so the run would write nothing it scores`;
+      case 'feature-version-mismatch': return `the model reads ${reason.featureName} at ${FeatureValuePins.VersionOf(reason.pinned)}, but ${FeatureValuePins.VersionOf(reason.active)} is in use now; retrain the model`;
       default: return ScoringRefusedError.unknown(reason);
     }
   }

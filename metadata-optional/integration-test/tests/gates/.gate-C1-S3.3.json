@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> S3.3",
+    "Description": "Gate G7.6 (owner PR 5, phase 7, dataset C1, criterion S3.3): scoring a C1 model with a job-title Feature Pipeline version other than the one it is pinned to is refused, 1 of 1. On the C1 corpus (truth:load-c1), a fixture job-title pipeline holds version 1 (Active, ungated) and version 2 (Retired) with planted values for both; a C1 renewal pipeline with an llm-derived step is trained (pinned at train time to version 1, carried in its lineage); the Active version then moves to 2 and the model is scored on the model path (Score Record Set): refused feature-version-mismatch naming version 1 pinned and version 2 active, a refused MJ: ML Scoring Runs row, 0 Feature Values written. Server transport (the planted values are saved through the Feature Pipelines write path's authorisation). Needs the truth sidecar. Mutation: remove the pin comparison (ScoringService.CheckFeaturePins) -> red.",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G7.6\",\"owner:PR5\",\"phase:7\",\"dataset:C1\",\"criterion:S3.3\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 1800000,
+    "ExpectedOutcomes": {
+      "summary": "Scoring with a job-title pipeline version other than the pinned one is refused (feature-version-mismatch), 1 of 1, before any record; 0 Feature Values written."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-s3-3"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "32818B00-9F31-42C0-B1E4-8593398062F5"
+  }
+}

@@ -829,7 +829,8 @@ export type PredictiveStudioTransitionRefusal =
     | { readonly kind: 'not-servable'; readonly reason: string }
     | { readonly kind: 'model-not-found'; readonly modelId: string }
     | { readonly kind: 'reason-required' }
-    | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+    | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string }
+    | { readonly kind: 'feature-version-not-activated'; readonly featureName: string; readonly pipelineVersion: number };
 
 /** Output of `PredictiveStudio.PromoteModel`: whether the gate applied the transition, the model's status, and why not. */
 export interface PredictiveStudioPromoteModelOutput {
@@ -2894,7 +2895,7 @@ export class PredictiveStudioPromoteModelOperation extends BaseRemotableOperatio
     public readonly ExecutionMode = 'Sync' as const;
     public readonly RequiredScope = "predictive:execute";
     public readonly RequiresSystemUser = false;
-    public readonly ContractFingerprint = "ro_fp_707dcd50e5ccc5f2";
+    public readonly ContractFingerprint = "ro_fp_3468a5f4b34aa417";
 }
 
 // ============================================================

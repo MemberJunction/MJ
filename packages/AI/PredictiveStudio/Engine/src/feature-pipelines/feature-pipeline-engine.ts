@@ -69,10 +69,25 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
     return super.getInstance<FeaturePipelineEngine>();
   }
 
+  /** How many Process Runs of one pipeline the cache holds, newest first (DD-9: last-run and freshness read only the newest). */
+  public static readonly MAX_RUNS_PER_PIPELINE = 50;
+
+  /**
+   * The `MJ: Process Runs` filter that keeps the newest {@link MAX_RUNS_PER_PIPELINE} runs of each Record Process,
+   * ranked in the entity's own base view (schema and view from the provider's metadata).
+   * @throws Error when the provider does not describe `MJ: Process Runs`
+   */
+  public static RunsCapFilter(provider: IMetadataProvider): string {
+    const runs = provider.EntityByName('MJ: Process Runs');
+    if (!runs) throw new Error('FeaturePipelineEngine: the provider does not describe MJ: Process Runs, so its run cache cannot be capped');
+    const ranked = `SELECT ID, ROW_NUMBER() OVER (PARTITION BY RecordProcessID ORDER BY __mj_CreatedAt DESC, ID DESC) AS RunRank FROM [${runs.SchemaName}].[${runs.BaseView}]`;
+    return `ID IN (SELECT ranked.ID FROM (${ranked}) AS ranked WHERE ranked.RunRank <= ${FeaturePipelineEngine.MAX_RUNS_PER_PIPELINE})`; // pk-filter-ok: MJ core entity keyed by ID
+  }
+
   /** All `MJ: Record Processes` rows (cached); narrowed to feature pipelines by {@link Pipelines}. */
   private _recordProcesses: MJRecordProcessEntity[] = [];
 
-  /** Recent `MJ: Process Runs` headers (cached) used to derive last-run / freshness. */
+  /** The newest `MJ: Process Runs` headers of each pipeline (at most MAX_RUNS_PER_PIPELINE, cached), for last-run / freshness. */
   private _processRuns: MJProcessRunEntity[] = [];
 
   /**
@@ -82,9 +97,12 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
    * We deliberately cache **all** `MJ: Record Processes` (a small, metadata-style
    * table) rather than server-side filtering to the category, because the
    * category id isn't known until the seeded row is loaded and because the full
-   * set is tiny; {@link Pipelines} narrows in memory by the category name. Process
-   * Runs are capped to the most recent rows (the audit headers carry no large
-   * columns) so freshness is cheap to compute.
+   * set is tiny; {@link Pipelines} narrows in memory by the category name. The
+   * Process Run cache is capped: it holds only the newest
+   * {@link FeaturePipelineEngine.MAX_RUNS_PER_PIPELINE} (50) Process Runs per
+   * pipeline (per Record Process; runs of no Record Process count as one group),
+   * read with one ranked filter, so it does not grow with a pipeline's history
+   * (DD-9); last-run and freshness read only the newest run.
    *
    * @param forceRefresh re-run the underlying RunViews even if already loaded
    * @param contextUser the context user (required server-side for audit/security)
@@ -107,6 +125,8 @@ export class FeaturePipelineEngine extends BaseEngine<FeaturePipelineEngine> {
         Type: 'entity',
         EntityName: 'MJ: Process Runs',
         PropertyName: '_processRuns',
+        // the newest MAX_RUNS_PER_PIPELINE runs of each pipeline only (DD-9)
+        Filter: FeaturePipelineEngine.RunsCapFilter(provider || this.ProviderToUse),
         // Newest first so {@link latestRunForPipeline} can take the first match.
         OrderBy: '__mj_CreatedAt DESC',
         CacheLocal: true,

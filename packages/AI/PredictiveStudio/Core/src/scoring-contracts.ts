@@ -14,7 +14,7 @@
  * Casing (D-054): the scope, the refusal and the scored-row shapes are stored in `MJ: ML Scoring Runs` / Feature Value
  * columns and keep the contract's camelCase; the request and the result never leave the process and are PascalCase.
  */
-import type { AssemblyRefusal, ReadPolicy } from './assembly-contract';
+import type { AssemblyRefusal, FeatureVersionPin, PredictionFeaturePin, ReadPolicy } from './assembly-contract';
 import type { Interval } from './evaluation-protocol';
 import type { Actor } from './prediction-unit';
 import type { PersistedModelStatus } from './registry-contracts';
@@ -108,7 +108,18 @@ export type ScoringRefusal =
    * the frozen contract (D4-165), as D4-156's dominance is.
    */
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
-  | { readonly kind: 'feature-values-not-writable'; readonly userId: string };
+  | { readonly kind: 'feature-values-not-writable'; readonly userId: string }
+  /**
+   * The model reads a feature at a version that is no longer the one in use (PR 5 G7.6, D5-9): its pinned Feature
+   * Pipeline version is not the pipeline's Active version, or its prediction pin names a model that is no longer the
+   * binding's pipeline's Published model. Refused before any record is read; retraining pins the version in use.
+   */
+  | {
+      readonly kind: 'feature-version-mismatch';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly featureName: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly pinned: FeatureVersionPin | PredictionFeaturePin;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly active: FeatureVersionPin | PredictionFeaturePin;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+    };
 
 /** One row's score: a calibrated class-probability vector with the adverse probability, or a value with an interval. */
 export type ScoreOutput =

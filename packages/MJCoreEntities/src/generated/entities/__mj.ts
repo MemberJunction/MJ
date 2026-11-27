@@ -89194,7 +89194,10 @@ export type MJMLModelPublishRecordEntity_TransitionRefusal =
   | { readonly kind: 'reason-required' }
   /** The run's stored comparison is against a model other than the one Published now (another publish replaced it, §5.7 R2); final. */
   // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
-  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string };
+  | { readonly kind: 'incumbent-not-current'; readonly comparedWith: string; readonly current: string }
+  /** The model's lineage pins a gated Feature Pipeline version with no passing golden-set result (PR 5 G7.6, D5-9, D5-31). */
+  // case-violation-ok-legacy-back-compat: stored publish-record Refusal JSON keys
+  | { readonly kind: 'feature-version-not-activated'; readonly featureName: string; readonly pipelineVersion: number };
 
 /** A lifecycle state of the contract. */
 export type MJMLModelPublishRecordEntity_LifecycleState = 'draft' | 'validated' | 'published' | 'archived';
@@ -91769,6 +91772,35 @@ export type MJMLScoringRunEntity_ScoringRefusal =
   | { readonly kind: 'leakage-unknown'; readonly modelId: string }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'artifact-unverified'; readonly modelId: string }
+  /** The model's pinned Feature Pipeline version, or the model its prediction pin names, is not the one in use (PR 5 G7.6, D5-9). */
+  | {
+      readonly kind: 'feature-version-mismatch';  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly featureName: string;  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      readonly pinned:  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      | {
+          readonly featurePipelineRecordProcessId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly pipelineVersion: number | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly promptVersionHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly aiModelId: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly parametersHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+        }
+      | {
+          readonly mlModelScoringBindingId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+          readonly mlModelId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+        };
+      readonly active:  // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON key
+      | {
+          readonly featurePipelineRecordProcessId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly pipelineVersion: number | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly promptVersionHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly aiModelId: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+          readonly parametersHash: string | null;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name
+        }
+      | {
+          readonly mlModelScoringBindingId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+          readonly mlModelId: string;  // case-violation-ok-legacy-back-compat: stored assembly JSON field name (D5-15)
+        };
+    }
   // case-violation-ok-legacy-back-compat: stored scoring-run Refusal JSON keys
   | { readonly kind: 'feature-values-not-writable'; readonly userId: string };
 
