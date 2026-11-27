@@ -15,7 +15,7 @@ import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { PredictiveStudioEvidenceGuard, PredictiveStudioPublishRecordGuard, PredictiveStudioStatusGuard } from './registry';
 import { PredictiveStudioScoringBindingGuard } from './governance';
 import { FeatureValueEffectiveRangeGuard } from './feature-values/effective-range-guard';
-import { BuildApprovalClaims, BuildApprovalResolver } from './agent';
+import { AgentDecisionLog, BuildApprovalClaims, BuildApprovalResolver } from './agent';
 
 // The self-managing Python-sidecar client `MLSidecar` lives in its own package,
 // `@memberjunction/predictive-studio-sidecar` — import it directly from there.
@@ -75,6 +75,9 @@ PredictiveStudioScoringBindingGuard.Register();
 // Agent's plan request that is not the person's own client save is recorded with no responder, D-090 rule 3).
 BuildApprovalClaims.Register();
 BuildApprovalResolver.Register();
+// The agent's decision log (PR 5, A4): MJ: Agent Decision Log rows are appended only by AgentDecisionLog.Append and
+// never changed or deleted afterwards (D5-24).
+AgentDecisionLog.Register();
 
 // Scoring — MLModelInferenceProcessor (Record Set Processing work type) + write-back (§10), and the daily prediction
 // retention job's driver (PredictiveStudioPredictionRetentionJobDriver, registered with BaseScheduledJob on load).

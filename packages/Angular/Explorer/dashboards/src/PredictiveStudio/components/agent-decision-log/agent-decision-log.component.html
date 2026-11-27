@@ -1,0 +1,22 @@
+<section class="ps-decision-log" data-testid="ps-agent-decision-log">
+  @if (IsLoading) {
+    <mj-loading text="Reading the decision log…" size="small"></mj-loading>
+  } @else if (LoadError) {
+    <p class="ps-refusals" data-testid="ps-decision-log-error">{{ LoadError }}</p>
+  } @else if (Shown.length === 0) {
+    <p class="ps-eval-empty">No decisions logged for this session yet.</p>
+  } @else {
+    <ol class="ps-decision-list">
+      @for (row of Shown; track row.ID) {
+        <li class="ps-decision" [class.terminal]="IsTerminal(row)" [attr.data-decision]="row.Decision">
+          <div class="ps-decision-head">
+            <span class="ps-decision-step">{{ row.Step }}</span>
+            <span class="ps-decision-label">{{ Label(row) }}</span>
+            <span class="ps-decision-hash" title="Plan hash before → after">{{ Short(row.PayloadHash) }} → {{ Short(row.ResultingPayloadHash) }}</span>
+          </div>
+          <p class="ps-decision-rationale">{{ row.Rationale }}</p>
+        </li>
+      }
+    </ol>
+  }
+</section>

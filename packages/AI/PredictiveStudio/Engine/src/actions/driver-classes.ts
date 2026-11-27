@@ -11,3 +11,4 @@ export const SCORE_RECORD_SET_DRIVER_CLASS = 'PredictiveStudioScoreRecordSetActi
 export const MIGRATE_PIPELINES_DRIVER_CLASS = 'PredictiveStudioMigratePipelinesAction';
 export const DRAFT_PREDICTION_UNIT_DRIVER_CLASS = 'PredictiveStudioDraftPredictionUnitAction';
 export const DRAFT_EVALUATION_PROTOCOL_DRIVER_CLASS = 'PredictiveStudioDraftEvaluationProtocolAction';
+export const PROFILE_PREDICTION_TARGET_DRIVER_CLASS = 'PredictiveStudioProfilePredictionTargetAction';

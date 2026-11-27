@@ -7,6 +7,7 @@ models trained before Prediction Units, so they keep scoring.
 Endpoints:
   * ``GET  /health``  — liveness + registered algorithms + warm-cache depth
   * ``POST /trainer`` — one protocol-driven training: inner-CV selection, one holdout scoring, baselines, the gate
+  * ``POST /profile`` — the read-only profile of a draft unit's development rows (per-field association, GLM vs dummy)
   * ``POST /predict``— score rows by APPLYING (never re-fitting) frozen preprocessing (legacy or v2 artifacts)
   * ``POST /monitor/drift`` — one look of monitor procedure M (z per input, empirical p, BH at q(L))
   * ``POST /monitor/calibrate`` — q(L) for a design by bisection on seeded no-drift replays
@@ -28,6 +29,7 @@ from . import algorithms, artifacts, monitor, preprocessing
 from .array_types import FArr, IntArr
 from .artifacts_v2 import PredictorEnvelope
 from .failures import RequestRefused
+from .profile import ProfileRefused, ProfileRequest, run_profile
 from .run import run_trainer
 from .trainer import DriverBaseline, TrainedPredictor, single_coef_row, top_signed_drivers
 from .trainer_schemas import TrainerRequest
@@ -71,6 +73,21 @@ def trainer(req: TrainerRequest) -> JSONResponse:
     except RequestRefused as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return JSONResponse(result.model_dump(mode="json"))
+
+
+# ---------------------------------------------------------------------------
+# /profile (PR 5, A4; D5-32)
+# ---------------------------------------------------------------------------
+
+@app.post("/profile")
+def profile(req: ProfileRequest) -> JSONResponse:
+    """Profile a draft unit's development rows (in the body; nothing is read or written elsewhere): per field the
+    single-feature inner-CV log-loss improvement over the dummy with its interval and a near-unique flag, and the GLM
+    on every field against the dummy on the same folds. A request outside the contract is a 422."""
+    try:
+        return JSONResponse(run_profile(req))
+    except ProfileRefused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 # ---------------------------------------------------------------------------

@@ -177,10 +177,10 @@ type ViewParams = { EntityName?: string; ExtraFilter?: string; OrderBy?: string;
 
 function idsIn(filter: string, column: string): string[] | undefined {
   const m = new RegExp(`${column}\\s+IN\\s*\\(([^)]*)\\)`, 'i').exec(filter);
-  return m?.[1].split(',').map((s) => s.trim().replace(/'/g, ''));
+  return m?.[1].split(',').map((s) => s.trim().replace(/'/g, '').toUpperCase());
 }
 function eq(filter: string, column: string): string | undefined {
-  return new RegExp(`(?:^|[^A-Za-z])${column}\\s*=\\s*'([^']+)'`, 'i').exec(filter)?.[1];
+  return new RegExp(`(?:^|[^A-Za-z])${column}\\s*=\\s*'([^']+)'`, 'i').exec(filter)?.[1]?.toUpperCase();
 }
 
 /** Every read the orchestrator, the log and replay make, answered from the fakes. */
@@ -203,6 +203,8 @@ function answer(p: ViewParams): { Success: boolean; Results: object[]; ErrorMess
       return { Success: true, Results: promptRuns.filter((r) => ids.includes(runOfPrompt(r.ID))).map((r) => ({ StepType: 'Prompt', TargetLogID: r.ID, StartedAt: r.RunAt, AgentRunID: runOfPrompt(r.ID) })) };
     }
     case 'MJ: AI Agent Runs': {
+      const parents = idsIn(f, 'ParentRunID');
+      if (parents) return { Success: true, Results: runs.filter((r) => r.ParentRunID !== null && parents.includes(r.ParentRunID)) };
       const running = /Status\s*=\s*'Running'/i.test(f);
       const ids = idsIn(f, 'ID') ?? [];
       const id = eq(f, 'ID');

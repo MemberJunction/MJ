@@ -163,6 +163,16 @@
           "primaryKey": {
             "ID": "0EEC36F0-6AAD-48EA-8D77-A1FC063B4F2B"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Profile Prediction Target",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "88AD6289-E702-47A8-89B2-0F957FF570A4"
+          }
         }
       ],
       "MJ: AI Agents": [

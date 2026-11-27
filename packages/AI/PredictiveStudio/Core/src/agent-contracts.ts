@@ -9,10 +9,15 @@
  * - {@link BuildApprovalRefusal} — why no approval holds: one variant per D-090 rule, plus consumption.
  * - {@link AgentControlState} — the orchestrator's states; {@link AgentDecisionKind} — the nine decision-log values
  *   (§5.1.6).
+ * - {@link AgentDecisionLogEntry} — one `MJ: Agent Decision Log` row as `AgentDecisionLog.Append` writes it (A4, D5-24).
+ * - {@link AgentRefusal} — the session's fixed refusals (small data, no usable signal, unresolved names), and
+ *   {@link ProfileResult} — what the read-only Profile Prediction Target Action found (A4, §5.1.5).
  *
  * Members are camelCase: they are persisted JSON (claim and decision rows, D-039), as the other PS contracts are.
  */
+import type { MetricWithInterval } from './evaluation-protocol';
 import type { GuardField } from './evaluation-protocol-rules';
+import type { JsonValue } from './json-value';
 import type { HumanActor } from './prediction-unit';
 
 /** A person's approval of one presented plan; the only thing that starts an agent build (D-090). */
@@ -116,3 +121,97 @@ export type DraftRefusal =
   | { readonly kind: 'holdout-read' }  // case-violation-ok-legacy-back-compat: persisted refusal JSON
   /** The draft's names resolve but PR 3's validation refuses it (the problems, in words). */
   | { readonly kind: 'draft-invalid'; readonly problems: readonly string[] };  // case-violation-ok-legacy-back-compat: persisted refusal JSON
+
+/**
+ * The vendor call parameters a prompt run was sent with: PR 1's `VendorCallParameters` (D-PR1-21; `VendorModelName` =
+ * the vendor API model name). PR 1's type is not in `@memberjunction/ai` at this head, so the decision log declares the
+ * same members here (D5-A4-2). A value the prompt run does not record is null.
+ */
+export interface VendorCallParameters {
+  readonly VendorModelName: string | null;
+  readonly Temperature: number | null;
+  readonly MaxTokens: number | null;
+  readonly Seed: number | null;
+}
+
+/** One tool call of a decision, with its recorded result (what replay re-applies, D5-2). */
+export interface AgentDecisionToolCall {
+  /** The Action, the code step (`present-plan`, `claim`) or `prompt-output` (the plan a prompt produced since the previous row). */
+  readonly action: string;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  /** SHA-256 of the call's inputs, or null when it has none. */
+  readonly paramsHash: string | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  /** The recorded result. */
+  readonly result: JsonValue;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+}
+
+/** The prompt a decision's prompt run used, and the parameters it was sent with (empty for a code step). */
+export interface AgentDecisionReplay {
+  readonly promptId: string | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  /** SHA-256 of the prompt run's rendered messages (the prompt as sent). */
+  readonly promptVersionHash: string | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  readonly parameters: VendorCallParameters | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+}
+
+/**
+ * One control-path transition of a session (§5.1.6, D5-24): what `AgentDecisionLog.Append` writes, before the
+ * transition's effect. `inputs.payloadHash` is the plan hash before the decision (the newest row's
+ * `resultingPayloadHash`: compare-and-append, D5-38); `resultingPayloadHash` the plan hash after it.
+ */
+export interface AgentDecisionLogEntry {
+  /** The session: the run that wrote its first row (D5-24). */
+  readonly sessionRunId: string;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  readonly agentRunId: string;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  readonly agentRunStepId: string | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  /** 1-based order in the session, across every run of it. */
+  readonly step: number;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  readonly decision: AgentDecisionKind;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  readonly inputs: {  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+    /** The prompt run whose output changed the plan since the previous row; null when none did. */
+    readonly promptRunId: string | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+    readonly toolCalls: readonly AgentDecisionToolCall[];  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+    readonly payloadHash: string;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  };
+  readonly resultingPayloadHash: string;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  /** The code rule's message or the LLM's reasoning. */
+  readonly rationale: string;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  readonly replay: AgentDecisionReplay;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+  /** The approved request a `request-build` claimed. */
+  readonly buildApprovalRequestId: string | null;  // case-violation-ok-legacy-back-compat: persisted decision-log JSON (D-039)
+}
+
+/** The session's fixed refusals (§5.3): no plan is presented after one. */
+export type AgentRefusal =
+  /** Fewer than 200 resolved development rows, or fewer than 50 in the minority class (DD-5, D5-10). */
+  // case-violation-ok-legacy-back-compat: persisted refusal JSON (D-039)
+  | { readonly kind: 'small-data'; readonly resolvedRows: number; readonly minorityRows: number; readonly minResolved: 200; readonly minMinority: 50 }
+  /** The cross-validated GLM's log-loss improvement over the dummy has an interval that includes 0. */
+  | { readonly kind: 'no-usable-signal'; readonly improvement: MetricWithInterval }  // case-violation-ok-legacy-back-compat: persisted refusal JSON (D-039)
+  /** After the repairs the plan still names things that do not exist. */
+  | { readonly kind: 'unresolved-reference'; readonly references: readonly UnresolvedReference[] };  // case-violation-ok-legacy-back-compat: persisted refusal JSON (D-039)
+
+/** One candidate field's profile: its association, and whether it is a leak suspect. */
+export interface ProfileFieldResult {
+  readonly name: string;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly improvement: MetricWithInterval;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly nearUnique: boolean;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  /** Implausibly strong alone, or a near-unique identifier. */
+  readonly leakSuspect: boolean;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+}
+
+/** What Profile Prediction Target found on a draft unit's development rows (§5.1.5); stored on the `profile` row. */
+export interface ProfileResult {
+  readonly resolvedRows: number;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly minorityRows: number;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  /** Development rows per class. */
+  readonly classCounts: Readonly<Record<string, number>>;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly fields: readonly ProfileFieldResult[];  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly leakSuspects: readonly string[];  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  /** The GLM against the dummy; null when the small-data refusal ended the profile before any compute. */
+  readonly glmVsDummy: MetricWithInterval | null;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  /** Sidecar compute in seconds (the profile's compute cost, DD-4). */
+  readonly computeSeconds: number;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly holdoutRowsRead: 0;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  readonly holdoutRowsExcluded: number;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+  /** The fixed refusal the profile ends the session with, or null. */
+  readonly verdict: Extract<AgentRefusal, { kind: 'small-data' | 'no-usable-signal' }> | null;  // case-violation-ok-legacy-back-compat: persisted profile JSON (D-039)
+}

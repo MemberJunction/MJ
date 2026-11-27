@@ -12,7 +12,8 @@ import type { BaseAgentNextStep } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentRequestEntity, MJMLBuildApprovalClaimEntity } from '@memberjunction/core-entities';
 import {
   GUARD_FIELDS, JsonParse,
-  type AgentControlState, type BuildApproval, type BuildApprovalRefusal, type DraftRefusal, type JsonValue, type ModelingPlanSpec, type UnresolvedReference,
+  type AgentControlState, type AgentRefusal, type BuildApproval, type BuildApprovalRefusal, type DraftRefusal, type JsonValue, type ModelingPlanSpec,
+  type ProfileResult, type UnresolvedReference,
 } from '@memberjunction/predictive-studio-core';
 
 import { SnapshotHash } from '../snapshot/snapshot-hash';
@@ -35,6 +36,19 @@ export interface BuildClaimFact {
   readonly ErrorMessage: string | null;
 }
 
+/** The profile's refusal of the session (the fixed small-data refusal or the no-usable-signal verdict). */
+export type ProfileVerdictRefusal = NonNullable<ProfileResult['verdict']>;
+
+/** The profile stage's facts (PR 5, A4): read from the session's decision log, never from a message. */
+export interface ProfileFact {
+  /** A `profile` row of the session profiled the payload's current unit draft and features ({@link AgentControlPath.ProfileInputHash}). */
+  readonly Current: boolean;
+  /** That profile's verdict: the session ends with it. */
+  readonly Verdict: ProfileVerdictRefusal | null;
+  /** The Action failed on the current inputs this run (the sidecar or the row read), with its message; null otherwise. */
+  readonly Failed: string | null;
+}
+
 /**
  * The draft stages' facts (PR 5, A3): whether the payload's drafts were made from its current inputs, the refusal of
  * the current inputs when the draft Action refused them, the presented plan's unresolved names and the repairs used.
@@ -50,6 +64,11 @@ export interface DraftFacts {
   readonly Unresolved: readonly UnresolvedReference[] | null;
   /** Repairs this run already sent back to the prompt. */
   readonly RepairsUsed: number;
+  /**
+   * The profile stage (A4). Facts without it (a caller that keeps no decision log) move through `profile` without a
+   * step, as A3 did.
+   */
+  readonly Profile?: ProfileFact;
 }
 
 /** What the control path decides on: read from the database and the payload, never from a message. */
@@ -83,6 +102,14 @@ export type AgentControlTransition =
   | { readonly Kind: 'draft-unit' }
   /** Run the Draft Evaluation Protocol Action on the unit draft and the protocol proposal (a code Actions step). */
   | { readonly Kind: 'draft-protocol' }
+  /** Run the read-only Profile Prediction Target Action on the unit draft's development rows (a code Actions step, A4). */
+  | { readonly Kind: 'profile' }
+  /** The profile's fixed small-data refusal: end the session, no plan presented (A4, D5-10). */
+  | { readonly Kind: 'decline-small-data'; readonly Refusal: Extract<AgentRefusal, { kind: 'small-data' }> }
+  /** The profile's no-usable-signal verdict: end the session, no plan presented (A4). */
+  | { readonly Kind: 'decline-no-signal'; readonly Refusal: Extract<AgentRefusal, { kind: 'no-usable-signal' }> }
+  /** The profile could not run on the current inputs: end the session with the reason (A4). */
+  | { readonly Kind: 'profile-failed'; readonly Reason: string }
   /** Send the refusal or the unresolved names, with the exact error, to the sub-agent that owns the slice (a code Sub-Agent step). */
   | { readonly Kind: 'repair'; readonly Reason: string; readonly Owner: string }
   /** After {@link AgentControlPath.MAX_REPAIRS} repairs the plan still names something that does not exist: end the session. */
@@ -106,6 +133,8 @@ export const PIPELINE_BUILDER_SUBAGENT_NAME = 'Pipeline Builder';
 /** The draft Actions the control path runs as code steps (the metadata's `MJ: Actions` names, A3). */
 export const DRAFT_UNIT_ACTION_NAME = 'Draft Prediction Unit';
 export const DRAFT_PROTOCOL_ACTION_NAME = 'Draft Evaluation Protocol';
+/** The read-only profiling Action the control path runs after the unit draft (A4). */
+export const PROFILE_ACTION_NAME = 'Profile Prediction Target';
 
 /** The orchestrator's control path (pure statics). */
 export class AgentControlPath {
@@ -125,7 +154,7 @@ export class AgentControlPath {
   public static readonly MAX_REPAIRS = 2; // design §5.1: unresolved names go back to the owning sub-agent at most twice
 
   /** The states whose transition is decided in code once the plan is complete (no prompt runs in them unless a repair is sent). */
-  public static readonly CODE_STATES: readonly AgentControlState[] = ['draft-unit', 'draft-protocol', 'validate-plan', 'present-plan'];
+  public static readonly CODE_STATES: readonly AgentControlState[] = ['draft-unit', 'profile', 'draft-protocol', 'validate-plan', 'present-plan'];
 
   /** The step kinds a prompt may choose without an effect (asking, finishing, thinking again). */
   private static readonly neutralSteps: readonly string[] = ['Chat', 'Success', 'Failed', 'Retry'];
@@ -162,6 +191,7 @@ export class AgentControlPath {
     const d = facts.Drafts;
     if (!d) return 'present-plan';
     if (!d.UnitDraftCurrent) return 'draft-unit';
+    if (d.Profile && (!d.Profile.Current || d.Profile.Verdict !== null || d.Profile.Failed !== null)) return 'profile';
     if (!d.ProtocolDraftCurrent) return 'draft-protocol';
     return 'validate-plan';
   }
@@ -169,6 +199,16 @@ export class AgentControlPath {
   /** SHA-256 of what the unit draft is made from: the plan's target (with its unit proposal). */
   public static UnitDraftInputHash(payload: Pick<ModelingPlanSpec, 'TargetDefinition'>): string {
     return SnapshotHash.Sha256Hex(Canonicalize({ TargetDefinition: payload.TargetDefinition || null }));
+  }
+
+  /** SHA-256 of what the profile is made from: the unit draft and the plan's candidate feature names (sorted). */
+  public static ProfileInputHash(payload: Pick<ModelingPlanSpec, 'UnitDraft' | 'CandidateFeatures'>): string {
+    return SnapshotHash.Sha256Hex(Canonicalize({ UnitDraft: payload.UnitDraft || null, Features: AgentControlPath.FeatureNames(payload) }));
+  }
+
+  /** The plan's candidate feature names, sorted (what the profile profiles). */
+  public static FeatureNames(payload: Pick<ModelingPlanSpec, 'CandidateFeatures'>): string[] {
+    return [...new Set((payload.CandidateFeatures || []).map((f) => f.Name))].sort();
   }
 
   /** SHA-256 of what the protocol draft is made from: the unit draft and the protocol proposal. */
@@ -182,7 +222,7 @@ export class AgentControlPath {
       case 'draft-unit':
         if (!facts.Drafts) return { Kind: 'advance', From: state, To: 'profile' };
         return facts.Drafts.Refusal ? AgentControlPath.repairOrDecline(facts.Drafts.Refusal, facts.Drafts.RepairsUsed) : { Kind: 'draft-unit' };
-      case 'profile': return { Kind: 'advance', From: state, To: 'draft-protocol' };
+      case 'profile': return AgentControlPath.nextAfterProfile(facts);
       case 'draft-protocol':
         if (!facts.Drafts) return { Kind: 'advance', From: state, To: 'validate-plan' };
         return facts.Drafts.Refusal ? AgentControlPath.repairOrDecline(facts.Drafts.Refusal, facts.Drafts.RepairsUsed) : { Kind: 'draft-protocol' };
@@ -196,6 +236,37 @@ export class AgentControlPath {
       case 'gather': return { Kind: 'prompt', State: 'gather' };
       default: return { Kind: 'prompt', State: 'gather' };
     }
+  }
+
+  /** The transition out of `profile` (A4): profile the current draft, then decline on a verdict or move on. */
+  private static nextAfterProfile(facts: AgentControlFacts): AgentControlTransition {
+    const p = facts.Drafts?.Profile;
+    if (!p) return { Kind: 'advance', From: 'profile', To: 'draft-protocol' };
+    if (p.Failed !== null) return { Kind: 'profile-failed', Reason: p.Failed };
+    if (!p.Current) return { Kind: 'profile' };
+    if (p.Verdict?.kind === 'small-data') return { Kind: 'decline-small-data', Refusal: p.Verdict };
+    if (p.Verdict?.kind === 'no-usable-signal') return { Kind: 'decline-no-signal', Refusal: p.Verdict };
+    return { Kind: 'advance', From: 'profile', To: 'draft-protocol' };
+  }
+
+  /** The session's last message after the fixed small-data refusal (deterministic, with the counts and the thresholds). */
+  public static DeclineSmallDataMessage(r: Extract<AgentRefusal, { kind: 'small-data' }>): string {
+    return `I can't build a reliable model from this data: the development rows hold ${r.resolvedRows} resolved rows, ${r.minorityRows} of them in the smaller outcome class. `
+      + `A model needs at least ${r.minResolved} resolved rows and at least ${r.minMinority} in the smaller class, so I have not drafted a plan. `
+      + 'Widen the rows (more years, a broader population) or pick an outcome with more cases, and ask me again.';
+  }
+
+  /** The session's last message after the no-usable-signal verdict, with the improvement's interval. */
+  public static DeclineNoSignalMessage(r: Extract<AgentRefusal, { kind: 'no-usable-signal' }>): string {
+    const i = r.improvement.interval;
+    return `I found no usable signal: on the development rows a model of all the candidate fields does no better than predicting the base rate `
+      + `(log-loss improvement ${r.improvement.value.toFixed(4)}, ${Math.round(i.level * 100)}% interval ${i.lower.toFixed(4)} to ${i.upper.toFixed(4)}, which includes 0). `
+      + 'I have not drafted a plan. Add fields that plausibly drive the outcome and ask me again.';
+  }
+
+  /** The session's last message when the profile could not run. */
+  public static ProfileFailedMessage(reason: string): string {
+    return `I couldn't profile the data for this plan, so I have not presented it: ${reason}`;
   }
 
   /** The transition out of `validate-plan`: present a plan whose every name resolves; else repair, then decline. */

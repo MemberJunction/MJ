@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   MonitoringResultSchemas,
+  ProfileContract,
   TrainerContract,
   type JsonValue,
   type MonitorCalibrateRequest,
@@ -13,6 +14,8 @@ import {
   type MonitorDriftResponse,
   type PredictRequest,
   type PredictResponse,
+  type ProfileRequest,
+  type ProfileResponse,
   type TrainerRequest,
   type TrainerResult,
 } from '@memberjunction/predictive-studio-core';
@@ -90,6 +93,18 @@ export class TrainerResultMalformedError extends Error {
   constructor(problems: readonly string[]) {
     super(`The sidecar's /trainer answer is not a TrainerResult: ${problems.join('; ')}`);
     this.name = 'TrainerResultMalformedError';
+    this.Problems = problems;
+  }
+}
+
+/** The sidecar's `/profile` answered 2xx with a body that is not a {@link ProfileResponse} (PR 5, A4). */
+export class ProfileResponseMalformedError extends Error {
+  /** One problem per mismatch with the contract. */
+  public readonly Problems: readonly string[];
+
+  constructor(problems: readonly string[]) {
+    super(`The sidecar's /profile answer is not a ProfileResponse: ${problems.join('; ')}`);
+    this.name = 'ProfileResponseMalformedError';
     this.Problems = problems;
   }
 }
@@ -440,6 +455,22 @@ export class MLSidecar {
   async MonitorCalibrate(req: MonitorCalibrateRequest): Promise<MonitorCalibrateResponse> {
     this.assertRunning();
     return this.httpPost<MonitorCalibrateRequest, MonitorCalibrateResponse>('/monitor/calibrate', req);
+  }
+
+  /**
+   * Profile a draft unit's development rows by POSTing a {@link ProfileRequest} to `/profile` (PR 5, A4; D5-32): per
+   * field the single-feature inner-CV log-loss improvement over the dummy with its interval and a near-unique flag,
+   * and the all-features GLM against the dummy on the same folds. The route reads only the body and writes nothing.
+   * The answer is checked against the contract before it is returned, never cast.
+   * @throws {SidecarError} when the sidecar refuses the request (422: outside the contract) or fails (5xx)
+   * @throws {ProfileResponseMalformedError} when a 2xx answer is not a {@link ProfileResponse}
+   */
+  async Profile(req: ProfileRequest): Promise<ProfileResponse> {
+    this.assertRunning();
+    const answer = await this.httpPost<ProfileRequest, JsonValue>('/profile', req);
+    const parsed = ProfileContract.ParseProfileResponse(answer);
+    if (parsed.Ok === false) throw new ProfileResponseMalformedError(parsed.Errors);
+    return parsed.Value;
   }
 
   /**

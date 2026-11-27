@@ -2738,5 +2738,155 @@
       "delete": true,
       "deletedAt": "2026-11-19T12:00:00.000Z"
     }
+  },
+  {
+    "fields": {
+      "Name": "Profile Prediction Target",
+      "Description": "Read-only profiling tool of the Model Development Agent (PR 5, A4). Reads the draft Prediction Unit's development rows only (never the locked holdout; HoldoutRowsRead is always 0) and returns their resolved and per-class counts, each candidate field's single-feature association with an interval, leak suspects (implausibly strong alone, or a near-unique identifier) and a cross-validated GLM against the dummy on the same folds, computed by the Predictive Studio sidecar's POST /profile. Applies the fixed refusals: small data (fewer than 200 resolved development rows or fewer than 50 in the smaller class, before any compute) and no usable signal (the GLM's improvement interval includes 0). Writes no row; records the sidecar compute seconds.",
+      "Type": "Custom",
+      "DriverClass": "PredictiveStudioProfilePredictionTargetAction",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "Config": {
+        "disallowWhenTainted": true
+      }
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UnitDraft",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": true,
+            "Description": "JSON of the validated UnitDraft (the Draft Prediction Unit Action's output) whose development rows are profiled."
+          },
+          "primaryKey": {
+            "ID": "31C89911-FD2F-4DB1-A302-FB04F282EE44"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Features",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON array of the candidate field names to profile (the plan's CandidateFeatures)."
+          },
+          "primaryKey": {
+            "ID": "FD8526A1-580D-40EA-854A-59399C00BBD6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProfileResult",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the ProfileResult: resolvedRows, minorityRows, classCounts, fields (improvement, nearUnique, leakSuspect), leakSuspects, glmVsDummy, computeSeconds, holdoutRowsRead (0), holdoutRowsExcluded, verdict."
+          },
+          "primaryKey": {
+            "ID": "CA035289-58B9-4739-9CF7-CBEB2066E509"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Refusal",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "JSON of the fixed refusal (small-data or no-usable-signal) when the profile ends the session."
+          },
+          "primaryKey": {
+            "ID": "62D2F45C-EAF8-45AB-8CE4-BE8AC5DA4F89"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HoldoutRowsRead",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Locked-holdout rows read: always 0 (the Action reads development rows only)."
+          },
+          "primaryKey": {
+            "ID": "935798D1-DE09-41E4-B3ED-A586B7998052"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ComputeSeconds",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Sidecar compute seconds the profile spent (0 when the small-data refusal ended it before any compute)."
+          },
+          "primaryKey": {
+            "ID": "F78289D1-C150-40AD-B87C-82963AE4568C"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "The profile was computed (the Refusal output carries its verdict when there is one)."
+          },
+          "primaryKey": {
+            "ID": "6CD9856D-57B4-4272-9EBE-9A8ABCEEF6C1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_UNIT",
+            "IsSuccess": false,
+            "Description": "UnitDraft was not supplied or does not parse."
+          },
+          "primaryKey": {
+            "ID": "6FE1E195-E83B-48D0-8A43-7FB61B35F43A"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROFILE_REFUSED",
+            "IsSuccess": false,
+            "Description": "The draft unit's development rows could not be read; nothing was profiled."
+          },
+          "primaryKey": {
+            "ID": "3A7032F4-325B-448A-B37A-4607DE4ED667"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROFILE_FAILED",
+            "IsSuccess": false,
+            "Description": "The profile failed (for example the sidecar refused or did not answer)."
+          },
+          "primaryKey": {
+            "ID": "A3F9BF62-2F06-4B45-9CA7-96C848346901"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "12F2CA90-CD3C-4CF0-B1DA-94E6FCE04191"
+    }
   }
 ]

@@ -12,6 +12,8 @@
  * - {@link AgentReadScope} — the development rows of a draft unit, the only rows an agent-callable path reads (G4.2)
  * - {@link PlanMetadataValidator} — every name a presented plan uses, resolved against metadata
  * - {@link CatalogRenderer} — the compact entity catalog the planning sub-agents read (DD-2)
+ * - {@link AgentDecisionLog} / {@link AgentSessionReplay} — the session's append-only decision log and its replay (A4)
+ * - {@link ProfileVerdict} — the profile's fixed refusals: small data, no usable signal (A4)
  */
 export * from './modeling-plan-to-pipeline';
 export * from './pipeline-builder';
@@ -25,3 +27,7 @@ export * from './model-dev-orchestrator-agent';
 export * from './agent-read-scope';
 export * from './plan-metadata-validator';
 export * from './catalog-renderer';
+export * from './decision-log-write-authorisations';
+export * from './decision-log';
+export * from './session-replay';
+export * from './profile-verdict';
