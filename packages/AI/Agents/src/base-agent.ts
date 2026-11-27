@@ -338,6 +338,33 @@ import { AgentContextAssembler } from './AgentContextAssembler';
 import { AgentStepDispatcher, type LoopIterationError } from './AgentStepDispatcher';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import _ from 'lodash';
+import {
+    type ActionCircuitBreakerReason,
+    type ActionFailureClass,
+    type ActionResultCrushConfig,
+    type ActionResultSummary,
+    type CreateStepEntityParams,
+    type ExecuteSingleActionOptions,
+    type ExtendedProgressStep,
+    type RecordedPromptMessage,
+    type StoppedRunStackStepRecord,
+} from './helpers/base-agent-types';
+import type { AgentHelperSubclassHooks, AgentRunContext } from './helpers/AgentRunContext';
+import { AgentHelperCache } from './helpers/AgentHelperResolver';
+import { BaseAgentDeprecatedDelegates } from './helpers/compat/BaseAgentDeprecatedDelegates';
+import { BaseAgentMessagingHelper } from './helpers/messaging/BaseAgentMessagingHelper';
+import { AgentMessagingHelper } from './helpers/messaging/AgentMessagingHelper';
+import { AgentStoppedRunContinuationHelper } from './helpers/messaging/AgentStoppedRunContinuationHelper';
+
+// Same-package type exports kept on ./base-agent for internal/direct-path import compatibility.
+export type {
+    ActionCircuitBreakerReason,
+    ActionFailureClass,
+    ActionResultCrushConfig,
+    ActionResultSummary,
+    ExecuteSingleActionOptions,
+    StoppedRunStackStepRecord,
+};
 
 const RECONCILED_FAST_JUDGE_IDS_DATA_KEY = '__reconciledFastJudgeIds' as const;
 
@@ -433,75 +460,6 @@ interface MemoryWriteSkip {
     Told: string;
 }
 
-/** A message a Prompt step recorded in its InputData, with its content/metadata snapshot at the time it was recorded. */
-interface RecordedPromptMessage {
-    Message: ChatMessage;
-    ContentRef: ChatMessage['content'];
-    MetadataRef: AgentChatMessageMetadata | undefined;
-    WasCompacted: boolean | undefined;
-    CanExpand: boolean | undefined;
-    IsExpired: boolean | undefined;
-}
-
-/**
- * Compact representation of a single action's execution result, used for
- * building the markdown summary that goes into conversation messages.
- */
-/**
- * A stopped run's step with its outcome. The full-stack resume reads every step of the run, not
- * only completed results: it needs the prompt steps' recorded message stacks, and it needs to
- * know which requested actions finished before the stop.
- */
-export interface StoppedRunStackStepRecord extends StoppedRunStepRecord {
-    Status: MJAIAgentRunStepEntityExtended['Status'];
-    Success: MJAIAgentRunStepEntityExtended['Success'];
-}
-
-/** What the pre-execution phase loaded about a user-stopped predecessor, applied once the phase settles. */
-interface StoppedRunContinuation {
-    RunID: string;
-    Mode: StopContinuationMode;
-    Steps: StoppedRunStackStepRecord[];
-}
-
-export interface ActionResultSummary {
-    actionName: string;
-    success: boolean;
-    params: ActionParam[];
-    resultCode: string;
-    message: string;
-    aiDirectives?: AIDirective[];
-    /** Set when the circuit breaker blocked the call without dispatching it. */
-    breakerReason?: ActionCircuitBreakerReason;
-    /** Trust classification of the action's output ('Trusted' | 'SemiTrusted' | 'Untrusted'). */
-    trustLevel?: ActionOutputTrustLevel;
-    /** Structured recovery hints returned on action failure. */
-    errorRecovery?: ActionErrorRecovery;
-}
-
-/**
- * Resolved per-run configuration for structurally compressing inline action-result
- * payloads via @memberjunction/context-crush. Undefined means crushing is disabled
- * for the run (the agent opted out via `crushActionResults: false`).
- */
-export interface ActionResultCrushConfig {
-    /** Minimum stringified length of an object/array (or code string) value before crushing. */
-    threshold: number;
-    /** Optional character budget passed to CrushJSON (undefined = no row truncation). */
-    maxChars: number | undefined;
-    /**
-     * When set, large *string* output params are reduced with CrushCode for this language.
-     * Undefined (default) means code-string crushing is off — only structural JSON crushing
-     * applies. Opt in per agent type via the `crushCodeLang` prompt param or a subclass override.
-     */
-    codeLang: CodeLang | undefined;
-    /**
-     * Actions whose results are never crushed, by Action name — large exact payloads such as code
-     * or specifications the model must read verbatim. Set with the `uncrushedActions` prompt param.
-     */
-    exemptActions?: ReadonlySet<string>;
-}
-
 /** What a While loop produced, handed from executeWhileIterations to completeWhileLoop. */
 interface WhileLoopResults {
     results: BaseAgentNextStep[];
@@ -545,20 +503,6 @@ interface BaseIterationContext {
     // Agent-type specific data (e.g., Flow stores stepId here)
     agentTypeData?: any;
 }
-
-/**
- * Extended progress step that includes additional metadata for execution tracking
- */
-type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
-    /** Timestamp when this progress step was recorded */
-    timestamp: Date;
-    /** Hierarchy of agent names from root to current agent */
-    agentHierarchy: string[];
-    /** Depth of the current agent in the execution hierarchy */
-    depth: number;
-    /** Hierarchical step string (e.g., "2.1.3" for nested agents) */
-    hierarchicalStep?: string;
-};
 
 /**
  * Base implementation for AI Agents in the MemberJunction framework.
@@ -638,55 +582,6 @@ interface ParallelSubAgentDispatch {
     subAgentEntity: MJAIAgentEntityExtended;
     relationship?: MJAIAgentRelationshipEntity;
 }
-
-/**
- * Options for {@link BaseAgent.ExecuteSingleAction}.
- */
-export interface ExecuteSingleActionOptions {
-    /**
-     * When true, the run-scoped action circuit breaker is bypassed for this call: none of the
-     * pre-execution checks (fatal lockout, identical-arguments rule, consecutive-attempt budget)
-     * apply, and the outcome neither increments nor resets the failure history.
-     *
-     * Set by the pipeline registry and by the ForEach / While iteration paths. Those callers do
-     * their own per-element failure accounting and expect elements to be independent, and there
-     * is no model in the loop to act on the breaker's guidance, so counting those calls would let
-     * a run of bad elements block the rest of the batch and then block the model's next direct
-     * call too.
-     */
-    skipCircuitBreaker?: boolean;
-    /**
-     * The run step (`MJ: AI Agent Run Steps`) this call is recorded under, named in the audit lines
-     * written when a bound parameter (`ExecuteAgentParams.boundActionParams`) overrides a value the
-     * model sent or refuses the call. Set by the actions step; a direct caller may leave it out.
-     */
-    StepID?: string;
-}
-
-/**
- * Which circuit-breaker rule blocked an action call without dispatching it.
- *
- * - `'fatal'` — the action failed earlier in the run with a configuration or credential error and is
- *   locked out for the rest of the run.
- * - `'audience'` — the action engine refused the action for the run's audience (`AUDIENCE_UNSUPPORTED`): it cannot
- *   limit what it returns to what everyone in a shared conversation may see, so it is locked out for the run. Not a
- *   configuration or credential error, and the model is told so.
- * - `'tainted'` — the run read untrusted content under a task-graph envelope and the action is `disallowWhenTainted`
- *   (`TAINTED_EGRESS_BLOCKED`), so it is locked out until a person reviews that content. Not a configuration or
- *   credential error either, and the model is told so.
- * - `'identical-arguments'` — the action already failed {@link IDENTICAL_FAILURE_THRESHOLD} times
- *   with these exact arguments.
- * - `'attempts-exhausted'` — the action has failed {@link ACTION_FAILURE_BUDGET} consecutive times
- *   across any arguments.
- */
-export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'tainted' | 'identical-arguments' | 'attempts-exhausted';
-
-/**
- * What {@link BaseAgent.classifyActionFailure} names for a failed action: the breaker rule that fired, a refusal by
- * the user's agent policy (`'policy'` — governance, not a parameter error, so the guidance must not tell the model
- * to adjust its arguments and retry), or a plain `'warning'`.
- */
-export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'non-retryable' | 'warning';
 
 /** Result codes that are structurally non-retryable (permission or run-scope refusals). */
 export const NON_RETRYABLE_RESULT_CODES: ReadonlySet<string> = new Set([
@@ -822,7 +717,109 @@ interface HeldCompletionChange {
 /** The prompt params that limit one turn's decisions. */
 type DecisionLimitParam = 'decisionsMaxRequests' | 'decisionsMaxItems' | 'decisionsMaxCallsPerTurn';
 
-export class BaseAgent {
+export class BaseAgent extends BaseAgentDeprecatedDelegates {
+    /** Per-run cache of resolved pluggable helper instances (`BaseAgent*Helper`), lazily initialized for `Object.create(BaseAgent.prototype)` safety. */
+    private _helperCache: AgentHelperCache | undefined;
+    /** Lazily constructed live `AgentRunContext` facade bound to this agent instance. */
+    private _cachedRunContext: AgentRunContext | undefined;
+
+    private get helperCache(): AgentHelperCache {
+        return (this._helperCache ??= new AgentHelperCache());
+    }
+
+    /**
+     * Returns the live {@link AgentRunContext} shared by `BaseAgent` and all pluggable helper seams.
+     * Accessors read/write directly against `BaseAgent`'s instance fields so state stays 100% unified.
+     */
+    protected override getRunContext(): AgentRunContext {
+        if (this._cachedRunContext) {
+            return this._cachedRunContext;
+        }
+        const self = this;
+        const hooks: AgentHelperSubclassHooks = {
+            LogStatus: (message, verboseOnly, params) => self.logStatus(message, verboseOnly, params),
+            LogError: (error, options) => self.logError(error, options),
+            FormatHierarchicalMessage: (baseMessage) => self.formatHierarchicalMessage(baseMessage),
+            FitStepName: (stepEntity, name) => self.fitStepName(stepEntity, name),
+            BuildHierarchicalStep: (currentStep, parentSteps) => self.buildHierarchicalStep(currentStep, parentSteps),
+            CreateStepEntity: (params) => self.createStepEntity(params),
+            FinalizeStepEntity: (stepEntity, success, errorMessage, outputData) =>
+                self.finalizeStepEntity(stepEntity, success, errorMessage, outputData),
+            QueueStepSave: (stepEntity, applyMutation) => self.queueStepSave(stepEntity, applyMutation),
+            SerializePayloadAtStart: (payload) => self.serializePayloadAtStart(payload),
+            SerializePayloadAtEnd: (payload) => self.serializePayloadAtEnd(payload),
+            HasDefaultPayloadSerializers: () => self.hasDefaultPayloadSerializers(),
+            EnsureTreeBudget: (params) => self.ensureTreeBudget(params),
+            RunPromptExecutionScope: (params) => self.runPromptExecutionScope(params),
+            RunAudienceAddsReader: (params) => self.runAudienceAddsReader(params),
+            MaxStandaloneToolResultChars: () => self.maxStandaloneToolResultChars,
+            CapStandaloneToolResultText: (text) => self.capStandaloneToolResultText(text),
+            FormatSubAgentResultAsMarkdown: (subAgentName, result) =>
+                self.formatSubAgentResultAsMarkdown(subAgentName, result),
+            BuildActionInvocationMessage: (actions, params) => self.buildActionInvocationMessage(actions, params),
+            BuildActionResultsMessage: (actionSummaries) => self.buildActionResultsMessage(actionSummaries),
+            AppendActionResults: (params, summaries, formattedResultsMessage, metadata, decision) =>
+                self.appendActionResults(params, summaries, formattedResultsMessage, metadata, decision),
+            ReconcileUnansweredToolCalls: (params) => self.reconcileUnansweredToolCalls(params),
+            InterceptLargeBinaryContent: (outputParams, actionEntity) =>
+                self.interceptLargeBinaryContent(outputParams, actionEntity),
+            LoadPriorTurnToolResultSteps: (params) => self.loadPriorTurnToolResultSteps(params),
+            LoadStoppedRunContinuation: (params) => self.loadStoppedRunContinuation(params),
+            ApplyStoppedRunContinuation: (params, continuation, continuationMessage) =>
+                self.applyStoppedRunContinuation(params, continuation, continuationMessage),
+            BuildResumedStoppedRunTurns: (steps, params) => self.buildResumedStoppedRunTurns(steps, params),
+            BuildStoppedRunTail: (decision, tailSteps, params) => self.buildStoppedRunTail(decision, tailSteps, params),
+            RaiseFeedbackRequest: (params, stepEntity, decision) => self.raiseFeedbackRequest(params, stepEntity, decision),
+            CreateFeedbackRequest: (params, stepEntity, previousDecision) =>
+                self.createFeedbackRequest(params, stepEntity, previousDecision),
+        };
+        this._cachedRunContext = {
+            get ActiveProvider() { return self._activeProvider; },
+            set ActiveProvider(v) { self._activeProvider = v; },
+            get ProviderToUse() { return self.ProviderToUse; },
+            get ExecuteParams() { return self._executeParams; },
+            set ExecuteParams(v) { self._executeParams = v; },
+            get AgentRun() { return self._agentRun; },
+            set AgentRun(v) { self._agentRun = v; },
+            get StepSaveQueue() { return self._stepSaveQueue; },
+            get PromptRunner() { return self._promptRunner; },
+            get BudgetTracker() { return self._budgetTracker; },
+            get FeedbackCoordinator() { return self._feedbackCoordinator; },
+            get AgentHierarchy() { return self._agentHierarchy; },
+            set AgentHierarchy(v) { self._agentHierarchy = v; },
+            get Depth() { return self._depth; },
+            set Depth(v) { self._depth = v; },
+            get ParentStepCounts() { return self._parentStepCounts; },
+            set ParentStepCounts(v) { self._parentStepCounts = v; },
+            get AllProgressSteps() { return self._allProgressSteps; },
+            set AllProgressSteps(v) { self._allProgressSteps = v; },
+            get PromptTurnCount() { return self._promptTurnCount; },
+            set PromptTurnCount(v) { self._promptTurnCount = v; },
+            get LastRecordedPromptStack() { return self._lastRecordedPromptStack; },
+            set LastRecordedPromptStack(v) { self._lastRecordedPromptStack = v; },
+            get SkillInvocations() { return self._skillInvocations; },
+            set SkillInvocations(v) { self._skillInvocations = v; },
+            get ConversationBranches() { return self._conversationBranches; },
+            set ConversationBranches(v) { self._conversationBranches = v; },
+            get OpenSubAgentConsults() { return self._openSubAgentConsults; },
+            get MessageLifecycleCallback() { return self._messageLifecycleCallback; },
+            set MessageLifecycleCallback(v) { self._messageLifecycleCallback = v; },
+            get FeedbackRequestId() { return self._feedbackRequestId; },
+            set FeedbackRequestId(v) { self._feedbackRequestId = v; },
+            Hooks: hooks,
+        };
+        return this._cachedRunContext;
+    }
+
+    /** Resolves the pluggable Messaging, Progress & Step-Logging helper (`BaseAgentMessagingHelper`). */
+    protected override getMessagingHelper(): BaseAgentMessagingHelper {
+        return this.helperCache.GetOrResolve({
+            SeamKey: 'messaging',
+            BaseClass: BaseAgentMessagingHelper,
+            DefaultClass: AgentMessagingHelper,
+        });
+    }
+
     /**
      * Maximum allowed validation retries before forcing failure.
      * @private
@@ -2791,107 +2788,7 @@ export class BaseAgent {
      * @param params Optional agent execution parameters for custom verbose check
      */
     protected logStatus(message: string, verboseOnly: boolean = false, params?: ExecuteAgentParams): void {
-        if (verboseOnly) {
-            LogStatusEx({
-                message,
-                verboseOnly: true,
-                isVerboseEnabled: () => params?.verbose === true || IsVerboseLoggingEnabled()
-            });
-        } else {
-            LogStatus(message);
-        }
-    }
-
-    /**
-     * Helper method for enhanced error logging with metadata
-     */
-    protected logError(error: Error | string, options?: {
-        category?: string;
-        metadata?: Record<string, any>;
-        agent?: MJAIAgentEntityExtended;
-        agentType?: MJAIAgentTypeEntity;
-        severity?: 'warning' | 'error' | 'critical';
-    }): void {
-        const errorMessage = error instanceof Error ? error.message : error;
-        const errorObj = error instanceof Error ? error : undefined;
-        
-        const metadata: Record<string, any> = {
-            ...options?.metadata
-        };
-        
-        // Add agent information if available
-        if (options?.agent) {
-            metadata.agentId = options.agent.ID;
-            metadata.agentName = options.agent.Name;
-        }
-        
-        // Add agent type information if available
-        if (options?.agentType) {
-            metadata.agentTypeId = options.agentType.ID;
-            metadata.agentTypeName = options.agentType.Name;
-        }
-        
-        LogErrorEx({
-            message: errorMessage,
-            error: errorObj,
-            category: options?.category || 'BaseAgent',
-            severity: options?.severity || 'error',
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined
-        });
-    }
-
-    /**
-     * Wrapper for progress callbacks that captures all progress events.
-     * @private
-     */
-    private wrapProgressCallback(originalCallback?: AgentExecutionProgressCallback): AgentExecutionProgressCallback | undefined {
-        if (!originalCallback) return undefined;
-
-        return (progress) => {
-            // Preserve hierarchical step if already calculated by a child agent
-            // Otherwise, build it using this agent's parent step counts
-            const hierarchicalStep = progress.metadata?.hierarchicalStep as string | undefined
-                ?? this.buildHierarchicalStep(
-                    progress.metadata?.stepCount as number,
-                    this._parentStepCounts
-                );
-
-            // Capture all progress events
-            this._allProgressSteps.push({
-                ...progress,
-                timestamp: new Date(),
-                agentHierarchy: this._agentHierarchy || [],
-                depth: this._depth || 0,
-                hierarchicalStep
-            });
-
-            // Include agent run and hierarchical step in metadata if available
-            try {
-                const enhancedProgress = {
-                    ...progress,
-                    metadata: {
-                        ...progress.metadata,
-                        agentRun: this._agentRun,
-                        hierarchicalStep
-                    }
-                };
-
-                // Call original callback with enhanced progress
-                originalCallback(enhancedProgress);
-            }
-            catch (e) {
-                this.logError(`Failed to enhance progress with agent run: ${e instanceof Error ? e.message : e}`, {
-                    category: 'ProgressEnhancement',
-                    metadata: {
-                        progress: progress,
-                        agentRunId: this._agentRun?.ID || 'N/A'
-                    }
-                });     
-
-                // Call original callback without enhancement
-                originalCallback(progress);
-            }
-        };
+        this.getMessagingHelper().LogStatus(this.getRunContext(), message, verboseOnly, params);
     }
 
     /**
@@ -3424,10 +3321,13 @@ export class BaseAgent {
 
             // --- PRE-WORK: Fast synchronous setup and early-exit checks ---
 
+            // Reset per-run helper resolution cache so global @RegisterClass / per-agent helperPlugins take effect cleanly.
+            this.helperCache.ResetForRun();
+
             // Wrap the progress callback to capture all events
             const wrappedParams = {
                 ...params,
-                onProgress: this.wrapProgressCallback(params.onProgress)
+                onProgress: this.getMessagingHelper().WrapProgressCallback(this.getRunContext(), params.onProgress)
             };
 
             // Capture for lifecycle hooks that don't receive params (post-turn compaction
@@ -3688,7 +3588,7 @@ export class BaseAgent {
                 this.InjectDecisionDiscovery(params.agent, params.contextUser, discoveryStagedMessages, params.data),
                 // If this run resumes a prior run that paused with FinalStep === 'Chat', reload any unanswered
                 // sub-agent consults so the caller's answer can be relayed back to the waiting sub-agent.
-                this.loadOpenConsults(wrappedParams)
+                this.getMessagingHelper().LoadOpenConsults(this.getRunContext(), wrappedParams)
             ]);
 
             if (memoryStagedMessages.length > 0 || ragStagedMessages.length > 0 || discoveryStagedMessages.length > 0) {
@@ -3711,7 +3611,7 @@ export class BaseAgent {
 
             // Restore open sub-agent consults from a resumed Chat run and splice the reminder immediately
             // before the caller's answer (continuationMessage).
-            this.applyOpenConsults(wrappedParams, openConsults, continuationMessage);
+            this.getMessagingHelper().ApplyOpenConsults(this.getRunContext(), wrappedParams, openConsults, continuationMessage);
 
             if (!config.success) {
                 this.logError(`Failed to load agent configuration: ${config.errorMessage}`, {
@@ -7353,38 +7253,6 @@ export class BaseAgent {
      *
      * @param messages - The conversation messages array to convert (modified in-place)
      */
-    protected convertUIMarkupInMessages(messages: ChatMessage[]): void {
-        if (!messages || messages.length === 0) {
-            return;
-        }
-
-        for (const message of messages) {
-            // Only convert user messages (skip system and assistant messages)
-            if (message.role !== 'user') {
-                continue;
-            }
-
-            // Handle string content
-            if (typeof message.content === 'string') {
-                message.content = ConversationUtility.ToPlainText(message.content);
-            }
-            // Handle content blocks (for multimodal messages)
-            else if (Array.isArray(message.content)) {
-                for (const block of message.content) {
-                    if (block.type === 'text' && typeof block.content === 'string') {
-                        block.content = ConversationUtility.ToPlainText(block.content);
-                    }
-                }
-            }
-
-            // Also convert rawContent in metadata when speaker attribution is active
-            const agentMessage = message as AgentChatMessage;
-            if (typeof agentMessage.metadata?.rawContent === 'string') {
-                agentMessage.metadata.rawContent = ConversationUtility.ToPlainText(agentMessage.metadata.rawContent);
-            }
-        }
-    }
-
     /**
      * Validates that there are no circular references in the run chain.
      * Follows the LastRunID chain to ensure it doesn't loop back to the current run.
@@ -12486,727 +12354,32 @@ The context is now within limits. Please retry your request with the recovered c
      * whoever ran it, not for this room.
      * @protected
      */
-    protected async injectPriorTurnToolResults(params: ExecuteAgentParams): Promise<void> {
-        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom || this.runAudienceAddsReader(params)) {
-            return;
-        }
-        try {
-            const steps = await this.loadPriorTurnToolResultSteps(params);
-            const body = BaseAgent.BuildPriorTurnToolResultsMessage(steps, this.maxStandaloneToolResultChars);
-            if (!body) {
-                return;
-            }
-            params.conversationMessages.push(this.buildCarryForwardMessage(body));
-            this.logStatus(`[PriorTurnToolResults] Carried ${steps.length} tool result(s) forward from the previous run`, true, params);
-        } catch (error) {
-            // Carry-forward is an optimization — never let it break the run.
-            this.logStatus(`[PriorTurnToolResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
-        }
-    }
+    // --- Public static pass-throughs preserving BaseAgent public API (delegated to AgentStoppedRunContinuationHelper) ---
+    public static readonly DefaultStopContinuationMode: StopContinuationMode = AgentStoppedRunContinuationHelper.DefaultStopContinuationMode;
+    public static readonly StoppedRunResumeNotice: string = AgentStoppedRunContinuationHelper.StoppedRunResumeNotice;
+    protected static readonly maxStoppedRunResultChars: number = AgentStoppedRunContinuationHelper.MaxStoppedRunResultChars;
+    public static readonly CarryForwardToolFamilies: readonly string[] = AgentStoppedRunContinuationHelper.CarryForwardToolFamilies;
+    public static readonly SummarizeRangePromptName: string = AgentStoppedRunContinuationHelper.SummarizeRangePromptName;
 
-    /**
-     * Carries a STOPPED previous turn's completed results forward into this run's context.
-     *
-     * {@link injectPriorTurnToolResults} covers the normal case: the previous run settled and
-     * its inline tool results ride along one turn. A run the user stopped never settles, so
-     * that path skips it, and the next turn would redo every action the stopped run had already
-     * finished (observed: a stopped Sage run had five weather lookups and fifteen searches done;
-     * "keep going" redid all of them). This path looks at the newest root run for this agent in
-     * the conversation and, when it is one the user stopped, carries it forward per
-     * {@link ExecuteAgentParams.stopContinuationMode}: by default its own message stack is resumed
-     * so the agent picks up where it stopped; in summary mode its completed Actions and Tool results
-     * go in as one transient message that says to continue, not restart. A settled newest run means
-     * the normal path already has the context, so nothing is added here. During execution the two
-     * halves run separately: {@link loadStoppedRunContinuation} in the parallel phase, then
-     * {@link applyStoppedRunContinuation} once it settles.
-     *
-     * Same gates as the sibling: root depth, a conversation, no history floor. Fail-soft.
-     * @protected
-     */
-    protected async injectStoppedRunResults(params: ExecuteAgentParams): Promise<void> {
-        const continuationMessage = params.conversationMessages[params.conversationMessages.length - 1];
-        const continuation = await this.loadStoppedRunContinuation(params);
-        this.applyStoppedRunContinuation(params, continuation, continuationMessage);
-    }
-
-    /**
-     * The I/O half of {@link injectStoppedRunResults}: finds a user-stopped predecessor and loads its
-     * steps (every step for the full-stack resume, only completed results for the summary). Runs inside
-     * the pre-execution parallel phase; nothing here touches the message list.
-     * @protected
-     */
-    protected async loadStoppedRunContinuation(params: ExecuteAgentParams): Promise<StoppedRunContinuation | null> {
-        if (!params.conversationId || this._depth !== 0 || params.ConversationHistoryFrom) {
-            return null;
-        }
-        try {
-            // A caller that chained this run (the run resolver, after its own stopped-predecessor
-            // lookup, or a client continuing a run) already named the predecessor: check that one
-            // row rather than searching the conversation again. Only an unchained run searches.
-            const runId = params.lastRunId
-                ? await this.userStoppedRunIdIfStopped(params.lastRunId, params)
-                : await this.findUserStoppedPredecessorRunId(params);
-            if (!runId) {
-                return null;
-            }
-            const mode = params.stopContinuationMode ?? BaseAgent.DefaultStopContinuationMode;
-            const steps = mode === 'full_stack'
-                ? await this.loadStoppedRunStack(runId, params)
-                : await this.loadStoppedRunResultSteps(runId, params);
-            return { RunID: runId, Mode: mode, Steps: steps };
-        } catch (error) {
-            this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
-            return null;
-        }
-    }
-
-    /**
-     * The message half of {@link injectStoppedRunResults}, applied once the pre-execution phase has
-     * settled so it never races the memory and RAG injections running beside the load.
-     *
-     * Full stack: the stopped run's own turns are spliced in ahead of the user's new message, in the
-     * shape the loop built while running, so the agent resumes where it stopped. When the stack cannot
-     * be resumed (no recorded prompt, or its anchor is missing) this falls back to the summary.
-     * Summary: the completed results go in as one carried-forward message. Fail-soft.
-     * @protected
-     */
-    protected applyStoppedRunContinuation(
-        params: ExecuteAgentParams,
-        continuation: StoppedRunContinuation | null,
-        continuationMessage: ChatMessage | undefined
-    ): void {
-        if (!continuation) {
-            return;
-        }
-        try {
-            if (continuation.Mode === 'full_stack' && this.tryResumeStoppedRunStack(params, continuation, continuationMessage)) {
-                return;
-            }
-            const steps = continuation.Steps.filter(BaseAgent.isCarriedForwardResultStep);
-            const body = BaseAgent.BuildStoppedRunResultsMessage(steps, BaseAgent.maxStoppedRunResultChars);
-            if (!body) {
-                return;
-            }
-            params.conversationMessages.push(this.buildCarryForwardMessage(body));
-            this.logStatus(`[StoppedRunResults] Carried ${steps.length} completed step result(s) forward from stopped run ${continuation.RunID}`, true, params);
-        } catch (error) {
-            this.logStatus(`[StoppedRunResults] Skipped (contained error): ${error instanceof Error ? error.message : error}`, true, params);
-        }
-    }
-
-    /**
-     * Loads unanswered sub-agent consultations (`OutputData.consult`) from `params.lastRunId` when that
-     * prior run paused with `FinalStep === 'Chat'` (and was not stopped by the user). Runs at any depth
-     * so a middle agent resumed via `resumeRunId` also reloads its own open child consults. Fail-soft.
-     * @private
-     */
-    private async loadOpenConsults(params: ExecuteAgentParams): Promise<SubAgentConsultRecord[]> {
-        if (!params.lastRunId || !IsValidUUID(params.lastRunId) || !CanAgentOwnSubAgentConsults(params.agent)) {
-            return [];
-        }
-        try {
-            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-            const runResult = await rv.RunView<{
-                ID: string;
-                FinalStep: string | null;
-                Status: string;
-                CancellationReason: string | null;
-            }>({
-                EntityName: 'MJ: AI Agent Runs',
-                ExtraFilter: `ID='${params.lastRunId}'`,
-                MaxRows: 1,
-                Fields: ['ID', 'FinalStep', 'Status', 'CancellationReason'],
-                ResultType: 'simple',
-                BypassCache: true,
-            }, params.contextUser);
-
-            const priorRun = runResult.Success ? runResult.Results?.[0] : undefined;
-            if (
-                !priorRun ||
-                priorRun.FinalStep !== 'Chat' ||
-                MJAIAgentRunEntityExtended.IsUserStopped(priorRun.Status, priorRun.CancellationReason)
-            ) {
-                return [];
-            }
-
-            return await LoadOpenSubAgentConsults(this.ProviderToUse, params.lastRunId, params.contextUser);
-        } catch (error) {
-            this.logStatus(
-                `[SubAgentConsult] Skipped loading open consults (contained error): ${error instanceof Error ? error.message : error}`,
-                true,
-                params
-            );
-            return [];
-        }
-    }
-
-    /**
-     * Restores reloaded open sub-agent consults into `this._openSubAgentConsults` (so `resumeRunId`
-     * validation accepts them) and splices a `sub-agent-consult` reminder message immediately before
-     * `continuationMessage` (the caller's answer). Fail-soft.
-     * @private
-     */
-    private applyOpenConsults(
-        params: ExecuteAgentParams,
-        openConsults: SubAgentConsultRecord[],
-        continuationMessage: ChatMessage | undefined
-    ): void {
-        if (!openConsults || openConsults.length === 0) {
-            return;
-        }
-        try {
-            for (const consult of openConsults) {
-                if (consult.childRunId) {
-                    this._openSubAgentConsults.set(consult.childRunId, consult);
-                }
-            }
-            const content = FormatReloadedConsultsMessage(openConsults);
-            if (!content) {
-                return;
-            }
-            const metadata: AgentChatMessageMetadata = {
-                turnAdded: 0,
-                messageType: 'sub-agent-consult',
-                ...(openConsults.length === 1
-                    ? {
-                          subAgentName: openConsults[0].subAgentName,
-                          subAgentId: openConsults[0].subAgentId,
-                      }
-                    : {}),
-                expirationTurns: 3,
-                expirationMode: 'Remove',
-            };
-            const consultReminder: AgentChatMessage = {
-                role: 'user',
-                content,
-                metadata,
-            };
-
-            const at = continuationMessage ? params.conversationMessages.indexOf(continuationMessage) : -1;
-            if (at >= 0) {
-                params.conversationMessages.splice(at, 0, consultReminder);
-            } else {
-                let lastUserIdx = -1;
-                for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
-                    if (params.conversationMessages[i].role === 'user') {
-                        lastUserIdx = i;
-                        break;
-                    }
-                }
-                if (lastUserIdx >= 0) {
-                    params.conversationMessages.splice(lastUserIdx, 0, consultReminder);
-                } else {
-                    params.conversationMessages.push(consultReminder);
-                }
-            }
-            this.logStatus(
-                `[SubAgentConsult] Reloaded ${openConsults.length} open consult(s) from prior run ${params.lastRunId}`,
-                true,
-                params
-            );
-        } catch (error) {
-            this.logStatus(
-                `[SubAgentConsult] Skipped applying open consults (contained error): ${error instanceof Error ? error.message : error}`,
-                true,
-                params
-            );
-        }
-    }
-
-    /**
-     * The full-stack half of {@link applyStoppedRunContinuation}: true when the stopped run's turns were
-     * spliced in. Any failure leaves the messages untouched and returns false, so the caller carries
-     * the results as a summary instead of losing them.
-     * @private
-     */
-    private tryResumeStoppedRunStack(
-        params: ExecuteAgentParams,
-        continuation: StoppedRunContinuation,
-        continuationMessage: ChatMessage | undefined
-    ): boolean {
-        try {
-            const resumed = this.buildResumedStoppedRunTurns(continuation.Steps, params);
-            if (resumed && BaseAgent.SpliceResumedTurns(params.conversationMessages, resumed, continuationMessage)) {
-                this.logStatus(`[StoppedRunResume] Resumed ${resumed.length} message(s) from stopped run ${continuation.RunID}`, true, params);
-                return true;
-            }
-            this.logStatus(`[StoppedRunResume] Stack of stopped run ${continuation.RunID} could not be resumed; carrying its results as a summary`, true, params);
-        } catch (error) {
-            this.logStatus(`[StoppedRunResume] Resume failed (${error instanceof Error ? error.message : error}); carrying its results as a summary`, true, params);
-        }
-        return false;
-    }
-
-    /** The mode a run uses when the caller does not set {@link ExecuteAgentParams.stopContinuationMode}. */
-    public static readonly DefaultStopContinuationMode: StopContinuationMode = 'full_stack';
-
-    /**
-     * Placed just before the user's new message when a stopped run's stack is resumed, so the model
-     * knows the turns above it were interrupted and what follows is how to continue.
-     */
-    public static readonly StoppedRunResumeNotice =
-        '[Note: The user stopped the previous execution at this point. The instruction that follows is the continuation request.]';
-
-    /** Result code and message for an action the stopped run requested but never ran. */
-    private static readonly stoppedBeforeRunResultCode = 'NOT_EXECUTED';
-    private static readonly stoppedBeforeRunMessage = 'Not executed: the user stopped the run before this action finished.';
-
-    /**
-     * The stopped run's turns in the shape the loop builds, or null when they cannot be recovered.
-     *
-     * The latest prompt step that recorded a full stack holds the run's whole message stack as it went
-     * into that prompt; the prompt steps after it recorded only the messages appended since (see
-     * {@link capturePromptStepMessages}). The first prompt step recorded the stack the run started from
-     * (history plus this run's injections, which the new run adds for itself). The difference is the
-     * run's own turns. If the last prompt completed, its decision and the steps after it are rebuilt
-     * with the loop's own builders.
-     * @protected
-     */
-    protected buildResumedStoppedRunTurns(steps: StoppedRunStackStepRecord[], params: ExecuteAgentParams): AgentChatMessage[] | null {
-        const prompts = steps.filter(s => s.StepType === 'Prompt');
-        if (prompts.length === 0) {
-            return null;
-        }
-        const firstStack = BaseAgent.readPromptStepStack(prompts[0]);
-        if (!firstStack?.length) {
-            return null;
-        }
-        const lastPrompt = prompts[prompts.length - 1];
-        let fullAt = prompts.length - 1;
-        while (fullAt > 0 && BaseAgent.isPromptStepDelta(prompts[fullAt])) {
-            fullAt--;
-        }
-        const loopTurns = BaseAgent.ExtractStoppedRunLoopTurns(firstStack, BaseAgent.readPromptStepStack(prompts[fullAt]));
-        if (!loopTurns) {
-            return null;
-        }
-        for (const prompt of prompts.slice(fullAt + 1)) {
-            const delta = BaseAgent.readPromptStepStack(prompt);
-            if (!delta) {
-                return null;
-            }
-            loopTurns.push(...delta.filter(m => m.metadata?.volatileState !== true));
-        }
-        const decision = lastPrompt.Status === 'Completed' ? BaseAgent.readPromptStepDecision(lastPrompt) : null;
-        const tail = this.buildStoppedRunTail(decision, steps.filter(s => s.StepNumber > lastPrompt.StepNumber), params);
-        return [...loopTurns, ...tail].map(BaseAgent.restampResumedTurn);
-    }
-
-    /**
-     * The run's own turns: what follows the run's starting message in its last recorded stack, minus
-     * the per-request runtime-state fragments (the new run appends its own). The starting message is
-     * matched at its original position first, so a repeated message earlier in the history ("keep
-     * going" twice) cannot be mistaken for it. Null when it cannot be found.
-     */
     public static ExtractStoppedRunLoopTurns(
         firstStack: AgentChatMessage[] | null,
         lastStack: AgentChatMessage[] | null
     ): AgentChatMessage[] | null {
-        if (!firstStack?.length || !lastStack?.length) {
-            return null;
-        }
-        const key = (m: ChatMessage): string => `${m.role}\u0000${JSON.stringify(m.content)}`;
-        const startKey = key(firstStack[firstStack.length - 1]);
-        const expectedAt = firstStack.length - 1;
-        const at = lastStack[expectedAt] && key(lastStack[expectedAt]) === startKey
-            ? expectedAt
-            : lastStack.map(key).lastIndexOf(startKey);
-        if (at < 0) {
-            return null;
-        }
-        return lastStack.slice(at + 1).filter(m => m.metadata?.volatileState !== true);
+        return AgentStoppedRunContinuationHelper.ExtractStoppedRunLoopTurns(firstStack, lastStack);
     }
 
-    /**
-     * Inserts resumed turns ahead of the user's new message (and ahead of the stopped run's own reply
-     * to the user, when that sits right before it), followed by {@link StoppedRunResumeNotice}. The new
-     * message is found by identity, captured before the pre-execution phase added anything. Returns
-     * false, changing nothing, when it is not a user message still in the list.
-     */
     public static SpliceResumedTurns(
         messages: ChatMessage[],
         resumed: AgentChatMessage[],
         continuationMessage: ChatMessage | undefined
     ): boolean {
-        const at = continuationMessage ? messages.indexOf(continuationMessage) : -1;
-        if (at < 0 || continuationMessage?.role !== 'user') {
-            return false;
-        }
-        const notice: AgentChatMessage = { role: 'user', content: BaseAgent.StoppedRunResumeNotice };
-        const previous = messages[at - 1] as AgentChatMessage | undefined;
-        const stoppedReplyAt = previous?.role === 'assistant' && !previous.toolCalls?.length ? at - 1 : at;
-        messages.splice(at, 0, notice);
-        messages.splice(stoppedReplyAt, 0, ...resumed);
-        return true;
+        return AgentStoppedRunContinuationHelper.SpliceResumedTurns(messages, resumed, continuationMessage);
     }
 
-    /**
-     * What the stopped run's last completed prompt decided, rebuilt as the loop would have written it:
-     * the model's native call turn when results go back natively, the invocation record and the results
-     * of the actions that finished (and a not-executed result for the ones that did not) for an Actions
-     * turn, otherwise the completed results as a carried-forward message. Any native call left without
-     * a result is then answered, so the history is valid for every provider.
-     * @protected
-     */
-    protected buildStoppedRunTail(
-        decision: BaseAgentNextStep | null,
-        tailSteps: StoppedRunStackStepRecord[],
-        params: ExecuteAgentParams
-    ): AgentChatMessage[] {
-        const tail: AgentChatMessage[] = [];
-        if (!decision) {
-            return tail;
-        }
-        const scratch: ExecuteAgentParams = { ...params, conversationMessages: tail };
-        const native = decision.nativeTurn?.sendResultsNatively === true;
-        if (native && decision.nativeTurn) {
-            tail.push(BuildAssistantToolCallTurn(decision.nativeTurn) as AgentChatMessage);
-        }
-        if (decision.step === 'Actions' && decision.actions?.length) {
-            if (!native) {
-                tail.push({ role: 'user', content: this.buildActionInvocationMessage(decision.actions, params) });
-            }
-            const summaries = this.summarizeStoppedRunActions(decision.actions, tailSteps);
-            this.appendActionResults(scratch, summaries, this.buildActionResultsMessage(summaries), undefined, decision);
-        } else {
-            const results = BaseAgent.BuildStoppedRunResultsMessage(tailSteps.filter(BaseAgent.isCarriedForwardResultStep), BaseAgent.maxStoppedRunResultChars);
-            if (results) {
-                tail.push(this.buildCarryForwardMessage(results));
-            }
-        }
-        this.reconcileUnansweredToolCalls(scratch);
-        return tail;
-    }
-
-    /** One result per requested action, in request order: its completed step's result, or not executed. @private */
-    private summarizeStoppedRunActions(requested: AgentAction[], tailSteps: StoppedRunStackStepRecord[]): ActionResultSummary[] {
-        const completed = tailSteps.filter(s => s.StepType === 'Actions' && s.Status === 'Completed');
-        const used = new Set<StoppedRunStackStepRecord>();
-        return requested.map(action => {
-            const step = completed.find(s => !used.has(s) && BaseAgent.readStoppedActionName(s) === action.name);
-            const summary = step ? this.summarizeStoppedActionStep(action.name, step) : null;
-            if (!step || !summary) {
-                return {
-                    actionName: action.name,
-                    success: false,
-                    params: [],
-                    resultCode: BaseAgent.stoppedBeforeRunResultCode,
-                    message: BaseAgent.stoppedBeforeRunMessage,
-                };
-            }
-            used.add(step);
-            return summary;
-        });
-    }
-
-    /**
-     * A completed action step as the loop summarizes a live action result: output parameters only,
-     * with large media swapped for placeholders. Null when the step's output cannot be read.
-     * @private
-     */
-    private summarizeStoppedActionStep(actionName: string, step: StoppedRunStackStepRecord): ActionResultSummary | null {
-        let output: { actionResult?: { success?: boolean; resultCode?: string; message?: string; parameters?: ActionParam[] } };
-        try {
-            output = step.OutputData ? JSON.parse(step.OutputData) : {};
-        } catch {
-            return null;
-        }
-        const result = output.actionResult;
-        if (!result) {
-            return null;
-        }
-        const success = result.success === true;
-        const outputParams = (result.parameters ?? []).filter(p => p.Type === 'Both' || p.Type === 'Output');
-        const actionEntity = ActionEngineServer.Instance.Actions?.find(a => a.Name === actionName);
-        return {
-            actionName,
-            success,
-            params: this.interceptLargeBinaryContent(outputParams, actionEntity),
-            resultCode: result.resultCode || (success ? 'SUCCESS' : 'ERROR'),
-            message: result.message || (success ? 'Action completed' : 'Unknown error'),
-        };
-    }
-
-    /** The message stack a prompt step recorded as its input, or null. @private */
-    private static readPromptStepStack(step: StoppedRunStackStepRecord): AgentChatMessage[] | null {
-        try {
-            const input: { conversationMessages?: AgentChatMessage[] } = step.InputData ? JSON.parse(step.InputData) : {};
-            return Array.isArray(input.conversationMessages) ? input.conversationMessages : null;
-        } catch {
-            return null;
-        }
-    }
-
-    /** True when a prompt step recorded only the per-turn message delta instead of the full history stack. @private */
-    private static isPromptStepDelta(step: StoppedRunStackStepRecord): boolean {
-        try {
-            const input: { conversationMessagesDelta?: boolean } = step.InputData ? JSON.parse(step.InputData) : {};
-            return input.conversationMessagesDelta === true;
-        } catch {
-            return false;
-        }
-    }
-
-    /** The decision a completed prompt step recorded, or null. @private */
-    private static readPromptStepDecision(step: StoppedRunStackStepRecord): BaseAgentNextStep | null {
-        try {
-            const output: { nextStep?: BaseAgentNextStep } = step.OutputData ? JSON.parse(step.OutputData) : {};
-            return output.nextStep ?? null;
-        } catch {
-            return null;
-        }
-    }
-
-    /** The action an Actions step ran, from its recorded input, or null. @private */
-    private static readStoppedActionName(step: StoppedRunStackStepRecord): string | null {
-        try {
-            const input: { actionName?: string } = step.InputData ? JSON.parse(step.InputData) : {};
-            return input.actionName ?? null;
-        } catch {
-            return null;
-        }
-    }
-
-    /**
-     * A resumed turn re-dated to this run's first turn. The stopped run's turn numbers mean nothing
-     * to this run's counter, and expiry compares the two, so a resumed result ages from now.
-     * @private
-     */
-    private static restampResumedTurn(message: AgentChatMessage): AgentChatMessage {
-        return message.metadata?.turnAdded !== undefined
-            ? { ...message, metadata: { ...message.metadata, turnAdded: 0 } }
-            : message;
-    }
-
-    /** A step whose result the summary carries: a completed, successful Actions or Tool step. @private */
-    private static isCarriedForwardResultStep(step: StoppedRunStackStepRecord): boolean {
-        const types: ReadonlyArray<string> = BaseAgent.stoppedRunCarryForwardPredicate.stepTypes;
-        return types.includes(step.StepType) &&
-            step.Status === BaseAgent.stoppedRunCarryForwardPredicate.stepStatus &&
-            step.Success === true;
-    }
-
-    /**
-     * A carried-forward results message: a user-role message that expires after two turns and
-     * compacts to its head, so results reused once never compound across the conversation. Shared
-     * by the settled-run and stopped-run carry-forwards so the two cannot age differently.
-     * @private
-     */
-    private buildCarryForwardMessage(content: string): AgentChatMessage {
-        return {
-            role: 'user',
-            content,
-            metadata: {
-                turnAdded: 0,
-                messageType: BaseAgent.toolResultMessageType,
-                expirationTurns: 2,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            },
-        };
-    }
-
-    /**
-     * The ID of this agent's newest root run on this turn's branch path IF the user stopped it,
-     * else null. One query over the runs that could be the predecessor (settled, or stopped by
-     * the user): the newest decides. A stopped run older than a settled one is history the
-     * settled run already built on, so it is not carried again. The path scopes it the same way
-     * as {@link loadPriorTurnToolResultSteps}: a run stopped on a sibling branch is never resumed.
-     * @private
-     */
-    private async findUserStoppedPredecessorRunId(params: ExecuteAgentParams): Promise<string | null> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const newest = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
-            EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: MJAIAgentRunEntityExtended.BuildStoppedPredecessorFilter(
-                params.conversationId!, params.agent.ID, params.ConversationBranchID ?? null, this._conversationBranches
-            ),
-            OrderBy: '__mj_CreatedAt DESC',
-            MaxRows: 1,
-            SkipTotalRowCount: true,
-            Fields: ['ID', 'Status', 'CancellationReason'],
-            ResultType: 'simple',
-            // The row this looks for was written by the Stop button moments ago; read the database, not a cache.
-            BypassCache: true,
-        }, params.contextUser);
-        const run = newest.Success ? newest.Results?.[0] : undefined;
-        return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
-    }
-
-    /**
-     * `runId` if that run is one the user stopped, else null. The chained-run counterpart of
-     * {@link findUserStoppedPredecessorRunId}: one primary-key read of the named run instead of a
-     * search of the conversation, so a run the resolver already resolved is not looked up twice,
-     * and a run chained to a settled predecessor (an ordinary continuation) resumes nothing.
-     * @private
-     */
-    private async userStoppedRunIdIfStopped(runId: string, params: ExecuteAgentParams): Promise<string | null> {
-        if (!IsValidUUID(runId)) {
-            return null;
-        }
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const result = await rv.RunView<{ ID: string; Status: string; CancellationReason: string | null }>({
-            EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ID='${runId}'`,
-            MaxRows: 1,
-            SkipTotalRowCount: true,
-            Fields: ['ID', 'Status', 'CancellationReason'],
-            ResultType: 'simple',
-            // The row this checks was written by the Stop button moments ago; read the database, not a cache.
-            BypassCache: true,
-        }, params.contextUser);
-        const run = result.Success ? result.Results?.[0] : undefined;
-        return run && MJAIAgentRunEntityExtended.IsUserStopped(run.Status, run.CancellationReason) ? run.ID : null;
-    }
-
-    /**
-     * Every step of a stopped run, in step order: the full-stack resume reads the prompt steps'
-     * recorded stacks and which requested actions completed. Read from the database, since the run
-     * was stopped moments ago.
-     * @private
-     */
-    private async loadStoppedRunStack(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStackStepRecord[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const steps = await rv.RunView<StoppedRunStackStepRecord>({
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${runId}'`,
-            OrderBy: 'StepNumber ASC',
-            Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
-            ResultType: 'simple',
-            BypassCache: true,
-            IgnoreMaxRows: true,
-        }, params.contextUser);
-        const validated = ValidateDecisionReadResult(steps, {
-            EntityName: 'MJ: AI Agent Run Steps',
-            OperationName: 'BaseAgent.loadStoppedRunStack',
-        });
-        if ('Error' in validated) {
-            if (validated.Truncated) {
-                throw validated.Error;
-            }
-            return [];
-        }
-        return validated.Results;
-    }
-
-    /** The completed, successful Actions and Tool steps of a stopped run, in step order. @private */
-    private async loadStoppedRunResultSteps(runId: string, params: ExecuteAgentParams): Promise<StoppedRunStackStepRecord[]> {
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        const steps = await rv.RunView<StoppedRunStackStepRecord>({
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${runId}' AND StepType IN (${BaseAgent.stoppedRunCarryForwardPredicate.stepTypes.map(t => `'${t}'`).join(', ')}) ` +
-                `AND Status='${BaseAgent.stoppedRunCarryForwardPredicate.stepStatus}' AND Success=1`,
-            OrderBy: 'StepNumber ASC',
-            Fields: ['StepNumber', 'StepType', 'StepName', 'Status', 'Success', 'InputData', 'OutputData'],
-            ResultType: 'simple',
-            BypassCache: true,
-            IgnoreMaxRows: true,
-        }, params.contextUser);
-        const validated = ValidateDecisionReadResult(steps, {
-            EntityName: 'MJ: AI Agent Run Steps',
-            OperationName: 'BaseAgent.loadStoppedRunResultSteps',
-        });
-        if ('Error' in validated) {
-            if (validated.Truncated) {
-                throw validated.Error;
-            }
-            return [];
-        }
-        return validated.Results;
-    }
-
-    /**
-     * Budget for the stopped-run carry-forward message. Smaller than a standalone tool result on
-     * purpose: this rides at the front of a continuation turn's context, and a stopped run can
-     * hold dozens of search results. ~7k tokens keeps the useful values and drops the long tails.
-     */
-    protected static readonly maxStoppedRunResultChars = 28_000;
-
-    /**
-     * Renders a stopped run's completed step results into the carried-forward message body.
-     * Pure and static for testability. An Actions step renders as the action call (name and
-     * params) with its output parameters, or its message when it produced none; a Tool step
-     * renders under the same contract as {@link BuildPriorTurnToolResultsMessage}. Failed or
-     * unparseable steps are skipped. Each section is capped at an even share of `maxChars`
-     * (never below a readable floor) and the whole body at `maxChars`, with a note for anything
-     * dropped. Returns null when nothing usable remains.
-     */
     public static BuildStoppedRunResultsMessage(steps: ReadonlyArray<StoppedRunStepRecord>, maxChars: number): string | null {
-        const sections: string[] = [];
-        const perSectionMax = Math.max(BaseAgent.minStoppedRunSectionChars, Math.floor(maxChars / Math.max(steps.length, 1)));
-        let usedChars = 0;
-        let dropped = 0;
-        for (const step of steps) {
-            const section = BaseAgent.renderStoppedRunStep(step);
-            if (!section) {
-                continue;
-            }
-            const capped = section.length > perSectionMax
-                ? `${section.slice(0, perSectionMax)}\n[truncated]`
-                : section;
-            if (usedChars + capped.length > maxChars && sections.length > 0) {
-                dropped++;
-                continue;
-            }
-            usedChars += capped.length;
-            sections.push(capped);
-        }
-        if (sections.length === 0) {
-            return null;
-        }
-        const header = 'Your previous turn was stopped by the user before it finished. The actions and tools listed below ' +
-            'were ALREADY EXECUTED in that turn and their results are still valid. Treat each entry as a result you already ' +
-            'have: do not run the action or call a tool again for it, and do not invoke the action names below as tools. ' +
-            'Continue from where the stopped turn left off rather than starting over.';
-        const droppedNote = dropped > 0 ? `\n\n[${dropped} additional result(s) omitted for size; re-call those if needed]` : '';
-        return `${header}\n${sections.join('\n\n')}${droppedNote}`;
+        return AgentStoppedRunContinuationHelper.BuildStoppedRunResultsMessage(steps, maxChars);
     }
 
-    /** One stopped-run step as a result section, or null when it carries nothing reusable. @private */
-    private static renderStoppedRunStep(step: StoppedRunStepRecord): string | null {
-        if (step.StepType === 'Tool') {
-            return BaseAgent.BuildPriorTurnToolResultsMessage([{ OutputData: step.OutputData }], Number.MAX_SAFE_INTEGER)
-                ?.split('\n').slice(1).join('\n') || null; // the sibling renderer's body without its header line
-        }
-        if (step.StepType !== 'Actions' || !step.InputData || !step.OutputData) {
-            return null;
-        }
-        let input: { actionName?: string; actionParams?: unknown };
-        let output: { actionResult?: { success?: boolean; message?: string; parameters?: Array<{ Name: string; Value: unknown; Type: string }> } };
-        try {
-            input = JSON.parse(step.InputData);
-            output = JSON.parse(step.OutputData);
-        } catch {
-            return null;
-        }
-        const result = output.actionResult;
-        if (!input.actionName || result?.success !== true) {
-            return null;
-        }
-        const outputs: Record<string, unknown> = {};
-        for (const param of result.parameters ?? []) {
-            if (param.Type === BaseAgent.actionOutputParamType && param.Value !== undefined && param.Value !== null) {
-                outputs[param.Name] = param.Value;
-            }
-        }
-        const body = Object.keys(outputs).length > 0 ? RenderToolResultData(outputs) : (result.message ?? '');
-        if (!body) {
-            return null;
-        }
-        // Deliberately NOT the inline-tool heading (`### tool({...})`): an agent shown that shape for an
-        // action tried to call the action as a conversation tool. Say what it is in words.
-        return `### Already executed: action "${input.actionName}" with params ${JSON.stringify(input.actionParams ?? {})}\n` +
-            `Result:\n\`\`\`json\n${body}\n\`\`\``;
-    }
-
-    /**
-     * The `MJ: AI Agent Runs` predicate for this agent's previous settled root run on one
-     * branch path: the run's reply row must be on that path, so a run made on a sibling
-     * branch is never carried forward, and not replaced by a rerun of its turn, so a replaced
-     * answer's tool results are never carried forward.
-     */
     public static BuildPriorTurnRunFilter(
         conversationId: string,
         agentId: string,
@@ -13214,294 +12387,11 @@ The context is now within limits. Please retry your request with the recovered c
         branches: ReadonlyArray<ConversationBranchRow>,
         statusList: string
     ): string {
-        return `ConversationID='${conversationId}' AND Status IN (${statusList}) AND ParentRunID IS NULL AND AgentID='${agentId}'`
-            + ` AND ${MJAIAgentRunEntityExtended.BuildReplyOnBranchPathFilter(conversationId, branchId, branches)}`;
+        return AgentStoppedRunContinuationHelper.BuildPriorTurnRunFilter(conversationId, agentId, branchId, branches, statusList);
     }
 
-    /**
-     * Loads this agent's previous settled root run's Tool steps for this conversation
-     * (settled = {@link settledRunStatuses}: Completed or AwaitingFeedback).
-     * Deliberately loads ALL completed Tool steps — eligibility for carry-forward is
-     * decided structurally by {@link BuildPriorTurnToolResultsMessage} via the
-     * `toolFamily` field the executors stamp into OutputData, never by StepName
-     * (which is a display label and free to change).
-     *
-     * Consults {@link PriorTurnToolResultCache} first — the completing run populates it
-     * in {@link finalizeAgentRun} from its in-memory steps, so on this node the common
-     * case (including "prior run made no tool calls") costs zero DB queries; the
-     * RunView pair below is the cache-miss fallback (first turn, restart, other node).
-     * @private
-     */
-    private async loadPriorTurnToolResultSteps(params: ExecuteAgentParams): Promise<CarryForwardStepRecord[]> {
-        const branchId = params.ConversationBranchID ?? null;
-        const cached = PriorTurnToolResultCache.Instance.Get(params.conversationId!, params.agent.ID, branchId);
-        if (cached) {
-            this.logStatus(`[PriorTurnToolResults] Prior-run tool results served from cache (${cached.length} step(s), no DB lookup)`, true, params);
-            return cached;
-        }
-
-        const predicate = BaseAgent.carryForwardPredicate;
-        const statusList = predicate.runStatuses.map(s => `'${s}'`).join(', ');
-        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-        // AgentID scopes provenance: in a multi-agent conversation, agent B must never
-        // inherit agent A's results labeled "your previous turn". The branch path scopes it
-        // the same way: a run on a sibling branch is never carried forward.
-        const priorRun = await rv.RunView<{ ID: string }>({
-            EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: BaseAgent.BuildPriorTurnRunFilter(params.conversationId!, params.agent.ID, branchId, this._conversationBranches, statusList),
-            OrderBy: '__mj_CreatedAt DESC',
-            MaxRows: 1,
-            SkipTotalRowCount: true,
-            Fields: ['ID'],
-            ResultType: 'simple',
-        }, params.contextUser);
-        const priorRunId = priorRun.Success ? priorRun.Results?.[0]?.ID : undefined;
-        if (!priorRunId) {
-            return [];
-        }
-
-        const steps = await rv.RunView<CarryForwardStepRecord>({
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${priorRunId}' AND StepType='${predicate.stepType}' AND Status='${predicate.stepStatus}'`,
-            OrderBy: 'StartedAt ASC',
-            Fields: ['OutputData'],
-            ResultType: 'simple',
-            IgnoreMaxRows: true,
-        }, params.contextUser);
-        const validated = ValidateDecisionReadResult(steps, {
-            EntityName: 'MJ: AI Agent Run Steps',
-            OperationName: 'BaseAgent.loadPriorTurnToolResultSteps',
-        });
-        if ('Error' in validated) {
-            if (validated.Truncated) {
-                throw validated.Error;
-            }
-            return [];
-        }
-        return validated.Results;
-    }
-
-    /**
-     * Publishes this run's completed Tool-step results to {@link PriorTurnToolResultCache}
-     * so the conversation's next turn skips the prior-run DB lookups. Applies the same
-     * row predicate as the DB path ({@link carryForwardPredicate}): root runs only, and
-     * only when the run row settled as {@link settledRunStatuses} (Completed OR
-     * AwaitingFeedback — the normal chat-turn ending) — a failed run leaves the previous
-     * settled run's entry standing, just as the RunView filter would. Scoped to this
-     * run's agent and branch (cache key = conversation + agent + branch) so parallel
-     * agents in one conversation, and sibling branches, never cross-pollinate. An empty
-     * projection is cached too (the negative-cache case that spares tool-free
-     * conversations the queries every turn). The run's reply row is stored with the entry,
-     * so the entry is no longer served once a rerun of its turn replaces that row.
-     * Same-node edge semantics (failed step INSERTs, concurrent completions) are
-     * documented on the cache class. Called from {@link finalizeAgentRun}.
-     * @private
-     */
-    private cachePriorTurnToolResults(): void {
-        const predicate = BaseAgent.carryForwardPredicate;
-        const conversationId = this._executeParams?.conversationId;
-        if (!conversationId || this._depth !== 0 || !this._agentRun
-            || !predicate.runStatuses.includes(this._agentRun.Status)) {
-            return;
-        }
-        const records: CarryForwardStepRecord[] = (this._agentRun.Steps || [])
-            .filter(s => s.StepType === predicate.stepType && s.Status === predicate.stepStatus)
-            .map(s => ({ OutputData: s.OutputData || null }));
-        PriorTurnToolResultCache.Instance.Set(
-            conversationId,
-            this._agentRun.AgentID,
-            this._executeParams?.ConversationBranchID ?? null,
-            records,
-            this._agentRun.ConversationDetailID ?? null
-        );
-    }
-
-    /**
-     * Tool families whose step results are eligible for prior-turn carry-forward —
-     * derived from {@link CarryForwardToolFamily} (the single source the stamp sites use).
-     * Read-tool families only: memory writes, pipelines, and client tools also record
-     * `StepType='Tool'` steps but must never be replayed as reusable results.
-     */
-    public static readonly CarryForwardToolFamilies: readonly string[] = Object.values(CarryForwardToolFamily);
-
-    /**
-     * Run statuses that count as a successfully settled root turn. 'AwaitingFeedback' is
-     * included because a Chat final step is the NORMAL per-turn completion for
-     * conversational agents — {@link finalizeAgentRun} maps `step === 'Chat'` to
-     * `Status='AwaitingFeedback'` with `Success=true`, so gating on 'Completed' alone
-     * silently disables post-turn compaction and carry-forward for the most common
-     * agent shape (a chat agent in a long conversation).
-     *
-     * Deliberately `ReadonlyArray<Union>` rather than an `as const` tuple: a narrowed
-     * tuple type would make `.includes(status)` fail to typecheck against the wider
-     * entity union, while this form keeps the compile-time check that each literal is a
-     * valid status (a CHECK-constraint change still surfaces here). Do not "tighten" it.
-     *
-     * Single source for the consumers that must agree: the carry-forward predicate
-     * ({@link carryForwardPredicate} → DB filter + cache-population gate) and the
-     * post-turn compaction gate ({@link startPostTurnCompaction}).
-     */
-    private static readonly settledRunStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']> =
-        MJAIAgentRunEntityExtended.SettledStatuses;
-
-    /**
-     * The carry-forward row predicate — the SINGLE source shared by the two places that
-     * must select the same rows or the cache diverges from the DB path: the RunView
-     * `ExtraFilter`s in {@link loadPriorTurnToolResultSteps} (DB fallback) and the
-     * in-memory gate/projection in {@link cachePriorTurnToolResults} (cache population).
-     * Values are typed from the entity unions so a CHECK-constraint change surfaces here
-     * at compile time instead of silently desynchronizing the two loaders.
-     *
-     * The executing agent's ID also scopes both paths (SQL `AgentID=` clause + cache
-     * key) but is per-run data, not a literal contract — it lives at the call sites,
-     * not here.
-     */
-    private static readonly carryForwardPredicate = {
-        stepType: 'Tool',
-        stepStatus: 'Completed',
-        runStatuses: BaseAgent.settledRunStatuses,
-    } as const satisfies {
-        stepType: MJAIAgentRunStepEntityExtended['StepType'];
-        stepStatus: MJAIAgentRunStepEntityExtended['Status'];
-        runStatuses: ReadonlyArray<MJAIAgentRunEntityExtended['Status']>;
-    };
-
-    /**
-     * The row predicate for the stopped-run carry-forward's step query: the completed, successful
-     * Actions and Tool steps of the run the user stopped. Declared beside
-     * {@link carryForwardPredicate} for the same reason it is: one place to change what counts.
-     */
-    private static readonly stoppedRunCarryForwardPredicate = {
-        stepTypes: ['Actions', 'Tool'],
-        stepStatus: 'Completed',
-    } as const satisfies {
-        stepTypes: ReadonlyArray<MJAIAgentRunStepEntityExtended['StepType']>;
-        stepStatus: MJAIAgentRunStepEntityExtended['Status'];
-    };
-
-    /** An action parameter's direction, as the action executor stamps it. */
-    private static readonly actionOutputParamType: ActionParam['Type'] = 'Output';
-
-    /** A stopped-run result section is never cut below this many characters, whatever the budget. */
-    private static readonly minStoppedRunSectionChars = 1_500;
-
-    /**
-     * Display name of the seeded system prompt behind summarizeRange's recursive
-     * sub-call (see metadata/prompts/.summarize-range-prompt.json). Resolved with a
-     * trimmed, case-insensitive compare — never an exact-case inline literal.
-     */
-    public static readonly SummarizeRangePromptName = 'Summarize Conversation Range';
-
-    /**
-     * The `messageType` marker stamped on injected tool-result messages and matched by
-     * the compaction/pruning eligibility checks — single-sourced so writers and matchers
-     * cannot drift. (Value participates in the AgentChatMessageMetadata union.)
-     */
-    private static readonly toolResultMessageType = 'tool-result' as const;
-
-    /**
-     * Header stems for injected tool-result messages. These exact headers are a contract:
-     * the loop-agent system template (loop-agent-type-system-prompt.template.md, "header
-     * `Conversation history tool result:`" / "`Artifact tool result:`") teaches the model
-     * to recognize them — change the template in lockstep.
-     */
-    private static conversationToolResultsHeader(count: number): string {
-        return count === 1 ? 'Conversation history tool result:' : `Conversation history tool results (${count} calls):`;
-    }
-
-    /** Artifact analog of {@link conversationToolResultsHeader} — same template contract. */
-    private static artifactToolResultsHeader(count: number): string {
-        return count === 1 ? 'Artifact tool result:' : `Artifact tool results (${count} calls):`;
-    }
-
-    /**
-     * Renders prior-turn tool-result steps into the carried-forward message body.
-     * Pure and static for testability: keeps only steps whose OutputData satisfies the
-     * structured contract stamped by the tool executors — a carry-forward-eligible
-     * `toolFamily` (see {@link CarryForwardToolFamilies}) AND a non-empty `tool` name.
-     * Tolerant of missing/invalid OutputData JSON, keeps only successful results,
-     * caps each result and the total under `maxChars` (adding an explicit truncation
-     * note when results are dropped). Returns null when nothing usable remains.
-     */
-    public static BuildPriorTurnToolResultsMessage(
-        steps: CarryForwardStepRecord[],
-        maxChars: number
-    ): string | null {
-        const sections: string[] = [];
-        let usedChars = 0;
-        let dropped = 0;
-        for (const step of steps) {
-            if (!step.OutputData) continue;
-            let parsed: Partial<CarryForwardToolStepOutput>;
-            try {
-                parsed = JSON.parse(step.OutputData);
-            } catch {
-                continue;
-            }
-            if (!parsed.toolFamily || !BaseAgent.CarryForwardToolFamilies.includes(parsed.toolFamily)) continue;
-            if (typeof parsed.tool !== 'string' || parsed.tool.length === 0) continue;
-            if (parsed.result?.success !== true) continue;
-            // Never carry untrusted or semi-trusted artifact reads across into a new run without taint tracking.
-            if (parsed.trustLevel === 'Untrusted' || parsed.trustLevel === 'SemiTrusted') continue;
-
-            const section = FormatToolResultSection(
-                { tool: parsed.tool, input: parsed.input },
-                RenderToolResultData(parsed.result.data)
-            );
-            if (usedChars + section.length > maxChars && sections.length > 0) {
-                dropped++;
-                continue;
-            }
-            const capped = section.length > maxChars
-                ? `${section.slice(0, maxChars)}\n[truncated]`
-                : section;
-            usedChars += capped.length;
-            sections.push(capped);
-        }
-        if (sections.length === 0) {
-            return null;
-        }
-        const header = 'Tool results from your previous turn (still valid — reuse instead of re-calling):';
-        const droppedNote = dropped > 0 ? `\n\n[${dropped} additional result(s) omitted for size — re-call those tools if needed]` : '';
-        return `${header}\n${sections.join('\n\n')}${droppedNote}`;
-    }
-
-    /**
-     * Builds the summarizeRange recursive-sub-call host: resolves the seeded
-     * 'Summarize Conversation Range' prompt (priority-ordered cheap models — the RLM
-     * "strong root model, cheap sub-call model" split) and runs it via the standard
-     * prompt runner so the AIPromptRun records itself.
-     * @protected
-     */
-    protected buildConversationSummaryHost(params: ExecuteAgentParams): ConversationToolSummaryHost {
-        return {
-            RunSummaryPrompt: async (rangeText: string, lens: string) => {
-                // Trimmed, case-insensitive name lookup (the AIPromptRunner 'Repair JSON'
-                // style) so cosmetic re-casing of the seeded prompt can't break the tool.
-                const targetName = BaseAgent.SummarizeRangePromptName.toLowerCase();
-                const prompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === targetName);
-                if (!prompt) {
-                    throw new Error(`The '${BaseAgent.SummarizeRangePromptName}' system prompt is not present in this environment`);
-                }
-                const promptParams = new AIPromptParams();
-                Object.assign(promptParams, this.runPromptExecutionScope(params));
-                promptParams.prompt = prompt;
-                // Keys are the summarize-range.template.md contract ({{ lens }}, {{ messages }})
-                promptParams.data = { lens, messages: rangeText };
-                promptParams.agentId = params.agent.ID;
-                promptParams.UserID = ResolvePromptRunUserID({
-                    UserID: params.userId,
-                    AgentRun: this._agentRun,
-                    ContextUser: params.contextUser,
-                }) ?? undefined;
-                const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
-                const text = ExtractPromptResultText(result);
-                if (!result.success || text.length === 0) {
-                    throw new Error(result.errorMessage || 'summarizeRange sub-call returned no content');
-                }
-                return { text, promptRunId: result.promptRun?.ID };
-            }
-        };
+    public static BuildPriorTurnToolResultsMessage(steps: CarryForwardStepRecord[], maxChars: number): string | null {
+        return AgentStoppedRunContinuationHelper.BuildPriorTurnToolResultsMessage(steps, maxChars);
     }
 
     /**
@@ -13593,120 +12483,6 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
-    protected injectConversationToolResultsMessage(
-        params: ExecuteAgentParams,
-        toolResults: ConversationToolExecutionResult[],
-    ): void {
-        if (toolResults.length === 0) return;
-        const header = BaseAgent.conversationToolResultsHeader(toolResults.length);
-        const body = toolResults.map((r, i) => {
-            const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1 };
-            if (r.result.success) {
-                const data = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
-                return FormatToolResultSection(parts, data);
-            }
-            return FormatToolErrorSection(parts, r.result.errorMessage);
-        }).join('\n\n');
-
-        const message: AgentChatMessage = {
-            role: 'user',
-            content: `${header}\n${body}`,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: BaseAgent.toolResultMessageType,
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            },
-        };
-        params.conversationMessages.push(message);
-    }
-
-    /**
-     * Pushes a single user-role message containing rendered artifact-tool
-     * results into the conversation. This mirrors the action-result
-     * "inject once, then expire" pattern — the LLM sees the results on its
-     * next turn, and older messages are pruned/compacted by
-     * `pruneAndCompactExpiredMessages` instead of being re-rendered into
-     * every system-prompt turn.
-     *
-     * @protected
-     */
-    protected injectArtifactToolResultsMessage(
-        params: ExecuteAgentParams,
-        toolResults: StoredToolResult[],
-    ): void {
-        if (toolResults.length === 0) return;
-        const header = BaseAgent.artifactToolResultsHeader(toolResults.length);
-        const body = toolResults.map((r, i) => {
-            const parts: ToolResultSectionParts = { tool: r.tool, input: r.input, ordinal: i + 1, signaturePrefix: r.artifactId };
-            if (r.result.success) {
-                const rawData = this.capStandaloneToolResultText(RenderToolResultData(r.result.data));
-                const section = FormatToolResultSection(parts, rawData);
-                return (r.trustLevel === 'Untrusted' || r.trustLevel === 'SemiTrusted')
-                    ? WrapUntrustedExternalData(section, r.sourceName ?? `artifact:${r.artifactId}`, r.trustLevel)
-                    : section;
-            }
-            return FormatToolErrorSection(parts, r.result.errorMessage);
-        }).join('\n\n');
-
-        const message: AgentChatMessage = {
-            role: 'user',
-            content: `${header}\n${body}`,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'tool-result',
-                // Default: keep results visible for a few turns then compact to a
-                // first-N-chars preview. The LLM is taught (via the loop-agent
-                // system prompt) that older tool results are summarised and that
-                // it can re-call the tool if it needs the full result back.
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            },
-        };
-        params.conversationMessages.push(message);
-    }
-
-    /**
-     * Character budget (~4 chars/token) for a SINGLE standalone artifact-tool result injected into
-     * the conversation. A `get_full` on a large artifact can otherwise dump the whole thing into
-     * context and overflow the model's window — the exact failure pipelines exist to avoid. Override
-     * in a subclass to tune. Pipelines are unaffected: their intermediate results never flow through
-     * here, and the executor already caps a pipeline's final output.
-     *
-     * @protected
-     */
-    protected get maxStandaloneToolResultChars(): number {
-        return 100_000; // ~25k tokens
-    }
-
-    /**
-     * Bound a standalone tool result to {@link maxStandaloneToolResultChars}: return a head slice
-     * plus a redirect that teaches the agent to page (`get_rows`) or reduce (`pipeline`) instead of
-     * reading a whole large artifact. Mirrors how read/search tools cap output at the tool boundary.
-     *
-     * @protected
-     */
-    protected capStandaloneToolResultText(text: string): string {
-        const budget = this.maxStandaloneToolResultChars;
-        if (text.length <= budget) {
-            return text;
-        }
-        const omitted = text.length - budget;
-        return (
-            text.slice(0, budget) +
-            `\n\n…[truncated ${omitted.toLocaleString()} chars. This artifact is too large to read whole ` +
-            `(~${Math.round(text.length / 4000)}k tokens) — reading it in full overflows the context window. ` +
-            `Instead: page it with get_rows(start, count), or run a pipeline that filters/aggregates it ` +
-            `server-side (where / select / groupBy → only the small final result returns to you).]`
-        );
-    }
-
     /** Where and for whom a memory write lands — shared by the envelope field and the native tool. */
     private memoryWriteOptions(params: ExecuteAgentParams): Parameters<MemoryWriteManager['ExecuteWrite']>[1] {
         return {
@@ -13883,35 +12659,6 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
-    protected injectMemoryWriteResultsMessage(
-        params: ExecuteAgentParams,
-        results: MemoryWriteResult[],
-    ): void {
-        if (results.length === 0) return;
-        const header = results.length === 1
-            ? 'Memory write result:'
-            : `Memory write results (${results.length} writes):`;
-        const body = results.map((r, i) => {
-            const note = r.request.note.length > 120 ? `${r.request.note.slice(0, 120)}…` : r.request.note;
-            return `${i + 1}. "${note}" — **${r.disposition}**${r.reason ? `: ${r.reason}` : ''}`;
-        }).join('\n');
-
-        const message: AgentChatMessage = {
-            role: 'user',
-            content: `${header}\n${body}`,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'tool-result',
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 300,
-                compactPromptId: '',
-            },
-        };
-        params.conversationMessages.push(message);
-    }
-
     /**
      * Builds a per-run {@link PipelineToolRegistry} that unifies the three pipeline-able
      * substrates behind one namespace: built-in transforms, the agent's effective Actions, and
@@ -14054,39 +12801,6 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @protected
      */
-    protected injectPipelineResultMessage(params: ExecuteAgentParams, result: PipelineExecutionResult): void {
-        const pipelineTaint = result.Taint;
-        const diagnostic = result.success && result.diagnostic
-            ? `\n⚠ Empty result — ${result.diagnostic}`
-            : '';
-        // Identify which pipeline this result belongs to (stage chain, e.g. `get_rows → where →
-        // select`). Without it, multiple pipeline results across turns are indistinguishable once
-        // compacted — mirrors how artifact-tool results name their tool/artifact.
-        const label = summarizePipelineStages(result.steps);
-        const renderedFinalOutput = result.success ? formatFinalOutput(result.finalOutput) : '';
-        const formattedFinalOutput = result.success && pipelineTaint
-            ? WrapUntrustedExternalData(renderedFinalOutput, pipelineTaint.SourceName, pipelineTaint.TrustLevel)
-            : `\`\`\`\n${renderedFinalOutput}\n\`\`\``;
-        const content = result.success
-            ? `Pipeline result [${label}] (final stage value — intermediate stages stayed out of context, ~${result.contextBytesSaved} bytes saved):\n${formattedFinalOutput}${diagnostic}`
-            : `Pipeline failed [${label}].\n${result.error}`;
-
-        const message: AgentChatMessage = {
-            role: 'user',
-            content,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'tool-result',
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            },
-        };
-        params.conversationMessages.push(message);
-    }
-
     /** At most this many decision calls run at once for one agent turn. */
     private static readonly DECISION_CONCURRENCY = 8;
 
@@ -14648,45 +13362,6 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @since 2.132.0
      */
-    protected injectDecisionResultsMessage(
-        params: ExecuteAgentParams,
-        results: AgentDecisionResult[],
-    ): void {
-        if (!results || results.length === 0) return;
-
-        const message: AgentChatMessage = {
-            role: 'user',
-            // fls-guard: decision outcomes, not entity rows
-            content: `Decision results:\n${JSON.stringify(results)}`,
-            metadata: {
-                turnAdded: this._promptTurnCount,
-                messageType: 'tool-result',
-                expirationTurns: 3,
-                expirationMode: 'Compact',
-                compactMode: 'First N Chars',
-                compactLength: 500,
-                compactPromptId: '',
-            },
-        };
-        params.conversationMessages.push(message);
-    }
-
-    /**
-     * Creates a chat message containing sub-agent execution results.
-     *
-     * @param {AgentSubAgentRequest} subAgent - The sub-agent that was executed
-     * @param {any} result - The result from sub-agent execution
-     * @returns {ChatMessage} A formatted message with sub-agent results
-     * @protected
-     */
-    protected createSubAgentResultMessage(subAgent: AgentSubAgentRequest, result: ExecuteAgentResult): ChatMessage {
-        return {
-            role: 'user',
-            content: this.formatSubAgentResultAsMarkdown(subAgent.name, result)
-        };
-    }
-
-
     /**
      * Gathers context data about the agent for use in prompt templates.
      *
@@ -17894,297 +16569,15 @@ The context is now within limits. Please retry your request with the recovered c
      * branch nobody can explain. Warn, never throw — a value that cannot be written down is not a
      * reason to fail a run that is otherwise fine.
      */
-    protected warnAboutDroppedValues(column: string, droppedPaths: string[], params: ExecuteAgentParams): void {
-        if (droppedPaths.length === 0) return;
-        this.logStatus(
-            `⚠️ ${droppedPaths.length} value(s) were not persistable and were left out of ` +
-            `${column}: ${droppedPaths.join(', ')}. Class instances, connections and circular ` +
-            `references are dropped on purpose — pass plain JSON for anything that must be readable later.`,
-            true,
-            params,
-        );
+    protected createStepEntity(params: CreateStepEntityParams): Promise<MJAIAgentRunStepEntityExtended> {
+        return this.getMessagingHelper().CreateStepEntity(this.getRunContext(), params);
     }
 
-    protected async createStepEntity(params: {
-        stepType: MJAIAgentRunStepEntityExtended["StepType"];
-        stepName: string;
-        contextUser: UserInfo;
-        targetId?: string;
-        inputData?: any;
-        targetLogId?: string;
-        payloadAtStart?: any;
-        payloadAtEnd?: any;
-        parentId?: string;
-        /**
-         * Skill-invocation records to persist on `AIAgentRunStep.Skills` for this step. When
-         * omitted, Prompt steps default to the full set of skills currently in effect
-         * ({@link _skillInvocations}) so prompt injection is always visible; all other step
-         * types default to no skill linkage. Pass explicitly for Skill steps (the activation
-         * performed) and Actions/Sub-Agent steps (the skill(s) that granted the tool).
-         */
-        skills?: AgentSkillInvocation[];
-        /**
-         * For steps whose outcome is fully known BEFORE the row exists (e.g. recording an
-         * already-finished compaction pass): applies {@link finalizeAgentRunStep} in memory
-         * so the single queued INSERT carries the terminal state, and no follow-up
-         * `finalizeStepEntity` UPDATE is needed — one DB write instead of two. Do NOT use
-         * for steps with real work between start and finish; those stay two-phase so a
-         * crash mid-work leaves a visible `Running` row.
-         */
-        completed?: {
-            success: boolean;
-            errorMessage?: string;
-            outputData?: Record<string, unknown>;
-        };
-    }): Promise<MJAIAgentRunStepEntityExtended> {
-        const stepEntity = await this._activeProvider.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
-        // Client-generate the PK so the step ID is valid IMMEDIATELY (before the INSERT lands) — child
-        // steps link via ParentID and the post-create UPDATE-phase mutations reference this row, and the
-        // create INSERT is fire-and-forget (the agent flow must not block on it).
-        stepEntity.NewRecord();
-
-        // Step number is based on current count of steps + 1
-        const stepNumber = (this._agentRun!.Steps?.length || 0) + 1;
-        // Warn on a non-UUID targetId before delegating (initAgentRunStep silently ignores invalid ids).
-        if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
-            console.warn(`Invalid target ID format: ${params.targetId}`);
-        }
-        // A start or end payload that repeats an earlier step's end is stored as a pointer to that step.
-        const payloadAtStart = this.serializePayloadAtStart(params.payloadAtStart);
-        const payloadAtStartSource = this.findPayloadAtStartSource(payloadAtStart);
-        const payloadAtEnd = (
-            params.payloadAtEnd !== undefined &&
-            params.payloadAtEnd === params.payloadAtStart &&
-            this.hasDefaultPayloadSerializers()
-        )
-            ? payloadAtStart
-            : this.serializePayloadAtEnd(params.payloadAtEnd);
-        const payloadAtEndSource = this.findPayloadAtEndSource(payloadAtEnd);
-        // Populate the started fields via the shared single-source-of-truth helper. Instance-specific
-        // concerns (hierarchy breadcrumb, InputData context, payload serialization) are computed here.
-        initAgentRunStep(stepEntity, {
-            AgentRunID: this._agentRun!.ID,
-            StepNumber: stepNumber,
-            StepType: params.stepType,
-            StepName: this.fitStepName(stepEntity, this.formatHierarchicalMessage(params.stepName)),  // breadcrumb, trimmed to the column
-            TargetID: params.targetId,
-            TargetLogID: params.targetLogId,
-            ParentID: params.parentId,  // Link to parent step (e.g., loop step)
-            PayloadAtStart: payloadAtStartSource ? null : payloadAtStart,
-            PayloadAtStartSourceStepID: payloadAtStartSource?.ID ?? null,
-            PayloadAtEnd: payloadAtEndSource ? null : payloadAtEnd,
-            PayloadAtEndSourceStepID: payloadAtEndSource?.ID ?? null,
-            InputData: params.inputData
-                ? JSON.stringify({
-                      ...params.inputData,
-                      context: {
-                          agentHierarchy: this._agentHierarchy,
-                          depth: this._depth,
-                          stepNumber
-                      }
-                  })
-                : undefined
-        });
-
-        // Skill observability: persist the invocation records for this step. Prompt steps
-        // default to everything currently in effect (so every turn's injection is auditable);
-        // other step types only carry skills when the caller attributes them explicitly.
-        const skillsForStep = params.skills
-            ?? (params.stepType === 'Prompt' && this._skillInvocations.length > 0
-                ? this._skillInvocations
-                : undefined);
-        if (skillsForStep && skillsForStep.length > 0) {
-            stepEntity.Skills = JSON.stringify(skillsForStep);
-        }
-
-        // Completed-at-creation steps: stamp the terminal state NOW so the INSERT below is the
-        // step's ONLY write (same shared helper + OutputData treatment finalizeStepEntity uses).
-        if (params.completed) {
-            finalizeAgentRunStep(stepEntity, {
-                success: params.completed.success,
-                errorMessage: params.completed.errorMessage,
-                outputData: params.completed.outputData ? CopyScalarsAndArrays(params.completed.outputData, true) : undefined,
-                completedAt: new Date()
-            });
-        }
-
-        // Fire-and-forget the 'started' INSERT — the agent flow never blocks on a step save. The queue
-        // tracks the INSERT so every later UPDATE (queueStepSave) chains AFTER it commits.
-        // - When the step has a parent, chain the INSERT AFTER the parent's INSERT to satisfy the
-        //   self-referencing FK_AIAgentRunStep_ParentID constraint.
-        // - When the step points PayloadAtStartSourceStepID at a predecessor whose INSERT is still in
-        //   flight (!payloadAtStartSource.IsSaved), ALSO chain the INSERT after payloadAtStartSource to
-        //   satisfy FK_AIAgentRunStep_PayloadAtStartSourceStepID, with a beforeInsert guard that falls
-        //   back to inline PayloadAtStart if the source step's INSERT failed. When payloadAtStartSource
-        //   is already saved (IsSaved === true), do NOT chain behind it so this step's INSERT never waits
-        //   behind a subsequent UPDATE on payloadAtStartSource.
-        const parentStepEntity = params.parentId && this._agentRun?.Steps
-            ? this._agentRun.Steps.find(s => UUIDsEqual(s.ID, params.parentId))
-            : undefined;
-        if (payloadAtStartSource && !payloadAtStartSource.IsSaved) {
-            this._stepSaveQueue.Insert(
-                stepEntity,
-                [parentStepEntity, payloadAtStartSource],
-                (s) => {
-                    if (!payloadAtStartSource.IsSaved) {
-                        s.PayloadAtStart = payloadAtStart;
-                        s.PayloadAtStartSourceStepID = null;
-                    }
-                }
-            );
-        } else {
-            this._stepSaveQueue.Insert(stepEntity, parentStepEntity);
-        }
-
-        // Add the step to the agent run's Steps array
-        if (this._agentRun) {
-            this._agentRun.Steps.push(stepEntity);
-        }
-
-        // Increment cumulative step count atomically on the shared root-tree / workflow budget
-        this._budgetTracker.RecordStepIncrement(this.ensureTreeBudget(this._executeParams), {
-            AgentName: this._executeParams?.agent?.Name ?? this._agentRun?.Agent,
-            RunID: this._agentRun?.ID,
-        });
-
-        return stepEntity;
-    }
-
-    /**
-     * Finds the step whose `PayloadAtEnd` a new step's start payload repeats, so the new step stores a
-     * pointer to it (`PayloadAtStartSourceStepID`) instead of a second copy. Call it before the new step
-     * is added to the run's `Steps`.
-     *
-     * The candidate is the latest step in the run that is not `Running` and has a `PayloadAtEnd` (or
-     * `PayloadAtEndSourceStepID`). Only that step is compared. If that step itself points to an earlier
-     * step via `PayloadAtEndSourceStepID`, the pointer resolves in one hop to the step that actually
-     * holds the stored `PayloadAtEnd`.
-     * - Running steps are skipped because their end can still change: parallel sub-agent siblings write
-     *   their own result as `PayloadAtEnd` when they finish, and a ForEach step writes its end after all
-     *   of its child steps.
-     * - Finished steps with no end (tool, compaction and finish-check steps) are skipped because they never
-     *   get one, and would hide the step that produced the payload.
-     * - If the matching candidate's INSERT is still in flight (`!step.IsSaved`), {@link createStepEntity}
-     *   chains the new step's INSERT after `step` on {@link _stepSaveQueue} (and falls back to storing inline
-     *   `PayloadAtStart` if the candidate's INSERT fails) so `FK_AIAgentRunStep_PayloadAtStartSourceStepID`
-     *   is always satisfied without sacrificing deduplication on fast back-to-back turns.
-     *
-     * Rule: a step's `PayloadAtEnd` must not change after a later step points at it, because readers take
-     * the pointing step's start payload from it. The comparison uses the in-memory end, so the saved end
-     * must match it: `finalizeStepEntity` re-applies the end after the INSERT lands, and an end set after
-     * `finalizeStepEntity` is saved with `queueStepSave`.
-     *
-     * @param serializedStart The new step's start payload, already serialized.
-     * @returns The step to point at, or undefined when the start payload must be stored.
-     */
-    private findPayloadAtStartSource(serializedStart: string | null): MJAIAgentRunStepEntityExtended | undefined {
-        return this.findPayloadEndSourceBefore(serializedStart);
-    }
-
-    /**
-     * Finds the earlier step whose stored `PayloadAtEnd` this step's end payload repeats, so the step
-     * stores a one-hop pointer (`PayloadAtEndSourceStepID`) instead of a second copy.
-     */
-    private findPayloadAtEndSource(
-        serializedEnd: string | null,
-        beforeStep?: MJAIAgentRunStepEntityExtended
-    ): MJAIAgentRunStepEntityExtended | undefined {
-        return this.findPayloadEndSourceBefore(serializedEnd, beforeStep);
-    }
-
-    private findPayloadEndSourceBefore(
-        serializedPayload: string | null,
-        beforeStep?: MJAIAgentRunStepEntityExtended
-    ): MJAIAgentRunStepEntityExtended | undefined {
-        if (serializedPayload == null) {
-            return undefined;
-        }
-        const steps = this._agentRun?.Steps ?? [];
-        let startIdx = steps.length - 1;
-        if (beforeStep) {
-            const foundIdx = steps.indexOf(beforeStep);
-            if (foundIdx >= 0) {
-                startIdx = foundIdx - 1;
-            }
-        }
-        // When beforeStep is provided (findPayloadAtEndSource during finalizeStepEntity), the
-        // source step must already be IsSaved because finalizeStepEntity queues an UPDATE rather
-        // than an INSERT with prerequisite chaining. When beforeStep is omitted (findPayloadAtStartSource
-        // during createStepEntity), an in-flight source step is allowed because createStepEntity chains
-        // the new step's INSERT after the source step on _stepSaveQueue.
-        const requireSavedSource = beforeStep != null;
-        let candidateStep: MJAIAgentRunStepEntityExtended | undefined;
-        for (let i = startIdx; i >= 0; i--) {
-            const step = steps[i];
-            if (step.Status !== 'Running' && (step.PayloadAtEnd != null || step.PayloadAtEndSourceStepID != null)) {
-                candidateStep = step;
-                break;
-            }
-        }
-        if (!candidateStep) {
-            return undefined;
-        }
-        if (requireSavedSource && !candidateStep.IsSaved) {
-            return undefined;
-        }
-        const source = candidateStep.PayloadAtEndSourceStepID
-            ? steps.find(s => UUIDsEqual(s.ID, candidateStep.PayloadAtEndSourceStepID))
-            : candidateStep;
-        if (!source) {
-            return undefined;
-        }
-        if (requireSavedSource && !source.IsSaved) {
-            return undefined;
-        }
-        return source.PayloadAtEnd === serializedPayload ? source : undefined;
-    }
-
-    /**
-     * Returns true when neither `serializePayloadAtStart` nor `serializePayloadAtEnd` has been
-     * overridden by a subclass, allowing unchanged start payloads to be reused as end payloads
-     * without a second `JSON.stringify` pass.
-     */
     private hasDefaultPayloadSerializers(): boolean {
         return (
             this.serializePayloadAtStart === BaseAgent.prototype.serializePayloadAtStart &&
             this.serializePayloadAtEnd === BaseAgent.prototype.serializePayloadAtEnd
         );
-    }
-
-    /**
-     * Resolves a step's start payload from its own `PayloadAtStart` or the step referenced by
-     * `PayloadAtStartSourceStepID`.
-     */
-    private resolveStepPayloadAtStart(step: MJAIAgentRunStepEntityExtended | undefined): string | null {
-        if (!step) {
-            return null;
-        }
-        if (step.PayloadAtStart != null) {
-            return step.PayloadAtStart;
-        }
-        if (step.PayloadAtStartSourceStepID) {
-            const source = this._agentRun?.Steps?.find(s => UUIDsEqual(s.ID, step.PayloadAtStartSourceStepID));
-            return source?.PayloadAtEnd ?? null;
-        }
-        return null;
-    }
-
-    /**
-     * Resolves a step's end payload from its own `PayloadAtEnd` or the step referenced by
-     * `PayloadAtEndSourceStepID`.
-     */
-    private resolveStepPayloadAtEnd(step: MJAIAgentRunStepEntityExtended | undefined): string | null {
-        if (!step) {
-            return null;
-        }
-        if (step.PayloadAtEnd != null) {
-            return step.PayloadAtEnd;
-        }
-        if (step.PayloadAtEndSourceStepID) {
-            const source = this._agentRun?.Steps?.find(s => UUIDsEqual(s.ID, step.PayloadAtEndSourceStepID));
-            return source?.PayloadAtEnd ?? null;
-        }
-        return null;
     }
 
     /**
@@ -18244,161 +16637,13 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * {@link buildResumedStoppedRunTurns} rebuilds the stack from the latest full stack plus the deltas after it.
      */
-    private capturePromptStepMessages(
-        messages: ChatMessage[] | undefined
-    ): { conversationMessages: ChatMessage[]; conversationMessagesDelta?: true } {
-        const nonVolatile = (messages ?? []).filter(m => (m as AgentChatMessage)?.metadata?.volatileState !== true);
-        const previous = this._lastRecordedPromptStack;
-        const isExtension = previous !== null && BaseAgent.isAppendOnlyExtension(previous, nonVolatile);
-        const recorded: RecordedPromptMessage[] = new Array(nonVolatile.length);
-        for (let i = 0; i < nonVolatile.length; i++) {
-            if (isExtension && i < previous.length) {
-                recorded[i] = previous[i];
-            } else {
-                const m = nonVolatile[i];
-                const meta = (m as AgentChatMessage).metadata;
-                recorded[i] = {
-                    Message: m,
-                    ContentRef: m.content,
-                    MetadataRef: meta,
-                    WasCompacted: meta?.wasCompacted,
-                    CanExpand: meta?.canExpand,
-                    IsExpired: meta?.isExpired,
-                };
-            }
-        }
-        this._lastRecordedPromptStack = recorded;
-        if (isExtension) {
-            return { conversationMessages: nonVolatile.slice(previous.length), conversationMessagesDelta: true };
-        }
-        return { conversationMessages: nonVolatile };
-    }
-
-    /** True when `current` starts with every message of `previous`, by reference and unchanged in place. @private */
-    private static isAppendOnlyExtension(previous: RecordedPromptMessage[], current: ChatMessage[]): boolean {
-        if (current.length < previous.length) {
-            return false;
-        }
-        for (let i = 0; i < previous.length; i++) {
-            const p = previous[i];
-            const c = current[i];
-            if (c !== p.Message || c.content !== p.ContentRef) {
-                return false;
-            }
-            const meta = (c as AgentChatMessage).metadata;
-            if (
-                meta !== p.MetadataRef ||
-                meta?.wasCompacted !== p.WasCompacted ||
-                meta?.canExpand !== p.CanExpand ||
-                meta?.isExpired !== p.IsExpired
-            ) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
-     * Finalizes a step entity with completion status. Pairs with `createStepEntity`
-     * — drivers that create custom steps should also finalize them through this
-     * method so `Status`/`CompletedAt`/`Success`/`ErrorMessage`/`OutputData` are
-     * populated consistently and the UPDATE is sequenced behind the INSERT via
-     * `queueStepSave`.
-     *
-     * Set `PayloadAtEnd` before calling it: the queued UPDATE re-applies the end the step has now.
-     * An end set later must be saved with `queueStepSave`.
-     *
-     * @protected
-     */
-    protected async finalizeStepEntity(stepEntity: MJAIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
-        try {
-            // Preserve any OutputData properties already stamped on the step prior to finalize
-            // (e.g. guardrailExceeded written by checkExecutionGuardrails during processNextStep).
-            let effectiveOutputData = outputData;
-            const existingRawOutputData = stepEntity.OutputData;
-            if (existingRawOutputData && outputData && typeof outputData === 'object') {
-                try {
-                    const parsedExisting = JSON.parse(existingRawOutputData) as Record<string, unknown>;
-                    if (parsedExisting && typeof parsedExisting === 'object' && !Array.isArray(parsedExisting)) {
-                        effectiveOutputData = {
-                            ...parsedExisting,
-                            ...outputData
-                        };
-                    }
-                } catch {
-                    // Leave effectiveOutputData as-is if existing OutputData is not a JSON object
-                }
-            }
-
-            // Capture the completion timestamp NOW so the duration is accurate regardless of when the
-            // mutation is actually applied/persisted.
-            const finalizeOpts = {
-                success,
-                errorMessage,
-                outputData: effectiveOutputData ? CopyScalarsAndArrays(effectiveOutputData, true) : undefined,
-                completedAt: new Date(),
-                // Capture any TargetLogID already stamped on the entity (e.g. a prompt-run / sub-agent-run id
-                // set before finalize) so the post-INSERT re-apply restores it too — otherwise the INSERT's
-                // reload could leave it null on a fast step.
-                targetLogID: stepEntity.TargetLogID ?? undefined
-            };
-            const finalPayloadValidationResult = stepEntity.FinalPayloadValidationResult;
-            const finalPayloadValidationMessages = stepEntity.FinalPayloadValidationMessages;
-
-            // Deduplicate PayloadAtEnd against the latest earlier finished, saved step when unchanged.
-            if (stepEntity.PayloadAtEnd != null) {
-                const endSource = this.findPayloadAtEndSource(stepEntity.PayloadAtEnd, stepEntity);
-                if (endSource) {
-                    stepEntity.PayloadAtEnd = null;
-                    stepEntity.PayloadAtEndSourceStepID = endSource.ID;
-                } else {
-                    stepEntity.PayloadAtEndSourceStepID = null;
-                }
-            }
-            // Capture the end the step finished with for the same reason: a later step may point at this
-            // step after comparing this end, so the saved row must end with it.
-            const payloadAtEnd = stepEntity.PayloadAtEnd;
-            const payloadAtEndSourceStepID = stepEntity.PayloadAtEndSourceStepID ?? null;
-
-            // Apply to the in-memory entity NOW so the run's Steps array / UI see the terminal state
-            // immediately. This in-memory copy can be reverted by the INSERT's post-save reload if the step
-            // finished while its INSERT was still in flight, which is why we ALSO re-apply it inside the
-            // post-INSERT continuation below (idempotent — same completedAt).
-            finalizeAgentRunStep(stepEntity, finalizeOpts);
-
-            // Fire-and-forget the UPDATE, but re-assert the finalize state and the end AFTER the INSERT (and
-            // its reload) lands so the force-persisted UPDATE never writes stale pre-finalize values. The
-            // agent flow never blocks on this UPDATE.
-            this.queueStepSave(stepEntity, (s) => {
-                if (finalizeOpts.outputData === undefined && existingRawOutputData != null) {
-                    s.OutputData = existingRawOutputData;
-                }
-                if (finalPayloadValidationResult !== undefined) {
-                    s.FinalPayloadValidationResult = finalPayloadValidationResult;
-                }
-                if (finalPayloadValidationMessages !== undefined) {
-                    s.FinalPayloadValidationMessages = finalPayloadValidationMessages;
-                }
-                finalizeAgentRunStep(s, finalizeOpts);
-                s.PayloadAtEnd = payloadAtEnd;
-                s.PayloadAtEndSourceStepID = payloadAtEndSourceStepID;
-            });
-        }
-        catch (e) {
-            LogError(`Failed to update agent run step record: ${(e as Error)?.message ?? e}`, undefined, e);
-        }
-    }
-
-    /**
-     * Queues a fire-and-forget UPDATE of a step entity whose fields the caller has ALREADY mutated.
-     * Delegates to {@link AgentRunStepSaveQueue.QueueUpdate} — the agent flow never awaits this; the UPDATE
-     * chains after the step's INSERT and force-persists (`IgnoreDirtyState`). Kept `protected` so driver
-     * subclasses that finalize their own steps get the same non-blocking behavior.
-     *
-     * @protected
-     */
-    protected queueStepSave(stepEntity: MJAIAgentRunStepEntityExtended, applyMutation?: (stepEntity: MJAIAgentRunStepEntityExtended) => void): void {
-        this._stepSaveQueue.QueueUpdate(stepEntity, applyMutation);
+    protected finalizeStepEntity(
+        stepEntity: MJAIAgentRunStepEntityExtended,
+        success: boolean,
+        errorMessage?: string,
+        outputData?: unknown
+    ): Promise<void> {
+        return this.getMessagingHelper().FinalizeStepEntity(this.getRunContext(), stepEntity, success, errorMessage, outputData);
     }
 
     /**
@@ -18481,161 +16726,7 @@ The context is now within limits. Please retry your request with the recovered c
      * @returns {string} - The formatted message with hierarchy breadcrumb
      */
     protected formatHierarchicalMessage(baseMessage: string): string {
-        if (this._depth > 0) {
-            // Build breadcrumb from agent hierarchy (skip root agent)
-            const breadcrumb = this._agentHierarchy
-                .slice(1)
-                .join(' → ');
-            return breadcrumb ? `${breadcrumb}: ${baseMessage}` : baseMessage;
-        }
-        return baseMessage;
-    }
-
-    /**
-     * Builds the user-oriented initialization progress message for an agent run.
-     *
-     * - Root agent (`_depth === 0`): `'Getting ready...'`
-     * - Direct sub-agent (`_depth === 1`): `'Starting <SubAgentName>...'`
-     * - Nested sub-agent (`_depth > 1`): `'<ParentBreadcrumb>: Starting <SubAgentName>...'`
-     *
-     * @protected
-     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
-     * @returns {string} Formatted initialization progress message
-     */
-    protected buildInitializationProgressMessage(params: ExecuteAgentParams): string {
-        if (this._depth === 0) {
-            return 'Getting ready...';
-        }
-        const startPhrase = `Starting ${params.agent.Name}...`;
-        const parentBreadcrumb = this._agentHierarchy.slice(1, -1).join(' → ');
-        return parentBreadcrumb ? `${parentBreadcrumb}: ${startPhrase}` : startPhrase;
-    }
-
-    /**
-     * Builds a user-oriented progress message for a prompt execution step without
-     * exposing internal framework terminology ("initial prompt", "payload", "context")
-     * or duplicating the sub-agent name when prefixed by {@link formatHierarchicalMessage}.
-     *
-     * @protected
-     * @param {ExecuteAgentParams} params - Execution parameters for the current agent
-     * @param {BaseAgentNextStep | null} [previousDecision] - Previous step decision when re-prompting
-     * @returns {string} Base progress message (before `formatHierarchicalMessage` breadcrumb prefixing)
-     */
-    protected buildPromptProgressMessage(
-        params: ExecuteAgentParams,
-        previousDecision?: BaseAgentNextStep | null
-    ): string {
-        if (!previousDecision) {
-            return this._depth > 0
-                ? 'Thinking...'
-                : `${params.agent.Name} is thinking...`;
-        }
-
-        const retryReason = previousDecision.retryReason?.trim();
-        if (retryReason) {
-            if (retryReason === 'Payload change applied') {
-                return this._depth > 0
-                    ? 'Thinking through the next steps...'
-                    : `${params.agent.Name} is thinking through the next steps...`;
-            }
-            if (retryReason.startsWith('Context recovery')) {
-                return this._depth > 0
-                    ? 'Thinking...'
-                    : `${params.agent.Name} is thinking...`;
-            }
-            if (retryReason === 'Error while processing actions, retry') {
-                return 'Recovering from an error and trying another approach...';
-            }
-            return retryReason;
-        }
-
-        const retryInstructions = previousDecision.retryInstructions?.trim();
-        if (retryInstructions) {
-            return this._depth > 0
-                ? 'Reviewing batch results...'
-                : `${params.agent.Name} is reviewing batch results...`;
-        }
-
-        return this._depth > 0
-            ? 'Thinking through the next steps...'
-            : `${params.agent.Name} is thinking through the next steps...`;
-    }
-
-    /**
-     * Trims a step name to what `AIAgentRunStep.StepName` can hold. Step names are built from free
-     * text — a termination message quoting a provider's error, a tool name with its arguments, the
-     * hierarchy breadcrumb in front of either — and one longer than the column made the whole row
-     * unsaveable, so the step vanished from the run ("2 step record save(s) failed" — a
-     * 327-character failure reason). The width comes from the entity's field metadata
-     * when the instance carries it, else the column's declared 255 characters.
-     *
-     * @protected
-     */
-    protected fitStepName(stepEntity: MJAIAgentRunStepEntityExtended, name: string): string {
-        const declared = stepEntity.EntityInfo?.Fields?.find((f) => f.Name === 'StepName')?.MaxLength;
-        const limit = declared && declared > 0 ? declared : 255;
-        return name.length > limit ? `${name.slice(0, limit - 1)}…` : name;
-    }
-
-    /**
-     * Builds hierarchical step string from parent and current step counts.
-     *
-     * Examples:
-     * - Root agent step 2: buildHierarchicalStep(2, []) => "2"
-     * - Sub-agent step 1 under root step 2: buildHierarchicalStep(1, [2]) => "2.1"
-     * - Nested sub-agent step 3: buildHierarchicalStep(3, [2, 1]) => "2.1.3"
-     * - Deep nesting: buildHierarchicalStep(5, [1, 2, 3, 4]) => "1.2.3.4.5"
-     *
-     * Exposed as `protected` so driver sub-classes can emit step labels that
-     * match the framework's `2.1.3` nesting convention.
-     *
-     * @param currentStep - Current agent's step number (1-based)
-     * @param parentSteps - Array of parent step counts from root to immediate parent
-     * @returns Formatted hierarchical step string, or undefined if currentStep is undefined/null
-     * @protected
-     */
-    protected buildHierarchicalStep(currentStep: number | undefined, parentSteps: number[]): string | undefined {
-        if (currentStep == null) return undefined;
-
-        if (parentSteps.length === 0) {
-            // Root agent - just return step number
-            return currentStep.toString();
-        }
-
-        // Nested agent - concatenate parent steps with current step
-        return [...parentSteps, currentStep].join('.');
-    }
-
-    /**
-     * Invokes params.onProgress, isolating the caller's callback (e.g. wire/websocket delivery,
-     * which can throw on serialization or publish failures) from prompt/step execution. A callback
-     * failure must never be misclassified as an agent execution failure and poison the run's
-     * terminal Status.
-     */
-    private safeOnProgress(params: ExecuteAgentParams, progress: Parameters<NonNullable<ExecuteAgentParams['onProgress']>>[0]): void {
-        try {
-            params.onProgress?.(progress);
-        } catch (e) {
-            this.logError(`onProgress callback threw and was swallowed: ${e}`, { category: 'ProgressCallback' });
-        }
-    }
-
-    /**
-     * Gets human-readable reasoning for the next step decision.
-     *
-     * @private
-     * @param {BaseAgentNextStep} nextStep - The next step decision
-     * @returns {string} Human-readable reasoning
-     */
-    private getNextStepReasoning(nextStep: BaseAgentNextStep): string {
-        switch (nextStep.step) {
-            case 'Failed':
-                return nextStep.errorMessage || 'Agent execution failed';
-            case 'Retry':
-                return nextStep.retryReason || 'Retrying with updated context';
-            default:
-                return nextStep.reasoning || 'Continuing to next step';
-        }
+        return this.getMessagingHelper().FormatHierarchicalMessage(this.getRunContext(), baseMessage);
     }
 
     /**
@@ -18775,7 +16866,7 @@ The context is now within limits. Please retry your request with the recovered c
             case 'Decision' as typeof previousDecision.step:
                 return await this.executeDecisionStep(params, previousDecision);
             case 'Chat':
-                return await this.executeChatStep(params, previousDecision);
+                return await this.getMessagingHelper().ExecuteChatStep(this.getRunContext(), params, previousDecision);
             case 'Success':
                 if (previousDecision.terminate) {
                     // If parent agent previously requested to auto-terminate, after a successful
@@ -19085,7 +17176,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             const hierarchicalStepToEmit = this.buildHierarchicalStep(stepCount + 1, this._parentStepCounts);
 
-            this.safeOnProgress(params, {
+            this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
                 step: 'prompt_execution',
                 message: this.formatHierarchicalMessage(promptMessage),
                 metadata: {
@@ -19245,7 +17336,7 @@ The context is now within limits. Please retry your request with the recovered c
             // cancellation check, before the next step, ends the run as Cancelled.
             if (params.cancellationToken?.aborted) {
                 if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.getMessagingHelper().ResolveStepPayloadAtStart(this.getRunContext(), stepEntity) : null)
                         ?? this.serializePayloadAtEnd(payload);
                 }
 
@@ -19264,7 +17355,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // CRITICAL FIX: Preserve payload before finalizing step
                 // This matches the success path behavior where PayloadAtEnd is set before finalizeStepEntity
                 if (stepEntity && payload) {
-                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                    stepEntity.PayloadAtEnd = (this.hasDefaultPayloadSerializers() ? this.getMessagingHelper().ResolveStepPayloadAtStart(this.getRunContext(), stepEntity) : null)
                         ?? this.serializePayloadAtEnd(payload);
                 }
 
@@ -19306,7 +17397,7 @@ The context is now within limits. Please retry your request with the recovered c
             }
 
             // Report decision processing progress
-            this.safeOnProgress(params, {
+            this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
                 step: 'decision_processing',
                 message: this.formatHierarchicalMessage('Analyzing response and determining next steps'),
                 metadata: {
@@ -19457,7 +17548,7 @@ The context is now within limits. Please retry your request with the recovered c
             const outputData = {
                 nextStep: {
                     ...updatedNextStep,
-                    reasoning: this.getNextStepReasoning(updatedNextStep),
+                    reasoning: this.getMessagingHelper().GetNextStepReasoning(this.getRunContext(), updatedNextStep),
                 },
                 // Include payload change metadata if changes were made
                 ...(currentStepPayloadChangeResult && {
@@ -19500,7 +17591,7 @@ The context is now within limits. Please retry your request with the recovered c
                     updatedNextStep.newPayload === undefined &&
                     finalPayload === payload &&
                     this.hasDefaultPayloadSerializers();
-                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.getMessagingHelper().ResolveStepPayloadAtStart(this.getRunContext(), stepEntity) : null)
                     ?? this.serializePayloadAtEnd(finalPayload);
             }
             
@@ -19555,13 +17646,13 @@ The context is now within limits. Please retry your request with the recovered c
             // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
             // that affects downstream things in the agent run
             // Preserve payload on error
-            const existingEnd = this.resolveStepPayloadAtEnd(stepEntity);
+            const existingEnd = this.getMessagingHelper().ResolveStepPayloadAtEnd(this.getRunContext(), stepEntity);
             const payload = existingEnd
                 ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
 
             stepEntity.PayloadAtEnd = existingEnd
-                ?? (this.hasDefaultPayloadSerializers() ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                ?? (this.hasDefaultPayloadSerializers() ? this.getMessagingHelper().ResolveStepPayloadAtStart(this.getRunContext(), stepEntity) : null)
                 ?? this.serializePayloadAtEnd(payload);
             stepEntity.PayloadAtEndSourceStepID = null;
 
@@ -19742,7 +17833,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Report sub-agent execution progress with descriptive context
-        this.safeOnProgress(params, {
+        this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
             step: 'subagent_execution',
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
             metadata: {
@@ -19954,7 +18045,7 @@ The context is now within limits. Please retry your request with the recovered c
                     mergedPayload === previousDecision?.newPayload &&
                     !currentStepPayloadChangeResult &&
                     this.hasDefaultPayloadSerializers();
-                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.resolveStepPayloadAtStart(stepEntity) : null)
+                stepEntity.PayloadAtEnd = (canReuseStartPayload ? this.getMessagingHelper().ResolveStepPayloadAtStart(this.getRunContext(), stepEntity) : null)
                     ?? this.serializePayloadAtEnd(mergedPayload);
             }
             
@@ -20129,7 +18220,7 @@ The context is now within limits. Please retry your request with the recovered c
             };            
         } catch (error) {
             // Preserve payload on error
-            const existingEnd = this.resolveStepPayloadAtEnd(stepEntity);
+            const existingEnd = this.getMessagingHelper().ResolveStepPayloadAtEnd(this.getRunContext(), stepEntity);
             const payload = existingEnd
                 ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
@@ -20453,7 +18544,7 @@ The context is now within limits. Please retry your request with the recovered c
                 ? { ...request, name: subAgentEntity.Name }
                 : request;
 
-        this.safeOnProgress(params, {
+        this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
             step: 'subagent_execution',
             message: this.formatHierarchicalMessage(`Delegating to parallel sub-agent ${canonicalRequest.name}`),
             metadata: {
@@ -21195,7 +19286,7 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         // Report sub-agent execution progress
-        this.safeOnProgress(params, {
+        this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
             step: 'subagent_execution',
             percentage: 60,
             message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
@@ -21490,7 +19581,7 @@ The context is now within limits. Please retry your request with the recovered c
             };
         } catch (error) {
             // Preserve payload on error
-            const existingEnd = this.resolveStepPayloadAtEnd(stepEntity);
+            const existingEnd = this.getMessagingHelper().ResolveStepPayloadAtEnd(this.getRunContext(), stepEntity);
             const payload = existingEnd
                 ? JSON.parse(existingEnd)
                 : (previousDecision?.newPayload || params.payload);
@@ -21698,7 +19789,7 @@ The context is now within limits. Please retry your request with the recovered c
                 }).join('\n\n');
             }
                 
-            this.safeOnProgress(params, {
+            this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
                 step: 'action_execution',
                 message: this.formatHierarchicalMessage(progressMessage),
                 metadata: {
@@ -22028,7 +20119,7 @@ The context is now within limits. Please retry your request with the recovered c
                     finalPayload = changeResult.result;
                     if (lastStep) {
                         const serializedEnd = this.serializePayloadAtEnd(finalPayload);
-                        const endSource = this.findPayloadAtEndSource(serializedEnd, lastStep);
+                        const endSource = this.getMessagingHelper().FindPayloadAtEndSource(this.getRunContext(), serializedEnd, lastStep);
                         const payloadAtEnd = endSource ? null : serializedEnd;
                         const payloadAtEndSourceStepId = endSource ? endSource.ID : null;
                         lastStep.PayloadAtEnd = payloadAtEnd;
@@ -22148,7 +20239,7 @@ The context is now within limits. Please retry your request with the recovered c
         });
 
         // Report progress
-        this.safeOnProgress(params, {
+        this.getMessagingHelper().SafeOnProgress(this.getRunContext(), params, {
             step: 'action_execution', // Reuse action_execution step type for progress reporting
             message: this.formatHierarchicalMessage(toolMessage),
             metadata: {
@@ -23330,109 +21421,6 @@ The context is now within limits. Please retry your request with the recovered c
      */
     protected buildPlanApprovalForm(planText: string): AgentResponseForm {
         return this._feedbackCoordinator.BuildPlanApprovalForm(planText);
-    }
-
-    private async executeChatStep(
-        params: ExecuteAgentParams,
-        previousDecision: BaseAgentNextStep
-    ): Promise<BaseAgentNextStep> {
-        // Chat steps are successful immediately — record in a single INSERT instead of INSERT + UPDATE
-        const stepEntity = await this.createStepEntity({
-            stepType: 'Chat',
-            stepName: 'User Interaction',
-            contextUser: params.contextUser,
-            completed: {
-                success: true
-            }
-        });
-
-        // For root agents, create a persistent AIAgentRequest so the request is
-        // tracked in the dashboard and can be responded to outside a conversation (none under an audience).
-        await this.raiseFeedbackRequest(params, stepEntity, previousDecision);
-
-        return {
-            step: 'Chat',
-            terminate: true,
-            message: previousDecision.message || 'Additional information needed from user',
-            priorStepResult: previousDecision.message,
-            reasoning: previousDecision.reasoning,
-            confidence: previousDecision.confidence,
-            previousPayload: previousDecision.previousPayload,
-            newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
-            responseForm: previousDecision.responseForm,
-            actionableCommands: previousDecision.actionableCommands,
-            automaticCommands: previousDecision.automaticCommands,
-            // This agent's own step, rebuilt — carry its directive. A Chat step can still be a run's
-            // final step with a payload attached, so a 'suppress' declared alongside a question to
-            // the user has to reach the writer rather than being dropped on reconstruction.
-            artifactDirective: previousDecision.artifactDirective
-        };
-    }
-
-    /**
-     * Raises the persistent `MJ: AI Agent Requests` row for a root agent's Chat or Plan step ({@link createFeedbackRequest}),
-     * so it can be answered outside the conversation — except when the run's audience adds a reader. A request answered
-     * on the dashboard or through the API resumes the run (`MJAIAgentRequestEntityServer.resumeAgent`) as the responder,
-     * in the original conversation, with no audience: neither the request nor the run row has a field that can carry
-     * one without a new column. So a shared conversation's run raises none: its question or plan still reaches the room,
-     * which answers in the conversation, where the host starts the next run with the room's audience.
-     */
-    private async raiseFeedbackRequest(
-        params: ExecuteAgentParams,
-        stepEntity: MJAIAgentRunStepEntityExtended,
-        decision: BaseAgentNextStep
-    ): Promise<void> {
-        if (this._depth !== 0) {
-            return;
-        }
-        if (this.runAudienceAddsReader(params)) {
-            this.logStatus('📋 No feedback request raised: the run has an audience, so it is answered in the conversation, not resumed', true, params);
-            return;
-        }
-        const isInteractiveConversation = Boolean(
-            params.conversationDetailId ||
-            this._agentRun?.ConversationDetailID ||
-            this._agentRun?.ConversationID
-        );
-        const hasStructuredGate = Boolean(decision.responseForm) || String(decision.step) === 'Plan';
-        if (isInteractiveConversation && !hasStructuredGate) {
-            this.logStatus('📋 No feedback request raised: interactive conversation Chat turn without structured responseForm or Plan gate', true, params);
-            return;
-        }
-        await this.createFeedbackRequest(params, stepEntity, decision);
-    }
-
-    /**
-     * Creates a persistent AIAgentRequest row when a Chat or Plan step fires.
-     * Resolves the target user via the assignment chain (delegating to
-     * {@link AgentFeedbackCoordinator.CreateFeedbackRequest}):
-     *   1. ExecuteAgentParams.assignmentStrategy (per-invocation override)
-     *   2. Agent Type's AssignmentStrategy
-     *   3. Agent's Category AssignmentStrategy (walks up ParentID tree)
-     *   4. Request Type's DefaultAssignmentStrategy
-     *   5. Fallback: contextUser (explicit caller) or null (system-level, visible to admins)
-     *
-     * @private
-     */
-    private async createFeedbackRequest(
-        params: ExecuteAgentParams,
-        stepEntity: MJAIAgentRunStepEntityExtended,
-        previousDecision: BaseAgentNextStep
-    ): Promise<void> {
-        // The step's INSERT is fire-and-forget (createStepEntity), and the request row has a foreign key to it
-        // (FK_AIAgentRequest_OriginatingStep). Without this wait the request's INSERT can reach the database
-        // first and fail; the coordinator logs that and returns null, and the run pauses with no request to answer.
-        await this._stepSaveQueue.Settled(stepEntity);
-        const requestId = await this._feedbackCoordinator.CreateFeedbackRequest({
-            Params: params,
-            StepEntity: stepEntity,
-            Decision: previousDecision,
-            AgentRun: this._agentRun,
-            Provider: params.provider || this._activeProvider,
-        });
-        if (requestId) {
-            this._feedbackRequestId = requestId;
-        }
     }
 
     /**
@@ -25675,14 +23663,14 @@ The context is now within limits. Please retry your request with the recovered c
             return;
         }
         if (!params?.conversationId || this._depth !== 0 || !this._agentRun
-            || !BaseAgent.settledRunStatuses.includes(this._agentRun.Status)) {
+            || !AgentStoppedRunContinuationHelper.SettledRunStatuses.includes(this._agentRun.Status)) {
             // A quiet return here is indistinguishable from "the pass ran and found nothing to do":
             // no Compaction step and no boundary summary are written either way. Say WHY we skipped,
             // so a missing post-turn compaction can be diagnosed without instrumenting the build.
             this.logStatus(
                 `Post-turn compaction skipped — conversationId=${params?.conversationId ?? 'none'}, ` +
                 `depth=${this._depth}, runStatus=${this._agentRun?.Status ?? 'no run'} ` +
-                `(requires a root run with a conversation, settled as ${BaseAgent.settledRunStatuses.join('/')})`,
+                `(requires a root run with a conversation, settled as ${AgentStoppedRunContinuationHelper.SettledRunStatuses.join('/')})`,
                 true /* verboseOnly — normal for non-conversation and sub-agent runs */,
                 params,
             );
@@ -26380,7 +24368,7 @@ The context is now within limits. Please retry your request with the recovered c
         const messageType = (msg as AgentChatMessage).metadata?.messageType;
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
-            || messageType === BaseAgent.toolResultMessageType;
+            || messageType === AgentStoppedRunContinuationHelper.ToolResultMessageType;
     }
 
     /**
@@ -26394,7 +24382,7 @@ The context is now within limits. Please retry your request with the recovered c
         const messageType = (msg as AgentChatMessage).metadata?.messageType;
         return messageType === 'action-result'
             || messageType === 'client-tool-result'
-            || messageType === BaseAgent.toolResultMessageType
+            || messageType === AgentStoppedRunContinuationHelper.ToolResultMessageType
             || messageType === 'sub-agent-result'
             || messageType === 'sub-agent-consult'
             || messageType === 'loop-result';
@@ -26517,12 +24505,6 @@ The context is now within limits. Please retry your request with the recovered c
      * Emits message lifecycle event if callback is registered.
      * @protected
      */
-    protected emitMessageLifecycleEvent(event: MessageLifecycleEvent): void {
-        if (this._messageLifecycleCallback) {
-            this._messageLifecycleCallback(event);
-        }
-    }
-
     /**
      * Expands a previously compacted message to its original content.
      *

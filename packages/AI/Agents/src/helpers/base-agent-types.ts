@@ -1,0 +1,206 @@
+/**
+ * @fileoverview Shared strongly-typed contracts for BaseAgent and its pluggable helper seams.
+ *
+ * Lives in `helpers/` so every helper seam and `AgentRunContext` can import shared types
+ * without introducing circular dependencies back to `base-agent.ts`.
+ *
+ * @module @memberjunction/ai-agents
+ */
+
+import type {
+    MJAIAgentEntityExtended,
+    MJAIAgentRunStepEntityExtended,
+    AgentChatMessageMetadata,
+    AgentExecutionProgressCallback,
+    AgentSkillInvocation,
+    StopContinuationMode,
+} from '@memberjunction/ai-core-plus';
+import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
+import type { ActionErrorRecovery, ActionOutputTrustLevel, ActionParam, AIDirective } from '@memberjunction/actions-base';
+import type { ChatMessage } from '@memberjunction/ai';
+import type { UserInfo } from '@memberjunction/core';
+import type { CodeLang } from '@memberjunction/context-crush/code';
+import type { StoppedRunStepRecord } from '../tool-result-format';
+
+/**
+ * Canonical seam keys identifying each pluggable BaseAgent helper seam.
+ * Used for per-agent `Configuration.helperPlugins` resolution and security enforcement.
+ */
+export type AgentHelperSeamKey =
+    | 'messaging'
+    | 'payload'
+    | 'compaction'
+    | 'realtime'
+    | 'iteration'
+    | 'skills'
+    | 'limits'
+    | 'actions'
+    | 'actionPolicy'
+    | 'prompt'
+    | 'subAgents'
+    | 'steps'
+    | 'setup';
+
+/**
+ * Security-critical helper seams that are **code-only** (replaceable only via `@RegisterClass`
+ * in server code, never via `AIAgent.Configuration.helperPlugins` metadata).
+ */
+export const CODE_ONLY_HELPER_SEAMS: ReadonlySet<AgentHelperSeamKey> = new Set<AgentHelperSeamKey>([
+    'limits',
+    'actionPolicy',
+]);
+
+/**
+ * Per-agent helper plugin configuration entry (`AIAgent.Configuration.helperPlugins`).
+ */
+export interface AgentHelperPluginConfig {
+    /** Which helper seam to override for this agent. */
+    seam: AgentHelperSeamKey;
+    /** Registered `@RegisterClass(BaseAgent<Seam>Helper, driverClass)` key. */
+    driverClass: string;
+    /** Optional priority hint when multiple entries are merged. */
+    priority?: number;
+}
+
+/**
+ * Structured error-logging options for `BaseAgent.logError` / `BaseAgentMessagingHelper.LogError`.
+ */
+export interface AgentLogErrorOptions {
+    category?: string;
+    metadata?: Record<string, unknown>;
+    agent?: MJAIAgentEntityExtended;
+    agentType?: MJAIAgentTypeEntity;
+    severity?: 'warning' | 'error' | 'critical';
+}
+
+/**
+ * A message a Prompt step recorded in its InputData, with its content/metadata snapshot at
+ * the time it was recorded (used by delta prompt-step recording).
+ */
+export interface RecordedPromptMessage {
+    Message: ChatMessage;
+    ContentRef: ChatMessage['content'];
+    MetadataRef: AgentChatMessageMetadata | undefined;
+    WasCompacted: boolean | undefined;
+    CanExpand: boolean | undefined;
+    IsExpired: boolean | undefined;
+}
+
+/**
+ * A stopped run's step with its outcome. The full-stack resume reads every step of the run,
+ * not only completed results: it needs the prompt steps' recorded message stacks, and it needs
+ * to know which requested actions finished before the stop.
+ */
+export interface StoppedRunStackStepRecord extends StoppedRunStepRecord {
+    Status: MJAIAgentRunStepEntityExtended['Status'];
+    Success: MJAIAgentRunStepEntityExtended['Success'];
+}
+
+/**
+ * What the pre-execution phase loaded about a user-stopped predecessor, applied once the phase settles.
+ */
+export interface StoppedRunContinuation {
+    RunID: string;
+    Mode: StopContinuationMode;
+    Steps: StoppedRunStackStepRecord[];
+}
+
+/**
+ * Extended progress step that includes additional metadata for execution tracking.
+ */
+export type ExtendedProgressStep = Parameters<AgentExecutionProgressCallback>[0] & {
+    /** Timestamp when this progress step was recorded */
+    timestamp: Date;
+    /** Hierarchy of agent names from root to current agent */
+    agentHierarchy: string[];
+    /** Depth of the current agent in the execution hierarchy */
+    depth: number;
+    /** Hierarchical step string (e.g., "2.1.3" for nested agents) */
+    hierarchicalStep?: string;
+};
+
+/**
+ * Parameters for creating an `MJ: AI Agent Run Steps` observability record.
+ */
+export interface CreateStepEntityParams {
+    stepType: MJAIAgentRunStepEntityExtended['StepType'];
+    stepName: string;
+    contextUser: UserInfo;
+    targetId?: string;
+    inputData?: Record<string, unknown>;
+    targetLogId?: string;
+    payloadAtStart?: unknown;
+    payloadAtEnd?: unknown;
+    parentId?: string;
+    /**
+     * Skill-invocation records to persist on `AIAgentRunStep.Skills` for this step.
+     */
+    skills?: AgentSkillInvocation[];
+    /**
+     * For steps whose outcome is fully known BEFORE the row exists: applies `finalizeAgentRunStep`
+     * in memory so the single queued INSERT carries the terminal state.
+     */
+    completed?: {
+        success: boolean;
+        errorMessage?: string;
+        outputData?: Record<string, unknown>;
+    };
+}
+
+/**
+ * Options for `BaseAgent.ExecuteSingleAction`.
+ */
+export interface ExecuteSingleActionOptions {
+    /**
+     * When true, the run-scoped action circuit breaker is bypassed for this call.
+     */
+    skipCircuitBreaker?: boolean;
+    /**
+     * The run step (`MJ: AI Agent Run Steps`) this call is recorded under.
+     */
+    StepID?: string;
+}
+
+/**
+ * Which circuit-breaker rule blocked an action call without dispatching it.
+ */
+export type ActionCircuitBreakerReason = 'fatal' | 'audience' | 'tainted' | 'identical-arguments' | 'attempts-exhausted';
+
+/**
+ * Classification returned by `classifyActionFailure` for a failed action.
+ */
+export type ActionFailureClass = ActionCircuitBreakerReason | 'policy' | 'non-retryable' | 'warning';
+
+/**
+ * Compact representation of a single action's execution result, used for
+ * building the markdown summary that goes into conversation messages.
+ */
+export interface ActionResultSummary {
+    actionName: string;
+    success: boolean;
+    params: ActionParam[];
+    resultCode: string;
+    message: string;
+    aiDirectives?: AIDirective[];
+    /** Set when the circuit breaker blocked the call without dispatching it. */
+    breakerReason?: ActionCircuitBreakerReason;
+    /** Trust classification of the action's output ('Trusted' | 'SemiTrusted' | 'Untrusted'). */
+    trustLevel?: ActionOutputTrustLevel;
+    /** Structured recovery hints returned on action failure. */
+    errorRecovery?: ActionErrorRecovery;
+}
+
+/**
+ * Resolved per-run configuration for structurally compressing inline action-result
+ * payloads via `@memberjunction/context-crush`.
+ */
+export interface ActionResultCrushConfig {
+    /** Minimum stringified length of an object/array (or code string) value before crushing. */
+    threshold: number;
+    /** Optional character budget passed to CrushJSON (undefined = no row truncation). */
+    maxChars: number | undefined;
+    /** When set, large string output params are reduced with CrushCode for this language. */
+    codeLang: CodeLang | undefined;
+    /** Actions whose results are never crushed, by Action name. */
+    exemptActions?: ReadonlySet<string>;
+}
