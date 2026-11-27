@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (536 classes)
+// @memberjunction/core-entities (537 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -523,6 +523,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2028,6 +2029,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2065,11 +2067,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJInteractionOfferEntity,
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
-    MJKnowledgeHubSavedSearchEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
     MJListCategoryEntity,
@@ -2269,11 +2271,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
-    ResourcePermissionProvider,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ResourcePermissionProvider,
     SavedQueryDocumentBlock,
     SharedConceptEdgeProvider,
     MJActionEntityExtended,
@@ -2473,11 +2475,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     RecordComparisonCompareServerOperation,
     RubricEngineBase,
     MJScheduledJobEntityExtended,
-    TagEngineBase,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TagEngineBase,
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2677,11 +2679,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJRecordChangeEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
-    MJResourcePermissionEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJResourcePermissionEntityServer,
     MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJRubricBandEntityServer,
@@ -2881,11 +2883,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
-    ScheduledGeocodingAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    ScheduledGeocodingAction,
     ScopedSearchAction,
     SearchAction,
     SearchEntityAction,
@@ -3005,7 +3007,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1302;
+export const CLASS_REGISTRATIONS_COUNT = 1303;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -248,7 +248,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (536 classes)
+// @memberjunction/core-entities (537 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -546,6 +546,7 @@ import {
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2425,6 +2426,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJExplorerNavigationItemEntity,
     MJExternalDataSourceEntity,
     MJExternalDataSourceTypeEntity,
+    MJFeaturePipelineRederivationLeaseEntity,
     MJFeaturePipelineTypeEntity,
     MJFeaturePipelineVersionEntity,
     MJFeatureValueCacheEntity,
@@ -2451,11 +2453,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
-    MJIntegrationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJIntegrationEntity,
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
     MJIntegrationSourceTypeEntity,
@@ -2655,11 +2657,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkQueueDeduplicationEntity,
     MJWorkQueueDeliveryEntity,
     MJWorkQueueMessageEntity,
-    MJWorkQueueSubscriptionEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    MJWorkQueueSubscriptionEntity,
     MJWorkQueueTopicEntity,
     MJWorkQueueTransportEntity,
     MJWorkspaceEntity,
@@ -2859,11 +2861,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MongoExternalDataSourceDriver,
     MySQLExternalDataSourceDriver,
     OracleExternalDataSourceDriver,
-    PostgresExternalDataSourceDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    PostgresExternalDataSourceDriver,
     SnowflakeExternalDataSourceDriver,
     SQLServerExternalDataSourceDriver,
     MJFeaturePipelineVersionEntityExtended,
@@ -3063,11 +3065,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     DatabaseDesignerSchemaDesigner,
     DatabaseDesignerSchemaValidator,
     CreateEntityAction,
-    DescribeEntityAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    DescribeEntityAction,
     ListMyEntitiesAction,
     ModifyEntityAction,
     ValidateEntitySchemaAction,
@@ -3267,11 +3269,11 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PredictiveStudioPredictionRetentionJobDriver,
     PredictiveStudioPromoteModelAction,
     PredictiveStudioPromoteModelServerOperation,
-    PredictiveStudioRegistryCheckJobDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    PredictiveStudioRegistryCheckJobDriver,
     PredictiveStudioRunExperimentAction,
     PredictiveStudioRunFeaturePipelineServerOperation,
     PredictiveStudioRunModelMonitoringServerOperation,
@@ -3471,11 +3473,11 @@ const CLASS_REGISTRATIONS_6: any[] = [
     RevokeListInvitationAction,
     RunAdhocQueryAction,
     RunClusterAnalysisAction,
-    RunDecisionAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    RunDecisionAction,
     RunRecordProcessAction,
     RunStoredQueryAction,
     ScheduleNextAgentWakeAction,
@@ -3582,7 +3584,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1488;
+export const CLASS_REGISTRATIONS_COUNT = 1489;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
