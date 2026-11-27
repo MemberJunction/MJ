@@ -23,6 +23,7 @@ import type {
     AIPromptRunResult,
     AgentTaintedSource,
     BaseAgentNextStep,
+    BudgetCostEvent,
     ExecuteAgentParams,
     ExecuteAgentResult,
     ForEachOperation,
@@ -41,8 +42,8 @@ import type {
 import type { ActionOutputTrustLevel, ActionParam, ActionResult, ActionRunScope, MJActionEntityExtended } from '@memberjunction/actions-base';
 import type { BaseRealtimeModel, ChatMessage, ChatMessageContent, RealtimeTranscript } from '@memberjunction/ai';
 import type { AIDecisionRunResult, AIPromptRunner } from '@memberjunction/ai-prompts';
-import type { IMetadataProvider, MJLimitsConfig, UserInfo } from '@memberjunction/core';
-import type { ConversationBranchRow, MJAIAgentActionEntity, MJAIPromptRunEntity, MJAISkillEntity } from '@memberjunction/core-entities';
+import type { IMetadataProvider, MJLimitsBudgetsConfig, MJLimitsConfig, MJLimitsResolutionResult, UserInfo } from '@memberjunction/core';
+import type { ConversationBranchRow, MJAIAgentActionEntity, MJAIAgentUserPolicyEntity, MJAIPromptRunEntity, MJAISkillEntity } from '@memberjunction/core-entities';
 import type { ActionCompactMode, ActionLifecycleResolver } from '../ActionLifecycleResolver';
 import type { ActionResultSpilloverManager } from '../ActionResultSpilloverManager';
 import type { BaseAgentType } from '../agent-types/base-agent-type';
@@ -51,7 +52,10 @@ import type { AgentFeedbackCoordinator } from '../AgentFeedbackCoordinator';
 import type { AgentStepDispatcher, LoopIterationError } from '../AgentStepDispatcher';
 import type { AgentRunTokenStats, AgentTreeBudgetTracker } from '../AgentTreeBudgetTracker';
 import type { ArtifactToolManager } from '../ArtifactToolManager';
+import type { BudgetEnforcementGuard } from '../BudgetEnforcementGuard';
 import type { CompactionOutcome, EffectiveContextBudget } from '../ConversationCompactionManager';
+import type { DeterministicProgressDetector } from '../DeterministicProgressDetector';
+import type { FastConvergenceJudge } from '../FastConvergenceJudge';
 import type { NativeControlConfig } from '../native-tools/native-control-config';
 import type { PayloadManager, PayloadManagerResult } from '../PayloadManager';
 import type { PipelineToolRegistry } from '../pipeline';
@@ -64,21 +68,31 @@ import type {
     DelegateToTargetRequest,
     RealtimeSessionRunnerDeps,
 } from '../realtime/realtime-session-runner';
+import type {
+    PendingRunawayCheckpointPersistence,
+    RestoredCheckpointContext,
+    RunawayCheckpointManager,
+} from '../RunawayCheckpointManager';
 import type { ScratchpadManager } from '../ScratchpadManager';
+import type { SelfCheckLinkRow } from '../self-check';
 import type { SubAgentConsultRecord } from '../sub-agent-consult';
 import type { CarryForwardStepRecord } from '../tool-result-format';
 import type {
     ActionResultCrushConfig,
     ActionResultSummary,
     AgentLogErrorOptions,
+    CooperativePauseState,
     CreateStepEntityParams,
     ExecuteSingleActionOptions,
     ExtendedProgressStep,
     ForEachIterationResult,
+    GuardrailVerdict,
     HeldCompletionChange,
     InlineLoopGovernanceArgs,
     PausedRunOutcome,
+    PauseNonDestructivelyDetails,
     RecordedPromptMessage,
+    RunLateJudgeScope,
     StoppedRunContinuation,
     StoppedRunStackStepRecord,
     WhileIterationResult,
@@ -249,28 +263,28 @@ export interface AgentHelperSubclassHooks {
     ): Promise<void>;
     TriggerPostRunMemoryExtraction(params: ExecuteAgentParams, agentRun: MJAIAgentRunEntityExtended): Promise<void>;
     CreateMemoryManagerAgent(agent: MJAIAgentEntityExtended): Promise<{ Execute(params: ExecuteAgentParams): Promise<ExecuteAgentResult> }>;
-    RecoveryStrategy_DropStaleVolatileState(
+    RecoveryStrategyDropStaleVolatileState(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number
     ): { tokensSaved: number; strategyName: string };
-    RecoveryStrategy_RemoveOldestToolResults(
+    RecoveryStrategyRemoveOldestToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
         minAge?: number
     ): { tokensSaved: number; strategyName: string };
-    RecoveryStrategy_CompactOldToolResults(
+    RecoveryStrategyCompactOldToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
         minAge?: number
     ): Promise<{ tokensSaved: number; strategyName: string }>;
-    RecoveryStrategy_CompactAllToolResults(
+    RecoveryStrategyCompactAllToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number
     ): Promise<{ tokensSaved: number; strategyName: string }>;
-    RecoveryStrategy_TrimLastUserMessage(
+    RecoveryStrategyTrimLastUserMessage(
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string };
@@ -445,6 +459,14 @@ export interface AgentHelperSubclassHooks {
     NotifyDroppedSkillRequests(droppedIds: string[], params: ExecuteAgentParams): void;
     ActivateRequestedSkills(newlyActivated: MJAISkillEntity[], params: ExecuteAgentParams): Promise<void>;
     MergeSkillIDs(explicit: readonly string[], persisted: readonly string[]): string[];
+
+    // --- Limits, budgets, guardrails & pause hooks (Slice s7) ---
+    HasExceededAgentRunGuardrails(params: ExecuteAgentParams, agentRun: MJAIAgentRunEntityExtended): Promise<GuardrailVerdict>;
+    CheckTreeBudgetLimit(params?: ExecuteAgentParams): GuardrailVerdict;
+    GetActionExecutionCount(agentRunId: string, actionId: string): Promise<number>;
+    GetSubAgentExecutionCount(agentRunId: string, subAgentId: string): Promise<number>;
+    GetExecutionCount(itemId: string): number;
+    PauseNonDestructively(params: ExecuteAgentParams, details: PauseNonDestructivelyDetails): Promise<PausedRunOutcome | null>;
 }
 
 /**
@@ -542,6 +564,70 @@ export interface AgentRunContext {
     PlanModeActive: boolean;
     /** Whether Plan Mode approval has been granted for this run. */
     PlanApproved: boolean;
+    /** Shared root-tree cumulative budget tracking object. */
+    TreeBudget: AgentTreeBudget | undefined;
+    /** Full 5-tier limits resolution result active for this run. */
+    ActiveLimitsResolution: MJLimitsResolutionResult | null;
+    /** Effective budget configuration resolved for this run. */
+    ActiveBudgets: MJLimitsBudgetsConfig | null;
+    /** Resolved per-(Agent, User) policy entity active for this run. */
+    ResolvedUserPolicy: MJAIAgentUserPolicyEntity | null;
+    /** Restored checkpoint metadata when resuming a paused run. */
+    ResumedCheckpointContext: RestoredCheckpointContext | null;
+    /** Active cooperative pause request & waiter queue. */
+    CooperativePauseState: CooperativePauseState | null;
+    /** Prior non-step cost accumulated before checkpoint resume. */
+    PriorNonStepCostUsd: number;
+    /** Prior non-step tokens accumulated before checkpoint resume. */
+    PriorNonStepTokensUsed: number;
+    /** FastConvergenceJudge cost reconciled into this run. */
+    FastJudgeCostUsd: number;
+    /** FastConvergenceJudge tokens reconciled into this run. */
+    FastJudgeTokensUsed: number;
+    /** Invocation IDs of FastConvergenceJudge calls reconciled for this run. */
+    readonly ReconciledFastJudgeInvocationIds: Set<string>;
+    /** Current run's late fast-judge settlement scope. */
+    CurrentLateJudgeScope: RunLateJudgeScope | null;
+    /** All tracked late fast-judge scopes across runs on this instance. */
+    readonly TrackedLateJudgeScopes: Set<RunLateJudgeScope>;
+    /** Prior-day cost baseline across midnight rollover. */
+    PriorDayCostBaselineUsd: number | undefined;
+    /** Prior-day wall-clock baseline across midnight rollover. */
+    PriorDayWallClockBaselineMs: number | undefined;
+    /** Last observed day budget snapshot for midnight rollover detection. */
+    LastObservedDaySnapshot: { DayBucketUTC: string; CostUsd: number; WallClockMs: number } | null;
+    /** Cost attribution events recorded for PerUserPerDay tracking. */
+    BudgetCostEvents: BudgetCostEvent[];
+    /** Day-bucket cost baselines recorded on the run's Data JSON. */
+    BudgetDayBaselines: Record<string, number>;
+    /** Last total run cost recorded into `BudgetCostEvents`. */
+    LastRecordedCostUsd: number;
+    /** Timestamp (ms) of last remote DB poll for cooperative pause requests. */
+    LastRemotePausePollMs: number;
+    /** Pending in-memory safe-point checkpoint awaiting storage recovery. */
+    PendingCheckpointPersistence: PendingRunawayCheckpointPersistence | null;
+    /** Per-action / per-sub-agent execution count map for min/max guardrails. */
+    readonly ExecutionCounts: Map<string, number>;
+    /** Per-run rubric self-check attempt counter. */
+    readonly SelfCheckAttemptsByRun: Map<string, number>;
+    /** Cached rubric self-check link per agent ID. */
+    readonly SelfCheckLinkByAgent: Map<string, SelfCheckLinkRow | null>;
+    /** Active workflow task ID when awaiting an external workflow. */
+    AwaitingWorkflowTaskID: string | null;
+    /** Prompt execution scope captured for this run. */
+    RunExecutionScope: AIPromptExecutionScope | undefined;
+    /** Tainted external sources ingested during this run. */
+    readonly TaintedSources: AgentTaintedSource[];
+    /** Budget enforcement guard collaborator. */
+    readonly BudgetEnforcementGuard: BudgetEnforcementGuard;
+    /** Deterministic progress detector collaborator. */
+    readonly ProgressDetector: DeterministicProgressDetector;
+    /** Fast convergence judge collaborator (instantiated on demand). */
+    readonly FastConvergenceJudge: FastConvergenceJudge;
+    /** Fast convergence judge collaborator ONLY if already instantiated (undefined if never created). */
+    readonly FastConvergenceJudgeIfInitialized: FastConvergenceJudge | undefined;
+    /** Runaway checkpoint persistence & notification manager collaborator. */
+    readonly CheckpointManager: RunawayCheckpointManager;
 
     /** Virtual-dispatch hooks back into `BaseAgent` for subclass overrides and test spies. */
     readonly Hooks: AgentHelperSubclassHooks;

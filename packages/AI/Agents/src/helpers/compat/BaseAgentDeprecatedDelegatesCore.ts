@@ -341,13 +341,13 @@ export abstract class BaseAgentDeprecatedDelegatesCore {
         return this.getCompactionHelper().SmartTrimContent(this.getRunContext(), content, maxLength);
     }
 
-    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_DropStaleVolatileState` instead (slated for v7.0 removal). */
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategyDropStaleVolatileState` instead (slated for v7.0 removal). */
     protected recoveryStrategy_DropStaleVolatileState(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number
     ): { tokensSaved: number; strategyName: string } {
-        return this.getCompactionHelper().RecoveryStrategy_DropStaleVolatileState(
+        return this.getCompactionHelper().RecoveryStrategyDropStaleVolatileState(
             this.getRunContext(),
             params,
             tokensToSave,
@@ -355,14 +355,14 @@ export abstract class BaseAgentDeprecatedDelegatesCore {
         );
     }
 
-    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_RemoveOldestToolResults` instead (slated for v7.0 removal). */
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategyRemoveOldestToolResults` instead (slated for v7.0 removal). */
     protected recoveryStrategy_RemoveOldestToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
         minAge?: number
     ): { tokensSaved: number; strategyName: string } {
-        return this.getCompactionHelper().RecoveryStrategy_RemoveOldestToolResults(
+        return this.getCompactionHelper().RecoveryStrategyRemoveOldestToolResults(
             this.getRunContext(),
             params,
             tokensToSave,
@@ -371,14 +371,14 @@ export abstract class BaseAgentDeprecatedDelegatesCore {
         );
     }
 
-    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_CompactOldToolResults` instead (slated for v7.0 removal). */
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategyCompactOldToolResults` instead (slated for v7.0 removal). */
     protected recoveryStrategy_CompactOldToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
         minAge?: number
     ): Promise<{ tokensSaved: number; strategyName: string }> {
-        return this.getCompactionHelper().RecoveryStrategy_CompactOldToolResults(
+        return this.getCompactionHelper().RecoveryStrategyCompactOldToolResults(
             this.getRunContext(),
             params,
             tokensToSave,
@@ -387,20 +387,20 @@ export abstract class BaseAgentDeprecatedDelegatesCore {
         );
     }
 
-    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_CompactAllToolResults` instead (slated for v7.0 removal). */
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategyCompactAllToolResults` instead (slated for v7.0 removal). */
     protected recoveryStrategy_CompactAllToolResults(
         params: ExecuteAgentParams,
         tokensToSave: number
     ): Promise<{ tokensSaved: number; strategyName: string }> {
-        return this.getCompactionHelper().RecoveryStrategy_CompactAllToolResults(this.getRunContext(), params, tokensToSave);
+        return this.getCompactionHelper().RecoveryStrategyCompactAllToolResults(this.getRunContext(), params, tokensToSave);
     }
 
-    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategy_TrimLastUserMessage` instead (slated for v7.0 removal). */
+    /** @deprecated Use `BaseAgentCompactionHelper.RecoveryStrategyTrimLastUserMessage` instead (slated for v7.0 removal). */
     protected recoveryStrategy_TrimLastUserMessage(
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string } {
-        return this.getCompactionHelper().RecoveryStrategy_TrimLastUserMessage(this.getRunContext(), params, tokensToSave);
+        return this.getCompactionHelper().RecoveryStrategyTrimLastUserMessage(this.getRunContext(), params, tokensToSave);
     }
 
     /** @deprecated Use `BaseAgentCompactionHelper.AttemptContextRecovery` instead (slated for v7.0 removal). */

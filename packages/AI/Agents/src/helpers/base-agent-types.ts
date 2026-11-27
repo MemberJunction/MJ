@@ -24,13 +24,16 @@ import type {
     RunawayPauseReason,
     RunawaySerializable,
     StopContinuationMode,
+    WorkflowBudgetBreachDiagnostic,
 } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import type { ActionErrorRecovery, ActionOutputTrustLevel, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import type { ChatMessage } from '@memberjunction/ai';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import type { CodeLang } from '@memberjunction/context-crush/code';
+import type { CooperativePauseResult } from '../ActiveRunGovernanceRegistry';
 import type { LoopIterationError } from '../AgentStepDispatcher';
+import type { BudgetEnforcementGuard } from '../BudgetEnforcementGuard';
 import type { PauseRunWithCheckpointResult } from '../RunawayCheckpointManager';
 import type { StoppedRunStepRecord } from '../tool-result-format';
 
@@ -306,5 +309,38 @@ export interface InlineLoopGovernanceArgs<P = unknown> {
     DelayBetweenIterationsMs?: number;
     ContinueOnError?: boolean;
     TotalItems?: number;
+}
+
+/** In-flight cooperative pause request state held on a running `BaseAgent`. */
+export interface CooperativePauseState {
+    Requested: boolean;
+    Summary?: string;
+    Waiters: Array<(res: CooperativePauseResult | null) => void>;
+}
+
+/** Legacy guardrail verdict shape returned by `HasExceededAgentRunGuardrails` and `CheckTreeBudgetLimit`. */
+export interface GuardrailVerdict {
+    exceeded: boolean;
+    type?: 'cost' | 'tokens' | 'iterations' | 'time';
+    limit?: number;
+    current?: number;
+    reason?: string;
+    diagnostic?: WorkflowBudgetBreachDiagnostic;
+}
+
+/** Cumulative budget ledger snapshot returned by `BudgetEnforcementGuard.Evaluate`. */
+export type AgentBudgetLedgerSnapshot = Awaited<ReturnType<BudgetEnforcementGuard['Evaluate']>>['Ledger'];
+
+/** Details handed to `PauseNonDestructively` when persisting a safe-point checkpoint. */
+export interface PauseNonDestructivelyDetails {
+    PauseReason: RunawayPauseReason;
+    Summary: string;
+    InFlightPayload: RunawaySerializable;
+    NextStepToResume: BaseAgentNextStep | null;
+    LoopCursor?: import('@memberjunction/ai-core-plus').PendingLoopCursorState | null;
+    BudgetBreach?: BudgetBreachDetail;
+    ProgressEvaluation?: ProgressEvaluationResult;
+    FastJudgeResult?: ProgressEvaluationResult['FastJudgeResult'];
+    Ledger: AgentBudgetLedgerSnapshot;
 }
 

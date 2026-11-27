@@ -16,8 +16,12 @@ import type { AgentFeedbackCoordinator } from '../../AgentFeedbackCoordinator';
 import { AgentStepDispatcher } from '../../AgentStepDispatcher';
 import { AgentTreeBudgetTracker } from '../../AgentTreeBudgetTracker';
 import { ArtifactToolManager } from '../../ArtifactToolManager';
+import { BudgetEnforcementGuard } from '../../BudgetEnforcementGuard';
+import { DeterministicProgressDetector } from '../../DeterministicProgressDetector';
+import { FastConvergenceJudge } from '../../FastConvergenceJudge';
 import { PayloadManager } from '../../PayloadManager';
 import { PipelineToolRegistry } from '../../pipeline';
+import { RunawayCheckpointManager } from '../../RunawayCheckpointManager';
 import { ScratchpadManager } from '../../ScratchpadManager';
 import type { AgentHelperSubclassHooks, AgentRunContext } from '../../helpers/AgentRunContext';
 
@@ -28,6 +32,10 @@ export function CreateMockAgentRunContext(
     const stepSaveQueue = new AgentRunStepSaveQueue();
     const payloadManager = new PayloadManager();
     const stepDispatcher = new AgentStepDispatcher();
+    const budgetEnforcementGuard = new BudgetEnforcementGuard();
+    const progressDetector = new DeterministicProgressDetector();
+    const fastConvergenceJudge = new FastConvergenceJudge();
+    const checkpointManager = new RunawayCheckpointManager();
     const actionSpilloverManager = new ActionResultSpilloverManager();
     const artifactToolManager = new ArtifactToolManager({
         AgentRunId: '11111111-1111-4111-8111-111111111111',
@@ -123,11 +131,11 @@ export function CreateMockAgentRunContext(
         RecordCompactionRunStep: vi.fn(async () => undefined),
         TriggerPostRunMemoryExtraction: vi.fn(async () => undefined),
         CreateMemoryManagerAgent: vi.fn(async () => ({ Execute: vi.fn(async () => ({ success: true, agentRun: {} })) })),
-        RecoveryStrategy_DropStaleVolatileState: () => ({ tokensSaved: 0, strategyName: 'DropStaleVolatileState' }),
-        RecoveryStrategy_RemoveOldestToolResults: () => ({ tokensSaved: 0, strategyName: 'RemoveOldestToolResults' }),
-        RecoveryStrategy_CompactOldToolResults: vi.fn(async () => ({ tokensSaved: 0, strategyName: 'CompactOldToolResults' })),
-        RecoveryStrategy_CompactAllToolResults: vi.fn(async () => ({ tokensSaved: 0, strategyName: 'CompactAllToolResults' })),
-        RecoveryStrategy_TrimLastUserMessage: () => ({ tokensSaved: 0, strategyName: 'TrimLastUserMessage' }),
+        RecoveryStrategyDropStaleVolatileState: () => ({ tokensSaved: 0, strategyName: 'DropStaleVolatileState' }),
+        RecoveryStrategyRemoveOldestToolResults: () => ({ tokensSaved: 0, strategyName: 'RemoveOldestToolResults' }),
+        RecoveryStrategyCompactOldToolResults: vi.fn(async () => ({ tokensSaved: 0, strategyName: 'CompactOldToolResults' })),
+        RecoveryStrategyCompactAllToolResults: vi.fn(async () => ({ tokensSaved: 0, strategyName: 'CompactAllToolResults' })),
+        RecoveryStrategyTrimLastUserMessage: () => ({ tokensSaved: 0, strategyName: 'TrimLastUserMessage' }),
         SessionAudienceRefusal: () => null,
         RunScopeFor: () => ({}),
         ActiveSkillIDsForRun: () => [],
@@ -197,6 +205,12 @@ export function CreateMockAgentRunContext(
         NotifyDroppedSkillRequests: vi.fn(),
         ActivateRequestedSkills: vi.fn(async () => undefined),
         MergeSkillIDs: (e, p) => [...e, ...p],
+        HasExceededAgentRunGuardrails: vi.fn(async () => ({ exceeded: false })),
+        CheckTreeBudgetLimit: () => ({ exceeded: false }),
+        GetActionExecutionCount: vi.fn(async () => 0),
+        GetSubAgentExecutionCount: vi.fn(async () => 0),
+        GetExecutionCount: () => 0,
+        PauseNonDestructively: vi.fn(async () => null),
     };
 
     const { Hooks: hookOverrides, ...restOverrides } = overrides ?? {};
@@ -257,6 +271,38 @@ export function CreateMockAgentRunContext(
         ConversationSkillIDs: [],
         PlanModeActive: false,
         PlanApproved: false,
+        TreeBudget: undefined,
+        ActiveLimitsResolution: null,
+        ActiveBudgets: null,
+        ResolvedUserPolicy: null,
+        ResumedCheckpointContext: null,
+        CooperativePauseState: null,
+        PriorNonStepCostUsd: 0,
+        PriorNonStepTokensUsed: 0,
+        FastJudgeCostUsd: 0,
+        FastJudgeTokensUsed: 0,
+        ReconciledFastJudgeInvocationIds: new Set(),
+        CurrentLateJudgeScope: null,
+        TrackedLateJudgeScopes: new Set(),
+        PriorDayCostBaselineUsd: undefined,
+        PriorDayWallClockBaselineMs: undefined,
+        LastObservedDaySnapshot: null,
+        BudgetCostEvents: [],
+        BudgetDayBaselines: {},
+        LastRecordedCostUsd: 0,
+        LastRemotePausePollMs: 0,
+        PendingCheckpointPersistence: null,
+        ExecutionCounts: new Map(),
+        SelfCheckAttemptsByRun: new Map(),
+        SelfCheckLinkByAgent: new Map(),
+        AwaitingWorkflowTaskID: null,
+        RunExecutionScope: undefined,
+        TaintedSources: [],
+        BudgetEnforcementGuard: budgetEnforcementGuard,
+        ProgressDetector: progressDetector,
+        FastConvergenceJudge: fastConvergenceJudge,
+        FastConvergenceJudgeIfInitialized: undefined,
+        CheckpointManager: checkpointManager,
         ...restOverrides,
         Hooks: {
             ...defaultHooks,

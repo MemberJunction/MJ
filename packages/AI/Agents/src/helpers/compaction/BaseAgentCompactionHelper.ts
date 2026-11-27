@@ -83,49 +83,49 @@ export class BaseAgentCompactionHelper {
 
     // --- Context-overflow recovery strategies ---
 
-    public RecoveryStrategy_DropStaleVolatileState(
+    public RecoveryStrategyDropStaleVolatileState(
         _ctx: AgentRunContext,
         _params: ExecuteAgentParams,
         _tokensToSave: number,
         _currentStepCount: number
     ): { tokensSaved: number; strategyName: string } {
-        throw new Error('BaseAgentCompactionHelper.RecoveryStrategy_DropStaleVolatileState must be implemented by a registered subclass.');
+        throw new Error('BaseAgentCompactionHelper.RecoveryStrategyDropStaleVolatileState must be implemented by a registered subclass.');
     }
 
-    public RecoveryStrategy_RemoveOldestToolResults(
+    public RecoveryStrategyRemoveOldestToolResults(
         _ctx: AgentRunContext,
         _params: ExecuteAgentParams,
         _tokensToSave: number,
         _currentStepCount: number,
         _minAge?: number
     ): { tokensSaved: number; strategyName: string } {
-        throw new Error('BaseAgentCompactionHelper.RecoveryStrategy_RemoveOldestToolResults must be implemented by a registered subclass.');
+        throw new Error('BaseAgentCompactionHelper.RecoveryStrategyRemoveOldestToolResults must be implemented by a registered subclass.');
     }
 
-    public async RecoveryStrategy_CompactOldToolResults(
+    public async RecoveryStrategyCompactOldToolResults(
         _ctx: AgentRunContext,
         _params: ExecuteAgentParams,
         _tokensToSave: number,
         _currentStepCount: number,
         _minAge?: number
     ): Promise<{ tokensSaved: number; strategyName: string }> {
-        throw new Error('BaseAgentCompactionHelper.RecoveryStrategy_CompactOldToolResults must be implemented by a registered subclass.');
+        throw new Error('BaseAgentCompactionHelper.RecoveryStrategyCompactOldToolResults must be implemented by a registered subclass.');
     }
 
-    public async RecoveryStrategy_CompactAllToolResults(
+    public async RecoveryStrategyCompactAllToolResults(
         _ctx: AgentRunContext,
         _params: ExecuteAgentParams,
         _tokensToSave: number
     ): Promise<{ tokensSaved: number; strategyName: string }> {
-        throw new Error('BaseAgentCompactionHelper.RecoveryStrategy_CompactAllToolResults must be implemented by a registered subclass.');
+        throw new Error('BaseAgentCompactionHelper.RecoveryStrategyCompactAllToolResults must be implemented by a registered subclass.');
     }
 
-    public RecoveryStrategy_TrimLastUserMessage(
+    public RecoveryStrategyTrimLastUserMessage(
         _ctx: AgentRunContext,
         _params: ExecuteAgentParams,
         _tokensToSave: number
     ): { tokensSaved: number; strategyName: string } {
-        throw new Error('BaseAgentCompactionHelper.RecoveryStrategy_TrimLastUserMessage must be implemented by a registered subclass.');
+        throw new Error('BaseAgentCompactionHelper.RecoveryStrategyTrimLastUserMessage must be implemented by a registered subclass.');
     }
 
     public async AttemptContextRecovery<P>(

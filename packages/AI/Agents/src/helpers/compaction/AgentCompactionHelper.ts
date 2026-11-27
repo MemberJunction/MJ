@@ -99,49 +99,49 @@ export class AgentCompactionHelper extends BaseAgentCompactionHelper {
         return this._recoveryHelper.EstimateConversationTokens(ctx, messages);
     }
 
-    public override RecoveryStrategy_DropStaleVolatileState(
+    public override RecoveryStrategyDropStaleVolatileState(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number
     ): { tokensSaved: number; strategyName: string } {
-        return this._recoveryHelper.RecoveryStrategy_DropStaleVolatileState(ctx, params, tokensToSave, currentStepCount);
+        return this._recoveryHelper.RecoveryStrategyDropStaleVolatileState(ctx, params, tokensToSave, currentStepCount);
     }
 
-    public override RecoveryStrategy_RemoveOldestToolResults(
+    public override RecoveryStrategyRemoveOldestToolResults(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
         minAge: number = 5
     ): { tokensSaved: number; strategyName: string } {
-        return this._recoveryHelper.RecoveryStrategy_RemoveOldestToolResults(ctx, params, tokensToSave, currentStepCount, minAge);
+        return this._recoveryHelper.RecoveryStrategyRemoveOldestToolResults(ctx, params, tokensToSave, currentStepCount, minAge);
     }
 
-    public override RecoveryStrategy_CompactOldToolResults(
+    public override RecoveryStrategyCompactOldToolResults(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number,
         currentStepCount: number,
         minAge: number = 3
     ): Promise<{ tokensSaved: number; strategyName: string }> {
-        return this._recoveryHelper.RecoveryStrategy_CompactOldToolResults(ctx, params, tokensToSave, currentStepCount, minAge);
+        return this._recoveryHelper.RecoveryStrategyCompactOldToolResults(ctx, params, tokensToSave, currentStepCount, minAge);
     }
 
-    public override RecoveryStrategy_CompactAllToolResults(
+    public override RecoveryStrategyCompactAllToolResults(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number
     ): Promise<{ tokensSaved: number; strategyName: string }> {
-        return this._recoveryHelper.RecoveryStrategy_CompactAllToolResults(ctx, params, tokensToSave);
+        return this._recoveryHelper.RecoveryStrategyCompactAllToolResults(ctx, params, tokensToSave);
     }
 
-    public override RecoveryStrategy_TrimLastUserMessage(
+    public override RecoveryStrategyTrimLastUserMessage(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string } {
-        return this._recoveryHelper.RecoveryStrategy_TrimLastUserMessage(ctx, params, tokensToSave);
+        return this._recoveryHelper.RecoveryStrategyTrimLastUserMessage(ctx, params, tokensToSave);
     }
 
     public override AttemptContextRecovery<P>(

@@ -343,12 +343,15 @@ import {
     type ActionFailureClass,
     type ActionResultCrushConfig,
     type ActionResultSummary,
+    type CooperativePauseState,
     type CreateStepEntityParams,
     type ExecuteSingleActionOptions,
     type ExtendedProgressStep,
+    type GuardrailVerdict,
     type HeldCompletionChange,
     type InlineLoopGovernanceArgs,
     type PausedRunOutcome,
+    type PauseNonDestructivelyDetails,
     type PendingDurableFastJudgeSettlement,
     type RecordedPromptMessage,
     type RunLateJudgeScope,
@@ -371,6 +374,8 @@ import { BaseAgentIterationHelper } from './helpers/iteration/BaseAgentIteration
 import { AgentIterationHelper } from './helpers/iteration/AgentIterationHelper';
 import { BaseAgentSkillsHelper } from './helpers/skills/BaseAgentSkillsHelper';
 import { AgentSkillsHelper } from './helpers/skills/AgentSkillsHelper';
+import { BaseAgentLimitsHelper } from './helpers/limits/BaseAgentLimitsHelper';
+import { AgentLimitsHelper } from './helpers/limits/AgentLimitsHelper';
 
 // Same-package type exports kept on ./base-agent for internal/direct-path import compatibility.
 export type {
@@ -381,46 +386,6 @@ export type {
     ExecuteSingleActionOptions,
     StoppedRunStackStepRecord,
 };
-
-const RECONCILED_FAST_JUDGE_IDS_DATA_KEY = '__reconciledFastJudgeIds' as const;
-
-function extractReconciledFastJudgeIdsFromRunData(dataJson: string | null | undefined): Set<string> {
-    const ids = new Set<string>();
-    if (typeof dataJson !== 'string' || dataJson.trim().length === 0) {
-        return ids;
-    }
-    const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(dataJson);
-    if (!IsPlainObject(parsed)) {
-        return ids;
-    }
-    const raw = parsed[RECONCILED_FAST_JUDGE_IDS_DATA_KEY];
-    if (!Array.isArray(raw)) {
-        return ids;
-    }
-    for (const item of raw) {
-        if (typeof item === 'string' && item.trim().length > 0) {
-            ids.add(item);
-        }
-    }
-    return ids;
-}
-
-function attachReconciledFastJudgeIdToRunData(
-    existingDataJson: string | null | undefined,
-    invocationId: string,
-): string {
-    let baseData: Record<string, RunawayJsonValue> = {};
-    if (typeof existingDataJson === 'string' && existingDataJson.trim().length > 0) {
-        const parsed = SafeJSONParse<Record<string, RunawayJsonValue>>(existingDataJson);
-        if (IsPlainObject(parsed)) {
-            baseData = { ...parsed };
-        }
-    }
-    const existingIds = extractReconciledFastJudgeIdsFromRunData(existingDataJson);
-    existingIds.add(invocationId);
-    baseData[RECONCILED_FAST_JUDGE_IDS_DATA_KEY] = ToRunawayJsonValue(Array.from(existingIds));
-    return JSON.stringify(baseData);
-}
 
 /**
  * Base iteration context for tracking loop execution in BaseAgent.
@@ -771,15 +736,15 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
             RecordCompactionRunStep: (phase, params, budget, outcome) => self.recordCompactionRunStep(phase, params, budget, outcome),
             TriggerPostRunMemoryExtraction: (params, agentRun) => self.triggerPostRunMemoryExtraction(params, agentRun),
             CreateMemoryManagerAgent: (agent) => CreateAgentInstance(agent),
-            RecoveryStrategy_DropStaleVolatileState: (params, tokensToSave, currentStepCount) =>
+            RecoveryStrategyDropStaleVolatileState: (params, tokensToSave, currentStepCount) =>
                 self.recoveryStrategy_DropStaleVolatileState(params, tokensToSave, currentStepCount),
-            RecoveryStrategy_RemoveOldestToolResults: (params, tokensToSave, currentStepCount, minAge) =>
+            RecoveryStrategyRemoveOldestToolResults: (params, tokensToSave, currentStepCount, minAge) =>
                 self.recoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentStepCount, minAge),
-            RecoveryStrategy_CompactOldToolResults: (params, tokensToSave, currentStepCount, minAge) =>
+            RecoveryStrategyCompactOldToolResults: (params, tokensToSave, currentStepCount, minAge) =>
                 self.recoveryStrategy_CompactOldToolResults(params, tokensToSave, currentStepCount, minAge),
-            RecoveryStrategy_CompactAllToolResults: (params, tokensToSave) =>
+            RecoveryStrategyCompactAllToolResults: (params, tokensToSave) =>
                 self.recoveryStrategy_CompactAllToolResults(params, tokensToSave),
-            RecoveryStrategy_TrimLastUserMessage: (params, tokensToSave) =>
+            RecoveryStrategyTrimLastUserMessage: (params, tokensToSave) =>
                 self.recoveryStrategy_TrimLastUserMessage(params, tokensToSave),
             SessionAudienceRefusal: (params) => self.sessionAudienceRefusal(params),
             RunScopeFor: (params) => self.runScopeFor(params),
@@ -856,6 +821,12 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
             NotifyDroppedSkillRequests: (droppedIds, params) => self.notifyDroppedSkillRequests(droppedIds, params),
             ActivateRequestedSkills: (newlyActivated, params) => self.activateRequestedSkills(newlyActivated, params),
             MergeSkillIDs: (explicit, persisted) => self.mergeSkillIDs(explicit, persisted),
+            HasExceededAgentRunGuardrails: (params, agentRun) => self.hasExceededAgentRunGuardrails(params, agentRun),
+            CheckTreeBudgetLimit: (params) => self.checkTreeBudgetLimit(params),
+            GetActionExecutionCount: (agentRunId, actionId) => self.getActionExecutionCount(agentRunId, actionId),
+            GetSubAgentExecutionCount: (agentRunId, subAgentId) => self.getSubAgentExecutionCount(agentRunId, subAgentId),
+            GetExecutionCount: (itemId) => self.getExecutionCount(itemId),
+            PauseNonDestructively: (params, details) => self.pauseNonDestructively(params, details),
         };
         this._cachedRunContext = {
             get ActiveProvider() { return self._activeProvider; },
@@ -931,6 +902,59 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
             set PlanModeActive(v) { self._planModeActive = v; },
             get PlanApproved() { return self._planApproved; },
             set PlanApproved(v) { self._planApproved = v; },
+            get TreeBudget() { return self._treeBudget; },
+            set TreeBudget(v) { self._treeBudget = v; },
+            get ActiveLimitsResolution() { return self._activeLimitsResolution; },
+            set ActiveLimitsResolution(v) { self._activeLimitsResolution = v; },
+            get ActiveBudgets() { return self._activeBudgets; },
+            set ActiveBudgets(v) { self._activeBudgets = v; },
+            get ResolvedUserPolicy() { return self._resolvedUserPolicy; },
+            set ResolvedUserPolicy(v) { self._resolvedUserPolicy = v; },
+            get ResumedCheckpointContext() { return self._resumedCheckpointContext; },
+            set ResumedCheckpointContext(v) { self._resumedCheckpointContext = v; },
+            get CooperativePauseState() { return self._cooperativePauseState; },
+            set CooperativePauseState(v) { self._cooperativePauseState = v; },
+            get PriorNonStepCostUsd() { return self._priorNonStepCostUsd; },
+            set PriorNonStepCostUsd(v) { self._priorNonStepCostUsd = v; },
+            get PriorNonStepTokensUsed() { return self._priorNonStepTokensUsed; },
+            set PriorNonStepTokensUsed(v) { self._priorNonStepTokensUsed = v; },
+            get FastJudgeCostUsd() { return self._fastJudgeCostUsd; },
+            set FastJudgeCostUsd(v) { self._fastJudgeCostUsd = v; },
+            get FastJudgeTokensUsed() { return self._fastJudgeTokensUsed; },
+            set FastJudgeTokensUsed(v) { self._fastJudgeTokensUsed = v; },
+            get ReconciledFastJudgeInvocationIds() { return self._reconciledFastJudgeInvocationIds; },
+            get CurrentLateJudgeScope() { return self._currentLateJudgeScope; },
+            set CurrentLateJudgeScope(v) { self._currentLateJudgeScope = v; },
+            get TrackedLateJudgeScopes() { return self._trackedLateJudgeScopes; },
+            get PriorDayCostBaselineUsd() { return self._priorDayCostBaselineUsd; },
+            set PriorDayCostBaselineUsd(v) { self._priorDayCostBaselineUsd = v; },
+            get PriorDayWallClockBaselineMs() { return self._priorDayWallClockBaselineMs; },
+            set PriorDayWallClockBaselineMs(v) { self._priorDayWallClockBaselineMs = v; },
+            get LastObservedDaySnapshot() { return self._lastObservedDaySnapshot; },
+            set LastObservedDaySnapshot(v) { self._lastObservedDaySnapshot = v; },
+            get BudgetCostEvents() { return self._budgetCostEvents; },
+            set BudgetCostEvents(v) { self._budgetCostEvents = v; },
+            get BudgetDayBaselines() { return self._budgetDayBaselines; },
+            set BudgetDayBaselines(v) { self._budgetDayBaselines = v; },
+            get LastRecordedCostUsd() { return self._lastRecordedCostUsd; },
+            set LastRecordedCostUsd(v) { self._lastRecordedCostUsd = v; },
+            get LastRemotePausePollMs() { return self._lastRemotePausePollMs; },
+            set LastRemotePausePollMs(v) { self._lastRemotePausePollMs = v; },
+            get PendingCheckpointPersistence() { return self._pendingCheckpointPersistence; },
+            set PendingCheckpointPersistence(v) { self._pendingCheckpointPersistence = v; },
+            get ExecutionCounts() { return self._executionCounts; },
+            get SelfCheckAttemptsByRun() { return self._selfCheckAttemptsByRun; },
+            get SelfCheckLinkByAgent() { return self._selfCheckLinkByAgent; },
+            get AwaitingWorkflowTaskID() { return self._awaitingWorkflowTaskID; },
+            set AwaitingWorkflowTaskID(v) { self._awaitingWorkflowTaskID = v; },
+            get RunExecutionScope() { return self._runExecutionScope; },
+            set RunExecutionScope(v) { self._runExecutionScope = v; },
+            get TaintedSources() { return self._taintedSources; },
+            get BudgetEnforcementGuard() { return self._budgetEnforcementGuard; },
+            get ProgressDetector() { return self._progressDetector; },
+            get FastConvergenceJudge() { return self._fastConvergenceJudge; },
+            get FastConvergenceJudgeIfInitialized() { return self.__fastConvergenceJudge; },
+            get CheckpointManager() { return self._checkpointManager; },
             Hooks: hooks,
         };
         return this._cachedRunContext;
@@ -990,6 +1014,15 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
         });
     }
 
+    /** Resolves the code-only Limits, Budgets, Guardrails & Checkpoints helper (`BaseAgentLimitsHelper`). */
+    protected override getLimitsHelper(): BaseAgentLimitsHelper {
+        return this.helperCache.GetOrResolve({
+            SeamKey: 'limits',
+            BaseClass: BaseAgentLimitsHelper,
+            DefaultClass: AgentLimitsHelper,
+        });
+    }
+
     /** Public API: opens a raw bridged {@link IRealtimeSession} for voice/video transports. */
     public StartBridgeRealtimeSession(params: ExecuteAgentParams): Promise<IRealtimeSession> {
         return this.getRealtimeHelper().StartBridgeRealtimeSession(this.getRunContext(), params);
@@ -1000,6 +1033,24 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
         return this.getSkillsHelper().EndConversationSkill(this.getRunContext(), conversationId, skillId, contextUser);
     }
 
+    /** Public API: flushes any in-memory safe-point checkpoint retained after an earlier save failure. */
+    public FlushPendingCheckpointPersistence(
+        agentRunId?: string,
+        provider?: IMetadataProvider | null
+    ): Promise<PauseRunWithCheckpointResult | null> {
+        return this.getLimitsHelper().FlushPendingCheckpointPersistence(this.getRunContext(), agentRunId, provider);
+    }
+
+    /** Public API: awaits any in-flight timed-out FastConvergenceJudge evaluations and flushes late saves. */
+    public WaitForPendingFastJudgeEvaluations(): Promise<boolean> {
+        return this.getLimitsHelper().WaitForPendingFastJudgeEvaluations(this.getRunContext());
+    }
+
+    /** Public API: flushes any pending durable late-settlement FastConvergenceJudge saves. */
+    public FlushPendingLateFastJudgeSaves(): Promise<boolean> {
+        return this.getLimitsHelper().FlushPendingLateFastJudgeSaves(this.getRunContext());
+    }
+
     /** Permanent protected hook: application-layer policy filter on skills admitted by MJ gates. */
     protected filterAvailableSkills(
         skills: MJAISkillEntity[],
@@ -1008,6 +1059,37 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
         contextUser?: UserInfo
     ): Promise<MJAISkillEntity[]> {
         return this.getSkillsHelper().FilterAvailableSkills(this.getRunContext(), skills, purpose, agent, contextUser);
+    }
+
+    /** Permanent protected hook: enforces cost, token, iteration, time, and self-check guardrails. */
+    protected checkExecutionGuardrails<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        currentPayload: P,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentStep: MJAIAgentRunStepEntityExtended
+    ): Promise<BaseAgentNextStep<P>> {
+        return this.getLimitsHelper().CheckExecutionGuardrails(
+            this.getRunContext(),
+            params,
+            nextStep,
+            currentPayload,
+            agentRun,
+            currentStep
+        );
+    }
+
+    /** Permanent protected hook: checks whether run or tree-level execution guardrails have been exceeded. */
+    protected hasExceededAgentRunGuardrails(
+        params: ExecuteAgentParams,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<GuardrailVerdict> {
+        return this.getLimitsHelper().HasExceededAgentRunGuardrails(this.getRunContext(), params, agentRun);
+    }
+
+    /** Permanent protected hook: bumps the per-item execution counter checked against min/max guardrails. */
+    protected incrementExecutionCount(itemId: string): void {
+        this.getLimitsHelper().IncrementExecutionCount(this.getRunContext(), itemId);
     }
 
     /** Permanent protected hook: maps an array through an async worker with bounded concurrency. */
@@ -1064,55 +1146,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      */
     private static get MAX_CONSECUTIVE_UNPRODUCTIVE_RETRIES(): number {
         return LimitsConfigResolver.Resolve().Limits.ResourceGuards.MaxConsecutiveUnproductiveRetries;
-    }
-
-    /** Resolves hierarchical execution limits for the current run, applying any per-run `limitsOverride`. */
-    private resolvedLimits(params?: ExecuteAgentParams): MJLimitsConfig {
-        return this.resolveFullRunLimits(params).Limits;
-    }
-
-    /** Resolves full 5-tier execution limits with provenance for the current run. */
-    private resolveFullRunLimits(params?: ExecuteAgentParams): MJLimitsResolutionResult {
-        const effectiveUserPolicy = params?.userPolicy ?? this._resolvedUserPolicy ?? null;
-        const agentChain =
-            params?.agent?.ID && typeof AIEngine.Instance?.GetAgentInheritanceChain === 'function'
-                ? AIEngine.Instance.GetAgentInheritanceChain(params.agent.ID)
-                : [];
-        const ancestorAgents = agentChain.length > 1 ? agentChain.slice(0, -1) : undefined;
-        const userId = params?.userId || params?.contextUser?.ID;
-        const ancestorUserPolicies =
-            ancestorAgents && userId
-                ? ancestorAgents
-                      .map((a) => AgentUserPolicyEngine.Instance.GetCachedPolicy(a.ID, userId, params?.provider))
-                      .filter((p): p is MJAIAgentUserPolicyEntity => p != null)
-                : undefined;
-
-        return ResolveAgentRunLimits({
-            Agent: params?.agent ?? null,
-            AncestorAgents: ancestorAgents,
-            UserPolicy: effectiveUserPolicy,
-            AncestorUserPolicies: ancestorUserPolicies && ancestorUserPolicies.length > 0 ? ancestorUserPolicies : undefined,
-            UserPolicyLimitsOverride: params?.userPolicyLimitsOverride ?? null,
-            RunParams: params ? {
-                absoluteMaxIterations: params.absoluteMaxIterations,
-                maxExecutionTimeMs: params.maxExecutionTimeMs,
-                maxTreeCost: params.maxTreeCost,
-                maxTreeTokens: params.maxTreeTokens,
-                maxTreeDurationMs: params.maxTreeDurationMs,
-                limitsOverride: params.limitsOverride,
-            } : null,
-            ContextUser: params?.contextUser ?? null,
-            Provider: this.ProviderToUse,
-            Options: {
-                EnforceUserPolicyAsCeiling: Boolean(
-                    effectiveUserPolicy ||
-                    params?.userPolicyLimitsOverride ||
-                    (ancestorUserPolicies && ancestorUserPolicies.length > 0)
-                ),
-                EnforceConfiguredCeilings: Boolean(params?.contextUser),
-                AllowAuthorizedCeilingOverride: Boolean(params?.contextUser),
-            },
-        });
     }
 
     /**
@@ -2996,110 +3029,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
         return this.Execute<C, R>(params);
     }
 
-    /**
-     * Flushes any in-memory safe-point checkpoint retained after an earlier pause persistence failure.
-     * When storage recovers, transitions the run cleanly to `Status = 'Paused'` and releases active
-     * ownership so `ResumePausedRun` can resume from the exact safe-point checkpoint.
-     */
-    public async FlushPendingCheckpointPersistence(
-        agentRunId?: string,
-        provider?: IMetadataProvider | null,
-    ): Promise<PauseRunWithCheckpointResult | null> {
-        const targetRunId = agentRunId ?? this._pendingCheckpointPersistence?.AgentRunID ?? this._agentRun?.ID;
-        const targetProvider = provider ?? this._pendingCheckpointPersistence?.Provider ?? this._activeProvider ?? null;
-        if (!targetRunId) {
-            return null;
-        }
-        const registryResult = await ActiveRunGovernanceRegistry.Instance.FlushPendingCheckpointPersistence(
-            targetRunId,
-            targetProvider,
-            undefined,
-            this._checkpointManager,
-        );
-        if (registryResult) {
-            if (registryResult.Saved) {
-                this.clearLocalPendingCheckpointIfMatches(targetRunId, registryResult);
-            }
-            return registryResult;
-        }
-        if (
-            this._pendingCheckpointPersistence &&
-            UUIDsEqual(this._pendingCheckpointPersistence.AgentRunID, targetRunId)
-        ) {
-            const localResult = await this._checkpointManager.FlushPendingCheckpointPersistence(
-                this._pendingCheckpointPersistence,
-            );
-            if (localResult.Saved) {
-                this.clearLocalPendingCheckpointIfMatches(targetRunId, localResult);
-            }
-            return localResult;
-        }
-        return null;
-    }
-
-    private clearLocalPendingCheckpointIfMatches(
-        runId: string,
-        flushed: PauseRunWithCheckpointResult,
-    ): void {
-        if (this._pendingCheckpointPersistence && UUIDsEqual(this._pendingCheckpointPersistence.AgentRunID, runId)) {
-            this._pendingCheckpointPersistence = null;
-        }
-        if (this._pausedRunOutcome && UUIDsEqual(this._pausedRunOutcome.PauseResult.Checkpoint.AgentRunID, runId)) {
-            this._pausedRunOutcome = {
-                ...this._pausedRunOutcome,
-                PauseResult: flushed,
-                PausePersistencePending: false,
-            };
-        }
-    }
-
-    private async resolveServerUserPolicy(
-        params: ExecuteAgentParams,
-    ): Promise<{ status: 'ok'; policy: MJAIAgentUserPolicyEntity | null } | { status: 'error'; policy: null; errorMessage: string }> {
-        if (params.userPolicy) {
-            return { status: 'ok', policy: params.userPolicy };
-        }
-        const userId = params.userId || params.contextUser?.ID;
-        if (!params.agent?.ID || !userId || !params.contextUser) {
-            return { status: 'ok', policy: null };
-        }
-        try {
-            const chainIds =
-                params.agent.BaseAgentID && typeof AIEngine.Instance?.GetAgentInheritanceChain === 'function'
-                    ? AIEngine.Instance.GetAgentInheritanceChain(params.agent.ID).map((a) => a.ID)
-                    : [params.agent.ID];
-            if (chainIds.length > 1) {
-                const effectivePolicy = await AgentUserPolicyEngine.Instance.GetEffectivePolicyForAgentChain(
-                    chainIds,
-                    userId,
-                    params.contextUser,
-                    { provider: params.provider ?? Metadata.Provider }
-                );
-                return { status: 'ok', policy: effectivePolicy };
-            }
-            const lookup = await AgentUserPolicyEngine.Instance.ResolvePolicyForAgentAndUser(
-                params.agent.ID,
-                userId,
-                params.contextUser,
-                { provider: params.provider ?? Metadata.Provider },
-            );
-            if (lookup.status === 'found') {
-                return { status: 'ok', policy: lookup.policy };
-            }
-            if (lookup.status === 'none') {
-                return { status: 'ok', policy: null };
-            }
-            return {
-                status: 'error',
-                policy: null,
-                errorMessage: lookup.errorMessage || 'User agent policy lookup returned error status',
-            };
-        } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            return { status: 'error', policy: null, errorMessage: message };
-        }
-    }
-
     private async executeRun<C, R>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Initialize or inherit the shared root-tree cumulative budget before any shallow clone of
         // `params` occurs so that callers, parent agents, and child runs share one object reference.
@@ -4135,35 +4064,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * @param params
      */
     /**
-     * Feeds one executed decision (never a prompt turn) to the repeated-failing-step guard (#4832).
-     * The consecutive-failed-steps counter cannot see a model that re-issues the same failing step:
-     * the prompt between two failures returns a non-Failed decision and resets it. When the same
-     * decision has failed {@link MAX_REPEATED_FAILING_STEP} times in a row, `nextStep` is turned
-     * into a terminating Failed step naming the step type and the last error.
-     */
-    private checkRepeatedFailingStep<P>(
-        params: ExecuteAgentParams,
-        tracker: RepeatedFailingStepTracker,
-        executedDecision: BaseAgentNextStep<P>,
-        nextStep: BaseAgentNextStep<P>
-    ): void {
-        const count = tracker.Observe(executedDecision, nextStep);
-        if (count < GetMaxRepeatedFailingStep()) {
-            return;
-        }
-        const lastError = FailingStepError(nextStep);
-        const message = `Agent repeated the same failing ${executedDecision.step} step ${count} times. Last error: ${lastError}`;
-        this.logError(`⛔ Agent '${params.agent.Name}': ${message}`, {
-            agent: params.agent,
-            category: 'ExecutionSafetyNet',
-            metadata: { repeatedFailures: count, stepType: executedDecision.step, lastError }
-        });
-        nextStep.step = 'Failed';
-        nextStep.terminate = true;
-        nextStep.errorMessage = message;
-    }
-
-    /**
      * Executes the agent's internal logic.
      * 
      * This method contains the core execution logic that drives agent behavior. By default,
@@ -4429,857 +4329,12 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
         return { finalStep: currentNextStep, stepCount };
     }
 
-    private async checkAndPauseOnBudgetBreach<P>(
-        params: ExecuteAgentParams,
-        inFlightPayload: P,
-        nextStepToResume: BaseAgentNextStep<P> | null,
-        loopCursor?: PendingLoopCursorState | null,
-    ): Promise<typeof this._pausedRunOutcome> {
-        if (!this._agentRun) {
-            return null;
-        }
-        this.drainPendingFastJudgeUsage();
-        const evalInput = this.buildBudgetEvaluationInput(params);
-        const result = await this._budgetEnforcementGuard.Evaluate(evalInput);
-        this.recordDayBudgetSnapshot(evalInput, result.Ledger);
-        if (!result.Exceeded || !result.Breach) {
-            return null;
-        }
-        const pauseReason: RunawayPauseReason = result.LedgerUnavailable ? 'LedgerUnavailable' : 'BudgetExceeded';
-        return this.pauseNonDestructively(params, {
-            PauseReason: pauseReason,
-            Summary: result.Breach.Reason,
-            InFlightPayload: inFlightPayload as RunawaySerializable,
-            NextStepToResume: nextStepToResume,
-            LoopCursor: loopCursor ?? null,
-            BudgetBreach: result.Breach,
-            Ledger: result.Ledger,
-        });
-    }
-
-    private registerActiveRunForCooperativePause(): void {
-        if (!this._agentRun?.ID) {
-            return;
-        }
-        ActiveRunGovernanceRegistry.Instance.RegisterActiveRun(
-            {
-                AgentRunID: this._agentRun.ID,
-                Provider: this._activeProvider,
-                RequestPause: (summary?: string) => this.requestCooperativePause(summary),
-            },
-            this._activeProvider,
-        );
-    }
-
-    private requestCooperativePause(summary?: string): Promise<CooperativePauseResult | null> {
-        if (this._pausedRunOutcome) {
-            return Promise.resolve({
-                Paused: true,
-                CheckpointID: this._pausedRunOutcome.PauseResult.Checkpoint.CheckpointID,
-                Status: this._agentRun?.Status ?? 'Paused',
-                Summary: this._pausedRunOutcome.PauseResult.Checkpoint.Summary,
-            });
-        }
-        if (!this._cooperativePauseState) {
-            this._cooperativePauseState = {
-                Requested: true,
-                Summary: summary,
-                Waiters: [],
-            };
-        } else {
-            this._cooperativePauseState.Requested = true;
-            if (summary) {
-                this._cooperativePauseState.Summary = summary;
-            }
-        }
-        return new Promise<CooperativePauseResult | null>((resolve) => {
-            this._cooperativePauseState!.Waiters.push(resolve);
-        });
-    }
-
-    private async checkPersistedCooperativePauseRequest(
-        params: ExecuteAgentParams,
-        allowRemotePoll = true,
-    ): Promise<CooperativePauseRequestSignal | null> {
-        const runId = this._agentRun?.ID;
-        if (!runId) {
-            return null;
-        }
-        const localSignal = ExtractCooperativePauseRequestFromRunData(this._agentRun?.Data);
-        if (localSignal) {
-            return localSignal;
-        }
-        if (!allowRemotePoll) {
-            return null;
-        }
-        const nowMs = Date.now();
-        if (nowMs - this._lastRemotePausePollMs < BaseAgent.REMOTE_PAUSE_POLL_INTERVAL_MS) {
-            return null;
-        }
-        const provider = params.provider || this._activeProvider;
-        if (!provider || typeof (provider as Partial<IRunViewProvider>).RunView !== 'function') {
-            return null;
-        }
-        this._lastRemotePausePollMs = nowMs;
-        try {
-            const rv = RunView.FromMetadataProvider(provider);
-            const res = await rv.RunView<{ ID: string; Data: string | null }>(
-                {
-                    EntityName: 'MJ: AI Agent Runs',
-                    ExtraFilter: `ID='${EscapeSQLString(runId)}'`,
-                    Fields: ['ID', 'Data'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                    MaxRows: 1,
-                },
-                params.contextUser,
-            );
-            const row = res?.Success ? res.Results?.[0] : undefined;
-            return row ? ExtractCooperativePauseRequestFromRunData(row.Data) : null;
-        } catch {
-            return null;
-        }
-    }
-
-    private async checkAndPauseOnCooperativeRequest<P>(
-        params: ExecuteAgentParams,
-        inFlightPayload: P,
-        nextStepToResume: BaseAgentNextStep<P> | null,
-        loopCursor?: PendingLoopCursorState | null,
-        allowRemotePoll = true,
-    ): Promise<typeof this._pausedRunOutcome> {
-        let summary: string | null = null;
-        if (this._cooperativePauseState?.Requested) {
-            summary = this._cooperativePauseState.Summary?.trim() || 'Paused cooperatively at safe step boundary';
-        } else {
-            const remoteSignal = await this.checkPersistedCooperativePauseRequest(params, allowRemotePoll);
-            if (!remoteSignal) {
-                return null;
-            }
-            summary = remoteSignal.Summary.trim() || 'Paused cooperatively at safe step boundary';
-        }
-
-        if (this._agentRun) {
-            this._agentRun.Data = ClearCooperativePauseRequestFromRunData(this._agentRun.Data);
-        }
-        const ledger = await this.captureCurrentBudgetLedger(params);
-        return this.pauseNonDestructively(params, {
-            PauseReason: 'ManualPause',
-            Summary: summary,
-            InFlightPayload: inFlightPayload as RunawaySerializable,
-            NextStepToResume: nextStepToResume,
-            LoopCursor: loopCursor ?? null,
-            Ledger: ledger,
-        });
-    }
-
     private getTotalSubAgentConsultRounds(): number {
         let total = 0;
         for (const count of this._subAgentConsultRounds.values()) {
             total += count;
         }
         return total;
-    }
-
-    private async evaluateRunawayGovernanceAfterStep<P>(
-        params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>,
-        stepCount: number,
-        prevCompletedTasksCount: number,
-        tokensDelta: number,
-        isPromptFailureOrParseRetry: boolean,
-        isConsultContinuation: boolean,
-    ): Promise<typeof this._pausedRunOutcome> {
-        const inFlightPayload = nextStep.newPayload ?? nextStep.previousPayload ?? params.payload;
-        const budgetPaused = await this.checkAndPauseOnBudgetBreach(params, inFlightPayload, nextStep);
-        if (budgetPaused) {
-            return budgetPaused;
-        }
-
-        // Active Sub-Agent Chat consultation rounds are already bounded by MaxSubAgentConsultRounds;
-        // avoid flagging an in-flight clarifying Q&A exchange as a payload-delta stall mid-consult.
-        if (isConsultContinuation) {
-            return null;
-        }
-
-        const sample = this.buildProgressSample(nextStep, stepCount, prevCompletedTasksCount, tokensDelta, inFlightPayload);
-        this._progressDetector.RecordSample(sample);
-
-        const explicitProgressOverride = Boolean(
-            params.limitsOverride?.ProgressDetector ||
-            params.userPolicyLimitsOverride?.ProgressDetector ||
-            params.enableRunawayGovernance,
-        );
-        if (isPromptFailureOrParseRetry && !explicitProgressOverride) {
-            return null;
-        }
-
-        const limits = this._activeLimitsResolution?.Limits ?? this.resolvedLimits(params);
-        const detResult = this._progressDetector.Evaluate(limits.ProgressDetector);
-        if (!detResult.Checked) {
-            return null;
-        }
-
-        const judgeScope = this._currentLateJudgeScope;
-        const evaluated = detResult.Classification === 'Ambiguous'
-            ? await this._fastConvergenceJudge.EvaluateIfAmbiguous({
-                DetectorResult: detResult,
-                Iteration: stepCount,
-                StateSummary: `${detResult.Reason}\nStep=${nextStep.step}\nPayload=${JSON.stringify(inFlightPayload ?? {}).slice(0, 1000)}`,
-                Config: limits.ProgressDetector,
-                AgentRun: this._agentRun,
-                AgentID: params.agent.ID,
-                ContextUser: params.contextUser,
-                ExecutionScope: this._runExecutionScope,
-                Evaluator: params.fastConvergenceJudgeEvaluator,
-                OnLateUsageSettled: judgeScope
-                    ? (settlement) => this.handleLateFastJudgeUsageForScope(judgeScope, settlement)
-                    : undefined,
-            })
-            : detResult;
-
-        this.attributeFastJudgeUsage(evaluated);
-        if (evaluated.Classification !== 'Stalled') {
-            if (evaluated.FastJudgeInvoked && evaluated.FastJudgeResult && ((evaluated.FastJudgeResult.CostUsd ?? 0) > 0 || (evaluated.FastJudgeResult.TokensUsed ?? 0) > 0)) {
-                return this.checkAndPauseOnBudgetBreach(params, inFlightPayload, nextStep);
-            }
-            return null;
-        }
-
-        const pauseReason: RunawayPauseReason = evaluated.FastJudgeInvoked ? 'FastJudgeStalled' : 'ProgressStalled';
-        const budgetSnapshot = await this.captureCurrentBudgetLedger(params);
-        return this.pauseNonDestructively(params, {
-            PauseReason: pauseReason,
-            Summary: evaluated.Reason,
-            InFlightPayload: inFlightPayload,
-            NextStepToResume: nextStep,
-            ProgressEvaluation: evaluated,
-            FastJudgeResult: evaluated.FastJudgeResult,
-            Ledger: budgetSnapshot,
-        });
-    }
-
-    private buildProgressSample<P>(
-        nextStep: BaseAgentNextStep<P>,
-        stepCount: number,
-        prevCompletedTasksCount: number,
-        tokensDelta: number,
-        inFlightPayload: P,
-    ): IterationProgressSample {
-        const currentCompletedTasks = this._scratchpadManager.GetTaskCounts().completed;
-        const tasksClosed = Math.max(0, currentCompletedTasks - prevCompletedTasksCount);
-        const recordsChanged = this.estimateRecordsChanged(nextStep);
-        const outputText = this.extractStepOutputText(nextStep);
-        const payloadFingerprint = inFlightPayload !== undefined ? JSON.stringify(inFlightPayload) : undefined;
-        const heapUsedBytes = typeof process !== 'undefined' && typeof process.memoryUsage === 'function'
-            ? process.memoryUsage().heapUsed
-            : undefined;
-        const errorSignature = nextStep.step === 'Failed'
-            ? (nextStep.errorMessage || nextStep.message || 'step-failed')
-            : (nextStep.step === 'Retry' && nextStep.errorMessage ? nextStep.errorMessage : null);
-
-        return {
-            IterationIndex: stepCount,
-            StepType: nextStep.step ?? 'Unknown',
-            StepSignature: `${nextStep.step ?? 'Unknown'}:${nextStep.actions?.map((a) => a.name).join(',') ?? nextStep.subAgent?.name ?? ''}`,
-            RecordsCreatedOrChanged: recordsChanged,
-            TasksClosed: tasksClosed,
-            OutputText: outputText,
-            PayloadFingerprint: payloadFingerprint,
-            TokensSpent: tokensDelta,
-            ErrorSignature: errorSignature,
-            HeapUsedBytes: heapUsedBytes,
-        };
-    }
-
-    private estimateRecordsChanged<P>(nextStep: BaseAgentNextStep<P>): number {
-        let count = 0;
-        if (nextStep.payloadChangeRequest) {
-            const req = nextStep.payloadChangeRequest;
-            if (req.newElements && Object.keys(req.newElements).length > 0) count += Object.keys(req.newElements).length;
-            if (req.updateElements && Object.keys(req.updateElements).length > 0) count += Object.keys(req.updateElements).length;
-        }
-        if (Array.isArray(nextStep.priorStepResult)) {
-            for (const item of nextStep.priorStepResult) {
-                if (!item || typeof item !== 'object') continue;
-                const summary = item as { success?: boolean; actionName?: string };
-                const name = (summary.actionName ?? '').toLowerCase();
-                if (
-                    summary.success === true &&
-                    (name.includes('create') || name.includes('update') || name.includes('save') || name.includes('upsert') || name.includes('delete'))
-                ) {
-                    count++;
-                }
-            }
-        }
-        return count;
-    }
-
-    private extractStepOutputText<P>(nextStep: BaseAgentNextStep<P>): string {
-        const parts: string[] = [];
-        if (nextStep.message) parts.push(nextStep.message);
-        if (nextStep.errorMessage) parts.push(nextStep.errorMessage);
-        if (nextStep.retryReason) parts.push(nextStep.retryReason);
-        if (nextStep.reasoning) parts.push(nextStep.reasoning);
-        if (nextStep.priorStepResult !== undefined) {
-            parts.push(typeof nextStep.priorStepResult === 'string'
-                ? nextStep.priorStepResult
-                : JSON.stringify(nextStep.priorStepResult));
-        }
-        return parts.join('\n').slice(0, 2000);
-    }
-
-    private initCurrentLateJudgeScope(params: ExecuteAgentParams): void {
-        const scope: RunLateJudgeScope = {
-            AgentRun: this._agentRun,
-            Provider: this._activeProvider,
-            ContextUser: params.contextUser,
-            CostEvents: this._budgetCostEvents,
-            DayCostBaselines: this._budgetDayBaselines,
-            TreeBudget: this._treeBudget,
-            LoopExited: false,
-            InMemoryReconciledIds: new Set<string>(),
-            PersistedIds: new Set<string>(),
-            PendingDurableSettlements: new Map<string, PendingDurableFastJudgeSettlement>(),
-            LateSaveChain: Promise.resolve(true),
-            ActiveFinalSavePromise: null,
-        };
-        this._currentLateJudgeScope = scope;
-        this._trackedLateJudgeScopes.add(scope);
-    }
-
-    /**
-     * Awaits any in-flight timed-out FastConvergenceJudge evaluations and flushes any pending
-     * durable late-settlement saves across tracked run scopes.
-     */
-    public async WaitForPendingFastJudgeEvaluations(): Promise<boolean> {
-        await this.__fastConvergenceJudge?.WaitForPendingEvaluations();
-        this.drainPendingFastJudgeUsage();
-        return this.FlushPendingLateFastJudgeSaves();
-    }
-
-    /**
-     * Flushes any pending durable late-settlement saves for runs that have exited the execution
-     * loop (Completed, Paused, Failed, Cancelled, AwaitingFeedback), returning `true` only when
-     * every pending settlement has been durably saved.
-     */
-    public async FlushPendingLateFastJudgeSaves(): Promise<boolean> {
-        let allPersisted = true;
-        for (const scope of Array.from(this._trackedLateJudgeScopes)) {
-            if (scope.PendingDurableSettlements.size > 0) {
-                const persisted = await this.enqueueScopeLateSave(scope);
-                if (!persisted) {
-                    allPersisted = false;
-                }
-            } else {
-                await scope.LateSaveChain;
-            }
-            if (scope.LoopExited && scope.PendingDurableSettlements.size === 0 && scope !== this._currentLateJudgeScope) {
-                this._trackedLateJudgeScopes.delete(scope);
-            }
-        }
-        return allPersisted;
-    }
-
-    private attributeFastJudgeUsage(evaluation: ProgressEvaluationResult): void {
-        this.drainPendingFastJudgeUsage();
-        if (!evaluation.FastJudgeInvoked || !evaluation.FastJudgeResult || evaluation.FastJudgeResult.TimedOut) {
-            return;
-        }
-        const scope = this._currentLateJudgeScope;
-        if (scope) {
-            void this.reconcileFastJudgeUsageForScope(scope, {
-                InvocationId: evaluation.FastJudgeResult.InvocationId,
-                CostUsd: evaluation.FastJudgeResult.CostUsd,
-                TokensUsed: evaluation.FastJudgeResult.TokensUsed,
-                SettledAfterDeadline: false,
-            });
-        }
-    }
-
-    private handleLateFastJudgeUsage(settlement: FastJudgeUsageSettlement): Promise<boolean> | boolean {
-        const scope = this._currentLateJudgeScope;
-        if (!scope) {
-            return false;
-        }
-        return this.handleLateFastJudgeUsageForScope(scope, settlement);
-    }
-
-    private handleLateFastJudgeUsageForScope(
-        scope: RunLateJudgeScope,
-        settlement: FastJudgeUsageSettlement,
-    ): Promise<boolean> | boolean {
-        return this.reconcileFastJudgeUsageForScope(scope, {
-            InvocationId: settlement.InvocationId,
-            CostUsd: settlement.CostUsd,
-            TokensUsed: settlement.TokensUsed,
-            SettledAfterDeadline: settlement.SettledAfterDeadline,
-        });
-    }
-
-    private drainPendingFastJudgeUsage(): void {
-        const pending = this.__fastConvergenceJudge?.DrainPendingLateUsage();
-        if (!pending || pending.length === 0) {
-            return;
-        }
-        for (const settlement of pending) {
-            void this.handleLateFastJudgeUsage(settlement);
-        }
-    }
-
-    private reconcileFastJudgeUsageForScope(
-        scope: RunLateJudgeScope,
-        usage: {
-            InvocationId?: string;
-            CostUsd?: number;
-            TokensUsed?: number;
-            SettledAfterDeadline: boolean;
-        },
-    ): Promise<boolean> | boolean {
-        const costUsd = typeof usage.CostUsd === 'number' && Number.isFinite(usage.CostUsd)
-            ? Math.max(0, usage.CostUsd)
-            : 0;
-        const tokensUsed = typeof usage.TokensUsed === 'number' && Number.isFinite(usage.TokensUsed)
-            ? Math.max(0, usage.TokensUsed)
-            : 0;
-        if (costUsd <= 0 && tokensUsed <= 0) {
-            return true;
-        }
-        const timestampMs = Date.now();
-        const isNewInMemory = !usage.InvocationId || !scope.InMemoryReconciledIds.has(usage.InvocationId);
-        if (isNewInMemory) {
-            if (usage.InvocationId) {
-                scope.InMemoryReconciledIds.add(usage.InvocationId);
-            }
-            if (this._currentLateJudgeScope === scope) {
-                if (usage.InvocationId) {
-                    this._reconciledFastJudgeInvocationIds.add(usage.InvocationId);
-                }
-                if (costUsd > 0) {
-                    this._fastJudgeCostUsd += costUsd;
-                    this._lastRecordedCostUsd += costUsd;
-                }
-                if (tokensUsed > 0) {
-                    this._fastJudgeTokensUsed += tokensUsed;
-                }
-            }
-            if (scope.TreeBudget) {
-                if (costUsd > 0) {
-                    scope.TreeBudget.totalCost += costUsd;
-                }
-                if (tokensUsed > 0) {
-                    scope.TreeBudget.totalTokens += tokensUsed;
-                }
-            }
-            if (scope.AgentRun) {
-                BudgetEnforcementGuard.RecordBatchedPromptCost({
-                    AgentRun: scope.AgentRun,
-                    CostEvents: scope.CostEvents,
-                    DayCostBaselines: scope.DayCostBaselines,
-                    CostUsd: costUsd,
-                    TokensUsed: tokensUsed,
-                    TimestampMs: timestampMs,
-                });
-                if (usage.InvocationId) {
-                    scope.AgentRun.Data = attachReconciledFastJudgeIdToRunData(scope.AgentRun.Data, usage.InvocationId);
-                }
-            }
-        }
-
-        if (!usage.SettledAfterDeadline) {
-            return true;
-        }
-        if (usage.InvocationId && scope.PersistedIds.has(usage.InvocationId)) {
-            return true;
-        }
-        if (!scope.AgentRun?.ID) {
-            return false;
-        }
-
-        const settlementKey = usage.InvocationId ?? `anon-${timestampMs}-${Math.random().toString(36).slice(2, 8)}`;
-        if (!scope.PendingDurableSettlements.has(settlementKey)) {
-            scope.PendingDurableSettlements.set(settlementKey, {
-                InvocationId: settlementKey,
-                CostUsd: costUsd,
-                TokensUsed: tokensUsed,
-                TimestampMs: timestampMs,
-            });
-        }
-
-        // Persist immediately whenever the run has exited the execution loop OR is in any non-Running
-        // state (Completed, Paused, Failed, Cancelled, AwaitingFeedback).
-        if (scope.LoopExited || scope.AgentRun.Status !== 'Running') {
-            return this.enqueueScopeLateSave(scope);
-        }
-
-        // Still inside the active execution loop: the exit path (finalizeAgentRun, createFailureResult,
-        // createCancelledResult, or pauseNonDestructively) will persist the updated totals.
-        return true;
-    }
-
-    private enqueueScopeLateSave(scope: RunLateJudgeScope): Promise<boolean> {
-        const next = scope.LateSaveChain.then(
-            () => this.persistPendingLateJudgeSettlements(scope),
-            () => this.persistPendingLateJudgeSettlements(scope),
-        );
-        scope.LateSaveChain = next;
-        return next;
-    }
-
-    private async persistPendingLateJudgeSettlements(scope: RunLateJudgeScope): Promise<boolean> {
-        if (scope.ActiveFinalSavePromise) {
-            await scope.ActiveFinalSavePromise;
-        }
-        const pendingEntries = Array.from(scope.PendingDurableSettlements.values());
-        if (pendingEntries.length === 0) {
-            return true;
-        }
-        const runRef = scope.AgentRun;
-        if (!runRef || !runRef.ID) {
-            return false;
-        }
-
-        let saved = false;
-        try {
-            saved = await runRef.Save({ SaveReturnMode: 'datestamps_only' });
-        } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            LogError(`[BaseAgent] Late FastConvergenceJudge usage save threw for run ${runRef.ID}: ${msg}`);
-            saved = false;
-        }
-        if (saved) {
-            this.markScopeSettlementsPersisted(scope, pendingEntries);
-            return true;
-        }
-
-        // Reload the latest persisted run entity and apply only unrecorded deltas so transient
-        // Save() failures recover cleanly without double-charging.
-        try {
-            const freshRun = await scope.Provider.GetEntityObject<MJAIAgentRunEntityExtended>(
-                'MJ: AI Agent Runs',
-                scope.ContextUser,
-            );
-            if (!(await freshRun.Load(runRef.ID))) {
-                return false;
-            }
-            const alreadyOnFresh = extractReconciledFastJudgeIdsFromRunData(freshRun.Data);
-            const freshEvents = ExtractBudgetCostEventsFromRunData(freshRun.Data);
-            const freshBaselines = ExtractBudgetDayBaselinesFromRunData(freshRun.Data);
-            const mergedBaselines = { ...freshBaselines, ...scope.DayCostBaselines };
-            let mutatedFresh = false;
-            for (const entry of pendingEntries) {
-                if (alreadyOnFresh.has(entry.InvocationId)) {
-                    continue;
-                }
-                BudgetEnforcementGuard.RecordBatchedPromptCost({
-                    AgentRun: freshRun,
-                    CostEvents: freshEvents,
-                    DayCostBaselines: mergedBaselines,
-                    CostUsd: entry.CostUsd,
-                    TokensUsed: entry.TokensUsed,
-                    TimestampMs: entry.TimestampMs,
-                });
-                freshRun.Data = attachReconciledFastJudgeIdToRunData(freshRun.Data, entry.InvocationId);
-                mutatedFresh = true;
-            }
-            if (!mutatedFresh && freshRun !== runRef) {
-                // Ensure CostEvents/Totals from freshRun are up to date even if already present.
-                this.markScopeSettlementsPersisted(scope, pendingEntries);
-                return true;
-            }
-            const retrySaved = await freshRun.Save({ SaveReturnMode: 'datestamps_only' });
-            if (retrySaved) {
-                runRef.TotalCost = freshRun.TotalCost;
-                runRef.TotalTokensUsed = freshRun.TotalTokensUsed;
-                runRef.Data = freshRun.Data;
-                this.markScopeSettlementsPersisted(scope, pendingEntries);
-                return true;
-            }
-        } catch (retryErr) {
-            const msg = retryErr instanceof Error ? retryErr.message : String(retryErr);
-            LogError(`[BaseAgent] Late FastConvergenceJudge reload-and-retry save failed for run ${runRef.ID}: ${msg}`);
-        }
-        return false;
-    }
-
-    private markScopeSettlementsPersisted(
-        scope: RunLateJudgeScope,
-        entries: readonly PendingDurableFastJudgeSettlement[],
-    ): void {
-        for (const entry of entries) {
-            scope.PersistedIds.add(entry.InvocationId);
-            scope.PendingDurableSettlements.delete(entry.InvocationId);
-        }
-    }
-
-    private prepareRunForFinalSave(run: MJAIAgentRunEntityExtended): {
-        Scope: RunLateJudgeScope | null;
-        ReconciledBeforeSave: string[];
-    } {
-        this.drainPendingFastJudgeUsage();
-        const scope = this._currentLateJudgeScope;
-        const reconciledBeforeSave = scope ? Array.from(scope.InMemoryReconciledIds) : [];
-        this.applyTokenStatsToRun(run, this.calculateTokenStats());
-        for (const id of reconciledBeforeSave) {
-            run.Data = attachReconciledFastJudgeIdToRunData(run.Data, id);
-        }
-        return { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave };
-    }
-
-    private markPreSaveFastJudgeIdsPersisted(
-        scope: RunLateJudgeScope | null,
-        reconciledBeforeSave: readonly string[],
-        saved: boolean,
-    ): void {
-        if (!saved || !scope) {
-            return;
-        }
-        for (const id of reconciledBeforeSave) {
-            scope.PersistedIds.add(id);
-            scope.PendingDurableSettlements.delete(id);
-        }
-    }
-
-    private async trackScopeFinalSave<T>(
-        scope: RunLateJudgeScope | null,
-        saveFn: () => Promise<T>,
-    ): Promise<T> {
-        if (!scope) {
-            return saveFn();
-        }
-        scope.LoopExited = true;
-        const promise = saveFn();
-        scope.ActiveFinalSavePromise = promise.then(
-            () => undefined,
-            () => undefined,
-        );
-        try {
-            return await promise;
-        } finally {
-            scope.ActiveFinalSavePromise = null;
-        }
-    }
-
-    private buildBudgetEvaluationInput(params: ExecuteAgentParams): BudgetEnforcementInput {
-        const budgets = this._activeBudgets ?? this.resolvedLimits(params).Budgets;
-        const tokenStats = this.calculateTokenStats();
-        const startedAtMs = this._agentRun?.StartedAt ? new Date(this._agentRun.StartedAt).getTime() : Date.now();
-        const nowMs = Date.now();
-        const currentTotalRunCostUsd = Math.max(0, tokenStats.TotalCost);
-        const costDeltaUsd = currentTotalRunCostUsd - this._lastRecordedCostUsd;
-        if (costDeltaUsd > 0) {
-            this._budgetCostEvents.push({ TimestampMs: nowMs, CostUsd: costDeltaUsd });
-            this._lastRecordedCostUsd = currentTotalRunCostUsd;
-        }
-        const currentDay = ComputeDayBoundaryWindow(nowMs, budgets.PerUserPerDay.DayBoundaryTimezone);
-        if (this._lastObservedDaySnapshot && this._lastObservedDaySnapshot.DayBucketUTC !== currentDay.DayBucketUTC) {
-            this._priorDayCostBaselineUsd = this._lastObservedDaySnapshot.CostUsd;
-            this._priorDayWallClockBaselineMs = this._lastObservedDaySnapshot.WallClockMs;
-            this._budgetDayBaselines[currentDay.DayBucketUTC] = this._lastObservedDaySnapshot.CostUsd;
-        }
-        if (this._agentRun && (costDeltaUsd > 0 || Object.keys(this._budgetDayBaselines).length > 0)) {
-            this._agentRun.Data = AttachBudgetAttributionToRunData(this._agentRun.Data, {
-                CostEvents: this._budgetCostEvents,
-                DayCostBaselines: this._budgetDayBaselines,
-            });
-        }
-        return {
-            Budgets: budgets,
-            AgentRunID: this._agentRun?.ID ?? null,
-            UserID: this._agentRun?.UserID ?? params.userId ?? params.contextUser?.ID ?? null,
-            RoutineID: params.routineId ?? null,
-            CurrentRunCostUsd: tokenStats.TotalCost,
-            CurrentRunStartedAtMs: startedAtMs,
-            CurrentRunTokens: tokenStats.TotalTokens,
-            PriorRunCostUsd: 0,
-            PriorDayCostBaselineUsd: this._priorDayCostBaselineUsd,
-            PriorDayWallClockBaselineMs: this._priorDayWallClockBaselineMs,
-            CostEvents: this._budgetCostEvents,
-            DayCostBaselines: this._budgetDayBaselines,
-            PausedIntervals: this._resumedCheckpointContext?.PausedIntervals,
-            NowMs: nowMs,
-            Provider: params.provider || this._activeProvider,
-            ContextUser: params.contextUser,
-        };
-    }
-
-    private recordDayBudgetSnapshot(
-        _input: BudgetEnforcementInput,
-        ledger: { DayBucketUTC: string; RunCostUsd: number; RunWallClockMs: number },
-    ): void {
-        this._lastObservedDaySnapshot = {
-            DayBucketUTC: ledger.DayBucketUTC,
-            CostUsd: ledger.RunCostUsd,
-            WallClockMs: ledger.RunWallClockMs,
-        };
-    }
-
-    private async captureCurrentBudgetLedger(params: ExecuteAgentParams) {
-        const evalInput = this.buildBudgetEvaluationInput(params);
-        const evalResult = await this._budgetEnforcementGuard.Evaluate(evalInput);
-        this.recordDayBudgetSnapshot(evalInput, evalResult.Ledger);
-        return evalResult.Ledger;
-    }
-
-    private async pauseNonDestructively(
-        params: ExecuteAgentParams,
-        details: {
-            PauseReason: RunawayPauseReason;
-            Summary: string;
-            InFlightPayload: RunawaySerializable;
-            NextStepToResume: BaseAgentNextStep | null;
-            LoopCursor?: PendingLoopCursorState | null;
-            BudgetBreach?: BudgetBreachDetail;
-            ProgressEvaluation?: ProgressEvaluationResult;
-            FastJudgeResult?: ProgressEvaluationResult['FastJudgeResult'];
-            Ledger: Awaited<ReturnType<BaseAgent['captureCurrentBudgetLedger']>>;
-        },
-    ): Promise<typeof this._pausedRunOutcome> {
-        if (!this._agentRun) {
-            return null;
-        }
-        await Promise.all([
-            this._stepSaveQueue.Flush(),
-            this.flushPromptRunnerSaves(),
-        ]);
-        const { Scope: scope, ReconciledBeforeSave: reconciledBeforeSave } = this.prepareRunForFinalSave(this._agentRun);
-        const pauseInput: PauseRunWithCheckpointInput = {
-            AgentRun: this._agentRun,
-            AgentID: params.agent.ID,
-            AgentName: params.agent.Name ?? 'Unknown Agent',
-            UserID: this._agentRun.UserID ?? params.userId ?? params.contextUser?.ID ?? null,
-            RoutineID: params.routineId ?? null,
-            PauseReason: details.PauseReason,
-            Summary: details.Summary,
-            CompletedPromptTurns: this._promptTurnCount,
-            ConversationMessages: params.conversationMessages,
-            InFlightPayload: details.InFlightPayload,
-            Scratchpad: this._scratchpadManager.ToJSON(),
-            NextStepToResume: details.NextStepToResume,
-            LoopCursor: details.LoopCursor ?? null,
-            BudgetBreach: details.BudgetBreach,
-            ProgressEvaluation: details.ProgressEvaluation,
-            FastJudgeResult: details.FastJudgeResult,
-            CumulativeLedger: details.Ledger,
-            Provider: params.provider || this._activeProvider,
-            ContextUser: params.contextUser,
-            OnOwnerNotification: params.onOwnerPauseNotification,
-        };
-        let pauseResult: PauseRunWithCheckpointResult | null = null;
-        let persistenceError: string | null = null;
-        try {
-            pauseResult = await this.trackScopeFinalSave(scope, () =>
-                this._checkpointManager.PauseRunWithCheckpoint(pauseInput),
-            );
-            if (!pauseResult.Saved) {
-                persistenceError = pauseResult.SaveError ?? (this._agentRun.LatestResult?.CompleteMessage || 'Save() returned false');
-            } else {
-                this.markPreSaveFastJudgeIdsPersisted(scope, reconciledBeforeSave, true);
-            }
-        } catch (err) {
-            persistenceError = err instanceof Error ? err.message : String(err);
-            pauseResult = null;
-        }
-
-        if (persistenceError || !pauseResult || !pauseResult.Saved) {
-            const detail = persistenceError || 'Checkpoint persistence returned Saved=false';
-            const retainedResult = pauseResult ?? this._checkpointManager.BuildFallbackCheckpointResult(pauseInput, detail);
-            const pendingRecord: PendingRunawayCheckpointPersistence = {
-                AgentRunID: this._agentRun.ID,
-                AgentRun: this._agentRun,
-                Checkpoint: retainedResult.Checkpoint,
-                InFlightPayload: details.InFlightPayload,
-                NotificationPayload: retainedResult.NotificationPayload,
-                OwnerNotificationID: retainedResult.OwnerNotificationID,
-                ApprovalRequestID: retainedResult.ApprovalRequestID,
-                Provider: pauseInput.Provider,
-                ContextUser: params.contextUser,
-                LastSaveError: detail,
-                OnOwnerNotification: params.onOwnerPauseNotification,
-            };
-            this._pendingCheckpointPersistence = pendingRecord;
-            this._agentRun.RunawayCheckpoint = retainedResult.Checkpoint;
-            ActiveRunGovernanceRegistry.Instance.MarkPausePersistencePending(pendingRecord);
-            this._pausedRunOutcome = {
-                PauseResult: retainedResult,
-                PauseReason: details.PauseReason,
-                BudgetBreach: details.BudgetBreach,
-                ProgressEvaluation: details.ProgressEvaluation,
-                Payload: details.InFlightPayload,
-                PausePersistencePending: true,
-            };
-            if (this._cooperativePauseState && this._cooperativePauseState.Waiters.length > 0) {
-                const waiters = [...this._cooperativePauseState.Waiters];
-                this._cooperativePauseState.Waiters.length = 0;
-                this._cooperativePauseState.Requested = false;
-                const coopPendingRes: CooperativePauseResult = {
-                    Paused: false,
-                    Pending: true,
-                    CheckpointID: retainedResult.Checkpoint.CheckpointID,
-                    Status: 'PausePersistencePending',
-                    Summary: `Checkpoint persistence pending for pause (${details.PauseReason}): ${detail}`,
-                };
-                for (const resolve of waiters) {
-                    resolve(coopPendingRes);
-                }
-            }
-            this.logError(
-                `Checkpoint persistence failed for run ${this._agentRun.ID}; retaining safe-point checkpoint ${retainedResult.Checkpoint.CheckpointID} in memory (PausePersistencePending): ${detail}`,
-                {
-                    agent: params.agent,
-                    category: 'RunawayCheckpointPersistence',
-                },
-            );
-            return this._pausedRunOutcome;
-        }
-
-        if (this._agentRun.ID) {
-            AgentRunWatchdog.Instance.Untrack(this._agentRun.ID);
-            ActiveRunGovernanceRegistry.Instance.UnregisterActiveRun(this._agentRun.ID, this._activeProvider);
-        }
-        this._pendingCheckpointPersistence = null;
-        this._pausedRunOutcome = {
-            PauseResult: pauseResult,
-            PauseReason: details.PauseReason,
-            BudgetBreach: details.BudgetBreach,
-            ProgressEvaluation: details.ProgressEvaluation,
-            Payload: details.InFlightPayload,
-            PausePersistencePending: false,
-        };
-        if (this._cooperativePauseState && this._cooperativePauseState.Waiters.length > 0) {
-            const waiters = [...this._cooperativePauseState.Waiters];
-            this._cooperativePauseState.Waiters.length = 0;
-            this._cooperativePauseState.Requested = false;
-            const coopRes: CooperativePauseResult = {
-                Paused: true,
-                CheckpointID: pauseResult.Checkpoint.CheckpointID,
-                Status: this._agentRun.Status,
-                Summary: pauseResult.Checkpoint.Summary,
-            };
-            for (const resolve of waiters) {
-                resolve(coopRes);
-            }
-        }
-        return this._pausedRunOutcome;
-    }
-
-    private buildPausedExecuteResult<R>(outcome: NonNullable<typeof this._pausedRunOutcome>): ExecuteAgentResult<R> {
-        return {
-            success: false,
-            paused: true,
-            ...(outcome.PausePersistencePending ? { pausePersistencePending: true } : {}),
-            pausedReason: outcome.PauseReason,
-            payload: outcome.Payload as R,
-            agentRun: this._agentRun!,
-            runawayCheckpoint: outcome.PauseResult.Checkpoint,
-            budgetBreach: outcome.BudgetBreach,
-            progressEvaluation: outcome.ProgressEvaluation,
-            ownerNotificationId: outcome.PauseResult.OwnerNotificationID ?? undefined,
-            approvalRequestId: outcome.PauseResult.ApprovalRequestID ?? undefined,
-            limitsSnapshot: this._agentRun?.LimitsDiagnosticsSnapshot ?? undefined,
-            taintedSources: this._taintedSources.length > 0 ? [...this._taintedSources] : undefined,
-            ...(this._treeBudget?.breachDiagnostic ? { limitExceeded: this._treeBudget.breachDiagnostic } : {}),
-        };
     }
 
     /**
@@ -9121,386 +8176,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      */
     private _selfCheckAttemptsByRun = new Map<string, number>();
     private _selfCheckLinkByAgent = new Map<string, SelfCheckLinkRow | null>();
-
-    private async applySelfCheck<P>(
-        params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>,
-        agentRun: MJAIAgentRunEntityExtended,
-        currentPayload: P,
-    ): Promise<BaseAgentNextStep<P> | null> {
-        if (params.cancellationToken?.aborted) return null;
-        const provider = params.provider || this._activeProvider;
-        let row = this._selfCheckLinkByAgent.get(agentRun.AgentID);
-        if (row === undefined) {
-            try {
-                const view = RunView.FromMetadataProvider(provider as never);
-                const found = await view.RunView({
-                    EntityName: 'MJ: AI Agent Rubrics',
-                    ExtraFilter: `AgentID='${agentRun.AgentID}' AND Purpose='SelfCheck' AND Status='Active'`,
-                    OrderBy: 'ID',
-                    ResultType: 'simple',
-                }, params.contextUser);
-                if (!found.Success) {
-                    LogError(`Self-check lookup failed, so the run continues: ${found.ErrorMessage || 'the view did not succeed'}`);
-                    return null;
-                }
-                row = PickSelfCheckLink((found.Results ?? []) as SelfCheckLinkRow[]) ?? null;
-                this._selfCheckLinkByAgent.set(agentRun.AgentID, row);
-            } catch (error) {
-                LogError(`Self-check lookup failed, so the run continues: ${error instanceof Error ? error.message : String(error)}`);
-                return null;
-            }
-        }
-        if (!row?.RubricID) return null;
-        const link: SelfCheckLink & { rubricId: string; passThreshold?: number | null; evaluatorConfig?: string | null } = {
-            Purpose: String(row.Purpose ?? ''),
-            Status: String(row.Status ?? ''),
-            MaxAttempts: row.MaxSelfCheckAttempts ?? null,
-            rubricId: String(row.RubricID),
-            passThreshold: row.PassThreshold ?? null,
-            evaluatorConfig: row.EvaluatorConfig ?? null,
-        };
-        const attempt = (this._selfCheckAttemptsByRun.get(agentRun.ID) ?? 0) + 1;
-        this._selfCheckAttemptsByRun.set(agentRun.ID, attempt);
-        const record = async (step: { EvaluationId?: string; Passed: boolean; Message?: string }) => {
-            const saved = await this.createStepEntity({
-                stepType: 'Validation',
-                stepName: 'Rubric self-check',
-                contextUser: params.contextUser,
-                inputData: { rubricEvaluationId: step.EvaluationId, passed: step.Passed },
-            });
-            await this.finalizeStepEntity(saved, step.Passed, step.Message || undefined);
-        };
-        try {
-            const outcome = await ExecuteSelfCheck({
-                engine: ProviderRubricEngine(provider, params.contextUser, this.runPromptExecutionScope(params)),
-                link,
-                runId: agentRun.ID,
-                agentKind: this.AgentTypeInstance?.constructor?.name === 'LoopAgentType' ? 'loop' : 'flow',
-                attempt,
-                candidate: { Message: nextStep.message, Payload: nextStep.newPayload ?? currentPayload },
-                record,
-            });
-            if (outcome.step === 'Success') return null;
-            if (outcome.step === 'Retry') return { ...nextStep, step: 'Retry', message: outcome.decision.Message };
-            return { ...nextStep, step: 'Failed', message: outcome.decision.Message, errorMessage: outcome.decision.Message };
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            LogError(`Self-check could not be saved, so the run continues: ${message}`);
-            try {
-                await record({ Passed: false, Message: message });
-            } catch (recordError) {
-                LogError(`Self-check validation step could not be recorded: ${recordError instanceof Error ? recordError.message : String(recordError)}`);
-            }
-            return null;
-        }
-    }
-
-    /** Runs the self-check when a success exit did not pass through the guardrail hook. */
-    private async selfCheckSuccess<P>(
-        params: ExecuteAgentParams,
-        step: BaseAgentNextStep<P>,
-        payload: P,
-    ): Promise<BaseAgentNextStep<P>> {
-        if (step.step !== 'Success' || !this._agentRun || this._awaitingWorkflowTaskID) return step;
-        const checked = await this.applySelfCheck(params, step, this._agentRun, payload);
-        return checked ?? step;
-    }
-
-    protected async checkExecutionGuardrails<P>(
-        params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>,
-        currentPayload: P,
-        agentRun: MJAIAgentRunEntityExtended,
-        currentStep: MJAIAgentRunStepEntityExtended
-    ): Promise<BaseAgentNextStep<P>> {
-        if (nextStep.step === 'Failed' || nextStep.step === 'Chat') {
-            return nextStep;
-        }
-        if (nextStep.step === 'Success') {
-            if (this.hasExplicitWorkflowBudgetCaps(params)) {
-                const wfBudgetCheck = this.checkTreeBudgetLimit(params);
-                if (wfBudgetCheck.exceeded) {
-                    this.logStatus(`⛔ Workflow budget exceeded: ${wfBudgetCheck.reason}`, false, params);
-                    return {
-                        ...nextStep,
-                        step: 'Failed',
-                        terminate: true,
-                        message: wfBudgetCheck.reason,
-                        errorMessage: wfBudgetCheck.reason,
-                    };
-                }
-            }
-            const checked = await this.applySelfCheck(params, nextStep, agentRun, currentPayload);
-            return checked ?? nextStep;
-        }
-
-        // Check if any guardrails are exceeded
-        const guardrailResult = await this.hasExceededAgentRunGuardrails(params, agentRun);
-
-        if (guardrailResult.exceeded) {
-            // Route dollar/time budget breaches through unified non-destructive checkpoint pause before terminal Failed,
-            // EXCEPT when explicit whole-workflow USD cost or wall-clock duration caps are active without runaway governance.
-            const routeToPause = (guardrailResult.type === 'cost' || guardrailResult.type === 'time')
-                && Boolean(this._agentRun)
-                && (!this.hasExplicitWorkflowBudgetCaps(params) || params.enableRunawayGovernance === true);
-            if (routeToPause) {
-                const pausedOutcome = await this.pauseGuardrailCostOrTimeBreach(
-                    params,
-                    nextStep,
-                    currentPayload,
-                    guardrailResult,
-                );
-                if (pausedOutcome) {
-                    return {
-                        ...nextStep,
-                        step: 'Success',
-                        terminate: true,
-                        previousPayload: currentPayload,
-                        newPayload: currentPayload,
-                        message: pausedOutcome.PauseResult.Checkpoint.Summary,
-                    };
-                }
-            }
-
-            // Log the guardrail violation
-            this.logStatus(`⛔ Execution guardrail exceeded: ${guardrailResult.reason}`, false, params);
-            
-            // Update the current step with guardrail information via the step save queue
-            try {
-                const guardrailExceeded = {
-                    type: guardrailResult.type,
-                    limit: guardrailResult.limit,
-                    current: guardrailResult.current,
-                    reason: guardrailResult.reason,
-                    timestamp: new Date().toISOString()
-                };
-                const outputData = currentStep.OutputData ? JSON.parse(currentStep.OutputData) : {};
-                currentStep.OutputData = JSON.stringify({
-                    ...outputData,
-                    guardrailExceeded
-                });
-                this.queueStepSave(currentStep, (s) => {
-                    const existingOutput = s.OutputData ? JSON.parse(s.OutputData) : {};
-                    s.OutputData = JSON.stringify({
-                        ...existingOutput,
-                        guardrailExceeded
-                    });
-                });
-            } catch (error) {
-                this.logError(`Failed to save guardrail violation to step: ${error.message}`, {
-                    category: 'Guardrails',
-                    metadata: { stepId: currentStep.ID }
-                });
-            }
-            
-            // Convert next step to Failed with guardrail reason
-            return {
-                ...nextStep,
-                step: 'Failed',
-                terminate: true,
-                message: guardrailResult.reason,
-                errorMessage: guardrailResult.reason
-            };
-        }
-        
-        // No guardrails exceeded, return original next step
-        return nextStep;
-    }
-
-    private hasExplicitWorkflowBudgetCaps(params?: ExecuteAgentParams): boolean {
-        return (
-            (params?.workflowMaxCostUsd ?? this._treeBudget?.workflowMaxCostUsd) !== undefined ||
-            (params?.workflowMaxDurationMs ?? this._treeBudget?.workflowMaxDurationMs) !== undefined
-        );
-    }
-
-    /**
-     * Checks if any agent run guardrails have been exceeded.
-     * Override this method to implement custom guardrail logic.
-     * 
-     * @param params - Execution parameters
-     * @param agentRun - Current agent run
-     * @returns Object indicating if guardrails exceeded and details
-     * @protected
-     */
-    protected async hasExceededAgentRunGuardrails(
-        params: ExecuteAgentParams,
-        agentRun: MJAIAgentRunEntityExtended
-    ): Promise<{
-        exceeded: boolean;
-        type?: 'cost' | 'tokens' | 'iterations' | 'time';
-        limit?: number;
-        current?: number;
-        reason?: string;
-        diagnostic?: WorkflowBudgetBreachDiagnostic;
-    }> {
-        // Refresh the run's accumulated cost/token actuals before comparing them to the agent's
-        // static limits.
-        //
-        // The LIMITS are static — MaxCostPerRun and MaxTokensPerRun live on the agent and never
-        // change during a run. What was missing is the other side of the comparison: TotalCost and
-        // TotalTokensUsed are DERIVED from the run's steps by calculateTokenStats(), and the only
-        // writer (applyTokenStatsToRun) previously ran on terminal paths alone —
-        // createFailureResult / createCancelledResult / finalizeAgentRun — plus the post-compaction
-        // top-up, which only fires if compaction happens to trigger.
-        //
-        // So mid-run both fields sat at 0, and because the checks below are guarded on
-        // `agent.MaxCostPerRun && agentRun.TotalCost`, a falsy 0 short-circuited them entirely. The
-        // cost and token ceilings were evaluated only at the moment a run ENDED, which is too late
-        // to stop anything: they became reporting, not guardrails. Only the iteration and time
-        // limits actually interrupted a run, because TotalPromptIterations is incremented in the
-        // loop.
-        //
-        // Recomputing here rather than at the call site means every caller — including subclasses
-        // that override the loop — gets a truthful comparison, and the recompute is cheap: it walks
-        // the in-memory step array, with no database round trip.
-        if (this._agentRun === agentRun) {
-            this.applyTokenStatsToRun(agentRun, this.calculateTokenStats());
-        }
-
-        const absoluteMaxIterations = this.resolvedLimits(params).AgentAbsoluteIterations;
-        const { Result, Budget } = this._budgetTracker.CheckRunAndTreeGuardrails({
-            Params: params,
-            AgentRun: agentRun,
-            ActiveAgentRun: this._agentRun,
-            CurrentBudget: this._treeBudget,
-            FallbackParams: this._executeParams,
-            AbsoluteMaxIterations: absoluteMaxIterations,
-            ValidationRetryCount: this._generalValidationRetryCount,
-            MaxValidationRetries: BaseAgent.MAX_VALIDATION_RETRIES,
-            EffectiveBudgets: this._activeBudgets,
-            PausedIntervals: this._resumedCheckpointContext?.PausedIntervals,
-            EnsureTreeBudgetFn: (p) => this.ensureTreeBudget(p),
-            CheckTreeBudgetLimitFn: (p) => this.checkTreeBudgetLimit(p),
-        });
-        this._treeBudget = Budget;
-        return this._budgetTracker.ToLegacyGuardrailVerdict(Result);
-    }
-
-    private async pauseGuardrailCostOrTimeBreach<P>(
-        params: ExecuteAgentParams,
-        nextStep: BaseAgentNextStep<P>,
-        currentPayload: P,
-        guardrailResult: {
-            exceeded: boolean;
-            type?: 'cost' | 'tokens' | 'iterations' | 'time';
-            limit?: number;
-            current?: number;
-            reason?: string;
-            diagnostic?: WorkflowBudgetBreachDiagnostic;
-        },
-    ): Promise<typeof this._pausedRunOutcome> {
-        const directPause = await this.checkAndPauseOnBudgetBreach(params, currentPayload, nextStep);
-        if (directPause) {
-            return directPause;
-        }
-        const ledger = await this.captureCurrentBudgetLedger(params);
-        const dimension = guardrailResult.type === 'time' ? 'WallClockMs' : 'CostUsd';
-        const diag = this._treeBudget?.breachDiagnostic;
-        const isMsDiagnostic = diag?.Dimension === 'WallClockMs';
-        const limitVal = guardrailResult.type === 'time'
-            ? (isMsDiagnostic ? diag!.Limit : ((guardrailResult.limit ?? 0) * 1000))
-            : (guardrailResult.limit ?? 0);
-        const currentVal = guardrailResult.type === 'time'
-            ? (isMsDiagnostic ? diag!.CurrentValue : ((guardrailResult.current ?? 0) * 1000))
-            : (guardrailResult.current ?? 0);
-        const breach: BudgetBreachDetail = {
-            Scope: 'PerRun',
-            Dimension: dimension,
-            Limit: limitVal,
-            OvershootAllowed: 0,
-            EffectiveLimit: limitVal,
-            Current: currentVal,
-            Reason: guardrailResult.reason ?? `PerRun ${dimension} budget exceeded`,
-        };
-        return this.pauseNonDestructively(params, {
-            PauseReason: 'BudgetExceeded',
-            Summary: breach.Reason,
-            InFlightPayload: currentPayload as RunawaySerializable,
-            NextStepToResume: nextStep,
-            BudgetBreach: breach,
-            Ledger: ledger,
-        });
-    }
-
-    /**
-     * Ensures that a shared {@link AgentTreeBudget} instance exists for the current execution tree
-     * and is attached to both `this._treeBudget` and `params.treeBudget`.
-     *
-     * - When `params.treeBudget` is already provided (for example, propagated by a parent agent
-     *   in {@link ExecuteSubAgent} or supplied directly by a caller), that exact object reference
-     *   is reused so all root, sequential child, and parallel child runs mutate the same shared
-     *   counters (`totalSteps`, `totalTokens`, `totalCost`, `startedAtMs`, `breachedReason`).
-     * - When `params.treeBudget` is absent (root run), a new {@link AgentTreeBudget} is created
-     *   and seeded with any top-level convenience ceilings (`maxTreeSteps`, `maxTreeTokens`,
-     *   `maxTreeCost`, `maxTreeDurationMs`) declared on `params`.
-     *
-     * @param params - Optional execution parameters for the current run.
-     * @returns The shared {@link AgentTreeBudget} instance for the execution tree.
-     * @protected
-     */
-    protected ensureTreeBudget(params?: ExecuteAgentParams): AgentTreeBudget {
-        const budget = this._budgetTracker.EnsureTreeBudget(params, this._treeBudget, this._executeParams);
-        this._treeBudget = budget;
-        return budget;
-    }
-
-    /**
-     * Accumulates token and cost usage from a completed prompt execution into the shared
-     * {@link AgentTreeBudget} for the execution tree.
-     *
-     * Prefers rollup figures on `promptRun` (`TokensUsedRollup` / `TokensPromptRollup` +
-     * `TokensCompletionRollup` and `TotalCost`) so hierarchical child prompts are counted,
-     * falling back to direct `promptRun` columns (`TokensUsed` / `TokensPrompt` + `TokensCompletion`
-     * and `Cost`) or the `AIPromptRunResult` summary fields when `promptRun` is not populated.
-     *
-     * @param promptRun - The persisted or in-memory `MJAIPromptRunEntity` from the prompt execution, if any.
-     * @param promptResult - Optional `AIPromptRunResult` carrying direct token/cost metrics.
-     * @param params - Optional execution parameters for the current run.
-     * @protected
-     */
-    protected recordPromptUsageInTreeBudget(
-        promptRun?: MJAIPromptRunEntity | null,
-        promptResult?: AIPromptRunResult<unknown>,
-        params?: ExecuteAgentParams
-    ): void {
-        const budget = this.ensureTreeBudget(params);
-        this._budgetTracker.RecordPromptUsage(budget, promptRun, promptResult, {
-            AgentName: params?.agent?.Name ?? this._agentRun?.Agent,
-            RunID: this._agentRun?.ID,
-        });
-    }
-
-    /**
-     * Evaluates whether any root-tree or whole-workflow cumulative budget ceiling
-     * (`maxTreeSteps`, `maxTreeTokens`, `maxTreeCost`, `maxTreeDurationMs`,
-     * `workflowMaxCostUsd`, `workflowMaxDurationMs`) on the shared {@link AgentTreeBudget}
-     * has been reached or exceeded.
-     *
-     * When a ceiling is breached, sets `budget.breachedReason` with a descriptive diagnostic
-     * message so both the breaching agent and any ancestor agents in the call tree can terminate
-     * immediately with `step: 'Failed'` and `terminate: true`.
-     *
-     * @param params - Optional execution parameters for the current run.
-     * @returns Guardrail evaluation result indicating whether a tree or workflow budget limit was exceeded.
-     * @protected
-     */
-    protected checkTreeBudgetLimit(params?: ExecuteAgentParams): {
-        exceeded: boolean;
-        type?: 'cost' | 'tokens' | 'iterations' | 'time';
-        limit?: number;
-        current?: number;
-        reason?: string;
-        diagnostic?: WorkflowBudgetBreachDiagnostic;
-    } {
-        const budget = this.ensureTreeBudget(params);
-        const result = this._budgetTracker.CheckTreeBudgetLimit(budget, undefined, {
-            AgentName: params?.agent?.Name ?? this._agentRun?.Agent,
-            RunID: this._agentRun?.ID,
-        });
-        return this._budgetTracker.ToLegacyGuardrailVerdict(result);
-    }
 
     /**
      * Determines if a prompt execution error is fatal and should stop agent execution.
@@ -17952,140 +16627,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
     }
 
     /**
-     * Evaluates cooperative pause, budget guardrails, and deterministic progress governance
-     * between sequential inline loop iterations, persisting a {@link PendingLoopCursorState} if paused.
-     */
-    private async checkInlineLoopIterationGovernance<P>(args: {
-        LoopType: 'ForEach' | 'While';
-        ParentStepID: string;
-        NextIndex: number;
-        CompletedResults: BaseAgentNextStep[];
-        WorkingPayload: P;
-        LoopDecision: BaseAgentNextStep<P>;
-        Params: ExecuteAgentParams;
-        RecordProgressSample?: boolean;
-        LastIterResult?: BaseAgentNextStep;
-        TokensDelta?: number;
-        DelayBetweenIterationsMs?: number;
-        ContinueOnError?: boolean;
-        TotalItems?: number;
-    }): Promise<typeof this._pausedRunOutcome> {
-        const cursor: PendingLoopCursorState = {
-            LoopType: args.LoopType,
-            ParentStepID: args.ParentStepID,
-            IterationIndex: args.NextIndex,
-            CompletedItemResults: args.CompletedResults.map((r) => ToRunawayJsonValue(r as RunawaySerializable)),
-            WorkingPayload: ToRunawayJsonValue(args.WorkingPayload as RunawaySerializable),
-            ...(args.DelayBetweenIterationsMs !== undefined ? { DelayBetweenIterationsMs: args.DelayBetweenIterationsMs } : {}),
-            ...(args.ContinueOnError !== undefined ? { ContinueOnError: args.ContinueOnError } : {}),
-        };
-
-        const coopPaused = await this.checkAndPauseOnCooperativeRequest(
-            args.Params,
-            args.WorkingPayload,
-            args.LoopDecision,
-            cursor,
-        );
-        if (coopPaused) {
-            return coopPaused;
-        }
-
-        const budgetPaused = await this.checkAndPauseOnBudgetBreach(
-            args.Params,
-            args.WorkingPayload,
-            args.LoopDecision,
-            cursor,
-        );
-        if (budgetPaused) {
-            return budgetPaused;
-        }
-
-        const isBoundedForEachComplete =
-            args.LoopType === 'ForEach' &&
-            args.TotalItems !== undefined &&
-            args.NextIndex >= args.TotalItems;
-        const explicitProgressOverride = Boolean(
-            args.Params.limitsOverride?.ProgressDetector ||
-            args.Params.userPolicyLimitsOverride?.ProgressDetector ||
-            args.Params.enableRunawayGovernance,
-        );
-        const skipProgressForBatchContinueOnError =
-            args.LoopType === 'ForEach' &&
-            args.ContinueOnError === true &&
-            !explicitProgressOverride;
-
-        if (args.RecordProgressSample && args.LastIterResult && !isBoundedForEachComplete && !skipProgressForBatchContinueOnError) {
-            const sample: IterationProgressSample = {
-                IterationIndex: args.NextIndex,
-                StepType: args.LoopType,
-                StepSignature: `${args.LoopType}:${args.NextIndex}:${args.LastIterResult.step}`,
-                RecordsCreatedOrChanged: this.estimateRecordsChanged(args.LastIterResult),
-                TasksClosed: 0,
-                OutputText: this.extractStepOutputText(args.LastIterResult),
-                PayloadFingerprint: args.WorkingPayload !== undefined ? JSON.stringify(args.WorkingPayload) : undefined,
-                TokensSpent: Math.max(0, args.TokensDelta ?? 0),
-                ErrorSignature: args.LastIterResult.errorMessage ?? null,
-                HeapUsedBytes: typeof process !== 'undefined' && typeof process.memoryUsage === 'function'
-                    ? process.memoryUsage().heapUsed
-                    : undefined,
-            };
-            this._progressDetector.RecordSample(sample);
-            const limits = this._activeLimitsResolution?.Limits ?? this.resolvedLimits(args.Params);
-            const detResult = this._progressDetector.Evaluate(limits.ProgressDetector);
-            if (detResult.Checked) {
-                const judgeScope = this._currentLateJudgeScope;
-                const evaluated = detResult.Classification === 'Ambiguous'
-                    ? await this._fastConvergenceJudge.EvaluateIfAmbiguous({
-                        DetectorResult: detResult,
-                        Iteration: args.NextIndex,
-                        StateSummary: `${detResult.Reason}\nLoop=${args.LoopType}\nIteration=${args.NextIndex}\nPayload=${JSON.stringify(args.WorkingPayload ?? {}).slice(0, 1000)}`,
-                        Config: limits.ProgressDetector,
-                        AgentRun: this._agentRun,
-                        AgentID: args.Params.agent.ID,
-                        ContextUser: args.Params.contextUser,
-                        ExecutionScope: this._runExecutionScope,
-                        Evaluator: args.Params.fastConvergenceJudgeEvaluator,
-                        OnLateUsageSettled: judgeScope
-                            ? (settlement) => this.handleLateFastJudgeUsageForScope(judgeScope, settlement)
-                            : undefined,
-                    })
-                    : detResult;
-                this.attributeFastJudgeUsage(evaluated);
-                if (evaluated.Classification === 'Stalled') {
-                    const pauseReason: RunawayPauseReason = evaluated.FastJudgeInvoked ? 'FastJudgeStalled' : 'ProgressStalled';
-                    const ledger = await this.captureCurrentBudgetLedger(args.Params);
-                    return this.pauseNonDestructively(args.Params, {
-                        PauseReason: pauseReason,
-                        Summary: evaluated.Reason,
-                        InFlightPayload: args.WorkingPayload as RunawaySerializable,
-                        NextStepToResume: args.LoopDecision,
-                        LoopCursor: cursor,
-                        ProgressEvaluation: evaluated,
-                        FastJudgeResult: evaluated.FastJudgeResult,
-                        Ledger: ledger,
-                    });
-                } else if (
-                    evaluated.FastJudgeInvoked &&
-                    evaluated.FastJudgeResult &&
-                    ((evaluated.FastJudgeResult.CostUsd ?? 0) > 0 || (evaluated.FastJudgeResult.TokensUsed ?? 0) > 0)
-                ) {
-                    const postJudgeBudgetPaused = await this.checkAndPauseOnBudgetBreach(
-                        args.Params,
-                        args.WorkingPayload,
-                        args.LoopDecision,
-                        cursor,
-                    );
-                    if (postJudgeBudgetPaused) {
-                        return postJudgeBudgetPaused;
-                    }
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Flushes any in-flight `MJAIPromptRunEntityExtended` saves queued on {@link _promptRunner}.
      * Tolerates lightweight test doubles on `_promptRunner` that may only implement
      * `WaitForPendingPromptRunSaves` or neither method.
@@ -18459,127 +17000,6 @@ export class BaseAgent extends BaseAgentDeprecatedDelegates {
      * @returns Token statistics including totals and costs
      * @private
      */
-    private calculateTokenStats(): AgentRunTokenStats {
-        const stats = this._budgetTracker.CalculateRunTokenStats(this._agentRun);
-        this.drainPendingFastJudgeUsage();
-        if (
-            this._priorNonStepCostUsd > 0 ||
-            this._priorNonStepTokensUsed > 0 ||
-            this._fastJudgeCostUsd > 0 ||
-            this._fastJudgeTokensUsed > 0
-        ) {
-            return {
-                ...stats,
-                TotalTokens: stats.TotalTokens + this._priorNonStepTokensUsed + this._fastJudgeTokensUsed,
-                TotalCost: stats.TotalCost + this._priorNonStepCostUsd + this._fastJudgeCostUsd,
-            };
-        }
-        return stats;
-    }
-
-    /**
-     * Applies a {@link calculateTokenStats} result to a run entity's six denormalized
-     * token/cost columns — the single source for the assignment shape shared by the
-     * failure/cancel/finalize paths AND the post-turn compaction top-up
-     * ({@link recordCompactionRunStep}).
-     * @private
-     */
-    private applyTokenStatsToRun(run: MJAIAgentRunEntityExtended, tokenStats: AgentRunTokenStats): void {
-        this._budgetTracker.ApplyTokenStatsToRun(run, tokenStats);
-    }
-
-    /**
-     * Gets the count of how many times a specific action has been executed in this agent run.
-     *
-     * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
-     * @param actionId - The action ID to count
-     * @returns The number of times the action has been executed
-     */
-    protected async getActionExecutionCount(agentRunId: string, actionId: string): Promise<number> {
-        return this.getExecutionCount(actionId);
-    }
-
-    /**
-     * Gets the count of how many times a specific sub-agent has been executed in this agent run.
-     *
-     * @param agentRunId - The agent run ID (not used anymore, kept for signature compatibility)
-     * @param subAgentId - The sub-agent ID to count
-     * @returns The number of times the sub-agent has been executed
-     */
-    protected async getSubAgentExecutionCount(agentRunId: string, subAgentId: string): Promise<number> {
-        return this.getExecutionCount(subAgentId);
-    }
-
-    /**
-     * Increments the execution count for an item (action or sub-agent).
-     *
-     * Exposed as `protected` so driver sub-classes performing custom dispatch
-     * bump the same per-item counter the framework checks against execution
-     * guardrails — without this, custom dispatch silently bypasses limits.
-     *
-     * @param itemId - The item ID to increment (action ID or sub-agent ID)
-     * @protected
-     */
-    protected incrementExecutionCount(itemId: string): void {
-        this._budgetTracker.IncrementExecutionCount(this._executionCounts, itemId);
-    }
-
-    /**
-     * Gets the execution count for an item (action or sub-agent).
-     *
-     * @param itemId - The item ID to get count for
-     * @returns The execution count (0 if never executed)
-     * @protected
-     */
-    protected getExecutionCount(itemId: string): number {
-        return this._budgetTracker.GetExecutionCount(this._executionCounts, itemId);
-    }
-
-    /**
-     * Checks if all minimum execution requirements are met for actions and sub-agents.
-     *
-     * NOTE: This method intentionally uses only database-configured AgentActions, not _effectiveActions.
-     * MinExecutionsPerRun is a database-only concept - dynamically added actions via actionChanges
-     * do not have minimum execution requirements. If minimum requirements for dynamic actions are
-     * needed in the future, consider adding a `minActionLimits` property to the ActionChange interface.
-     *
-     * @param agent - The agent to check
-     * @param agentRun - The current agent run
-     * @returns Array of violation messages (empty if all requirements are met)
-     */
-    protected async checkMinimumExecutionRequirements(agent: MJAIAgentEntityExtended, agentRun: MJAIAgentRunEntityExtended): Promise<string[]> {
-        const violations: string[] = [];
-
-        // Check action minimum requirements from database-configured (including BaseAgentID-inherited) actions only.
-        // Dynamically added actions do not have MinExecutionsPerRun requirements.
-        const agentActions = this.getEffectiveAgentActions(agent.ID).filter(aa =>
-            aa.MinExecutionsPerRun != null &&
-            aa.MinExecutionsPerRun > 0
-        );
-        
-        for (const agentAction of agentActions) {
-            const executionCount = await this.getActionExecutionCount(agentRun.ID, agentAction.ActionID);
-            if (executionCount < agentAction.MinExecutionsPerRun) {
-                violations.push(`Action '${agentAction.Action}' requires ${agentAction.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`);
-            }
-        }
-        
-        // Check sub-agent minimum requirements
-        const subAgents = AIEngine.Instance.GetSubAgents(agent.ID, "Active").filter(a => 
-            a.MinExecutionsPerRun != null && 
-            a.MinExecutionsPerRun > 0
-        );
-
-        for (const subAgent of subAgents) {
-            const executionCount = await this.getSubAgentExecutionCount(agentRun.ID, subAgent.ID);
-            if (executionCount < subAgent.MinExecutionsPerRun) {
-                violations.push(`Sub-agent '${subAgent.Name}' requires ${subAgent.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`);
-            }
-        }
-        
-        return violations;
-    }
-
     /**
      * The run's scope inputs: the explicit `ExecuteAgentParams` fields, else their `data` fallbacks, which count only
      * when the caller set `TrustReservedRunData`. {@link Execute} has already cleaned `data`; the rule is applied here

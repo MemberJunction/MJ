@@ -19,26 +19,45 @@ import type {
     AgentPipelineRequest,
     AgentSkillActivationRequest,
     AgentSkillInvocation,
+    AgentTreeBudget,
+    AIPromptRunResult,
     BaseAgentNextStep,
+    CooperativePauseRequestSignal,
     ExecuteAgentParams,
+    ExecuteAgentResult,
     ForEachOperation,
     MJAIAgentEntityExtended,
     MJAIAgentRunEntityExtended,
     MJAIAgentRunStepEntityExtended,
+    PendingLoopCursorState,
+    ProgressEvaluationResult,
     SkillAvailabilityPurpose,
     WhileOperation,
 } from '@memberjunction/ai-core-plus';
-import type { UserInfo } from '@memberjunction/core';
-import type { MJAISkillEntity } from '@memberjunction/core-entities';
+import type { MJLimitsConfig, MJLimitsResolutionResult, UserInfo } from '@memberjunction/core';
+import type { MJAIAgentUserPolicyEntity, MJAIPromptRunEntity, MJAISkillEntity } from '@memberjunction/core-entities';
+import type { CooperativePauseResult } from '../../ActiveRunGovernanceRegistry';
 import type { LoopIterationError } from '../../AgentStepDispatcher';
+import type { AgentRunTokenStats } from '../../AgentTreeBudgetTracker';
+import type { BudgetEnforcementInput } from '../../BudgetEnforcementGuard';
+import type { IterationProgressSample } from '../../DeterministicProgressDetector';
+import type { FastJudgeUsageSettlement } from '../../FastConvergenceJudge';
 import type { PipelineExecutionResult, PipelineToolRegistry } from '../../pipeline';
+import type { RepeatedFailingStepTracker } from '../../repeated-failing-step';
 import type {
+    AgentBudgetLedgerSnapshot,
     ForEachIterationResult,
     ForEachLoopResults,
+    GuardrailVerdict,
+    InlineLoopGovernanceArgs,
+    PausedRunOutcome,
+    PauseNonDestructivelyDetails,
+    RunLateJudgeScope,
     WhileIterationResult,
     WhileLoopResults,
 } from '../base-agent-types';
 import type { BaseAgentIterationHelper } from '../iteration/BaseAgentIterationHelper';
+import type { BaseAgentLimitsHelper } from '../limits/BaseAgentLimitsHelper';
 import type { BaseAgentSkillsHelper } from '../skills/BaseAgentSkillsHelper';
 import { BaseAgentDeprecatedDelegatesCore } from './BaseAgentDeprecatedDelegatesCore';
 
@@ -53,6 +72,9 @@ export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDe
 
     /** Provides the resolved skills activation & grants helper (`BaseAgentSkillsHelper`). */
     protected abstract getSkillsHelper(): BaseAgentSkillsHelper;
+
+    /** Provides the resolved code-only limits, budgets & checkpoints helper (`BaseAgentLimitsHelper`). */
+    protected abstract getLimitsHelper(): BaseAgentLimitsHelper;
 
     // =========================================================================
     // Seam S5 — Iteration Constructs (ForEach, While, Pipeline, Templates)
@@ -456,5 +478,283 @@ export abstract class BaseAgentDeprecatedDelegates extends BaseAgentDeprecatedDe
             params,
             invocation
         );
+    }
+
+    // =========================================================================
+    // Seam S7 — Limits, Budgets, Guardrails, Checkpoints & Pause (Code-Only)
+    // =========================================================================
+
+    /** @deprecated Use `BaseAgentLimitsHelper.ResolvedLimits` instead (slated for v7.0 removal). */
+    protected resolvedLimits(params?: ExecuteAgentParams): MJLimitsConfig {
+        return this.getLimitsHelper().ResolvedLimits(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.ResolveFullRunLimits` instead (slated for v7.0 removal). */
+    protected resolveFullRunLimits(params?: ExecuteAgentParams): MJLimitsResolutionResult {
+        return this.getLimitsHelper().ResolveFullRunLimits(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.ResolveServerUserPolicy` instead (slated for v7.0 removal). */
+    protected resolveServerUserPolicy(
+        params: ExecuteAgentParams
+    ): Promise<
+        { status: 'ok'; policy: MJAIAgentUserPolicyEntity | null } | { status: 'error'; policy: null; errorMessage: string }
+    > {
+        return this.getLimitsHelper().ResolveServerUserPolicy(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.EnsureTreeBudget` instead (slated for v7.0 removal). */
+    protected ensureTreeBudget(params?: ExecuteAgentParams): AgentTreeBudget {
+        return this.getLimitsHelper().EnsureTreeBudget(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.RecordPromptUsageInTreeBudget` instead (slated for v7.0 removal). */
+    protected recordPromptUsageInTreeBudget(
+        promptRun?: MJAIPromptRunEntity | null,
+        promptResult?: AIPromptRunResult<unknown>,
+        params?: ExecuteAgentParams
+    ): void {
+        this.getLimitsHelper().RecordPromptUsageInTreeBudget(this.getRunContext(), promptRun, promptResult, params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckTreeBudgetLimit` instead (slated for v7.0 removal). */
+    protected checkTreeBudgetLimit(params?: ExecuteAgentParams): GuardrailVerdict {
+        return this.getLimitsHelper().CheckTreeBudgetLimit(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CalculateTokenStats` instead (slated for v7.0 removal). */
+    protected calculateTokenStats(): AgentRunTokenStats {
+        return this.getLimitsHelper().CalculateTokenStats(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.ApplyTokenStatsToRun` instead (slated for v7.0 removal). */
+    protected applyTokenStatsToRun(run: MJAIAgentRunEntityExtended, tokenStats: AgentRunTokenStats): void {
+        this.getLimitsHelper().ApplyTokenStatsToRun(this.getRunContext(), run, tokenStats);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.GetActionExecutionCount` instead (slated for v7.0 removal). */
+    protected getActionExecutionCount(agentRunId: string, actionId: string): Promise<number> {
+        return this.getLimitsHelper().GetActionExecutionCount(this.getRunContext(), agentRunId, actionId);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.GetSubAgentExecutionCount` instead (slated for v7.0 removal). */
+    protected getSubAgentExecutionCount(agentRunId: string, subAgentId: string): Promise<number> {
+        return this.getLimitsHelper().GetSubAgentExecutionCount(this.getRunContext(), agentRunId, subAgentId);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.GetExecutionCount` instead (slated for v7.0 removal). */
+    protected getExecutionCount(itemId: string): number {
+        return this.getLimitsHelper().GetExecutionCount(this.getRunContext(), itemId);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckMinimumExecutionRequirements` instead (slated for v7.0 removal). */
+    protected checkMinimumExecutionRequirements(
+        agent: MJAIAgentEntityExtended,
+        agentRun: MJAIAgentRunEntityExtended
+    ): Promise<string[]> {
+        return this.getLimitsHelper().CheckMinimumExecutionRequirements(this.getRunContext(), agent, agentRun);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckRepeatedFailingStep` instead (slated for v7.0 removal). */
+    protected checkRepeatedFailingStep<P>(
+        params: ExecuteAgentParams,
+        tracker: RepeatedFailingStepTracker,
+        executedDecision: BaseAgentNextStep<P>,
+        nextStep: BaseAgentNextStep<P>
+    ): void {
+        this.getLimitsHelper().CheckRepeatedFailingStep(this.getRunContext(), params, tracker, executedDecision, nextStep);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.ApplySelfCheck` instead (slated for v7.0 removal). */
+    protected applySelfCheck<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        agentRun: MJAIAgentRunEntityExtended,
+        currentPayload: P
+    ): Promise<BaseAgentNextStep<P> | null> {
+        return this.getLimitsHelper().ApplySelfCheck(this.getRunContext(), params, nextStep, agentRun, currentPayload);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.SelfCheckSuccess` instead (slated for v7.0 removal). */
+    protected selfCheckSuccess<P>(
+        params: ExecuteAgentParams,
+        step: BaseAgentNextStep<P>,
+        payload: P
+    ): Promise<BaseAgentNextStep<P>> {
+        return this.getLimitsHelper().SelfCheckSuccess(this.getRunContext(), params, step, payload);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.HasExplicitWorkflowBudgetCaps` instead (slated for v7.0 removal). */
+    protected hasExplicitWorkflowBudgetCaps(params?: ExecuteAgentParams): boolean {
+        return this.getLimitsHelper().HasExplicitWorkflowBudgetCaps(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckAndPauseOnBudgetBreach` instead (slated for v7.0 removal). */
+    protected checkAndPauseOnBudgetBreach<P>(
+        params: ExecuteAgentParams,
+        inFlightPayload: P,
+        nextStepToResume: BaseAgentNextStep<P> | null,
+        loopCursor?: PendingLoopCursorState | null
+    ): Promise<PausedRunOutcome | null> {
+        return this.getLimitsHelper().CheckAndPauseOnBudgetBreach(
+            this.getRunContext(),
+            params,
+            inFlightPayload,
+            nextStepToResume,
+            loopCursor
+        );
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.RegisterActiveRunForCooperativePause` instead (slated for v7.0 removal). */
+    protected registerActiveRunForCooperativePause(): void {
+        this.getLimitsHelper().RegisterActiveRunForCooperativePause(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.RequestCooperativePause` instead (slated for v7.0 removal). */
+    protected requestCooperativePause(summary?: string): Promise<CooperativePauseResult | null> {
+        return this.getLimitsHelper().RequestCooperativePause(this.getRunContext(), summary);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckPersistedCooperativePauseRequest` instead (slated for v7.0 removal). */
+    protected checkPersistedCooperativePauseRequest(
+        params: ExecuteAgentParams,
+        allowRemotePoll?: boolean
+    ): Promise<CooperativePauseRequestSignal | null> {
+        return this.getLimitsHelper().CheckPersistedCooperativePauseRequest(this.getRunContext(), params, allowRemotePoll);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckAndPauseOnCooperativeRequest` instead (slated for v7.0 removal). */
+    protected checkAndPauseOnCooperativeRequest<P>(
+        params: ExecuteAgentParams,
+        inFlightPayload: P,
+        nextStepToResume: BaseAgentNextStep<P> | null,
+        loopCursor?: PendingLoopCursorState | null,
+        allowRemotePoll?: boolean
+    ): Promise<PausedRunOutcome | null> {
+        return this.getLimitsHelper().CheckAndPauseOnCooperativeRequest(
+            this.getRunContext(),
+            params,
+            inFlightPayload,
+            nextStepToResume,
+            loopCursor,
+            allowRemotePoll
+        );
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.EvaluateRunawayGovernanceAfterStep` instead (slated for v7.0 removal). */
+    protected evaluateRunawayGovernanceAfterStep<P>(
+        params: ExecuteAgentParams,
+        nextStep: BaseAgentNextStep<P>,
+        stepCount: number,
+        prevCompletedTasksCount: number,
+        tokensDelta: number,
+        isPromptFailureOrParseRetry: boolean,
+        isConsultContinuation: boolean
+    ): Promise<PausedRunOutcome | null> {
+        return this.getLimitsHelper().EvaluateRunawayGovernanceAfterStep(
+            this.getRunContext(),
+            params,
+            nextStep,
+            stepCount,
+            prevCompletedTasksCount,
+            tokensDelta,
+            isPromptFailureOrParseRetry,
+            isConsultContinuation
+        );
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CheckInlineLoopIterationGovernance` instead (slated for v7.0 removal). */
+    protected checkInlineLoopIterationGovernance<P>(args: InlineLoopGovernanceArgs<P>): Promise<PausedRunOutcome | null> {
+        return this.getLimitsHelper().CheckInlineLoopIterationGovernance(this.getRunContext(), args);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.BuildProgressSample` instead (slated for v7.0 removal). */
+    protected buildProgressSample<P>(
+        nextStep: BaseAgentNextStep<P>,
+        stepCount: number,
+        prevCompletedTasksCount: number,
+        tokensDelta: number,
+        inFlightPayload: P
+    ): IterationProgressSample {
+        return this.getLimitsHelper().BuildProgressSample(
+            this.getRunContext(),
+            nextStep,
+            stepCount,
+            prevCompletedTasksCount,
+            tokensDelta,
+            inFlightPayload
+        );
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.InitCurrentLateJudgeScope` instead (slated for v7.0 removal). */
+    protected initCurrentLateJudgeScope(params: ExecuteAgentParams): void {
+        this.getLimitsHelper().InitCurrentLateJudgeScope(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.AttributeFastJudgeUsage` instead (slated for v7.0 removal). */
+    protected attributeFastJudgeUsage(evaluation: ProgressEvaluationResult): void {
+        this.getLimitsHelper().AttributeFastJudgeUsage(this.getRunContext(), evaluation);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.HandleLateFastJudgeUsage` instead (slated for v7.0 removal). */
+    protected handleLateFastJudgeUsage(settlement: FastJudgeUsageSettlement): Promise<boolean> | boolean {
+        return this.getLimitsHelper().HandleLateFastJudgeUsage(this.getRunContext(), settlement);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.HandleLateFastJudgeUsageForScope` instead (slated for v7.0 removal). */
+    protected handleLateFastJudgeUsageForScope(
+        scope: RunLateJudgeScope,
+        settlement: FastJudgeUsageSettlement
+    ): Promise<boolean> | boolean {
+        return this.getLimitsHelper().HandleLateFastJudgeUsageForScope(this.getRunContext(), scope, settlement);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.DrainPendingFastJudgeUsage` instead (slated for v7.0 removal). */
+    protected drainPendingFastJudgeUsage(): void {
+        this.getLimitsHelper().DrainPendingFastJudgeUsage(this.getRunContext());
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.PrepareRunForFinalSave` instead (slated for v7.0 removal). */
+    protected prepareRunForFinalSave(
+        run: MJAIAgentRunEntityExtended
+    ): { Scope: RunLateJudgeScope | null; ReconciledBeforeSave: string[] } {
+        return this.getLimitsHelper().PrepareRunForFinalSave(this.getRunContext(), run);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.MarkPreSaveFastJudgeIdsPersisted` instead (slated for v7.0 removal). */
+    protected markPreSaveFastJudgeIdsPersisted(
+        scope: RunLateJudgeScope | null,
+        reconciledBeforeSave: readonly string[],
+        saved: boolean
+    ): void {
+        this.getLimitsHelper().MarkPreSaveFastJudgeIdsPersisted(this.getRunContext(), scope, reconciledBeforeSave, saved);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.TrackScopeFinalSave` instead (slated for v7.0 removal). */
+    protected trackScopeFinalSave<T>(scope: RunLateJudgeScope | null, saveFn: () => Promise<T>): Promise<T> {
+        return this.getLimitsHelper().TrackScopeFinalSave(this.getRunContext(), scope, saveFn);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.BuildBudgetEvaluationInput` instead (slated for v7.0 removal). */
+    protected buildBudgetEvaluationInput(params: ExecuteAgentParams): BudgetEnforcementInput {
+        return this.getLimitsHelper().BuildBudgetEvaluationInput(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.CaptureCurrentBudgetLedger` instead (slated for v7.0 removal). */
+    protected captureCurrentBudgetLedger(params: ExecuteAgentParams): Promise<AgentBudgetLedgerSnapshot> {
+        return this.getLimitsHelper().CaptureCurrentBudgetLedger(this.getRunContext(), params);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.PauseNonDestructively` instead (slated for v7.0 removal). */
+    protected pauseNonDestructively(
+        params: ExecuteAgentParams,
+        details: PauseNonDestructivelyDetails
+    ): Promise<PausedRunOutcome | null> {
+        return this.getLimitsHelper().PauseNonDestructively(this.getRunContext(), params, details);
+    }
+
+    /** @deprecated Use `BaseAgentLimitsHelper.BuildPausedExecuteResult` instead (slated for v7.0 removal). */
+    protected buildPausedExecuteResult<R>(outcome: PausedRunOutcome): ExecuteAgentResult<R> {
+        return this.getLimitsHelper().BuildPausedExecuteResult<R>(this.getRunContext(), outcome);
     }
 }

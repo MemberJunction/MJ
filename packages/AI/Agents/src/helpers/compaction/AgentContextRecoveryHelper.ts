@@ -314,7 +314,7 @@ export class AgentContextRecoveryHelper {
         return originalTokens - ctx.Hooks.EstimateTokens(preview) > 0;
     }
 
-    public RecoveryStrategy_DropStaleVolatileState(
+    public RecoveryStrategyDropStaleVolatileState(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number,
@@ -359,7 +359,7 @@ export class AgentContextRecoveryHelper {
         };
     }
 
-    public RecoveryStrategy_RemoveOldestToolResults(
+    public RecoveryStrategyRemoveOldestToolResults(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number,
@@ -433,7 +433,7 @@ export class AgentContextRecoveryHelper {
         };
     }
 
-    public async RecoveryStrategy_CompactOldToolResults(
+    public async RecoveryStrategyCompactOldToolResults(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number,
@@ -527,7 +527,7 @@ export class AgentContextRecoveryHelper {
         };
     }
 
-    public async RecoveryStrategy_CompactAllToolResults(
+    public async RecoveryStrategyCompactAllToolResults(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         tokensToSave: number
@@ -611,7 +611,7 @@ export class AgentContextRecoveryHelper {
         };
     }
 
-    public RecoveryStrategy_TrimLastUserMessage(
+    public RecoveryStrategyTrimLastUserMessage(
         ctx: AgentRunContext,
         params: ExecuteAgentParams,
         _tokensToSave: number
@@ -696,12 +696,12 @@ export class AgentContextRecoveryHelper {
 
         const currentPromptTurn = ctx.PromptTurnCount;
         const strategies = [
-            () => ctx.Hooks.RecoveryStrategy_DropStaleVolatileState(params, tokensToSave, currentPromptTurn),
-            () => ctx.Hooks.RecoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 5),
-            () => ctx.Hooks.RecoveryStrategy_CompactOldToolResults(params, tokensToSave, currentPromptTurn, 3),
-            () => ctx.Hooks.RecoveryStrategy_RemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 2),
-            () => ctx.Hooks.RecoveryStrategy_CompactAllToolResults(params, tokensToSave),
-            () => Promise.resolve(ctx.Hooks.RecoveryStrategy_TrimLastUserMessage(params, tokensToSave)),
+            () => ctx.Hooks.RecoveryStrategyDropStaleVolatileState(params, tokensToSave, currentPromptTurn),
+            () => ctx.Hooks.RecoveryStrategyRemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 5),
+            () => ctx.Hooks.RecoveryStrategyCompactOldToolResults(params, tokensToSave, currentPromptTurn, 3),
+            () => ctx.Hooks.RecoveryStrategyRemoveOldestToolResults(params, tokensToSave, currentPromptTurn, 2),
+            () => ctx.Hooks.RecoveryStrategyCompactAllToolResults(params, tokensToSave),
+            () => Promise.resolve(ctx.Hooks.RecoveryStrategyTrimLastUserMessage(params, tokensToSave)),
         ];
 
         let tokensSaved = 0;
