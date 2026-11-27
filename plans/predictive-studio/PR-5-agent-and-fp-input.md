@@ -3590,9 +3590,9 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
 - Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->3<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->3<!-- /gen:checks -->
-- Head: <!-- gen:head -->c1c7931c6e<!-- /gen:head -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->4<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->4<!-- /gen:checks -->
+- Head: <!-- gen:head -->6f6b762723<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
