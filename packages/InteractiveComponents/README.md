@@ -526,6 +526,49 @@ behavior as a CodeGen-generated Angular form.
 
 See [/plans/interactive-forms/phase-2-runtime-loop.md](../../plans/interactive-forms/phase-2-runtime-loop.md) for the full architecture, lifecycle, and security model (Create / Modify / Activate / Revert + ownership checks).
 
+## Wave S0 Contracts (Widgets, TSX Language, Remote Ops Allowlist & Unified Updates)
+
+Wave S0 extends `@memberjunction/interactive-component-types` with four framework-free host and spec contracts, backed by strict recursive JSON types (`JsonPrimitive`, `JsonObject`, `JsonArray`, `JsonValue`) with zero `any` or lazy `unknown` payloads.
+
+### 1. Widget Host Contract (`P8` — `widget-host.ts`)
+
+Components declaring `componentRole: 'widget'` target `WidgetHostProps<TSettings extends JsonObject = JsonObject>` across `'home' | 'dashboard' | 'tray' | 'desktop-widget' | 'companion'` surfaces:
+
+- **Placement & Layout**: `surface` (`WidgetSurface`), `placementId`, open-extensible `sizeClass` (`'sm' | 'md' | 'lg' | 'wide' | 'tall' | (string & {})`), and strongly typed `hostContext` (`WidgetHostContext`).
+- **Settings & Persistence**: `userSettings` (hydrated by the host via `UserInfoEngine` / `MJ: User Settings`, never browser `localStorage`), optional JSON Schema `settingsSchema` (`WidgetSettingsSchema`), and `onSaveUserSettings(settings)`. Host implementations should debounce writes (`DEFAULT_WIDGET_SETTINGS_SAVE_DEBOUNCE_MS = 300`) and enforce payload ceilings (`MAX_WIDGET_SETTINGS_PAYLOAD_BYTES = 65536`).
+- **Upward Intents (Callbacks & Events)**: `onOpenRecord` / `WidgetEventNames.RecordOpenRequested`, `onInvokeAction` / `WidgetEventNames.ActionRequested`, `onNotify` / `WidgetEventNames.NotificationRequested`, and `onSaveUserSettings` / `WidgetEventNames.UserSettingsSaveRequested`.
+- **Runtime Validators**: `IsWidgetRole`, `IsWidgetSurface`, `IsWidgetSizeClass`, `IsWidgetHostContext`, `IsWidgetSettingsSchema`, `IsWidgetHostProps`, `ValidateWidgetHostProps`, `ValidateWidgetSettingsAgainstSchema`.
+
+### 2. TSX Language & `erasableSyntaxOnly` Metadata (`P6` — `component-language.ts`, `component-spec.ts`)
+
+`ComponentSpec` supports optional `language?: 'jsx' | 'tsx'`, `erasableSyntaxOnly?: boolean`, and `tsxMetadata?: ComponentTsxMetadata`:
+
+- **G9 Backward Compatibility**: Omitting `language` resolves to `'jsx'` via `ResolveComponentLanguage(spec)` so all legacy JSX `ComponentSpec` records remain valid without edits.
+- **TSX Defaults**: Declaring `language: 'tsx'` defaults `erasableSyntaxOnly` to `true` via `ResolveErasableSyntaxOnly(spec)` and `ResolveComponentLanguageInfo(spec)`, disallowing runtime-emitting TypeScript constructs (`enum`, value `namespace`, parameter properties, decorators) so lightweight type-stripping runtimes can compile TSX safely.
+- **Validation**: `IsComponentLanguage`, `IsComponentTsxMetadata`, and `ValidateComponentLanguageSpec` reject unsupported language strings and conflicting flags.
+
+### 3. Remote Operations Allowlist (`P11` — `data-requirements.ts`)
+
+`ComponentDataRequirements` supports an optional `operations?: ComponentOperationDataRequirement[]` allowlist specifying which `BaseRemotableOperation` keys (`utilities.ops`) a sandboxed component may invoke:
+
+- **Default-Deny Security**: Omitting `operations` resolves via `ResolveAllowedOperations(requirements)` strictly to `[]` (zero permitted operations).
+- **Exact Keys Only**: `IsValidOperationKey` and `ValidateOperationAllowlist` reject empty keys, whitespace, duplicates, and wildcard patterns (`*`, `?`). Use `IsOperationAllowed(requirements, operationKey)` at the sandbox bridge boundary.
+
+### 4. Unified Update Host Adapter (`P18` — `update-host-adapter.ts`)
+
+Provides one framework-free contract for Web (`SwUpdate`), Mobile (`expo-updates` / App Store / Play Store), and Desktop (`electron-updater`) shells:
+
+- **State Machine**: `UpdateStatus` (`'idle' | 'checking' | 'downloading' | 'ready-to-apply' | 'store-upgrade-required'`), `UpdateStateSnapshot` (`currentVersion`, `targetVersion`, `minSupportedClientVersion`, `releaseNotesUrl`, `downloadProgress`, optional `platform`, `lastCheckedAt`, and structured `error?: UpdateErrorDescriptor`), `UpdateUnsubscribe`, and `UpdateHostAdapter` (`checkForUpdates()`, `applyUpdate()`, `subscribe()`).
+- **Transition Validation**: `UPDATE_STATE_TRANSITIONS`, `IsValidUpdateTransition`, and `ValidateUpdateTransition` enforce monotonic `downloadProgress` (`0..100`), require `100%` on `'ready-to-apply'`, forbid OTA transitions out of `'store-upgrade-required'`, and revert transient check/download/signature failures cleanly to `'idle'` with `snapshot.error`.
+
+### Migration Guidance
+
+- **Legacy JSX ComponentSpecs**: No changes required. Keep omitting `language`, `erasableSyntaxOnly`, and `operations`; hosts resolve `language` to `'jsx'` and `operations` to `[]` automatically.
+- **New TSX Widgets**: Set `componentRole: 'widget'`, `language: 'tsx'`, `erasableSyntaxOnly: true`, declare every required `BaseRemotableOperation` under `dataRequirements.operations`, and persist settings exclusively through `onSaveUserSettings` (`UserInfoEngine`).
+- **Platform Update Shells**: Implement `UpdateHostAdapter` with singleflight `checkForUpdates()` coalescing and throttled `downloadProgress` subscriber notifications (`DEFAULT_PROGRESS_EMIT_THROTTLE_MS = 250`).
+
+For the full Wave S0 specification, see `.mj/specs/one-contract-s0-types/README.md` in local spec storage.
+
 ## Dependencies
 
 - `@memberjunction/core`: Core MemberJunction types and interfaces
