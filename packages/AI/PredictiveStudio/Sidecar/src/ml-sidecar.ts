@@ -186,8 +186,13 @@ const DEFAULT_SERVER_PATH = resolveServerPath();
  * ```
  */
 export class MLSidecar {
-  /** Default per-request timeout (ms) — training can be slow. */
+  /**
+   * Default per-request timeout (ms) — training can be slow. It is the declared timeout of a sidecar call whose protocol
+   * declares none (G4.8): a stopped sidecar fails the call within it.
+   */
   public static readonly DefaultRequestTimeoutMs = 300_000;
+  /** How long a health probe ({@link Reachable}) waits: a live sidecar answers `/health` in milliseconds. */
+  public static readonly HealthProbeTimeoutMs = 5_000;
   /** Default startup timeout (ms) for the managed Python process. */
   public static readonly DefaultStartupTimeoutMs = 30_000;
   /** Seconds the trainer transport waits beyond a run's own `timeoutSeconds` before giving up on the sidecar. */
@@ -259,6 +264,25 @@ export class MLSidecar {
       return true;
     }
     return this.process !== null && this.port !== null && !this.stopping;
+  }
+
+  /** The managed Python process's pid, or null (remote / not started / exited). */
+  get Pid(): number | null {
+    return this.process?.pid ?? null; // `??`: a pid is never 0, but `process.pid` is `undefined` until the spawn succeeds
+  }
+
+  /**
+   * Whether the sidecar answers `/health` within `timeoutMs`: false for a managed sidecar that is not running, and for a
+   * remote or managed one that refuses, resets or does not answer in time. Never throws.
+   */
+  async Reachable(timeoutMs: number = MLSidecar.HealthProbeTimeoutMs): Promise<boolean> {
+    if (!this.IsRunning) return false;
+    try {
+      await this.httpGet<SidecarHealthResponse>('/health', timeoutMs);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** The port the managed Python service is listening on, or null (remote / not started). */
@@ -489,7 +513,8 @@ export class MLSidecar {
   }
 
   /**
-   * Poll `/health` until the server accepts requests, bounded by startupTimeoutMs.
+   * Poll `/health` until the server accepts requests, bounded by startupTimeoutMs: each probe waits at most the time
+   * left, so a sidecar that accepts connections but never answers (a stopped process) fails the start on time.
    */
   private async waitForReady(): Promise<void> {
     const deadline = Date.now() + this.startupTimeoutMs;
@@ -497,7 +522,7 @@ export class MLSidecar {
     let lastError = '';
     while (Date.now() < deadline) {
       try {
-        await this.httpGet<SidecarHealthResponse>('/health');
+        await this.httpGet<SidecarHealthResponse>('/health', Math.max(1, deadline - Date.now()));
         return;
       } catch (err) {
         lastError = err instanceof Error ? err.message : String(err);
@@ -570,7 +595,7 @@ export class MLSidecar {
     });
   }
 
-  private httpGet<T>(reqPath: string): Promise<T> {
+  private httpGet<T>(reqPath: string, timeoutMs: number = this.requestTimeoutMs): Promise<T> {
     const target = this.requestTarget();
     return new Promise<T>((resolve, reject) => {
       const req = http.request(
@@ -580,11 +605,11 @@ export class MLSidecar {
           port: target.port,
           path: reqPath,
           method: 'GET',
-          timeout: this.requestTimeoutMs,
+          timeout: timeoutMs,
         },
         (res) => this.collectResponse<T>(res, reqPath, resolve, reject)
       );
-      this.attachRequestHandlers(req, reqPath, reject);
+      this.attachRequestHandlers(req, reqPath, reject, timeoutMs);
       req.end();
     });
   }

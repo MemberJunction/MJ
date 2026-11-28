@@ -2177,7 +2177,7 @@ sweep run-now and is injected into the next run; `packages/AI/Agents` tests unch
 
 #### A6 — Budgets, token accounting, sidecar failure
 
-**Status:** `not-started`
+**Status:** `done`
 
 **Outcome.** A session halts at its caps with at most one call of overrun, counting every iteration (failed ones
 included); `TokensUsed` is the sum of the prompt runs attributed to an iteration, so `RunCost` (computeSeconds,
@@ -2222,6 +2222,8 @@ packages/AI/PredictiveStudio/Engine/src/experiment/budget.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/index.ts
 packages/AI/PredictiveStudio/Engine/src/agent/run-cost.ts
 packages/AI/PredictiveStudio/Engine/src/agent/model-dev-orchestrator-agent.ts
+packages/AI/PredictiveStudio/Engine/src/agent/pipeline-builder-agent.ts
+packages/AI/PredictiveStudio/Engine/src/agent/__tests__/pipeline-builder-agent.test.ts
 packages/AI/PredictiveStudio/Engine/src/agent/index.ts
 packages/AI/PredictiveStudio/Sidecar/src/ml-sidecar.ts
 packages/AI/PredictiveStudio/Engine/src/experiment/__tests__/token-accounting.test.ts
@@ -2232,6 +2234,7 @@ metadata-optional/integration-test/tests/gates/.gate-C1-C3.1.json
 metadata-optional/integration-test/test-suites/.ps-gates-agent-suite.json
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c3-4.checks.ts
 packages/TestingFramework/integration-test-suite/src/checks/ps-gate-c1-c3-1.checks.ts
+packages/TestingFramework/integration-test-suite/src/checks/ps-gates/ps-gate-traced-numbers.ts
 packages/TestingFramework/integration-test-suite/src/index.ts
 packages/TestingFramework/integration-test-suite/src/__tests__/check-registry.test.ts
 ```
@@ -3694,6 +3697,38 @@ Record every decision taken in §9 and, when it changes another plan's interface
   the chunk), so an agent run's form opened before the Studio loads the chunk and shows the panel; the pre-push audit
   (`allowlist … 1 outside`) named the file. · Leaving the panel unexported (the form would show it only after the
   Studio chunk had loaded).
+- D5-A6-1 · 2026-11-27 · A prompt run is attributed to an experiment iteration when it ran in the agent run tree the
+  iteration names in `AIAgentRunID` (the strategist's or derivation's run that made calls for it), reached through that
+  tree's `Prompt` run steps (`TargetLogID`), as the decision log reads them; an iteration with no `AIAgentRunID` used 0
+  tokens, and a strategist that makes LLM calls names its run (`IAttributedWaveStrategist.CurrentAgentRunID`) so the
+  orchestrator records it on each iteration it proposes. · `MJ: AI Prompt Runs` has no agent-run or iteration column,
+  `MJ: Experiment Session Iterations.AIAgentRunID` exists, and A6 owns no DDL; at this head no shipped strategist calls
+  an LLM and derivations run in Feature Pipeline runs before training, so every stored iteration truthfully used 0. ·
+  A new iteration column on prompt runs (DDL in a shared table); a time-window join (would count other runs' calls).
+- D5-A6-2 · 2026-11-27 · `RunCost.budget` of a session is the session's: `maxTokens` = the orchestrator's
+  `MaxTokensPerRun` (the token budget the session runs under), `maxComputeSeconds` and `maxCandidates` = the protocol's
+  trainer budgets its first completed training run stored (`trainer.cost.budget`; 0 when it trained nothing),
+  `hardStop: true`; `stoppedByBudget` when a run step of the tree recorded `guardrailExceeded` or a trainer reported
+  `stoppedByBudget`. The root run's `TotalTokensUsed`/`TotalCost` already include its sub-agents (integration database:
+  31,235 = 28,874 children + 2,361 own), so the tree's prompt part is the root row's. · The protocol's `maxTokens` bounds
+  a training run, not the agent session. · Summing every run of the tree (double counts the children).
+- D5-A6-3 · 2026-11-27 · Controller ruling: G4.8's training-run half is measured in-process (the training run and the
+  resumed build turn `Failed` within 300 s of the kill; that run's failed result is what `run.ts` reads, `if
+  (!result.success) exitCode = 1`), and the CLI's non-zero exit on a real `mj ai agents run` child whose turn the kill
+  stops. · A build starts only from a person's structured approval answered on the plan card (D-090) and runs in the run
+  that answer resumes; `run.ts` takes one prompt and no payload or `lastRunId`, so no CLI process can reach an approved
+  build. · An MJCLI change (non-PS, owner batch).
+- D5-A6-4 · 2026-11-27 · Controller ruling: A6 owns `Engine/src/agent/pipeline-builder-agent.ts` (and its test, caller
+  maintenance) in wave 4 and puts the cost line beside the primary metric of the ML Experiment Results report
+  (`ExperimentReports`), as §5.1.7 says; the full session `RunCost` with its stored parts is on the build's `report`
+  decision-log row; `ComputeCost` stays on the training-run row. G4.9 asserts the delivered line. · A6 runs alone in
+  wave 4. · Deferring the artifact line to MZ.
+- D5-A6-5 · 2026-11-27 · Controller ruling: the report's cost line renders the training run's stored `ComputeSeconds`,
+  `ComputeCost` and `TokensUsed` as `TracedNumber`s sourced to `MJ: ML Training Runs` at `$.ComputeSeconds`,
+  `$.ComputeCost`, `$.TokensUsed` (`ExperimentReports.COST_COLUMNS`, `CostColumnsJson`), read by the builder from the
+  settled run (`ReadRunCost`) and by `TracedNumberChecks.RegenerateReport`/`StoredJson`, so G3.7/G3.8 trace them; A6 owns
+  `checks/ps-gates/ps-gate-traced-numbers.ts`. · Every number of the report must trace to a stored row (G3.7), and the
+  root agent run is still being written while the builder renders the report. · The session `RunCost` in the report.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3823,10 +3858,10 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 
 **Generated facts** (regenerated before every checkpoint commit by `tools/pr-body.mjs`; do not edit by hand):
 - Migration: <!-- gen:migration -->migrations/v6/V202611260931__v6.3.x__PS_Agent_FP_Input.sql<!-- /gen:migration -->
-- Environment variables read by new code: <!-- gen:env -->GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL<!-- /gen:env -->
-- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->7<!-- /gen:gates -->
-- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->7<!-- /gen:checks -->
-- Head: <!-- gen:head -->14dc06d5ad<!-- /gen:head -->
+- Environment variables read by new code: <!-- gen:env -->DB_PORT, GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL, PS_COMPUTE_USD_PER_SECOND<!-- /gen:env -->
+- Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->9<!-- /gen:gates -->
+- Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->9<!-- /gen:checks -->
+- Head: <!-- gen:head -->34db666e46<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
@@ -4967,6 +5002,90 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - **Not run (D5-51, D5-53):** `ci-mirror` (the controller's at integration); no push.
 - **LLM spend** (§2.4 query on claudeint, `RunAt >= 2026-11-27T22:20Z`): 54 prompt runs, **$0.2187**, 307,271 tokens (the
   three smoke tests' agent runs and their rubric judge calls; no CodeGen).
+
+### 2026-11-28 — budgets, token accounting, sidecar failure (council 30st24) — A6
+
+- **Branch** `ps/pr-5-agent-fp-input--A6` from `5658dca511` (local only, D5-53); attack list red first (`736c660014`,
+  D5-48: run against `5658dca511` with the implementation absent, `token-accounting.test.ts` and `run-cost.test.ts` fail
+  to load on missing modules and 4 orchestrator/trainer token assertions fail; attack 1's four concurrency cases already
+  pass — PR 3 counts failed attempts), then `34db666e46` (implementation), then the records commit (the gate fixes
+  below, the report's unset-tokens wording, this entry). After the red commit two attack fixtures were corrected, no
+  assertion weakened: the stored-trainer fixture needs a 36-character run ID (the parser refused `TR1`), and the
+  attributed-strategist case runs under a guided strategy with a passed comparison (G7.7 refuses a custom strategist
+  under `random`).
+- **Database** `MJ_PS_PR5_claude1` (4051), dropped (0 sessions) and rebuilt from the head: `mj migrate` 207 applied
+  (262.0 s); `codegen --skipfiles` 491 entities; `sync push` 270 created · 24 updated · 5 deleted · 0 errors (write-back
+  reversed); `codegen --skipdb` (no generated diff); D5-46 user (Developer, UI, Integration); `truth:provision` (48
+  entities, 305 immutable fields), `truth:loom`; `metadata-optional/integration-test` 845 created · 0 errors (write-back
+  reversed); `PS truth datasets: load and verify` 68/68 (`591289B0`); `truth:load-c1` (C1 corpus: 2,015 people, 15,420
+  order headers — G3.7's corpus-end read refused `C1OrderHeader.OrderDate` while it was empty). Truth sidecar 4151 (run
+  dir `~/.mj-ps/pr5-claude1/sidecar-run`, interpreter the main checkout's Sidecar `.venv`), MJAPI 4051 with
+  `PREDICTIVE_STUDIO_SIDECAR_URL`, `PS_SIDECAR_RUN_DIR`, `STORAGE_LOCAL_ROOT`.
+- **What changed.** `ExperimentTokenAccounting.TokensFor` (D5-A6-1) and `AgentRunTree`; the trainer stores the tokens on
+  the training run and returns them, a failed attempt carries them (`TrainingAttemptFailedError.TokensUsed`) and the
+  iteration records them; an attributed strategist's run goes on each iteration. `RunCostReport.Of`/`Breakdown`
+  (D5-A6-2) — recorded on the build's `report` decision row (`runCost` with its parts). The ML Experiment Results report
+  shows `- **Training cost**: <s> s of compute, $<usd>, <n> LLM tokens` beside the primary metric, each number traced to
+  the run's column (D5-A6-4, D5-A6-5; unset tokens read "no LLM tokens recorded": only an iteration's are attributed).
+  `MLSidecar.Reachable`/`Pid`, `HealthProbeTimeoutMs` and a readiness poll bounded by the startup deadline; the
+  orchestrator ends the turn `Failed` (after a `report` row `sidecar-stopped` for a profile) when a profile or build
+  failed and the sidecar does not answer. Gates `C1 -> C3.1` and `C1 -> C3.4` at Sequences 4 and 5 of the agent suite
+  (G4.7 moved to 6). No `@deprecated` alias in any touched file (`git grep -n "@deprecated"` → 0).
+- **Unit tests (0 TypeScript errors in each build):** `@memberjunction/predictive-studio` (Engine) **157 files, 2,320
+  passed** (A6's files: `token-accounting.test.ts` 5, `run-cost.test.ts` 9,
+  `experiment-orchestrator.test.ts` 59, `pipeline-builder-agent.test.ts` 61); `@memberjunction/predictive-studio-sidecar`
+  **5 files, 41 passed**; `@memberjunction/integration-test-suite` **79 files, 1,160 passed** (`check-registry.test.ts`
+  301 bundles, `ps-gate-c1-c3-1.G4.9` and `ps-gate-c1-c3-4.G4.8` mutation-gated; `ps-gate-suite-sequencing.test.ts`
+  green with W7 last).
+- **Attacks.** 1: MaxRuns 3, every iteration failing → 3 iterations at concurrency 1–4. 2: `C1 -> C3.1` low budget
+  (`MaxTokensPerRun` 15,000 in-process): run `00E1372B` `Failed` on the `tokens` guardrail, `TotalTokensUsed` 16,263 ≤
+  15,000 + 2,616 (its last of 5 calls), `stoppedByBudget`. 3: unit attacks green; at runtime the priced build
+  (`C04667C0`, rate $0.0001/s in-process) — its one training run `ComputeCost` 0.001928 beside `log-loss 0.4424`,
+  `TokensUsed` unset; `RunCost` 9,379 tokens / $0.009959 = the stored sums; the report row's compute 19.284 s / $0.001928
+  = stored; the delivered artifact line = the one regenerated from the run's columns. 4: `C1 -> C3.4` — training half:
+  training run `CED66519` `Failed` 96.7 s after the kill, its turn `07D4B71B` `Failed` 97.0 s after (≤ 300 s); CLI half
+  (D5-A6-3): `mj ai agents run` turn `E0489CCD` `Failed` 82.1 s after the kill, a `sidecar-stopped` report row, exit 1
+  (attempt 1). 5: a successful CLI run exited 60 ms after its result line, 0 SQL connections at its sample, 0 after exit.
+  The training run fails ~93–97 s after the kill on every run (5 runs): within the declared 300 s.
+- **Gate runs** (`PS_PR=5 ps-env.sh pnpm mj test run`, the suite lock held 00:25–01:19Z): `C1 -> C3.1` **pass**
+  (`A3B8841A`), `C1 -> C3.4` **pass** (`E823A5E5`, then again after the attempt-counting fix), `W1 -> S9.2` (G3.8)
+  **pass** (`96CA122E`: 13 numeric tokens, 13 traced, the cost line's included, none untraced), `C1 -> S9.2` (G3.7)
+  **pass** (`097F1AAE`: 10 of 10 sampled numbers recompute).
+- **Gate fixes found at runtime (all in A6's check).** The approval's `ResumingAgentRunID` is written only when the
+  resumed run ends, so G4.8 polls for the `Running` training run straight after the approval; the CLI turn counts when
+  it ran its profile Action (it is re-run otherwise); the C1 corpus's unit draft resolved 0 development rows
+  (`seeded-random-side-empty`, the turn ends before any sidecar call), so the CLI half asks the renewal question of the
+  W1-signal world; a sidecar left down by a half that threw is restored (`RestoreIfDown`).
+- **Mutation table (ruling S1):**
+
+| Guard flipped (scratch, restored, Engine rebuilt) | Attack | Result with the flip |
+|---|---|---|
+| `TrainingEngineExperimentTrainer.train` returns `TokensUsed: 0` | 3 | `returns the iteration's tokens …` red (1 failed / 59) |
+| `foldOutcome` counts only attempts with a model | 1 | concurrency 1–4 all red (4 failed) |
+| a failed attempt's tokens not written on the iteration | 3 | `writes the trainer's tokens …` red |
+| `RunCostReport.Sum` drops the training runs' tokens | 3 | 2 of 9 red |
+| the report's cost line removed | 3 | 3 red (`run-cost`, `pipeline-builder-agent`) |
+| `SidecarReachable` always `true` (the stopped-sidecar check never fires) | 4 | `C1 -> C3.4` red (`8FB845E6`, then again) |
+
+- **Mutation output G4.8:** with `SidecarReachable()` returning `true` (Engine rebuilt), `C1 -> C3.4` failed:
+  `training half failed, agent-turn half failed` — the build turn `2C2359A0` ended `Completed` (not `Failed`) and the CLI
+  turn `79F467A0` `AwaitingFeedback` with exit 0, the profile's failure declined as a plan verdict; restored, rebuilt, pass.
+- **Mutation output G4.9:** `TokensUsed: 0` in the trainer → `AssertionError: expected +0 to be 2000` (`returns the
+  iteration's tokens and stores them on its training run`); failed iterations not counted → `expected 4 to be 3` at
+  concurrency 1–4 (attack 1).
+- **LLM spend** (§2.4 query from 2026-11-27T22:00Z on `MJ_PS_PR5_claude1`): **447 prompt runs, $1.237630, 1,962,746
+  tokens** (G4.9 ×2, G4.8 ×7 incl. the mutation and diagnosis runs, G3.7/G3.8). Wave cap $5 (§6.0 rule 7).
+- **Rulings:** D5-A6-1, D5-A6-2 (A6), D5-A6-3, D5-A6-4, D5-A6-5 (controller, §9). Ownership gained (D5-A6-4/5):
+  `Engine/src/agent/pipeline-builder-agent.ts` and its test, `checks/ps-gates/ps-gate-traced-numbers.ts`.
+- **Exit checks.** First full `milestone-exit` run: 48 checks, 3 failed — `check:guards` (`PrimaryKeyCompliance` gate 4:
+  an `ID` field list under an entity name held in a constant, `TrustVerdicts.RunEntityName` in `ReadRunCost` and
+  `BuildApprovalClaims.EntityName` in the `RunCostReport` batch — now the `'MJ: …'` literals; `check:guards` 16 + 5
+  passed) and the two `test:python` commands (no `.venv` in this worktree; with `PREDICTIVE_STUDIO_PYTHON` and
+  `PREDICTIVE_STUDIO_TRUTH_PYTHON` set to the main checkout's venvs: Sidecar **541 passed**, TruthSuite **24 passed**,
+  mypy clean on 55 files). Engine after the fix: 157 files, 2,320 passed.
+  Final `milestone-exit --milestone A6` (full, with commands, the Python interpreters set) at `4e79ea374e`:
+  **`# checks 48 · failed 0`**.
+- **Not run (D5-51, D5-53):** `ci-mirror` (the controller runs it at integration); no push.
 
 ## 12. Refresh log (append-only)
 

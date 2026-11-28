@@ -18,8 +18,9 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError } from '@memberjunction/core';
-import type { MJMLModelEntity } from '@memberjunction/core-entities';
+import { EscapeSQLString } from '@memberjunction/global';
+import { LogError, RunView, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
+import type { MJMLModelEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, ArtifactDirective } from '@memberjunction/ai-core-plus';
 import {
@@ -122,6 +123,12 @@ const CATALOG_STATUS_TEXT: Readonly<Record<CatalogStatus, string>> = {
 /** The hidden-list note for a model whose stored weights are not of a kind shown as drivers but are not split/impurity counts. */
 export const UNSHOWN_IMPORTANCE_KIND_NOTE = "This model's feature weights are not of a kind we show as drivers yet.";
 
+/**
+ * A training run's stored cost columns (§5.1.7, D5-A6-5): the compute seconds and USD it recorded and the tokens of the
+ * prompt runs attributed to it. The report traces each number it shows of them to its column of this row.
+ */
+export type TrainingRunCost = Pick<MJMLTrainingRunEntity, 'ID' | 'ComputeSeconds' | 'ComputeCost' | 'TokensUsed'>;
+
 /** What the experiment report is generated from: the build's words and its stored rows. */
 export interface ExperimentReportInput {
   /** The report's title (the plan's name). */
@@ -140,6 +147,11 @@ export interface ExperimentReportInput {
   readonly Trust: TrustVerdict | null;
   /** Where the build's model stands in the catalog. */
   readonly Status: CatalogStatus;
+  /**
+   * The training run's stored cost columns, shown beside the primary metric. Absent: the report has no cost line (an
+   * input built before the run's cost was read); null: the line says the cost was not measured.
+   */
+  readonly Cost?: TrainingRunCost | null;
 }
 
 /**
@@ -159,6 +171,8 @@ export interface ExperimentReportRows {
   readonly Run: ExperimentReportInput['Run'];
   /** The model row and its status; null when the build shipped no model. */
   readonly Model: (NonNullable<ExperimentReportInput['Model']> & { readonly Status: MJMLModelEntity['Status'] }) | null;
+  /** The training run's cost columns, as {@link ExperimentReportInput.Cost}. */
+  readonly Cost?: TrainingRunCost | null;
 }
 
 /** The experiment report: its Markdown and every number it renders, each traced to the stored row it was read from. */
@@ -209,6 +223,19 @@ export class ExperimentReports {
   /** How many of the model's weights the report lists. */
   private static readonly maxFeatures = 8;
 
+  /** The training-run columns the cost line traces its numbers to (each number's path is `$.<column>`). */
+  public static readonly COST_COLUMNS: readonly (keyof Omit<TrainingRunCost, 'ID'>)[] = ['ComputeSeconds', 'ComputeCost', 'TokensUsed'];
+
+  /** True when a traced number's path names a training-run cost column rather than a path in `ValidationResults`. */
+  public static IsCostPath(path: string): boolean {
+    return ExperimentReports.COST_COLUMNS.some((c) => path === `$.${c}`);
+  }
+
+  /** The cost columns of a training run as the JSON its cost numbers are traced in (a column with no value is null). */
+  public static CostColumnsJson(cost: TrainingRunCost): string {
+    return JSON.stringify({ ComputeSeconds: cost.ComputeSeconds, ComputeCost: cost.ComputeCost, TokensUsed: cost.TokensUsed });
+  }
+
   /**
    * The report for a build: the executive summary (the verdict's words around its traced headline numbers), the
    * performance section (the primary metric, the outcome, the inner-fold leaderboard), the features the model weighted
@@ -222,7 +249,7 @@ export class ExperimentReports {
     const rows = ExperimentReports.leaderboardRows(run);
     const summary = ExperimentReports.summary(input.Trust, run, numbers);
     const why = ExperimentReports.whyLine(gate, run, numbers);
-    const primary = ExperimentReports.primaryMetricLine(input, run, numbers);
+    const primary = ExperimentReports.primaryMetricLine(input, run, numbers) + ExperimentReports.costLine(input.Cost, numbers);
     const leaderboard = ExperimentReports.leaderboardSection(rows, gate, numbers);
     const features = ExperimentReports.featureLines(input.Model, numbers);
     const measured = ExperimentReports.measurementLines(rows, trainer, gate, numbers);
@@ -259,6 +286,7 @@ ${measured}
       Model: model === null ? null : { ID: model.ID, FeatureImportance: model.FeatureImportance, Lineage: model.Lineage },
       Trust: model === null ? null : TrustVerdicts.DeriveTrustVerdict({ ValidationResults: rows.Run === null ? null : rows.Run.ValidationResults, Lineage: model.Lineage }),
       Status: ExperimentReports.CatalogStatusOfModel(model === null ? null : model.Status),
+      ...(rows.Cost === undefined ? {} : { Cost: rows.Cost }),
     };
   }
 
@@ -361,6 +389,26 @@ ${measured}
     const n = run === null || path === undefined ? null : ExperimentReports.fromRun(run, path, ExperimentReports.threeDecimals);
     if (c === null || n === null) return `- **Primary Metric**: **${input.TargetMetric}** = **not measured**`;
     return `- **Primary Metric**: **${c.Metric} gain over the flat guess** = **${ExperimentReports.cite(numbers, n)}**`;
+  }
+
+  /**
+   * The training cost beside the primary metric (§5.1.7, D5-A6-5): the run's compute seconds, the USD they were priced
+   * at and the tokens attributed to it, each traced to its column of the training run. Empty when the input carries no
+   * cost; "not measured" for unset seconds, "not priced" for an unset cost, "no LLM tokens recorded" for unset tokens.
+   */
+  private static costLine(cost: TrainingRunCost | null | undefined, numbers: TracedNumber[]): string {
+    if (cost === undefined) return '';
+    if (cost === null) return '\n- **Training cost**: not measured';
+    const json = ExperimentReports.CostColumnsJson(cost);
+    const traced = (column: string, format: (v: number) => string): string => {
+      const n = TracedNumbers.FromStoredPath(TrustVerdicts.RunEntityName, cost.ID, json, `$.${column}`, format);
+      return n === null ? 'not measured' : ExperimentReports.cite(numbers, n);
+    };
+    const seconds = traced('ComputeSeconds', (v) => v.toFixed(3));
+    const usd = cost.ComputeCost === null ? 'not priced' : `$${traced('ComputeCost', (v) => v.toFixed(6))}`;
+    // An unset TokensUsed: no strategist or derivation call was attributed to the run (only an experiment iteration's are).
+    const tokens = cost.TokensUsed === null ? 'no LLM tokens recorded' : `${traced('TokensUsed', (v) => v.toLocaleString('en-US', { maximumFractionDigits: 0 }))} LLM tokens`;
+    return `\n- **Training cost**: ${seconds} s of compute, ${usd}, ${tokens}`;
   }
 
   /** The search's leaderboard, best-first by inner-fold mean, each row traced to its stored inner score's index. */
@@ -675,7 +723,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
 
     const outcome = PredictiveStudioPipelineBuilderAgent.SummarizeBuildResult(result);
     const newPayload: PredictiveStudioBuilderPayload = result.success
-      ? PredictiveStudioPipelineBuilderAgent.ReportPayload(payload, result, outcome)
+      ? PredictiveStudioPipelineBuilderAgent.ReportPayload(payload, result, outcome, await this.ReadRunCost(result, provider, user))
       : { ...payload, BuildResult: outcome };
     const directive: ArtifactDirective | undefined = result.success
       ? { behavior: 'create-new', name: `ML Experiment Results - ${newPayload.Name}`, description: `Experiment results and performance evaluation for ${newPayload.Name}` }
@@ -684,12 +732,34 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
   }
 
   /**
+   * The build's training run's stored cost columns, read fresh (the run settled before the build returned), or null
+   * when the build has no run or the row cannot be read (the report then says the cost was not measured; a failed read
+   * is logged).
+   */
+  protected async ReadRunCost(result: BuildPredictionResult, provider: IMetadataProvider, user: UserInfo): Promise<TrainingRunCost | null> {
+    if (!result.run) return null;
+    const runId = result.run.ID;
+    try {
+      const rows = await RunView.FromMetadataProvider(provider).RunView<TrainingRunCost>({
+        EntityName: 'MJ: ML Training Runs', ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', ...ExperimentReports.COST_COLUMNS], ResultType: 'simple', BypassCache: true,
+      }, user);
+      if (!rows.Success) LogError(`PredictiveStudioPipelineBuilderAgent: reading the cost of training run ${runId} failed: ${rows.ErrorMessage || 'unknown error'}`);
+      return rows.Success ? rows.Results[0] || null : null;
+    } catch (e) {
+      LogError(`PredictiveStudioPipelineBuilderAgent: reading the cost of training run ${runId} failed: ${e instanceof Error ? e.message : String(e)}`);
+      return null;
+    }
+  }
+
+  /**
    * The payload of a build that ran: the outcome plus the experiment report (name, goal, target metric, leaderboard,
    * the feature importance the lineage lets us show, the best model when one shipped, the summary and its markdown).
-   * The report is generated from the build's stored rows (its training run and its model); its traced numbers are not
-   * put in the payload (G3.7 regenerates the report from the stored rows).
+   * The report is generated from the build's stored rows (its training run, its cost columns and its model); its traced
+   * numbers are not put in the payload (G3.7 regenerates the report from the stored rows).
+   *
+   * @param cost the training run's stored cost columns ({@link ReadRunCost}); absent, the report has no cost line
    */
-  public static ReportPayload(payload: PredictiveStudioBuilderPayload, result: BuildPredictionResult, outcome: PredictiveStudioBuildOutcome): PredictiveStudioBuilderPayload {
+  public static ReportPayload(payload: PredictiveStudioBuilderPayload, result: BuildPredictionResult, outcome: PredictiveStudioBuildOutcome, cost?: TrainingRunCost | null): PredictiveStudioBuilderPayload {
     const targetVar = payload.TargetDefinition?.TargetVariable || 'Target';
     const name = payload.Name || `${targetVar} Prediction`;
     const goal = payload.Goal || `Predict ${targetVar}`;
@@ -705,6 +775,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
       Model: result.model ? { ID: result.model.ID, FeatureImportance: result.model.FeatureImportance, Lineage: result.model.Lineage } : null,
       Trust: result.trust || null,
       Status: PredictiveStudioPipelineBuilderAgent.CatalogStatusOf(outcome),
+      ...(cost === undefined ? {} : { Cost: cost }),
     });
     return {
       ...payload,

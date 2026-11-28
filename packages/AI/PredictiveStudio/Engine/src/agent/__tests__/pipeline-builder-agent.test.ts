@@ -25,6 +25,7 @@ import {
   type CatalogStatus,
   type ExperimentReportInput,
   type PredictiveStudioBuilderPayload,
+  type TrainingRunCost,
 } from '../pipeline-builder-agent';
 import {
   PredictiveStudioPipelineBuilder,
@@ -537,6 +538,9 @@ class NoSignalSearchBuilder extends PredictiveStudioPipelineBuilder {
 }
 
 /** The agent with the builder seam stubbed and a provider supplied, exposing the protected run. */
+/** The cost columns the test agent's training run stores (A6). */
+const STORED_RUN_COST: Omit<TrainingRunCost, 'ID'> = { ComputeSeconds: 12.5, ComputeCost: 0.00125, TokensUsed: 0 };
+
 class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
   constructor(
     private readonly builder: PredictiveStudioPipelineBuilder = new UnmeasuredBuilder(),
@@ -553,6 +557,10 @@ class TestableBuilderAgent extends PredictiveStudioPipelineBuilderAgent {
   }
   protected override get ProviderToUse(): IMetadataProvider {
     return new DatabaseProviderStub();
+  }
+  /** The training run's stored cost columns (A6, D5-A6-5): a fixed row, instead of a read through the provider stub. */
+  protected override async ReadRunCost(result: BuildPredictionResult): Promise<TrainingRunCost | null> {
+    return result.run ? { ID: result.run.ID, ...STORED_RUN_COST } : null;
   }
   /**
    * Runs the agent's build step. By default the run is what the truth suite's gate runs are: a top-level run whose
@@ -632,8 +640,10 @@ describe('PredictiveStudioPipelineBuilderAgent.executeAgentInternal — a shippe
     const report = ExperimentReports.GenerateMarkdownReport({
       Name: 'Renewed Prediction', Goal: 'Predict renewal', TargetVariable: 'Renewed', TargetMetric: 'AUC', Run: shippedRun,
       Model: { ID: model.ID, FeatureImportance: model.FeatureImportance, Lineage: model.Lineage }, Trust: shippedTrust, Status: 'published',
+      Cost: { ID: shippedRun.ID, ...STORED_RUN_COST },
     });
     expect(payload.Markdown).toBe(report.Markdown);
+    expect(payload.Markdown).toContain('- **Training cost**: 12.500 s of compute, $0.001250, 0 LLM tokens');
     expect('Numbers' in payload).toBe(false);
   });
 });

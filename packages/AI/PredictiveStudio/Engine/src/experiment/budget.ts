@@ -14,7 +14,8 @@ import { TrainingRefusedError } from '../training/training-refusal';
 
 /**
  * A training attempt that failed after its run row existed: the compute the run recorded (seconds and USD) still counts
- * against the session's budget. The engine's error is kept as `cause`.
+ * against the session's budget, and the tokens of the calls made for it are still its iteration's. The engine's error
+ * is kept as `cause`.
  */
 export class TrainingAttemptFailedError extends Error {
   /**
@@ -22,8 +23,9 @@ export class TrainingAttemptFailedError extends Error {
    * @param ComputeSeconds the compute seconds the failed attempt's run recorded
    * @param ComputeCost the USD the failed attempt's run recorded
    * @param cause the engine's error
+   * @param TokensUsed the tokens of the prompt runs attributed to the attempt's iteration
    */
-  constructor(message: string, public readonly ComputeSeconds: number, public readonly ComputeCost: number, cause?: Error) {
+  constructor(message: string, public readonly ComputeSeconds: number, public readonly ComputeCost: number, cause?: Error, public readonly TokensUsed: number = 0) {
     super(message, cause === undefined ? undefined : { cause });
     this.name = 'TrainingAttemptFailedError';
   }

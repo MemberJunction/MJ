@@ -880,7 +880,7 @@ describe('TrainingEngineExperimentTrainer', () => {
     harness.deps.trainer = protocolTrainer;
     harness.pipeline.EvaluationProtocolID = pipelineProtocolID;
     const resolver = { resolvePipelineId: async (): Promise<string> => harness.pipeline.ID };
-    return { trainer: new TrainingEngineExperimentTrainer(harness.deps, resolver, harness.engine), protocolTrainer, runs: harness.runs };
+    return { trainer: new TrainingEngineExperimentTrainer(harness.deps, resolver, harness.engine, async () => 0), protocolTrainer, runs: harness.runs };
   }
 
   function input(timeoutSeconds: number | null): TrainExperimentInput {
@@ -1084,3 +1084,101 @@ describe('ExperimentScores.ExtractNormalizedScore', () => {
   });
 });
 
+
+// ---------------------------------------------------------------------------
+// A6 attacks 1 and 3 (F-EXP-2, F-EXP-3): failed iterations count against the session budget, and an iteration's
+// tokens are the prompt runs attributed to it, written on the iteration and its training run.
+// ---------------------------------------------------------------------------
+
+describe('A6 attack 1: a MaxRuns = 3 session whose iterations all fail runs 3 iterations, not 4', () => {
+  for (const concurrency of [1, 2, 3, 4]) {
+    it(`concurrency ${concurrency}`, async () => {
+      const factory = new FakeFactory();
+      const labels = ['A', 'B', 'C', 'D', 'E', 'F'];
+      const trainer = new FakeTrainer({}, undefined, 0, 1, new Set(labels));
+      const result = await new ExperimentOrchestrator().runSession(
+        plan(labels.map((l, i) => experiment(l, i + 1)), { MaxRuns: 3 }),
+        deps(factory, trainer, new FakeClock()),
+        { concurrency },
+      );
+      expect(trainer.Calls.length).toBe(3);
+      expect(factory.Iterations.map((it) => it.Status)).toEqual(['Failed', 'Failed', 'Failed']);
+      expect(result.stopReason).toBe('budget-maxRuns');
+    });
+  }
+});
+
+describe('A6 attack 3: iteration tokens', () => {
+  /** A trainer answering a fixed token count, or failing with one. */
+  class TokenTrainer implements IExperimentTrainer {
+    constructor(private readonly tokens: number, private readonly fail: boolean) {}
+    async train(input: TrainExperimentInput): Promise<TrainExperimentResult> {
+      if (this.fail) throw new TrainingAttemptFailedError('strategist call then a sidecar failure', 1, 0.01, undefined, this.tokens);
+      const run = new FakeRun();
+      run.ExperimentSessionIterationID = input.iterationId;
+      return { model: new FakeModel() as unknown as MJMLModelEntity, run: run as unknown as MJMLTrainingRunEntity, Score: 0.7, ScoreMetric: 'AUC', ComputeCost: 0, ComputeSeconds: 1, TokensUsed: this.tokens };
+    }
+  }
+
+  it("writes the trainer's tokens on a completed iteration, and a failed attempt's tokens on a failed one", async () => {
+    const done = new FakeFactory();
+    await new ExperimentOrchestrator().runSession(plan([experiment('A', 1)]), deps(done, new TokenTrainer(2000, false), new FakeClock()), { concurrency: 1 });
+    expect(done.Iterations.map((it) => [it.Status, it.TokensUsed])).toEqual([['Completed', 2000]]);
+    const failed = new FakeFactory();
+    await new ExperimentOrchestrator().runSession(plan([experiment('A', 1)]), deps(failed, new TokenTrainer(750, true), new FakeClock()), { concurrency: 1 });
+    expect(failed.Iterations.map((it) => [it.Status, it.TokensUsed])).toEqual([['Failed', 750]]);
+  });
+
+  it('records on each iteration the agent run an attributed strategist made its calls under', async () => {
+    const factory = new FakeFactory();
+    const strategist: IWaveStrategist & { CurrentAgentRunID: string | null } = {
+      CurrentAgentRunID: 'STRATEGIST-RUN',
+      proposeNextWave: (ctx) => ctx.remaining.slice(0, 1),
+    };
+    // A strategist other than the seeded random one runs only under a guided strategy with a passed comparison (G7.7).
+    const comparisonId = 'C1111111-1111-4111-8111-111111111111';
+    await new ExperimentOrchestrator().runSession(plan([experiment('A', 1), experiment('B', 2)]), deps(factory, new TokenTrainer(10, false), new FakeClock(), strategist), {
+      concurrency: 1,
+      searchStrategy: { kind: 'guided', method: 'bayesian', equalCostComparisonId: comparisonId },
+      searchComparisonStore: {
+        LoadComparison: async () => ({
+          ID: comparisonId, Method: 'bayesian', ComputeBudgetSecondsPerArm: 120,
+          Datasets: [{ Dataset: 'W1-signal', Seeds: [42] }, { Dataset: 'C1', Seeds: [1] }],
+          PairedDifference: { 'W1-signal': { value: 0.05, ci: [0.02, 0.08], beats: true }, 'C1': { value: 0.04, ci: [0.01, 0.07], beats: true } },
+          LowerBoundMin: 0.01, Passed: true,
+        }),
+      },
+    });
+    expect(factory.Iterations.map((it) => it.AIAgentRunID)).toEqual(['STRATEGIST-RUN', 'STRATEGIST-RUN']);
+  });
+});
+
+describe('A6 attack 3: TrainingEngineExperimentTrainer reports the tokens attributed to the iteration', () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  function tokenTrainer(answer: ConstructorParameters<typeof FakeProtocolTrainer>[0], tokens: number): { trainer: TrainingEngineExperimentTrainer; runs: ReturnType<typeof TrainingHarness.ForUnit>['runs']; asked: string[] } {
+    const harness = TrainingHarness.ForUnit(UnitYearsWorld.Years(), UnitYearsWorld.UnitColumns());
+    harness.deps.trainer = new FakeProtocolTrainer(answer);
+    harness.pipeline.EvaluationProtocolID = ProtocolRowFixture.ID;
+    const asked: string[] = [];
+    const resolver = { resolvePipelineId: async (): Promise<string> => harness.pipeline.ID };
+    const source = async (iterationId: string): Promise<number> => { asked.push(iterationId); return tokens; };
+    return { trainer: new TrainingEngineExperimentTrainer(harness.deps, resolver, harness.engine, source), runs: harness.runs, asked };
+  }
+
+  const trainInput: TrainExperimentInput = { experiment: experiment('A', 1), plan: plan([experiment('A', 1)]), iterationId: 'iter-T', sessionId: 'sess-T', timeoutSeconds: null };
+
+  it("returns the iteration's tokens and stores them on its training run", async () => {
+    const { trainer, runs, asked } = tokenTrainer((r) => TrainerResultFixtures.CannedCompleted(r.trainingRunId, ProtocolRowFixture.Spec(), r.snapshot.featureSchemaHash), 2000);
+    const result = await trainer.train(trainInput);
+    expect(asked).toEqual(['iter-T']);
+    expect(result.TokensUsed).toBe(2000);
+    expect(runs[0].TokensUsed).toBe(2000);
+  });
+
+  it('carries the tokens of a failed attempt and stores them on its run', async () => {
+    const { trainer, runs } = tokenTrainer((r) => TrainerResultFixtures.CannedFailed(r.trainingRunId), 640);
+    await expect(trainer.train(trainInput)).rejects.toMatchObject({ name: 'TrainingAttemptFailedError', TokensUsed: 640 });
+    expect(runs[0].TokensUsed).toBe(640);
+  });
+});

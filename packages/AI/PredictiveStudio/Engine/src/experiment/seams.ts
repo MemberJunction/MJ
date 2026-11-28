@@ -24,6 +24,7 @@ import type { TrainingDeps, TrainModelInput, TrainModelResult } from '../trainin
 import { RunViewTrainingSnapshotStore } from '../snapshot/training-snapshot-store';
 import { TrainingAttemptFailedError } from './budget';
 import { ExperimentScores } from './scores';
+import { ExperimentTokenAccounting, type IterationTokenSource } from './token-accounting';
 import type {
   IClock,
   IExperimentEntityFactory,
@@ -100,11 +101,14 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
    * @param trainingDeps the training engine's injected dependency bundle
    * @param pipelineResolver maps experiment → pipeline id
    * @param engine optional TrainingEngine override (defaults to a fresh instance)
+   * @param tokenSource where the tokens attributed to an iteration are read (defaults to
+   *   {@link ExperimentTokenAccounting.TokensFor} on the training deps' provider and user)
    */
   constructor(
     private readonly trainingDeps: TrainingDeps,
     private readonly pipelineResolver: IPipelineResolver,
     private readonly engine: TrainingEngine = new TrainingEngine(),
+    private readonly tokenSource: IterationTokenSource = (iterationId) => ExperimentTokenAccounting.TokensFor(iterationId, trainingDeps.provider, trainingDeps.contextUser),
   ) {}
 
   /**
@@ -124,6 +128,8 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
     // A run whose gate decision shipped no artifact has no model to score: the iteration completes with no score
     // (its run's stored gate record says why) and the session continues.
     const scored = model === null ? null : ExperimentScores.ExtractNormalizedScore(model.HoldoutMetrics, input.plan.TargetDefinition.SuccessMetric);
+    const tokens = await this.tokenSource(input.iterationId);
+    await TrainingEngineExperimentTrainer.recordTokens(run, tokens);
     return {
       model,
       run,
@@ -133,7 +139,7 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
       // session's MaxComputeCost sum.
       ComputeCost: run.ComputeCost ?? 0,
       ComputeSeconds: run.ComputeSeconds || 0,
-      TokensUsed: 0,
+      TokensUsed: tokens,
     };
   }
 
@@ -150,8 +156,35 @@ export class TrainingEngineExperimentTrainer implements IExperimentTrainer {
     } catch (err) {
       const run = await this.failedAttemptRun(iterationId);
       if (run === null || !(err instanceof Error)) throw err;
-      throw new TrainingAttemptFailedError(err.message, run.ComputeSeconds || 0, run.ComputeCost || 0, err);
+      const tokens = await this.failedAttemptTokens(run, iterationId);
+      throw new TrainingAttemptFailedError(err.message, run.ComputeSeconds || 0, run.ComputeCost || 0, err, tokens);
     }
+  }
+
+  /**
+   * Stores the iteration's attributed tokens on its training run, so the run row holds what the iteration used.
+   *
+   * @throws when the save fails (the run's stored sums must match what the session counted)
+   */
+  private static async recordTokens(run: MJMLTrainingRunEntity, tokens: number): Promise<void> {
+    if (run.TokensUsed === tokens) return;
+    run.TokensUsed = tokens;
+    if (!(await run.Save())) throw new Error(`TrainingEngineExperimentTrainer: storing ${tokens} tokens on training run ${run.ID} failed: ${run.LatestResult?.CompleteMessage || 'unknown error'}`);
+  }
+
+  /**
+   * The tokens of a failed attempt, stored on its run. A failed read or save is logged and counts what was read, so it
+   * never masks the attempt's own error.
+   */
+  private async failedAttemptTokens(run: MJMLTrainingRunEntity, iterationId: string): Promise<number> {
+    let tokens = 0;
+    try {
+      tokens = await this.tokenSource(iterationId);
+      await TrainingEngineExperimentTrainer.recordTokens(run, tokens);
+    } catch (tokenErr) {
+      LogError(`TrainingEngineExperimentTrainer: recording the tokens of failed iteration ${iterationId} failed: ${tokenErr instanceof Error ? tokenErr.message : String(tokenErr)}`);
+    }
+    return tokens;
   }
 
   /**

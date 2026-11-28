@@ -17,4 +17,5 @@ export * from './random-strategist';
 export * from './scores';
 export * from './seams';
 export * from './budget';
+export * from './token-accounting';
 export * from './experiment-orchestrator';

@@ -1,0 +1,26 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "C1 -> C3.4",
+    "Description": "Gate G4.8 (owner PR 5, phase 4, dataset C1, criterion C3.4): a stopped sidecar ends the work it was doing Failed within the declared timeout (MLSidecar.DefaultRequestTimeoutMs, 300 s, when the protocol declares none), and the CLI exits non-zero on a failed result. The truth sidecar's Python process is killed (SIGKILL) and its wrapper restarted on the same URL after each half: (1) during the approved W1-signal build's training run -> the training run and the agent turn that ran the build are Failed within the timeout (the CLI cannot run an approved build: D5-A6-3); (2) during a `mj ai agents run` turn on the renewal request for the W1-signal world -> the turn is Failed within the timeout and the CLI exits non-zero (a run that reached no sidecar call is re-run, never counted, at most 3 attempts); (3) after a successful CLI run, the process ends within 10 s of its result with 0 established connections to the SQL port. Server transport (the agent runs as the D5-46 person); spends LLM money. Mutation: let a failed profile or build with the sidecar unreachable leave the turn running to its decline (drop the sidecar check) -> red. Run budget 60 min (MaxExecutionTimeMS).",
+    "Status": "Active",
+    "Tags": "[\"gate\",\"G4.8\",\"owner:PR5\",\"phase:4\",\"dataset:C1\",\"criterion:C3.4\"]",
+    "InputDefinition": {},
+    "MaxExecutionTimeMS": 3600000,
+    "ExpectedOutcomes": {
+      "summary": "The training run and its turn end Failed within 300 s of the kill; the CLI turn ends Failed within 300 s and the CLI exits non-zero; a successful CLI run exits within 10 s of its result with 0 SQL connections."
+    },
+    "Configuration": {
+      "tier": "mutation",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "ps-gate-c1-c3-4"
+        }
+      ]
+    }
+  },
+  "primaryKey": {
+    "ID": "9B5E1FB5-D7A4-4304-986B-F32B659BC801"
+  }
+}
