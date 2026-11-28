@@ -320,9 +320,10 @@ export class AgentControlPath {
   /** The exact error a repair hands the owning sub-agent: what is wrong, where, and what to do. */
   public static RepairReason(refusal: DraftRefusal): string {
     const fix = `${AgentControlPath.DescribeRefusal(refusal)} Correct your slice of the plan so that it uses only names from the entity catalog, and change nothing else.`;
-    // Only the target slice holds names the user asked for (D5-W4-1); an invented source or feature is always replaced.
-    const targetOnly = refusal.kind === 'unresolved-reference' && refusal.references.every((r) => r.path.startsWith('TargetDefinition.'));
-    return targetOnly ? `${fix} A name the user asked for that the catalog does not have: keep it as the user wrote it, never swap in another entity or column.` : fix;
+    // Only a target entity that does not exist is one the user may have asked for (D5-W4-1); an invented label, source
+    // or feature on a real entity is always replaced with a catalog name.
+    const missingEntity = refusal.kind === 'unresolved-reference' && refusal.references.some((r) => r.path === 'TargetDefinition.EntityName');
+    return missingEntity ? `${fix} A name the user asked for that the catalog does not have: keep it as the user wrote it, never swap in another entity or column.` : fix;
   }
 
   /** A draft refusal in words, naming the slice and the sub-agent that fixes it. */

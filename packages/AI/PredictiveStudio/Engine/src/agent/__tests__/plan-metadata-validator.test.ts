@@ -237,8 +237,17 @@ describe('wave-4 integration: a target naming things that do not exist ends decl
     expect(t.Kind === 'repair' ? t.Reason : '').toContain('keep it as the user wrote it');
   });
 
+  it('a repair of an invented label on a real entity carries no keep-as-written sentence (Small-N runtime)', () => {
+    const label = [{ path: 'TargetDefinition.TargetVariable', name: 'SteppedDownNextYear', kind: 'field' as const }];
+    const t = AgentControlPath.Next('validate-plan', validatedFacts(label, 0));
+    expect(t.Kind).toBe('repair');
+    expect(t.Kind === 'repair' ? t.Reason : '').not.toContain('keep it as the user wrote it');
+  });
+
   it('a repair of other slices (a feature the Data Scout invented) carries no keep-as-written sentence', () => {
-    const t = AgentControlPath.Next('validate-plan', validatedFacts(INVENTED, 0));
-    expect(t.Kind === 'repair' ? t.Reason : 'none').not.toContain('keep it as the user wrote it');
+    const features = INVENTED.filter((r) => !r.path.startsWith('TargetDefinition.'));
+    const t = AgentControlPath.Next('validate-plan', validatedFacts(features, 0));
+    expect(t.Kind).toBe('repair');
+    expect(t.Kind === 'repair' ? t.Reason : '').not.toContain('keep it as the user wrote it');
   });
 });
