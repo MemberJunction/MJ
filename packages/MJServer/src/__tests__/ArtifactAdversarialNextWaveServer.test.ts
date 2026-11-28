@@ -885,7 +885,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                         }
                         if (!synced && syncSubType === syncProtocol.messageYjsSyncStep2) {
                             synced = true;
-                            setTimeout(() => resolve({ ws, doc, controlFrames }), 30);
+                            resolve({ ws, doc, controlFrames });
                         }
                     } else if (msgType === YJS_MESSAGE_CONTROL) {
                         const frame = JSON.parse(decoding.readVarString(decoder)) as CollaborationControlFrame;
@@ -909,8 +909,12 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             mutate();
             clientDoc.off('update', listener);
             ws.send(encoding.toUint8Array(encoder));
-            return new Promise((r) => setTimeout(r, 60));
+            return Promise.resolve();
         };
+
+        /** Waits for the server's asynchronous `readonly-rejected` control frame on `frames` (D-091 item 17). */
+        const expectReadonlyRejected = (frames: CollaborationControlFrame[]): Promise<void> =>
+            vi.waitFor(() => expect(frames.some((f) => f.action === 'readonly-rejected')).toBe(true), { timeout: 5_000, interval: 10 });
 
         try {
             // 1. Unlocked Document: non-owner adding <!-- mj-lock: owner-only --> on wire is rejected (P0-12)
@@ -919,7 +923,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             await sendClientDelta(docConn.ws, docConn.doc, () => {
                 docConn.doc.getText('content').insert(0, '<!-- mj-lock: owner-only -->\n');
             });
-            expect(docConn.controlFrames.some((f) => f.action === 'readonly-rejected')).toBe(true);
+            await expectReadonlyRejected(docConn.controlFrames);
             const roomContentAfterLockAttempt = await server.GetRoomContent(artifactId, ownerUser, provider);
             expect(roomContentAfterLockAttempt).not.toContain('mj-lock');
             docConn.ws.close();
@@ -928,7 +932,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
             await sendClientDelta(metaConn.ws, metaConn.doc, () => {
                 metaConn.doc.getMap('meta').set('baseVersionNumber', 999);
             });
-            expect(metaConn.controlFrames.some((f) => f.action === 'readonly-rejected')).toBe(true);
+            await expectReadonlyRejected(metaConn.controlFrames);
             metaConn.ws.close();
 
             // 2. Spreadsheet: overlapping ProtectedRanges (AllowEditors:true + AllowEditors:false) denies editor
@@ -947,7 +951,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                     })
                 );
             });
-            expect(sheetConn.controlFrames.some((f) => f.action === 'readonly-rejected')).toBe(true);
+            await expectReadonlyRejected(sheetConn.controlFrames);
             sheetConn.ws.close();
 
             // Duplicate RangeID injection on spreadsheet also rejected (clean client clock)
@@ -964,7 +968,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 ];
                 sheetsMap.set('sheet-1', JSON.stringify(currentSheet));
             });
-            expect(sheetDupConn.controlFrames.some((f) => f.action === 'readonly-rejected')).toBe(true);
+            await expectReadonlyRejected(sheetDupConn.controlFrames);
             sheetDupConn.ws.close();
 
             // 3. SlideDeck: non-owner adding Locked slide or duplicate SlideID rejected, and malformed slidesById fails closed
@@ -983,7 +987,7 @@ describe('Artifact & Collaboration Adversarial Security + Next-Wave Fixes', () =
                 );
                 slideConn.doc.getArray<string>('slideOrder').push(['slide-2']);
             });
-            expect(slideConn.controlFrames.some((f) => f.action === 'readonly-rejected')).toBe(true);
+            await expectReadonlyRejected(slideConn.controlFrames);
             slideConn.ws.close();
 
             // 4. Malformed slidesById JSON in room fails closed instead of falling back to Y.Text

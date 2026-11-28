@@ -330,6 +330,8 @@ packages/MJCore/src/__tests__/providerBase.metadataMemberRefresh.test.ts  (D-091
 packages/AI/Agents/src/__tests__/AgentStepDispatcher.test.ts  (D-091 item 15)
 # Owner-batch item 16: an agent-presence test waited fixed sleeps for async states (controller, 2026-11-28)
 packages/MJServer/src/__tests__/artifact-collaboration-agent-presence.test.ts  (D-091 item 16)
+# Owner-batch item 17: the wire-lock adversarial test waited fixed sleeps for the server's control frame (integrator, 2026-11-28)
+packages/MJServer/src/__tests__/ArtifactAdversarialNextWaveServer.test.ts  (D-091 item 17)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
@@ -3784,6 +3786,11 @@ Record every decision taken in §9 and, when it changes another plan's interface
   (`ECA491D5`) crossed on the Data Scout's 12,954-token call (21,228 of 15,000) and spent another 2,615-token prompt,
   23,843 > 15,000 + 2,615. A6's runs crossed on an orchestrator prompt, so it never showed. · Changing the framework's
   check order (non-PS; the orchestrator owns its turn routing). Integrator ruling, wave-4 integration.
+- D5-60 · 2026-11-28 · Standing rule: a test that fails in the mirror under load because a fixed sleep awaits an async
+  state, or a cold import or bootstrap is counted inside its own timeout, is fixed at that cause as the next owner-batch
+  item (`vi.waitFor` on the state, or the setup moved to `beforeAll`), proven green alone and with 4 concurrent copies,
+  and recorded here and in the allowlist; never a raised timeout or a skip. Anything else goes to the controller. ·
+  Controller ruling.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3892,6 +3899,14 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    restored. `ai-agents` 303 files, 5,428 passed. Fixed by the integrator at wave-4 integration under the owner's
    2026-11-26 statement.
 
+16. Recorded by the controller in §11 (2026-11-28): the agent-presence test's fixed sleeps, `4458cd334f`.
+17. `packages/MJServer/src/__tests__/ArtifactAdversarialNextWaveServer.test.ts` — "P0-12 & P0-13" connected each editor
+   30 ms after sync step 2 and sent each client delta 60 ms before asserting the server's asynchronous
+   `readonly-rejected` control frame had arrived (fixed sleeps). Wave-4's final mirror on `4458cd334f`
+   (`20261128-141559-4666`, load 40) failed it at :967 (`expected false to be true`); alone 3/3 at load 36→25. The
+   sleeps are gone: the connection resolves on sync step 2 and each of the five assertions is `vi.waitFor` on the frame
+   (5 s bound, 10 ms interval). Alone 13/13 three times, 4 concurrent copies 4/4; waiting on a frame the server never
+   sends fails in 5 s (mutation, restored). Approved by the controller 2026-11-28 (item 17).
 ## 10. PR description draft
 
 **Title:** `Predictive Studio PR 5 — the agent as a drafter; Feature Pipelines as a Predictive Studio input`
