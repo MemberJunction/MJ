@@ -1,8 +1,8 @@
 You are analyzing a database table to generate comprehensive documentation. Your task is to infer the table's purpose based on the evidence provided.
 
 ## Table Information
-- **Name**: {{ tableName }}
-- **Schema**: {{ schemaName }}
+- **Name**: {{ table }}
+- **Schema**: {{ schema }}
 - **Row Count**: {{ rowCount }}
 {% if dependencyLevel is defined %}- **Dependency Level**: {{ dependencyLevel }} (0 = no dependencies){% endif %}
 
@@ -16,11 +16,12 @@ You are analyzing a database table to generate comprehensive documentation. Your
   {% if col.statistics %}- Distinct Values: {{ col.statistics.distinctCount }} ({{ (col.statistics.uniquenessRatio * 100) | round(1) }}% unique){% endif %}
   {% if col.statistics and col.statistics.nullPercentage > 0 %}- Nulls: {{ col.statistics.nullPercentage | round(1) }}%{% endif %}
   {% if col.possibleValues %}- Possible Values: {{ col.possibleValues | join(', ') }}{% endif %}
-  {% if col.statistics and col.statistics.min is defined %}- Range: {{ col.statistics.min }} to {{ col.statistics.max }}{% if col.statistics.avg %} (avg: {{ col.statistics.avg | round(2) }}){% endif %}{% endif %}
+  {% if col.statistics and col.statistics.min is defined and col.statistics.min !== null %}- Range: {{ col.statistics.min }} to {{ col.statistics.max }}{% if col.statistics.avg %} (avg: {{ col.statistics.avg | round(2) }}){% endif %}{% elif col.statistics and col.statistics.minValue is defined and col.statistics.minValue !== null %}- Range: {{ col.statistics.minValue }} to {{ col.statistics.maxValue }}{% endif %}
   {% if col.statistics and col.statistics.avgLength %}- Avg Length: {{ col.statistics.avgLength | round(1) }} chars{% endif %}
   {% if col.statistics.sampleValues and col.statistics.sampleValues.length > 0 %}- Sample Values: {{ col.statistics.sampleValues | jsoninline }}{% endif %}
+  {% if col.quality and col.quality.length > 0 %}- Data Quality: {{ col.quality | join(' ') }}{% endif %}
   {% if col.enumCandidate %}- **Enum Candidate**: Yes (pre-filter passed: distinctCount={{ col.enumCandidate.distinctCount }}, totalRows={{ col.enumCandidate.totalRows }}, cardinality={{ (col.enumCandidate.cardinalityRatio * 100) | round(1) }}%, dataType={{ col.enumCandidate.dataType }})
-  - **Candidate Values**: {{ col.enumCandidate.values | join(', ') }}{% endif %}
+  - **Candidate Values**: {{ col.enumCandidate.values | join(', ') }}{% if col.enumCandidate.variantsFolded %} ({{ col.enumCandidate.variantsFolded }} spellings that differ only by case or spaces were folded into these){% endif %}{% endif %}
 {% endfor %}
 
 ## Relationships
@@ -40,6 +41,16 @@ You are analyzing a database table to generate comprehensive documentation. Your
 
 {% if not dependsOn or dependsOn.length === 0 %}
 **Note**: This table has no foreign key dependencies (dependency level 0). It is likely a foundational/lookup table.
+{% endif %}
+
+{% if hasDataQuality or (dataQuality and dataQuality.length > 0) %}
+## Data Quality Observations
+Measured from the data: counts, not opinions. Use them to describe what the data actually holds. An always-NULL column is unused in this dataset; a mostly-NULL foreign key is an optional relationship; a placeholder date such as 9999-12-31 usually means "open-ended" or "unknown"; spellings that differ only by case mean the column is typed by hand. Do not invent a purpose the data does not support, and lower your confidence for an empty table.
+{% if dataQuality and dataQuality.length > 0 %}
+{% for line in dataQuality %}
+- {{ line }}
+{% endfor %}
+{% endif %}
 {% endif %}
 
 {% if parentDescriptions and parentDescriptions.length > 0 %}
@@ -171,7 +182,8 @@ Based on the evidence above, generate a JSON response with this exact structure:
 2. **Reasoning**: Reference specific evidence (column names, FK relationships, sample values, cardinality patterns)
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
 4. **Column Descriptions**: Every column should be described. Explain its role and meaning. For columns marked as "Enum Candidate: Yes", include a `valueList` object with your verdict. Omit `valueList` for columns that are not enum candidates.
-   - **Date and time columns**: when the table has more than one, say for EACH what event it marks (row created, business event happened, row last changed, period start or end) and name the one that tracks changes to the row. Use the value ranges above as evidence: a change-tracking column spans the whole life of the table, a business-event column spans the period the data covers. Never describe two date columns with the same words.
+   - **Always-NULL / unused columns**: when a column is 100% NULL on a non-empty table (its `Data Quality` note says every row is NULL), state explicitly in its description that the column is unpopulated / unused in the current data. Do NOT state an unverified purpose or lifecycle event as fact (at most mention briefly what the column name suggests it may have been intended for).
+   - **Date and time columns**: when the table has more than one populated date/time column, say for EACH what event it marks (row created, business event happened, row last changed, period start or end) and name the one that tracks changes to the row. Use the value ranges above as evidence: a change-tracking column spans the whole life of the table, a business-event column spans the period the data covers. Never describe two date columns with the same words.
 5. **Primary Key**: Identify the column(s) that most likely form this table's primary key.
    - Look for columns with 100% uniqueness, zero nulls, and names like `ID`, `TableNameID`, or `Code`
    - For junction/bridge tables (e.g., `ProductModelIllustration`), the PK is likely a composite of the FK columns

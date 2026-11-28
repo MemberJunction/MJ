@@ -49,6 +49,10 @@ export interface AutoDocForeignKey {
   referencedTable: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   referencedColumn: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
   constraintName?: string;  // case-violation-ok-legacy-back-compat: the type is named in an exported signature, so consumers build object literals against it; an interface has no runtime carrier for a stub
+  /** False when existing rows are not guaranteed to satisfy the constraint (NOCHECK, NOT VALID, unenforcing engine). Undefined when unknown. */
+  isTrusted?: boolean;  // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings are camelCase
+  /** True when the constraint is disabled. */
+  isDisabled?: boolean;  // case-violation-ok-legacy-back-compat: added to a camelCase interface; its siblings are camelCase
 }
 
 /**

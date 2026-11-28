@@ -69,6 +69,11 @@ export interface AdditionalSchemaInfoOptions {
    * writes EntityOrganicKey / EntityOrganicKeyRelatedEntity metadata.
    */
   OrganicKeys?: DetectedOrganicKeysOutput;
+  /**
+   * Fold value-list spellings that differ only by letter case or surrounding whitespace.
+   * Defaults to true when the state contains an active (non-skipped) data quality phase.
+   */
+  FoldSpellingVariants?: boolean;
 }
 
 interface SoftPKEntry {
@@ -128,7 +133,9 @@ interface AdditionalSchemaInfoOutput {
 }
 
 export class AdditionalSchemaInfoGenerator {
-  private readonly enumCandidateGate = new EnumCandidateGate();
+  private readonly plainEnumGate = new EnumCandidateGate({ FoldSpellingVariants: false });
+  private readonly foldingEnumGate = new EnumCandidateGate({ FoldSpellingVariants: true });
+  private activeEnumGate: EnumCandidateGate = this.plainEnumGate;
 
   /**
    * Generate additionalSchemaInfo JSON from analysis state.
@@ -148,6 +155,10 @@ export class AdditionalSchemaInfoGenerator {
     state: DatabaseDocumentation,
     options: AdditionalSchemaInfoOptions = {}
   ): string {
+    const foldVariants =
+      options.FoldSpellingVariants ??
+      (state.phases?.dataQuality !== undefined && state.phases.dataQuality.Status !== 'skipped');
+    this.activeEnumGate = foldVariants ? this.foldingEnumGate : this.plainEnumGate;
     const result: AdditionalSchemaInfoOutput = {
       Schemas: this.generateSchemaNameInfo(state),
     };
@@ -390,7 +401,7 @@ export class AdditionalSchemaInfoGenerator {
 
       const values = col.userApproved
         ? verdict.values
-        : this.enumCandidateGate.FilterVerdictValues(col, table.rowCount, verdict.values);
+        : this.activeEnumGate.FilterVerdictValues(col, table.rowCount, verdict.values);
       if (!values) continue;
 
       // Sort values alphabetically — matches CHECK-constraint pass behavior

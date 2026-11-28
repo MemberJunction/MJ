@@ -397,9 +397,10 @@ export class ColumnStatsCache {
 
   /**
    * Write the cache back onto the schema's columns. A column the sampling pass already measured keeps
-   * every field sampling recorded (its counts, percentages, numeric and length statistics) and gains
-   * what only discovery computes, such as the data pattern; a column sampling did not cover gets the
-   * cache's record in full.
+   * every field sampling recorded (its counts, 0–100 percentages, numeric and length statistics) and
+   * gains what only discovery computes, such as the data pattern. When sampling skipped the column or
+   * its count query failed (all-zero counts on a non-empty table), the cache supplies the counts with
+   * the null fraction converted to 0–100.
    */
   public MergeIntoSchemas(schemas: SchemaDefinition[]): void {
     for (const schema of schemas) {
@@ -413,21 +414,64 @@ export class ColumnStatsCache {
           const cachedStats = tableStats.columns.get(column.name);
           if (!cachedStats) continue;
 
-          column.statistics = {
+          // The cache holds a 0–1 fraction (its detectors use it); column statistics hold 0–100.
+          const fromCache: import('../types/state.js').ColumnStatistics = {
             totalRows: cachedStats.totalRows,
             distinctCount: cachedStats.distinctCount,
             uniquenessRatio: cachedStats.uniqueness,
             nullCount: cachedStats.nullCount,
-            nullPercentage: cachedStats.nullPercentage,
+            nullPercentage: cachedStats.totalRows > 0 ? (cachedStats.nullCount / cachedStats.totalRows) * 100 : 0,
             dataPattern: cachedStats.dataPattern,
             sampleValues: cachedStats.sampleValues,
             valueDistribution: cachedStats.valueDistribution,
+            min: cachedStats.minValue,
+            max: cachedStats.maxValue,
             minValue: cachedStats.minValue,
             maxValue: cachedStats.maxValue,
             avgLength: cachedStats.avgLength,
             computedAt: cachedStats.computedAt,
-            queryTimeMs: cachedStats.queryTimeMs,
-            ...column.statistics
+            queryTimeMs: cachedStats.queryTimeMs
+          };
+
+          const existing = column.statistics;
+          if (!existing) {
+            column.statistics = fromCache;
+            continue;
+          }
+
+          const failedSamplingCounts =
+            existing.totalRows === 0 &&
+            existing.distinctCount === 0 &&
+            ((table.rowCount ?? 0) > 0 || cachedStats.totalRows > 0);
+          if (failedSamplingCounts) {
+            column.statistics = {
+              ...existing,
+              totalRows: fromCache.totalRows,
+              distinctCount: fromCache.distinctCount,
+              uniquenessRatio: fromCache.uniquenessRatio,
+              nullCount: fromCache.nullCount,
+              nullPercentage: fromCache.nullPercentage,
+              dataPattern: existing.dataPattern ?? fromCache.dataPattern,
+              sampleValues: existing.sampleValues?.length ? existing.sampleValues : fromCache.sampleValues,
+              valueDistribution: existing.valueDistribution?.length ? existing.valueDistribution : fromCache.valueDistribution,
+              min: existing.min ?? fromCache.min,
+              max: existing.max ?? fromCache.max,
+              minValue: existing.minValue ?? fromCache.minValue,
+              maxValue: existing.maxValue ?? fromCache.maxValue,
+              avgLength: existing.avgLength ?? fromCache.avgLength,
+              computedAt: fromCache.computedAt,
+              queryTimeMs: fromCache.queryTimeMs
+            };
+            continue;
+          }
+
+          column.statistics = {
+            ...existing,
+            dataPattern: existing.dataPattern ?? cachedStats.dataPattern,
+            minValue: existing.minValue ?? cachedStats.minValue,
+            maxValue: existing.maxValue ?? cachedStats.maxValue,
+            computedAt: existing.computedAt ?? cachedStats.computedAt,
+            queryTimeMs: existing.queryTimeMs ?? cachedStats.queryTimeMs
           };
         }
       }

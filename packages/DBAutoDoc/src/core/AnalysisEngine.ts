@@ -13,6 +13,9 @@ import { BuildIndexHints, FormatIndexHint, IsUniquelyIndexed } from "../utils/in
 import { SeedContextExcerpt } from "../utils/seed-context.js";
 import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
 import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
+import type { DataQualityRunner } from '../quality/DataQualityRunner.js';
+import { ResolveDataQualityConfig } from '../quality/DataQualityConfig.js';
+import { ColumnQualityLines, OrphanEvidence, TableQualityLines } from '../quality/PromptFacts.js';
 import { KeyVerifier, StampFor, JoinProbeResult } from '../discovery/JoinProbe.js';
 import {
   TableAnalysisPromptResult,
@@ -37,6 +40,8 @@ export class AnalysisEngine {
   private convergenceDetector: ConvergenceDetector;
   private guardrailsManager: GuardrailsManager;
   private enumCandidateGate: EnumCandidateGate;
+  private readonly plainEnumCandidateGate = new EnumCandidateGate({ FoldSpellingVariants: false });
+  private readonly foldingEnumCandidateGate = new EnumCandidateGate({ FoldSpellingVariants: true });
   private startTime: number = 0;
   private currentRun?: AnalysisRun;
 
@@ -57,6 +62,21 @@ export class AnalysisEngine {
    */
   public SetKeyVerifier(verifier: KeyVerifier | null): void {
     this.keyVerifier = verifier;
+  }
+
+  /**
+   * Data quality findings shown to the model while it describes tables and prunes keys. Optional:
+   * without it the prompts carry no data quality facts.
+   */
+  private dataQuality: DataQualityRunner | null = null;
+
+  /** Supply the data quality runner whose findings the description and pruning prompts show. */
+  public SetDataQuality(runner: DataQualityRunner | null, state?: DatabaseDocumentation): void {
+    this.dataQuality = runner;
+    if (runner) {
+      const fold = (state ? runner.IsActive(state) : runner.Config.Enabled) && runner.Config.Checks.CaseWhitespaceVariants;
+      this.enumCandidateGate = fold ? this.foldingEnumCandidateGate : this.plainEnumCandidateGate;
+    }
   }
 
   constructor(
@@ -84,7 +104,10 @@ export class AnalysisEngine {
     );
 
     this.guardrailsManager = new GuardrailsManager(config.analysis.guardrails);
-    this.enumCandidateGate = new EnumCandidateGate();
+    // Value lists fold spellings that differ only by case or whitespace when the data quality
+    // check for them is on: 'Active', 'ACTIVE' and 'Active ' are one value written three ways.
+    const quality = ResolveDataQualityConfig(config.analysis.dataQuality);
+    this.enumCandidateGate = quality.Enabled && quality.Checks.CaseWhitespaceVariants ? this.foldingEnumCandidateGate : this.plainEnumCandidateGate;
 
     // Set up guardrail checking in PromptEngine
     this.promptEngine.setGuardrailCheck(() => {
@@ -361,15 +384,20 @@ export class AnalysisEngine {
       const [schemaName, tableName] = tableKey.split('.');
       const table = this.stateManager.findTable(state, schemaName, tableName);
 
-      const candidates = tableFKs.map(fk => ({
-        sourceColumn: fk.sourceColumn,
-        targetSchema: fk.targetSchema,
-        targetTable: fk.targetTable,
-        targetColumn: fk.targetColumn,
-        confidence: fk.confidence,
-        locked: fk.status === 'confirmed',
-        targetUniquelyIndexed: IsUniquelyIndexed(this.stateManager.findTable(state, fk.targetSchema, fk.targetTable), fk.targetColumn)
-      }));
+      const qualityFindings = table && this.dataQuality ? this.dataQuality.PruningTableFindings(state, schemaName, table) : [];
+      const candidates = tableFKs.map(fk => {
+        const orphans = OrphanEvidence(qualityFindings, fk.sourceColumn, fk.targetSchema, fk.targetTable);
+        return {
+          sourceColumn: fk.sourceColumn,
+          targetSchema: fk.targetSchema,
+          targetTable: fk.targetTable,
+          targetColumn: fk.targetColumn,
+          confidence: fk.confidence,
+          locked: fk.status === 'confirmed',
+          targetUniquelyIndexed: IsUniquelyIndexed(this.stateManager.findTable(state, fk.targetSchema, fk.targetTable), fk.targetColumn),
+          ...(orphans ? { orphanRate: orphans.OrphanRate, checkedRows: orphans.CheckedRows } : {})
+        };
+      });
 
       const context = {
         sourceSchema: schemaName,
@@ -481,6 +509,10 @@ export class AnalysisEngine {
       }
     }
 
+    if (removed > 0) {
+      this.unflagRejectedForeignKeys(state, allFKs);
+    }
+
     const kept = allFKs.length - removed;
     console.log(`[AnalysisEngine] FK pruning complete: ${removed} removed, ${kept} kept (model: ${effectiveModel})`);
     this.onProgress('FK pruning complete', { removed, kept, model: effectiveModel });
@@ -490,6 +522,59 @@ export class AnalysisEngine {
     await this.stateManager.save(state);
 
     return { removed, kept };
+  }
+
+  private unflagRejectedForeignKeys(
+    state: DatabaseDocumentation,
+    foreignKeys: import('../types/discovery.js').FKCandidate[]
+  ): void {
+    const bare = (name: string): string => (name.includes('.') ? (name.split('.').pop() ?? name) : name);
+    const rejected = foreignKeys.filter(fk => fk.status === 'rejected');
+    for (const fk of rejected) {
+      const srcTable = this.stateManager.findTable(state, fk.schemaName, fk.sourceTable);
+      if (srcTable) {
+        srcTable.dependsOn = srcTable.dependsOn.filter(dep => {
+          if (dep.constraintName) return true; // never drop a declared catalog constraint
+          const depTable = bare(dep.table);
+          const depRef = dep.referencedColumn || dep.column;
+          return !(
+            dep.column === fk.sourceColumn &&
+            dep.schema === fk.targetSchema &&
+            depTable === fk.targetTable &&
+            depRef === fk.targetColumn
+          );
+        });
+        const stillReferencedFromColumn = srcTable.dependsOn.some(dep => dep.column === fk.sourceColumn);
+        const col = srcTable.columns.find(c => c.name === fk.sourceColumn);
+        if (col && !col.foreignKeyReferences?.constraintName && !stillReferencedFromColumn) {
+          col.isForeignKey = false;
+          col.foreignKeyReferences = undefined;
+        }
+      }
+
+      const tgtTable = this.stateManager.findTable(state, fk.targetSchema, fk.targetTable);
+      if (tgtTable) {
+        const remainingEdgesToTarget = (srcTable?.dependsOn ?? []).filter(
+          dep => dep.schema === fk.targetSchema && bare(dep.table) === fk.targetTable
+        );
+        if (remainingEdgesToTarget.length === 0) {
+          tgtTable.dependents = tgtTable.dependents.filter(
+            dep => !(dep.schema === fk.schemaName && bare(dep.table) === fk.sourceTable)
+          );
+        } else {
+          tgtTable.dependents = tgtTable.dependents.filter(dep => {
+            if (dep.schema !== fk.schemaName || bare(dep.table) !== fk.sourceTable) return true;
+            // Discovered/proposed dependents store `{ column: sourceColumn, referencedColumn: targetColumn }`;
+            // introspected dependents store `{ column: targetColumn, referencedColumn: sourceColumn }`.
+            return remainingEdgesToTarget.some(
+              edge =>
+                (dep.column === edge.column && dep.referencedColumn === (edge.referencedColumn || edge.column)) ||
+                (dep.column === (edge.referencedColumn || edge.column) && dep.referencedColumn === edge.column)
+            );
+          });
+        }
+      }
+    }
   }
 
   /** @deprecated Use {@link PruneForeignKeys}. */
@@ -769,14 +854,25 @@ export class AnalysisEngine {
     // Build FK candidate stats from discovery phase for LLM context
     const fkCandidateStats = this.buildFKCandidateStats(state, tableNode.schema, tableNode.table);
 
-    // Evaluate columns for enum candidacy via deterministic pre-filter
+    // Evaluate columns for enum candidacy via deterministic pre-filter (respecting `--skip-data-quality`)
+    if (this.dataQuality) {
+      const fold = this.dataQuality.IsActive(state) && this.dataQuality.Config.Checks.CaseWhitespaceVariants;
+      this.enumCandidateGate = fold ? this.foldingEnumCandidateGate : this.plainEnumCandidateGate;
+    }
     const enumCandidates = this.enumCandidateGate.evaluateTable(table.columns, table.rowCount);
     const enumCandidateMap = new Map(enumCandidates.map(c => [c.columnName, c]));
+
+    // Data quality facts, derived from the current state so keys added or removed since the
+    // measurement pass are reflected.
+    const qualityFindings = this.dataQuality ? this.dataQuality.TableFindings(state, tableNode.schema, table) : [];
+    const columnQuality = ColumnQualityLines(qualityFindings, this.dataQuality?.Config.PromptMaxFindingsPerColumn ?? 0);
+    const tableQuality = TableQualityLines(qualityFindings);
 
     return {
       schema: tableNode.schema,
       table: tableNode.table,
       rowCount: table.rowCount,
+      dependencyLevel: tableNode.level,
       columns: table.columns.map(col => ({
         name: col.name,
         dataType: col.dataType,
@@ -788,7 +884,8 @@ export class AnalysisEngine {
         defaultValue: col.defaultValue,
         possibleValues: col.possibleValues,
         statistics: col.statistics,
-        enumCandidate: enumCandidateMap.get(col.name) ?? undefined
+        enumCandidate: enumCandidateMap.get(col.name) ?? undefined,
+        quality: columnQuality.get(col.name)
       })),
       dependsOn: table.dependsOn,
       dependents: table.dependents,
@@ -800,7 +897,9 @@ export class AnalysisEngine {
       groundTruth: groundTruthContext,
       fkCandidateStats,
       enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined,
-      existingIndexes: this.indexHintLines(table)
+      existingIndexes: this.indexHintLines(table),
+      dataQuality: tableQuality.length > 0 ? tableQuality : undefined,
+      hasDataQuality: columnQuality.size > 0 || tableQuality.length > 0
     };
   }
 
