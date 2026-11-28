@@ -354,6 +354,8 @@ export class FeaturePipelineGateFixtures {
             { Entity: 'MJ: Feature Value Caches', Filter: `RecordProcessID IN ${rps} OR PromptID IN ${prompts}` },
             { Entity: 'MJ: Record Process Watermarks', Filter: `RecordProcessID IN ${rps}` },
             { Entity: 'MJ: Process Run Details', Filter: `ProcessRunID IN (SELECT ID FROM [__mj].[vwProcessRuns] WHERE RecordProcessID IN ${rps})` },
+            // A released re-derivation lease stays as a row and references both the Process Run and the Record Process.
+            { Entity: 'MJ: Feature Pipeline Rederivation Leases', Filter: `RecordProcessID IN ${rps}` },
             { Entity: 'MJ: Process Runs', Filter: `RecordProcessID IN ${rps}` },
             { Entity: 'MJ: Feature Pipeline Versions', Filter: `RecordProcessID IN ${rps}` },
             { Entity: 'MJ: Record Processes', Filter: `Name LIKE ${like}` },

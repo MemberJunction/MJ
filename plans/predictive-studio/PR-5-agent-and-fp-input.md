@@ -241,6 +241,9 @@ packages/MJCoreEntitiesServer/src/__tests__/ml-*.test.ts
 packages/TestingFramework/integration-test-suite/src/checks/ps-*
 packages/TestingFramework/integration-test-suite/src/checks/predictive-*
 packages/TestingFramework/integration-test-suite/src/checks/ps-gates/**
+# Caller maintenance (D-082): the Feature Pipeline gate fixtures' teardown deletes B3's re-derivation leases (§9 D5-W4-6)
+packages/TestingFramework/integration-test-suite/src/checks/fp-gates/fp-gate-fixture.ts  (D5-W4-6)
+packages/TestingFramework/integration-test-suite/src/__tests__/fp-gate-fixture-teardown.test.ts  (D5-W4-6)
 packages/TestingFramework/integration-test-suite/src/__tests__/ps-*
 packages/TestingFramework/integration-test-suite/src/__tests__/predictive-*
 # The checks' registration barrel and its pinned bundle counts (D-082 caller maintenance; §9 D5-19)
@@ -3799,6 +3802,13 @@ Record every decision taken in §9 and, when it changes another plan's interface
   loading (`MJServer/src/services/isolation/WorkerIsolationRunner.ts:247`,
   `MJCoreEntitiesServer/src/custom/SpreadsheetWorkerRunner.ts:171`), cost ~2.6 s of product time per mutation
   (4.05 s CPU); a warm pool that keeps isolation is a separate design decision. · Controller ruling.
+- D5-W4-6 · 2026-11-28 · The Feature Pipeline gate fixtures' teardown (`DeleteStubPipeline`) deletes the pipeline's
+  `MJ: Feature Pipeline Rederivation Leases` before its Process Runs and Record Processes (caller maintenance, D-082). ·
+  B3's lease references both, and a released lease stays as a row: the wave-4 Feature Pipelines suite on claudefp
+  (`545D42ED`, 8/8) logged `FK_FeaturePipelineRederivationLease_ProcessRun` three times in C2.1's teardown and left the
+  lease, its Process Run and the `FP Gate` Record Process behind. With the step: `755BA90F` 8/8, 0 leases and 0 `FP
+  Gate` Record Processes left. · Deleting the lease at release (the lease row is the single-flight record, D5-B3-1).
+  Integrator ruling, wave-4 integration.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
