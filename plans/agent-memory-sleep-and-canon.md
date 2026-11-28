@@ -2,7 +2,7 @@
 
 **Version**: 1.2 — Unified v6.3 Design Spec (consolidates PR #5869 *Harness²* into this plan, aligns with merged PR #6279, and adds Self-Improvement Memory + relational context items)  
 **Date**: November 18, 2026 (v1.1 November 2, 2026; originally October 30, 2026)  
-**Status**: Proposed — single authoritative v6.3 spec for **Arie Glazier (@arie-glazier-bcc)** after Predictive Studio wraps  
+**Status**: Accepted as part of the Canon factory run (2026-11-28). The master plan for Canon is [`plans/canon-factory-run.md`](canon-factory-run.md) ([MJ 7002](https://github.com/MemberJunction/MJ/pull/7002)); this document is the design for its memory, learning-cycle and precedence slices. See the box below.  
 **Owner / Assignee**: Arie Glazier (@arie-glazier-bcc) — extends his earlier work on Memory Consolidation ([`specs/001-memory-consolidation`](../specs/001-memory-consolidation/spec.md)), In-Flight Memory Writes ([`plans/agent-inflight-memory-writes.md`](agent-inflight-memory-writes.md)), and consolidates Recursive Improvement & Canon (formerly PR #5869) into a single roadmap  
 **FYI / Reviewers**: Robert Kihm (@rkihm-BC), Thomas Altman, Dray (@dray-mc), Topher Hunnewell (@topherHunnewell), Madhav Subramaniyam (@MS-BC), Jordan Fanapour (@jordanfanapour — Canon Semantic Graph alignment + legacy `Skip-Brain` FK cleanup in §3.2)  
 **Source Research**:
@@ -12,7 +12,25 @@
 
 **Code references** are pinned against `origin/next` @ `4da222e6aa` (2026-11-02, post-merge of PR #6279). §2.4 and §3.6 were re-verified against `origin/next` @ `883e71eb0` (2026-11-17); where §2.2 and §2.4 disagree, §2.4 is current.
 
-> **Before this work starts: read the Canon plans first (added 2026-11-23)**
+> **This plan is now one part of the Canon factory run (added 2026-11-28)**
+>
+> The sponsor pulled the open Canon work back from its owners. One Software Factory run builds all of it, this plan's five phases included, on one branch that merges to `next` once. [`plans/canon-factory-run.md`](canon-factory-run.md) is the master plan: scope, the 40 rulings (D1 to D40), the waves and the frozen tests. Nobody on the team has work due here; the team tests after the merge. `arie-glazier-bcc` is asked to review the result against this design then.
+>
+> **Where this text and the rulings disagree, the rulings win.** The differences that matter:
+> - **Statuses and tiers.** Concepts and edges use the shipped `Draft`, `Proposed`, `Approved`, `Deprecated`, plus `Provisional` (D28). `Canonical` and `Disputed` are not statuses, and the tier is `Inferred`, not `Custom` (master plan decision 5).
+> - **Canonical notes.** `IsCanonical` on a note marks a rule about agent behaviour only. Anything that defines a term, metric, policy, process, role or domain is a Graph Concept (decision 4).
+> - **The proposal tables are the one ledger** for every proposer (decision 2, D12), and each row also carries Impact, Confidence, its route and a review brief (D29, D33).
+> - **Promotion routing (§5.3) is replaced by Rule 6 of [`plans/canon-unification.md`](canon-unification.md).** Every class of decision starts in human review; only a person makes a class automatic, and the system never raises a threshold (D30). "Auto-Canon per tenant" becomes that per-class setting. Policy and Process concepts, contradictions of approved Canon, and anything from an untrusted outside source are never automatic (D32). An approval not made by a person does not publish past its sources' permissions unless a graph's setting says so (D31).
+> - **Precedence and two-lane selection (§4) are enforced in the one `CanonContextResolver`** (D9). Concepts are cited in the shipped inline format (D11); the `[N1]` short IDs stay for notes and examples.
+> - **The evidence ladder (§8.1) applies to every Canon member**, not only notes. Replay is the main evidence; the random holdout is read per class, and a human-approved Policy concept is never withheld (D34). An answer evaluation set measures Canon on against Canon off (D35).
+> - **Dreaming and the harness refiner ship switched off**, with their cost cap (D27).
+> - **A migration ships with its PostgreSQL migration** (D26).
+>
+> **Where each phase lands in the run:** Phase 0 → slices 0.1 and 0.4 (schema, fixes), with context items written by slice 4.3; Phase 1 → 1.3; the ledger and its materializer → 4.2; verification by replay and the holdout → 5.5; Phases 2 to 4 → 6.3.
+>
+> **From #4155:** R1 (provenance and taint) and R4 (governed self-improvement) are covered by the trust ceiling here and by Rule 6's ledger. R2 (compaction that proves it lost nothing) and R10 (standing intents) are not Canon and are not in this run.
+
+> **Superseded by the box above; kept as the record of what was to be reconciled (added 2026-11-23)**
 >
 > This plan was written when Canon was much smaller than it is now. Since then the sponsor closed seven Canon decisions, and a large part of the Canon runtime has merged. **Before Phase 0 begins (`arie-glazier-bcc`, starting the week of 2026-11-30), do a deep review of [`plans/canon-unification.md`](canon-unification.md)** and reconcile this plan with it and with [`plans/canon-master-plan.md`](canon-master-plan.md) ([MJ #6675](https://github.com/MemberJunction/MJ/pull/6675)). Canon is now central to memory, so the memory phases should build on it rather than beside it. Raise anything that doesn't fit on #6675 or with `rkihm-BC`.
 >
