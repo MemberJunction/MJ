@@ -70,14 +70,17 @@ export function IsJsonObject(value: unknown, seen: WeakSet<object> = new WeakSet
         return false;
     }
     seen.add(value);
-    const values = Object.values(value);
-    for (const entry of values) {
-        if (!IsJsonValue(entry, seen)) {
-            return false;
+    try {
+        const values = Object.values(value);
+        for (const entry of values) {
+            if (!IsJsonValue(entry, seen)) {
+                return false;
+            }
         }
+        return true;
+    } finally {
+        seen.delete(value);
     }
-    seen.delete(value);
-    return true;
 }
 
 /**
@@ -88,13 +91,16 @@ export function IsJsonArray(value: unknown, seen: WeakSet<object> = new WeakSet<
         return false;
     }
     seen.add(value);
-    for (const item of value) {
-        if (!IsJsonValue(item, seen)) {
-            return false;
+    try {
+        for (const item of value) {
+            if (!IsJsonValue(item, seen)) {
+                return false;
+            }
         }
+        return true;
+    } finally {
+        seen.delete(value);
     }
-    seen.delete(value);
-    return true;
 }
 
 /**

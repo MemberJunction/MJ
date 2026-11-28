@@ -127,11 +127,20 @@ describe('json-types runtime guards', () => {
         expect(IsJsonPrimitive(Infinity)).toBe(false);
         expect(IsJsonPrimitive(undefined)).toBe(false);
         expect(IsJsonValue(() => undefined)).toBe(false);
-        expect(IsJsonObject({ bad: undefined as unknown as string })).toBe(false);
 
-        const circular: Record<string, unknown> = { name: 'loop' };
+        const withUndefined: { bad: string | undefined } = { bad: undefined };
+        expect(IsJsonObject(withUndefined)).toBe(false);
+
+        interface CircularNode {
+            name: string;
+            self?: CircularNode;
+        }
+        const circular: CircularNode = { name: 'loop' };
         circular.self = circular;
         expect(IsJsonObject(circular)).toBe(false);
+
+        const sharedSubObj: JsonObject = { tag: 'v1' };
+        expect(IsJsonObject({ first: sharedSubObj, second: sharedSubObj })).toBe(true);
     });
 });
 
@@ -255,6 +264,36 @@ describe('WidgetHostProps contract (P8)', () => {
         expect(invalid.errors.some((e) => e.includes('minimum'))).toBe(true);
         expect(invalid.errors.some((e) => e.includes('enum'))).toBe(true);
         expect(invalid.errors.some((e) => e.includes('additionalProperties'))).toBe(true);
+
+        const nestedSchema: WidgetSettingsSchema = {
+            type: 'object',
+            properties: {
+                thresholds: {
+                    type: 'object',
+                    properties: {
+                        warning: { type: 'number', minimum: 0 },
+                        codePattern: { type: 'string', pattern: '[invalid' },
+                    },
+                    required: ['warning'],
+                    additionalProperties: false,
+                },
+            },
+            required: ['thresholds'],
+        };
+        const nestedInvalid = ValidateWidgetSettingsAgainstSchema(
+            {
+                thresholds: {
+                    warning: -1,
+                    codePattern: 'abc',
+                    extra: true,
+                },
+            },
+            nestedSchema
+        );
+        expect(nestedInvalid.valid).toBe(false);
+        expect(nestedInvalid.errors.some((e) => e.includes('thresholds.warning'))).toBe(true);
+        expect(nestedInvalid.errors.some((e) => e.includes('thresholds.extra'))).toBe(true);
+        expect(nestedInvalid.errors.some((e) => e.includes('invalid schema pattern'))).toBe(true);
     });
 
     it('supports upward WidgetEventNames and typed cancelable event payloads', () => {

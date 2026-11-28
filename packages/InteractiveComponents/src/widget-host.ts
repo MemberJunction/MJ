@@ -601,6 +601,37 @@ function validateValueAgainstSchemaProperty(
             validateValueAgainstSchemaProperty(`${path}[${i}]`, val[i], prop.items, errors);
         }
     }
+    if (IsPlainObject(val) && prop.type === 'object') {
+        validateObjectSchemaConstraints(path, val as JsonObject, prop, errors);
+    }
+}
+
+function validateObjectSchemaConstraints(
+    path: string,
+    obj: JsonObject,
+    prop: WidgetSettingsSchemaProperty,
+    errors: string[]
+): void {
+    for (const reqKey of prop.required ?? []) {
+        if (!(reqKey in obj)) {
+            errors.push(`Missing required widget setting "${path}.${reqKey}".`);
+        }
+    }
+    if (!prop.properties) {
+        return;
+    }
+    for (const [key, nestedVal] of Object.entries(obj)) {
+        const nestedProp = prop.properties[key];
+        if (!nestedProp) {
+            if (prop.additionalProperties === false) {
+                errors.push(`Unexpected widget setting "${path}.${key}" (additionalProperties is false).`);
+            } else if (prop.additionalProperties && typeof prop.additionalProperties === 'object') {
+                validateValueAgainstSchemaProperty(`${path}.${key}`, nestedVal, prop.additionalProperties, errors);
+            }
+            continue;
+        }
+        validateValueAgainstSchemaProperty(`${path}.${key}`, nestedVal, nestedProp, errors);
+    }
 }
 
 function validateStringSchemaConstraints(
@@ -616,9 +647,13 @@ function validateStringSchemaConstraints(
         errors.push(`Setting "${path}" length must be <= ${prop.maxLength}.`);
     }
     if (prop.pattern !== undefined) {
-        const regex = new RegExp(prop.pattern);
-        if (!regex.test(val)) {
-            errors.push(`Setting "${path}" does not match pattern "${prop.pattern}".`);
+        try {
+            const regex = new RegExp(prop.pattern);
+            if (!regex.test(val)) {
+                errors.push(`Setting "${path}" does not match pattern "${prop.pattern}".`);
+            }
+        } catch {
+            errors.push(`Setting "${path}" has an invalid schema pattern "${prop.pattern}".`);
         }
     }
 }
