@@ -1,0 +1,97 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Prompts & Models"
+    Icon="fa-solid fa-comment-dots"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [BadgeCount]="Prompts.length > 0 ? Prompts.length : null"
+    [DefaultExpanded]="true">
+
+    @if (!Record?.ID) {
+        <mj-empty-state
+            Icon="fa-solid fa-comment-dots"
+            Title="Save Agent First"
+            Message="Save this agent before linking prompts."
+            Size="compact" />
+    } @else {
+        <div class="ap-shell">
+            <div class="ap-header">
+                <div class="ap-mode-group">
+                    <span class="ap-mode-label">Model Selection Mode:</span>
+                    @if (EditMode) {
+                        <select
+                            class="mj-input ap-mode-select"
+                            [ngModel]="ModelSelectionMode"
+                            (ngModelChange)="SetModelSelectionMode($event)"
+                            name="agentPromptsModelSelectionMode"
+                            aria-label="Model Selection Mode">
+                            @for (mode of ModelSelectionModes; track mode) {
+                                <option [value]="mode">{{ mode }}</option>
+                            }
+                        </select>
+                    } @else {
+                        <span class="ap-pill">{{ ModelSelectionMode }}</span>
+                        @if (IsModelSelectionInherited && Record.BaseAgentID) {
+                            <span class="ap-mode-label">(inherited)</span>
+                        }
+                    }
+                </div>
+                @if (EditMode) {
+                    <button mjButton variant="primary" size="sm" type="button" (click)="AddPrompt()">
+                        <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                        Add Prompt
+                    </button>
+                }
+            </div>
+
+            <div class="ap-body">
+                @if (Loading) {
+                    <mj-loading text="Loading prompts..." size="medium"></mj-loading>
+                } @else if (Prompts.length === 0) {
+                    <mj-empty-state
+                        Icon="fa-solid fa-comments"
+                        Title="No Prompts Linked"
+                        Message="Add prompts to define how this agent reasons and structures responses."
+                        [ActionText]="EditMode ? 'Add Prompt' : ''"
+                        ActionIcon="fa-solid fa-plus"
+                        (Action)="AddPrompt()"
+                        Size="compact" />
+                } @else {
+                    <div class="ap-list">
+                        @for (prompt of Prompts; track prompt.ID; let i = $index) {
+                            <div class="ap-card" (click)="OpenPrompt(prompt.ID)">
+                                <div class="ap-card-icon">
+                                    <i class="fa-solid fa-comment-dots" aria-hidden="true"></i>
+                                </div>
+                                <div class="ap-card-main">
+                                    <div class="ap-card-title">
+                                        {{ prompt.Name }}
+                                        @if (prompt.PromptRole) {
+                                            <span class="ap-pill ap-pill--violet">{{ prompt.PromptRole }}</span>
+                                        }
+                                        <span class="ap-pill">#{{ i + 1 }}</span>
+                                    </div>
+                                    @if (PromptPreview(prompt)) {
+                                        <div class="ap-card-preview">{{ PromptPreview(prompt) }}</div>
+                                    }
+                                </div>
+                                <div class="ap-card-actions">
+                                    @if (EditMode) {
+                                        <button mjButton variant="flat" size="sm" type="button" (click)="OpenAdvancedSettings(prompt, $event)" title="Prompt link settings">
+                                            <i class="fa-solid fa-gear" aria-hidden="true"></i>
+                                        </button>
+                                        <button mjButton variant="flat" size="sm" type="button" (click)="RemovePrompt(prompt, $event)" title="Remove prompt">
+                                            <i class="fa-solid fa-trash ap-danger-icon" aria-hidden="true"></i>
+                                        </button>
+                                    }
+                                    <i class="fa-solid fa-arrow-up-right-from-square ap-open-icon" aria-hidden="true"></i>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</mj-collapsible-panel>

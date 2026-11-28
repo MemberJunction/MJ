@@ -19,7 +19,7 @@ import { TemplateParamDialogComponent } from "./Templates/template-param-dialog.
 import { TemplateParamsGridComponent } from "./Templates/template-params-grid.component";
 import { TemplateEditorComponent } from "../shared/components/template-editor.component";
 import { MJAIPromptFormComponentExtended } from "./AIPrompts/ai-prompt-form.component";
-import { MJAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
+import { MJAIAgentFormComponentExtended, LoadMJAIAgentFormComponentExtended } from "./AIAgents/ai-agent-form.component";
 import { NewAgentDialogComponent } from "./AIAgents/new-agent-dialog.component";
 import { NewAgentDialogService } from "./AIAgents/new-agent-dialog.service";
 import { AddActionDialogComponent } from "./AIAgents/add-action-dialog.component";
@@ -93,9 +93,18 @@ import { MJAIAgentSessionBridgeFormComponentExtended, LoadMJAIAgentSessionBridge
 import { RecordProcessFormComponentExtended, LoadRecordProcessFormComponentExtended } from "./RecordProcesses/record-process-form.component";
 import { RecordProcessEditorComponent, FeaturePipelineBuilderComponent, RecordProcessHistoryComponent } from "@memberjunction/ng-record-process-studio";
 import { MJAIBridgeAgentIdentityFormComponentExtended, LoadMJAIBridgeAgentIdentityFormComponentExtended } from "./BridgeAgentIdentities/bridge-agent-identity-form.component";
-// AI Agent "Realtime" panel (Pattern 1 — BaseFormPanel slot). Imported so the
-// @RegisterClassEx decorator runs at module load (Angular tree-shaking guard).
+// AI Agent modern form panels (Pattern 1 — BaseFormPanel slots) & toolbar actions.
+// Imported here so the @RegisterClassEx / @RegisterFormToolbarAction decorators run at module load.
+import { AgentOverviewPanel } from "../panels/ai-agents/agent-overview.panel";
+import { AgentTypeStudioPanel } from "../panels/ai-agents/agent-type-studio.panel";
+import { AgentPromptsPanel } from "../panels/ai-agents/agent-prompts.panel";
+import { AgentCapabilitiesPanel } from "../panels/ai-agents/agent-capabilities.panel";
+import { AgentKnowledgeMemoryPanel } from "../panels/ai-agents/agent-knowledge-memory.panel";
+import { AgentGuardrailsPayloadPanel } from "../panels/ai-agents/agent-guardrails-payload.panel";
+import { AgentRunsSessionsPanel } from "../panels/ai-agents/agent-runs-sessions.panel";
+import { AgentGovernancePanel } from "../panels/ai-agents/agent-governance.panel";
 import { AgentRealtimePanel, LoadAgentRealtimePanel } from "../panels/ai-agents/agent-realtime.panel";
+import { LoadAIAgentToolbarActions } from "../panels/ai-agents/agent-toolbar-actions";
 // Model Predictions — an ENTITY-AGNOSTIC BaseFormPanel (Pattern 1) registered
 // against the '*' wildcard entity, so it mounts on every entity form and
 // self-hides unless that entity has an active MJ: ML Model Scoring Binding.
@@ -128,6 +137,9 @@ import { BrandKitAssetsPanelComponent } from "../panels/brand-kits/brand-kit-ass
 import { BrandKitGenerationPolicyPanelComponent } from "../panels/brand-kits/brand-kit-generation-policy.panel";
 
 LoadDiagnosticSenderRegistrationToolbarActions();
+LoadMJAIAgentFormComponentExtended();
+LoadAIAgentToolbarActions();
+LoadAgentRealtimePanel();
 
 @NgModule({
     declarations: [
@@ -198,6 +210,14 @@ LoadDiagnosticSenderRegistrationToolbarActions();
         MJAIBridgeProviderFormComponentExtended,
         MJAIAgentSessionBridgeFormComponentExtended,
         MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentOverviewPanel,
+        AgentTypeStudioPanel,
+        AgentPromptsPanel,
+        AgentCapabilitiesPanel,
+        AgentKnowledgeMemoryPanel,
+        AgentGuardrailsPayloadPanel,
+        AgentRunsSessionsPanel,
+        AgentGovernancePanel,
         AgentRealtimePanel,
         RecordProcessFormComponentExtended,
         EntityFormChromeEditorComponent,
@@ -318,6 +338,14 @@ LoadDiagnosticSenderRegistrationToolbarActions();
         MJAIBridgeProviderFormComponentExtended,
         MJAIAgentSessionBridgeFormComponentExtended,
         MJAIBridgeAgentIdentityFormComponentExtended,
+        AgentOverviewPanel,
+        AgentTypeStudioPanel,
+        AgentPromptsPanel,
+        AgentCapabilitiesPanel,
+        AgentKnowledgeMemoryPanel,
+        AgentGuardrailsPayloadPanel,
+        AgentRunsSessionsPanel,
+        AgentGovernancePanel,
         AgentRealtimePanel,
         ActionsModule,
         RecordProcessFormComponentExtended,

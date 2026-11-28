@@ -54,7 +54,8 @@ describe('custom form components that override ngOnDestroy', () => {
     );
 
     it('finds all custom-layout forms using CUSTOM_LAYOUT_TOOLBAR_CONFIG', () => {
-        expect(customLayoutForms.length).toBeGreaterThanOrEqual(8);
+        // 7 remaining custom-layout forms (AI Agents migrated onto modern left-nav BaseFormPanel architecture)
+        expect(customLayoutForms.length).toBeGreaterThanOrEqual(7);
     });
 
     it.each(customLayoutForms.map(({ file, source }) => [file.slice(customDir.length + 1), source] as const))(

@@ -307,7 +307,6 @@ const NESTED_SCAN_BASELINE: Record<string, number> = {
     'Actions/Engine/src/entity-actions/EntityActionInvocationTypes.ts': 2,
     'Angular/Explorer/core-entity-forms/src/lib/custom/AIAgentSessions/ai-agent-session-form.component.ts': 1,
     'Angular/Explorer/core-entity-forms/src/lib/custom/AIAgents/add-action-dialog.component.ts': 1,
-    'Angular/Explorer/core-entity-forms/src/lib/custom/AIAgents/ai-agent-form.component.ts': 5,
     'Angular/Explorer/core-entity-forms/src/lib/custom/AIAgents/create-sub-agent-dialog.component.ts': 2,
     'Angular/Explorer/core-entity-forms/src/lib/custom/AIPrompts/ai-prompt-form.component.ts': 1,
     'Angular/Explorer/core-entity-forms/src/lib/custom/Rubrics/rubric-form.component.ts': 1,

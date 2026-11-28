@@ -268,7 +268,6 @@ const UNDOCUMENTED_STATIC_NUMERIC_BASELINE: Record<string, number> = {
     'Actions/CoreActions/src/custom/web/rss-feed-read.action.ts': 3,
     'Actions/CoreActions/src/custom/web/tavily-search.action.ts': 1,
     'Actions/PeopleDataLabs/src/PDLPersonClient.ts': 2,
-    'Angular/Explorer/core-entity-forms/src/lib/custom/AIAgents/ai-agent-form.component.ts': 1,
     'Angular/Explorer/dashboards/src/AI/components/autotagging/autotagging-pipeline-resource.component.ts': 1,
     'Angular/Explorer/dashboards/src/AI/components/autotagging/components/classify-overview-analytics.component.ts': 2,
     'Angular/Explorer/dashboards/src/AI/components/autotagging/dialogs/dry-run-preview.dialog.component.ts': 1,

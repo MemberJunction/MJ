@@ -1,0 +1,62 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Invocations & Rubrics"
+    Icon="fa-solid fa-scale-balanced"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [DefaultExpanded]="true">
+
+    @if (!Record?.ID) {
+        <mj-empty-state
+            Icon="fa-solid fa-scale-balanced"
+            Title="Save Agent First"
+            Message="Save this agent to view its scheduled/event invocations and attach evaluation rubrics."
+            Size="compact" />
+    } @else {
+        <div class="agov-shell">
+            <div class="agov-subtabs" role="tablist" aria-label="Governance views">
+                <button
+                    type="button"
+                    role="tab"
+                    class="agov-tab"
+                    [class.is-active]="ActiveTab === 'invocations'"
+                    [attr.aria-selected]="ActiveTab === 'invocations'"
+                    (click)="SetTab('invocations')">
+                    <i class="fa-solid fa-tower-broadcast" aria-hidden="true"></i>
+                    Invocations
+                </button>
+                <button
+                    type="button"
+                    role="tab"
+                    class="agov-tab"
+                    [class.is-active]="ActiveTab === 'rubrics'"
+                    [attr.aria-selected]="ActiveTab === 'rubrics'"
+                    (click)="SetTab('rubrics')">
+                    <i class="fa-solid fa-scale-balanced" aria-hidden="true"></i>
+                    Evaluation Rubrics
+                </button>
+            </div>
+
+            <div class="agov-body">
+                @if (ActiveTab === 'invocations') {
+                    <mj-agent-invocations
+                        [Provider]="FormComponent.ProviderToUse"
+                        [AgentID]="Record.ID"
+                        [Active]="ActiveTab === 'invocations'"
+                        [ExposeAsAction]="Record.ExposeAsAction"
+                        [ParentAgentName]="Record.Parent"
+                        [ParentAgentID]="Record.ParentID"
+                        (RecordOpenRequested)="OnInvocationOpenRequested($event)">
+                    </mj-agent-invocations>
+                } @else {
+                    <mj-agent-rubrics
+                        [Provider]="FormComponent.ProviderToUse"
+                        [AgentID]="Record.ID"
+                        [Active]="ActiveTab === 'rubrics'">
+                    </mj-agent-rubrics>
+                }
+            </div>
+        </div>
+    }
+</mj-collapsible-panel>

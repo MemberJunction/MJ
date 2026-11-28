@@ -725,13 +725,23 @@ import {
     RubricEngineBase,
 } from '@memberjunction/rubrics-base';
 
-// @memberjunction/ng-core-entity-forms (74 classes)
+// @memberjunction/ng-core-entity-forms (84 classes)
 import {
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
+    AIAgentFormPolicy,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    AgentCapabilitiesPanel,
+    AgentGovernancePanel,
+    AgentGuardrailsPayloadPanel,
+    AgentKnowledgeMemoryPanel,
+    AgentOverviewPanel,
+    AgentPromptsPanel,
+    AgentRealtimePanel,
+    AgentRunsSessionsPanel,
+    AgentTypeStudioPanel,
     BrandKitAssetsPanelComponent,
     BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
@@ -1611,8 +1621,18 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AIAgentCategoryHeaderPanel,
     AIAgentCategoryHierarchyPanel,
     AIAgentCategoryOverviewPanel,
+    AIAgentFormPolicy,
     AIPromptCategoryHierarchyPanel,
     ActionCategoryHierarchyPanel,
+    AgentCapabilitiesPanel,
+    AgentGovernancePanel,
+    AgentGuardrailsPayloadPanel,
+    AgentKnowledgeMemoryPanel,
+    AgentOverviewPanel,
+    AgentPromptsPanel,
+    AgentRealtimePanel,
+    AgentRunsSessionsPanel,
+    AgentTypeStudioPanel,
     BrandKitAssetsPanelComponent,
     BrandKitGenerationPolicyPanelComponent,
     CompanyHeaderPanel,
@@ -1768,6 +1788,10 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PSUnitVersionsPanel,
     PermissionsAuditLogResourceComponent,
     PermissionsResourceAccessResourceComponent,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     PermissionsUserAccessResourceComponent,
     PipelinesComponent,
     PromptManagementComponent,
@@ -1778,10 +1802,6 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SchedulingDashboardComponent,
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     SecurityPermissionsComponent,
     SettingsExplorerComponent,
     SystemConfigurationComponent,
@@ -1843,7 +1863,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 846;
+export const CLASS_REGISTRATIONS_COUNT = 856;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

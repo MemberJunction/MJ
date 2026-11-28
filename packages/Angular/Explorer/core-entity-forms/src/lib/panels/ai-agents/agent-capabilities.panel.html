@@ -1,0 +1,203 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Capabilities"
+    Icon="fa-solid fa-cubes"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [BadgeCount]="TotalCapabilityCount > 0 ? TotalCapabilityCount : null"
+    [DefaultExpanded]="true">
+
+    @if (!Record?.ID) {
+        <mj-empty-state
+            Icon="fa-solid fa-cubes"
+            Title="Save Agent First"
+            Message="Save this agent to configure actions, sub-agents, skills, and client tools."
+            Size="compact" />
+    } @else {
+        <div class="acap-shell">
+            <div class="acap-header">
+                <div class="acap-tabs" role="tablist" aria-label="Capability categories">
+                    <button type="button" role="tab" class="acap-tab" [class.is-active]="ActiveTab === 'actions'" [attr.aria-selected]="ActiveTab === 'actions'" (click)="SetTab('actions')">
+                        <i class="fa-solid fa-bolt" aria-hidden="true"></i> Actions <span class="acap-count">{{ Actions.length }}</span>
+                    </button>
+                    <button type="button" role="tab" class="acap-tab" [class.is-active]="ActiveTab === 'subagents'" [attr.aria-selected]="ActiveTab === 'subagents'" (click)="SetTab('subagents')">
+                        <i class="fa-solid fa-sitemap" aria-hidden="true"></i> Sub-Agents <span class="acap-count">{{ SubAgents.length }}</span>
+                    </button>
+                    <button type="button" role="tab" class="acap-tab" [class.is-active]="ActiveTab === 'skills'" [attr.aria-selected]="ActiveTab === 'skills'" (click)="SetTab('skills')">
+                        <i class="fa-solid fa-brain" aria-hidden="true"></i> Skills <span class="acap-count">{{ Skills.length }}</span>
+                    </button>
+                    <button type="button" role="tab" class="acap-tab" [class.is-active]="ActiveTab === 'clientTools'" [attr.aria-selected]="ActiveTab === 'clientTools'" (click)="SetTab('clientTools')">
+                        <i class="fa-solid fa-toolbox" aria-hidden="true"></i> Client Tools <span class="acap-count">{{ ClientTools.length }}</span>
+                    </button>
+                </div>
+
+                <div class="acap-header-actions">
+                    @if (ActiveTab === 'actions' && EditMode) {
+                        <button mjButton variant="primary" size="sm" type="button" (click)="AddAction()">
+                            <i class="fa-solid fa-plus" aria-hidden="true"></i> Add Action
+                        </button>
+                    }
+                    @if (ActiveTab === 'subagents' && EditMode) {
+                        <button mjButton variant="primary" size="sm" type="button" (click)="LinkRelatedSubAgent()">
+                            <i class="fa-solid fa-share-nodes" aria-hidden="true"></i> Link Sub-Agent
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <div class="acap-body">
+                @if (Loading) {
+                    <mj-loading text="Loading capabilities..." size="medium"></mj-loading>
+                } @else {
+                    @switch (ActiveTab) {
+                        @case ('actions') {
+                            @if (Actions.length === 0) {
+                                <mj-empty-state
+                                    Icon="fa-solid fa-bolt"
+                                    Title="No Actions Configured"
+                                    Message="Add actions so this agent can invoke external systems, queries, or workflows."
+                                    [ActionText]="EditMode ? 'Add Action' : ''"
+                                    ActionIcon="fa-solid fa-plus"
+                                    (Action)="AddAction()"
+                                    Size="compact" />
+                            } @else {
+                                <div class="acap-list">
+                                    @for (action of Actions; track action.ID) {
+                                        <div class="acap-card" (click)="OpenRecord('MJ: Actions', action.ID)">
+                                            <div class="acap-icon acap-icon--warn"><i class="fa-solid fa-bolt" aria-hidden="true"></i></div>
+                                            <div class="acap-main">
+                                                <div class="acap-title">
+                                                    {{ action.Name || 'Untitled Action' }}
+                                                    @if (action.Type) {
+                                                        <span class="acap-pill">{{ action.Type }}</span>
+                                                    }
+                                                    <span class="acap-pill" [class.acap-pill--ok]="action.Status === 'Active'">{{ action.Status }}</span>
+                                                </div>
+                                                @if (action.Description) {
+                                                    <div class="acap-desc">{{ action.Description }}</div>
+                                                }
+                                            </div>
+                                            <div class="acap-actions">
+                                                @if (EditMode) {
+                                                    <button mjButton variant="flat" size="sm" type="button" (click)="RemoveAction(action, $event)" title="Remove action">
+                                                        <i class="fa-solid fa-trash acap-danger" aria-hidden="true"></i>
+                                                    </button>
+                                                }
+                                                <i class="fa-solid fa-arrow-up-right-from-square acap-open" aria-hidden="true"></i>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+
+                        @case ('subagents') {
+                            @if (SubAgents.length > 0) {
+                                <div class="acap-filter-row">
+                                    <button type="button" class="acap-chip" [class.is-active]="SubAgentFilter === 'all'" (click)="SetSubAgentFilter('all')">All ({{ SubAgents.length }})</button>
+                                    <button type="button" class="acap-chip" [class.is-active]="SubAgentFilter === 'child'" (click)="SetSubAgentFilter('child')">Child</button>
+                                    <button type="button" class="acap-chip" [class.is-active]="SubAgentFilter === 'related'" (click)="SetSubAgentFilter('related')">Related</button>
+                                </div>
+                            }
+                            @if (FilteredSubAgents.length === 0) {
+                                <mj-empty-state
+                                    Icon="fa-solid fa-sitemap"
+                                    Title="No Sub-Agents Linked"
+                                    Message="Link child or related sub-agents for hierarchical multi-agent delegation."
+                                    [ActionText]="EditMode ? 'Link Sub-Agent' : ''"
+                                    ActionIcon="fa-solid fa-share-nodes"
+                                    (Action)="LinkRelatedSubAgent()"
+                                    Size="compact" />
+                            } @else {
+                                <div class="acap-list">
+                                    @for (item of FilteredSubAgents; track item.Agent.ID) {
+                                        <div class="acap-card" (click)="OpenRecord('MJ: AI Agents', item.Agent.ID)">
+                                            <div class="acap-icon"><i [class]="SubAgentIcon(item.Agent)" aria-hidden="true"></i></div>
+                                            <div class="acap-main">
+                                                <div class="acap-title">
+                                                    {{ item.Agent.Name || 'Untitled Sub-Agent' }}
+                                                    <span class="acap-pill" [class.acap-pill--info]="item.LinkType === 'child'" [class.acap-pill--violet]="item.LinkType === 'related'">
+                                                        {{ item.LinkType === 'child' ? 'Child' : 'Related' }}
+                                                    </span>
+                                                    @if (item.Agent.Status) {
+                                                        <span class="acap-pill" [class.acap-pill--ok]="item.Agent.Status === 'Active'">{{ item.Agent.Status }}</span>
+                                                    }
+                                                </div>
+                                                @if (item.Agent.Description) {
+                                                    <div class="acap-desc">{{ item.Agent.Description }}</div>
+                                                }
+                                            </div>
+                                            <i class="fa-solid fa-arrow-up-right-from-square acap-open" aria-hidden="true"></i>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+
+                        @case ('skills') {
+                            <div class="acap-banner">
+                                Accepts Skills: <strong>{{ Record.AcceptsSkills || 'Not Set' }}</strong>
+                                · Activation Mode: <strong>{{ Record.SkillActivationMode || 'Default' }}</strong>
+                            </div>
+                            @if (Skills.length === 0) {
+                                <mj-empty-state
+                                    Icon="fa-solid fa-brain"
+                                    Title="No Skills Explicitly Assigned"
+                                    Message="Manage explicit skill assignments under More → AI Agent Skills or enable Accepts Skills in Guardrails."
+                                    Size="compact" />
+                            } @else {
+                                <div class="acap-list">
+                                    @for (skill of Skills; track skill.ID) {
+                                        <div class="acap-card" (click)="OpenRecord('MJ: AI Skills', skill.SkillID)">
+                                            <div class="acap-icon"><i class="fa-solid fa-brain" aria-hidden="true"></i></div>
+                                            <div class="acap-main">
+                                                <div class="acap-title">
+                                                    {{ skill.Skill || skill.SkillID }}
+                                                    @if (skill.Status) {
+                                                        <span class="acap-pill" [class.acap-pill--ok]="skill.Status === 'Active'">{{ skill.Status }}</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <i class="fa-solid fa-arrow-up-right-from-square acap-open" aria-hidden="true"></i>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+
+                        @case ('clientTools') {
+                            <div class="acap-banner">
+                                Ephemeral Client Tools: <strong>{{ Record.AllowEphemeralClientTools ? 'Allowed' : 'Disabled' }}</strong>
+                            </div>
+                            @if (ClientTools.length === 0) {
+                                <mj-empty-state
+                                    Icon="fa-solid fa-toolbox"
+                                    Title="No Registered Client Tools"
+                                    Message="Register client-side tools under More → AI Agent Client Tools."
+                                    Size="compact" />
+                            } @else {
+                                <div class="acap-list">
+                                    @for (tool of ClientTools; track tool.ID) {
+                                        <div class="acap-card" (click)="OpenRecord('MJ: AI Agent Client Tools', tool.ID)">
+                                            <div class="acap-icon"><i class="fa-solid fa-toolbox" aria-hidden="true"></i></div>
+                                            <div class="acap-main">
+                                                <div class="acap-title">
+                                                    {{ tool.ClientToolDefinition || tool.ClientToolDefinitionID }}
+                                                    @if (tool.Status) {
+                                                        <span class="acap-pill" [class.acap-pill--ok]="tool.Status === 'Active'">{{ tool.Status }}</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                            <i class="fa-solid fa-arrow-up-right-from-square acap-open" aria-hidden="true"></i>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                    }
+                }
+            </div>
+        </div>
+    }
+</mj-collapsible-panel>

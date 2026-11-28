@@ -39,11 +39,8 @@ interface BridgeIdentityRow {
  *   - its bridge agent identities ('MJ: AI Bridge Agent Identities' for this
  *     agent).
  *
- * Registers against the 'MJ: AI Agents' entity, `after-fields` slot. The AI Agent
- * form is a full custom override whose template doesn't emit the `after-fields`
- * marker, so this panel falls through to the container's always-present
- * `after-everything` slot and mounts at the bottom of the form — functional,
- * just lower than ideal until the custom form emits the slot marker.
+ * Registers against the 'MJ: AI Agents' entity, `after-fields` slot, alongside the
+ * other modular AI Agent panels in the left-nav rail.
  *
  * Provider-correct: all RunViews are scoped to the host form's `ProviderToUse`.
  */
@@ -54,6 +51,8 @@ interface BridgeIdentityRow {
         entity: 'MJ: AI Agents',
         slot: 'after-fields',
         sortKey: 40,
+        contributionKey: 'agentRealtime',
+        sectionKey: 'agentRealtime',
     },
 })
 @Component({

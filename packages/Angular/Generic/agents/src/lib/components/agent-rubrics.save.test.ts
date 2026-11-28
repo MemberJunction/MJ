@@ -18,8 +18,8 @@ describe('agent rubric link writes', () => {
         expect(source).toContain('Max self-check attempts');
         expect(source).toContain('Evaluator config');
         expect(source).toContain('row.SampleRate = draft.sampleRate');
-        const form = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../../../Explorer/core-entity-forms/src/lib/custom/AIAgents/ai-agent-form.component.html'), 'utf8');
-        expect(form).toContain('[Provider]="Provider"');
+        const form = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../../../../../Explorer/core-entity-forms/src/lib/panels/ai-agents/agent-governance.panel.html'), 'utf8');
+        expect(form).toContain('[Provider]="FormComponent.ProviderToUse"');
         expect(form).toContain('mj-agent-rubrics');
     });
 });

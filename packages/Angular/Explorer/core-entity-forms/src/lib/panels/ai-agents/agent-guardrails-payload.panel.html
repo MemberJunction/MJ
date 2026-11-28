@@ -1,0 +1,363 @@
+<mj-collapsible-panel
+    [SectionKey]="SectionKey"
+    [Order]="DisplayOrder"
+    SectionName="Guardrails & Payload"
+    Icon="fa-solid fa-shield-halved"
+    [Form]="FormComponent"
+    [FormContext]="FormContext"
+    [DefaultExpanded]="true">
+
+    @if (Record) {
+        <div class="agp-stack">
+            <!-- 1. Execution Ceilings & Context Window Budget -->
+            <section class="agp-card">
+                <header class="agp-card-head">
+                    <div class="agp-head-title">
+                        <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                        <h3>Execution Guardrails &amp; Context Budget</h3>
+                    </div>
+                    @if (Telemetry.RunCount > 0) {
+                        <span class="agp-headroom-meta">
+                            Recent runs avg {{ FormattedAvgCost }} · p95 {{ FormattedP95Tokens }} tokens
+                        </span>
+                    }
+                </header>
+                <div class="agp-card-body">
+                    <div class="agp-grid">
+                        <!-- Non-deprecated physical ceiling columns via native mj-form-field -->
+                        <div class="agp-field-box">
+                            <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxCostPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                            @if (Telemetry.CostHeadroomPct != null) {
+                                <div class="agp-meter-track">
+                                    <div class="agp-meter-fill" [class.agp-meter-fill--warn]="Telemetry.CostHeadroomPct >= 75" [style.width.%]="Telemetry.CostHeadroomPct"></div>
+                                </div>
+                                <span class="agp-meter-caption">Avg cost uses {{ Telemetry.CostHeadroomPct }}% of cap</span>
+                            }
+                        </div>
+                        <div class="agp-field-box">
+                            <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxTokensPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                            @if (Telemetry.TokenHeadroomPct != null) {
+                                <div class="agp-meter-track">
+                                    <div class="agp-meter-fill" [class.agp-meter-fill--warn]="Telemetry.TokenHeadroomPct >= 75" [style.width.%]="Telemetry.TokenHeadroomPct"></div>
+                                </div>
+                                <span class="agp-meter-caption">p95 usage is {{ Telemetry.TokenHeadroomPct }}% of cap</span>
+                            }
+                        </div>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxIterationsPerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="MaxTimePerRun" Type="number" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+
+                        <!-- Canonical Configuration JSON ceilings & context window settings -->
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Context Window Max Tokens</label>
+                            @if (EditMode) {
+                                <input type="number" class="mj-input" [value]="Effective.ContextWindowMaxTokens ?? ''" placeholder="Inherited / model default" (change)="SetNumberConfig('contextWindow', 'maxTokens', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.ContextWindowMaxTokens ?? '—' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Default Prompt Effort Level</label>
+                            @if (EditMode) {
+                                <input type="number" class="mj-input" [value]="Effective.DefaultPromptEffortLevel ?? ''" placeholder="1–100" (change)="SetNumberConfig('execution', 'defaultPromptEffortLevel', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.DefaultPromptEffortLevel ?? '—' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Max Sub-Agent Executions / Run</label>
+                            @if (EditMode) {
+                                <input type="number" class="mj-input" [value]="Effective.MaxExecutionsPerRun ?? ''" placeholder="Unconstrained" (change)="SetNumberConfig('subAgentExecution', 'maxExecutionsPerRun', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.MaxExecutionsPerRun ?? '—' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Max Sub-Agent Consult Rounds</label>
+                            @if (EditMode) {
+                                <input type="number" class="mj-input" [value]="Effective.MaxSubAgentConsultRounds ?? ''" placeholder="Default" (change)="SetNumberConfig('subAgentExecution', 'maxConsultRounds', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.MaxSubAgentConsultRounds ?? '—' }}</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 2. Runtime Behavior, Planning, Skills & Extensions -->
+            <section class="agp-card">
+                <header class="agp-card-head">
+                    <div class="agp-head-title">
+                        <i class="fa-solid fa-sliders" aria-hidden="true"></i>
+                        <h3>Runtime Behavior, Planning &amp; Skills</h3>
+                    </div>
+                    <span class="agp-headroom-meta">Stored in typed Configuration JSON (3-table cascade)</span>
+                </header>
+                <div class="agp-card-body">
+                    <div class="agp-grid">
+                        <!-- Non-deprecated physical columns from runtimeLimitsExecutionSettings -->
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="AcceptsSkills" Type="select" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="DefaultCoAgentID" Type="textbox" [EditMode]="EditMode" [FormContext]="FormContext" LinkType="Record"></mj-form-field>
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="DefaultMediaCollectionID" Type="textbox" [EditMode]="EditMode" [FormContext]="FormContext" LinkType="Record"></mj-form-field>
+
+                        <!-- Canonical Configuration JSON settings -->
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Skill Activation Mode</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="Effective.SkillActivationMode" (change)="SetStringConfig('skills', 'activationMode', InputValue($event))">
+                                    @for (opt of SkillActivationModes; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.SkillActivationMode }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Sub-Agent Execution Mode</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="Effective.ExecutionMode" (change)="SetStringConfig('subAgentExecution', 'mode', InputValue($event))">
+                                    @for (opt of ExecutionModes; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.ExecutionMode }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Chat Handling Option</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="Effective.ChatHandlingOption ?? ''" (change)="SetStringConfig('execution', 'chatHandlingOption', InputValue($event))">
+                                    <option value="">Default</option>
+                                    @for (opt of ChatHandlingOptions; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.ChatHandlingOption || 'Default' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Message Mode</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="Effective.MessageMode" (change)="SetStringConfig('attachments', 'messageMode', InputValue($event))">
+                                    @for (opt of MessageModes; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.MessageMode }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Max Messages</label>
+                            @if (EditMode) {
+                                <input type="number" class="mj-input" [value]="Effective.MaxMessages ?? ''" placeholder="Unconstrained" (change)="SetNumberConfig('attachments', 'maxMessages', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.MaxMessages ?? '—' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Artifact Creation Mode</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="Effective.ArtifactCreationMode" (change)="SetStringConfig('artifacts', 'creationMode', InputValue($event))">
+                                    @for (opt of ArtifactCreationModes; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.ArtifactCreationMode }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Recording Default</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="Effective.RecordingDefault ?? ''" (change)="SetStringConfig('recording', 'defaultMode', InputValue($event))">
+                                    <option value="">Default</option>
+                                    @for (opt of RecordingDefaults; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.RecordingDefault || 'Default' }}</span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Boolean policy toggles -->
+                    <div class="agp-toggle-grid">
+                        <label class="agp-toggle-item">
+                            <input type="checkbox" [checked]="Effective.SupportsPlanMode" [disabled]="!EditMode" (change)="SetBooleanConfig('execution', 'supportsPlanMode', $event)" />
+                            <span>Supports Plan Mode</span>
+                        </label>
+                        <label class="agp-toggle-item">
+                            <input type="checkbox" [checked]="Effective.RequirePlanMode" [disabled]="!EditMode" (change)="SetBooleanConfig('execution', 'requirePlanMode', $event)" />
+                            <span>Require Plan Mode</span>
+                        </label>
+                        <label class="agp-toggle-item">
+                            <input type="checkbox" [checked]="Effective.DeclareActionsAsNativeTools" [disabled]="!EditMode" (change)="SetBooleanConfig('execution', 'declareActionsAsNativeTools', $event)" />
+                            <span>Declare Actions as Native Tools</span>
+                        </label>
+                        <label class="agp-toggle-item">
+                            <input type="checkbox" [checked]="Effective.AllowEphemeralClientTools" [disabled]="!EditMode" (change)="SetBooleanConfig('clientTools', 'allowEphemeral', $event)" />
+                            <span>Allow Ephemeral Client Tools</span>
+                        </label>
+                        <label class="agp-toggle-item">
+                            <input type="checkbox" [checked]="Effective.AcceptUnregisteredFiles" [disabled]="!EditMode" (change)="SetBooleanConfig('attachments', 'acceptUnregisteredFiles', $event)" />
+                            <span>Accept Unregistered Files</span>
+                        </label>
+                    </div>
+
+                    @if (Effective.HelperPlugins.length > 0) {
+                        <div class="agp-plugins-bar">
+                            <span class="agp-cfg-label"><i class="fa-solid fa-plug" aria-hidden="true"></i> Active Helper Plugins (3-Table Cascade)</span>
+                            <div class="agp-plugin-chips">
+                                @for (plugin of Effective.HelperPlugins; track plugin.seam + ':' + plugin.driverClass) {
+                                    <span class="agp-plugin-chip">
+                                        <strong>{{ plugin.seam }}</strong> → {{ plugin.driverClass }}
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <div class="agp-code-block">
+                        <mj-form-field [Record]="Record" [ShowLabel]="true" FieldName="TypeConfiguration" Type="code" [EditMode]="EditMode" [FormContext]="FormContext"></mj-form-field>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. Payload Data Flow, Validation & Memory Injection -->
+            <section class="agp-card">
+                <header class="agp-card-head">
+                    <div class="agp-head-title">
+                        <i class="fa-solid fa-exchange-alt" aria-hidden="true"></i>
+                        <h3>Payload Data Flow, Validation &amp; Memory Injection</h3>
+                    </div>
+                </header>
+                <div class="agp-card-body">
+                    <div class="agp-grid">
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Payload Scope Root</label>
+                            @if (EditMode) {
+                                <input type="text" class="mj-input" [value]="PayloadScope" placeholder="e.g. research (blank = root)" (change)="SetStringConfig('payload', 'scope', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ PayloadScope || 'Root payload' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Downstream Paths (comma-separated)</label>
+                            @if (EditMode) {
+                                <input type="text" class="mj-input" [value]="PayloadDownstreamPathsText" placeholder="*" (change)="SetPayloadPaths('downstreamPaths', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val agp-mono">{{ PayloadDownstreamPathsText || '*' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Upstream Paths (comma-separated)</label>
+                            @if (EditMode) {
+                                <input type="text" class="mj-input" [value]="PayloadUpstreamPathsText" placeholder="*" (change)="SetPayloadPaths('upstreamPaths', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val agp-mono">{{ PayloadUpstreamPathsText || '*' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Self Read Paths</label>
+                            @if (EditMode) {
+                                <input type="text" class="mj-input" [value]="PayloadSelfReadPathsText" placeholder="All paths" (change)="SetPayloadPaths('selfReadPaths', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val agp-mono">{{ PayloadSelfReadPathsText || 'All' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Self Write Paths</label>
+                            @if (EditMode) {
+                                <input type="text" class="mj-input" [value]="PayloadSelfWritePathsText" placeholder="All paths" (change)="SetPayloadPaths('selfWritePaths', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val agp-mono">{{ PayloadSelfWritePathsText || 'All' }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Starting Payload Validation Mode</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="StartingValidationMode" (change)="SetStringConfig('payload', 'startingValidationMode', InputValue($event))">
+                                    @for (opt of StartingValidationModes; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ StartingValidationMode }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Final Payload Validation Mode</label>
+                            @if (EditMode) {
+                                <select class="mj-input" [value]="FinalValidationMode" (change)="SetStringConfig('payload', 'finalValidationMode', InputValue($event))">
+                                    @for (opt of FinalValidationModes; track opt) {
+                                        <option [value]="opt">{{ opt }}</option>
+                                    }
+                                </select>
+                            } @else {
+                                <span class="agp-cfg-val">{{ FinalValidationMode }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Final Validation Max Retries</label>
+                            @if (EditMode) {
+                                <input type="number" class="mj-input" [value]="FinalValidationMaxRetries ?? ''" placeholder="3" (change)="SetNumberConfig('payload', 'finalValidationMaxRetries', InputValue($event))" />
+                            } @else {
+                                <span class="agp-cfg-val">{{ FinalValidationMaxRetries ?? 3 }}</span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Memory Injection Controls -->
+                    <div class="agp-grid agp-divider">
+                        <div class="agp-cfg-field">
+                            <label class="agp-toggle-item">
+                                <input type="checkbox" [checked]="Effective.InjectNotes" [disabled]="!EditMode" (change)="SetBooleanConfig('memory', 'injectNotes', $event)" />
+                                <span>Inject Memory Notes</span>
+                            </label>
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Max Notes / Strategy</label>
+                            @if (EditMode) {
+                                <div class="agp-inline-pair">
+                                    <input type="number" class="mj-input" [value]="Effective.MaxNotesToInject ?? ''" placeholder="5" (change)="SetNumberConfig('memory', 'maxNotesToInject', InputValue($event))" />
+                                    <select class="mj-input" [value]="Effective.NoteInjectionStrategy" (change)="SetStringConfig('memory', 'noteInjectionStrategy', InputValue($event))">
+                                        @for (opt of NoteStrategies; track opt) {
+                                            <option [value]="opt">{{ opt }}</option>
+                                        }
+                                    </select>
+                                </div>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.MaxNotesToInject ?? 5 }} · {{ Effective.NoteInjectionStrategy }}</span>
+                            }
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-toggle-item">
+                                <input type="checkbox" [checked]="Effective.InjectExamples" [disabled]="!EditMode" (change)="SetBooleanConfig('memory', 'injectExamples', $event)" />
+                                <span>Inject Few-Shot Examples</span>
+                            </label>
+                        </div>
+                        <div class="agp-cfg-field">
+                            <label class="agp-cfg-label">Max Examples / Strategy</label>
+                            @if (EditMode) {
+                                <div class="agp-inline-pair">
+                                    <input type="number" class="mj-input" [value]="Effective.MaxExamplesToInject ?? ''" placeholder="3" (change)="SetNumberConfig('memory', 'maxExamplesToInject', InputValue($event))" />
+                                    <select class="mj-input" [value]="Effective.ExampleInjectionStrategy" (change)="SetStringConfig('memory', 'exampleInjectionStrategy', InputValue($event))">
+                                        @for (opt of ExampleStrategies; track opt) {
+                                            <option [value]="opt">{{ opt }}</option>
+                                        }
+                                    </select>
+                                </div>
+                            } @else {
+                                <span class="agp-cfg-val">{{ Effective.MaxExamplesToInject ?? 3 }} · {{ Effective.ExampleInjectionStrategy }}</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    }
+</mj-collapsible-panel>
