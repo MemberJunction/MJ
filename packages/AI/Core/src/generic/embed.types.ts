@@ -1,4 +1,4 @@
-import { BaseParams, ModelUsage } from "./baseModel";
+import { BaseParams, ModelUsage } from "./baseModel.types";
 import { ChatMessageContent } from "./chat.types";
 
 /**

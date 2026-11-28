@@ -1,4 +1,4 @@
-import { BaseParams, BaseResult, ModelUsage } from "./baseModel"
+import { BaseParams, BaseResult, ModelUsage } from "./baseModel.types"
 
 
 

@@ -36,22 +36,61 @@ vi.mock('@memberjunction/global', () => ({
 // on chat.types. The helpers are pure functions, so the real ones are what the driver should
 // be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
 import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
-// The cancellation classification is likewise pure and shared, so the stand-in BaseLLM below builds
-// its cancelled results from the real module rather than from a hand-copied shape.
+// The cancellation classification and thinking stream extractor are pure and shared, so the stand-in BaseLLM below uses the real modules.
 import * as actualCancellation from '../../../../Core/src/generic/cancellation';
+import { ThinkingStreamExtractor } from '../../../../Core/src/generic/thinkingStreamExtractor';
 
-const mockGetLongRunningAIFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
+const mockCustomFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
 
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
+        protected _additionalSettings: Record<string, unknown> = {};
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get CustomFetch() {
+            return mockCustomFetch();
+        }
+        protected BuildTransportClientOptions() {
+            const customFetch = this.CustomFetch;
+            return customFetch ? { fetch: customFetch } : {};
+        }
     }
     class BaseLLM extends BaseModel {
-        protected _additionalSettings: Record<string, unknown> = {};
+        protected _thinkingExtractor: ThinkingStreamExtractor | null = null;
         public get SupportsStreaming(): boolean { return false; }
+        protected getThinkingTagFormat(): { open: string; close: string } {
+            return { open: '<think>', close: '</think>' };
+        }
+        protected CreateThinkingStreamExtractor(tags?: { open: string; close: string }): ThinkingStreamExtractor {
+            return new ThinkingStreamExtractor(tags ?? this.getThinkingTagFormat());
+        }
+        protected get thinkingStreamState() {
+            if (!this._thinkingExtractor) return null;
+            return {
+                accumulatedThinking: this._thinkingExtractor.AccumulatedThinking,
+                inThinkingBlock: this._thinkingExtractor.InThinkingBlock,
+                pendingContent: this._thinkingExtractor.PendingContent,
+                thinkingComplete: this._thinkingExtractor.ThinkingComplete,
+            };
+        }
+        protected initializeThinkingStreamState(): void {
+            this._thinkingExtractor = this.CreateThinkingStreamExtractor();
+        }
+        protected resetThinkingStreamState(): void {
+            this._thinkingExtractor?.Reset();
+            this._thinkingExtractor = null;
+        }
+        protected resetStreamingState(): void {
+            this.resetThinkingStreamState();
+        }
+        protected processStreamChunkWithThinking(rawContent: string): string {
+            return this._thinkingExtractor ? this._thinkingExtractor.ProcessChunk(rawContent).contentDelta : rawContent;
+        }
+        protected flushThinkingStreamRemainder(): string {
+            return this._thinkingExtractor ? this._thinkingExtractor.Flush() : '';
+        }
         protected extractThinkingFromContent(content: string): { content: string; thinking: string | undefined } {
             if (content.startsWith('<think>') && content.includes('</think>')) {
                 const thinkStart = content.indexOf('<think>') + '<think>'.length;
@@ -62,6 +101,42 @@ vi.mock('@memberjunction/ai', () => {
                 };
             }
             return { content, thinking: undefined };
+        }
+        protected BuildNormalizedModelUsage(p: {
+            rawPromptTokens: number;
+            completionTokens: number;
+            cacheReadTokens?: number;
+            cacheWriteTokens?: number;
+            cost?: number;
+            costCurrency?: string;
+            promptTokensAlreadyExcludesCache?: boolean;
+        }) {
+            const cacheRead = Math.max(0, p.cacheReadTokens ?? 0);
+            const cacheWrite = Math.max(0, p.cacheWriteTokens ?? 0);
+            const netPrompt = p.promptTokensAlreadyExcludesCache
+                ? Math.max(0, p.rawPromptTokens ?? 0)
+                : Math.max(0, (p.rawPromptTokens ?? 0) - cacheRead);
+            const u = new ModelUsage(netPrompt, Math.max(0, p.completionTokens ?? 0));
+            u.cacheReadTokens = cacheRead;
+            u.cacheWriteTokens = cacheWrite;
+            if (p.cost !== undefined) u.cost = p.cost;
+            if (p.costCurrency !== undefined) u.costCurrency = p.costCurrency;
+            return u;
+        }
+        protected FormatOpenAICompatibleTools(p: { tools?: unknown[] }) {
+            return p.tools && p.tools.length > 0 ? actualToolMapping.BuildOpenAICompatibleTools(p.tools as never) : undefined;
+        }
+        protected FormatOpenAICompatibleToolChoice(p: { toolChoice?: unknown }) {
+            return p.toolChoice !== undefined ? actualToolMapping.BuildOpenAICompatibleToolChoice(p.toolChoice as never) : undefined;
+        }
+        protected FormatOpenAICompatibleToolCalls(calls: unknown[]) {
+            return actualToolMapping.BuildOpenAICompatibleToolCalls(calls as never);
+        }
+        protected FormatOpenAICompatibleToolResults(msg: unknown, providerName?: string) {
+            return actualToolMapping.BuildOpenAICompatibleToolResults(msg as never, providerName ?? this.constructor.name);
+        }
+        protected ParseOpenAICompatibleToolCalls(raw: unknown, providerName?: string) {
+            return actualToolMapping.ReadOpenAICompatibleToolCalls(raw as never, providerName ?? this.constructor.name);
         }
         /** Mirrors BaseLLM.IsCancellationError: an aborted signal or an abort-named error. */
         protected IsCancellationError(error: unknown, signal?: AbortSignal | null): boolean {
@@ -82,6 +157,10 @@ vi.mock('@memberjunction/ai', () => {
         promptTokens: number;
         completionTokens: number;
         totalTokens: number;
+        cacheReadTokens: number = 0;
+        cacheWriteTokens: number = 0;
+        cost?: number;
+        costCurrency?: string;
         constructor(promptTokens: number, completionTokens: number) {
             this.promptTokens = promptTokens;
             this.completionTokens = completionTokens;
@@ -155,8 +234,7 @@ vi.mock('@memberjunction/ai', () => {
         ErrorAnalyzer: { analyzeError: vi.fn() },
         GetUserMessageFromChatParams: (p: { messages: Array<{ role: string; content: unknown }> }) =>
             p.messages.find((m: { role: string }) => m.role === 'user')?.content,
-        parseBase64DataUrl: vi.fn(),
-        GetLongRunningAIFetch: mockGetLongRunningAIFetch
+        parseBase64DataUrl: vi.fn()
     };
 });
 
@@ -218,9 +296,9 @@ describe('OpenAILLM', () => {
             expect(instance.OpenAI.chat).toBeDefined();
         });
 
-        it('should forward GetLongRunningAIFetch to the OpenAI SDK constructor when configured (B6 / R2-15)', () => {
+        it('should forward BaseModel.CustomFetch to the OpenAI SDK constructor when configured (B6 / R2-15)', () => {
             const scopedFetch = vi.fn(async () => new Response('ok'));
-            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            mockCustomFetch.mockReturnValueOnce(scopedFetch);
             vi.clearAllMocks();
             new OpenAILLM('test-key');
             expect(MockOpenAI).toHaveBeenCalledWith({
@@ -461,25 +539,18 @@ describe('OpenAILLM', () => {
     });
 
     describe('resetStreamingState', () => {
-        it('should reset all streaming state fields', () => {
-            // Access private method
+        it('should reset ThinkingStreamExtractor state cleanly', () => {
+            const initMethod = (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState'].bind(instance);
+            const processChunk = (instance as ReturnType<typeof Object.create>)['processStreamingChunk'].bind(instance);
             const resetMethod = (instance as ReturnType<typeof Object.create>)['resetStreamingState'].bind(instance);
-            const getState = () => (instance as ReturnType<typeof Object.create>)['_streamingState'];
+            const getState = () => (instance as ReturnType<typeof Object.create>)['thinkingStreamState'];
 
-            // Modify the state first
-            const state = getState();
-            state.accumulatedThinking = 'some thinking';
-            state.inThinkingBlock = true;
-            state.pendingContent = 'some content';
-            state.thinkingComplete = true;
+            initMethod();
+            processChunk({ choices: [{ delta: { reasoning_content: 'some thinking' } }] });
+            expect(getState().accumulatedThinking).toBe('some thinking');
 
-            // Reset and verify
             resetMethod();
-            const resetState = getState();
-            expect(resetState.accumulatedThinking).toBe('');
-            expect(resetState.inThinkingBlock).toBe(false);
-            expect(resetState.pendingContent).toBe('');
-            expect(resetState.thinkingComplete).toBe(false);
+            expect(getState()).toBeNull();
         });
     });
 

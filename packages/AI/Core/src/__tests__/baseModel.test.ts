@@ -1,11 +1,45 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { BaseModel, BaseResult, BaseParams, ModelUsage } from '../generic/baseModel';
+import {
+    AITransportManager,
+    type FetchDispatcherLike,
+    type FetchFunction,
+    type ResolvedUndiciAgentOptions,
+    type UndiciModuleLike,
+} from '../generic/aiTransportManager';
 
 // Concrete test implementation of the abstract BaseModel
 class TestModel extends BaseModel {
-    // Expose the protected apiKey for testing
+    public settingsChangedCount = 0;
+
+    // Expose protected members for testing
     public getApiKey(): string {
         return this.apiKey;
+    }
+
+    public getCustomFetch(): FetchFunction | undefined {
+        return this.CustomFetch;
+    }
+
+    public getBoundFetch(): FetchFunction {
+        return this.BoundFetch;
+    }
+
+    public buildTransportOptions(): { fetch?: FetchFunction } {
+        return this.BuildTransportClientOptions();
+    }
+
+    public getClient<T>(factory: () => T): T {
+        return this.GetOrCreateClient(factory);
+    }
+
+    public invalidate(): void {
+        this.InvalidateClient();
+    }
+
+    protected override OnAdditionalSettingsChanged(): void {
+        this.settingsChangedCount++;
+        super.OnAdditionalSettingsChanged();
     }
 }
 
@@ -198,6 +232,92 @@ describe('BaseModel', () => {
         // The apiKey property should not be directly accessible on the public interface
         expect((model as Record<string, unknown>)['_apiKey']).toBeDefined();
         expect(model.getApiKey()).toBe('secret-key');
+    });
+
+    describe('AdditionalSettings, lazy client caching, and AI transport integration', () => {
+        beforeEach(async () => {
+            await AITransportManager.Instance.Reset();
+        });
+
+        afterEach(async () => {
+            await AITransportManager.Instance.Reset();
+        });
+
+        it('manages AdditionalSettings across all BaseModel modalities and invokes OnAdditionalSettingsChanged', () => {
+            const model = new TestModel('key');
+            expect(model.AdditionalSettings).toEqual({});
+
+            model.SetAdditionalSettings({ endpoint: 'https://a.example.com' });
+            model.SetAdditionalSettings({ timeout: 5000 });
+            expect(model.AdditionalSettings).toEqual({ endpoint: 'https://a.example.com', timeout: 5000 });
+            expect(model.settingsChangedCount).toBe(2);
+
+            model.ClearAdditionalSettings();
+            expect(model.AdditionalSettings).toEqual({});
+            expect(model.settingsChangedCount).toBe(3);
+        });
+
+        it('caches SDK clients via GetOrCreateClient and invalidates automatically on settings changes', () => {
+            const model = new TestModel('key');
+            let builds = 0;
+            const factory = () => ({ id: ++builds, host: model.AdditionalSettings.host ?? 'default' });
+
+            const first = model.getClient(factory);
+            const second = model.getClient(factory);
+            expect(first).toBe(second);
+            expect(builds).toBe(1);
+
+            model.SetAdditionalSettings({ host: 'https://custom.local' });
+            const rebuilt = model.getClient(factory);
+            expect(rebuilt).not.toBe(first);
+            expect(rebuilt).toEqual({ id: 2, host: 'https://custom.local' });
+
+            model.invalidate();
+            const afterManualInvalidate = model.getClient(factory);
+            expect(afterManualInvalidate.id).toBe(3);
+        });
+
+        it('exposes CustomFetch, BuildTransportClientOptions, and memoized late-bound BoundFetch', async () => {
+            const model = new TestModel('key');
+            expect(model.getCustomFetch()).toBeUndefined();
+            expect(model.buildTransportOptions()).toEqual({});
+
+            // BoundFetch is memoized per instance and created BEFORE AITransportManager is configured
+            const bound1 = model.getBoundFetch();
+            const bound2 = model.getBoundFetch();
+            expect(bound1).toBe(bound2);
+
+            const createdOpts: ResolvedUndiciAgentOptions[] = [];
+            const fakeUndici: UndiciModuleLike = {
+                Agent: class implements FetchDispatcherLike {
+                    public readonly close = vi.fn(async () => undefined);
+                    public constructor(opts: ResolvedUndiciAgentOptions) {
+                        createdOpts.push(opts);
+                    }
+                },
+            };
+            const baseFetch = vi.fn(async () => new Response('ok', { status: 200 }));
+            AITransportManager.Instance.Configure({ headersTimeoutMs: 1_800_000, bodyTimeoutMs: 1_800_000 }, fakeUndici, baseFetch);
+
+            expect(model.getCustomFetch()).toBeTypeOf('function');
+            expect(model.buildTransportOptions()).toEqual({ fetch: model.getCustomFetch() });
+
+            // BoundFetch picks up the post-construction transport configuration dynamically
+            await bound1('https://api.example.com/v1', { method: 'POST' });
+            expect(baseFetch).toHaveBeenCalledTimes(1);
+
+            // Per-model overrides in AdditionalSettings flow through CustomFetch & BoundFetch
+            model.SetAdditionalSettings({ headersTimeoutMs: 30_000 });
+            await bound1('https://api.example.com/v1/override', { method: 'POST' });
+            expect(baseFetch).toHaveBeenCalledTimes(2);
+            expect(createdOpts).toHaveLength(2);
+            expect(createdOpts[1].headersTimeout).toBe(30_000);
+
+            // Per-model transport opt-out disables custom fetch cleanly
+            model.SetAdditionalSettings({ transportDisabled: true });
+            expect(model.getCustomFetch()).toBeUndefined();
+            expect(model.buildTransportOptions()).toEqual({});
+        });
     });
 });
 

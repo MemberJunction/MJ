@@ -1,5 +1,6 @@
 import { FireworksLLM } from '../models/fireworks';
-import { ChatParams, ChatMessage, ChatMessageRole, ChatResult, ConfigureLongRunningAIFetch } from '@memberjunction/ai';
+import { OpenAILLM } from '@memberjunction/ai-openai';
+import { AITransportManager, ChatParams, ChatMessage, ChatMessageRole, ChatResult } from '@memberjunction/ai';
 
 describe('FireworksLLM', () => {
   let fireworks: FireworksLLM;
@@ -25,8 +26,20 @@ describe('FireworksLLM', () => {
       expect(fireworks.SupportsStreaming).toBe(true);
     });
 
-    it('should forward GetLongRunningAIFetch to the underlying OpenAI client when configured (R2-9)', async () => {
-      const handle = ConfigureLongRunningAIFetch({
+    it('should extend OpenAILLM and expose Client alias matching OpenAI getter', () => {
+      expect(fireworks).toBeInstanceOf(OpenAILLM);
+      expect(fireworks.Client).toBe(fireworks.OpenAI);
+      expect(fireworks.SupportsTools).toBe(true);
+    });
+
+    it('should forward topK as top_k in getProviderRequestExtras', () => {
+      const extras = (fireworks as unknown as { getProviderRequestExtras(p: ChatParams): Record<string, unknown> })
+        .getProviderRequestExtras({ model: 'm', messages: [], topK: 40 } as ChatParams);
+      expect(extras).toEqual({ top_k: 40 });
+    });
+
+    it('should consume AITransportManager.Instance transport via BaseModel.BuildTransportClientOptions when configured', async () => {
+      const handle = AITransportManager.Instance.Configure({
         headersTimeoutMs: 60_000,
         bodyTimeoutMs: 60_000,
       });

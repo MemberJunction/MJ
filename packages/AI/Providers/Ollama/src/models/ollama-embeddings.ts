@@ -15,7 +15,10 @@ export class OllamaEmbedding extends BaseEmbeddings {
     
     constructor(apiKey?: string) {
         super(apiKey || ''); // Ollama doesn't require API key for local usage
-        this._client = new Ollama({ host: this._baseUrl });
+        this._client = new Ollama({
+            host: this._baseUrl,
+            ...this.BuildTransportClientOptions(),
+        });
     }
 
     /**
@@ -54,7 +57,10 @@ export class OllamaEmbedding extends BaseEmbeddings {
         // Handle Ollama-specific settings
         if (settings.baseUrl || settings.host) {
             this._baseUrl = settings.baseUrl || settings.host;
-            this._client = new Ollama({ host: this._baseUrl });
+            this._client = new Ollama({
+                host: this._baseUrl,
+                ...this.BuildTransportClientOptions(),
+            });
         }
         
         if (settings.keepAlive !== undefined) {
@@ -199,7 +205,7 @@ export class OllamaEmbedding extends BaseEmbeddings {
         if (!signal) {
             return { Client: this.Client, Dispose: () => undefined };
         }
-        return CreateCancellableOllamaClient(this._baseUrl, signal);
+        return CreateCancellableOllamaClient(this._baseUrl, signal, this.CustomFetch);
     }
 
     /**

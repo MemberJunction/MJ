@@ -1,0 +1,273 @@
+import { AIErrorInfo } from './errorTypes.js';
+
+export class BaseResult {
+    success: boolean  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    startTime: Date  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    endTime: Date  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    errorMessage: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    exception: any  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    /**
+     * Structured error information for better error handling and retry logic
+     */
+    errorInfo?: AIErrorInfo  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    get timeElapsed(): number {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        return this.endTime.getTime() - this.startTime.getTime();
+    }
+    constructor (success: boolean, startTime: Date, endTime: Date) {
+        this.success = success;
+        this.startTime = startTime;
+        this.endTime = endTime;
+    }
+}
+
+export class BaseParams {
+    /**
+     * Model name, required.
+     */
+    model: string  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    
+    /**
+     * Model temperature, optional.
+     */
+    temperature?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Specifies the format that the model should output. Not all models support all formats. If not specified, the default is 'Any'.
+     */
+    responseFormat?: 'Any' | 'Text' | 'Markdown' | 'JSON' | 'ModelSpecific' = 'Any';  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * The standard response formats may not be sufficient for all models. This field allows for a model-specific response format to be specified. For this field to be used, responseFormat must be set to 'ModelSpecific' (the Gemini driver also merges it alongside 'JSON', e.g. a thinkingConfig on a JSON prompt). 
+     */
+    modelSpecificResponseFormat?: any  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Model max output response tokens, optional.
+     */
+    maxOutputTokens?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Model max budget tokens that we may use for reasoning in reasoning models, optional.
+     */
+    reasoningBudgetTokens?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Optional seed for reproducible outputs.
+     * Not all models support seeding, but when supported, using the same seed
+     * with the same inputs should produce identical outputs.
+     */
+    seed?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Optional array of sequences where the model will stop generating further tokens.
+     * The returned text will not contain the stop sequence.
+     */
+    stopSequences?: string[]  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+}
+
+/**
+ * The base measure a model's usage is counted in.
+ *
+ * `Tokens` is the default and is carried by the token fields on {@link ModelUsage}. The other
+ * kinds are *continuous* measures — what a model bills for when tokens are not the unit of work —
+ * and are carried by {@link ModelUsage.inputUnits} / {@link ModelUsage.outputUnits}.
+ *
+ * Always the BASE measure, never the billing measure: audio billed per hour is still counted in
+ * `Seconds`, and the price unit type driver does the conversion. That keeps one recorded quantity
+ * valid across vendors who bill the same model per minute and per hour.
+ *
+ * **This union must stay a SUPERSET of the `AIUsageType` catalog.** Those rows are the source:
+ * `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to its `Name` and hands the string
+ * straight to this type. Adding a usage-type row whose name is absent here means every run
+ * recorded in it becomes unpriceable at runtime — a data change breaking a type, with no compile
+ * error to warn you. `MODEL_USAGE_UNIT_KINDS` below exists so a test can assert the two agree;
+ * `Characters` is present for exactly that reason, ahead of any driver for it.
+ *
+ * A kind being listed here does NOT mean runs recorded in it can be priced. Pricing is driven by
+ * `MJ: AI Model Price Unit Types` drivers, and both `AIEngineBase.CalculateModelCost` and
+ * `MJAIPromptRunEntityServer` deliberately REFUSE to price a run whose kind no driver claims,
+ * rather than produce a plausible wrong number. `Characters` is priced by the data-driven `Linear`
+ * driver through the `Per 1K Characters` unit type; a run is costed once a cost row for its model
+ * and vendor uses that unit, and until then it is left uncosted with a logged reason.
+ */
+export const MODEL_USAGE_UNIT_KINDS = ['Tokens', 'Seconds', 'Characters', 'Images'] as const;
+
+export type ModelUsageUnitKind = (typeof MODEL_USAGE_UNIT_KINDS)[number];
+
+/**
+ * Represents usage and cost information for an AI model execution.
+ *
+ * This class tracks the number of tokens used in both the prompt (input) and
+ * completion (output) phases of an AI model execution, along with optional
+ * cost information when provided by the AI provider.
+ *
+ * For models whose unit of work is not a token — speech-to-text priced per minute of audio,
+ * image generation priced per image — the quantity lives in {@link inputUnits} /
+ * {@link outputUnits} with {@link unitKind} naming its measure. Continuous quantities are never
+ * folded into the token fields: a run that reports 90 "tokens" meaning 90 minutes corrupts every
+ * token rollup and dashboard downstream of it.
+ *
+ * @class ModelUsage
+ * @since 2.43.0
+ */
+export class ModelUsage {
+    /**
+     * Creates a new ModelUsage instance.
+     * 
+     * @param {number} promptTokens - Number of tokens used in the prompt/input
+     * @param {number} completionTokens - Number of tokens generated in the completion/output
+     * @param {number} [cost] - Optional cost of the execution
+     * @param {string} [costCurrency] - Optional currency code for the cost (e.g., 'USD', 'EUR', 'GBP')
+     */
+    constructor(promptTokens: number, completionTokens: number, cost?: number, costCurrency?: string) {
+        this.promptTokens = promptTokens;
+        this.completionTokens = completionTokens;
+        if (cost !== undefined) {
+            this.cost = cost;
+        }
+        if (costCurrency !== undefined) {
+            this.costCurrency = costCurrency;
+        }
+    }
+    
+    /**
+     * Number of UNCACHED ("net-new") input tokens — i.e. prompt/input tokens that were NOT served
+     * from the provider's prompt cache. This is normalized to the SAME meaning across every provider
+     * (uniform across all providers): cached tokens are never counted here.
+     *
+     * Provider adapters are responsible for normalizing into this shape:
+     *  - Anthropic already reports `input_tokens` excluding cached tokens → use as-is.
+     *  - OpenAI/Gemini/Groq/Cerebras/Fireworks include cached tokens in their prompt count →
+     *    subtract: promptTokens = prompt_tokens − cacheReadTokens (clamp at 0).
+     *
+     * The cache buckets ({@link cacheReadTokens}, {@link cacheWriteTokens}) are DISJOINT from this.
+     * Total input the provider processed = {@link totalInputTokens}.
+     */
+    promptTokens: number  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    
+    /**
+     * Number of tokens generated by the model in its response.
+     * This represents the length of the model's output.
+     */
+    completionTokens: number  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+    
+    /**
+     * Optional cost of this execution.
+     * The currency is specified in the costCurrency field.
+     * Some providers (like Anthropic) provide this information directly in their API responses.
+     */
+    cost?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    
+    /**
+     * Optional ISO 4217 currency code for the cost field.
+     * Examples: 'USD', 'EUR', 'GBP', 'JPY', etc.
+     * If not specified when cost is provided, the currency is provider-specific.
+     */
+    costCurrency?: string  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    
+    /**
+     * Optional queue time in milliseconds before the model started processing the request.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    queueTime?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    
+    /**
+     * Optional time in milliseconds for the model to ingest and process the prompt.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    promptTime?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+    
+    /**
+     * Optional time in milliseconds for the model to generate the completion/response tokens.
+     * This is a provider-specific timing metric that may not be available from all providers.
+     */
+    completionTime?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Number of input tokens served from the provider's prompt cache (a cache READ / hit).
+     * These are billed at a steep discount versus normal input tokens (e.g. Anthropic ~0.1x,
+     * OpenAI ~0.5x, Gemini ~0.1x) and are the primary source of prompt-caching savings.
+     *
+     * DISJOINT from {@link promptTokens} (which is uncached/net-new only) on EVERY provider — the
+     * adapter normalizes to guarantee this. So `totalInputTokens = promptTokens + cacheReadTokens +
+     * cacheWriteTokens` holds uniformly.
+     *
+     * Optional/additive: declared optional so existing object-literal `ModelUsage` construction
+     * sites keep compiling. `new ModelUsage(...)` instances default it to 0; treat `undefined` as 0.
+     */
+    cacheReadTokens?: number = 0  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Number of input tokens written to the provider's prompt cache (a cache WRITE / creation).
+     * Some providers charge a premium for cache writes (e.g. Anthropic ~1.25x normal input);
+     * others (OpenAI, Gemini, Groq, Cerebras, Fireworks) do not bill/report writes separately, so
+     * this stays 0. DISJOINT from {@link promptTokens} and {@link cacheReadTokens}.
+     */
+    cacheWriteTokens?: number = 0  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Total input tokens the provider processed: uncached ({@link promptTokens}) + cache reads +
+     * cache writes. This is the figure to price at the input rate (until cache-aware per-bucket
+     * pricing is added) and equals what the provider's native "prompt token" count was before
+     * normalization. Use THIS (not promptTokens) for cost so cached tokens aren't dropped.
+     */
+    get totalInputTokens(): number {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        return this.promptTokens + (this.cacheReadTokens ?? 0) + (this.cacheWriteTokens ?? 0);
+    }
+
+    /**
+     * Total UNCACHED tokens for the call: uncached input ({@link promptTokens}) + completion.
+     *
+     * Deliberately EXCLUDES the cache buckets so the MemberJunction invariant
+     * `TokensUsed === TokensPrompt + TokensCompletion` (enforced by AIPromptRun's CK_AIPromptRun_Tokens
+     * constraint + generated validation) continues to hold once promptTokens is net-new. The full
+     * token count INCLUDING cache is `totalInputTokens + completionTokens` — use {@link totalInputTokens}
+     * for cost so cached tokens are still billed.
+     *
+     * @returns {number} promptTokens + completionTokens
+     */
+    get totalTokens(): number {  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+        return this.promptTokens + this.completionTokens;
+    }
+
+    /**
+     * The base measure {@link inputUnits} / {@link outputUnits} are counted in. `undefined` means
+     * the execution was token-billed and only the token fields are meaningful.
+     */
+    unitKind?: ModelUsageUnitKind  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Continuous input quantity consumed by the execution, in {@link unitKind}'s base measure —
+     * e.g. seconds of audio submitted for transcription. Undefined for token-billed executions.
+     *
+     * Left undefined rather than zeroed when a provider does not report the quantity: a zero here
+     * prices as free, which is a worse answer than "no usage recorded".
+     */
+    inputUnits?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Continuous output quantity produced by the execution, in {@link unitKind}'s base measure —
+     * e.g. seconds of audio synthesized, or number of images generated. Undefined for
+     * token-billed executions.
+     */
+    outputUnits?: number  // case-violation-ok-legacy-back-compat: an accessor cannot be optional, so a stub would turn this into a required member
+
+    /**
+     * Builds usage for a continuous-media execution, with the token fields zeroed.
+     *
+     * @param kind The base measure being counted — never the billing measure
+     * @param inputUnits Quantity consumed on the input side
+     * @param outputUnits Quantity produced on the output side; defaults to 0
+     */
+    public static ForMedia(
+        kind: Exclude<ModelUsageUnitKind, 'Tokens'>,
+        inputUnits: number,
+        outputUnits: number = 0
+    ): ModelUsage {
+        const usage = new ModelUsage(0, 0);
+        usage.unitKind = kind;
+        usage.inputUnits = inputUnits;
+        usage.outputUnits = outputUnits;
+        return usage;
+    }
+}

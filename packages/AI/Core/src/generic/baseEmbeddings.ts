@@ -44,18 +44,6 @@ export class EmbeddingDimensionsError extends Error {
  */
 export abstract class BaseEmbeddings extends BaseModel {
     /**
-     * Protected property to store additional provider-specific settings
-     */
-    protected _additionalSettings: Record<string, any> = {};
-
-    /**
-     * Get the current additional settings
-     */
-    public get AdditionalSettings(): Record<string, any> {
-        return this._additionalSettings;
-    }
-
-    /**
      * Declares which non-text mime types this provider's embedding model can embed.
      * null = text-only (the default). Multimodal providers override this.
      * Mirrors BaseLLM.GetFileCapabilities().
@@ -108,25 +96,6 @@ export abstract class BaseEmbeddings extends BaseModel {
             const p = pattern.toLowerCase();
             return p.endsWith('/*') ? mime.startsWith(p.slice(0, -1)) : mime === p;
         });
-    }
-
-    /**
-     * Set additional provider-specific settings
-     * Subclasses should override this method to validate required settings
-     *
-     * @param settings Provider-specific settings
-     */
-    public SetAdditionalSettings(settings: Record<string, any>): void {
-        this._additionalSettings = { ...this._additionalSettings, ...settings };
-    }
-
-    /**
-     * Clear all additional settings
-     * This is useful for resetting the state of the provider
-     * or when switching between different configurations.
-     */
-    public ClearAdditionalSettings(): void {
-        this._additionalSettings = {};
     }
 
     /**

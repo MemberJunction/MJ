@@ -329,7 +329,7 @@ flowchart LR
         W3["Run AbortController"]
     end
 
-    subgraph HTTP["@memberjunction/ai httpDispatcher"]
+    subgraph HTTP["@memberjunction/ai AITransportManager"]
         H1["Always-On Liveness Sink\n(Headless Streaming)"]
         H2["undici Agent Dispatcher\nheadersTimeout: 30m\nbodyTimeout: 30m (finite)"]
     end
@@ -360,18 +360,17 @@ Implemented in `packages/AI/Agents/src/helpers/limits/AgentLivenessWatchdog.ts`:
 ### 4.2 Always-On Liveness Streaming & Node `undici` `headersTimeout` Tuning
 
 1. **Always-On Liveness Sink:** When `LivenessWatchdog` is active (`Liveness.Enabled === true`), headless runs (`params.onStreaming === undefined`) automatically attach an internal `onStreaming` callback so streaming-capable LLM drivers stream tokens continuously and feed `'llm-stream-chunk'` heartbeats into the watchdog. Setting `limits.Liveness.Enabled: false` disables automatic streaming promotion.
-2. **AI-Scoped Long-Running `undici` Fetch (`packages/AI/Core/src/generic/httpDispatcher.ts`):** For extended-thinking models or native tool-calling turns where streaming is suppressed, Node's default `undici` `headersTimeout` of `300_000` ms (5 minutes) would throw `UND_ERR_HEADERS_TIMEOUT`. `MJServer` calls `ConfigureLongRunningAIFetch(...)` at startup using `Liveness.HttpHeadersTimeoutMs` / `Liveness.HttpBodyTimeoutMs` (default 30 minutes) without replacing Node's process-global dispatcher, so unrelated outbound HTTP (OAuth, webhooks, connectors) retains Node defaults and corporate `ProxyAgent` / mTLS setups are preserved (hosts with custom CA/mTLS `Agent` instances can also pass `options.dispatcher` or `options.disabled: true`). `OpenAILLM` (and all OpenAI-compatible subclasses: `OpenRouterLLM`, `xAILLM`, `InceptionLLM`, `SiliconFlowLLM`, `DeepInfraLLM`, `MiniMaxLLM`, `ZhipuLLM`, `LlamaCppLLM`), `AnthropicLLM`, `GroqLLM`, `CerebrasLLM`, `FireworksLLM`, `MistralLLM`, and `OllamaLLM` all consume `GetLongRunningAIFetch()`. *(Note: `@google/genai` used by `GeminiLLM`/`VertexLLM` does not yet expose a per-client custom `fetch` option, and `@azure-rest/ai-inference` uses `@azure/core-rest-pipeline`'s Node HTTP client rather than WHATWG `fetch`.)* Custom Node workers can call the same helper:
+2. **AI-Scoped Long-Running `undici` Fetch (`AITransportManager` in `packages/AI/Core/src/generic/aiTransportManager.ts` + `BaseModel`):** For extended-thinking models or native tool-calling turns where streaming is suppressed, Node's default `undici` `headersTimeout` of `300_000` ms (5 minutes) would throw `UND_ERR_HEADERS_TIMEOUT`. `MJServer` configures the process-wide `AITransportManager.Instance` (`BaseSingleton<AITransportManager>`) at startup using `Liveness.HttpHeadersTimeoutMs` / `Liveness.HttpBodyTimeoutMs` (default 30 minutes) without replacing Node's process-global dispatcher, so unrelated outbound HTTP (OAuth, webhooks, connectors) retains Node defaults and corporate `ProxyAgent` / mTLS setups are preserved (hosts with custom CA/mTLS `Agent` instances can also pass `options.dispatcher` or `options.disabled: true`). Every AI modality inheriting from `BaseModel` receives first-class transport access via `this.CustomFetch`, `this.BoundFetch` (late-bound), and `this.BuildTransportClientOptions()` — including `OpenAILLM` (and all OpenAI-compatible subclasses: `FireworksLLM`, `OpenRouterLLM`, `xAILLM`, `InceptionLLM`, `SiliconFlowLLM`, `DeepInfraLLM`, `MiniMaxLLM`, `ZhipuLLM`, `LlamaCppLLM`), `AnthropicLLM`, `GroqLLM`, `CerebrasLLM`, `MistralLLM`, and `OllamaLLM` / `OllamaEmbedding`. *(Note: `@google/genai` used by `GeminiLLM`/`VertexLLM` does not yet expose a per-client custom `fetch` option, and `@azure-rest/ai-inference` uses `@azure/core-rest-pipeline`'s Node HTTP client rather than WHATWG `fetch`.)* Custom Node workers can configure the singleton directly:
 
 ```typescript
 import {
-    ConfigureLongRunningAIFetch,
+    AITransportManager,
     DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,
     DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS,
-    PrimeNodeBuiltinUndiciDispatcher,
 } from '@memberjunction/ai';
 
-await PrimeNodeBuiltinUndiciDispatcher();
-const handle = ConfigureLongRunningAIFetch({
+await AITransportManager.Instance.PrimeNodeBuiltinUndici();
+const handle = AITransportManager.Instance.Configure({
     headersTimeoutMs: DEFAULT_LONG_RUNNING_HEADERS_TIMEOUT_MS, // Default: 1_800_000 (30m); pass 0 to disable
     bodyTimeoutMs: DEFAULT_LONG_RUNNING_BODY_TIMEOUT_MS,       // Default: 1_800_000 (30m); pass 0 to defer to AbortSignal
 });
@@ -441,7 +440,7 @@ When reviewing or activating a custom `MJ: AI Agent Step Types` row from an Open
 | --- | --- | --- |
 | Non-admin user save rejected on `MJ: AI Agents` | `MJAIAgentEntityServer.ValidateAsync` (`ValidateAgentInheritanceAndSandbox`) | Confirm `BaseAgentID` is set, `baseAgent.InstantiationMode !== 'None'`, user has `CanRun` on `BaseAgentID`, `InstantiationMode === 'None'`, `ExposeAsAction === false`, and no `DriverClass` or `helperPlugins` are set. |
 | `Security violation: helper seam 'limits' is code-only` | `AgentHelperResolver.ts` / `ValidateAgentInheritanceAndSandbox` | Remove any code-only seam (`limits`, `actionPolicy`, `setup`, `steps`, `actions`, `subAgents`) from `Configuration.helperPlugins` and register a server-side `@RegisterClass` subclass instead. |
-| Agent aborted with `UND_ERR_HEADERS_TIMEOUT` | Host startup / `httpDispatcher.ts` | Ensure `ConfigureLongRunningAIFetch` is called at server startup with `headersTimeoutMs >= 1_800_000` (or `0`) and verify the provider SDK uses `GetLongRunningAIFetch()`. |
+| Agent aborted with `UND_ERR_HEADERS_TIMEOUT` | Host startup / `AITransportManager` (`aiTransportManager.ts`) | Ensure `AITransportManager.Instance.Configure(...)` is called at server startup with `headersTimeoutMs >= 1_800_000` (or `0`) and verify the provider driver consumes `BaseModel.CustomFetch` / `BuildTransportClientOptions()`. |
 | Long-running agent aborted after 15 minutes | `AgentLivenessWatchdog` (`AgentInactivityAbortReason`) | Verify `Liveness.InactivityTimeoutMs` in `mj.config.cjs`, confirm external waits call `SuspendForExternalWait`, or verify streaming/progress heartbeats are emitted. |
 | Agent paused with `StuckToolCallLoop` or `ReadOnlySpiral` | `AgentStuckDetector` (`mj.config.cjs` `limits.StuckDetector`) | Inspect the checkpoint summary; tune `ReadOnlyStepThreshold` or `IdenticalToolCallThreshold` for deep read-only investigator agents if needed. |
 | Legacy column edit didn't appear in `Configuration` | Direct SQL write bypassed `MJAIAgentEntityServer.Save()` | Always mutate agents via `Metadata.GetEntityObject('MJ: AI Agents')` or `mj sync push` so bidirectional dirty-field sync runs. |

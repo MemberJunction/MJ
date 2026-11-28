@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
 const mockCreate = vi.hoisted(() => vi.fn());
-const mockGetLongRunningAIFetch = vi.hoisted(
+const mockCustomFetch = vi.hoisted(
     () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
 );
 const MockCerebras = vi.hoisted(() => vi.fn().mockImplementation(function (this: Record<string, unknown>) {
@@ -46,13 +46,52 @@ import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
+        protected _additionalSettings: Record<string, unknown> = {};
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get CustomFetch() {
+            return mockCustomFetch();
+        }
+        protected BuildTransportClientOptions() {
+            const customFetch = this.CustomFetch;
+            return customFetch ? { fetch: customFetch } : {};
+        }
     }
     class BaseLLM extends BaseModel {
-        protected _additionalSettings: Record<string, unknown> = {};
         public get SupportsStreaming(): boolean { return false; }
+        protected BuildNormalizedModelUsage(p: {
+            rawPromptTokens: number;
+            completionTokens: number;
+            cacheReadTokens?: number;
+            cacheWriteTokens?: number;
+            promptTokensAlreadyExcludesCache?: boolean;
+        }) {
+            const cacheRead = Math.max(0, p.cacheReadTokens ?? 0);
+            const cacheWrite = Math.max(0, p.cacheWriteTokens ?? 0);
+            const netPrompt = p.promptTokensAlreadyExcludesCache
+                ? Math.max(0, p.rawPromptTokens ?? 0)
+                : Math.max(0, (p.rawPromptTokens ?? 0) - cacheRead);
+            const u = new ModelUsage(netPrompt, Math.max(0, p.completionTokens ?? 0));
+            u.cacheReadTokens = cacheRead;
+            u.cacheWriteTokens = cacheWrite;
+            return u;
+        }
+        protected FormatOpenAICompatibleTools(p: { tools?: unknown[] }) {
+            return p.tools && p.tools.length > 0 ? actualToolMapping.BuildOpenAICompatibleTools(p.tools as never) : undefined;
+        }
+        protected FormatOpenAICompatibleToolChoice(p: { toolChoice?: unknown }) {
+            return p.toolChoice !== undefined ? actualToolMapping.BuildOpenAICompatibleToolChoice(p.toolChoice as never) : undefined;
+        }
+        protected FormatOpenAICompatibleToolCalls(calls: unknown[]) {
+            return actualToolMapping.BuildOpenAICompatibleToolCalls(calls as never);
+        }
+        protected FormatOpenAICompatibleToolResults(msg: unknown, providerName?: string) {
+            return actualToolMapping.BuildOpenAICompatibleToolResults(msg as never, providerName ?? this.constructor.name);
+        }
+        protected ParseOpenAICompatibleToolCalls(raw: unknown, providerName?: string) {
+            return actualToolMapping.ReadOpenAICompatibleToolCalls(raw as never, providerName ?? this.constructor.name);
+        }
         protected thinkingStreamState: {
             accumulatedThinking: string;
             inThinkingBlock: boolean;
@@ -110,6 +149,8 @@ vi.mock('@memberjunction/ai', () => {
         promptTokens: number;
         completionTokens: number;
         totalTokens: number;
+        cacheReadTokens: number = 0;
+        cacheWriteTokens: number = 0;
         constructor(promptTokens: number, completionTokens: number) {
             this.promptTokens = promptTokens;
             this.completionTokens = completionTokens;
@@ -156,7 +197,6 @@ vi.mock('@memberjunction/ai', () => {
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
         ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
         CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
-        GetLongRunningAIFetch: mockGetLongRunningAIFetch,
         BaseLLM,
         ModelUsage,
         ChatResult,
@@ -193,9 +233,9 @@ describe('CerebrasLLM', () => {
             expect(instance.client).toBe(instance.CerebrasClient);
         });
 
-        it('should forward GetLongRunningAIFetch to the Cerebras SDK constructor when configured (R2-9)', () => {
+        it('should forward BaseModel.CustomFetch to the Cerebras SDK constructor when configured (R2-9)', () => {
             const scopedFetch = vi.fn<() => Promise<Response>>();
-            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            mockCustomFetch.mockReturnValueOnce(scopedFetch);
             MockCerebras.mockClear();
 
             new CerebrasLLM('scoped-key');

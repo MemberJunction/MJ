@@ -1,6 +1,5 @@
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls,
-    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, GetLongRunningAIFetch, type OpenAICompatibleToolCallReadout } from "@memberjunction/ai";
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type OpenAICompatibleToolCallReadout, type ThinkingTagFormat } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
@@ -26,10 +25,9 @@ export class OpenAILLM extends BaseLLM {
         super(apiKey);
 
         // now create the OpenAI instance
-        const longRunningFetch = GetLongRunningAIFetch();
         const params: Record<string, unknown> = {
             apiKey,
-            ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
+            ...this.BuildTransportClientOptions(),
         };
         if (baseURL && baseURL.length > 0) {
             params.baseURL = baseURL; // OpenAI base URL is optional, lots of sub-classes and users might use other providers that are Open AI compatible
@@ -145,6 +143,26 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
+     * Whether this OpenAI-compatible provider supports `top_k` sampling (via `getProviderRequestExtras`).
+     * Standard OpenAI does not; compatible gateways such as Fireworks override this to `true`.
+     */
+    protected get SupportsTopK(): boolean {
+        return false;
+    }
+
+    /**
+     * OpenAI supports thinking extraction using `<thinking>...</thinking>` tags (plus native
+     * `reasoning_content` / `reasoning` delta fields on o1/o3/reasoning models).
+     */
+    protected override supportsThinkingModels(): boolean {
+        return true;
+    }
+
+    protected override getThinkingTagFormat(): ThinkingTagFormat {
+        return { open: '<thinking>', close: '</thinking>' };
+    }
+
+    /**
      * Extra request-body params merged into BOTH the streaming and non-streaming ChatCompletion
      * requests, beyond the standard OpenAI schema. Default is none. Subclasses targeting
      * OpenAI-compatible gateways override this to opt into provider extensions the OpenAI SDK
@@ -238,8 +256,8 @@ export class OpenAILLM extends BaseLLM {
             openAIParams.stop = params.stopSequences;
         }
 
-        // OpenAI doesn't support topK or minP - warn if provided
-        if (params.topK != null) {
+        // OpenAI doesn't support topK or minP - warn if provided (unless subclass supports topK)
+        if (params.topK != null && !this.SupportsTopK) {
             console.warn('OpenAI provider does not support topK parameter, ignoring');
         }
         if (params.minP != null) {
@@ -284,28 +302,18 @@ export class OpenAILLM extends BaseLLM {
         const endTime = new Date();
         const timeElapsed = endTime.getTime() - startTime.getTime();
 
-        // Create ModelUsage normalized to the uniform ModelUsage contract.
-        // OpenAI's cache convention: `prompt_tokens` INCLUDES cached tokens, and the cached count is
-        // nested at `prompt_tokens_details.cached_tokens`. The contract requires promptTokens to be
-        // UNCACHED/net-new input ONLY, with cache reads tracked separately and DISJOINT. So we record
-        // cacheReadTokens first, then subtract it from the native prompt count (clamped at 0).
-        // OpenAI does not bill or report cache WRITES, so cacheWriteTokens stays 0. The full native
-        // prompt count is recoverable via usage.totalInputTokens (promptTokens + cacheReadTokens).
+        // Create ModelUsage normalized to the uniform ModelUsage contract via BaseLLM.BuildNormalizedModelUsage.
+        // OpenAI's `prompt_tokens` INCLUDES cached tokens (`prompt_tokens_details.cached_tokens`).
         const extendedUsage = result.usage as any;
         const openAICachedTokens = extendedUsage.prompt_tokens_details?.cached_tokens ?? 0;
-        const openAINetPromptTokens = Math.max(0, (result.usage.prompt_tokens ?? 0) - openAICachedTokens);
-        const usage = new ModelUsage(openAINetPromptTokens, result.usage.completion_tokens);
-        usage.cacheReadTokens = openAICachedTokens;
-        // cacheWriteTokens intentionally left at 0 (OpenAI implicit caching has no separate write charge).
-
-        // OpenAI-compatible gateways (e.g. OpenRouter, when usage accounting is requested) report the
-        // authoritative dollar cost on the usage object. OpenAI itself never sets this, so the read is
-        // a safe no-op for the base provider. When present we surface it as the provider-reported cost,
-        // which the prompt-cost pipeline prefers over rate-table estimation (see MJAIPromptRunEntityServer).
-        if (typeof extendedUsage.cost === 'number') {
-            usage.cost = extendedUsage.cost;
-            usage.costCurrency = 'USD';
-        }
+        const hasProviderCost = typeof extendedUsage.cost === 'number';
+        const usage = this.BuildNormalizedModelUsage({
+            rawPromptTokens: result.usage.prompt_tokens ?? 0,
+            completionTokens: result.usage.completion_tokens,
+            cacheReadTokens: openAICachedTokens,
+            cost: hasProviderCost ? extendedUsage.cost : undefined,
+            costCurrency: hasProviderCost ? 'USD' : undefined,
+        });
         if (extendedUsage.completion_tokens_details) {
             // Store completion token details in usage if needed in future
         }
@@ -549,8 +557,8 @@ export class OpenAILLM extends BaseLLM {
             openAIParams.stop = params.stopSequences;
         }
 
-        // OpenAI doesn't support topK or minP - warn if provided
-        if (params.topK != null) {
+        // OpenAI doesn't support topK or minP - warn if provided (unless subclass supports topK)
+        if (params.topK != null && !this.SupportsTopK) {
             console.warn('OpenAI provider does not support topK parameter, ignoring');
         }
         if (params.minP != null) {
@@ -571,40 +579,12 @@ export class OpenAILLM extends BaseLLM {
         // non-streaming path. The OpenAI SDK forwards unknown body keys unchanged.
         Object.assign(openAIParams, this.getProviderRequestExtras(params));
 
+        // Initialize BaseLLM's ThinkingStreamExtractor for this stream (tags: <thinking>...</thinking>)
+        this.initializeThinkingStreamState();
+
         // Same request-option channel as the non-streaming path: aborting the signal cancels the
         // in-flight HTTP request AND the SSE stream, so we stop pulling chunks off a dead socket.
         return this.OpenAI.chat.completions.create(openAIParams, this.buildRequestOptions(params));
-    }
-
-    // State tracking for streaming thinking extraction
-    private _streamingState: {
-        accumulatedThinking: string;
-        inThinkingBlock: boolean;
-        pendingContent: string;
-        thinkingComplete: boolean;
-    } = {
-        accumulatedThinking: '',
-        inThinkingBlock: false,
-        pendingContent: '',
-        thinkingComplete: false
-    };
-
-    /**
-     * Reset streaming state for a new request. Overrides the base-class hook so
-     * `BaseLLM.handleStreamingChatCompletion` calls this both at the start of a
-     * request AND in its `finally` block — releasing accumulated reasoning/
-     * thinking buffers and preventing state from a prior request bleeding into
-     * the next. Inheriting providers (Cerebras, Fireworks, Groq, xAI, Zhipu,
-     * Inception, LlamaCpp, etc.) automatically benefit from this override. See
-     * audit R2-C5.
-     */
-    protected resetStreamingState(): void {
-        this._streamingState = {
-            accumulatedThinking: '',
-            inThinkingBlock: false,
-            pendingContent: '',
-            thinkingComplete: false
-        };
     }
 
     /**
@@ -619,11 +599,7 @@ export class OpenAILLM extends BaseLLM {
         let content = '';
         const usage = chunk?.usage || null;
 
-        // Normalize the streaming usage once, to the uniform ModelUsage contract. OpenAI's
-        // `prompt_tokens` INCLUDES cached tokens; the cache-read count is nested at
-        // prompt_tokens_details.cached_tokens (present on the final usage chunk when
-        // stream_options.include_usage is set). promptTokens must be UNCACHED/net-new only, so we
-        // subtract the cache-read count (clamped at 0) and carry the cache-read count alongside.
+        // Normalize the streaming usage once, to the uniform ModelUsage contract.
         const streamCacheReadTokens = usage?.prompt_tokens_details?.cached_tokens ?? 0;
         const streamNetPromptTokens = Math.max(0, (usage?.prompt_tokens || 0) - streamCacheReadTokens);
         const streamUsage = usage ? {
@@ -640,9 +616,12 @@ export class OpenAILLM extends BaseLLM {
         // Check if chunk contains reasoning content (for o1 models)
         const delta = chunk?.choices?.[0]?.delta;
         if (delta) {
+            if (!this._thinkingExtractor) {
+                this.initializeThinkingStreamState();
+            }
             // Check for reasoning fields specific to o1 models
             if (delta.reasoning_content) {
-                this._streamingState.accumulatedThinking += delta.reasoning_content;
+                this._thinkingExtractor?.AppendThinking(delta.reasoning_content);
                 // Don't emit reasoning as regular content
                 return {
                     content: '',
@@ -650,7 +629,7 @@ export class OpenAILLM extends BaseLLM {
                     usage: streamUsage
                 };
             } else if (delta.reasoning) {
-                this._streamingState.accumulatedThinking += delta.reasoning;
+                this._thinkingExtractor?.AppendThinking(delta.reasoning);
                 // Don't emit reasoning as regular content
                 return {
                     content: '',
@@ -659,14 +638,10 @@ export class OpenAILLM extends BaseLLM {
                 };
             }
 
-            // Process regular content
+            // Process regular content through BaseLLM's ThinkingStreamExtractor
             const rawContent = delta.content || '';
             if (rawContent) {
-                // Add raw content to pending content for processing
-                this._streamingState.pendingContent += rawContent;
-
-                // Process the pending content to extract thinking
-                content = this.processThinkingInStreamingContent();
+                content = this.processStreamChunkWithThinking(rawContent);
             }
         }
 
@@ -675,87 +650,6 @@ export class OpenAILLM extends BaseLLM {
             finishReason: chunk?.choices?.[0]?.finish_reason,
             usage: streamUsage
         };
-    }
-
-    /**
-     * Process pending content to extract thinking blocks
-     * Returns content that should be emitted to the user
-     */
-    private processThinkingInStreamingContent(): string {
-        const state = this._streamingState;
-        let outputContent = '';
-        
-        // If thinking is already complete, just pass through content
-        if (state.thinkingComplete) {
-            outputContent = state.pendingContent;
-            state.pendingContent = '';
-            return outputContent;
-        }
-        
-        // Check if we're currently in a thinking block
-        if (state.inThinkingBlock) {
-            // Look for end of thinking block
-            const endIndex = state.pendingContent.indexOf('</thinking>');
-            
-            if (endIndex !== -1) {
-                // Found end of thinking block
-                state.accumulatedThinking += state.pendingContent.substring(0, endIndex);
-                state.inThinkingBlock = false;
-                state.thinkingComplete = true;
-                
-                // Keep remaining content after </thinking> for output
-                state.pendingContent = state.pendingContent.substring(endIndex + '</thinking>'.length);
-                outputContent = state.pendingContent.trim();
-                state.pendingContent = '';
-            } else {
-                // Still in thinking block, accumulate all content
-                state.accumulatedThinking += state.pendingContent;
-                state.pendingContent = '';
-            }
-        } else {
-            // Not in thinking block, check if one is starting
-            const startIndex = state.pendingContent.indexOf('<thinking>');
-            
-            if (startIndex !== -1) {
-                // Found start of thinking block
-                if (startIndex === 0) {
-                    // Thinking starts at beginning
-                    state.inThinkingBlock = true;
-                    state.pendingContent = state.pendingContent.substring('<thinking>'.length);
-                    
-                    // Process again to check for end tag in same chunk
-                    return this.processThinkingInStreamingContent();
-                } else {
-                    // There's content before thinking block - emit it first
-                    outputContent = state.pendingContent.substring(0, startIndex);
-                    state.pendingContent = state.pendingContent.substring(startIndex);
-                    state.inThinkingBlock = true;
-                    state.pendingContent = state.pendingContent.substring('<thinking>'.length);
-                }
-            } else {
-                // No thinking block found
-                // Check if we might be at the start of a partial tag
-                if (state.pendingContent.endsWith('<') || 
-                    state.pendingContent.endsWith('<t') ||
-                    state.pendingContent.endsWith('<th') ||
-                    state.pendingContent.endsWith('<thi') ||
-                    state.pendingContent.endsWith('<thin') ||
-                    state.pendingContent.endsWith('<think') ||
-                    state.pendingContent.endsWith('<thinki') ||
-                    state.pendingContent.endsWith('<thinkin')) {
-                    // Hold back content that might be start of tag
-                    const lastOpenBracket = state.pendingContent.lastIndexOf('<');
-                    outputContent = state.pendingContent.substring(0, lastOpenBracket);
-                    state.pendingContent = state.pendingContent.substring(lastOpenBracket);
-                } else {
-                    // No thinking block and no partial tag, output all content
-                    outputContent = state.pendingContent;
-                    state.pendingContent = '';
-                }
-            }
-        }
-        
-        return outputContent;
     }
     
     /**
@@ -778,20 +672,20 @@ export class OpenAILLM extends BaseLLM {
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
 
-        // Get thinking content from streaming state
-        const thinkingContent = this._streamingState.accumulatedThinking.trim();
+        // Get thinking content from BaseLLM's ThinkingStreamExtractor
+        const thinkingContent = this.thinkingStreamState?.accumulatedThinking.trim();
 
         // promptTokens here is already normalized to UNCACHED/net-new (processStreamingChunk
         // subtracted the cache-read count); cacheReadTokens is the disjoint cache-read subset.
-        // OpenAI does not report cache writes, so cacheWriteTokens stays 0.
-        const modelUsage = new ModelUsage(promptTokens, completionTokens);
-        modelUsage.cacheReadTokens = cacheReadTokens;
-
-        // Provider-reported cost carried from the final usage chunk (OpenAI-compatible gateways).
-        if (typeof usage?.cost === 'number') {
-            modelUsage.cost = usage.cost;
-            modelUsage.costCurrency = usage.costCurrency || 'USD';
-        }
+        const hasProviderCost = typeof usage?.cost === 'number';
+        const modelUsage = this.BuildNormalizedModelUsage({
+            rawPromptTokens: promptTokens,
+            completionTokens,
+            cacheReadTokens,
+            cost: hasProviderCost ? usage.cost : undefined,
+            costCurrency: hasProviderCost ? (usage.costCurrency || 'USD') : undefined,
+            promptTokensAlreadyExcludesCache: true,
+        });
 
         // Set all properties
         result.data = {
@@ -929,10 +823,7 @@ export class OpenAILLM extends BaseLLM {
      * @returns One OpenAI tool message per result block
      */
     private convertToolResultMessage(message: ChatMessage): ChatCompletionMessageParam[] {
-        // Delegates to the shared OpenAI-shaped mapping in @memberjunction/ai. Groq and Cerebras
-        // speak the same wire format, and three copies of this would drift; the SDK type stays at
-        // this boundary so the compiler still checks the shape going into the request.
-        return buildOpenAICompatibleToolResults(message, 'OpenAI provider') as ChatCompletionMessageParam[];
+        return this.FormatOpenAICompatibleToolResults(message, 'OpenAI provider') as ChatCompletionMessageParam[];
     }
 
     /**
@@ -942,7 +833,7 @@ export class OpenAILLM extends BaseLLM {
      * @returns OpenAI-shaped tool calls
      */
     private convertToolCallsToOpenAI(toolCalls: ChatToolCall[]): ChatCompletionMessageFunctionToolCall[] {
-        return buildOpenAICompatibleToolCalls(toolCalls) as ChatCompletionMessageFunctionToolCall[];
+        return this.FormatOpenAICompatibleToolCalls(toolCalls) as ChatCompletionMessageFunctionToolCall[];
     }
 
     /**
@@ -959,14 +850,16 @@ export class OpenAILLM extends BaseLLM {
         request: OpenAI.Chat.Completions.ChatCompletionCreateParams,
         params: ChatParams
     ): void {
-        if (!params.tools || params.tools.length === 0) {
+        const tools = this.FormatOpenAICompatibleTools(params);
+        if (!tools) {
             return;
         }
 
-        request.tools = buildOpenAICompatibleTools(params.tools) as ChatCompletionTool[];
+        request.tools = tools as ChatCompletionTool[];
 
-        if (params.toolChoice !== undefined) {
-            request.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        const toolChoice = this.FormatOpenAICompatibleToolChoice(params);
+        if (toolChoice !== undefined) {
+            request.tool_choice = toolChoice;
         }
 
         if (params.parallelToolCalls !== undefined) {
@@ -986,7 +879,7 @@ export class OpenAILLM extends BaseLLM {
      * @returns The normalized calls, or the malformed call's description
      */
     private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): OpenAICompatibleToolCallReadout {
-        return ReadOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
+        return this.ParseOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
     }
 
 
