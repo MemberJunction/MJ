@@ -38,7 +38,7 @@ Refine the plan's:
 4. **Guard against an ill-posed target.** If the proposed outcome can only be known *after* the moment you'd want to predict it, flag that as a point-in-time concern and list it as a leakage concern — this prevents leakage downstream.
 
 ## Entity catalog
-Pick `EntityName`, `GrainEntity`, `TargetVariable` and every column from the entities below; a name that is not here does not exist.
+Pick `EntityName`, `GrainEntity`, `TargetVariable` and every column from the entities below; never invent one. When the user asks for an entity or column by name and it is not here, keep it as the user wrote it in `EntityName` / `TargetVariable`: never substitute an entity or column the user did not ask for, and do not ask instead. Code checks every name against the database and tells the user which ones do not exist.
 {% if PS_ENTITY_CATALOG %}{{ PS_ENTITY_CATALOG }}{% else %}[PS ENTITY CATALOG] {{ ALL_ENTITIES | length }} entities:
 {% for e in ALL_ENTITIES %}- {{ e.Name }} ({{ e.SchemaName }}.{{ e.BaseView }}){% if e.Description %}: {{ e.Description | truncate(60) }}{% endif %}
 {% endfor %}{% endif %}

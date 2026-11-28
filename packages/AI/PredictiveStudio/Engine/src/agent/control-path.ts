@@ -62,6 +62,11 @@ export interface DraftFacts {
   readonly Refusal: DraftRefusal | null;
   /** The drafted plan's unresolved names (`PlanMetadataValidator`), or null before both drafts are current. */
   readonly Unresolved: readonly UnresolvedReference[] | null;
+  /**
+   * The gathered target's unresolved names ({@link PlanMetadataValidator.ValidateTarget}) while the plan is not complete,
+   * or null when there is no target to check. Optional: facts without it gather as before (wave-4 integration).
+   */
+  readonly TargetUnresolved?: readonly UnresolvedReference[] | null;
   /** Repairs this run already sent back to the prompt. */
   readonly RepairsUsed: number;
   /**
@@ -233,9 +238,20 @@ export class AgentControlPath {
         if (!facts.BuildDispatchedThisRun && AgentControlPath.isApproval(facts.Approval)) return { Kind: 'request-build', Approval: facts.Approval };
         return { Kind: 'prompt', State: facts.BuildDispatchedThisRun ? 'report' : 'gather' };
       case 'report': return { Kind: 'prompt', State: 'report' };
-      case 'gather': return { Kind: 'prompt', State: 'gather' };
+      case 'gather': return AgentControlPath.nextInGather(facts);
       default: return { Kind: 'prompt', State: 'gather' };
     }
+  }
+
+  /**
+   * The transition out of `gather`: a target naming an entity or column that does not exist goes back to the Goal
+   * Analyst (at most {@link MAX_REPAIRS} times), then the session declines listing the names; otherwise the prompt
+   * gathers. A request for something the database does not hold ends in a typed decline, never only in chat text.
+   */
+  private static nextInGather(facts: AgentControlFacts): AgentControlTransition {
+    const unresolved = facts.Drafts?.TargetUnresolved || [];
+    if (unresolved.length === 0) return { Kind: 'prompt', State: 'gather' };
+    return AgentControlPath.repairOrDecline({ kind: 'unresolved-reference', references: unresolved }, facts.Drafts?.RepairsUsed ?? 0);
   }
 
   /** The transition out of `profile` (A4): profile the current draft, then decline on a verdict or move on. */
@@ -300,7 +316,7 @@ export class AgentControlPath {
 
   /** The exact error a repair hands the owning sub-agent: what is wrong, where, and what to do. */
   public static RepairReason(refusal: DraftRefusal): string {
-    return `${AgentControlPath.DescribeRefusal(refusal)} Correct your slice of the plan so that it uses only names from the entity catalog, and change nothing else.`;
+    return `${AgentControlPath.DescribeRefusal(refusal)} Correct your slice of the plan so that it uses only names from the entity catalog, and change nothing else. A name the user asked for that the catalog does not have: keep it as the user wrote it, never swap in another entity or column.`;
   }
 
   /** A draft refusal in words, naming the slice and the sub-agent that fixes it. */

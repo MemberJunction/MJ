@@ -49,6 +49,21 @@ export class PlanMetadataValidator {
     return out.References;
   }
 
+  /**
+   * The target slice's unresolved names (the entity and the target variable), for a plan still being gathered: a
+   * target naming an entity or column the catalog lacks is caught before the rest of the plan is drafted. `[]` while
+   * the target names no entity yet; the variable is checked once it is named.
+   */
+  public static ValidateTarget(plan: Pick<ModelingPlanSpec, 'TargetDefinition'>, provider: PlanValidationProvider): UnresolvedReference[] {
+    const t = plan.TargetDefinition;
+    if (!t?.EntityName?.trim()) return [];
+    const out = new ReferenceCollector();
+    const entity = PredictiveStudioPipelineBuilder.ResolveEntity(t.EntityName, provider) || null;
+    if (!entity) out.Add('TargetDefinition.EntityName', t.EntityName, 'entity');
+    if (t.TargetVariable?.trim() && !PlanMetadataValidator.HasField(entity, t.TargetVariable)) out.Add('TargetDefinition.TargetVariable', t.TargetVariable, 'field');
+    return out.References;
+  }
+
   /** The plan's Feature Pipeline sources that name no `MJ: Record Processes` row, read through `provider` as `user`. */
   public static async ValidateFeaturePipelines(plan: ModelingPlanSpec, provider: IMetadataProvider, user: UserInfo): Promise<UnresolvedReference[]> {
     const refs = (plan.CandidateSources || []).map((s, i) => ({ s, i })).filter(({ s }) => s.Kind === 'FeaturePipeline');

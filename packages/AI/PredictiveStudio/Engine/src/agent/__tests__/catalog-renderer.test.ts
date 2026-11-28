@@ -92,4 +92,11 @@ describe('A3 attack 8: the Data Scout and Goal Analyst templates', () => {
     expect(goal).toContain(`{{ ${CatalogRenderer.DATA_KEY} }}`);
     for (const word of ['DecisionDateColumn', 'LabelWindowDays', 'Censoring', 'GrainEntity']) expect(goal).toContain(word);
   });
+
+  it('the Goal Analyst writes a name the user asked for as written when the catalog lacks it, so code can check it (wave-4 integration)', () => {
+    const goal = template('goal-analyst');
+    expect(goal).toMatch(/keep it as the user wrote it/i);
+    expect(goal).toMatch(/never substitute/i);
+    expect(goal).not.toMatch(/a name that is not here does not exist\./i);
+  });
 });

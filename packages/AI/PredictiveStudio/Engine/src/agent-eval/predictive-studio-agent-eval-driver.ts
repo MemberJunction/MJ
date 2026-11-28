@@ -477,6 +477,26 @@ export function ReadPSRubricConfig(config: OracleConfig): PSRubricOracleConfig {
   };
 }
 
+type JudgeEvidenceItem = NonNullable<OracleInput['judgeEvidence']>['Items'][number];
+
+/** The most characters one evidence item gives the judge: the testing engine's own per-item default (40,000). */
+const MAX_EVIDENCE_CHARS_PER_ITEM = 40_000; // mirrors DEFAULT_JUDGE_EVIDENCE_LIMITS.MaxCharsPerItem in @memberjunction/testing-engine
+
+/** An evidence item, cut to {@link MAX_EVIDENCE_CHARS_PER_ITEM} with a marker saying how much was shown. */
+function BoundedEvidenceItem(label: string, text: string): JudgeEvidenceItem {
+  if (text.length <= MAX_EVIDENCE_CHARS_PER_ITEM) return { Label: label, Text: text, Truncated: false };
+  return { Label: label, Text: `${text.slice(0, MAX_EVIDENCE_CHARS_PER_ITEM)}\n…[truncated: showing ${MAX_EVIDENCE_CHARS_PER_ITEM} of ${text.length} characters]`, Truncated: true };
+}
+
+/** An agent run's final message and pretty-printed final payload (an empty payload is none), or null for another target. */
+function ReadAgentRunOutput(target: OracleInput['targetEntity']): { Message: string | null; Payload: string | null } | null {
+  if (typeof target !== 'object' || target === null || !('Message' in target)) return null;
+  const message = typeof target.Message === 'string' && target.Message.trim() ? target.Message.trim() : null;
+  const parsed = ParseJsonRecord('FinalPayload' in target ? target.FinalPayload : null);
+  const payload = parsed && Object.keys(parsed).length > 0 ? JSON.stringify(parsed, null, 2) : null;
+  return { Message: message, Payload: payload };
+}
+
 /**
  * The PS eval suite's rubric oracle (D5-59). It judges the repeat with the rubric engine, through the generic
  * `RubricOracle`, and passes iff every criterion in `criteriaKeys` is Met; the rubric's other criteria are recorded
@@ -500,12 +520,29 @@ export class PSRubricOracle implements IOracle {
     if (unknown.length > 0) {
       return this.refuse('unknown-criterion', `rubric version ${versionId} defines no criterion ${unknown.join(', ')}.`, { UnknownKeys: unknown });
     }
-    const judged = await new RubricOracle(this.engine).evaluate(input, {
+    const judged = await new RubricOracle(this.engine).evaluate(PSRubricOracle.WithJudgeEvidence(input), {
       rubricId: settings.rubricId,
       rubricVersionId: versionId,
       versionLabel: settings.versionLabel,
     });
     return this.scoreNamedCriteria(judged, settings.criteriaKeys);
+  }
+
+  /**
+   * The input the judge reads: the driver's own judge evidence when it built some, else the agent run's final message
+   * and final payload, labeled. The testing engine builds evidence only for its own judge oracle types, so without
+   * this a `ps-rubric` judge sees the bare payload and never the reply the criteria are about (wave-4 integration:
+   * a fixed small-data decline scored `failure-reported` 0 because the judge read only the drafted target).
+   */
+  public static WithJudgeEvidence(input: OracleInput): OracleInput {
+    if (input.judgeEvidence) return input;
+    const run = ReadAgentRunOutput(input.targetEntity);
+    if (!run) return input;
+    const items: JudgeEvidenceItem[] = [];
+    if (run.Message) items.push(BoundedEvidenceItem('Agent final message', run.Message));
+    if (run.Payload) items.push(BoundedEvidenceItem('Agent final payload (JSON)', run.Payload));
+    if (items.length === 0) return input;
+    return { ...input, judgeEvidence: { Items: items, Truncated: items.some((i) => i.Truncated) } };
   }
 
   /** Passes iff every named criterion is Met (normalized score 1); the score is the share of named criteria Met. */

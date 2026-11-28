@@ -284,7 +284,11 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     const refusal = !unitCurrent ? this.draftRefusals.get(`unit:${unitHash}`) : !protocolCurrent ? this.draftRefusals.get(`protocol:${protocolHash}`) : undefined;
     const unresolved = unitCurrent && protocolCurrent && AgentControlPath.IsPlanComplete(payload) ? await this.unresolvedNames(params, payload) : null;
     const profile = unitCurrent ? this.profileFact(payload) : undefined;
-    return { UnitDraftCurrent: unitCurrent, ProtocolDraftCurrent: protocolCurrent, Refusal: refusal || null, Unresolved: unresolved, RepairsUsed: this.repairsUsed, ...(profile ? { Profile: profile } : {}) };
+    const targetUnresolved = this.unresolvedTarget(params, payload);
+    return {
+      UnitDraftCurrent: unitCurrent, ProtocolDraftCurrent: protocolCurrent, Refusal: refusal || null, Unresolved: unresolved, TargetUnresolved: targetUnresolved,
+      RepairsUsed: this.repairsUsed, ...(profile ? { Profile: profile } : {}),
+    };
   }
 
   /**
@@ -317,6 +321,13 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
       glmVsDummy: glm, computeSeconds: JsonParse.JsonNumber(value, 'computeSeconds') || 0,
       holdoutRowsRead: 0, holdoutRowsExcluded: JsonParse.JsonNumber(value, 'holdoutRowsExcluded') || 0, verdict: parsedVerdict,
     };
+  }
+
+  /** The gathered target's unresolved names while the plan is incomplete (wave-4 integration), or null with nothing to check. */
+  private unresolvedTarget(params: ExecuteAgentParams, payload: PredictiveStudioBuilderPayload): UnresolvedReference[] | null {
+    const ctx = this.contextOf(params);
+    if (!ctx || AgentControlPath.IsPlanComplete(payload) || !payload.TargetDefinition) return null;
+    return PlanMetadataValidator.ValidateTarget({ TargetDefinition: payload.TargetDefinition }, ctx.Provider);
   }
 
   /** The plan's unresolved names: metadata (entities, fields, queries) and Feature Pipeline rows, through the run's provider. */

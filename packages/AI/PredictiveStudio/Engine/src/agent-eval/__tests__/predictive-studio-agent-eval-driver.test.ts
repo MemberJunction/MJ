@@ -480,6 +480,35 @@ describe('PSRubricOracle — judges only the criteria a test names (D5-59)', () 
     expect(engine.Calls).toHaveLength(0);
   });
 
+  it("judges the agent's final message, not only the payload, when the driver supplied no judge evidence (wave-4 integration)", async () => {
+    const engine = MakeEngine({ 'failure-reported': 1 });
+    const decline = "I can't build a reliable model from this data: the development rows hold 180 resolved rows, 15 of them in the smaller outcome class.";
+    const input: OracleInput = {
+      ...MakeInput(),
+      actualOutput: { TargetDefinition: { EntityName: 'PS Truth: C1CommitteeMembership' } },
+      targetEntity: { ID: 'run-1', Message: decline, FinalPayload: '{"TargetDefinition":{"EntityName":"PS Truth: C1CommitteeMembership"}}' },
+    };
+    await new PSRubricOracle(engine).evaluate(input, { rubricId: RUBRIC_ID, criteriaKeys: ['failure-reported'] });
+    const text = engine.Calls[0].content?.text ?? '';
+    expect(text).toContain('=== Agent final message ===');
+    expect(text).toContain(decline);
+    expect(text).toContain('=== Agent final payload (JSON) ===');
+    expect(text.indexOf(decline)).toBeLessThan(text.indexOf('C1CommitteeMembership'));
+  });
+
+  it("keeps the driver's own judge evidence when it supplied some", async () => {
+    const engine = MakeEngine({ 'failure-reported': 1 });
+    const input: OracleInput = {
+      ...MakeInput(),
+      targetEntity: { ID: 'run-1', Message: 'not this', FinalPayload: '{}' },
+      judgeEvidence: { Items: [{ Label: 'Agent final message', Text: 'the driver evidence', Truncated: false }], Truncated: false },
+    };
+    await new PSRubricOracle(engine).evaluate(input, { rubricId: RUBRIC_ID, criteriaKeys: ['failure-reported'] });
+    const text = engine.Calls[0].content?.text ?? '';
+    expect(text).toContain('the driver evidence');
+    expect(text).not.toContain('not this');
+  });
+
   it('the generated tests name ps-rubric only with criteria, never the generic rubric oracle', () => {
     const manifest = JSON.parse(
       readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'scenario-manifest.json'), 'utf8')

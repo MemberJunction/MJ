@@ -172,3 +172,61 @@ describe('A3 attack 7: a presented plan with an unresolved name is never shown',
     }
   });
 });
+
+/** Facts of a gathered, incomplete plan whose target names `unresolved`, after `repairs` repairs (wave-4 integration). */
+function gatheredFacts(unresolved: readonly UnresolvedReference[] | null, repairs: number): AgentControlFacts {
+  return {
+    PayloadHash: 'h', PlanComplete: false, PresentedPlanHash: null, Approval: { kind: 'no-request' }, Claim: null, BuildDispatchedThisRun: false,
+    Drafts: { UnitDraftCurrent: false, ProtocolDraftCurrent: false, Refusal: null, Unresolved: null, TargetUnresolved: unresolved, RepairsUsed: repairs },
+  };
+}
+
+const USER_NAMED: readonly UnresolvedReference[] = [
+  { path: 'TargetDefinition.EntityName', name: 'Nonexistent Course Drop Reasons', kind: 'entity' },
+  { path: 'TargetDefinition.TargetVariable', name: 'PhantomOutcomeScore', kind: 'field' },
+];
+
+describe('wave-4 integration: a target naming things that do not exist ends decline-unresolved-reference before the plan is complete', () => {
+  it('ValidateTarget resolves only the target slice: the entity and the variable', () => {
+    const plan: Pick<ModelingPlanSpec, 'TargetDefinition'> = {
+      TargetDefinition: { EntityName: 'Nonexistent Course Drop Reasons', TargetVariable: 'PhantomOutcomeScore', ProblemType: 'classification', SuccessMetric: 'AUC' },
+    };
+    expect(PlanMetadataValidator.ValidateTarget(plan, ValidatorProvider())).toEqual(USER_NAMED);
+  });
+
+  it('a real target, and a target with no entity yet, resolve to []', () => {
+    expect(PlanMetadataValidator.ValidateTarget(RealPlan(), ValidatorProvider())).toEqual([]);
+    const empty: Pick<ModelingPlanSpec, 'TargetDefinition'> = { TargetDefinition: { EntityName: '', TargetVariable: '', ProblemType: 'classification', SuccessMetric: 'AUC' } };
+    expect(PlanMetadataValidator.ValidateTarget(empty, ValidatorProvider())).toEqual([]);
+    const noVariable: Pick<ModelingPlanSpec, 'TargetDefinition'> = { TargetDefinition: { EntityName: 'PS Truth W1 Membership Years', TargetVariable: '', ProblemType: 'classification', SuccessMetric: 'AUC' } };
+    expect(PlanMetadataValidator.ValidateTarget(noVariable, ValidatorProvider())).toEqual([]);
+  });
+
+  it('in gather, an unresolved target goes to the Goal Analyst for a repair (twice), naming the names', () => {
+    for (const repairs of [0, 1]) {
+      const f = gatheredFacts(USER_NAMED, repairs);
+      expect(AgentControlPath.StateOf(f)).toBe('gather');
+      const t = AgentControlPath.Next('gather', f);
+      expect(t.Kind).toBe('repair');
+      if (t.Kind === 'repair') {
+        expect(t.Owner).toBe('Goal Analyst');
+        expect(t.Reason).toContain('Nonexistent Course Drop Reasons');
+        expect(t.Reason).toContain('PhantomOutcomeScore');
+      }
+    }
+  });
+
+  it('after two repairs the session ends decline-unresolved-reference listing the names', () => {
+    expect(AgentControlPath.Next('gather', gatheredFacts(USER_NAMED, 2))).toEqual({ Kind: 'decline-unresolved-reference', References: USER_NAMED });
+  });
+
+  it('a resolved or not-yet-named target leaves gather to the prompt', () => {
+    expect(AgentControlPath.Next('gather', gatheredFacts([], 0))).toEqual({ Kind: 'prompt', State: 'gather' });
+    expect(AgentControlPath.Next('gather', gatheredFacts(null, 0))).toEqual({ Kind: 'prompt', State: 'gather' });
+  });
+
+  it('the repair keeps a name the user asked for: it is never swapped for another entity', () => {
+    const t = AgentControlPath.Next('gather', gatheredFacts(USER_NAMED, 0));
+    expect(t.Kind === 'repair' ? t.Reason : '').toContain('keep it as the user wrote it');
+  });
+});
