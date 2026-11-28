@@ -4,7 +4,7 @@ One run of the BizApps Software Factory builds the open Canon work on an integra
 
 ## Status
 
-- **Status**: Draft for the sponsor's rulings. Nothing starts until the [decision sheet](#decision-sheet) is ruled and the [preconditions](#preconditions-people-only) are set.
+- **Status**: Ruled. The sponsor accepted the [decision sheet](#decision-sheet) on 2026-11-28, with D25 reversed on `cmbrock-BC`'s suggestion. The run starts when the [preconditions](#preconditions-people-only) are set.
 - **Created**: 2026-11-28
 - **Sponsor**: Amith Nagarajan (`AN-BC`). **Development lead**: `rkihm-BC`.
 - **What it builds**: the open items of [`canon-master-plan.md`](canon-master-plan.md), phases U1 to U6 of [`canon-unification.md`](canon-unification.md), and the `canon` issues listed under [Scope](#scope).
@@ -24,7 +24,7 @@ Two facts about the factory shape the run:
 ## How the run works
 
 1. **One integration branch**, `canon/factory-run`, cut from `next`. Every factory slice targets it (the factory takes an explicit target branch per repository). Nothing reaches `next` until the final merge.
-2. **Slices merge into the integration branch without a person**, under an owner-signed, time-limited policy exception scoped to this project and this branch. The exception does not apply to `next`.
+2. **Slices merge into the integration branch without a person**, under an owner-signed, time-limited policy exception granted to this project's delivery policy. The factory scopes an exception by project, not by branch, so this project targets only the integration branch and nothing in it targets `next`.
 3. **Schema can change during the run.** Nothing on the integration branch has shipped, so a migration written in an early wave can be edited or replaced by a later one. Schema still goes first in each wave, so CodeGen has produced the typed properties before code is written against them.
 4. **CI on every merge.** MJ's workflows run only for pull requests into `next`. A draft pull request from `canon/factory-run` into `next` stays open for the whole run, so each merge into the branch runs the full pull-request checks. The factory's own checks (build, unit tests, the integration tier on a scratch database) run per slice as well.
 5. **`next` is merged into the branch daily.** Generated files and class manifests are regenerated after each merge, never merged by hand.
@@ -42,7 +42,7 @@ The factory refuses to let a model do any of these.
 | 1 | Rule on the decision sheet. | Sponsor |
 | 2 | Create `canon/factory-run` and the draft pull request into `next`. | Sponsor |
 | 3 | For this project on `MemberJunction/MJ`: shadow mode off, auto-merge allowed, target branch `canon/factory-run`. | Sponsor |
-| 4 | Sign the policy exception for protected paths, scoped to this project and branch, expiring when the run ends. | Sponsor |
+| 4 | Sign the policy exception that waives the protected-path rule for this project's delivery policy, expiring when the run ends. | Sponsor |
 | 5 | Approve each frozen plan with upfront auto-merge. The approval is bound to the plan's hash, so a changed plan needs it again. | Sponsor |
 | 6 | Three model vendors, or distinct model families, enrolled, so builder, reviewer and validator are never the same. | Sponsor |
 | 7 | Label the gold-set corpus for [MJ 6997](https://github.com/MemberJunction/MJ/issues/6997): 10 to 20 documents, with the concepts and edges a person expects. The factory can draft labels; a person confirms them. | `cmbrock-BC` |
@@ -69,12 +69,12 @@ The factory refuses to let a model do any of these.
 
 ## Decision sheet
 
-Each row has a recommended answer. The sponsor marks each Accept or writes a change. A ruled sheet replaces the decisions the December 3 review was going to make; the review becomes a review of the run.
+**Ruled 2026-11-28**: the sponsor accepted every row as written except D25, which is reversed. The ruled sheet replaces the decisions the December 3 review was going to make; the review becomes a review of the run.
 
 | # | Question | Recommended answer | Schema |
 |---|---|---|---|
 | D1 | Is Canon a property of approved, visible members, read through a `CanonState` read-model (unification decision 1)? | Yes. No new column; adapters map each kind's own lifecycle. | None |
-| D2 | Edge direction for `Defines`, `Measures`, `Describes`, `Implements`. | Confirm artifact → concept, as shipped in [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842). | None |
+| D2 | Edge direction for `Defines`, `Measures`, `Describes`, `Implements`. | Confirm artifact → concept, as shipped in [MJ 6842](https://github.com/MemberJunction/MJ/pull/6842). "Artifact" here means whatever defines, measures, describes or implements a concept (a view, a query, a document, a skill), not an `MJ: Artifacts` record. The edge links the two; nothing is promoted by it. | None |
 | D3 | Per-graph permissions (5b): how are they stored? | A `MJ: Graph Permissions` table modelled on `MJ: Search Scope Permissions`, with Read, Use and Approve, registered as a permission domain. `Graph: Approve Edges` stays as the all-graphs grant. | New table |
 | D4 | Default grants on graphs (5b). | `MJ Canon` stays readable by the UI role, as today. A new graph grants nothing until someone grants it. The UI role keeps read on the type tables. | Seed rows |
 | D5 | Do search-scope permissions also move into the permission engine (unification decision 3)? | Not in this run. [MJ 6910](https://github.com/MemberJunction/MJ/pull/6910) just made their resolver pluggable; moving them is a separate change with its own risk. Graphs use the new table; search scopes stay as they are. | None |
@@ -84,7 +84,7 @@ Each row has a recommended answer. The sponsor marks each Accept or writes a cha
 | D9 | One `CanonContextResolver` (unification decision 5). | Yes, with MJ 6213's precedence order enforced there and one budget per run. | None |
 | D10 | Does the resolver's budget replace per-scope `MaxResults`? | No. It sits above it as a cap. | None |
 | D11 | Citation format. | The shipped inline token, `[[MJ: Graph Concepts\|ID\|Name]]` ([MJ 6963](https://github.com/MemberJunction/MJ/pull/6963)), parsed by the shipped parser. Not a second "short-ID" format. Citing is required by the resolver's contract. | None |
-| D12 | The proposal ledger (master plan decision 2). | Build MJ 6213's learning-cycle proposal tables and proposal sources as drafted there, corrected to the shipped statuses and tiers (decision 5). Until that slice lands, proposers write `Proposed` graph rows directly, as [MJ 6667](https://github.com/MemberJunction/MJ/pull/6667) does. | New tables |
+| D12 | The proposal ledger (master plan decision 2). | Build MJ 6213's learning-cycle proposal tables and proposal sources as drafted there, corrected to the shipped statuses and tiers (decision 5). `arie-glazier-bcc` reviews the ledger schema during wave 0, since wave 4 builds on it. Until that slice lands, proposers write `Proposed` graph rows directly, as [MJ 6667](https://github.com/MemberJunction/MJ/pull/6667) does. | New tables |
 | D13 | Retrieval traces. | Build `MJ: AI Agent Context Items` as drafted in MJ 6213 section 3.6. | New table |
 | D14 | Amend master plan decision 6 to resolution by meaning ([MJ 6996](https://github.com/MemberJunction/MJ/issues/6996))? | Yes. Three outcomes; every outcome is a proposal; a match to a rejected concept stays rejected. Concept vectors come from MJ's existing entity vector sync. | None |
 | D15 | May a confident "same concept" be applied without a reviewer? | No. It is proposed as a synonym and a person approves it. Revisit after the gold set shows the error rate. | None |
@@ -97,17 +97,17 @@ Each row has a recommended answer. The sponsor marks each Accept or writes a cha
 | D22 | Tags. | Derived `Tagged` edges from a provider, never stored, and tags are never members. Steering a question by tag is left out of this run. | None |
 | D23 | Concept profiles for the most-connected concepts. | Yes, as proposed `Specification` drafts with every fact linked to a `SourcedFrom` chunk, through the ledger. | None |
 | D24 | Who decides schema between monthly reviews? | The sponsor, by ruling this sheet. Master plan governance rule 5 is amended to say so. | None |
-| D25 | Does the run write PostgreSQL migrations? | No. MJ's rule is that a feature pull request ships the T-SQL migration only and the build engineer converts at release. The factory's PostgreSQL step is switched off for this project. (It did write one in [MJ 6970](https://github.com/MemberJunction/MJ/pull/6970), which is the exception this ruling avoids repeating.) | None |
+| D25 | Does the run write PostgreSQL migrations? | Yes (reversed from the draft, on `cmbrock-BC`'s suggestion). Each slice that adds a migration runs the `pg-migrate-v2` skill: the deterministic converter, a model finishing the small residue the converter marks for hand work, and proof by applying the result to a fresh PostgreSQL database. This is a stated exception, for this run, to MJ's rule that a feature pull request ships the T-SQL migration only; the frozen plans say so, so builders do not get two instructions. | None |
 
 ## Waves
 
-Slices in a wave are independent of each other. A wave starts when the one before it has merged into the integration branch. "Done when" is the frozen acceptance test for the slice; the factory adds its standard unit-test, integration-test and documentation requirements to each.
+Slices in a wave are independent of each other. A wave starts when the one before it has merged into the integration branch. **Wave 0 is the pilot**: its measurements and the testers' findings are looked at before wave 1 is released. "Done when" is the frozen acceptance test for the slice; the factory adds its standard unit-test, integration-test and documentation requirements to each.
 
 ### Wave 0: foundation
 
 | Slice | What | Done when |
 |---|---|---|
-| 0.1 | Schema: `MJ: Graph Permissions`, `MJ: Search Scope Graphs`, the proposal ledger tables, `MJ: AI Agent Context Items`, `EffectiveFrom` and `EffectiveTo` on concepts, `AuthorityTierID` on edges. CodeGen. | A database builds from migrations alone; generated classes exist for every new table and column. |
+| 0.1 | Schema: `MJ: Graph Permissions`, `MJ: Search Scope Graphs`, the proposal ledger tables, `MJ: AI Agent Context Items`, `EffectiveFrom` and `EffectiveTo` on concepts, `AuthorityTierID` on edges. CodeGen. | SQL Server and PostgreSQL databases each build from migrations alone; generated classes exist for every new table and column. |
 | 0.2 | Metadata: the `AuthoritativeFor` edge type and its endpoint rows, the graph permission domain, default grants per D4. | The edge-type registry test passes; a new graph is unreadable by a UI-role user until granted. |
 | 0.3 | MJ 6837, both items, per D18 and D19. | A new ungoverned column fails a test; deleting a source document leaves no edgeless approved concept. |
 | 0.4 | The Canon guide: path finding, `RenderCanonDocument`, the approval gate, the ambiguity codes, redaction, the edge direction contract and the two edge-fix Record Processes hosts run after upgrading. | Every public method of `GraphEngine` and `CanonGraphEngine` named in the guide exists, and each shipped feature above has a section. |
@@ -163,7 +163,7 @@ Wave 3 is the one wave whose merged result `cmbrock-BC` tests by hand before wav
 
 ### Final merge
 
-1. Replace the run's migrations with one migration stamped after everything on `next`; run CodeGen once; add the changeset (`minor`, since the run ships a migration and metadata).
+1. Replace the run's migrations with one migration stamped after everything on `next`; run CodeGen once; convert it to PostgreSQL once with the same step D25 names; add the changeset (`minor`, since the run ships a migration and metadata).
 2. Run the full integration tier from an empty database, as MJ's CI does.
 3. Mark the draft pull request ready. The sponsor reviews the decision sheet against what was built and approves.
 4. Update the master plan, close the issues the run built, and record the measurements.
@@ -232,3 +232,4 @@ The run counts as a success for the factory if the final merge leaves `next` gre
 | Date | Change |
 |---|---|
 | 2026-11-28 | Draft created for the sponsor's rulings. |
+| 2026-11-28 | The sponsor ruled the decision sheet: every row accepted, D25 reversed so each migration slice also produces and proves its PostgreSQL migration. The policy exception is described as the factory scopes it (by project). Wave 0 is the pilot. |
