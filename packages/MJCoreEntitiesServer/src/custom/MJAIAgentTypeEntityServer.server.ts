@@ -10,6 +10,8 @@ import {
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import {
+    IsLegacyAIAgentTypeConfigSqlDefault,
+    LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS,
     SyncAgentTypeLegacyColumnsAndConfiguration,
     ValidateLegacyAgentTypeConfigFields,
     type LegacyAIAgentTypeConfigColumns,
@@ -152,19 +154,44 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
         };
     }
 
-    private isLegacyFieldExplicitlyWritten(fieldName: string, isCreate: boolean): boolean {
+    private isLegacyFieldExplicitlyWritten(
+        fieldName: string,
+        isCreate: boolean,
+        legacyValues?: LegacyAIAgentTypeConfigColumns
+    ): boolean {
         const field = this.GetFieldByName(fieldName);
         if (!field) {
             return false;
         }
-        return isCreate ? (field.Dirty === true || field.NeverSet === false) : field.Dirty === true;
+        if (!isCreate) {
+            return field.Dirty === true;
+        }
+        if (field.Dirty === true) {
+            return true;
+        }
+        if (field.NeverSet !== false) {
+            return false;
+        }
+        // On GraphQL CreateRecord (`NewRecord()` + `SetMany(input)`), ResolverBase populates every
+        // writable field with its SQL default, leaving `Dirty === false` while flipping `NeverSet`
+        // to `false`. Treat `!Dirty` + SQL default value as untouched so untouched defaults never
+        // overwrite `DefaultAgentConfiguration` or pollute `null` creates (C-R2-1).
+        if (fieldName === 'DefaultAgentConfiguration') {
+            return this.DefaultAgentConfiguration !== null && this.DefaultAgentConfiguration !== undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS, fieldName)) {
+            const legacyKey = fieldName as keyof LegacyAIAgentTypeConfigColumns;
+            const values = legacyValues ?? this.buildLegacyConfigValues();
+            return !IsLegacyAIAgentTypeConfigSqlDefault(legacyKey, values[legacyKey]);
+        }
+        return true;
     }
 
     private collectDirtyLegacyPatch(isCreate: boolean): Partial<LegacyAIAgentTypeConfigColumns> {
         const legacyValues = this.buildLegacyConfigValues();
         const patch: Partial<LegacyAIAgentTypeConfigColumns> = {};
         for (const key of Object.keys(legacyValues) as Array<keyof LegacyAIAgentTypeConfigColumns>) {
-            if (this.isLegacyFieldExplicitlyWritten(key, isCreate)) {
+            if (this.isLegacyFieldExplicitlyWritten(key, isCreate, legacyValues)) {
                 (patch as Record<string, unknown>)[key] = legacyValues[key];
             }
         }

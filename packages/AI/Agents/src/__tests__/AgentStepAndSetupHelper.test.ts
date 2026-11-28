@@ -804,6 +804,73 @@ describe('BaseAgentStepExecutionHelper & BaseAgentRunSetupHelper (s11)', () => {
         }
     });
 
+    it('C-R2-2: resets ExecuteParams, MessageLifecycleCallback, prompt-cache fields, circuit breaker, and managers BEFORE pre-flight exits', async () => {
+        const setup = new AgentRunSetupHelper();
+        const resetBreakerSpy = vi.fn();
+        let executeParamsSeenInFailure: ExecuteAgentParams | undefined = makeParams();
+        const run1Params = makeParams({ agent: makeAgent({ Name: 'Run1Agent' }) });
+        const run1Lifecycle = vi.fn();
+
+        const ctx = CreateMockAgentRunContext({
+            ExecuteParams: run1Params,
+            MessageLifecycleCallback: run1Lifecycle,
+            AgentConfig: { success: true } as AgentConfiguration,
+            LastModelSelectionInfo: { modelName: 'gpt-old' } as never,
+            LastVolatileStateMessage: { role: 'user', content: 'old' } as never,
+            ResolvedTrailingStateMode: true,
+            LastSentFingerprints: ['fp-old'],
+            LastSentPrefix: 'prefix-old',
+            Turn1InsertionIndex: 4,
+            RunScope: { PrimaryScopeEntityName: 'Accounts', PrimaryScopeRecordID: '1' } as never,
+            AudienceReaders: [{ ID: 'reader-1' } as never],
+            AudienceSource: { Kind: 'private' } as never,
+            Hooks: {
+                ResetActionCircuitBreaker: resetBreakerSpy,
+                ResolveServerUserPolicy: vi.fn(async () => ({
+                    policy: null,
+                    status: 'error' as const,
+                    errorMessage: 'Policy service unavailable',
+                })),
+                CreateFailureResult: vi.fn(async () => {
+                    executeParamsSeenInFailure = ctx.ExecuteParams;
+                    return { success: false, agentRun: makeRun({ Status: 'Failed' }) };
+                }),
+            },
+        });
+        const artifactClearSpy = vi.spyOn(ctx.ArtifactToolManager, 'Clear');
+        const scratchpadClearSpy = vi.spyOn(ctx.ScratchpadManager, 'Clear');
+        const memoryClearSpy = vi.spyOn(ctx.MemoryWriteManager, 'Clear');
+        const spilloverClearSpy = vi.spyOn(ctx.ActionSpilloverManager, 'Clear');
+
+        const res = await setup.ExecuteRun(ctx, makeParams({ agent: makeAgent({ Name: 'Run2Agent' }) }));
+        expect(res.success).toBe(false);
+        expect(executeParamsSeenInFailure).toBeUndefined();
+        expect(ctx.ExecuteParams).toBeUndefined();
+        expect(ctx.MessageLifecycleCallback).toBeUndefined();
+        expect(ctx.AgentConfig).toBeUndefined();
+        expect(ctx.LastModelSelectionInfo).toBeUndefined();
+        expect(ctx.LastVolatileStateMessage).toBeUndefined();
+        expect(ctx.ResolvedTrailingStateMode).toBeUndefined();
+        expect(ctx.LastSentFingerprints).toBeUndefined();
+        expect(ctx.LastSentPrefix).toBeUndefined();
+        expect(ctx.Turn1InsertionIndex).toBe(-1);
+        expect(ctx.RunScope).toBeUndefined();
+        expect(ctx.AudienceReaders).toBeUndefined();
+        expect(ctx.AudienceSource).toBeUndefined();
+        expect(resetBreakerSpy).toHaveBeenCalledTimes(1);
+        expect(artifactClearSpy).toHaveBeenCalledTimes(1);
+        expect(scratchpadClearSpy).toHaveBeenCalledTimes(1);
+        expect(memoryClearSpy).toHaveBeenCalledTimes(1);
+        expect(spilloverClearSpy).toHaveBeenCalled();
+
+        // ClearRunBoundState also clears ExecuteParams & MessageLifecycleCallback
+        ctx.ExecuteParams = run1Params;
+        ctx.MessageLifecycleCallback = run1Lifecycle;
+        setup.ClearRunBoundState(ctx);
+        expect(ctx.ExecuteParams).toBeUndefined();
+        expect(ctx.MessageLifecycleCallback).toBeUndefined();
+    });
+
     it('C-R1-4: routes Flow agents with Custom steps to inRun automatically, rejects explicit dispatch clearly, and validates Decision+Custom flows without UnsupportedStepType', async () => {
         const { AIEngine } = await import('@memberjunction/aiengine');
         const { CompileAndValidateFlowAgent, ResolveFlowExecutionMode } = await import('../agent-types/flow-graph-executor');

@@ -14,7 +14,9 @@ import {
     BuildAgentTypeConfigurationFromLegacyFields,
     DeepMergeAgentConfigurations,
     IsLegacyAIAgentConfigSqlDefault,
+    IsLegacyAIAgentTypeConfigSqlDefault,
     LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS,
+    LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS,
     ParseAgentConfiguration,
     ResolveAgentInstantiationConfig,
     SyncAgentLegacyColumnsAndConfiguration,
@@ -763,5 +765,15 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         const typeErrs = ValidateLegacyAgentTypeConfigFields({ CompactionTriggerPercent: 150 });
         expect(typeErrs.some((e) => /compactionTriggerPercent/i.test(e))).toBe(true);
         expect(ValidateLegacyAgentTypeConfigFields({ CompactionTriggerPercent: 80 })).toEqual([]);
+
+        // C-R2-1: IsLegacyAIAgentTypeConfigSqlDefault matches all 7 AIAgentType defaults
+        const allTypeKeys = Object.keys(LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS) as Array<keyof LegacyAIAgentTypeConfigColumns>;
+        expect(allTypeKeys).toHaveLength(7);
+        for (const key of allTypeKeys) {
+            expect(IsLegacyAIAgentTypeConfigSqlDefault(key, LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS[key])).toBe(true);
+        }
+        expect(IsLegacyAIAgentTypeConfigSqlDefault('CompactionTriggerPercent', 85)).toBe(false);
+        expect(IsLegacyAIAgentTypeConfigSqlDefault('CompactionTargetPercent', 40)).toBe(false);
+        expect(IsLegacyAIAgentTypeConfigSqlDefault('ContextWindowMaxTokens', 200000)).toBe(false);
     });
 });

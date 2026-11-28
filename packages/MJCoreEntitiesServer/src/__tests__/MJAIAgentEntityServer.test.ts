@@ -1341,4 +1341,63 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             typeValidateSpy.mockRestore();
         }
     });
+
+    it('C-R2-1: MJAIAgentTypeEntityServer GraphQL create (NewRecord + SetMany defaults) preserves DefaultAgentConfiguration and keeps null creates null', async () => {
+        const makeTypeServer = (defaultAgentConfig: string | null, configDirty: boolean) => {
+            const fields = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+            const defaultCols: Record<string, unknown> = {
+                ContextCompressionMessageThreshold: null,
+                ContextCompressionPromptID: null,
+                ContextCompressionMessageRetentionCount: null,
+                ContextWindowMaxTokens: null,
+                CompactionTriggerPercent: 75,
+                CompactionTargetPercent: 30,
+                ConversationSummaryPromptID: null,
+            };
+            for (const col of Object.keys(defaultCols)) {
+                fields.set(col, { Name: col, Dirty: false, NeverSet: false });
+            }
+            fields.set('DefaultAgentConfiguration', {
+                Name: 'DefaultAgentConfiguration',
+                Dirty: configDirty,
+                NeverSet: false,
+            });
+
+            const server = Object.create(MJAIAgentTypeEntityServer.prototype) as MJAIAgentTypeEntityServer & Record<string, unknown>;
+            server['GetFieldByName'] = (name: string) => fields.get(name);
+            Object.defineProperty(server, 'IsSaved', { get: () => false, configurable: true });
+            Object.defineProperty(server, 'ContextCurrentUser', { get: () => null, configurable: true });
+            Object.defineProperty(server, 'Name', { value: 'CustomType', writable: true, configurable: true });
+            Object.defineProperty(server, 'DefaultAgentConfiguration', {
+                value: defaultAgentConfig,
+                writable: true,
+                configurable: true,
+            });
+            for (const [k, v] of Object.entries(defaultCols)) {
+                Object.defineProperty(server, k, { value: v, writable: true, configurable: true });
+            }
+            return server;
+        };
+
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
+        try {
+            // Case 1: GraphQL create with explicit DefaultAgentConfiguration and untouched SQL defaults
+            const cfgJson = JSON.stringify({
+                contextWindow: { compactionTriggerPercent: 85, compactionTargetPercent: 40, maxTokens: 200000 },
+            });
+            const s1 = makeTypeServer(cfgJson, false);
+            expect(await s1.Save()).toBe(true);
+            expect(s1['DefaultAgentConfiguration']).toBe(cfgJson);
+            expect(s1['CompactionTriggerPercent']).toBe(85);
+            expect(s1['CompactionTargetPercent']).toBe(40);
+            expect(s1['ContextWindowMaxTokens']).toBe(200000);
+
+            // Case 2: GraphQL create with DefaultAgentConfiguration = null and untouched SQL defaults
+            const s2 = makeTypeServer(null, false);
+            expect(await s2.Save()).toBe(true);
+            expect(s2['DefaultAgentConfiguration']).toBeNull();
+        } finally {
+            baseSaveSpy.mockRestore();
+        }
+    });
 });

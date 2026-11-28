@@ -178,6 +178,36 @@ export function IsLegacyAIAgentConfigSqlDefault<K extends keyof LegacyAIAgentCon
 }
 
 /**
+ * Exact SQL column defaults for all 7 columns in {@link LegacyAIAgentTypeConfigColumns}
+ * (matching `spCreateAIAgentType` defaults). Used on `MJAIAgentTypeEntityServer` creates so
+ * GraphQL `NewRecord() + SetMany(defaults)` payloads do not clobber `DefaultAgentConfiguration`
+ * or pollute `null` creates with default keys (C-R2-1).
+ */
+export const LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS: Readonly<LegacyAIAgentTypeConfigColumns> = {
+    ContextCompressionMessageThreshold: null,
+    ContextCompressionPromptID: null,
+    ContextCompressionMessageRetentionCount: null,
+    ContextWindowMaxTokens: null,
+    CompactionTriggerPercent: 75, // SQL schema default DF_AIAgentType_CompactionTriggerPercent
+    CompactionTargetPercent: 30, // SQL schema default DF_AIAgentType_CompactionTargetPercent
+    ConversationSummaryPromptID: null,
+};
+
+/**
+ * Returns `true` when `value` equals the SQL column default for `fieldName` on `AIAgentType`
+ * (or is `undefined`).
+ */
+export function IsLegacyAIAgentTypeConfigSqlDefault<K extends keyof LegacyAIAgentTypeConfigColumns>(
+    fieldName: K,
+    value: LegacyAIAgentTypeConfigColumns[K] | undefined
+): boolean {
+    if (value === undefined) {
+        return true;
+    }
+    return value === LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS[fieldName];
+}
+
+/**
  * Resolves canonical agent instantiation config (`IAgentConfiguration.instantiation`) with
  * fallback to legacy `TypeConfiguration.instantiation` (canonical keys take precedence per key).
  */

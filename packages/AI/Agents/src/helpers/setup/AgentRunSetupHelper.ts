@@ -88,6 +88,23 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
         ctx.FileOutputs.length = 0;
         ctx.MediaOutputs = [];
         ctx.FeedbackRequestId = undefined;
+        ctx.ExecuteParams = undefined;
+        ctx.MessageLifecycleCallback = undefined;
+        ctx.AgentConfig = undefined;
+        ctx.LastModelSelectionInfo = undefined;
+        ctx.LastVolatileStateMessage = undefined;
+        ctx.ResolvedTrailingStateMode = undefined;
+        ctx.LastSentFingerprints = undefined;
+        ctx.LastSentPrefix = undefined;
+        ctx.Turn1InsertionIndex = -1;
+        ctx.RunScope = undefined;
+        ctx.AudienceReaders = undefined;
+        ctx.AudienceSource = undefined;
+        ctx.Hooks.ResetActionCircuitBreaker();
+        ctx.ScratchpadManager.Clear();
+        ctx.ArtifactToolManager.Clear();
+        ctx.MemoryWriteManager.Clear();
+        ctx.ActionSpilloverManager.Clear();
         ctx.ActivatedSkillIDs = [];
         ctx.ConversationSkillIDs = [];
         ctx.SkillInvocations = [];
@@ -706,6 +723,8 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
     }
 
     public override ClearRunBoundState(ctx: AgentRunContext): void {
+        ctx.ExecuteParams = undefined;
+        ctx.MessageLifecycleCallback = undefined;
         ctx.RunScope = undefined;
         ctx.AudienceReaders = undefined;
         ctx.AudienceSource = undefined;
