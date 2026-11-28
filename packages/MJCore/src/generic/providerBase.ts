@@ -7837,6 +7837,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async Refresh(providerToUse?: IMetadataProvider): Promise<boolean> {
         // do nothing here, but set a _refresh flag for next time things are requested
         if (this.AllowRefresh) {
+            // This full reload starts after every write that armed the debounced member refresh, so it covers them;
+            // left armed, that timer reloads again after the caller has moved on (a write during this reload re-arms it).
+            this.CancelPendingMetadataMemberRefresh();
             this._refresh = true;
             return this.Config(this._ConfigData, providerToUse);
         }

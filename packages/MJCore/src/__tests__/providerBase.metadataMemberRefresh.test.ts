@@ -688,3 +688,53 @@ describe('ProviderBase.SweepMetadataAgainstDatabase', () => {
         expect(p.RefreshIfNeededCalls).toHaveLength(0);
     });
 });
+
+// ---------------------------------------------------------------------------
+// An explicit Refresh() supersedes a pending debounced member refresh (D-091 item 14)
+// ---------------------------------------------------------------------------
+
+/** The test provider with the base Refresh() kept: Config (the reload it calls) is counted instead. */
+class ExplicitRefreshTestProvider extends MemberRefreshTestProvider {
+    public ConfigCalls = 0;
+    public override async Refresh(): Promise<boolean> {
+        return ProviderBase.prototype.Refresh.call(this);
+    }
+    public override async Config(): Promise<boolean> {
+        this.ConfigCalls++;
+        return true;
+    }
+}
+
+describe('ProviderBase - an explicit Refresh() covers the writes before it', () => {
+    beforeEach(() => {
+        vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+    });
+
+    it('a member write followed by Refresh() runs no second, timer-driven refresh after it', async () => {
+        const provider = new ExplicitRefreshTestProvider();
+        provider.RegisterMembership(buildDataset(['MJ: Entities']));
+
+        provider.HandleMemberEvent('mj: entities', saveEvent('MJ: Entities'));
+        await provider.Refresh();
+        expect(provider.ConfigCalls).toBe(1);
+
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + 100);
+        expect(provider.RefreshCalls).toBe(0);
+    });
+
+    it('a member write after Refresh() still schedules its own debounced refresh', async () => {
+        const provider = new ExplicitRefreshTestProvider();
+        provider.RegisterMembership(buildDataset(['MJ: Entities']));
+
+        await provider.Refresh();
+        provider.HandleMemberEvent('mj: entities', saveEvent('MJ: Entities'));
+
+        await vi.advanceTimersByTimeAsync(ProviderBase.MetadataDatasetRefreshDebounceMs + 100);
+        expect(provider.RefreshCalls).toBe(1);
+    });
+});

@@ -323,6 +323,9 @@ packages/MJCLI/src/__tests__/queue-aws-registration.test.ts  (D-091 item 13)
 packages/MJCLI/src/__tests__/queue-azure-registration.test.ts  (D-091 item 13)
 packages/MJCLI/src/__tests__/queue-gcp-registration.test.ts  (D-091 item 13)
 packages/MJCLI/src/__tests__/app-commands.test.ts  (D-091 item 13)
+# Owner-batch item 14: an explicit metadata Refresh() left the debounced member-refresh timer armed (integrator, 2026-11-28)
+packages/MJCore/src/generic/providerBase.ts  (D-091 item 14)
+packages/MJCore/src/__tests__/providerBase.metadataMemberRefresh.test.ts  (D-091 item 14)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
@@ -3858,6 +3861,17 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    `app/list.ts` turns the load test red, restored. In that mirror the queue files' hook took ~228 s of its 300 s.
    `@memberjunction/cli` 84 files, 1,274 passed. Fixed by the integrator at wave-4 integration under the owner's
    2026-11-26 statement.
+14. `packages/MJCore/src/generic/providerBase.ts` (+ 2 tests) — `ProviderBase.Refresh()`, a full hard reload, left the
+   500 ms debounced member-refresh timer (`scheduleMetadataMemberRefresh`) armed by a write just before it, so a second,
+   redundant reload ran after the caller had moved on. Wave-4's fourth full mirror (`20261128-070230-99996`, the only red:
+   integration tier 139/170 · **1 failed** · 30 skipped, suite run `A1564602-A710-4D66-8FF2-0485B367F79E`): IT164's
+   teardown saves `MJ: Entities` and awaits `Refresh()` (~400 ms), IT132 starts 7 ms later, and the timer's reload
+   (`[Metadata] Full reload (a full reload was requested)` in the log, between ABV3's two parts) replaced the EntityInfo
+   holding IT132's temporary `ActiveUsersCheck` alternate base view: `AlternateBaseView 'ActiveUsersCheck' is not
+   registered on entity 'MJ: Users'`. IT132 alone 6/6 (no reload inside it). `Refresh()` now cancels the pending
+   member refresh before it reloads (a write during the reload re-arms it). Tests: a member write then `Refresh()` runs no
+   timer refresh after it (red before), a write after `Refresh()` still schedules one; MJCore 306 files, 4,418 passed.
+   Fixed by the integrator at wave-4 integration under the owner's 2026-11-26 statement.
 
 ## 10. PR description draft
 
