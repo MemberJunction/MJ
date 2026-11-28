@@ -2,7 +2,7 @@
 
 > **Purpose** — If you're evaluating MemberJunction's AI agent framework against the orchestration libraries you already know — LangGraph, CrewAI, AG2/AutoGen, the OpenAI Agents SDK, Semantic Kernel, Mastra, and the rest — this guide gives you a fair, dimension-by-dimension comparison: what each tool is genuinely great at, where MJ differs, and how to choose. Like its sibling [Framework Comparison](FRAMEWORK_COMPARISON.md) (which covers Next.js, Supabase, Rails, Django), it is deliberately **not** a "MJ wins everything" pitch — different tools win different jobs, and knowing which is which saves you months.
 
-**Companions:** [Framework Comparison](FRAMEWORK_COMPARISON.md) (web/app stacks) · [Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md).
+**Companions:** [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md) · [Framework Comparison](FRAMEWORK_COMPARISON.md) (web/app stacks) · [Building Applications on MemberJunction](BUILDING_APPS_ON_MJ.md).
 
 ---
 
@@ -122,10 +122,10 @@ Every compared framework picks one paradigm and asks you to build the others on 
 
 LangGraph's state is a shared dict with reducers — any node can write anything. CrewAI passes task outputs; AutoGen shares message history. MJ's `PayloadManager` enforces **declarative, per-agent access control on the shared state itself**:
 
-- `PayloadDownstreamPaths` — what a sub-agent is allowed to *see* (the payload is projected before handoff).
-- `PayloadUpstreamPaths` — what a sub-agent is allowed to *write back* (merges outside the grant are blocked and recorded as audit violations).
-- `PayloadSelfWritePaths` — what an agent may mutate in its own payload each turn.
-- `PayloadScope` — confine an agent's entire world-view to a subtree.
+- `Configuration.payload.downstreamPaths` *(legacy: `PayloadDownstreamPaths`)* — what a sub-agent is allowed to *see* (the payload is projected before handoff).
+- `Configuration.payload.upstreamPaths` *(legacy: `PayloadUpstreamPaths`)* — what a sub-agent is allowed to *write back* (merges outside the grant are blocked and recorded as audit violations).
+- `Configuration.payload.selfWritePaths` *(legacy: `PayloadSelfWritePaths`)* — what an agent may mutate in its own payload each turn.
+- `Configuration.payload.scope` *(legacy: `PayloadScope`)* — confine an agent's entire world-view to a subtree.
 
 And mutations are **diffs, not replacements**: the LLM emits add/update/remove change requests, never the full payload — which eliminates the classic failure where a truncated response silently erases half the state. A change analyzer diffs every transition and flags suspicious changes. In any of the compared frameworks, this entire layer is something you'd design and build yourself.
 

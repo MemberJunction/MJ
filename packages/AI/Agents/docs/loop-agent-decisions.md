@@ -4,6 +4,8 @@ A decision model answers typed questions (a probability, a choice from a list, a
 call. Agents can use one in seven places on their own. Each place has its own setting, and one master
 switch sits above all of them.
 
+**Canonical Guides:** [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) (`BaseAgentPromptHelper` / `AgentDecisionsHelper` & `DecisionStepHandler`) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
+
 ## The master switch: `decisionsEnabled`
 
 `decisionsEnabled` is a Loop agent-type prompt param. It defaults to `false`.

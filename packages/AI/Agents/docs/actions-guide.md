@@ -2,6 +2,8 @@
 
 Comprehensive guide to how agents discover, execute, and manage actions in the MemberJunction agent framework.
 
+**Canonical Guides:** [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) (`BaseAgentActionsHelper` & code-only `BaseAgentActionPolicyHelper`) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) · [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
+
 ## Overview
 
 Actions are the primary mechanism through which agents interact with the outside world. When an LLM decides it needs to do something beyond generating text (send an email, query a database, call an API), it requests one or more actions. The `BaseAgent` execution engine handles the full lifecycle: discovery, validation, execution, result formatting, and context management.

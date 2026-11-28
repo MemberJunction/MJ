@@ -39,6 +39,7 @@ import type { TaskSecurityEnvelope } from './task-graph/task-security-envelope';
 import { MJAIAgentEntityExtended } from './MJAIAgentEntityExtended';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MediaModality } from './prompt.types';
+import type { AgentHelperPluginEntry } from './agent-instantiation';
 
 /**
  * Value type for secondary scope dimensions.
@@ -688,6 +689,55 @@ export type AgentHandoffResult = {
  *                      This ensures type safety when passing context to sub-agents.
  *                      Defaults to any for backward compatibility.
  */
+/**
+ * All 14 built-in next-step keys recognized by `BaseAgent` and `AgentStepTypeRegistry`.
+ * Combines the terminal `MJAIAgentRun.FinalStep` values with non-terminal control steps.
+ */
+export type BuiltInAgentNextStepKey =
+    | NonNullable<MJAIAgentRunEntityExtended['FinalStep']>
+    | 'Skill'
+    | 'Plan'
+    | 'Tasks'
+    | 'Handoff'
+    | 'ClientTools'
+    | 'Decision';
+
+/**
+ * Next-step key emitted by an agent type or custom pluggable step handler.
+ * Preserves IDE autocomplete for all 14 built-in keys while accepting OpenApp step keys
+ * registered in `MJ: AI Agent Step Types` / `AgentStepTypeRegistry` without cast hacks.
+ */
+export type AgentNextStepKey = BuiltInAgentNextStepKey | (string & {});
+
+/**
+ * Converts a runtime {@link AgentNextStepKey} into a valid schema-backed
+ * `MJAIAgentRun.FinalStep` value (`null` for custom/non-terminal step keys).
+ */
+export function ToAgentRunFinalStep(
+    step: AgentNextStepKey | null | undefined
+): MJAIAgentRunEntityExtended['FinalStep'] {
+    switch (step) {
+        case 'Actions':
+            return 'Actions';
+        case 'Chat':
+            return 'Chat';
+        case 'Failed':
+            return 'Failed';
+        case 'ForEach':
+            return 'ForEach';
+        case 'Retry':
+            return 'Retry';
+        case 'Sub-Agent':
+            return 'Sub-Agent';
+        case 'Success':
+            return 'Success';
+        case 'While':
+            return 'While';
+        default:
+            return null;
+    }
+}
+
 export type BaseAgentNextStep<P = any, TContext = any> = {
     /** Whether to terminate the agent execution after this step */
     terminate: boolean;
@@ -718,7 +768,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
      * and then continue with the retry.
      */
-    step: MJAIAgentRunEntityExtended['FinalStep']
+    step: AgentNextStepKey;
+    /** Optional foreign key referencing `MJ: AI Agent Step Types` when executing a registered/custom step type. */
+    stepTypeID?: string;
+    /** Optional structured input payload carried for custom pluggable step handlers. */
+    customStepData?: Record<string, unknown>;
     /** Result from the prior step, useful for retry or sub-agent context */
     priorStepResult?: any;
     /** 
@@ -2187,6 +2241,14 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * ```
      */
     testRunId?: string;
+
+    /**
+     * Optional per-run helper plugin overrides (Extension Point #3).
+     * Merged after any admin-configured `helperPlugins` on the agent's configuration JSON.
+     * Code-only security/invariant seams (`limits`, `actionPolicy`, `setup`, `steps`, `actions`, `subAgents`)
+     * are always rejected regardless of source.
+     */
+    helperPlugins?: ReadonlyArray<AgentHelperPluginEntry>;
 
     /**
      * Optional flag to convert UI markup (@{...} syntax) in user messages to plain text

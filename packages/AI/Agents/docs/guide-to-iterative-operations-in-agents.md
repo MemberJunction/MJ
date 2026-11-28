@@ -1,7 +1,7 @@
 # Guide to Iterative Operations in MemberJunction Agents
 
-**Version:** 2.112.0+
-**Last Updated:** January 2025
+**Version:** 2.112.0+ (Updated for `v6.x` `BaseAgentIterationHelper` & `ForEachStepHandler`/`WhileStepHandler`)
+**Canonical Guides:** [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md)
 
 ---
 

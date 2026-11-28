@@ -98,6 +98,11 @@ import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunctio
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
+import {
+  ConfigureLongRunningAIFetch,
+  IsLongRunningAIFetchConfigured,
+  PrimeNodeBuiltinUndiciDispatcher,
+} from '@memberjunction/ai';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -1962,6 +1967,31 @@ const setupComplete$ = new ReplaySubject(1);
   AgentRunWatchdog.Instance.Configure(configInfo.agentRunWatchdog);
   // Wire default fresh-worker continuation dispatcher for checkpoint-resumed paused runs (CR-14).
   InstallDefaultResumeContinuationDispatcher();
+  // Configure a scoped long-running fetch wrapper for AI provider SDK calls ONLY (reading
+  // Liveness.HttpHeadersTimeoutMs / HttpBodyTimeoutMs from LimitsConfigResolver) without
+  // mutating Node's process-global undici dispatcher (preserving ProxyAgent/mTLS and standard
+  // timeouts for OAuth, webhooks, and non-AI outbound traffic).
+  try {
+    if (!IsLongRunningAIFetchConfigured()) {
+      await PrimeNodeBuiltinUndiciDispatcher();
+      const livenessLimits = LimitsConfigResolver.Resolve().Limits.Liveness;
+      const longRunningFetchInstall = ConfigureLongRunningAIFetch({
+        headersTimeoutMs: livenessLimits.HttpHeadersTimeoutMs,
+        bodyTimeoutMs: livenessLimits.HttpBodyTimeoutMs,
+      });
+      if (longRunningFetchInstall.Installed) {
+        LogStatus(
+          `[AI Transport] Configured AI-scoped long-running fetch dispatcher (headersTimeout=${longRunningFetchInstall.Options.headersTimeout}ms, bodyTimeout=${longRunningFetchInstall.Options.bodyTimeout}ms)`
+        );
+      } else if (longRunningFetchInstall.SkippedReason) {
+        LogStatus(`[AI Transport] Skipped custom AI fetch dispatcher: ${longRunningFetchInstall.SkippedReason}`);
+      }
+    } else {
+      LogStatus('[AI Transport] Preserving pre-configured host AI fetch dispatcher');
+    }
+  } catch (err) {
+    LogError(`[AI Transport] Failed to configure AI-scoped long-running fetch dispatcher (continuing with default fetch): ${err instanceof Error ? err.message : String(err)}`);
+  }
   // The handoff offer registry starts its own expiry sweep when it loads, on every role; apply the host's setting.
   ApplyHandoffOfferExpirySettings(configInfo.agentSessions.handoffOfferExpiry);
 

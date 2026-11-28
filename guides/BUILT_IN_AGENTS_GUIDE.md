@@ -2,6 +2,8 @@
 
 MemberJunction ships with a rich catalog of built-in AI agents spanning conversational orchestration, autonomous personal coordination, deep research, query and form authoring, agent/skill engineering, and system operations.
 
+**Canonical Guides:** [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md).
+
 ---
 
 ## 1. Architectural Overview & Agent Taxonomy

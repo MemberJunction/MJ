@@ -253,7 +253,9 @@ export type RunawayPauseReason =
     | 'ProgressStalled'
     | 'FastJudgeStalled'
     | 'LedgerUnavailable'
-    | 'ManualPause';
+    | 'ManualPause'
+    | 'StuckToolCallLoop'
+    | 'ReadOnlySpiral';
 
 /** Persisted pending action entry preserved inside {@link PendingStepDecision}. */
 export interface PendingActionDecision {
@@ -460,7 +462,9 @@ function isRunawayPauseReason(value: RunawayJsonValue | undefined): value is Run
         value === 'ProgressStalled' ||
         value === 'FastJudgeStalled' ||
         value === 'LedgerUnavailable' ||
-        value === 'ManualPause'
+        value === 'ManualPause' ||
+        value === 'StuckToolCallLoop' ||
+        value === 'ReadOnlySpiral'
     );
 }
 

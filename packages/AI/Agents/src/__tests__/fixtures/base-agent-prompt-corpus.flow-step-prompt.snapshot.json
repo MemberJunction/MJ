@@ -1,0 +1,18 @@
+{
+  "systemPromptRendered": "Analyze order ORD-100 for amount 250.",
+  "systemPromptSha256": "44fbf871e402714fdd295a39c3613425c6c75e49bebf4c7f8b3b033346c9c1f3",
+  "outgoingMessages": [
+    {
+      "role": "user",
+      "content": "Execute flow-step-prompt",
+      "volatileState": false
+    },
+    {
+      "role": "user",
+      "content": "<mj-runtime-state>\n## Current Date/Time\n- **Date**: 2026-11-27 (Friday)\n- **Time**: 12:00 PM UTC\n\n## Scratchpad State\nYour private working memory. Manage via `scratchpad` in your response.\n\n### Notes\n_(no notes yet)_\n\n### Tasks (No tasks)\n_(no notes yet)_\n\n### Task List\n_(no tasks yet)_\n\n## Current State\n**Payload:** Represents your work state. Request changes via `payloadChangeRequest`\n```json\n{\"orderId\":\"ORD-100\",\"amount\":250}\n```\n</mj-runtime-state>",
+      "volatileState": true
+    }
+  ],
+  "toolNames": [],
+  "templateRole": "user"
+}
