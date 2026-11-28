@@ -65,7 +65,7 @@
   <!-- Job Cards Grid -->
   @if (!IsLoading && FilteredJobs.length > 0) {
     <div class="jobs-grid">
-      @for (job of FilteredJobs; track job) {
+      @for (job of FilteredJobs; track job.jobId) {
         <div
           class="job-card"
           (click)="OpenEditSlideout(job)">
