@@ -255,7 +255,40 @@ export function ValidateFlowGraph(
     paths: readonly AgentStepPath[],
     workflowName: string | undefined,
 ): string[] {
-    const compilerSteps = steps.map(toCompilerStep);
+    const activeCustomSteps = steps.filter((s) => s.StepType === 'Custom');
+    if (activeCustomSteps.length > 0) {
+        const dispatcherOnly = steps.filter((s) => {
+            if (s.StepType === 'Human' || s.StepType === 'Wait' || s.StepType === 'External') return true;
+            if (s.StepType === 'ForEach' && typeof s.Configuration === 'string' && s.Configuration.trim().length > 0) {
+                try {
+                    const parsed = JSON.parse(s.Configuration) as Record<string, unknown>;
+                    return Boolean(parsed && typeof parsed === 'object' && parsed['enqueue'] && typeof parsed['enqueue'] === 'object');
+                } catch {
+                    return false;
+                }
+            }
+            return false;
+        });
+        if (dispatcherOnly.length > 0) {
+            return dispatcherOnly.map(
+                (s) =>
+                    `Step "${s.Name}" requires the task-graph dispatcher and cannot be combined in the same ` +
+                    `workflow as in-process Custom step(s) (${activeCustomSteps.map((c) => `"${c.Name}"`).join(', ')}).`
+            );
+        }
+    }
+
+    const compilerSteps = steps.map((step): FlowCompilerStep => {
+        const projected = toCompilerStep(step);
+        if (projected.StepType === 'Custom') {
+            return {
+                ...projected,
+                StepType: 'External',
+                Configuration: JSON.stringify({ domain: 'custom-step-placeholder' }),
+            };
+        }
+        return projected;
+    });
     const resolved = resolvePaths(paths, steps);
     const compiled = CompileFlowToTaskGraph(compilerSteps, resolved.Paths, compilerOptions(workflowName));
     return [

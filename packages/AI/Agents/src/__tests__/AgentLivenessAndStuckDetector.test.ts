@@ -1340,7 +1340,7 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
             expect(ClassifyToolOrActionName('WaitSeconds')).toBe('neutral');
             expect(ClassifyToolOrActionName('Sleep')).toBe('neutral');
             expect(ClassifyToolOrActionName('Delay')).toBe('neutral');
-            expect(ClassifyToolOrActionName('Ping')).toBe('neutral');
+            expect(ClassifyToolOrActionName('WaitSeconds')).toBe('neutral');
 
             const streakDet = new AgentStuckDetector();
             for (let i = 0; i < 4; i++) {
@@ -1491,6 +1491,92 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
                 );
             }
             expect(stalledPauseReason).toBe('StuckToolCallLoop');
+
+            // R6 Follow-up #3: state-changing actions starting with Pause / Ping classify as mutating, not neutral
+            expect(ClassifyToolOrActionName('Pause Campaign')).toBe('mutating');
+            expect(ClassifyToolOrActionName('Ping User')).toBe('mutating');
+
+            // R6-3: Rate-limited mutations + Delay(1) (alternating, batched, and poll+mutate+delay) never pause
+            // Case 1: Send Email{to:i} / Delay{1} alternating
+            const bulkDet = new AgentStuckDetector();
+            let bulkDirectives = 0;
+            let bulkPaused = false;
+            for (let i = 1; i <= 8; i++) {
+                const sendEval = bulkDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Send Email', params: { to: `u${i}@example.com` } }] },
+                    pollCfg
+                );
+                bulkDirectives += sendEval.InjectedDirectives.length;
+                if (sendEval.PauseRequest) bulkPaused = true;
+                const dEval = bulkDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Delay', params: { seconds: 1 } }] },
+                    pollCfg
+                );
+                bulkDirectives += dEval.InjectedDirectives.length;
+                if (dEval.PauseRequest) bulkPaused = true;
+            }
+            expect(bulkDirectives).toBe(0);
+            expect(bulkPaused).toBe(false);
+
+            // Case 2: Batched [Send Email{to:i}, Delay{1}]
+            const batchDet = new AgentStuckDetector();
+            let batchDirectives = 0;
+            let batchPaused = false;
+            for (let i = 1; i <= 6; i++) {
+                const ev = batchDet.EvaluateStepDecision(
+                    params,
+                    {
+                        step: 'Actions',
+                        terminate: false,
+                        actions: [
+                            { name: 'Send Email', params: { to: `b${i}@example.com` } },
+                            { name: 'Delay', params: { seconds: 1 } },
+                        ],
+                    },
+                    pollCfg
+                );
+                batchDirectives += ev.InjectedDirectives.length;
+                if (ev.PauseRequest) batchPaused = true;
+            }
+            expect(batchDirectives).toBe(0);
+            expect(batchPaused).toBe(false);
+
+            // Case 3: Poll (changing) -> Update Record{pct:i} -> Delay{30}
+            const mixedDet = new AgentStuckDetector();
+            let mixedDirectives = 0;
+            let mixedPaused = false;
+            for (let i = 1; i <= 6; i++) {
+                const pEv = mixedDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Get Job Status', params: { jobId: 'j1' } }] },
+                    pollCfg
+                );
+                mixedDirectives += pEv.InjectedDirectives.length;
+                if (pEv.PauseRequest) mixedPaused = true;
+                mixedDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Get Job Status', success: true, pct: i * 15 }] },
+                    pollCfg
+                );
+                const uEv = mixedDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Update Record', params: { pct: i * 15 } }] },
+                    pollCfg
+                );
+                mixedDirectives += uEv.InjectedDirectives.length;
+                if (uEv.PauseRequest) mixedPaused = true;
+                const wEv = mixedDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Delay', params: { seconds: 30 } }] },
+                    pollCfg
+                );
+                mixedDirectives += wEv.InjectedDirectives.length;
+                if (wEv.PauseRequest) mixedPaused = true;
+            }
+            expect(mixedDirectives).toBe(0);
+            expect(mixedPaused).toBe(false);
         });
     });
 });

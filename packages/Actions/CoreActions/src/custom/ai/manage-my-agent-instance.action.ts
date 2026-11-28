@@ -166,7 +166,11 @@ export class ManageMyAgentInstanceAction extends BaseAction {
         if (maxPerUser != null && maxPerUser > 0) {
             const rootBase = AIEngine.Instance.GetRootAgent(baseAgent.ID) ?? baseAgent;
             const existingForRoot = AIEngine.Instance.GetUserDerivedAgents(contextUser).filter((a) => {
-                if (a.Status !== 'Active' || !UUIDsEqual(a.OwnerUserID, contextUser.ID)) {
+                if (
+                    a.Status !== 'Active' ||
+                    (a.InstantiationMode ?? 'None') !== 'None' ||
+                    !UUIDsEqual(a.OwnerUserID, contextUser.ID)
+                ) {
                     return false;
                 }
                 const r = AIEngine.Instance.GetRootAgent(a.ID);

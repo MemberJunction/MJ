@@ -74,12 +74,40 @@ const PROBE_PREFIX = 'path-check:';
  * @param steps the flow's steps (`MJAIAgentStepEntity` satisfies the shape as-is)
  * @param paths the flow's paths (`MJAIAgentStepPathEntity` satisfies the shape as-is)
  */
+/** Projects a step (including prototype-getter-backed BaseEntity objects) onto a plain FlowCompilerStep. */
+function projectCompilerStep(step: FlowCompilerStep, overrideAsExternalPlaceholder = false): FlowCompilerStep {
+  return {
+    ID: step.ID,
+    Name: step.Name,
+    Description: step.Description,
+    StepType: overrideAsExternalPlaceholder ? 'External' : step.StepType,
+    StartingStep: step.StartingStep === true,
+    Status: step.Status,
+    ActionID: step.ActionID,
+    SubAgentID: step.SubAgentID,
+    PromptID: step.PromptID,
+    LoopBodyType: step.LoopBodyType,
+    Configuration: overrideAsExternalPlaceholder
+      ? JSON.stringify({ domain: 'custom-step-placeholder' })
+      : step.Configuration,
+    ActionInputMapping: step.ActionInputMapping,
+    ActionOutputMapping: step.ActionOutputMapping,
+    TimeoutSeconds: step.TimeoutSeconds,
+    RetryCount: step.RetryCount,
+    OnErrorBehavior: step.OnErrorBehavior,
+    PositionX: step.PositionX,
+    PositionY: step.PositionY,
+    Width: step.Width,
+    Height: step.Height,
+  };
+}
+
 export function CheckFlowRun(steps: readonly FlowCompilerStep[], paths: readonly FlowCompilerPath[]): FlowRunProblem[] {
   const activeCustomSteps = steps.filter((s) => s.Status === 'Active' && s.StepType === 'Custom');
   if (activeCustomSteps.length > 0) {
     const dispatcherOnlySteps = steps.filter((s) => {
       if (s.Status !== 'Active') return false;
-      if (s.StepType === 'Human') return true;
+      if (s.StepType === 'Human' || s.StepType === 'Wait' || s.StepType === 'External') return true;
       if (s.StepType === 'ForEach' && typeof s.Configuration === 'string' && s.Configuration.trim().length > 0) {
         try {
           const parsed = JSON.parse(s.Configuration) as Record<string, unknown>;
@@ -101,15 +129,12 @@ export function CheckFlowRun(steps: readonly FlowCompilerStep[], paths: readonly
     }
   }
 
-  // Mirror FlowAgentType's in-run pre-flight check (R5 Follow-up #3): substitute active Custom steps
-  // with synthetic External placeholders so valid Custom flows are not falsely flagged as unsupported.
+  // Mirror FlowAgentType's in-run pre-flight check (R5 Follow-up #3 & R6-1): explicitly project named
+  // fields (never spread a BaseEntity, whose columns are prototype getters) and substitute active
+  // Custom steps with synthetic External placeholders so valid Custom flows are validated accurately.
   const stepsForCompile: readonly FlowCompilerStep[] =
     activeCustomSteps.length > 0
-      ? steps.map((step) =>
-          step.StepType === 'Custom'
-            ? { ...step, StepType: 'External', Configuration: JSON.stringify({ domain: 'custom-step-placeholder' }) }
-            : step
-        )
+      ? steps.map((step) => projectCompilerStep(step, step.StepType === 'Custom'))
       : steps;
 
   const compiled = CompileFlowToTaskGraph(stepsForCompile, paths, {

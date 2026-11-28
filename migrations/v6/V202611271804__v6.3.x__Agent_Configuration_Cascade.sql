@@ -116,6 +116,35 @@ WHERE a.[Configuration] IS NULL
   AND a.[BaseAgentID] IS NULL;
 GO
 
+-- Preserve pre-PR SearchScopeAccess = 'None' enforcement on existing derived non-instantiable
+-- rows (R6-2): pre-PR scoped-search read the row's own SearchScopeAccess directly, whereas
+-- ResolveEffectiveAgentProperties treats a non-instantiable derived row with legacy 'None'
+-- and no scope.searchScopeAccess JSON as unset (inheriting from its base). Writing
+-- {"scope":{"searchScopeAccess":"None"}} when scope.searchScopeAccess is absent preserves exact
+-- pre-PR search restriction on upgrade without freezing any other column defaults.
+UPDATE a
+SET a.[Configuration] = CASE
+    WHEN a.[Configuration] IS NULL OR LTRIM(RTRIM(a.[Configuration])) = N''
+        THEN N'{"scope":{"searchScopeAccess":"None"}}'
+    WHEN ISJSON(a.[Configuration]) = 1
+        AND JSON_VALUE(a.[Configuration], '$.scope.searchScopeAccess') IS NULL
+        THEN JSON_MODIFY(
+            CASE
+                WHEN JSON_QUERY(a.[Configuration], '$.scope') IS NULL
+                    THEN JSON_MODIFY(a.[Configuration], '$.scope', JSON_QUERY(N'{}'))
+                ELSE a.[Configuration]
+            END,
+            '$.scope.searchScopeAccess',
+            N'None'
+        )
+    ELSE a.[Configuration]
+END
+FROM [${flyway:defaultSchema}].[AIAgent] a
+WHERE a.[BaseAgentID] IS NOT NULL
+  AND COALESCE(a.[InstantiationMode], N'None') = N'None'
+  AND a.[SearchScopeAccess] = N'None';
+GO
+
 -- Additive data-copy: backfill AIAgentType.DefaultAgentConfiguration from existing 7 context-window columns where NULL
 UPDATE atype
 SET atype.[DefaultAgentConfiguration] = (

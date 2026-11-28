@@ -382,7 +382,7 @@ export class AgentSubAgentExecutionHelper {
                 ctx.Hooks.LogStatus(`✅ Sub-agent '${subAgentRequest.name}' completed successfully`, true, params);
             } else {
                 ctx.Hooks.LogStatus(
-                    `Sub-agent '${subAgentRequest.name}' failed: ${result.errorMessage || result.agentRun?.ErrorMessage || 'Unknown error'}`
+                    `Sub-agent '${subAgentRequest.name}' failed: ${result.agentRun?.ErrorMessage || result.errorMessage || 'Unknown error'}`
                 );
             }
 
@@ -750,7 +750,7 @@ export class AgentSubAgentExecutionHelper {
                     }
                 }
             } else {
-                const errDetail = subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage || 'Unknown error';
+                const errDetail = subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage || 'Unknown error';
                 const msg = `Sub-agent '${subAgentRequest.name}' execution failed: ${errDetail}`;
                 LogError(msg);
                 stepEntity.Success = false;
@@ -805,7 +805,7 @@ export class AgentSubAgentExecutionHelper {
                 subAgentResult: {
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
-                    errorMessage: subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage,
+                    errorMessage: subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
                 },
                 shouldTerminate,
@@ -833,7 +833,7 @@ export class AgentSubAgentExecutionHelper {
             await ctx.Hooks.FinalizeStepEntity(
                 stepEntity,
                 subAgentResult.success,
-                subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage || undefined,
+                subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage || undefined,
                 outputData
             );
 
@@ -916,7 +916,7 @@ export class AgentSubAgentExecutionHelper {
                     : previousDecision?.message,
                 errorMessage: subAgentResult.success
                     ? undefined
-                    : subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message',
+                    : subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage || 'Sub-agent failed with no error message',
                 retryReason: subAgentResult.success
                     ? `Reviewing results from ${subAgentRequest.name}`
                     : `Handling error from ${subAgentRequest.name}`,

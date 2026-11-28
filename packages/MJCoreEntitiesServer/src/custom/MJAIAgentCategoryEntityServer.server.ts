@@ -168,7 +168,7 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const errors = ValidateAgentCategoryDelete(this.ID, this.ContextCurrentUser);
         if (errors.length > 0) {
-            const deleteResult = new BaseEntityResult(false, errors[0].Message, 'delete');
+            const deleteResult = new BaseEntityResult(false, '', 'delete');
             deleteResult.Errors = errors;
             this.RegisterResultHistoryEntry(deleteResult);
             return false;

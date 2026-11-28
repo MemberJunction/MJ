@@ -185,5 +185,101 @@ describe('placing run-check problems on the canvas and in the panel', () => {
     expect(mixed).toHaveLength(1);
     expect(mixed[0].StepID).toBe('human-1');
     expect(mixed[0].Message).toMatch(/cannot be combined/i);
+
+    // R6 Follow-up #1: Custom mixed with Wait or External is also refused up front
+    const waitStep = MakeStep('wait-1', { Name: 'Wait 1h', StepType: 'Wait', Configuration: JSON.stringify({ durationSeconds: 3600 }) });
+    const extStep = MakeStep('ext-1', { Name: 'Webhook', StepType: 'External', Configuration: JSON.stringify({ domain: 'hook' }) });
+    expect(CheckFlowRun([customStart, waitStep], [MakePath('pw', 'custom-1', { DestinationStepID: 'wait-1' })])).toEqual([
+      expect.objectContaining({ Code: 'UnsupportedStepType', StepID: 'wait-1' }),
+    ]);
+    expect(CheckFlowRun([customStart, extStep], [MakePath('pe', 'custom-1', { DestinationStepID: 'ext-1' })])).toEqual([
+      expect.objectContaining({ Code: 'UnsupportedStepType', StepID: 'ext-1' }),
+    ]);
+  });
+
+  it('R6-1: preserves all fields on prototype-getter-backed BaseEntity Custom steps (never spreads entities)', () => {
+    const makeGetterEntityStep = (fields: Record<string, unknown>): MJAIAgentStepEntity => {
+      const proto: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(fields)) {
+        Object.defineProperty(proto, k, { get: () => v, enumerable: false, configurable: true });
+      }
+      const instance = Object.create(proto) as MJAIAgentStepEntity;
+      expect(Object.keys(instance)).toEqual([]); // proves spread `{ ...instance }` would lose every field!
+      return instance;
+    };
+
+    // 1. Valid flow starting with a getter-backed Custom step -> no problems (no false NoStartingStep)
+    const cStart = makeGetterEntityStep({
+      ID: 'gc-1',
+      Name: 'Custom Gate',
+      StepType: 'Custom',
+      StartingStep: true,
+      Status: 'Active',
+      Configuration: JSON.stringify({ stepType: 'Gate' }),
+    });
+    const actNext = makeGetterEntityStep({
+      ID: 'ga-1',
+      Name: 'Do Work',
+      StepType: 'Action',
+      StartingStep: false,
+      Status: 'Active',
+      ActionID: 'act-1',
+    });
+    expect(CheckFlowRun([cStart, actNext], [MakePath('gp1', 'gc-1', { DestinationStepID: 'ga-1' })])).toEqual([]);
+
+    // 2. Action -> Custom -> Action loop -> LoopDetected
+    const actLoopStart = makeGetterEntityStep({
+      ID: 'gl-1',
+      Name: 'Start Action',
+      StepType: 'Action',
+      StartingStep: true,
+      Status: 'Active',
+      ActionID: 'act-1',
+    });
+    const cMid = makeGetterEntityStep({
+      ID: 'gl-2',
+      Name: 'Mid Custom',
+      StepType: 'Custom',
+      StartingStep: false,
+      Status: 'Active',
+      Configuration: JSON.stringify({ stepType: 'Gate' }),
+    });
+    const loopProblems = CheckFlowRun(
+      [actLoopStart, cMid],
+      [
+        MakePath('glp1', 'gl-1', { DestinationStepID: 'gl-2' }),
+        MakePath('glp2', 'gl-2', { DestinationStepID: 'gl-1' }),
+      ]
+    );
+    expect(loopProblems.some((p) => p.Code === 'LoopDetected')).toBe(true);
+
+    // 3. Unknown decision key on path out of getter-backed Custom step -> UnknownDecisionKey
+    const badKeyProblems = CheckFlowRun(
+      [cStart, actNext],
+      [MakePath('gp-bad', 'gc-1', { DestinationStepID: 'ga-1', Condition: "decisions.ghost.intent.value === 'billing'" })]
+    );
+    expect(badKeyProblems.some((p) => p.Code === 'UnknownDecisionKey')).toBe(true);
+
+    // 4. Choice value not offered on a fork targeting a getter-backed Custom step -> IncompleteFork + InvalidCondition
+    const decisionStep = MakeDecisionStep(TRIAGE_ID, { key: 'triage', questions: { intent } }, { Name: 'Triage', StartingStep: true });
+    const hBilling = MakeStep('h-billing', { Name: 'Handle billing', StepType: 'Sub-Agent', SubAgentID: 'agent-billing' });
+    const cTarget = makeGetterEntityStep({
+      ID: 'gc-target',
+      Name: 'Custom Target',
+      StepType: 'Custom',
+      StartingStep: false,
+      Status: 'Active',
+      Configuration: JSON.stringify({ stepType: 'Gate' }),
+    });
+    const badChoiceProblems = CheckFlowRun(
+      [decisionStep, hBilling, cTarget],
+      [
+        MakePath('gp-billing', TRIAGE_ID, { DestinationStepID: 'h-billing', Condition: "decisions.triage.intent.value === 'billing'" }),
+        MakePath('gp-choice', TRIAGE_ID, { DestinationStepID: 'gc-target', Condition: "decisions.triage.intent.value === 'invoice'" }),
+      ]
+    );
+    const codes = new Set(badChoiceProblems.map((p) => p.Code));
+    expect(codes.has('IncompleteFork')).toBe(true);
+    expect(codes.has('InvalidCondition')).toBe(true);
   });
 });

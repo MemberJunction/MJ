@@ -153,14 +153,14 @@ export function FormatFlowValidationErrors(errors: readonly TaskGraphValidationE
 
 /**
  * Returns active steps in `steps` that require the detached task-graph dispatcher and cannot run
- * inside the in-run walker (`Human` steps or `ForEach` steps configured with `enqueue`).
+ * inside the in-run walker (`Human`, `Wait`, `External`, or `ForEach` steps configured with `enqueue`).
  */
 export function FindDispatcherOnlyFlowSteps(
     steps: ReadonlyArray<Pick<MJAIAgentStepEntity, 'Name' | 'StepType' | 'Status' | 'Configuration'>>
 ): Array<Pick<MJAIAgentStepEntity, 'Name' | 'StepType' | 'Status' | 'Configuration'>> {
     return steps.filter((step) => {
         if (step.Status !== 'Active') return false;
-        if (step.StepType === 'Human') return true;
+        if (step.StepType === 'Human' || step.StepType === 'Wait' || step.StepType === 'External') return true;
         if (step.StepType === 'ForEach' && typeof step.Configuration === 'string' && step.Configuration.trim().length > 0) {
             try {
                 const parsed = JSON.parse(step.Configuration) as Record<string, unknown>;

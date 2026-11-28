@@ -1097,9 +1097,10 @@ export class FlowAgentType extends BaseAgentType {
 
             case 'Human':
                 // A Human step waits for a person, which only the task-graph dispatcher can do: it
-                // parks the task until someone answers. The in-run walker has nowhere to wait, so the
-                // run stops here, naming the step. Only a run that reaches the step is refused, so a
-                // Human step on a branch the run does not take never fails it (#4621).
+                // parks the task until someone answers. Workflows combining Custom steps with
+                // dispatcher-only steps (Human, Wait, External, ForEach+enqueue) are refused up front
+                // before step 1; non-Custom in-run runs (e.g. sub-agent runs) refuse lazily here only
+                // if the run actually reaches the Human step (#4621).
                 return this.stopFlow(
                     `Workflow '${params.agent.Name}' reached Human step '${node.Name}', which this run cannot ` +
                     `execute: Human steps wait for a person and run only on the task-graph dispatcher. Run the ` +

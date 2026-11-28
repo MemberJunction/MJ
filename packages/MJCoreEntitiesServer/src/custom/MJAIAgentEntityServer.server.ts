@@ -28,7 +28,7 @@ import {
     MJAIAgentEntityExtended,
     ParseAgentConfiguration,
     ParseAgentHelperPlugins,
-    ResolveAgentInstantiationConfig,
+    ParseAgentInstantiationConfig,
     SyncAgentLegacyColumnsAndConfiguration,
     VALID_AGENT_HELPER_SEAMS,
     ValidateAgentConfigurationJson,
@@ -568,13 +568,13 @@ export function ValidateAgentInheritanceAndSandbox(
             foldMaxPerUser(layer.instantiation?.maxInstancesPerUser);
         }
         for (const anc of ancestors) {
-            const resolved = ResolveAgentInstantiationConfig(anc.Configuration, anc.TypeConfiguration);
-            foldMaxPerUser(resolved?.maxInstancesPerUser);
+            foldMaxPerUser(ParseAgentConfiguration(anc.Configuration)?.instantiation?.maxInstancesPerUser);
+            foldMaxPerUser(ParseAgentInstantiationConfig(anc.TypeConfiguration)?.maxInstancesPerUser);
         }
 
         const ownerId = Target.OwnerUserID ?? User?.ID ?? null;
-        if (effectiveMaxPerUser !== null && ownerId) {
-            const rootBaseId = ancestors[0].ID;
+        const isCreatingPersonalInstance = (Target.InstantiationMode ?? 'None') === 'None';
+        if (effectiveMaxPerUser !== null && ownerId && isCreatingPersonalInstance) {
             const resolveRootId = (agent: typeof baseAgent): string => {
                 const seen = new UUIDSet([agent.ID]);
                 let cur = agent;
@@ -589,10 +589,12 @@ export function ValidateAgentInheritanceAndSandbox(
                 }
                 return cur.ID;
             };
+            const rootBaseId = resolveRootId(baseAgent);
             const existingCount = AllAgents.filter(
                 (a) =>
                     a.Status === 'Active' &&
                     a.BaseAgentID != null &&
+                    (a.InstantiationMode ?? 'None') === 'None' &&
                     UUIDsEqual(a.OwnerUserID, ownerId) &&
                     UUIDsEqual(resolveRootId(a), rootBaseId)
             ).length;
@@ -1130,7 +1132,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     this.ID,
                     ValidationErrorType.Failure
                 );
-                const deleteResult = new BaseEntityResult(false, err.Message, 'delete');
+                const deleteResult = new BaseEntityResult(false, '', 'delete');
                 deleteResult.Errors = [err];
                 this.RegisterResultHistoryEntry(deleteResult);
                 return false;
@@ -1381,6 +1383,15 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
      * like *Pepper* immediately inherit `TypeID`, `AcceptsSkills`, `SkillActivationMode`,
      * `ModelSelectionMode`, `Isolation`, and memory settings without requiring every caller to
      * manually copy 20 columns.
+     *
+     * Note (C-R1-1 vs R5-1): On GraphQL creates (`NewRecord()` + `SetMany(input)`), untouched
+     * columns arrive with `Dirty === false`, `NeverSet === false`, and their SQL default value.
+     * For general overridable columns (e.g. `InjectNotes = true`), `!Dirty` + SQL default is
+     * treated as untouched so parent values inherit cleanly (meaning an explicit create write equal
+     * to the SQL default under a non-default base inherits the base value unless set via
+     * `Configuration` or updated after create). For the 4 strict-default narrow-only columns
+     * (`SearchScopeAccess`, `AcceptUnregisteredFiles`, `AcceptsSkills`, `SkillActivationMode`),
+     * `NeverSet === true` is required so explicit strict restrictions are never loosened.
      */
     private inheritDefaultsFromBaseAgent(
         baseAgent: MJAIAgentEntity,
@@ -1499,8 +1510,16 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         const ancestorSearchCeiling = computeAncestorSearchScopeCeiling(defaultPolicyLayers, ancestors, ancestorConfigs);
         const strictestSearchAccess: MJAIAgentEntity['SearchScopeAccess'] = ancestorSearchCeiling ?? 'None';
 
+        let strictestAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] = baseAgent.AcceptsSkills ?? 'None';
+        for (const anc of ancestors) {
+            const val = anc.AcceptsSkills;
+            if (val != null && ACCEPTS_SKILLS_RANK[val] < ACCEPTS_SKILLS_RANK[strictestAcceptsSkills]) {
+                strictestAcceptsSkills = val;
+            }
+        }
+
         copyIfNotDirty('ModelSelectionMode');
-        copyIfNotDirty('AcceptsSkills');
+        copyIfNotDirty('AcceptsSkills', strictestAcceptsSkills);
         copyIfNotDirty('SkillActivationMode', strictestSkillMode);
         copyIfNotDirty('SearchScopeAccess', strictestSearchAccess);
         copyIfNotDirty('ArtifactCreationMode');
@@ -1725,6 +1744,47 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 AllAgentTypes: [],
                 ErrorMessage: failed.ErrorMessage || 'Guard metadata RunViews query failed',
             };
+        }
+        // R6 Follow-up #5: Fail closed if field-level security silently omitted a required guard
+        // column from a `'simple'` RunView projection (e.g. denied `DefaultConfiguration`).
+        const requiredGuardFieldsByResult: ReadonlyArray<{ Entity: string; Rows: unknown[]; RequiredFields: readonly string[] }> = [
+            {
+                Entity: 'MJ: AI Agents',
+                Rows: results[0].Results,
+                RequiredFields: ['ID', 'BaseAgentID', 'Configuration', 'SearchScopeAccess', 'Isolation'],
+            },
+            {
+                Entity: 'MJ: AI Agent Permissions',
+                Rows: results[1].Results,
+                RequiredFields: ['AgentID', 'CanRun'],
+            },
+            {
+                Entity: 'MJ: AI Agent Categories',
+                Rows: results[2].Results,
+                RequiredFields: ['ID', 'ParentID', 'DefaultConfiguration'],
+            },
+            {
+                Entity: 'MJ: AI Agent Types',
+                Rows: results[3].Results,
+                RequiredFields: ['ID', 'DefaultAgentConfiguration'],
+            },
+        ];
+        for (const check of requiredGuardFieldsByResult) {
+            if (check.Rows.length > 0) {
+                const sample = check.Rows[0] as Record<string, unknown> | null;
+                const missingField = check.RequiredFields.find(
+                    (f) => !sample || !Object.prototype.hasOwnProperty.call(sample, f)
+                );
+                if (missingField) {
+                    return {
+                        AllAgents: [],
+                        AllPermissions: [],
+                        AllCategories: [],
+                        AllAgentTypes: [],
+                        ErrorMessage: `Required security guard field '${missingField}' was omitted from '${check.Entity}' query result (possible field-level security restriction).`,
+                    };
+                }
+            }
         }
         return {
             AllAgents: results[0].Results as MJAIAgentEntity[],

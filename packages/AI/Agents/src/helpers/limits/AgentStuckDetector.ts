@@ -151,14 +151,11 @@ const READ_ONLY_ACTION_TOKENS: readonly string[] = [
     'select',
 ];
 
-/** Keywords identifying explicit wait/poll-delay/no-op actions that neither mutate state nor count as read-only investigation (R5-2). */
+/** Keywords identifying explicit wait/sleep/delay actions that neither mutate state nor count as read-only investigation (R5-2 & R6 Follow-up #3). */
 const NEUTRAL_ACTION_TOKENS: readonly string[] = [
     'wait',
     'sleep',
     'delay',
-    'ping',
-    'noop',
-    'pause',
 ];
 
 function tokenizeIdentifier(name: string): string[] {
@@ -403,13 +400,13 @@ export class AgentStuckDetector {
             }
         }
 
-        // If a mutating call ran with a fresh fingerprint (not itself repeating), clear ONLY older
-        // read-only fingerprints so `list -> create -> list` resets cleanly while preserving
-        // mutating fingerprints (catches A-B-A-B loops) and leaving neutral calls (`WaitSeconds`)
-        // from prematurely wiping read-only loop history.
+        // If a mutating call ran with a fresh fingerprint (not itself repeating), clear older
+        // read-only AND neutral wait/delay fingerprints so `list -> create -> list` and
+        // rate-limited bulk mutations (`Send Email{to:i} -> Delay{1}`) reset cleanly while
+        // preserving mutating fingerprints (catches A-B-A-B and repeated-mutation loops) (R6-3).
         if (countInWindow === 1 && classification === 'mutating') {
             this._recentToolFingerprints = this._recentToolFingerprints.filter(
-                (fp) => !this._readOnlyFingerprints.has(fp)
+                (fp) => !this._readOnlyFingerprints.has(fp) && !this._neutralFingerprints.has(fp)
             );
             this.pruneAgedDirectiveFingerprints();
         }

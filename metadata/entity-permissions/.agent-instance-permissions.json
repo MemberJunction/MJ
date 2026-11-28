@@ -37,5 +37,47 @@
       "lastModified": "2026-11-24T20:27:53.147Z",
       "checksum": "b1e61b31ef76b6854ed60bf989d6b0f3663588092a0f81503d8267d8f405d89e"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Permissions",
+      "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Permissions&RoleID=@lookup:MJ: Roles.Name=Agent Administrator&Type=Allow?create"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Categories",
+      "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Categories&RoleID=@lookup:MJ: Roles.Name=Agent Administrator&Type=Allow?create"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Types",
+      "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+      "Type": "Allow",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": true
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Types&RoleID=@lookup:MJ: Roles.Name=Agent Administrator&Type=Allow?create"
+    }
   }
 ]

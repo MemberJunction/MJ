@@ -504,6 +504,7 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             ID: '00000000-0000-4000-8000-000000000077',
             BaseAgentID: COS_ID,
             OwnerUserID: ALICE,
+            InstantiationMode: 'None',
             Status: 'Active',
         });
         const maxInstErrors = ValidateAgentInheritanceAndSandbox({
@@ -1824,5 +1825,96 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
         expect(await personaServer.Delete()).toBe(false);
         expect(personaServer.LatestResult?.Success).toBe(false);
         expect(personaServer.LatestResult?.CompleteMessage).toMatch(/Non-administrator users can only configure personas/i);
+        // R6 Follow-up #8: refusal message is NOT duplicated in CompleteMessage
+        const occurrences = (personaServer.LatestResult?.CompleteMessage ?? '').match(/Non-administrator users can only configure personas/g) ?? [];
+        expect(occurrences).toHaveLength(1);
+    });
+
+    it('R6 Follow-ups #4 & #5: maxInstancesPerUser folds both JSON+TypeConfiguration, ignores templates, and loadGuardMetadataBatch fails closed when FLS omits guard fields', async () => {
+        const uiUser = makeUser(ALICE, 'User', ['UI']);
+        const adminUser = makeUser(ALICE, 'Owner');
+        const root = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            // Configuration says 5, legacy TypeConfiguration says 1 -> monotonic Math.min enforces 1!
+            Configuration: JSON.stringify({ instantiation: { maxInstancesPerUser: 5 } }),
+            TypeConfiguration: JSON.stringify({ instantiation: { maxInstancesPerUser: 1 } }),
+        });
+        const existingTemplate = baseAgentRow({
+            ID: 'f4000000-0000-4000-8000-000000000001',
+            BaseAgentID: root.ID,
+            OwnerUserID: ALICE,
+            InstantiationMode: 'Optional',
+            Status: 'Active',
+        });
+        const existingPersonal = baseAgentRow({
+            ID: 'f4000000-0000-4000-8000-000000000002',
+            BaseAgentID: root.ID,
+            OwnerUserID: ALICE,
+            InstantiationMode: 'None',
+            Status: 'Active',
+        });
+        const perm = Object.create(MJAIAgentPermissionEntity.prototype) as MJAIAgentPermissionEntity;
+        Object.defineProperties(perm, {
+            AgentID: { value: root.ID },
+            UserID: { value: ALICE },
+            RoleID: { value: null },
+            CanView: { value: true },
+            CanRun: { value: true },
+            CanEdit: { value: false },
+            CanDelete: { value: false },
+        });
+
+        // 1. Existing personal instance blocks second personal instance under min(5, 1) = 1
+        const capErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                ID: 'f4000000-0000-4000-8000-000000000003',
+                IsSaved: false,
+                BaseAgentID: root.ID,
+                OwnerUserID: ALICE,
+                InstantiationMode: 'None',
+            }),
+            User: uiUser,
+            AllAgents: [root, existingPersonal],
+            AllPermissions: [perm],
+        });
+        expect(capErrors.some((e) => /Maximum of 1 active instance/i.test(e.Message))).toBe(true);
+
+        // 2. Existing admin-owned sub-template does NOT count against personal cap and admin can create another sub-template
+        const subTemplateErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                ID: 'f4000000-0000-4000-8000-000000000004',
+                IsSaved: false,
+                BaseAgentID: root.ID,
+                OwnerUserID: ALICE,
+                InstantiationMode: 'Optional',
+            }),
+            User: adminUser,
+            AllAgents: [root, existingTemplate, existingPersonal],
+            AllPermissions: [],
+        });
+        expect(subTemplateErrors).toEqual([]);
+
+        // 3. Follow-up #5: loadGuardMetadataBatch fails closed if FLS drops DefaultConfiguration on Categories
+        const flsServer = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        Object.defineProperty(flsServer, 'ContextCurrentUser', { get: () => uiUser, configurable: true });
+        Object.defineProperty(flsServer, 'RunViewProviderToUse', {
+            get: () => ({
+                RunViews: async () => [
+                    { Success: true, Results: [{ ID: COS_ID, BaseAgentID: null, Configuration: null, SearchScopeAccess: 'All', Isolation: 'InProcess' }] },
+                    { Success: true, Results: [{ AgentID: COS_ID, CanRun: true }] },
+                    // DefaultConfiguration omitted by FLS!
+                    { Success: true, Results: [{ ID: 'cat-1', ParentID: null }] },
+                    { Success: true, Results: [{ ID: 'type-1', DefaultAgentConfiguration: null }] },
+                ],
+            }),
+            configurable: true,
+        });
+        const batchRes = await (
+            flsServer as unknown as {
+                loadGuardMetadataBatch(): Promise<{ ErrorMessage?: string }>;
+            }
+        ).loadGuardMetadataBatch();
+        expect(batchRes.ErrorMessage).toMatch(/DefaultConfiguration/);
     });
 });
