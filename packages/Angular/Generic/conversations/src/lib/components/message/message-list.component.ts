@@ -2049,11 +2049,38 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this._scrollFrame = requestAnimationFrame(() => {
         this._scrollFrame = null;
         if (this.messages?.length) {
-          this.updateMessages(this.messages);
+          this.syncMountedWindowOnScroll();
         }
       });
     };
     root.addEventListener('scroll', this._onScroll, { passive: true });
+  }
+
+  /**
+   * Re-evaluates the virtualized mount window after a scroll frame, skipping
+   * {@link updateMessages} completely when no timeline entry needs to mount or
+   * unmount. Without this guard, every scroll frame re-stamps and runs synchronous
+   * `detectChanges()` across every mounted bubble (including actively streaming
+   * replies with diagrams).
+   */
+  private syncMountedWindowOnScroll(): void {
+    if (!this.messages?.length || !this.MessageContainerRef) {
+      return;
+    }
+    const timeline = BuildConversationTimeline(this.messages);
+    const range = this.computeMountedRange(timeline);
+
+    for (let i = 0; i < timeline.length; i++) {
+      const item = timeline[i];
+      const key = this.getTimelineKey(item);
+      const shouldBeMounted = (i >= range.start && i <= range.end)
+        || this.mustStayMounted(item, i, timeline.length);
+      const existing = this._renderedMessages.get(key);
+      if (shouldBeMounted ? (!existing || existing.kind === 'spacer') : (existing && existing.kind !== 'spacer')) {
+        this.updateMessages(this.messages);
+        return;
+      }
+    }
   }
 
   private detachScrollListener(): void {

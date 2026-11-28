@@ -1,6 +1,9 @@
 // Angular components in this package are partial-compiled — load the JIT compiler first
 // (same convention as the other component suites in this node test environment).
 import '@angular/compiler';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect, vi } from 'vitest';
 import { MessageListComponent } from '../lib/components/message/message-list.component';
 
@@ -341,6 +344,65 @@ describe('MessageListComponent — DOM unmount', () => {
     h.open['computeMountedRange'] = (t: unknown[]) => ({ start: t.length - 20, end: t.length - 1 });
     invokePrivate(h.component, 'updateMessages', messages);
     expect(unsubscribed.length).toBeGreaterThanOrEqual(20 * 20);
+  });
+
+  it('scroll listener calls syncMountedWindowOnScroll and skips updateMessages when the mounted window has not moved', () => {
+    const messages = Array.from({ length: 12 }, (_, i) => detail(`d-${i}`, i + 1));
+    const h = createHarness(messages);
+
+    // Mount all 12 items initially
+    h.open['computeMountedRange'] = (t: unknown[]) => ({ start: 0, end: t.length - 1 });
+    invokePrivate(h.component, 'updateMessages', messages);
+
+    const listeners = new Map<string, () => void>();
+    const fakeRoot = {
+      addEventListener: vi.fn((event: string, fn: () => void) => listeners.set(event, fn)),
+      removeEventListener: vi.fn(),
+    };
+    h.open['resolveScrollParent'] = () => fakeRoot;
+    h.open['_scrollFrame'] = null;
+    h.open['syncScrollListener'] = MessageListComponent.prototype['syncScrollListener' as keyof MessageListComponent];
+
+    const origRaf = globalThis.requestAnimationFrame;
+    const origCancelRaf = globalThis.cancelAnimationFrame;
+    const rafCallbacks: Array<() => void> = [];
+    (globalThis as unknown as { requestAnimationFrame: (cb: () => void) => number }).requestAnimationFrame = (cb) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    };
+    (globalThis as unknown as { cancelAnimationFrame: (id: number) => void }).cancelAnimationFrame = vi.fn();
+
+    try {
+      invokePrivate(h.component, 'syncScrollListener');
+      const onScroll = listeners.get('scroll');
+      expect(onScroll).toBeDefined();
+
+      const updateSpy = vi.fn();
+      h.open['updateMessages'] = updateSpy;
+
+      // Scrolling within the mounted window must be a complete no-op (no 60fps detectChanges storm)
+      onScroll!();
+      rafCallbacks.shift()!();
+      onScroll!();
+      rafCallbacks.shift()!();
+      expect(updateSpy).not.toHaveBeenCalled();
+
+      // Once the computed range shifts so an item needs to unmount into a spacer, updateMessages runs
+      h.open['computeMountedRange'] = () => ({ start: 4, end: 11 });
+      onScroll!();
+      rafCallbacks.shift()!();
+      expect(updateSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      (globalThis as unknown as { requestAnimationFrame: typeof origRaf }).requestAnimationFrame = origRaf;
+      (globalThis as unknown as { cancelAnimationFrame: typeof origCancelRaf }).cancelAnimationFrame = origCancelRaf;
+    }
+  });
+
+  it('keeps message-item mj-markdown streaming-friendly by disabling collapsible headings and forwarding IsStreaming while in progress', () => {
+    const dir = dirname(fileURLToPath(import.meta.url));
+    const html = readFileSync(resolve(dir, '../lib/components/message/message-item.component.html'), 'utf8');
+    expect(html).toContain('[IsStreaming]="IsStreaming || IsInProgressAIMessage"');
+    expect(html).toContain('[enableCollapsibleHeadings]="!IsStreaming && !IsInProgressAIMessage"');
   });
 
 });
