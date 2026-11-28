@@ -12,6 +12,7 @@
       {
         "fields": {
           "RubricID": "@parent:ID",
+          "Status": "Published",
           "PassThreshold": 1,
           "NotApplicablePolicy": "ExcludeAndRedistribute",
           "ScoreDisplayMin": 0,

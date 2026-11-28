@@ -22,6 +22,9 @@ const DEFAULT_NON_INFERIORITY_MARGIN = 0.05; // D5-7: paired difference lower bo
 /** Default rubric pass threshold (1.0 requires all applicable criteria to be Met). */
 const RUBRIC_PASS_THRESHOLD = 1.0; // Text criteria evaluated as binary Met (1) / Not met (0)
 
+/** The oracle type the PS eval tests name for their rubric check (D5-59); the generic `rubric` oracle is never used. */
+export const PS_RUBRIC_ORACLE_TYPE = 'ps-rubric';
+
 const WORLD_ORDER: readonly AgentEvalWorldId[] = [
   'C1',
   'C4',
@@ -96,7 +99,7 @@ function BuildScenarioOracles(scenario: AgentEvalScenario, rubricId: string): re
 
   if (scenario.expected.rubricCriteria && scenario.expected.rubricCriteria.length > 0) {
     oracles.push({
-      type: 'rubric',
+      type: PS_RUBRIC_ORACLE_TYPE,
       weight: 0.2,
       config: {
         rubricId,
@@ -256,6 +259,9 @@ export class AgentEvalScenarioManifest {
           {
             fields: {
               RubricID: '@parent:ID',
+              // Published on insert (MJRubricVersionEntityServer.Save): the rubric oracle evaluates only a published
+              // version (RubricEngine.EvaluateRecord), D5-58.
+              Status: 'Published',
               PassThreshold: RUBRIC_PASS_THRESHOLD,
               NotApplicablePolicy: 'ExcludeAndRedistribute',
               ScoreDisplayMin: 0,

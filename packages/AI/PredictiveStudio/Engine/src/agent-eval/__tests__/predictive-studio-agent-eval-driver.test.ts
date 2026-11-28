@@ -1,8 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EntityInfo, UserInfo, type IMetadataProvider, type RunViewParams } from '@memberjunction/core';
 import type { MJAIAgentEntity, MJAIAgentRunEntity, MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
-import type { DriverExecutionContext, OracleInput, SuiteFixtureContext } from '@memberjunction/testing-engine';
-import { PredictiveStudioAgentEvalDriver } from '../index';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import type { AgentEvalConfig, DriverExecutionContext, OracleInput, RubricOracleEngine, SuiteFixtureContext } from '@memberjunction/testing-engine';
+import {
+  AgentEvalScenarioManifest,
+  PS_RUBRIC_ORACLE_TYPE,
+  PSRubricOracle,
+  PredictiveStudioAgentEvalDriver,
+  type AgentEvalManifest,
+} from '../index';
 
 interface InMemoryNote {
   ID: string;
@@ -375,5 +384,158 @@ describe('PredictiveStudioAgentEvalDriver — Attacks 3, 7, 8', () => {
     expect(refusalOracle).toBeDefined();
     expect(refusalOracle?.passed).toBe(false);
     expect(refusalOracle?.message).toMatch(/0 rows|not present|absent/i);
+  });
+});
+
+describe('PSRubricOracle — judges only the criteria a test names (D5-59)', () => {
+  const RUBRIC_ID = '2056F86A-FB34-4222-855C-275C7A36467A';
+  const VERSION_ID = '267FF292-E94E-4ABC-AC40-BB7088324AD3';
+  const KEYS = ['censoring-named', 'asks-what-to-improve', 'failure-reported'];
+
+  type JudgedCriterion = { key: string; normalizedScore: number | null; rationale?: string };
+  type EvaluateRecordInput = Parameters<RubricOracleEngine['EvaluateRecord']>[0];
+
+  /** A rubric engine whose judge returns fixed criterion scores, recording every call. */
+  function MakeEngine(scores: Record<string, number>): RubricOracleEngine & { Calls: EvaluateRecordInput[] } {
+    const calls: EvaluateRecordInput[] = [];
+    return {
+      Calls: calls,
+      async EvaluateRecord(input: EvaluateRecordInput) {
+        calls.push(input);
+        const criteria: JudgedCriterion[] = KEYS.map((key) => ({ key, normalizedScore: scores[key] ?? 0, rationale: `${key} judged` }));
+        const all = criteria.every((c) => c.normalizedScore === 1);
+        return { evaluationId: 'eval-1', score: all ? 1 : 0, outcome: all ? 'Passed' : 'BelowThreshold', criteria };
+      },
+    };
+  }
+
+  /** A provider holding one published rubric version with the three PS criteria. */
+  function MakeRubricProvider(): IMetadataProvider {
+    const provider = {
+      Entities: [MakeEntity('MJ: Rubric Versions'), MakeEntity('MJ: Rubric Criteria')],
+      async RunView<T>(params: RunViewParams): Promise<{ Success: boolean; Results: T[] }> {
+        if (params.EntityName === 'MJ: Rubric Versions') return { Success: true, Results: [{ ID: VERSION_ID }] as unknown as T[] };
+        if (params.EntityName === 'MJ: Rubric Criteria') {
+          const matches = (params.ExtraFilter ?? '').includes(VERSION_ID);
+          return { Success: true, Results: (matches ? KEYS.map((Key) => ({ Key })) : []) as unknown as T[] };
+        }
+        return { Success: true, Results: [] };
+      },
+    };
+    return provider as unknown as IMetadataProvider;
+  }
+
+  function MakeInput(): OracleInput {
+    return {
+      test: { ID: 'test-1', InputDefinition: { userMessage: 'rebuild it' } } as unknown as MJTestEntity,
+      actualOutput: 'What should the rebuild improve: the metric, a feature, or a segment?',
+      contextUser: MakeUser(),
+      testRunId: 'test-run-1',
+      provider: MakeRubricProvider(),
+    };
+  }
+
+  it('passes when the one named criterion is Met, though the unnamed ones are Not met', async () => {
+    const engine = MakeEngine({ 'asks-what-to-improve': 1, 'censoring-named': 0, 'failure-reported': 0 });
+    const result = await new PSRubricOracle(engine).evaluate(MakeInput(), { rubricId: RUBRIC_ID, criteriaKeys: ['asks-what-to-improve'] });
+    expect(result.oracleType).toBe(PS_RUBRIC_ORACLE_TYPE);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(1);
+    expect(engine.Calls).toHaveLength(1);
+    expect(engine.Calls[0].versionId).toBe(VERSION_ID);
+  });
+
+  it('fails when the named criterion is Not met, though every unnamed one is Met', async () => {
+    const engine = MakeEngine({ 'asks-what-to-improve': 0, 'censoring-named': 1, 'failure-reported': 1 });
+    const result = await new PSRubricOracle(engine).evaluate(MakeInput(), { rubricId: RUBRIC_ID, criteriaKeys: ['asks-what-to-improve'] });
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0);
+  });
+
+  it('needs every named criterion Met when a test names two', async () => {
+    const engine = MakeEngine({ 'asks-what-to-improve': 1, 'failure-reported': 0 });
+    const result = await new PSRubricOracle(engine).evaluate(MakeInput(), {
+      rubricId: RUBRIC_ID,
+      rubricVersionId: VERSION_ID,
+      criteriaKeys: ['asks-what-to-improve', 'failure-reported'],
+    });
+    expect(result.passed).toBe(false);
+    expect(result.score).toBe(0.5);
+  });
+
+  it('refuses a key the rubric version does not define, before any judge call', async () => {
+    const engine = MakeEngine({ 'asks-what-to-improve': 1 });
+    const result = await new PSRubricOracle(engine).evaluate(MakeInput(), { rubricId: RUBRIC_ID, criteriaKeys: ['asks-what-to-improve', 'tone-polite'] });
+    expect(result.passed).toBe(false);
+    expect(result.message).toMatch(/^ps-rubric-unknown-criterion:/);
+    expect(result.details).toEqual({ Refusal: 'unknown-criterion', UnknownKeys: ['tone-polite'] });
+    expect(engine.Calls).toHaveLength(0);
+  });
+
+  it('refuses an empty criteria list, before any judge call', async () => {
+    const engine = MakeEngine({});
+    const result = await new PSRubricOracle(engine).evaluate(MakeInput(), { rubricId: RUBRIC_ID, criteriaKeys: [] });
+    expect(result.passed).toBe(false);
+    expect(result.details).toEqual({ Refusal: 'no-criteria' });
+    expect(engine.Calls).toHaveLength(0);
+  });
+
+  it('the generated tests name ps-rubric only with criteria, never the generic rubric oracle', () => {
+    const manifest = JSON.parse(
+      readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'scenario-manifest.json'), 'utf8')
+    ) as AgentEvalManifest;
+    const { tests } = AgentEvalScenarioManifest.GenerateMetadata(manifest) as { tests: readonly { fields: { Name: string; Configuration: { oracles: readonly { type: string; config?: { criteriaKeys?: readonly string[] } }[] } } }[] };
+    const byName = new Map(manifest.scenarios.map((s) => [s.name, s]));
+    for (const test of tests) {
+      const oracles = test.fields.Configuration.oracles;
+      expect(oracles.some((o) => o.type === 'rubric')).toBe(false);
+      const named = byName.get(test.fields.Name)?.expected.rubricCriteria ?? [];
+      const ps = oracles.filter((o) => o.type === PS_RUBRIC_ORACLE_TYPE);
+      if (named.length === 0) expect(ps).toHaveLength(0);
+      else expect(ps.map((o) => o.config?.criteriaKeys)).toEqual([named]);
+    }
+  });
+});
+
+describe('PredictiveStudioAgentEvalDriver.WithResolvedRubric — no implicit generic rubric oracle (D5-59)', () => {
+  class ExposedDriver extends PredictiveStudioAgentEvalDriver {
+    public Resolve(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
+      return this.WithResolvedRubric(config, context);
+    }
+  }
+
+  const RUBRIC_ID = '2056F86A-FB34-4222-855C-275C7A36467A';
+  const PINNED = { id: '267ff292-e94e-4abc-ac40-bb7088324ad3', label: '1.0.0' };
+
+  function MakeContext(): DriverExecutionContext {
+    return {
+      contextUser: MakeUser(),
+      test: { ID: 'test-1', RubricID: RUBRIC_ID } as unknown as MJTestEntity,
+      testRun: { ID: 'run-1', TestSuiteRunID: 'suite-run-1' } as unknown as MJTestRunEntity,
+      fixtures: { SuiteRunID: 'suite-run-1', Data: {}, PinnedRubricVersions: { [RUBRIC_ID.toLowerCase()]: PINNED } },
+      options: {},
+      oracleRegistry: new Map(),
+    } as unknown as DriverExecutionContext;
+  }
+
+  it('adds no rubric oracle to a test without criteria, though the test and its suites name a rubric', async () => {
+    const config: AgentEvalConfig = { agentId: 'agent-1', oracles: [{ type: 'builds-started', config: { expectedCount: 0 } }] };
+    const resolved = await new ExposedDriver().Resolve(config, MakeContext());
+    expect(resolved.oracles.map((o) => o.type)).toEqual(['builds-started']);
+  });
+
+  it('pins a ps-rubric oracle to the suite run’s rubric version, matching the rubric ID in any case', async () => {
+    const config: AgentEvalConfig = {
+      agentId: 'agent-1',
+      oracles: [{ type: PS_RUBRIC_ORACLE_TYPE, weight: 0.2, config: { rubricId: RUBRIC_ID, criteriaKeys: ['asks-what-to-improve'] } }],
+    };
+    const resolved = await new ExposedDriver().Resolve(config, MakeContext());
+    expect(resolved.oracles).toEqual([
+      {
+        type: PS_RUBRIC_ORACLE_TYPE,
+        weight: 0.2,
+        config: { rubricId: RUBRIC_ID, criteriaKeys: ['asks-what-to-improve'], rubricVersionId: PINNED.id, versionLabel: PINNED.label },
+      },
+    ]);
   });
 });
