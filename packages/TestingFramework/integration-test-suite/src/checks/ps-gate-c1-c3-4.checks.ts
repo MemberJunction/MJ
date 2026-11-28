@@ -14,9 +14,9 @@
  *     and run in the run that answer resumes, while `mj ai agents run` (`run.ts`) takes one prompt and no payload or
  *     `lastRunId` — so no CLI process can ever reach an approved build. The resumed run's `Failed` status is the failed
  *     result the CLI's exit code reads (`run.ts`: `if (!result.success) exitCode = 1`).
- *  2. **During an agent turn:** `mj ai agents run` on the C1 renewal request; once its run row exists, the sidecar is
+ *  2. **During an agent turn:** `mj ai agents run` on the renewal request for the W1-signal world; once its run row exists, the sidecar is
  *     killed → the turn (its profile reads the sidecar) is `Failed` within the timeout and the CLI exits non-zero. A
- *     run that ended without reaching a sidecar call is recorded and run again, never counted (at most 3 attempts).
+ *     run that never ran its profile Action (no sidecar call) is recorded and run again, never counted (at most 3 attempts).
  *  3. **After a successful run** (attack 5): the CLI process ends within 10 s of printing its result, with 0 established
  *     connections to the SQL port left (`lsof -nP -a -p <pid> -iTCP:$DB_PORT -sTCP:ESTABLISHED`, sampled until it exits).
  * Needs the database MJAPI uses, the LLM keys, the D5-46 user, the truth sidecar and the truth datasets loaded. Mutation
@@ -32,7 +32,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import type { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentRequestEntity, MJAIAgentRunEntity, MJMLTrainingRunEntity } from '@memberjunction/core-entities';
 import { EscapeSQLString } from '@memberjunction/global';
-import { BuildApprovalClaims, BuildApprovalResolver, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
+import { BuildApprovalClaims, BuildApprovalResolver, PROFILE_ACTION_NAME, type PredictiveStudioBuilderPayload } from '@memberjunction/predictive-studio';
 import type { ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import { HarnessSidecar, TruthSuite, W_WORLD_DENY_FIELDS, W_WORLD_FEATURES } from '@memberjunction/predictive-studio-truth-suite';
 import { Assert, IntegrationCheckRegistry, type IntegrationCheckContext, type NamedCheck } from '@memberjunction/testing-integration';
@@ -63,7 +63,7 @@ export class PsGateAgentSession {
   /** How long a resumed (building) run may take. */
   public static readonly RESUME_TIMEOUT_MS = 20 * 60_000; // 20 min: a W1 build trains on the sidecar
   /** Poll interval while waiting for a run or a request. */
-  public static readonly POLL_MS = 500; // 0.5 s: the kill must land while the training run is still Running
+  public static readonly POLL_MS = 250; // 0.25 s: the kill must land while the training run is still Running (a W1 run trains ~23 s)
 
   /** The person the gate acts as: the D5-46 user (never the MJ system user). */
   public static Person(gate: string): UserInfo {
@@ -209,6 +209,16 @@ export class PsGateSidecarStop {
   public static async Restore(): Promise<void> {
     await HarnessSidecar.Restart();
   }
+
+  /** Restores the sidecar when its health route does not answer (a half that threw after its kill leaves it down). */
+  public static async RestoreIfDown(url: string): Promise<void> {
+    try {
+      if ((await fetch(`${url}/health`)).ok) return;
+    } catch {
+      // connection refused: the sidecar is down
+    }
+    await PsGateSidecarStop.Restore();
+  }
 }
 
 /** The `mj ai agents run` child process. */
@@ -253,7 +263,9 @@ export class PsGateCli {
       stdout += chunk.toString();
       if (resultAt === null && stdout.includes('"success"')) {
         resultAt = Date.now();
-        sampler = setInterval(() => { if (child.pid !== undefined) samples.push(PsGateCli.SqlConnections(child.pid)); }, PsGateCli.SAMPLE_MS);
+        const sample = (): void => { if (child.pid !== undefined && child.exitCode === null) samples.push(PsGateCli.SqlConnections(child.pid)); };
+        sample(); // one sample as the result is printed, then every SAMPLE_MS until the process exits
+        sampler = setInterval(sample, PsGateCli.SAMPLE_MS);
       }
     });
     child.stderr.on('data', () => undefined);
@@ -270,8 +282,14 @@ export class PsGateCli {
 
 /** The gate's halves. */
 class PsGateC1C34Steps {
-  /** The C1 renewal request (the eval suite's `renewal-clean` seed, D5-45): the agent plans and profiles it. */
-  public static readonly RENEWAL_MESSAGE = 'Predict which members will not renew their dues next year. Use only information available at the end of the membership year.';
+  /**
+   * The renewal request on the W1-signal world the other agent gates use (D5-45's wording, naming the world's entity):
+   * the agent drafts a unit on its rows and profiles it on the sidecar. (The C1 corpus's unit draft can resolve 0
+   * development rows, and a refused draft ends the turn before any sidecar call.)
+   */
+  public static RenewalMessage(world: string): string {
+    return `Predict Renewed for ${world} from the other columns. Use only information available at the end of the membership year.`;
+  }
   /** CLI attempts for the agent-turn half: a run that never reached a sidecar call is run again, never counted. */
   public static readonly TURN_ATTEMPTS = 3;
   /** The success measurement's message: a reply with no plan and no sidecar call. */
@@ -281,19 +299,33 @@ class PsGateC1C34Steps {
   /** The `report` row a turn the sidecar stopped writes (`PredictiveStudioModelDevAgent`). */
   public static readonly SIDECAR_STOPPED = 'sidecar-stopped';
 
-  /** The approved build's training run once it is `Running`, polled from `since`. */
-  public static async RunningTraining(ctx: IntegrationCheckContext, person: UserInfo, since: Date, resumedRunId: string): Promise<string> {
+  /**
+   * The approved build's training run once it is `Running`, polled from `since` straight after the approval (the request
+   * names the run it resumed only once that run has ended, so the poll cannot wait for it); it gives up when the request
+   * names a resumed run that has ended.
+   */
+  public static async RunningTraining(ctx: IntegrationCheckContext, person: UserInfo, since: Date, requestId: string): Promise<string> {
     const deadline = Date.now() + PsGateAgentSession.RESUME_TIMEOUT_MS;
     for (;;) {
       const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJMLTrainingRunEntity, 'ID'>>({
         EntityName: 'MJ: ML Training Runs', ExtraFilter: `Status='Running' AND StartedAt >= '${since.toISOString()}'`, Fields: ['ID'], OrderBy: 'StartedAt DESC', MaxRows: 1, ResultType: 'simple', BypassCache: true,
       }, person);
-      if (rows.Success && rows.Results[0]) return rows.Results[0].ID;
-      const resumed = await PsGateAgentSession.ReadRun(ctx, person, resumedRunId);
-      if (resumed !== null && resumed.Status !== 'Running') throw new Error(`G4.8: the build run ${resumedRunId} ended ${resumed.Status} before any training run was Running`);
+      if (!rows.Success) throw new Error(`G4.8: reading the running training runs failed: ${rows.ErrorMessage || 'unknown error'}`);
+      if (rows.Results[0]) return rows.Results[0].ID;
+      await PsGateC1C34Steps.refuseEndedResume(ctx, person, requestId);
       if (Date.now() > deadline) throw new Error('G4.8: no training run started');
       await PsGateAgentSession.Sleep(PsGateAgentSession.POLL_MS);
     }
+  }
+
+  /** Throws when the request names a resumed run that has already ended (its build never had a training run Running). */
+  private static async refuseEndedResume(ctx: IntegrationCheckContext, person: UserInfo, requestId: string): Promise<void> {
+    const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<Pick<MJAIAgentRequestEntity, 'ResumingAgentRunID'>>({
+      EntityName: 'MJ: AI Agent Requests', ExtraFilter: `ID='${EscapeSQLString(requestId)}'`, Fields: ['ResumingAgentRunID'], ResultType: 'simple', BypassCache: true,
+    }, person);
+    const resumedId = rows.Success ? rows.Results[0]?.ResumingAgentRunID : null;
+    const resumed = resumedId ? await PsGateAgentSession.ReadRun(ctx, person, resumedId) : null;
+    if (resumed !== null && resumed.Status !== 'Running') throw new Error(`G4.8: the build run ${resumed.RunID} ended ${resumed.Status} before any training run was Running`);
   }
 
   /** A training run's status and end. */
@@ -313,9 +345,9 @@ class PsGateC1C34Steps {
     const request = await PsGateAgentSession.PlanRequest(ctx, person, presented.RunID, 'G4.8');
     const since = new Date(Date.now() - 1000);
     await PsGateAgentSession.Approve(request, 'G4.8');
-    const resumedId = await PsGateAgentSession.ResumedRunId(ctx, person, request.ID, 'G4.8');
-    const trainingId = await PsGateC1C34Steps.RunningTraining(ctx, person, since, resumedId);
+    const trainingId = await PsGateC1C34Steps.RunningTraining(ctx, person, since, request.ID);
     const killedAt = PsGateSidecarStop.Kill(url);
+    const resumedId = await PsGateAgentSession.ResumedRunId(ctx, person, request.ID, 'G4.8');
     const resumed = await PsGateAgentSession.Ended(ctx, person, resumedId, 'G4.8');
     const training = await PsGateC1C34Steps.Training(ctx, person, trainingId);
     await PsGateSidecarStop.Restore();
@@ -326,19 +358,20 @@ class PsGateC1C34Steps {
   }
 
   /** Half 2: the sidecar killed during a CLI agent turn; attempts that never reached a sidecar call are run again. */
-  public static async DuringTurn(ctx: IntegrationCheckContext, url: string, person: UserInfo): Promise<Record<string, string | number | boolean | null>> {
+  public static async DuringTurn(ctx: IntegrationCheckContext, url: string, person: UserInfo, world: string): Promise<Record<string, string | number | boolean | null>> {
     const uncounted: string[] = [];
     for (let attempt = 1; attempt <= PsGateC1C34Steps.TURN_ATTEMPTS; attempt++) {
       const since = new Date(Date.now() - 1000);
       let killedAt: number | null = null;
-      const cli = PsGateCli.Run(PsGateAgentSession.AGENT, PsGateC1C34Steps.RENEWAL_MESSAGE, { PREDICTIVE_STUDIO_SIDECAR_URL: url });
+      const cli = PsGateCli.Run(PsGateAgentSession.AGENT, PsGateC1C34Steps.RenewalMessage(world), { PREDICTIVE_STUDIO_SIDECAR_URL: url });
       const runId = await PsGateC1C34Steps.cliRunId(ctx, person, since);
       killedAt = PsGateSidecarStop.Kill(url);
       const outcome = await cli;
       const run = await PsGateAgentSession.Ended(ctx, person, runId, 'G4.8');
       await PsGateSidecarStop.Restore();
       const stoppedRow = await PsGateC1C34Steps.sidecarStoppedRows(ctx, person, runId);
-      if (stoppedRow === 0 && run.Status !== 'Failed') { uncounted.push(`${runId}:${run.Status}`); continue; }
+      // Counted when the turn made a sidecar call after the kill (its profile Action ran), whatever the turn did then.
+      if (!(await PsGateC1C34Steps.profiled(ctx, person, runId))) { uncounted.push(`${runId}:${run.Status}`); continue; }
       return { attempt, turn: runId, turnStatus: run.Status, turnEndedMsAfterKill: PsGateAgentSession.MsAfter(killedAt, run), cliExit: outcome.ExitCode, sidecarStoppedRows: stoppedRow, uncounted: uncounted.join(',') };
     }
     return { attempt: PsGateC1C34Steps.TURN_ATTEMPTS, turn: null, turnStatus: 'no attempt reached a sidecar call', turnEndedMsAfterKill: null, cliExit: null, sidecarStoppedRows: 0, uncounted: uncounted.join(',') };
@@ -351,7 +384,7 @@ class PsGateC1C34Steps {
     const lastSample = outcome.SqlConnectionSamples.length > 0 ? outcome.SqlConnectionSamples[outcome.SqlConnectionSamples.length - 1] : 0;
     return {
       cliExit: outcome.ExitCode, printedResult: outcome.ResultAt !== null, exitMsAfterResult: outcome.ResultAt === null ? null : outcome.ExitedAt - outcome.ResultAt,
-      sqlConnectionsAtLastSample: lastSample, sqlConnectionsAfterExit: PsGateCli.SqlConnections(pid), samples: outcome.SqlConnectionSamples.join('/'),
+      sqlConnectionSamples: outcome.SqlConnectionSamples.length, sqlConnectionsAtLastSample: lastSample, sqlConnectionsAfterExit: PsGateCli.SqlConnections(pid), samples: outcome.SqlConnectionSamples.join('/'),
     };
   }
 
@@ -363,10 +396,20 @@ class PsGateC1C34Steps {
         EntityName: 'MJ: AI Agent Runs', ExtraFilter: `Agent='${EscapeSQLString(PsGateAgentSession.AGENT)}' AND ParentRunID IS NULL AND StartedAt >= '${since.toISOString()}'`,
         Fields: ['ID'], OrderBy: 'StartedAt DESC', MaxRows: 1, ResultType: 'simple', BypassCache: true,
       }, person);
-      if (rows.Success && rows.Results[0]) return rows.Results[0].ID;
+      if (!rows.Success) throw new Error(`G4.8: reading the CLI child's agent run failed: ${rows.ErrorMessage || 'unknown error'}`);
+      if (rows.Results[0]) return rows.Results[0].ID;
       if (Date.now() > deadline) throw new Error('G4.8: the CLI child started no agent run');
       await PsGateAgentSession.Sleep(PsGateAgentSession.POLL_MS);
     }
+  }
+
+  /** True when `runId` ran its profile Action (the turn's sidecar call). */
+  private static async profiled(ctx: IntegrationCheckContext, person: UserInfo, runId: string): Promise<boolean> {
+    const rows = await RunView.FromMetadataProvider(ctx.Provider).RunView<{ readonly ID: string }>({
+      EntityName: 'MJ: AI Agent Run Steps', ExtraFilter: `AgentRunID='${EscapeSQLString(runId)}' AND StepType='Actions' AND StepName LIKE '%${PROFILE_ACTION_NAME}%'`, Fields: ['ID'], ResultType: 'simple', BypassCache: true,
+    }, person);
+    if (!rows.Success) throw new Error(`G4.8: reading the steps of run ${runId} failed: ${rows.ErrorMessage || 'unknown error'}`);
+    return rows.Results.length > 0;
   }
 
   /** The `report` rows of `runId` that record a stopped sidecar. */
@@ -391,13 +434,20 @@ export const PsGateC1C34Checks: NamedCheck[] = [
       const timeout = PsGateSidecarStop.DECLARED_TIMEOUT_MS;
       const within = (ms: string | number | boolean | null): boolean => typeof ms === 'number' && ms >= 0 && ms <= timeout;
 
-      const training = await PsGateC1C34Steps.DuringTraining(ctx, url, agent, person, world);
-      const turn = await PsGateC1C34Steps.DuringTurn(ctx, url, person);
-      const success = await PsGateC1C34Steps.AfterSuccess(url);
+      let training: Record<string, string | number | boolean | null>;
+      let turn: Record<string, string | number | boolean | null>;
+      let success: Record<string, string | number | boolean | null>;
+      try {
+        training = await PsGateC1C34Steps.DuringTraining(ctx, url, agent, person, world);
+        turn = await PsGateC1C34Steps.DuringTurn(ctx, url, person, world);
+        success = await PsGateC1C34Steps.AfterSuccess(url);
+      } finally {
+        await PsGateSidecarStop.RestoreIfDown(url);
+      }
 
       const trainingOk = training.trainingStatus === 'Failed' && within(training.trainingEndedMsAfterKill) && training.turnStatus === 'Failed' && within(training.turnEndedMsAfterKill);
       const turnOk = turn.turnStatus === 'Failed' && within(turn.turnEndedMsAfterKill) && typeof turn.cliExit === 'number' && turn.cliExit !== 0;
-      const successOk = success.cliExit === 0 && success.printedResult === true && typeof success.exitMsAfterResult === 'number'
+      const successOk = success.cliExit === 0 && success.printedResult === true && typeof success.exitMsAfterResult === 'number' && typeof success.sqlConnectionSamples === 'number' && success.sqlConnectionSamples > 0
         && success.exitMsAfterResult <= PsGateC1C34Steps.EXIT_AFTER_RESULT_MS && success.sqlConnectionsAtLastSample === 0 && success.sqlConnectionsAfterExit === 0;
       const measured = { timeoutMs: timeout, training, turn, success };
       console.log(`      → G4.8: training half ${trainingOk ? 'held' : 'failed'}, agent-turn half ${turnOk ? 'held' : 'failed'}, CLI after success ${successOk ? 'held' : 'failed'}  ${JSON.stringify(measured)}`);

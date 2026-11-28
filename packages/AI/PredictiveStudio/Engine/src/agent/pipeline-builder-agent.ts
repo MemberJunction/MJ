@@ -394,7 +394,7 @@ ${measured}
   /**
    * The training cost beside the primary metric (§5.1.7, D5-A6-5): the run's compute seconds, the USD they were priced
    * at and the tokens attributed to it, each traced to its column of the training run. Empty when the input carries no
-   * cost; "not measured" for a column the run left unset.
+   * cost; "not measured" for unset seconds, "not priced" for an unset cost, "no LLM tokens recorded" for unset tokens.
    */
   private static costLine(cost: TrainingRunCost | null | undefined, numbers: TracedNumber[]): string {
     if (cost === undefined) return '';
@@ -406,8 +406,9 @@ ${measured}
     };
     const seconds = traced('ComputeSeconds', (v) => v.toFixed(3));
     const usd = cost.ComputeCost === null ? 'not priced' : `$${traced('ComputeCost', (v) => v.toFixed(6))}`;
-    const tokens = traced('TokensUsed', (v) => v.toLocaleString('en-US', { maximumFractionDigits: 0 }));
-    return `\n- **Training cost**: ${seconds} s of compute, ${usd}, ${tokens} LLM tokens`;
+    // An unset TokensUsed: no strategist or derivation call was attributed to the run (only an experiment iteration's are).
+    const tokens = cost.TokensUsed === null ? 'no LLM tokens recorded' : `${traced('TokensUsed', (v) => v.toLocaleString('en-US', { maximumFractionDigits: 0 }))} LLM tokens`;
+    return `\n- **Training cost**: ${seconds} s of compute, ${usd}, ${tokens}`;
   }
 
   /** The search's leaderboard, best-first by inner-fold mean, each row traced to its stored inner score's index. */

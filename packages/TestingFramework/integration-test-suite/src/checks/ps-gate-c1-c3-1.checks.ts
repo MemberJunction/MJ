@@ -154,7 +154,8 @@ class PsGateC1C31Steps {
   /** The cost line the ML Experiment Results report must show for a run, from its stored columns (D5-A6-5). */
   public static ExpectedCostLine(run: Pick<MJMLTrainingRunEntity, 'ComputeSeconds' | 'ComputeCost' | 'TokensUsed'>): string {
     const usd = run.ComputeCost === null ? 'not priced' : `$${run.ComputeCost.toFixed(6)}`;
-    return `- **Training cost**: ${(run.ComputeSeconds || 0).toFixed(3)} s of compute, ${usd}, ${(run.TokensUsed || 0).toLocaleString('en-US')} LLM tokens`;
+    const tokens = run.TokensUsed === null ? 'no LLM tokens recorded' : `${run.TokensUsed.toLocaleString('en-US')} LLM tokens`;
+    return `- **Training cost**: ${(run.ComputeSeconds || 0).toFixed(3)} s of compute, ${usd}, ${tokens}`;
   }
 
   /** The cost line of the report the build delivered (its run's final payload `Markdown`), or null. */

@@ -151,6 +151,9 @@ describe('A6 attack 3 (D5-A6-4, D5-A6-5): the ML Experiment Results report shows
     expect(ExperimentReports.GenerateMarkdownReport({ ...base, Cost: null }).Markdown).toContain('- **Training cost**: not measured');
     const unpriced = ExperimentReports.GenerateMarkdownReport({ ...base, Cost: { ID: 'TR1', ComputeSeconds: 3, ComputeCost: null, TokensUsed: 0 } }).Markdown;
     expect(unpriced).toContain('- **Training cost**: 3.000 s of compute, not priced, 0 LLM tokens');
+    const untracked = ExperimentReports.GenerateMarkdownReport({ ...base, Cost: { ID: 'TR1', ComputeSeconds: 3, ComputeCost: 0.0003, TokensUsed: null } });
+    expect(untracked.Markdown).toContain('- **Training cost**: 3.000 s of compute, $0.000300, no LLM tokens recorded');
+    expect(untracked.Numbers.filter((n) => ExperimentReports.IsCostPath(n.Source.Path)).map((n) => n.Source.Path)).toEqual(['$.ComputeSeconds', '$.ComputeCost']);
     expect(ExperimentReports.GenerateMarkdownReport(base).Markdown).not.toContain('Training cost');
   });
 
