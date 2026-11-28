@@ -262,6 +262,8 @@ metadata/test-suites/.predictive-studio-*.json
 metadata/test-types/.predictive-studio-*.json
 metadata/tests/predictive-studio-agent/**
 metadata/rubrics/.predictive-studio-*.json
+# The eval rubric's publication record: its version is authored with no Status (Draft) and published from here (§9 D5-W4-3)
+metadata/rubric-publications/.predictive-studio-*.json
 # The PS JSONType interfaces and remote-operation types that carry the refusal unions B2/B3 extend (§9 D5-19)
 metadata/entities/JSONType-interfaces/IML*JsonTypes.ts
 metadata/remote-operations/types/predictive-studio-*.ts

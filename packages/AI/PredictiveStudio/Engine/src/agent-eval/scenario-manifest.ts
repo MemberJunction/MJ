@@ -46,6 +46,8 @@ export interface GeneratedMetadataPayload {
   readonly suite: readonly object[];
   readonly tests: readonly object[];
   readonly rubric: object;
+  /** The `rubric-publications/` record that publishes the rubric's Draft version once its criteria are in (D5-58). */
+  readonly rubricPublication: readonly object[];
 }
 
 export interface SerializedMetadataFiles {
@@ -53,6 +55,7 @@ export interface SerializedMetadataFiles {
   readonly suiteJson: string;
   readonly testsJson: string;
   readonly rubricJson: string;
+  readonly rubricPublicationJson: string;
 }
 
 function StableJsonStringify(value: unknown): string {
@@ -259,9 +262,9 @@ export class AgentEvalScenarioManifest {
           {
             fields: {
               RubricID: '@parent:ID',
-              // Published on insert (MJRubricVersionEntityServer.Save): the rubric oracle evaluates only a published
-              // version (RubricEngine.EvaluateRecord), D5-58.
-              Status: 'Published',
+              // No Status: a new version is Draft (the column default), the only status the server accepts for a new version
+              // and its criteria. The rubric oracle evaluates only a published version (RubricEngine.EvaluateRecord), so
+              // `rubricPublication` publishes it, and Status is set in that one entry only (D5-58, D5-W4-3).
               PassThreshold: RUBRIC_PASS_THRESHOLD,
               NotApplicablePolicy: 'ExcludeAndRedistribute',
               ScoreDisplayMin: 0,
@@ -328,11 +331,12 @@ export class AgentEvalScenarioManifest {
       suite: [parentSuiteRecord, ...childSuiteRecords],
       tests,
       rubric,
+      rubricPublication: [{ fields: { Status: 'Published' }, primaryKey: { ID: manifest.rubricVersionId } }],
     };
   }
 
   /**
-   * Render all four metadata files as deterministic JSON strings with trailing newlines.
+   * Render all five metadata files as deterministic JSON strings with trailing newlines.
    */
   public static SerializeMetadataFiles(manifest: AgentEvalManifest): SerializedMetadataFiles {
     const payload = AgentEvalScenarioManifest.GenerateMetadata(manifest);
@@ -341,6 +345,7 @@ export class AgentEvalScenarioManifest {
       suiteJson: StableJsonStringify(payload.suite),
       testsJson: StableJsonStringify(payload.tests),
       rubricJson: StableJsonStringify(payload.rubric),
+      rubricPublicationJson: StableJsonStringify(payload.rubricPublication),
     };
   }
 
@@ -354,6 +359,7 @@ export class AgentEvalScenarioManifest {
       { path: join(repoRoot, 'metadata/test-suites/.predictive-studio-agent-eval-suite.json'), content: serialized.suiteJson },
       { path: join(repoRoot, 'metadata/tests/predictive-studio-agent/.predictive-studio-agent-eval-tests.json'), content: serialized.testsJson },
       { path: join(repoRoot, 'metadata/rubrics/.predictive-studio-agent-eval-rubric.json'), content: serialized.rubricJson },
+      { path: join(repoRoot, 'metadata/rubric-publications/.predictive-studio-agent-eval-rubric-publication.json'), content: serialized.rubricPublicationJson },
     ];
     for (const target of targets) {
       mkdirSync(dirname(target.path), { recursive: true });

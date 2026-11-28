@@ -91,28 +91,44 @@ interface RubricMetadataFile {
   };
 }
 
-const RUBRIC_METADATA_PATH = join(
-  dirname(fileURLToPath(import.meta.url)),
-  '..', '..', '..', '..', '..', '..', '..',
-  'metadata', 'rubrics', '.predictive-studio-agent-eval-rubric.json'
-);
+const METADATA_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..', '..', '..', 'metadata');
+const RUBRIC_METADATA_PATH = join(METADATA_ROOT, 'rubrics', '.predictive-studio-agent-eval-rubric.json');
+const PUBLICATION_METADATA_PATH = join(METADATA_ROOT, 'rubric-publications', '.predictive-studio-agent-eval-rubric-publication.json');
+const VERSION_ID = '267FF292-E94E-4ABC-AC40-BB7088324AD3';
 
+interface PublicationRecord {
+  readonly fields: { readonly Status: string };
+  readonly primaryKey: { readonly ID: string };
+}
+
+/**
+ * D5-58 as it installs on a clean database (wave-4 integration): the server refuses a new version that is not Draft
+ * (`VersionStatusError`) and criteria under a non-Draft version, so the version is authored Draft with its criteria and
+ * published by a `rubric-publications/` record pushed after `rubrics/` (the RUBRICS_GUIDE shipped pattern).
+ */
 describe('Predictive Studio Agent Eval rubric metadata (D5-58)', () => {
-  it('ships its one version Published, so RubricEngine finds a published version to evaluate with', () => {
+  it('authors its one version with no Status (Draft by default), so a clean install accepts the version and its criteria', () => {
     const rubric = JSON.parse(readFileSync(RUBRIC_METADATA_PATH, 'utf8')) as RubricMetadataFile;
     const versions = rubric.relatedEntities['MJ: Rubric Versions'];
     expect(versions).toHaveLength(1);
-    expect(versions[0].primaryKey.ID).toBe('267FF292-E94E-4ABC-AC40-BB7088324AD3');
-    expect(versions[0].fields.Status).toBe('Published');
+    expect(versions[0].primaryKey.ID).toBe(VERSION_ID);
+    expect(versions[0].fields.Status).toBeUndefined();
+  });
+
+  it('ships a publication record that makes that version Published, so RubricEngine finds a published version', () => {
+    const records = JSON.parse(readFileSync(PUBLICATION_METADATA_PATH, 'utf8')) as PublicationRecord[];
+    expect(records).toEqual([{ fields: { Status: 'Published' }, primaryKey: { ID: VERSION_ID } }]);
   });
 });
 
 describe('the rubric generator (D5-58)', () => {
-  it('writes the version Published, so regenerating the metadata keeps the oracle evaluable', () => {
+  it('writes the version with no Status and its publication record, so regenerating the metadata keeps the oracle evaluable', () => {
     const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'scenario-manifest.json');
     const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as AgentEvalManifest;
     const files = AgentEvalScenarioManifest.SerializeMetadataFiles(manifest);
     const rubric = JSON.parse(files.rubricJson) as RubricMetadataFile;
-    expect(rubric.relatedEntities['MJ: Rubric Versions'][0].fields.Status).toBe('Published');
+    expect(rubric.relatedEntities['MJ: Rubric Versions'][0].fields.Status).toBeUndefined();
+    expect(JSON.parse(files.rubricPublicationJson)).toEqual([{ fields: { Status: 'Published' }, primaryKey: { ID: VERSION_ID } }]);
+    expect(files.rubricPublicationJson).toBe(readFileSync(PUBLICATION_METADATA_PATH, 'utf8'));
   });
 });
