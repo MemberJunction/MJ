@@ -22,7 +22,8 @@ vi.mock('@memberjunction/templates-base-types', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core', () => {
+vi.mock('@memberjunction/core', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core')>();
     // Lightweight BaseEngine stub that stores properties directly
     class MockBaseEngine {
         protected _loaded = false;
@@ -58,6 +59,7 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     return {
+        ...actual,
         BaseEngine: MockBaseEngine,
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},
@@ -80,9 +82,11 @@ vi.mock('@memberjunction/core', () => {
     };
 });
 
-vi.mock('@memberjunction/core-entities', () => {
+vi.mock('@memberjunction/core-entities', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/core-entities')>();
     const cls = () => class { ID = ''; Name = '' };
     return {
+        ...actual,
         ArtifactMetadataEngine: {
             Instance: { ArtifactTypes: [], Config: vi.fn().mockResolvedValue(undefined) },
         },
@@ -104,12 +108,10 @@ vi.mock('@memberjunction/core-entities', () => {
     };
 });
 
-vi.mock('@memberjunction/ai-core-plus', async () => {
-    const agentConfig = await import('../../../CorePlus/src/agent-configuration');
-    const agentInstantiation = await import('../../../CorePlus/src/agent-instantiation');
+vi.mock('@memberjunction/ai-core-plus', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/ai-core-plus')>();
     return {
-        ...agentInstantiation,
-        ...agentConfig,
+        ...actual,
         MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
         MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
         MJAIModelEntityExtended: class {
@@ -119,12 +121,6 @@ vi.mock('@memberjunction/ai-core-plus', async () => {
         MJAIAgentEntityExtended: class {
             ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null; BaseAgentID: string | null = null;
             OwnerUserID = ''; InstantiationMode = 'None'; Actions: Array<{ ID: string }> = []; Notes: Array<{ ID: string }> = [];
-        },
-        MAX_AGENT_INHERITANCE_DEPTH: 5,
-        DeepMergeAgentConfigObjects: (base: Record<string, unknown>, over: Record<string, unknown>) => ({ ...base, ...over }),
-        ParseAgentConfigJsonObject: (raw: string | null | undefined) => {
-            if (!raw) return null;
-            try { return JSON.parse(raw); } catch { return null; }
         },
     };
 });
