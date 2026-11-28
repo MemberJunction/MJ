@@ -5007,6 +5007,8 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   passed) and the two `test:python` commands (no `.venv` in this worktree; with `PREDICTIVE_STUDIO_PYTHON` and
   `PREDICTIVE_STUDIO_TRUTH_PYTHON` set to the main checkout's venvs: Sidecar **541 passed**, TruthSuite **24 passed**,
   mypy clean on 55 files). Engine after the fix: 157 files, 2,320 passed.
+  Final `milestone-exit --milestone A6` (full, with commands, the Python interpreters set) at `4e79ea374e`:
+  **`# checks 48 · failed 0`**.
 - **Not run (D5-51, D5-53):** `ci-mirror` (the controller runs it at integration); no push.
 
 ## 12. Refresh log (append-only)
