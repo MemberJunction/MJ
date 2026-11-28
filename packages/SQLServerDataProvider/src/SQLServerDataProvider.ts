@@ -426,9 +426,31 @@ async function executeSQLCore(
     // Preserve the original error type (ConnectionError vs RequestError) so callers
     // can structurally distinguish infrastructure failures from query-level errors.
     // Attach the detailed message while keeping the error's class identity and code.
+    if (IsUserRaisedSqlError(error)) {
+      // A THROW or RAISERROR from a trigger or procedure (error number 50000 and up) is a
+      // business message written for the caller, such as a refused change. The caller gets that
+      // message alone; the statement and parameters stay in the server log, since they are
+      // internal detail and can carry values the caller should not see.
+      LogError(errorMessage);
+      throw error;
+    }
     error.message = errorMessage;
     throw error;
   }
+}
+
+/** SQL Server numbers its own errors below 50000; THROW and user RAISERROR messages use 50000 and up. */
+const FIRST_USER_ERROR_NUMBER = 50000;
+
+/**
+ * True when the error was raised by T-SQL code (THROW, or RAISERROR with a user message) rather
+ * than by the engine. mssql's RequestError copies the server's error number onto `number`; the
+ * driver's original error keeps it under `info.number`.
+ */
+export function IsUserRaisedSqlError(error: unknown): boolean {
+  const candidate = error as { number?: unknown; originalError?: { info?: { number?: unknown } } } | null | undefined;
+  const errorNumber = candidate?.number ?? candidate?.originalError?.info?.number;
+  return typeof errorNumber === 'number' && errorNumber >= FIRST_USER_ERROR_NUMBER;
 }
 
 

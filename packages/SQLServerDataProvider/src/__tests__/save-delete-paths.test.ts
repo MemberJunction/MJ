@@ -350,6 +350,61 @@ describe('SQLServerDataProvider save path (real Save() → GenerateSaveSQL → m
     expect(message).toContain('Parameters: None');
   });
 
+  it('a save refused by a THROW (error 50000+) gives the caller only the THROW message; the SQL goes to the server log', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Refused');
+    const refusal = 'Widget cannot be changed once it is confirmed. Use a reversal.';
+    mssqlState.QueueResult({ error: Object.assign(new Error(refusal), { number: 50000 }) });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+        () => null,
+        (e: Error) => e,
+      );
+
+      expect(error?.message).toBe(refusal);
+      expect(entity.LatestResult?.Message).toBe(refusal);
+      const logged = consoleError.mock.calls.map((args) => args.map(String).join(' ')).join('\n');
+      expect(logged).toContain('Query:');
+      expect(logged).toContain('spUpdateWidget');
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('a user-defined error number above 50000 reported only on the driver error is also passed through alone', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Refused');
+    mssqlState.QueueResult({ error: Object.assign(new Error('Custom refusal'), { originalError: { info: { number: 50123 } } }) });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+        () => null,
+        (e: Error) => e,
+      );
+      expect(error?.message).toBe('Custom refusal');
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
+  it('an engine error (number below 50000) keeps the statement in the message', async () => {
+    const provider = makeProvider();
+    const entity = makeSavedWidgetEntity(makeWidgetEntityInfo(), TEST_USER);
+    entity.Set('Name', 'Doomed');
+    mssqlState.QueueResult({ error: Object.assign(new Error('Violation of UNIQUE KEY constraint'), { number: 2627 }) });
+
+    const error = await provider.Save(entity, TEST_USER, new EntitySaveOptions()).then(
+      () => null,
+      (e: Error) => e,
+    );
+
+    expect(error?.message).toContain('Query:');
+    expect(error?.message).toContain('Violation of UNIQUE KEY constraint');
+  });
+
   it('a failed save gives a caller denied a field of the entity the message without the SQL or the quoted values', async () => {
     const provider = makeProvider();
     const entityInfo = makeWidgetEntityInfo();
