@@ -69,7 +69,7 @@ export const TASK_GRAPH_ISOLATION_GUARANTEES: Readonly<
         ExecutionSubstrate: 'Host Node.js event loop (direct in-process invocation)',
         Guarantees: [
             'Zero IPC serialization overhead; preserves shared metadata providers and connection pools.',
-            'Default isolation level for existing/upgraded workflows and graphs without an explicit Isolation setting.',
+            'Available via explicit opt-in (`isolation: "InProcess"` or `Limits.Isolation.DefaultIsolation`) and preserved on upgraded pre-isolation Flow agents (`AIAgent.Isolation = "InProcess"`).',
         ],
         Limitations: [
             'Shares V8 isolate heap, native memory, event loop, and process crash domain with the host MJAPI process.',
@@ -83,7 +83,7 @@ export const TASK_GRAPH_ISOLATION_GUARANTEES: Readonly<
             'Executes isolated JavaScript/TypeScript payloads inside a dedicated V8 Isolate bounded by resourceLimits (maxOldGenerationSizeMb, maxYoungGenerationSizeMb).',
             'Guarantees clean worker termination (ERR_WORKER_OUT_OF_MEMORY) without crashing host MJAPI when unbounded V8 JavaScript heap allocations occur.',
             'Enforces wall-clock execution timeouts via worker.terminate().',
-            'Default isolation level for newly drafted workflows created through Workflow.Draft.',
+            'Default isolation level for submitted task graphs (including model-written graphs) and newly drafted workflows created through Workflow.Draft.',
         ],
         Limitations: [
             'V8 heap resourceLimits do NOT constrain native C++ addon allocations or off-heap Buffer / ArrayBuffer / SharedArrayBuffer / WASM linear memory.',
@@ -225,7 +225,7 @@ export type TaskGraphIsolationRunnerMap = Partial<Record<TaskGraphIsolationLevel
 
 /**
  * Resolves the effective isolation level for a workflow or submitted graph.
- * Precedence: explicit runtime override > persisted graph/spec `isolation` > owning workflow entity `Isolation` > `LimitsConfigResolver` default (`'InProcess'`).
+ * Precedence: explicit runtime override > persisted graph/spec `isolation` > owning workflow entity `Isolation` > `LimitsConfigResolver` default (`'Worker'`).
  */
 export function ResolveTaskGraphIsolation(args: {
     OverrideIsolation?: TaskGraphIsolationLevel | null;

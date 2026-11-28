@@ -175,3 +175,47 @@ describe('BaseAgent taint seeded from a task-graph node (S7)', () => {
         expect(agent.IsRunTainted).toBe(false);
     });
 });
+
+describe('BaseAgent model-written task-graph isolation forwarding', () => {
+    afterEach(() => RegisterTaskGraphSubmitter(null));
+
+    it('leaves Isolation unset for legacy InProcess agents so TaskGraphService applies the Worker default and honors explicit InProcess opt-in', async () => {
+        const submitter = new EnvelopeSubmitter();
+        RegisterTaskGraphSubmitter(submitter);
+        const { internals } = agentInternals();
+
+        const legacyAgentParams = params({
+            agent: { ID: 'a1', Name: 'LegacyAgent', Isolation: 'InProcess' } as unknown as ExecuteAgentParams['agent'],
+        });
+        const outcome = await internals.executeTasksStep(legacyAgentParams, TASKS_STEP);
+        expect(outcome.step).toBe('Success');
+        expect(submitter.LastRequest?.Isolation).toBeUndefined();
+    });
+
+    it('enforces narrow-only stricter agent Isolation (Process / Container) on submitted model-written graphs', async () => {
+        const submitter = new EnvelopeSubmitter();
+        RegisterTaskGraphSubmitter(submitter);
+        const { internals } = agentInternals();
+
+        const processAgentParams = params({
+            agent: { ID: 'a2', Name: 'IsolatedAgent', Isolation: 'Process' } as unknown as ExecuteAgentParams['agent'],
+        });
+        const outcome = await internals.executeTasksStep(processAgentParams, TASKS_STEP);
+        expect(outcome.step).toBe('Success');
+        expect(submitter.LastRequest?.Isolation).toBe('Process');
+
+        // Attempting to loosen via spec.isolation = 'InProcess' is still clamped to the agent's stricter Isolation
+        const downgradeStep = {
+            ...TASKS_STEP,
+            taskGraph: {
+                spec: {
+                    ...TASKS_STEP.taskGraph.spec,
+                    isolation: 'InProcess',
+                },
+            },
+        };
+        const downgradeOutcome = await internals.executeTasksStep(processAgentParams, downgradeStep);
+        expect(downgradeOutcome.step).toBe('Success');
+        expect(submitter.LastRequest?.Isolation).toBe('Process');
+    });
+});

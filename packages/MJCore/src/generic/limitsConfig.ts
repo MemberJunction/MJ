@@ -75,7 +75,7 @@ export function IsTaskGraphIsolationLevel(value: unknown): value is TaskGraphIso
  * Execution isolation defaults and resource-containment guard settings for task graphs and workflows.
  */
 export interface MJLimitsIsolationConfig {
-    /** Default isolation mode for existing or unspecified workflows (`'InProcess'` for safe upgrade compatibility). */
+    /** Default isolation mode for task graphs and workflows without an explicit isolation level (`'Worker'`). */
     DefaultIsolation: TaskGraphIsolationLevel;
     /** Default isolation mode applied to newly drafted workflows authored via `Workflow.Draft` (`'Worker'`). */
     DraftDefaultIsolation: TaskGraphIsolationLevel;
@@ -548,7 +548,7 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         MaxStepsPerSignal: 1000,
     },
     Isolation: {
-        DefaultIsolation: 'InProcess',
+        DefaultIsolation: 'Worker',
         DraftDefaultIsolation: 'Worker',
         WorkerMaxOldGenerationSizeMb: 256,
         WorkerMaxYoungGenerationSizeMb: 64,

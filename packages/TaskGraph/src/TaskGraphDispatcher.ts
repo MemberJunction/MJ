@@ -62,7 +62,7 @@ import {
     type BudgetCostEvent,
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
-import { AssertRunViewNotTruncated, DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, IsTaskGraphIsolationLevel, LimitsConfigResolver, LogError, LogStatus, LogWarning, RunView, ServerOperationScopeManager, type TaskGraphIsolationLevel, UserInfo, ValidateDecisionReadResult } from '@memberjunction/core';
+import { AssertRunViewNotTruncated, DatabaseProviderBase, IMetadataProvider, IRunQueryProvider, IsTaskGraphIsolationLevel, LimitsConfigResolver, LogError, LogStatus, LogWarning, type MJLimitsOverride, RunView, ServerOperationScopeManager, type TaskGraphIsolationLevel, UserInfo, ValidateDecisionReadResult } from '@memberjunction/core';
 import { EscapeSQLString, GroupByUUID, IShutdownable, IndexByUUID, IsValidUUID, ShutdownRegistry, UUIDMap, UUIDSet, UUIDsEqual } from '@memberjunction/global';
 import { MJTaskEntity, MJTaskDependencyEntity, MJAIAgentRunEntity, MJAIAgentRequestEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
 import type { MJActionExecutionLogEntity, MJRecordChangeEntity } from '@memberjunction/core-entities';
@@ -373,6 +373,8 @@ type GraphContext = {
     RecordsTaint: boolean;
     /** Effective isolation level resolved from the parent graph metadata or `LimitsConfigResolver` defaults. */
     Isolation: TaskGraphIsolationLevel;
+    /** Optional per-graph Tier-3/Tier-5 limits override carried on parent metadata for isolation resource limits. */
+    LimitsOverride?: MJLimitsOverride;
 };
 
 /**
@@ -2229,6 +2231,7 @@ export class TaskGraphDispatcher implements IShutdownable {
         let parentEnvelopeColumn: string | null = null;
         let recordsTaint = true;
         let isolation = LimitsConfigResolver.Resolve().Limits.Isolation.DefaultIsolation;
+        let limitsOverride: MJLimitsOverride | undefined = undefined;
 
         if (task.ParentID && prehydrated && (prehydrated.parentMetadata || prehydrated.parentTask)) {
             parentRead = true;
@@ -2243,8 +2246,13 @@ export class TaskGraphDispatcher implements IShutdownable {
             submittedByUserID = meta.submittedByUserID ?? parent?.UserID ?? task.UserID;
             parentEnvelopeColumn = parent?.SecurityEnvelope ?? null;
             recordsTaint = meta.recordsTaint === true;
+            limitsOverride = meta.limitsOverride;
             if (IsTaskGraphIsolationLevel(meta.isolation)) {
                 isolation = meta.isolation;
+            } else if (meta.limitsOverride?.Isolation?.DefaultIsolation) {
+                isolation = LimitsConfigResolver.Resolve({
+                    AgentOrWorkflowMetadata: meta.limitsOverride,
+                }).Limits.Isolation.DefaultIsolation;
             }
         } else if (task.ParentID && typeof provider?.GetEntityObject === 'function') {
             try {
@@ -2261,8 +2269,13 @@ export class TaskGraphDispatcher implements IShutdownable {
                     submittedByUserID = meta.submittedByUserID ?? parent.UserID ?? task.UserID;
                     parentEnvelopeColumn = parent.SecurityEnvelope;
                     recordsTaint = meta.recordsTaint === true;
+                    limitsOverride = meta.limitsOverride;
                     if (IsTaskGraphIsolationLevel(meta.isolation)) {
                         isolation = meta.isolation;
+                    } else if (meta.limitsOverride?.Isolation?.DefaultIsolation) {
+                        isolation = LimitsConfigResolver.Resolve({
+                            AgentOrWorkflowMetadata: meta.limitsOverride,
+                        }).Limits.Isolation.DefaultIsolation;
                     }
                 }
             } catch (e) {
@@ -2291,6 +2304,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             Security: security,
             RecordsTaint: recordsTaint,
             Isolation: isolation,
+            ...(limitsOverride ? { LimitsOverride: limitsOverride } : {}),
         };
     }
 
@@ -4480,7 +4494,15 @@ export class TaskGraphDispatcher implements IShutdownable {
         onProgress?: TaskRunProgressCallback,
         parentTask?: MJTaskEntity | null,
     ): Promise<TaskBodyOutcome> {
-        const isoConfig = LimitsConfigResolver.Resolve().Limits.Isolation;
+        const isoConfig = LimitsConfigResolver.Resolve({
+            AgentOrWorkflowMetadata: context.LimitsOverride,
+        }).Limits.Isolation;
+        const policyTimeoutSec = task.ConfigurationObject?.policy?.timeoutSeconds;
+        // Convert step policy seconds to milliseconds (1s = 1000ms) when positively configured.
+        const timeoutMs =
+            typeof policyTimeoutSec === 'number' && Number.isFinite(policyTimeoutSec) && policyTimeoutSec > 0
+                ? Math.trunc(policyTimeoutSec * 1000)
+                : undefined;
         const stepResult = await runner.Execute<TaskBodyOutcome>({
             Level: level,
             TaskID: task.ID,
@@ -4488,6 +4510,7 @@ export class TaskGraphDispatcher implements IShutdownable {
             GraphID: task.ParentID ?? task.ID,
             Workload: { Kind: 'InProcessCallback' },
             Limits: isoConfig,
+            ...(timeoutMs !== undefined ? { TimeoutMs: timeoutMs } : {}),
             ExecuteInProcess: () =>
                 this.runTaskBodyOfKind(
                     task,

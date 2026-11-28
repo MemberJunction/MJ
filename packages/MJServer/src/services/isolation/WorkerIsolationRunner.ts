@@ -60,7 +60,7 @@ function normalizeOutput(val) {
         let rawResult;
         if (workerData.kind === 'InlineScript') {
             const AsyncFn = Object.getPrototypeOf(async function () {}).constructor;
-            const fn = new AsyncFn('input', workerData.script);
+            const fn = new AsyncFn('input', "'use strict';\\n" + workerData.script);
             rawResult = await fn(workerData.input || {});
         } else if (workerData.kind === 'Module') {
             let loaded;
@@ -285,6 +285,8 @@ export class WorkerIsolationRunner implements TaskGraphIsolationRunner {
                         ErrorMessage: msg.errorMessage ?? 'Worker reported execution failure.',
                     });
                 }
+                // Ensure scripts that leave open handles/timers behind cannot leak a worker thread after reporting completion.
+                void worker.terminate().catch(() => undefined);
             });
 
             worker.on('error', (err: Error & { code?: string }) => {

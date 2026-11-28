@@ -53,6 +53,8 @@ describe('LimitsConfigResolver & CODE_FALLBACK_LIMITS', () => {
         expect(CODE_FALLBACK_LIMITS.ProgressDetector.AmbiguityLowScoreThreshold).toBeLessThan(
             CODE_FALLBACK_LIMITS.ProgressDetector.AmbiguityHighScoreThreshold,
         );
+        expect(CODE_FALLBACK_LIMITS.Isolation.DefaultIsolation).toBe('Worker');
+        expect(CODE_FALLBACK_LIMITS.Isolation.DraftDefaultIsolation).toBe('Worker');
         expect(DEFAULT_MJ_LIMITS_CONFIG).toBe(CODE_FALLBACK_LIMITS);
         expect(ValidateLimitsConfig(CODE_FALLBACK_LIMITS).Valid).toBe(true);
     });

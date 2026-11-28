@@ -115,6 +115,10 @@ export class SchedulingOverviewComponent implements OnInit, OnDestroy {
     await this.schedulingService.releaseLock(jobId);
   }
 
+  public GetAlertTrackKey(alert: AlertCondition): string {
+    return `${alert.type}:${alert.jobId ?? alert.title}`;
+  }
+
   public GetStatusIcon(status: string): string {
     switch (status) {
       case 'Running': return 'fa-solid fa-spinner fa-spin';

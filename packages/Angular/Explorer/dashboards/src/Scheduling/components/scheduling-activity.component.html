@@ -49,7 +49,7 @@
       <!-- Job Type Summary Cards -->
       @if (JobTypes.length > 0) {
         <div class="type-cards-row">
-          @for (type of JobTypes; track type) {
+          @for (type of JobTypes; track type.typeId) {
             <div class="type-card">
               <div class="type-card-icon">
                 <i [class]="GetTypeIcon(type.typeName)"></i>
@@ -87,7 +87,7 @@
           </div>
           <div class="panel-body chart-container">
             <div class="trend-chart">
-              @for (trend of Trends; track trend; let i = $index) {
+              @for (trend of Trends; track trend.timestamp.getTime(); let i = $index) {
                 <div class="chart-column">
                   <div class="bars-wrapper">
                     <div class="bar success-bar"
@@ -144,7 +144,7 @@
                 </tr>
               </thead>
               <tbody>
-                @for (exec of FilteredExecutions; track exec) {
+                @for (exec of FilteredExecutions; track exec.id) {
                   <tr class="exec-row" [class.expanded]="IsExpanded(exec)" (click)="ToggleExpand(exec)">
                     <td class="col-expand">
                       <i class="fa-solid fa-chevron-right expand-icon"
