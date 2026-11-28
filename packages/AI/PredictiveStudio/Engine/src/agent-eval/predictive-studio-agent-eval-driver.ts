@@ -1,6 +1,6 @@
 import { RunView, type EntityInfo, type UserInfo } from '@memberjunction/core';
 import type { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
-import { EscapeSQLString, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, NormalizeUUID, RegisterClass, UUIDMap, UUIDsEqual } from '@memberjunction/global';
 import {
   AgentEvalDriver,
   BaseTestDriver,
@@ -631,14 +631,13 @@ export class PredictiveStudioAgentEvalDriver extends AgentEvalDriver {
    * the suite chain's rubric), else the rubric's latest published version.
    */
   protected override async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
+    const suitePins = new UUIDMap(Object.entries(context.fixtures?.PinnedRubricVersions ?? {}));
     const oracles = await Promise.all(
       (config.oracles ?? []).map(async (oracle) => {
         if (oracle.type !== PS_RUBRIC_ORACLE_TYPE) return oracle;
         const settings = ReadPSRubricConfig(oracle.config ?? {});
         if (!settings.rubricId || settings.rubricVersionId) return oracle;
-        const pins = Object.entries(context.fixtures?.PinnedRubricVersions ?? {});
-        const suitePin = pins.find(([rubricId]) => UUIDsEqual(rubricId, settings.rubricId))?.[1];
-        const pinned = suitePin ?? (await this.LookupLatestPublished(context, settings.rubricId));
+        const pinned = suitePins.Get(settings.rubricId) ?? (await this.LookupLatestPublished(context, settings.rubricId));
         if (!pinned) return oracle;
         return { ...oracle, config: { ...oracle.config, rubricVersionId: pinned.id, versionLabel: pinned.label } };
       })
