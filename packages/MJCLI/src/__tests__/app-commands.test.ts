@@ -12,7 +12,7 @@
  *      flag on `app install` and `app upgrade`: hidden from help, defaults
  *      to false.
  */
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,36 +68,60 @@ describe('app command dependency declarations (regression for 5.29.0 open-app-en
     });
 });
 
+/**
+ * Budget for the one cold load of the eight `app/*` command modules (the whole open-app transitive graph through Vite's
+ * transform): ~21 s alone on a dev machine, over 180 s inside a full-repo test run (PR 5 wave-4 full mirror). It is a hook
+ * timeout, so the load is never counted against a test's own timeout (D-091 item 13).
+ */
+const MODULE_LOAD_TIMEOUT_MS = 300_000;
+
+/** Loads every `app/*` command module, each settled on its own so one failed load fails only the tests that read it. */
+function LoadAppCommands() {
+    return Promise.allSettled([
+        import('../commands/app/list.js'),
+        import('../commands/app/info.js'),
+        import('../commands/app/install.js'),
+        import('../commands/app/upgrade.js'),
+        import('../commands/app/remove.js'),
+        import('../commands/app/enable.js'),
+        import('../commands/app/disable.js'),
+        import('../commands/app/check-updates.js'),
+    ]);
+}
+
+/** A settled load's module, or the load's own error. */
+function Loaded<T>(result: PromiseSettledResult<T>): T {
+    if (result.status === 'rejected') throw result.reason;
+    return result.value;
+}
+
+let appCommands: Awaited<ReturnType<typeof LoadAppCommands>>;
+
+// The modules load once, here: the tests below assert on what the load produced, not on how long it took.
+beforeAll(async () => {
+    appCommands = await LoadAppCommands();
+}, MODULE_LOAD_TIMEOUT_MS);
+
 describe('app command modules load cleanly', () => {
     /**
      * If a static import in a command file points at an undeclared or
      * unresolvable package, importing the module throws. This is the
      * strongest end-to-end guard against the 5.29.0 bug.
      */
-    it('loads every `app/*` command module without throwing', async () => {
-        const modules = await Promise.all([
-            import('../commands/app/list.js'),
-            import('../commands/app/info.js'),
-            import('../commands/app/install.js'),
-            import('../commands/app/upgrade.js'),
-            import('../commands/app/remove.js'),
-            import('../commands/app/enable.js'),
-            import('../commands/app/disable.js'),
-            import('../commands/app/check-updates.js'),
-        ]);
-        for (const mod of modules) {
+    it('loads every `app/*` command module without throwing', () => {
+        for (const result of appCommands) {
+            const mod = Loaded(result);
             expect(mod.default).toBeDefined();
             expect(typeof mod.default).toBe('function'); // command class
         }
-    }, 180_000); // these imports pull the whole open-app transitive graph; cold CI transform can
-                 // exceed the default timeout (passes in ~2.5s locally with built dists)
+    });
 });
 
 describe('hidden --dangerously-ignore-dbl-underscore-schema-rule flag', () => {
     const FLAG = 'dangerously-ignore-dbl-underscore-schema-rule';
 
-    it('install command declares the flag as hidden with default false', async () => {
-        const { default: AppInstall } = await import('../commands/app/install.js');
+    it('install command declares the flag as hidden with default false', () => {
+        const { default: AppInstall } = Loaded(appCommands[2]);
         const flag = AppInstall.flags[FLAG];
         expect(flag).toBeDefined();
         expect(flag.hidden).toBe(true);
@@ -105,8 +129,8 @@ describe('hidden --dangerously-ignore-dbl-underscore-schema-rule flag', () => {
         expect(flag.type).toBe('boolean');
     });
 
-    it('upgrade command declares the flag as hidden with default false', async () => {
-        const { default: AppUpgrade } = await import('../commands/app/upgrade.js');
+    it('upgrade command declares the flag as hidden with default false', () => {
+        const { default: AppUpgrade } = Loaded(appCommands[3]);
         const flag = AppUpgrade.flags[FLAG];
         expect(flag).toBeDefined();
         expect(flag.hidden).toBe(true);
@@ -114,9 +138,9 @@ describe('hidden --dangerously-ignore-dbl-underscore-schema-rule flag', () => {
         expect(flag.type).toBe('boolean');
     });
 
-    it('the flag carries no description (intentionally undocumented)', async () => {
-        const { default: AppInstall } = await import('../commands/app/install.js');
-        const { default: AppUpgrade } = await import('../commands/app/upgrade.js');
+    it('the flag carries no description (intentionally undocumented)', () => {
+        const { default: AppInstall } = Loaded(appCommands[2]);
+        const { default: AppUpgrade } = Loaded(appCommands[3]);
         expect(AppInstall.flags[FLAG].description).toBeUndefined();
         expect(AppUpgrade.flags[FLAG].description).toBeUndefined();
     });

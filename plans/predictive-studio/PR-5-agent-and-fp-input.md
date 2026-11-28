@@ -322,6 +322,7 @@ packages/AI/Agents/src/__tests__/DocumentToolLibrary.test.ts  (D-091 item 11)
 packages/MJCLI/src/__tests__/queue-aws-registration.test.ts  (D-091 item 13)
 packages/MJCLI/src/__tests__/queue-azure-registration.test.ts  (D-091 item 13)
 packages/MJCLI/src/__tests__/queue-gcp-registration.test.ts  (D-091 item 13)
+packages/MJCLI/src/__tests__/app-commands.test.ts  (D-091 item 13)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
@@ -3842,15 +3843,21 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    line still times out alone. Alone 5/5 before and after; under 12 busy loops on 14 cores it passed 3/3 both ways (the
    red needs a full test run's contention); `ai-agents` 303 files, 5,428 passed. Fixed by the integrator at wave-1
    integration under the owner's 2026-11-26 statement.
-13. `packages/MJCLI/src/__tests__/queue-{aws,azure,gcp}-registration.test.ts` — each "registers the <cloud> driver
+13. `packages/MJCLI/src/__tests__/queue-{aws,azure,gcp}-registration.test.ts` and `app-commands.test.ts` — each queue test "registers the <cloud> driver
    factory and manifest enricher when a cloud command module loads" did the first `import()` of a queue command module
    (it loads that cloud's transport cold) inside its body, on a 120 s test timeout. Alone 17.6 s each (3 files 42/42);
    in wave-4's first full mirror (`20261128-055555-59090`, the only red, `@memberjunction/cli` 3 failed / 1,271 passed)
    all three timed out at 120 s. The module now loads once in `beforeAll` under a documented 300 s hook timeout
    (`Promise.allSettled`, so a failed load still fails the test with its reason), as items 6 and 9; the test asserts on
    what the load registered. Mutation: the `@memberjunction/work-queue-engine/aws` import dropped from
-   `validate-bindings.ts` turns the AWS test red, restored. `@memberjunction/cli` 84 files, 1,274 passed. Fixed by the
-   integrator at wave-4 integration under the owner's 2026-11-26 statement.
+   `validate-bindings.ts` turns the AWS test red, restored. The second full mirror (`20261128-064405-89102`) then went red
+   on the same shape in `app-commands.test.ts`: the eight `app/*` command modules (the open-app graph) imported inside
+   "loads every `app/*` command module" (180 s timeout) and again inside each hidden-flag test (5 s default; "install
+   command declares the flag as hidden" timed out at 30 s); 21 s alone, 154.6 s when it passed in the first mirror. They
+   now load once in a file-level `beforeAll` (300 s hook, each module settled on its own); an unresolvable import added to
+   `app/list.ts` turns the load test red, restored. In that mirror the queue files' hook took ~228 s of its 300 s.
+   `@memberjunction/cli` 84 files, 1,274 passed. Fixed by the integrator at wave-4 integration under the owner's
+   2026-11-26 statement.
 
 ## 10. PR description draft
 
