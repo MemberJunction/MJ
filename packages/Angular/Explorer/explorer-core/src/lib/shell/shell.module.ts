@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { ShellComponent } from './shell.component';
 import { AppSwitcherComponent } from './components/header/app-switcher.component';
 import { AppNavComponent } from './components/header/app-nav.component';
+import { NotificationPopoverComponent } from './components/header/notification-popover.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
 import { AppAccessDialogComponent } from './components/dialogs/app-access-dialog.component';
 import { ShellNoAccessComponent } from './components/no-access/shell-no-access.component';
@@ -53,7 +54,8 @@ import {
     RecordSwitcherSheetComponent,
     SharePanelDirective,
     UserImpersonationBannerComponent,
-    UserImpersonationDialogComponent
+    UserImpersonationDialogComponent,
+    NotificationPopoverComponent
   ],
   providers: [
     CommandPaletteService

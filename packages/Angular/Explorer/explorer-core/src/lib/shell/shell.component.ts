@@ -174,6 +174,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.UnreadNotificationCount = value;
   } // Notification badge count
 
+  /** True while the header Notifications dropdown popover is open. */
+  NotificationsPopoverOpen = false;
+
   // Global Activity indicator (P3)
   ActivityItems: ActivityItem[] = [];
 
@@ -3285,6 +3288,8 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.UserMenuVisible = !this.UserMenuVisible;
 
     if (this.UserMenuVisible) {
+      this.NotificationsPopoverOpen = false;
+      this.ActivityOpen = false;
       // Close menu when clicking outside. CAPTURE phase so clicks whose
       // bubbling something stopped (e.g. the origin crumb's GL-focus
       // stoppers) still dismiss the menu.
@@ -4026,6 +4031,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   @HostListener('document:keydown', ['$event'])
   OnGlobalKeydown(event: KeyboardEvent): void {
+      if (event.key === 'Escape' && this.NotificationsPopoverOpen) {
+          this.NotificationsPopoverOpen = false;
+          this.cdr.detectChanges();
+          return;
+      }
+
       const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
       const isCtrlOrCmd = isMac ? event.metaKey : event.ctrlKey;
       if (!isCtrlOrCmd) {
@@ -4168,12 +4179,47 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   ToggleActivity(event: MouseEvent): void {
     event.stopPropagation();
     this.ActivityOpen = !this.ActivityOpen;
+    if (this.ActivityOpen) {
+      this.NotificationsPopoverOpen = false;
+      this.UserMenuVisible = false;
+    }
     this.cdr.detectChanges();
   }
 
   /** @deprecated Use {@link ToggleActivity}. */
   toggleActivity(event: MouseEvent): void {
     return this.ToggleActivity(event);
+  }
+
+  /** Toggle the anchored header Notifications popover. */
+  ToggleNotificationsPopover(event: Event): void {
+    event.stopPropagation();
+    this.NotificationsPopoverOpen = !this.NotificationsPopoverOpen;
+    if (this.NotificationsPopoverOpen) {
+      this.ActivityOpen = false;
+      this.UserMenuVisible = false;
+    }
+    this.cdr.detectChanges();
+  }
+
+  /** Close the anchored header Notifications popover. */
+  CloseNotificationsPopover(): void {
+    if (this.NotificationsPopoverOpen) {
+      this.NotificationsPopoverOpen = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /** Open the full Notifications tab from the popover footer. */
+  OnNotificationPopoverViewAll(): void {
+    this.CloseNotificationsPopover();
+    this.showNotifications();
+  }
+
+  /** Open the Profile/Preferences dialog from the popover gear shortcut. */
+  OnNotificationPopoverPreferences(): void {
+    this.CloseNotificationsPopover();
+    this.OnPaletteSettingsRequested();
   }
 
   /** Clear finished activities from the tracker. */
@@ -4186,11 +4232,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return this.ClearFinishedActivity();
   }
 
-  /** Close the Activity drawer when clicking anywhere outside it. */
+  /** Close header drawers/popovers when clicking anywhere outside them. */
   @HostListener('document:click')
   onDocumentClickCloseActivity(): void {
+    let changed = false;
     if (this.ActivityOpen) {
       this.ActivityOpen = false;
+      changed = true;
+    }
+    if (this.NotificationsPopoverOpen) {
+      this.NotificationsPopoverOpen = false;
+      changed = true;
+    }
+    if (changed) {
       this.cdr.detectChanges();
     }
   }

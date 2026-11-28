@@ -330,9 +330,18 @@ mj-tab-container ::ng-deep :is(.gl-container, .records-gl-container) .lm_stack:n
   padding: 1.5px var(--mj-space-1-5);
 }
 
-/* Notification button with badge */
+/* Notification button with badge and anchored popover */
+.notification-wrap {
+  position: relative;
+}
+
 .notification-btn {
   position: relative;
+}
+
+.notification-btn.is-open {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, transparent);
+  color: var(--mj-brand-primary);
 }
 
 .notification-badge {

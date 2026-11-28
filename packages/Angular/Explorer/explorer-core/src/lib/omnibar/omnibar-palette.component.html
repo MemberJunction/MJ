@@ -50,9 +50,11 @@
           }
         </div>
         @if (RecentRows.length > 0) {
-          <div class="ob-group-label" role="presentation">Recent</div>
           <div id="ob-listbox" role="listbox" aria-label="Suggestions">
           @for (row of RecentRows; track row.Suggestion.id; let i = $index) {
+            @if (row.GroupLabel !== null) {
+              <div class="ob-group-label" role="presentation">{{ row.GroupLabel }}</div>
+            }
             <div class="ob-row" role="option" [attr.id]="'ob-opt-' + (RecentBaseIndex + i)"
               [attr.tabindex]="RecentBaseIndex + i === SelectedIndex ? 0 : -1"
               [attr.aria-selected]="RecentBaseIndex + i === SelectedIndex"

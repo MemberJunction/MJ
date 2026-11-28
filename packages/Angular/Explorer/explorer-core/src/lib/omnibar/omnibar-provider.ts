@@ -20,7 +20,8 @@ export type OmnibarNavPayload =
     | { kind: 'agent'; agentName: string }
     | { kind: 'file'; fileName: string; rawMetadata?: string }
     | { kind: 'dashboard'; dashboardId: string; dashboardName: string }
-    | { kind: 'view'; viewId: string; viewName: string };
+    | { kind: 'view'; viewId: string; viewName: string }
+    | { kind: 'artifact'; artifactId: string; artifactName: string };
 
 /** Key under which the nav payload rides in `MentionSuggestion.data`. */
 export const OMNIBAR_NAV_KEY = 'nav';

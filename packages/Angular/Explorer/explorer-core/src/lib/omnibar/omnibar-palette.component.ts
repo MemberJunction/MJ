@@ -2,17 +2,19 @@ import {
     ChangeDetectionStrategy, ChangeDetectorRef, Component, ElementRef, EventEmitter,
     OnDestroy, Output, ViewChild, inject,
 } from '@angular/core';
-import { CompositeKey, LogError, UserInfo } from '@memberjunction/core';
+import { CompositeKey, EntityRecordNameInput, LogError, UserInfo } from '@memberjunction/core';
 import { Metadata } from '@memberjunction/core';
+import { MJUserFavoriteEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { MentionSuggestion } from '@memberjunction/ng-composer';
-import { NavigationService } from '@memberjunction/ng-shared';
+import { IsDashboardEntity, NavigationService, RecentAccessItem, RecentAccessService } from '@memberjunction/ng-shared';
+import { ResourceTypeForEntity } from '@memberjunction/ng-shared-generic';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 import { SearchService, SearchScopeInfo } from '@memberjunction/ng-search';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { Subscription, firstValueFrom, skip } from 'rxjs';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import {
-    DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarProvider,
+    DiscoverOmnibarProviders, GetOmnibarNavPayload, OmnibarNavPayload, OmnibarProvider,
 } from './omnibar-provider';
 import { OmnibarSearchProvider } from './providers/omnibar-search.provider';
 import { OmnibarSemanticIndexService } from './omnibar-semantic-index.service';
@@ -68,6 +70,7 @@ export class OmnibarPaletteComponent implements OnDestroy {
     private search = inject(SearchService);
     private paletteService = inject(CommandPaletteService);
     private fileOpen = inject(FileOpenService);
+    private recentAccess = inject(RecentAccessService, { optional: true });
 
     @ViewChild('paletteInput') private inputRef?: ElementRef<HTMLInputElement>;
 
@@ -465,6 +468,9 @@ export class OmnibarPaletteComponent implements OnDestroy {
             case 'view':
                 this.navigation.OpenView(nav.viewId, nav.viewName);
                 break;
+            case 'artifact':
+                this.navigation.OpenArtifact(nav.artifactId, nav.artifactName);
+                break;
         }
         this.Close();
     }
@@ -667,13 +673,15 @@ export class OmnibarPaletteComponent implements OnDestroy {
         }
     }
 
-    /** Empty-state recents: recent searches + recent apps (best-effort). */
+    /** Empty-state quick access: starred favorites + recent items/searches/apps (best-effort). */
     private async loadRecents(): Promise<void> {
-        const rows: OmnibarRow[] = [];
+        const favoriteRows = await this.buildFavoriteRows();
+        const recentRows: OmnibarRow[] = [];
+
         try {
             const recentSearches = this.search.RecentSearches$.value.slice(0, 3);
             for (const recent of recentSearches) {
-                rows.push({
+                recentRows.push({
                     Suggestion: {
                         type: 'search',
                         id: `recent-search:${recent.Query}`,
@@ -690,19 +698,183 @@ export class OmnibarPaletteComponent implements OnDestroy {
         } catch {
             // recents are decorative — never block the palette
         }
+
+        try {
+            const recentItems = this.recentAccess ? await firstValueFrom(this.recentAccess.RecentItems).catch(() => []) : [];
+            const seen = new Set<string>();
+            for (const item of recentItems) {
+                const key = `${item.entityName}-${item.recordId}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+                const row = this.recentItemToRow(item);
+                if (row) {
+                    recentRows.push(row);
+                    if (seen.size >= 4) break;
+                }
+            }
+        } catch {
+            // decorative — never block the palette
+        }
+
         try {
             const commandProvider = this.byTrigger.get('/');
             if (commandProvider) {
                 const apps = await commandProvider.EmptyStateSuggestions({
                     Query: '', MaxResults: 3, ContextUser: this.currentUser, Provider: null,
                 });
-                rows.push(...apps.map((s) => ({ Suggestion: s, GroupLabel: null, ScorePercent: null })));
+                recentRows.push(...apps.map((s) => ({ Suggestion: s, GroupLabel: null, ScorePercent: null })));
             }
         } catch {
             // ditto
         }
-        this.RecentRows = rows;
+
+        if (favoriteRows.length > 0) {
+            favoriteRows[0].GroupLabel = 'Favorites';
+        }
+        if (recentRows.length > 0) {
+            recentRows[0].GroupLabel = 'Recent';
+        }
+
+        this.RecentRows = [...favoriteRows, ...recentRows];
         this.cdr.markForCheck();
+    }
+
+    /** Starred user favorites from UserInfoEngine, batch-resolved to record display names. */
+    private async buildFavoriteRows(): Promise<OmnibarRow[]> {
+        let favorites: MJUserFavoriteEntity[] = [];
+        try {
+            favorites = (UserInfoEngine.Instance.UserFavorites ?? []).slice(0, 5);
+        } catch {
+            return [];
+        }
+        if (favorites.length === 0) {
+            return [];
+        }
+
+        const displayNames = await this.resolveFavoriteDisplayNames(favorites);
+        const rows: OmnibarRow[] = [];
+        for (const fav of favorites) {
+            const entityName = fav.Entity || '';
+            const recordId = fav.RecordID || '';
+            if (!entityName || !recordId) continue;
+
+            const displayName = displayNames.get(fav.ID) || entityName;
+            const nav = this.buildFavoriteNavPayload(entityName, recordId, displayName);
+            rows.push({
+                Suggestion: {
+                    type: 'favorite',
+                    id: `favorite:${fav.ID}`,
+                    name: displayName,
+                    displayName,
+                    description: entityName,
+                    icon: this.resolveEntityIcon(entityName, 'fa-solid fa-star'),
+                    data: { nav },
+                },
+                GroupLabel: null,
+                ScorePercent: null,
+            });
+        }
+        return rows;
+    }
+
+    private async resolveFavoriteDisplayNames(favorites: MJUserFavoriteEntity[]): Promise<Map<string, string>> {
+        const result = new Map<string, string>();
+        const provider = this.search?.Provider ?? Metadata.Provider;
+        if (!provider?.GetEntityRecordNames) {
+            return result;
+        }
+        const inputs: EntityRecordNameInput[] = [];
+        const idByKey = new Map<string, string>();
+        for (const fav of favorites) {
+            if (!fav.Entity || !fav.RecordID) continue;
+            const entityInfo = provider.EntityByName?.(fav.Entity);
+            if (!entityInfo && !fav.RecordID.includes(CompositeKey.DefaultValueDelimiter)) continue;
+            const key = CompositeKey.FromURLSegment(entityInfo, fav.RecordID);
+            if (key.KeyValuePairs.length === 0) continue;
+            inputs.push({ EntityName: fav.Entity, CompositeKey: key });
+            idByKey.set(`${fav.Entity}||${key.ToConcatenatedString()}`, fav.ID);
+        }
+        if (inputs.length === 0) {
+            return result;
+        }
+        try {
+            const names = await provider.GetEntityRecordNames(inputs);
+            for (const entry of names) {
+                if (entry.Success && entry.RecordName) {
+                    const favId = idByKey.get(`${entry.EntityName}||${entry.CompositeKey.ToConcatenatedString()}`);
+                    if (favId) {
+                        result.set(favId, entry.RecordName);
+                    }
+                }
+            }
+        } catch {
+            // Fall back to entity name if name resolution fails
+        }
+        return result;
+    }
+
+    private buildFavoriteNavPayload(entityName: string, recordId: string, displayName: string): OmnibarNavPayload {
+        if (IsDashboardEntity(entityName)) {
+            return { kind: 'dashboard', dashboardId: recordId, dashboardName: displayName };
+        }
+        if (ResourceTypeForEntity(entityName) === 'view') {
+            return { kind: 'view', viewId: recordId, viewName: displayName };
+        }
+        if (entityName.toLowerCase().includes('artifact')) {
+            return { kind: 'artifact', artifactId: recordId, artifactName: displayName };
+        }
+        return { kind: 'record', entityName, recordId };
+    }
+
+    private recentItemToRow(item: RecentAccessItem): OmnibarRow | null {
+        if (!item.recordId) return null;
+        const displayName = item.recordName || item.entityName || item.recordId;
+        let nav: OmnibarNavPayload;
+        switch (item.resourceType) {
+            case 'dashboard':
+                nav = { kind: 'dashboard', dashboardId: item.recordId, dashboardName: displayName };
+                break;
+            case 'view':
+                nav = { kind: 'view', viewId: item.recordId, viewName: displayName };
+                break;
+            case 'artifact':
+                nav = { kind: 'artifact', artifactId: item.recordId, artifactName: displayName };
+                break;
+            default:
+                if (!item.entityName) return null;
+                nav = { kind: 'record', entityName: item.entityName, recordId: item.recordId };
+                break;
+        }
+        return {
+            Suggestion: {
+                type: item.resourceType || 'record',
+                id: `recent-item:${item.entityName}:${item.recordId}`,
+                name: displayName,
+                displayName,
+                description: item.entityName || 'Recent',
+                icon: this.resolveEntityIcon(item.entityName, 'fa-solid fa-clock-rotate-left'),
+                data: { nav },
+            },
+            GroupLabel: null,
+            ScorePercent: null,
+        };
+    }
+
+    private resolveEntityIcon(entityName: string | undefined, fallback: string): string {
+        if (!entityName) return fallback;
+        const provider = this.search?.Provider ?? Metadata.Provider;
+        const rawIcon = provider?.EntityByName?.(entityName)?.Icon;
+        if (!rawIcon) return fallback;
+        if (
+            rawIcon.startsWith('fa-solid') ||
+            rawIcon.startsWith('fa-regular') ||
+            rawIcon.startsWith('fa-light') ||
+            rawIcon.startsWith('fa-brands') ||
+            rawIcon.startsWith('fa ')
+        ) {
+            return rawIcon;
+        }
+        return rawIcon.startsWith('fa-') ? `fa-solid ${rawIcon}` : `fa-solid fa-${rawIcon}`;
     }
 
     private get currentUser(): UserInfo | null {

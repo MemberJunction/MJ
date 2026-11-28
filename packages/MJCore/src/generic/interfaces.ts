@@ -724,15 +724,37 @@ export interface ILocalStorageProvider {
     readonly SupportsCrossProcessPersistence?: boolean;
 
     /**
-     * Whether other processes read and write the same storage — `true` for Redis, where every
-     * server in a fleet shares one keyspace; `false`/omitted for per-process or per-browser
-     * stores (in-memory, IndexedDB, localStorage, MMKV).
+     * Whether other server processes read and write the same distributed storage — `true` for
+     * Redis, where every server in a fleet shares one keyspace; `false`/omitted for per-process
+     * or per-browser stores (in-memory, IndexedDB, localStorage, MMKV).
      *
-     * `LocalCacheManager` keeps its registry (per-process eviction accounting) out of shared
-     * storage: persisting it there made every server overwrite one key with its own view and
-     * publish the whole registry to every peer on each write.
+     * Setting this to `true` opts into multi-server fleet semantics in `LocalCacheManager`:
+     * - Keeps the eviction registry (`__MJ_CACHE_REGISTRY__`) process-local (equivalent to
+     *   {@link ProcessLocalRegistry}).
+     * - On a schema mismatch during a serving read, leaves the slot in place and applies a
+     *   rolling-deploy write hold rather than deleting the slot (avoiding delete/reload loops
+     *   across peers on either side of a migration).
+     * - Delegates TTL expiry to the store itself instead of deleting entries by this process's
+     *   local clock.
+     *
+     * Providers that only want a process-local eviction registry without multi-server fleet
+     * semantics (for example, browser tabs sharing IndexedDB via a SharedWorker) should set
+     * {@link ProcessLocalRegistry} instead.
      */
     readonly SharedAcrossProcesses?: boolean;
+
+    /**
+     * Keeps `LocalCacheManager`'s eviction registry (`__MJ_CACHE_REGISTRY__`) in-memory per
+     * process/tab (skipping `loadRegistry` and `persistRegistry`) without opting into the
+     * multi-server fleet semantics of {@link SharedAcrossProcesses}.
+     *
+     * Use this when multiple execution contexts share a local store (such as browser tabs
+     * routing IndexedDB through a SharedWorker) so they do not overwrite one shared registry
+     * key, while still wanting immediate schema-mismatch slot eviction and local `defaultTTLMs`
+     * expiry because the underlying store is not a rolling-deploy server fleet and does not
+     * expire keys natively.
+     */
+    readonly ProcessLocalRegistry?: boolean;
 
     /**
      * Retrieves a value from storage. The implementation is responsible for any
