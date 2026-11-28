@@ -97,7 +97,7 @@ describe('A3 attack 8: the Data Scout and Goal Analyst templates', () => {
     const orchestrator = template('model-development-agent');
     expect(orchestrator).toMatch(/call \*\*Goal Analyst\*\* first/i);
     expect(orchestrator).toMatch(/never decide in chat whether there is enough data/i);
-    expect(orchestrator).toMatch(/profiles the development rows/i);
+    expect(orchestrator).toMatch(/never call the Draft Prediction Unit, Draft Evaluation Protocol or profiling actions yourself/i);
     expect(orchestrator).not.toMatch(/If it is vague \("predict churn"\), ask a couple of focused questions to ground it/);
   });
 

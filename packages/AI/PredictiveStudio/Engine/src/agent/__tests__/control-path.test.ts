@@ -160,6 +160,13 @@ describe('attack 21: the gate replaces any step the state does not allow', () =>
     }
   });
 
+  it('in gather, a replaced draft Action is answered with the next planning step, not only a refusal (wave-4 integration)', () => {
+    const reason = AgentControlPath.Gate('gather', draft).retryReason ?? '';
+    expect(reason).toContain('Data Scout');
+    expect(reason).toContain('Experiment Designer');
+    expect(reason).toMatch(/never call the draft or profile actions yourself/i);
+  });
+
   it('in gather, the three planning sub-agents and a chat reply pass unchanged', () => {
     for (const name of ['Goal Analyst', 'Data Scout', 'Experiment Designer']) {
       const s = step({ step: 'Sub-Agent', subAgent: { name, message: 'go', terminateAfter: false } });

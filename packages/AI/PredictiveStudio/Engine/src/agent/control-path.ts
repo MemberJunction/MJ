@@ -152,6 +152,9 @@ export class AgentControlPath {
   /** The prompt steps a complete, unpresented plan is presented in place of (asking, finishing, presenting). */
   public static readonly PRESENTABLE_STEPS: readonly string[] = ['Chat', 'Success', 'Plan'];
 
+  /** What a gather turn does instead of a refused step (D5-W4-4): the plan's next missing slice, never a code step. */
+  public static readonly GATHER_NEXT_STEP = 'Call the planning sub-agent whose slice is still missing (Goal Analyst for the target, then Data Scout for sources and features, then Experiment Designer for experiments), or ask the user; never call the draft or profile actions yourself: the system runs them once the plan is complete.';
+
   /** The planning sub-agents a `gather` turn may call. */
   public static readonly PLANNING_SUBAGENTS: readonly string[] = ['Goal Analyst', 'Data Scout', 'Experiment Designer'];
 
@@ -365,10 +368,12 @@ export class AgentControlPath {
     if (state === 'report') {
       return { step: 'Success', terminate: true, message: step.message || 'The build has finished; see the results above.', previousPayload: step.previousPayload, newPayload: step.newPayload ?? step.previousPayload };
     }
+    // In gather the reason also names the next planning step, so the prompt does not choose the refused step again.
+    const next = state === 'gather' ? ` ${AgentControlPath.GATHER_NEXT_STEP}` : '';
     return {
       step: 'Retry',
       terminate: false,
-      retryReason: `${refused} is not allowed in state ${state}: the control path decides builds, drafts and plan presentation.`,
+      retryReason: `${refused} is not allowed in state ${state}: the control path decides builds, drafts and plan presentation.${next}`,
       previousPayload: step.previousPayload,
       newPayload: step.newPayload ?? step.previousPayload,
     };
