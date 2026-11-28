@@ -12,6 +12,9 @@ const mockList = vi.hoisted(() => vi.fn());
 const mockPull = vi.hoisted(() => vi.fn());
 const mockEmbeddings = vi.hoisted(() => vi.fn());
 const mockShow = vi.hoisted(() => vi.fn());
+const mockGetLongRunningAIFetch = vi.hoisted(
+  () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 
 // Records the config every Ollama client is constructed with, so tests can assert that a
 // per-request client carrying the caller's cancellation token (via Config.fetch) was built.
@@ -139,6 +142,7 @@ vi.mock('@memberjunction/ai', () => {
       return null;
     }),
     NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
+    GetLongRunningAIFetch: mockGetLongRunningAIFetch,
   };
 });
 
@@ -172,6 +176,20 @@ describe('OllamaLLM', () => {
 
     it('should expose client alias', () => {
       expect(llm.client).toBe(llm.OllamaClient);
+    });
+
+    it('should forward GetLongRunningAIFetch to Ollama constructor and SetAdditionalSettings when configured (R2-9)', () => {
+      const scopedFetch = vi.fn<() => Promise<Response>>();
+      mockGetLongRunningAIFetch.mockReturnValue(scopedFetch);
+      mockOllamaConfigs.length = 0;
+
+      const scopedLlm = new OllamaLLM();
+      expect(mockOllamaConfigs[0]).toEqual({ host: 'http://localhost:11434', fetch: scopedFetch });
+
+      scopedLlm.SetAdditionalSettings({ baseUrl: 'http://remote:11434' });
+      expect(mockOllamaConfigs[1]).toEqual({ host: 'http://remote:11434', fetch: scopedFetch });
+
+      mockGetLongRunningAIFetch.mockReturnValue(undefined);
     });
   });
 

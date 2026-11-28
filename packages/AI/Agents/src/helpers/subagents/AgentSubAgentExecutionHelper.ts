@@ -490,11 +490,16 @@ export class AgentSubAgentExecutionHelper {
         let downstreamPaths: string[] = ['*'];
         let upstreamPaths: string[] = ['*'];
 
+        const effectivePayload = SafeResolveEffectiveAgentProperties(subAgentEntity);
         try {
-            if (subAgentEntity.PayloadDownstreamPaths) {
+            if (effectivePayload?.PayloadDownstreamPaths) {
+                downstreamPaths = effectivePayload.PayloadDownstreamPaths;
+            } else if (subAgentEntity.PayloadDownstreamPaths) {
                 downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
             }
-            if (subAgentEntity.PayloadUpstreamPaths) {
+            if (effectivePayload?.PayloadUpstreamPaths) {
+                upstreamPaths = effectivePayload.PayloadUpstreamPaths;
+            } else if (subAgentEntity.PayloadUpstreamPaths) {
                 upstreamPaths = JSON.parse(subAgentEntity.PayloadUpstreamPaths);
             }
         } catch (parseError) {
@@ -529,19 +534,21 @@ export class AgentSubAgentExecutionHelper {
         );
 
         let scopedPayload: unknown = downstreamPayload;
-        if (subAgentEntity.PayloadScope) {
+        const effectivePayloadScope =
+            SafeResolveEffectiveAgentProperties(subAgentEntity)?.PayloadScope ?? subAgentEntity.PayloadScope;
+        if (effectivePayloadScope) {
             scopedPayload = ctx.PayloadManager.applyPayloadScope(
                 downstreamPayload,
-                subAgentEntity.PayloadScope
+                effectivePayloadScope
             ) as Partial<SR>;
             if (scopedPayload === null) {
-                const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
+                const errorMessage = `Critical: Failed to extract payload scope '${effectivePayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
                 ctx.Hooks.LogError(errorMessage, {
                     category: 'SubAgentExecution',
                     metadata: {
                         agentName: params.agent.Name,
                         subAgentName: subAgentRequest.name,
-                        payloadScope: subAgentEntity.PayloadScope,
+                        payloadScope: effectivePayloadScope,
                         availableKeys: Object.keys((downstreamPayload as Record<string, unknown>) || {}),
                     },
                 });
@@ -660,10 +667,12 @@ export class AgentSubAgentExecutionHelper {
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
             if (subAgentResult.success) {
                 let resultPayloadForMerge = subAgentResult.payload;
-                if (subAgentEntity.PayloadScope) {
+                const effectiveReverseScope =
+                    SafeResolveEffectiveAgentProperties(subAgentEntity)?.PayloadScope ?? subAgentEntity.PayloadScope;
+                if (effectiveReverseScope) {
                     resultPayloadForMerge = ctx.PayloadManager.reversePayloadScope(
                         subAgentResult.payload,
-                        subAgentEntity.PayloadScope
+                        effectiveReverseScope
                     ) as SR;
                 }
 

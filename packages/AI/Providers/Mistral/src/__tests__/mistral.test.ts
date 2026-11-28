@@ -4,6 +4,9 @@ import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
 // Hoisted mock variables
 const mockComplete = vi.hoisted(() => vi.fn());
 const mockStream = vi.hoisted(() => vi.fn());
+const mockGetLongRunningAIFetch = vi.hoisted(
+    () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 const MockMistral = vi.hoisted(() => vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.chat = {
         complete: mockComplete,
@@ -13,7 +16,13 @@ const MockMistral = vi.hoisted(() => vi.fn().mockImplementation(function (this: 
 
 // Mock the Mistral SDK
 vi.mock('@mistralai/mistralai', () => ({
-    Mistral: MockMistral
+    Mistral: MockMistral,
+    HTTPClient: class MockHTTPClient {
+        public options: unknown;
+        constructor(options?: unknown) {
+            this.options = options;
+        }
+    },
 }));
 
 // Mock @memberjunction/global
@@ -83,7 +92,8 @@ vi.mock('@memberjunction/ai', () => {
         ClassifyParams: ChatParams,
         ClassifyResult: class {},
         ErrorAnalyzer: { analyzeError: vi.fn() },
-        NormalizeFinishReason: actualChatTypes.NormalizeFinishReason
+        NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
+        GetLongRunningAIFetch: mockGetLongRunningAIFetch
     };
 });
 
@@ -107,6 +117,18 @@ describe('MistralLLM', () => {
         it('should expose the Mistral client via getter', () => {
             expect(instance.Client).toBeDefined();
             expect(instance.Client.chat).toBeDefined();
+        });
+
+        it('should forward GetLongRunningAIFetch via HTTPClient when configured (R2-9)', () => {
+            const scopedFetch = vi.fn<() => Promise<Response>>();
+            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            MockMistral.mockClear();
+
+            new MistralLLM('scoped-key');
+            expect(MockMistral).toHaveBeenCalledTimes(1);
+            const opts = MockMistral.mock.calls[0][0] as { apiKey: string; httpClient?: unknown };
+            expect(opts.apiKey).toBe('scoped-key');
+            expect(opts.httpClient).toBeDefined();
         });
     });
 

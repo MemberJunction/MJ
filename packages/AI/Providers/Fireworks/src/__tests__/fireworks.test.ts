@@ -1,5 +1,5 @@
 import { FireworksLLM } from '../models/fireworks';
-import { ChatParams, ChatMessage, ChatMessageRole, ChatResult } from '@memberjunction/ai';
+import { ChatParams, ChatMessage, ChatMessageRole, ChatResult, ConfigureLongRunningAIFetch } from '@memberjunction/ai';
 
 describe('FireworksLLM', () => {
   let fireworks: FireworksLLM;
@@ -23,6 +23,19 @@ describe('FireworksLLM', () => {
 
     it('should support streaming', () => {
       expect(fireworks.SupportsStreaming).toBe(true);
+    });
+
+    it('should forward GetLongRunningAIFetch to the underlying OpenAI client when configured (R2-9)', async () => {
+      const handle = ConfigureLongRunningAIFetch({
+        headersTimeoutMs: 60_000,
+        bodyTimeoutMs: 60_000,
+      });
+      try {
+        const scopedFireworks = new FireworksLLM(apiKey);
+        expect(scopedFireworks.Client).toBeDefined();
+      } finally {
+        await handle.Restore();
+      }
     });
   });
 

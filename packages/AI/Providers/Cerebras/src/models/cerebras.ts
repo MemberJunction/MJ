@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessage, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage,
     buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL,
-    type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
+    GetLongRunningAIFetch, type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
@@ -19,7 +19,11 @@ export class CerebrasLLM extends BaseLLM {
      */
     constructor(apiKey: string) {
         super(apiKey);
-        this._client = new Cerebras({ apiKey });
+        const longRunningFetch = GetLongRunningAIFetch();
+        this._client = new Cerebras({
+            apiKey,
+            ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
+        });
     }
 
     /**

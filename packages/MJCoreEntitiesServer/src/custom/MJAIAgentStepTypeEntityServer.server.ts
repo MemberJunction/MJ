@@ -2,6 +2,8 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    IEntityDataProvider,
+    IMetadataProvider,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -46,9 +48,10 @@ export interface AgentStepTypeValidationTarget {
 /** Pure validation helper for `MJ: AI Agent Step Types` create/update rules. */
 export function ValidateAgentStepTypeMutation(
     target: AgentStepTypeValidationTarget,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'Name',
@@ -112,9 +115,10 @@ export function ValidateAgentStepTypeMutation(
 export function ValidateAgentStepTypeDelete(
     stepTypeName: string | null | undefined,
     stepTypeId: string | null | undefined,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'Name',
@@ -165,7 +169,8 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
                 CountsAgainstTreeBudget: this.CountsAgainstTreeBudget,
                 Status: this.Status,
             },
-            this.ContextCurrentUser
+            this.ContextCurrentUser,
+            this.ProviderToUse
         );
         result.Errors.push(...errors);
         result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
@@ -173,7 +178,7 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const errors = ValidateAgentStepTypeDelete(this.Name, this.ID, this.ContextCurrentUser);
+        const errors = ValidateAgentStepTypeDelete(this.Name, this.ID, this.ContextCurrentUser, this.ProviderToUse);
         if (errors.length > 0) {
             const deleteResult = new BaseEntityResult(false, '', 'delete');
             deleteResult.Errors = errors;

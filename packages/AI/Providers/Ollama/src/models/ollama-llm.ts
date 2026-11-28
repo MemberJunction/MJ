@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl, NormalizeFinishReason } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, ChatMessageContentBlock, parseBase64DataUrl, NormalizeFinishReason, GetLongRunningAIFetch } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Ollama, ChatRequest, ChatResponse, GenerateRequest, GenerateResponse, Message } from 'ollama';
 import { CancellableOllamaClient, CreateCancellableOllamaClient } from './cancellable-client';
@@ -15,7 +15,11 @@ export class OllamaLLM extends BaseLLM {
 
     constructor(apiKey?: string) {
         super(apiKey || ''); // Ollama doesn't require API key for local usage
-        this._client = new Ollama({ host: this._baseUrl });
+        const longRunningFetch = GetLongRunningAIFetch();
+        this._client = new Ollama({
+            host: this._baseUrl,
+            ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
+        });
     }
 
     /**
@@ -68,7 +72,11 @@ export class OllamaLLM extends BaseLLM {
         // Handle Ollama-specific settings
         if (settings.baseUrl || settings.host) {
             this._baseUrl = settings.baseUrl || settings.host;
-            this._client = new Ollama({ host: this._baseUrl });
+            const longRunningFetch = GetLongRunningAIFetch();
+            this._client = new Ollama({
+                host: this._baseUrl,
+                ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
+            });
         }
         
         if (settings.keepAlive !== undefined) {

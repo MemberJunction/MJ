@@ -1,6 +1,6 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock,
     buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL,
-    CHAT_FINISH_REASON_TOOL_CALLS, type ChatToolCall, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
+    CHAT_FINISH_REASON_TOOL_CALLS, GetLongRunningAIFetch, type ChatToolCall, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { GetToolUseFailedGeneration, ParseFailedGeneration } from './failedGeneration';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq from 'groq-sdk';
@@ -15,7 +15,11 @@ export class GroqLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._client = new Groq({ apiKey: apiKey });
+        const longRunningFetch = GetLongRunningAIFetch();
+        this._client = new Groq({
+            apiKey: apiKey,
+            ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
+        });
     }
 
     /**

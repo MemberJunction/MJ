@@ -1,6 +1,6 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, NormalizeFinishReason } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, NormalizeFinishReason, GetLongRunningAIFetch } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import { Mistral } from "@mistralai/mistralai";
+import { Mistral, HTTPClient } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
 // Type-only import (elided at emit) — RequestOptions is the SDK's per-call options bag, which
 // extends RequestInit and therefore accepts a `signal` for cancellation.
@@ -25,8 +25,10 @@ export class MistralLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
+        const longRunningFetch = GetLongRunningAIFetch();
         this._client = new Mistral({
-            apiKey: apiKey
+            apiKey: apiKey,
+            ...(longRunningFetch ? { httpClient: new HTTPClient({ fetcher: longRunningFetch }) } : {}),
         });
     }
 

@@ -15,14 +15,19 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { UserInfo, ValidationErrorType } from '@memberjunction/core';
+import { AuthorizationInfo, AuthorizationRoleInfo, IMetadataProvider, UserInfo, ValidationErrorType } from '@memberjunction/core';
 import { MJAIAgentPermissionEntity } from '@memberjunction/core-entities';
 import {
+    AI_AGENT_ADMINISTRATION_AUTHORIZATION,
+    IsAgentAdminOrOwnerUser,
     ValidateAgentInheritanceAndSandbox,
     type AgentSandboxValidationContext,
     type AgentSandboxValidationTarget,
 } from '../custom/MJAIAgentEntityServer.server';
+import { ValidateAgentCategoryDelete, ValidateAgentCategoryMutation } from '../custom/MJAIAgentCategoryEntityServer.server';
 import { ValidateAgentPersonaOwnership } from '../custom/MJAIAgentPersonaEntityServer.server';
+import { ValidateAgentStepTypeDelete, ValidateAgentStepTypeMutation } from '../custom/MJAIAgentStepTypeEntityServer.server';
+import { ValidateAgentTypeDelete, ValidateAgentTypeMutation } from '../custom/MJAIAgentTypeEntityServer.server';
 
 const __dirname_ = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname_, '../../../..');
@@ -96,6 +101,7 @@ interface EntityPermissionRecord {
     fields: {
         EntityID: string;
         RoleID: string;
+        Type?: string;
         CanRead?: boolean;
         CanCreate?: boolean;
         CanUpdate?: boolean;
@@ -104,6 +110,36 @@ interface EntityPermissionRecord {
         UpdateRLSFilterID?: string;
         DeleteRLSFilterID?: string;
     };
+    primaryKey?: {
+        ID?: string;
+    };
+    sync?: Record<string, unknown>;
+}
+
+interface AuthorizationRecord {
+    fields: {
+        Name: string;
+        ParentID: string | null;
+        IsActive: boolean;
+        UseAuditLog: boolean;
+        Description: string;
+    };
+    primaryKey?: {
+        ID?: string;
+    };
+    sync?: Record<string, unknown>;
+}
+
+interface AuthorizationRoleRecord {
+    fields: {
+        AuthorizationID: string;
+        RoleID: string;
+        Type: string;
+    };
+    primaryKey?: {
+        ID?: string;
+    };
+    sync?: Record<string, unknown>;
 }
 
 describe('#6852 Agent Instance Security & Dual-Dialect RLS Audit (§2.4 & §3.1)', () => {
@@ -231,5 +267,184 @@ describe('#6852 Agent Instance Security & Dual-Dialect RLS Audit (§2.4 & §3.1)
         expect(uiPersonaPerm!.fields.CanCreate).toBe(true);
         expect(uiPersonaPerm!.fields.CanUpdate).toBe(true);
         expect(uiPersonaPerm!.fields.CanDelete).toBe(true);
+    });
+
+    it('aligns Developer, Integration, and Agent Administrator EntityPermission metadata with admin-only server gates across Categories, Types, and Step Types (R6-4 & C1)', () => {
+        const permPath = join(REPO_ROOT, 'metadata/entity-permissions/.agent-instance-permissions.json');
+        const permRecords = JSON.parse(readFileSync(permPath, 'utf8')) as EntityPermissionRecord[];
+
+        const adminOnlyEntities = [
+            'MJ: AI Agent Categories',
+            'MJ: AI Agent Types',
+            'MJ: AI Agent Step Types',
+        ] as const;
+
+        for (const entityName of adminOnlyEntities) {
+            // Agent Administrator gets full CRUD on all 3 governance entities
+            const adminPerm = permRecords.find(
+                (p) =>
+                    p.fields.EntityID === `@lookup:MJ: Entities.Name=${entityName}` &&
+                    p.fields.RoleID === '@lookup:MJ: Roles.Name=Agent Administrator',
+            );
+            expect(adminPerm, `missing Agent Administrator row for ${entityName}`).toBeDefined();
+            expect(adminPerm!.fields.CanRead).toBe(true);
+            expect(adminPerm!.fields.CanCreate).toBe(true);
+            expect(adminPerm!.fields.CanUpdate).toBe(true);
+            expect(adminPerm!.fields.CanDelete).toBe(true);
+            expect(adminPerm!.primaryKey?.ID).toBeTruthy();
+            expect(adminPerm!.sync).toBeUndefined();
+
+            // Developer & Integration are trimmed to read-only via @lookup primaryKeys (matching CodeGen rows)
+            for (const roleName of ['Developer', 'Integration'] as const) {
+                const rolePerm = permRecords.find(
+                    (p) =>
+                        p.fields.EntityID === `@lookup:MJ: Entities.Name=${entityName}` &&
+                        p.fields.RoleID === `@lookup:MJ: Roles.Name=${roleName}`,
+                );
+                expect(rolePerm, `missing ${roleName} row for ${entityName}`).toBeDefined();
+                expect(rolePerm!.fields.Type).toBe('Allow');
+                expect(rolePerm!.fields.CanRead).toBe(true);
+                expect(rolePerm!.fields.CanCreate).toBe(false);
+                expect(rolePerm!.fields.CanUpdate).toBe(false);
+                expect(rolePerm!.fields.CanDelete).toBe(false);
+                expect(rolePerm!.primaryKey?.ID).toBe(
+                    `@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=${entityName}&RoleID=@lookup:MJ: Roles.Name=${roleName}&Type=Allow`,
+                );
+                expect(rolePerm!.sync).toBeUndefined();
+            }
+        }
+
+        // Verify server-side guards reject Developer & Integration and accept Agent Administrator
+        const devUser = makeUser(ALICE_ID, 'User', ['Developer']);
+        const integrationUser = makeUser(BOB_ID, 'User', ['Integration']);
+        const agentAdminUser = makeUser('c1000000-0000-4000-8000-000000000003', 'User', ['Agent Administrator']);
+
+        for (const nonAdmin of [devUser, integrationUser]) {
+            expect(ValidateAgentCategoryMutation('Finance', nonAdmin)).toHaveLength(1);
+            expect(ValidateAgentCategoryDelete('cat-1', nonAdmin)).toHaveLength(1);
+            expect(ValidateAgentTypeMutation('Loop', nonAdmin)).toHaveLength(1);
+            expect(ValidateAgentTypeDelete('type-1', nonAdmin)).toHaveLength(1);
+            expect(
+                ValidateAgentStepTypeMutation(
+                    { Name: 'CustomStep', DriverClass: 'CustomHandler', AllowedInUnapprovedPlanMode: false, CountsAgainstTreeBudget: true },
+                    nonAdmin,
+                ),
+            ).toHaveLength(1);
+            expect(ValidateAgentStepTypeDelete('CustomStep', 'step-1', nonAdmin)).toHaveLength(1);
+        }
+
+        expect(ValidateAgentCategoryMutation('Finance', agentAdminUser)).toEqual([]);
+        expect(ValidateAgentCategoryDelete('cat-1', agentAdminUser)).toEqual([]);
+        expect(ValidateAgentTypeMutation('Loop', agentAdminUser)).toEqual([]);
+        expect(ValidateAgentTypeDelete('type-1', agentAdminUser)).toEqual([]);
+        expect(
+            ValidateAgentStepTypeMutation(
+                { Name: 'CustomStep', DriverClass: 'CustomHandler', AllowedInUnapprovedPlanMode: false, CountsAgainstTreeBudget: true },
+                agentAdminUser,
+            ),
+        ).toEqual([]);
+        expect(ValidateAgentStepTypeDelete('CustomStep', 'step-1', agentAdminUser)).toEqual([]);
+    });
+
+    it('supports the AI: Agent Administration MJ Authorization alongside role fallback and ships declarative metadata (C1)', () => {
+        const authPath = join(REPO_ROOT, 'metadata/authorizations/.agent-administration-authorizations.json');
+        const authRolesPath = join(REPO_ROOT, 'metadata/authorization-roles/.agent-administration-authorization-roles.json');
+        const authRecords = JSON.parse(readFileSync(authPath, 'utf8')) as AuthorizationRecord[];
+        const authRoleRecords = JSON.parse(readFileSync(authRolesPath, 'utf8')) as AuthorizationRoleRecord[];
+
+        const agentAdminAuth = authRecords.find((a) => a.fields.Name === AI_AGENT_ADMINISTRATION_AUTHORIZATION);
+        expect(agentAdminAuth).toBeDefined();
+        expect(agentAdminAuth!.fields.IsActive).toBe(true);
+        expect(agentAdminAuth!.primaryKey?.ID).toBeTruthy();
+        expect(agentAdminAuth!.sync).toBeUndefined();
+
+        const roleGrant = authRoleRecords.find(
+            (r) =>
+                r.fields.AuthorizationID === `@lookup:MJ: Authorizations.Name=${AI_AGENT_ADMINISTRATION_AUTHORIZATION}` &&
+                r.fields.RoleID === '@lookup:MJ: Roles.Name=Agent Administrator' &&
+                r.fields.Type === 'Allow',
+        );
+        expect(roleGrant).toBeDefined();
+        expect(roleGrant!.primaryKey?.ID).toBeTruthy();
+        expect(roleGrant!.sync).toBeUndefined();
+
+        // A user in a custom non-admin role ("AI Ops") is denied without the authorization...
+        const customOpsRoleId = 'c3000000-0000-4000-8000-000000000099';
+        const opsUser = new UserInfo(undefined, {
+            ID: ALICE_ID,
+            Name: 'Ops User',
+            Email: 'ops@test.mj',
+            Type: 'User',
+            UserRoles: [{ RoleID: customOpsRoleId, Role: 'AI Ops', UserID: ALICE_ID }],
+        });
+        expect(IsAgentAdminOrOwnerUser(opsUser)).toBe(false);
+
+        // ...and allowed when granted the "AI: Agent Administration" authorization directly...
+        const directAuthId = 'c4000000-0000-4000-8000-000000000001';
+        const directProvider: Pick<IMetadataProvider, 'Authorizations' | 'AuthorizationRoles'> = {
+            Authorizations: [],
+            AuthorizationRoles: [
+                new AuthorizationRoleInfo({
+                    ID: 'c5000000-0000-4000-8000-000000000001',
+                    AuthorizationID: directAuthId,
+                    RoleID: customOpsRoleId,
+                    Type: 'Allow',
+                }),
+            ],
+        };
+        const directAuth = new AuthorizationInfo(
+            {
+                ID: directAuthId,
+                Name: AI_AGENT_ADMINISTRATION_AUTHORIZATION,
+                ParentID: null,
+                IsActive: true,
+            },
+            directProvider as IMetadataProvider,
+        );
+        directProvider.Authorizations.push(directAuth);
+        expect(IsAgentAdminOrOwnerUser(opsUser, directProvider)).toBe(true);
+        expect(ValidateAgentCategoryMutation('Finance', opsUser, directProvider)).toEqual([]);
+        expect(ValidateAgentTypeMutation('Loop', opsUser, directProvider)).toEqual([]);
+        expect(
+            ValidateAgentStepTypeMutation(
+                { Name: 'CustomStep', DriverClass: 'CustomHandler', AllowedInUnapprovedPlanMode: false, CountsAgainstTreeBudget: true },
+                opsUser,
+                directProvider,
+            ),
+        ).toEqual([]);
+
+        // ...or via an ancestor authorization!
+        const parentAuthId = 'c4000000-0000-4000-8000-000000000010';
+        const ancestorProvider: Pick<IMetadataProvider, 'Authorizations' | 'AuthorizationRoles'> = {
+            Authorizations: [],
+            AuthorizationRoles: [
+                new AuthorizationRoleInfo({
+                    ID: 'c5000000-0000-4000-8000-000000000010',
+                    AuthorizationID: parentAuthId,
+                    RoleID: customOpsRoleId,
+                    Type: 'Allow',
+                }),
+            ],
+        };
+        const parentAuth = new AuthorizationInfo(
+            {
+                ID: parentAuthId,
+                Name: 'Platform Administration',
+                ParentID: null,
+                IsActive: true,
+            },
+            ancestorProvider as IMetadataProvider,
+        );
+        const childAuth = new AuthorizationInfo(
+            {
+                ID: 'c4000000-0000-4000-8000-000000000011',
+                Name: AI_AGENT_ADMINISTRATION_AUTHORIZATION,
+                ParentID: parentAuthId,
+                IsActive: true,
+            },
+            ancestorProvider as IMetadataProvider,
+        );
+        ancestorProvider.Authorizations.push(parentAuth, childAuth);
+        expect(IsAgentAdminOrOwnerUser(opsUser, ancestorProvider)).toBe(true);
     });
 });

@@ -120,6 +120,16 @@ export interface EffectiveAgentProperties {
     NoteRetentionDays: number | null;
     ExampleRetentionDays: number | null;
     AutoArchiveEnabled: boolean;
+    PayloadDownstreamPaths: string[] | null;
+    PayloadUpstreamPaths: string[] | null;
+    PayloadSelfReadPaths: string[] | null;
+    PayloadSelfWritePaths: string[] | null;
+    PayloadScope: string | null;
+    StartingPayloadValidation: string | null;
+    StartingPayloadValidationMode: MJAIAgentEntity['StartingPayloadValidationMode'];
+    FinalPayloadValidation: string | null;
+    FinalPayloadValidationMode: MJAIAgentEntity['FinalPayloadValidationMode'];
+    FinalPayloadValidationMaxRetries: number | null;
     ExecutionMode: MJAIAgentEntity['ExecutionMode'];
     MinExecutionsPerRun: number | null;
     MaxExecutionsPerRun: number | null;
@@ -2241,6 +2251,53 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             true
         );
 
+        const parseStringArrayColumn = (raw: string | null | undefined): string[] | null => {
+            if (!raw || raw.trim().length === 0) {
+                return null;
+            }
+            try {
+                const parsed: unknown = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.every((item): item is string => typeof item === 'string')) {
+                    return parsed;
+                }
+            } catch {
+                // Invalid legacy JSON string; treat as unset so cascade/default handles cleanly
+            }
+            return null;
+        };
+
+        const resolvePayloadPaths = (
+            jsonPicker: (cfg: IAgentConfiguration | null) => string[] | null | undefined,
+            legacyPicker: (a: MJAIAgentEntityExtended) => string | null | undefined,
+            layerDefault: string[] | null | undefined,
+            treatWildcardAsDbDefault: boolean
+        ): string[] | null => {
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const explicit = jsonPicker(nodeConfigs[i]);
+                if (Array.isArray(explicit)) {
+                    return [...explicit];
+                }
+                const legacy = parseStringArrayColumn(legacyPicker(nodes[i]));
+                if (legacy !== null) {
+                    const isDbWildcardDefault =
+                        treatWildcardAsDbDefault && legacy.length === 1 && legacy[0] === '*';
+                    if (!isDbWildcardDefault) {
+                        return legacy;
+                    }
+                }
+            }
+            if (Array.isArray(layerDefault)) {
+                return [...layerDefault];
+            }
+            for (let i = nodes.length - 1; i >= 0; i--) {
+                const legacy = parseStringArrayColumn(legacyPicker(nodes[i]));
+                if (legacy !== null) {
+                    return legacy;
+                }
+            }
+            return null;
+        };
+
         return {
             TypeID: effectiveTypeId,
             DriverClass: nearestNonNull((a) => a.DriverClass),
@@ -2338,6 +2395,62 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 180
             ),
             AutoArchiveEnabled: effectiveAutoArchive,
+            PayloadDownstreamPaths: resolvePayloadPaths(
+                (cfg) => cfg?.payload?.downstreamPaths,
+                (a) => a.PayloadDownstreamPaths,
+                defaultsLayer.payload?.downstreamPaths,
+                true
+            ),
+            PayloadUpstreamPaths: resolvePayloadPaths(
+                (cfg) => cfg?.payload?.upstreamPaths,
+                (a) => a.PayloadUpstreamPaths,
+                defaultsLayer.payload?.upstreamPaths,
+                true
+            ),
+            PayloadSelfReadPaths: resolvePayloadPaths(
+                (cfg) => cfg?.payload?.selfReadPaths,
+                (a) => a.PayloadSelfReadPaths,
+                defaultsLayer.payload?.selfReadPaths,
+                false
+            ),
+            PayloadSelfWritePaths: resolvePayloadPaths(
+                (cfg) => cfg?.payload?.selfWritePaths,
+                (a) => a.PayloadSelfWritePaths,
+                defaultsLayer.payload?.selfWritePaths,
+                false
+            ),
+            PayloadScope: nearestOrDefault(
+                (a, cfg) => cfg?.payload?.scope ?? a.PayloadScope,
+                defaultsLayer.payload?.scope
+            ),
+            StartingPayloadValidation: nearestOrDefault(
+                (a, cfg) => cfg?.payload?.startingValidationSchema ?? a.StartingPayloadValidation,
+                defaultsLayer.payload?.startingValidationSchema
+            ),
+            StartingPayloadValidationMode:
+                resolveOverridableWithDbDefault(
+                    (cfg) => cfg?.payload?.startingValidationMode,
+                    (a) => a.StartingPayloadValidationMode,
+                    defaultsLayer.payload?.startingValidationMode,
+                    'Fail'
+                ) ?? 'Fail',
+            FinalPayloadValidation: nearestOrDefault(
+                (a, cfg) => cfg?.payload?.finalValidationSchema ?? a.FinalPayloadValidation,
+                defaultsLayer.payload?.finalValidationSchema
+            ),
+            FinalPayloadValidationMode:
+                resolveOverridableWithDbDefault(
+                    (cfg) => cfg?.payload?.finalValidationMode,
+                    (a) => a.FinalPayloadValidationMode,
+                    defaultsLayer.payload?.finalValidationMode,
+                    'Retry'
+                ) ?? 'Retry',
+            FinalPayloadValidationMaxRetries: resolveOverridableWithDbDefault(
+                (cfg) => cfg?.payload?.finalValidationMaxRetries,
+                (a) => a.FinalPayloadValidationMaxRetries,
+                defaultsLayer.payload?.finalValidationMaxRetries,
+                3
+            ),
             ExecutionMode:
                 resolveOverridableWithDbDefault(
                     (cfg) => cfg?.subAgentExecution?.mode,

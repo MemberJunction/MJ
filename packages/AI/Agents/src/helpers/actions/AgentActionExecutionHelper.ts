@@ -33,6 +33,7 @@ import { BuildClientToolResultMessage, ResolveClientToolResultMaxChars } from '.
 import { ClientToolRequestManager } from '../../ClientToolRequestManager';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from '../../native-tools/agent-tools';
 import { BuildToolResultTurn, type NativeToolResult } from '../../native-tools/tool-result-turns';
+import { SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import {
     CircuitBreakerActionResult,
@@ -507,9 +508,11 @@ export class AgentActionExecutionHelper {
                 );
 
                 if (payloadChangeRequest) {
-                    const allowedPaths = params.agent.PayloadSelfWritePaths
-                        ? JSON.parse(params.agent.PayloadSelfWritePaths)
-                        : ctx.Hooks.GetDefaultPayloadSelfWritePaths();
+                    const allowedPaths =
+                        SafeResolveEffectiveAgentProperties(params.agent)?.PayloadSelfWritePaths ??
+                        (params.agent.PayloadSelfWritePaths
+                            ? (JSON.parse(params.agent.PayloadSelfWritePaths) as string[])
+                            : ctx.Hooks.GetDefaultPayloadSelfWritePaths());
 
                     const changeResult = ctx.PayloadManager.applyAgentChangeRequest(currentPayload, payloadChangeRequest, {
                         validateChanges: true,
@@ -901,9 +904,11 @@ export class AgentActionExecutionHelper {
         params: ExecuteAgentParams,
         partial = false
     ): { payload: P; error?: string } {
-        const allowedPaths = params.agent.PayloadSelfWritePaths
-            ? JSON.parse(params.agent.PayloadSelfWritePaths)
-            : ctx.Hooks.GetDefaultPayloadSelfWritePaths();
+        const allowedPaths =
+            SafeResolveEffectiveAgentProperties(params.agent)?.PayloadSelfWritePaths ??
+            (params.agent.PayloadSelfWritePaths
+                ? (JSON.parse(params.agent.PayloadSelfWritePaths) as string[])
+                : ctx.Hooks.GetDefaultPayloadSelfWritePaths());
         const changeResult = ctx.PayloadManager.applyAgentChangeRequest(payload, change, {
             validateChanges: true,
             logChanges: true,

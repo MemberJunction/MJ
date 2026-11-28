@@ -70,6 +70,30 @@ export class AgentStepValidationHelper {
             };
         }
 
+        if (policy.ConfigSchema && policy.ConfigSchema.trim().length > 0) {
+            const schemaResult = policy.Handler.ValidateConfigSchema(policy.ConfigSchema, nextStep.customStepData);
+            if (!schemaResult.Valid) {
+                ctx.GeneralValidationRetryCount++;
+                const summary = `Custom step '${policy.StepKey}' customStepData failed ConfigSchema validation: ${schemaResult.Errors.join('; ')}`;
+                ctx.Hooks.LogError(summary, {
+                    agent: params.agent,
+                    category: 'CustomStepConfigSchemaValidation',
+                    metadata: {
+                        stepKey: policy.StepKey,
+                        validationErrors: schemaResult.Errors,
+                    },
+                });
+                return {
+                    step: 'Retry',
+                    terminate: false,
+                    errorMessage: summary,
+                    retryInstructions:
+                        `Custom step '${policy.StepKey}' customStepData failed ConfigSchema validation:\n` +
+                        schemaResult.Errors.map((e, i) => `${i + 1}. ${e}`).join('\n'),
+                };
+            }
+        }
+
         return policy.Handler.Validate<P>(ctx, params, nextStep, currentPayload, agentRun, currentStep);
     }
 

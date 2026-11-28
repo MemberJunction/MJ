@@ -422,9 +422,13 @@ export class AgentPromptCatalogAndNarrowingHelper {
             Description: item.Description ?? '',
             Pinned: pinned,
         });
+        const subAgentMinExec = (s: MJAIAgentEntityExtended): number =>
+            (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function'
+                ? AIEngine.Instance.ResolveEffectiveAgentProperties(s).MinExecutionsPerRun
+                : s.MinExecutionsPerRun) ?? 0;
         return [
             ...actions.map((a) => candidate('action', a, IsAlwaysShownAction(a.Name) || requiredActionIds.Has(a.ID))),
-            ...subAgents.filter((s) => !!s).map((s) => candidate('agent', s, (s.MinExecutionsPerRun ?? 0) > 0)),
+            ...subAgents.filter((s) => !!s).map((s) => candidate('agent', s, subAgentMinExec(s) > 0)),
             ...skills.map((s) => candidate('skill', s, hasUnpinnedSkills && assignedSkillIDs.Has(s.ID))),
         ];
     }

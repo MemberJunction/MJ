@@ -2,6 +2,7 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    IEntityDataProvider,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -19,9 +20,10 @@ import { IsAgentAdminOrOwnerUser, IsMetadataProvider } from './MJAIAgentEntitySe
 export function ValidateAgentPersonaOwnership(
     targetAgent: Pick<MJAIAgentEntity, 'ID' | 'BaseAgentID' | 'OwnerUserID'> | null,
     user: UserInfo | null | undefined,
-    agentId: string | null | undefined
+    agentId: string | null | undefined,
+    provider?: IEntityDataProvider | null
 ): ValidationErrorInfo[] {
-    if (IsAgentAdminOrOwnerUser(user) || !user) {
+    if (IsAgentAdminOrOwnerUser(user, provider) || !user) {
         return [];
     }
     if (!targetAgent || !targetAgent.BaseAgentID || !UUIDsEqual(targetAgent.OwnerUserID, user.ID)) {
@@ -58,7 +60,7 @@ export class MJAIAgentPersonaEntityServer extends MJAIAgentPersonaEntity {
         }
 
         const user = this.ContextCurrentUser;
-        if (IsAgentAdminOrOwnerUser(user) || !user) {
+        if (IsAgentAdminOrOwnerUser(user, this.ProviderToUse) || !user) {
             return result;
         }
 
@@ -70,7 +72,7 @@ export class MJAIAgentPersonaEntityServer extends MJAIAgentPersonaEntity {
 
         for (const agentId of targetIds) {
             const targetAgent = await this.loadAgent(agentId);
-            const errors = ValidateAgentPersonaOwnership(targetAgent, user, agentId);
+            const errors = ValidateAgentPersonaOwnership(targetAgent, user, agentId, this.ProviderToUse);
             if (errors.length > 0) {
                 result.Errors.push(...errors);
                 result.Success = false;
@@ -82,11 +84,11 @@ export class MJAIAgentPersonaEntityServer extends MJAIAgentPersonaEntity {
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const user = this.ContextCurrentUser;
-        if (!IsAgentAdminOrOwnerUser(user) && user) {
+        if (!IsAgentAdminOrOwnerUser(user, this.ProviderToUse) && user) {
             const preSaveAgentId =
                 (this.GetFieldByName('AgentID')?.OldValue as string | null | undefined) ?? this.AgentID;
             const targetAgent = preSaveAgentId ? await this.loadAgent(preSaveAgentId) : null;
-            const errors = ValidateAgentPersonaOwnership(targetAgent, user, preSaveAgentId);
+            const errors = ValidateAgentPersonaOwnership(targetAgent, user, preSaveAgentId, this.ProviderToUse);
             if (errors.length > 0) {
                 const deleteResult = new BaseEntityResult(false, '', 'delete');
                 deleteResult.Errors = errors;

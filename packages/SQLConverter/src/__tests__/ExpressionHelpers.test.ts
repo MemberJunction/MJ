@@ -19,6 +19,7 @@ import {
   ConvertTryConvert,
   HasTryConvert,
   AddRecursiveToSelfReferencingCtes,
+  ConvertJsonFunctions,
 } from '../rules/ExpressionHelpers.js';
 
 // ---------------------------------------------------------------------------
@@ -1048,5 +1049,66 @@ describe('AddRecursiveToSelfReferencingCtes (issue #5799)', () => {
   it('ignores a CTE name that appears only in a string literal', () => {
     const sql = "WITH a AS (SELECT 'FROM a' AS note) SELECT * FROM a";
     expect(AddRecursiveToSelfReferencingCtes(sql)).toBe(sql);
+  });
+});
+
+describe('ConvertJsonFunctions — JSON_MODIFY, JSON_QUERY, JSON_VALUE, ISJSON', () => {
+  it('converts single- and multi-segment JSON_MODIFY with string, numeric, boolean, and JSON_QUERY values', () => {
+    expect(ConvertJsonFunctions("JSON_MODIFY(a.\"Configuration\", '$.scope', JSON_QUERY('{}'))"))
+      .toBe("jsonb_set((a.\"Configuration\")::jsonb, '{scope}', ('{}')::jsonb, true)::text");
+    expect(ConvertJsonFunctions("JSON_MODIFY(a.\"Configuration\", '$.scope.searchScopeAccess', 'None')"))
+      .toBe("jsonb_set((a.\"Configuration\")::jsonb, '{scope,searchScopeAccess}', to_jsonb('None'::text), true)::text");
+    expect(ConvertJsonFunctions("JSON_MODIFY(col, '$.maxRetries', 5)"))
+      .toBe("jsonb_set((col)::jsonb, '{maxRetries}', to_jsonb(5), true)::text");
+    expect(ConvertJsonFunctions("JSON_MODIFY(col, '$.enabled', true)"))
+      .toBe("jsonb_set((col)::jsonb, '{enabled}', to_jsonb(true), true)::text");
+    expect(ConvertJsonFunctions("JSON_MODIFY(col, '$.items[0].name', 'Alpha')"))
+      .toBe("jsonb_set((col)::jsonb, '{items,0,name}', to_jsonb('Alpha'::text), true)::text");
+  });
+
+  it('converts JSON_MODIFY with NULL to key deletion in lax mode and json null in strict mode', () => {
+    expect(ConvertJsonFunctions("JSON_MODIFY(col, '$.scope.searchScopeAccess', NULL)"))
+      .toBe("((col)::jsonb #- '{scope,searchScopeAccess}')::text");
+    expect(ConvertJsonFunctions("JSON_MODIFY(col, 'strict $.scope.searchScopeAccess', NULL)"))
+      .toBe("jsonb_set((col)::jsonb, '{scope,searchScopeAccess}', 'null'::jsonb, true)::text");
+  });
+
+  it('converts 1-arg and 2-arg JSON_QUERY', () => {
+    expect(ConvertJsonFunctions("JSON_QUERY(N'{}')")).toBe("('{}')::jsonb");
+    expect(ConvertJsonFunctions('JSON_QUERY(a."Configuration", \'$.scope\')'))
+      .toBe('(a."Configuration")::jsonb -> \'scope\'');
+    expect(ConvertJsonFunctions('JSON_QUERY(a."Configuration", \'$.a.b\')'))
+      .toBe('(a."Configuration")::jsonb #> \'{a,b}\'');
+    expect(ConvertJsonFunctions('JSON_QUERY(a."Configuration", \'$\')'))
+      .toBe('(a."Configuration")::jsonb');
+  });
+
+  it('converts nested JSON_MODIFY inside CASE expressions with JSON_QUERY and ISJSON', () => {
+    const input = `CASE
+      WHEN ISJSON(a."Configuration") = 1
+        AND JSON_VALUE(a."Configuration", '$.scope.searchScopeAccess') IS NULL
+        THEN JSON_MODIFY(
+          CASE
+            WHEN JSON_QUERY(a."Configuration", '$.scope') IS NULL
+              THEN JSON_MODIFY(a."Configuration", '$.scope', JSON_QUERY('{}'))
+            ELSE a."Configuration"
+          END,
+          '$.scope.searchScopeAccess',
+          'None'
+        )
+      ELSE a."Configuration"
+    END`;
+    const out = ConvertJsonFunctions(input);
+    expect(out).not.toMatch(/\b(?:JSON_MODIFY|JSON_QUERY|JSON_VALUE|ISJSON)\s*\(/i);
+    expect(out).toContain('(a."Configuration") IS JSON');
+    expect(out).toContain('(a."Configuration")::jsonb #>> \'{scope,searchScopeAccess}\' IS NULL');
+    expect(out).toContain('(a."Configuration")::jsonb -> \'scope\' IS NULL');
+    expect(out).toContain("jsonb_set((a.\"Configuration\")::jsonb, '{scope}', ('{}')::jsonb, true)::text");
+    expect(out).toContain("'{scope,searchScopeAccess}', to_jsonb('None'::text), true)::text");
+  });
+
+  it('does not rewrite JSON_MODIFY / JSON_QUERY / ISJSON inside single-quoted string literals', () => {
+    const sql = "SELECT 'Use JSON_MODIFY(col, ''$.a'', ''b'') and JSON_QUERY(col)' AS \"Note\"";
+    expect(ConvertJsonFunctions(sql)).toBe(sql);
   });
 });

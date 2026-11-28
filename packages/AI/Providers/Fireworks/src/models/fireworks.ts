@@ -1,4 +1,4 @@
-import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
+import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetLongRunningAIFetch, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
@@ -16,9 +16,11 @@ export class FireworksLLM extends BaseLLM {
         super(apiKey);
 
         // Create the OpenAI-compatible client instance with Fireworks.ai endpoint
+        const longRunningFetch = GetLongRunningAIFetch();
         this._client = new OpenAI({
             apiKey,
-            baseURL: baseURL || FireworksLLM.DEFAULT_BASE_URL
+            baseURL: baseURL || FireworksLLM.DEFAULT_BASE_URL,
+            ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
         });
     }
 

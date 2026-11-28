@@ -1,4 +1,5 @@
 import { Ollama, Fetch } from 'ollama';
+import { GetLongRunningAIFetch } from '@memberjunction/ai';
 
 /**
  * An Ollama client whose requests abort with a caller's cancellation token, plus the `Dispose`
@@ -30,10 +31,11 @@ export function CreateCancellableOllamaClient(host: string, token: AbortSignal):
         token.addEventListener('abort', onTokenAbort, { once: true });
     }
 
+    const baseFetch: Fetch = GetLongRunningAIFetch() ?? fetch;
     const cancellableFetch: Fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const existing = init?.signal;
         if (!existing) {
-            return fetch(input, { ...init, signal: requestController.signal });
+            return baseFetch(input, { ...init, signal: requestController.signal });
         }
         // `existing` is the Ollama client's own per-request signal, so this listener dies with it
         const combined = new AbortController();
@@ -45,7 +47,7 @@ export function CreateCancellableOllamaClient(host: string, token: AbortSignal):
             }
             source.addEventListener('abort', () => forward(source), { once: true });
         }
-        return fetch(input, { ...init, signal: combined.signal });
+        return baseFetch(input, { ...init, signal: combined.signal });
     };
 
     return {

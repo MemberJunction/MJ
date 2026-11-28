@@ -62,6 +62,8 @@ export interface AgentStepTypeDescriptor {
     DefaultEnabledInPrompt?: boolean;
     /** Optional prompt instructions teaching the LLM how to emit this step type. */
     PromptInstructions?: string | null;
+    /** Optional JSON Schema validating `customStepData` before handler execution (`AIAgentStepType.ResponseSchemaSnippet` or `Configuration.configSchema`). */
+    ConfigSchema?: string | null;
     /** Optional direct constructor fallback used when `ClassFactory` has been cleared in unit tests. */
     FallbackClass?: AgentStepHandlerConstructor;
 }
@@ -78,6 +80,7 @@ export interface ResolvedAgentStepTypePolicy {
     CountsAgainstTreeBudget: boolean;
     DefaultEnabledInPrompt: boolean;
     PromptInstructions: string | null;
+    ConfigSchema: string | null;
     IsBuiltIn: boolean;
     Handler: BaseAgentStepHandler;
 }
@@ -191,6 +194,7 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
                     programmatic.CountsAgainstTreeBudget ?? handler.CountsAgainstTreeBudget,
                 DefaultEnabledInPrompt: programmatic.DefaultEnabledInPrompt ?? true,
                 PromptInstructions: programmatic.PromptInstructions ?? null,
+                ConfigSchema: programmatic.ConfigSchema ?? (metadataRow ? this.resolveMetadataConfigSchema(metadataRow) : null),
                 IsBuiltIn: Boolean(builtIn),
                 Handler: handler,
             };
@@ -224,6 +228,7 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
                     : Boolean(metadataRow.CountsAgainstTreeBudget) || handler.CountsAgainstTreeBudget,
                 DefaultEnabledInPrompt: metadataRow.DefaultEnabledInPrompt,
                 PromptInstructions: metadataRow.PromptDocsTemplate ?? null,
+                ConfigSchema: this.resolveMetadataConfigSchema(metadataRow),
                 IsBuiltIn: Boolean(builtIn),
                 Handler: handler,
             };
@@ -242,6 +247,7 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
                 CountsAgainstTreeBudget: builtIn.CountsAgainstTreeBudget,
                 DefaultEnabledInPrompt: true,
                 PromptInstructions: null,
+                ConfigSchema: null,
                 IsBuiltIn: true,
                 Handler: handler,
             };
@@ -339,6 +345,29 @@ export class AgentStepTypeRegistry extends BaseSingleton<AgentStepTypeRegistry> 
         } catch {
             return [];
         }
+    }
+
+    private resolveMetadataConfigSchema(row: MJAIAgentStepTypeEntity): string | null {
+        if (row.ResponseSchemaSnippet && row.ResponseSchemaSnippet.trim().length > 0) {
+            return row.ResponseSchemaSnippet;
+        }
+        if (row.Configuration && row.Configuration.trim().length > 0) {
+            try {
+                const parsed: unknown = JSON.parse(row.Configuration);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    const schema = (parsed as Record<string, unknown>)['configSchema'];
+                    if (typeof schema === 'string' && schema.trim().length > 0) {
+                        return schema;
+                    }
+                    if (schema && typeof schema === 'object' && !Array.isArray(schema)) {
+                        return JSON.stringify(schema);
+                    }
+                }
+            } catch {
+                // Ignore malformed Configuration JSON when probing optional configSchema
+            }
+        }
+        return null;
     }
 
     private findMetadataRow(normalizedKey: string): MJAIAgentStepTypeEntity | undefined {

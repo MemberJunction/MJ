@@ -150,10 +150,18 @@ export function FormatReloadedConsultsMessage(consults: ReadonlyArray<SubAgentCo
  * `MJAIAgentRelationshipEntity` row with `ChatHandlingOption === 'Consult'`.
  */
 export function CanAgentOwnSubAgentConsults(
-    agentOrId: string | { ID: string; ChatHandlingOption?: string | null }
+    agentOrId: string | { ID: string; ChatHandlingOption?: string | null; Configuration?: string | null }
 ): boolean {
-    if (typeof agentOrId === 'object' && agentOrId !== null && agentOrId.ChatHandlingOption === 'Consult') {
-        return true;
+    if (typeof agentOrId === 'object' && agentOrId !== null) {
+        if (agentOrId.ChatHandlingOption === 'Consult') {
+            return true;
+        }
+        if (agentOrId.ID && typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+            const cached = AIEngine.Instance.Agents?.find(a => UUIDsEqual(a.ID, agentOrId.ID));
+            if (cached && AIEngine.Instance.ResolveEffectiveAgentProperties(cached).ChatHandlingOption === 'Consult') {
+                return true;
+            }
+        }
     }
 
     const agentId = typeof agentOrId === 'string' ? agentOrId : agentOrId?.ID;
@@ -163,7 +171,11 @@ export function CanAgentOwnSubAgentConsults(
 
     if (typeof agentOrId === 'string') {
         const found = AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId));
-        if (found?.ChatHandlingOption === 'Consult') {
+        const effectiveChatOption =
+            found && typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function'
+                ? AIEngine.Instance.ResolveEffectiveAgentProperties(found).ChatHandlingOption
+                : found?.ChatHandlingOption;
+        if (effectiveChatOption === 'Consult') {
             return true;
         }
     }

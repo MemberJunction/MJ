@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
 const mockCreate = vi.hoisted(() => vi.fn());
+const mockGetLongRunningAIFetch = vi.hoisted(
+    () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 const MockCerebras = vi.hoisted(() => vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.chat = {
         completions: {
@@ -153,6 +156,7 @@ vi.mock('@memberjunction/ai', () => {
         extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
         ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
         CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
+        GetLongRunningAIFetch: mockGetLongRunningAIFetch,
         BaseLLM,
         ModelUsage,
         ChatResult,
@@ -187,6 +191,15 @@ describe('CerebrasLLM', () => {
             expect(instance.CerebrasClient).toBeDefined();
             expect(instance.client).toBeDefined();
             expect(instance.client).toBe(instance.CerebrasClient);
+        });
+
+        it('should forward GetLongRunningAIFetch to the Cerebras SDK constructor when configured (R2-9)', () => {
+            const scopedFetch = vi.fn<() => Promise<Response>>();
+            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            MockCerebras.mockClear();
+
+            new CerebrasLLM('scoped-key');
+            expect(MockCerebras).toHaveBeenCalledWith({ apiKey: 'scoped-key', fetch: scopedFetch });
         });
     });
 

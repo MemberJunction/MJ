@@ -417,12 +417,14 @@ export class AgentPromptExecutionHelper {
 
             const workingPayload = ctx.PayloadHelper.WithHeldCompletionChanges(ctx, params, payload);
             let downstreamPayload = workingPayload;
-            if (params.agent.PayloadSelfReadPaths) {
-                const downstreamPaths = JSON.parse(params.agent.PayloadSelfReadPaths);
+            const effectiveSelfReadPaths =
+                SafeResolveEffectiveAgentProperties(params.agent)?.PayloadSelfReadPaths ??
+                (params.agent.PayloadSelfReadPaths ? (JSON.parse(params.agent.PayloadSelfReadPaths) as string[]) : null);
+            if (effectiveSelfReadPaths) {
                 downstreamPayload = ctx.PayloadManager.extractDownstreamPayload(
                     `Self: ${params.agent.Name}`,
                     workingPayload,
-                    downstreamPaths
+                    effectiveSelfReadPaths
                 );
             }
 

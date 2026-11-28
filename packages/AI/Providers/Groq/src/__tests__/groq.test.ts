@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
 const mockCreate = vi.hoisted(() => vi.fn());
+const mockGetLongRunningAIFetch = vi.hoisted(
+    () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 const MockGroq = vi.hoisted(() => vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.chat = {
         completions: {
@@ -156,6 +159,7 @@ vi.mock('@memberjunction/ai', () => {
         ReadOpenAICompatibleToolCalls: actualToolMapping.ReadOpenAICompatibleToolCalls,
         CHAT_FINISH_REASON_MALFORMED_TOOL_CALL: 'malformed_tool_call',
         CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
+        GetLongRunningAIFetch: mockGetLongRunningAIFetch,
         // Narrows a `tool` role to the classic trio; the driver relies on it, so use the real one.
         toClassicChatMessageRole: actualToClassicChatMessageRole,
         BaseLLM,
@@ -195,6 +199,15 @@ describe('GroqLLM', () => {
             expect(instance.GroqClient).toBeDefined();
             expect(instance.client).toBeDefined();
             expect(instance.client).toBe(instance.GroqClient);
+        });
+
+        it('should forward GetLongRunningAIFetch to the Groq SDK constructor when configured (R2-9)', () => {
+            const scopedFetch = vi.fn<() => Promise<Response>>();
+            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            MockGroq.mockClear();
+
+            new GroqLLM('scoped-key');
+            expect(MockGroq).toHaveBeenCalledWith({ apiKey: 'scoped-key', fetch: scopedFetch });
         });
     });
 

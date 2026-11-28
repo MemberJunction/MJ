@@ -3,6 +3,8 @@ import {
     BaseEntityResult,
     EntityDeleteOptions,
     EntitySaveOptions,
+    IEntityDataProvider,
+    IMetadataProvider,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -26,9 +28,10 @@ import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
  */
 export function ValidateAgentTypeMutation(
     typeName: string | null | undefined,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'Name',
@@ -47,9 +50,10 @@ export function ValidateAgentTypeMutation(
  */
 export function ValidateAgentTypeDelete(
     typeId: string | null | undefined,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'ID',
@@ -84,7 +88,7 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
             return result;
         }
 
-        const authErrors = ValidateAgentTypeMutation(this.Name, this.ContextCurrentUser);
+        const authErrors = ValidateAgentTypeMutation(this.Name, this.ContextCurrentUser, this.ProviderToUse);
         if (authErrors.length > 0) {
             result.Errors.push(...authErrors);
             result.Success = false;
@@ -111,7 +115,8 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
                 this.DefaultAgentConfiguration,
                 'DefaultAgentConfiguration',
                 'AI Agent Type',
-                this.ContextCurrentUser
+                this.ContextCurrentUser,
+                this.ProviderToUse
             );
             result.Errors.push(...errors);
             result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
@@ -179,7 +184,7 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const errors = ValidateAgentTypeDelete(this.ID, this.ContextCurrentUser);
+        const errors = ValidateAgentTypeDelete(this.ID, this.ContextCurrentUser, this.ProviderToUse);
         if (errors.length > 0) {
             const deleteResult = new BaseEntityResult(false, '', 'delete');
             deleteResult.Errors = errors;
