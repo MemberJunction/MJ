@@ -655,6 +655,15 @@ describe('BaseAgentStepExecutionHelper & BaseAgentRunSetupHelper (s11)', () => {
         const pausedCtx = CreateMockAgentRunContext({ AgentRun: pausedRun, AwaitingWorkflowTaskID: 'wf-task-1' });
         await setup.FinalizeAgentRun(pausedCtx, { step: 'Success', terminate: true, message: 'Workflow started' });
         expect(pausedRun.Status).toBe('Paused');
+
+        // R5 Follow-up #1: FinalizeAgentRun returns defensive copies of fileOutputs & mediaOutputs
+        // so resetting ctx.FileOutputs.length = 0 on a subsequent run never mutates Run 1's result.
+        const copyCtx = CreateMockAgentRunContext({ AgentRun: makeRun() });
+        copyCtx.FileOutputs.push({ fileId: 'f-copy-1', fileName: 'report.pdf', mimeType: 'application/pdf', sizeBytes: 42 });
+        const copyOut = await setup.FinalizeAgentRun(copyCtx, { step: 'Success', terminate: true, message: 'ok' });
+        copyCtx.FileOutputs.length = 0;
+        expect(copyOut.fileOutputs).toHaveLength(1);
+        expect(copyOut.fileOutputs?.[0].fileId).toBe('f-copy-1');
     });
 
     it('PreloadAgentData skips when disabled or shared audience, and EndRun resolves cooperative pause waiters', async () => {

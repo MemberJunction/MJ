@@ -33,6 +33,7 @@ import {
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
 import {
     CompileAndValidateFlowAgent,
+    FindDispatcherOnlyFlowSteps,
     FormatFlowCompileErrors,
     ResolveFlowExecutionMode,
 } from './flow-graph-executor';
@@ -1843,6 +1844,23 @@ export class FlowAgentType extends BaseAgentType {
                 `Workflow '${params.agent.Name}' cannot run:\n${FormatFlowCompileErrors({ Success: false, Errors: duplicateKeys, Excluded: [] })}`,
                 payloadToUse
             );
+        }
+
+        // R5 Follow-up #3: refuse workflows combining in-process Custom steps with dispatcher-only
+        // steps (Human / ForEach+Enqueue) up front rather than failing mid-flow with contradictory advice.
+        const activeCustomSteps = activeSteps.filter(s => s.StepType === 'Custom');
+        if (activeCustomSteps.length > 0) {
+            const dispatcherOnly = FindDispatcherOnlyFlowSteps(activeSteps);
+            if (dispatcherOnly.length > 0) {
+                const customNames = activeCustomSteps.map(s => `'${s.Name}'`).join(', ');
+                const dispNames = dispatcherOnly.map(s => `'${s.Name}'`).join(', ');
+                return this.stopFlow(
+                    `Workflow '${params.agent.Name}' combines in-process Custom step(s) (${customNames}) with ` +
+                    `dispatcher-only step(s) (${dispNames}). Custom steps require executionMode 'inRun' while ` +
+                    `${dispNames} require the task-graph dispatcher; split these into separate workflows.`,
+                    payloadToUse
+                );
+            }
         }
 
         // A flow with a Decision step gets the dispatched path's whole check, once, before its first

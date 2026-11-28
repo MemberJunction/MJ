@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    BaseEntityResult,
     EntityDeleteOptions,
     UserInfo,
     ValidationErrorInfo,
@@ -174,7 +175,9 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const errors = ValidateAgentStepTypeDelete(this.Name, this.ID, this.ContextCurrentUser);
         if (errors.length > 0) {
-            this.LatestResult?.Errors.push(...errors);
+            const deleteResult = new BaseEntityResult(false, errors[0].Message, 'delete');
+            deleteResult.Errors = errors;
+            this.RegisterResultHistoryEntry(deleteResult);
             return false;
         }
         return super.Delete(options);

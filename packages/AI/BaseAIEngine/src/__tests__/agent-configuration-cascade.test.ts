@@ -648,5 +648,38 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         expect(engine.ResolveEffectiveAgentProperties(l2UnderL1).SearchScopeAccess).toBe('None');
         // Minimal non-instantiable leaf with untouched legacy 'None' still inherits L0's 'All'
         expect(engine.ResolveEffectiveAgentProperties(minimalLeafUnderL0).SearchScopeAccess).toBe('All');
+
+        // R5-6: Non-instantiable derived middle node with untouched legacy 'None' behaves consistently
+        // for both itself and its child (inherits 'All'), rather than differing by position.
+        const childOfMinimal = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000013',
+            Name: 'Child Of Non-Instantiable Derived',
+            BaseAgentID: minimalLeafUnderL0.ID,
+            InstantiationMode: 'None',
+            SearchScopeAccess: 'None',
+            Configuration: null,
+        });
+        const engine2 = seedEngine({
+            _agents: [l0, minimalLeafUnderL0, childOfMinimal],
+        });
+        expect(engine2.ResolveEffectiveAgentProperties(minimalLeafUnderL0).SearchScopeAccess).toBe('All');
+        expect(engine2.ResolveEffectiveAgentProperties(childOfMinimal).SearchScopeAccess).toBe('All');
+
+        // R5-7: instantiation.maxInstancesPerUser clamps monotonically (Math.min) across root -> template
+        const cappedRoot = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000020',
+            Name: 'Capped Root',
+            InstantiationMode: 'Optional',
+            Configuration: JSON.stringify({ instantiation: { maxInstancesPerUser: 1 } }),
+        });
+        const looserMid = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000021',
+            Name: 'Looser Mid Template',
+            BaseAgentID: cappedRoot.ID,
+            InstantiationMode: 'Optional',
+            Configuration: JSON.stringify({ instantiation: { maxInstancesPerUser: 5 } }),
+        });
+        const engine3 = seedEngine({ _agents: [cappedRoot, looserMid] });
+        expect(engine3.ResolveEffectiveAgentProperties(looserMid).Configuration.instantiation?.maxInstancesPerUser).toBe(1);
     });
 });

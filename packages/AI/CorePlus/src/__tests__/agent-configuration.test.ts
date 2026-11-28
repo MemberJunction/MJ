@@ -709,6 +709,17 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
             expect(typeDefaults.has(col), `Missing generated getter for MJAIAgentTypeEntity.${col}`).toBe(true);
             expect(resetVal, `Reset default mismatch for MJAIAgentTypeEntity.${col}`).toEqual(typeDefaults.get(col));
         }
+
+        // R5 Follow-up #7: pin LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS & LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS
+        // directly against generated __mj.ts metadata defaults (not just against themselves).
+        for (const [col, sqlDefault] of Object.entries(LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS)) {
+            expect(agentDefaults.has(col), `Missing generated default for MJAIAgentEntity.${col}`).toBe(true);
+            expect(sqlDefault, `LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS mismatch for ${col}`).toEqual(agentDefaults.get(col));
+        }
+        for (const [col, sqlDefault] of Object.entries(LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS)) {
+            expect(typeDefaults.has(col), `Missing generated default for MJAIAgentTypeEntity.${col}`).toBe(true);
+            expect(sqlDefault, `LEGACY_AI_AGENT_TYPE_CONFIG_SQL_DEFAULTS mismatch for ${col}`).toEqual(typeDefaults.get(col));
+        }
     });
 
     it('C-R1-1 / C-R1-5 / C-R1-7: validates SQL default matching, ResolveAgentInstantiationConfig precedence, and legacy patch validation', () => {

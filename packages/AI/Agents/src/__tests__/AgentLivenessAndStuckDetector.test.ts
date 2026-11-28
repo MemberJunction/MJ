@@ -1408,6 +1408,89 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
                 cfg
             );
             expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(0);
+
+            // R5-2: Unknown-named mutating/output actions count as progress (mutating), NOT neutral
+            expect(ClassifyToolOrActionName('Mutate Governed Artifact')).toBe('mutating');
+            expect(ClassifyToolOrActionName('Reply In Agent Channel')).toBe('mutating');
+            expect(ClassifyToolOrActionName('Train ML Model')).toBe('mutating');
+            expect(ClassifyToolOrActionName('Generate Image')).toBe('mutating');
+            for (let i = 0; i < 4; i++) {
+                streakDet.RecordStepOutcome(
+                    { StepType: 'Actions', ActionNames: ['ReadFile'], HasPayloadMutation: false, HasSubAgentDelegation: false, IsTerminal: false },
+                    cfg
+                );
+            }
+            expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(4);
+            streakDet.RecordStepOutcome(
+                { StepType: 'Actions', ActionNames: ['Mutate Governed Artifact'], HasPayloadMutation: false, HasSubAgentDelegation: false, IsTerminal: false },
+                cfg
+            );
+            expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(0);
+
+            // R5-3: Legitimate poll + Delay loop with changing poll results never triggers StuckToolCallLoop
+            // on repeated Delay(30), while a stalled poll + Delay loop with unchanged results DOES pause.
+            const pollCfg = { ...cfg, ReadOnlyStepThreshold: 15, IdenticalToolCallThreshold: 3 };
+            const pollDet = new AgentStuckDetector();
+            let pollDirectives = 0;
+            let pollPaused = false;
+            for (let turn = 1; turn <= 6; turn++) {
+                const statusEval = pollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Get Job Status', params: { jobId: 'j1' } }] },
+                    pollCfg
+                );
+                pollDirectives += statusEval.InjectedDirectives.length;
+                if (statusEval.PauseRequest) pollPaused = true;
+                pollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Get Job Status', success: true, pct: turn * 15 }] },
+                    pollCfg
+                );
+                const delayEval = pollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Delay', params: { seconds: 30 } }] },
+                    pollCfg
+                );
+                pollDirectives += delayEval.InjectedDirectives.length;
+                if (delayEval.PauseRequest) pollPaused = true;
+                pollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Delay', success: true }] },
+                    pollCfg
+                );
+            }
+            expect(pollDirectives).toBe(0);
+            expect(pollPaused).toBe(false);
+
+            const stalledPollDet = new AgentStuckDetector();
+            let stalledPauseReason: string | null = null;
+            for (let turn = 1; turn <= 5 && !stalledPauseReason; turn++) {
+                const statusEval = stalledPollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Get Job Status', params: { jobId: 'j1' } }] },
+                    pollCfg
+                );
+                if (statusEval.PauseRequest) stalledPauseReason = statusEval.PauseRequest.PauseReason;
+                stalledPollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Get Job Status', success: true, pct: 15 }] },
+                    pollCfg
+                );
+                const delayEval = stalledPollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Delay', params: { seconds: 30 } }] },
+                    pollCfg
+                );
+                if (!stalledPauseReason && delayEval.PauseRequest) {
+                    stalledPauseReason = delayEval.PauseRequest.PauseReason;
+                }
+                stalledPollDet.EvaluateStepDecision(
+                    params,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Delay', success: true }] },
+                    pollCfg
+                );
+            }
+            expect(stalledPauseReason).toBe('StuckToolCallLoop');
         });
     });
 });

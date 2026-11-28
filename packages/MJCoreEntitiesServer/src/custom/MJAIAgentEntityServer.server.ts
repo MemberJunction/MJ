@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    BaseEntityResult,
     EntityDeleteOptions,
     EntitySaveOptions,
     IEntityDataProvider,
@@ -33,7 +34,6 @@ import {
     ValidateAgentConfigurationJson,
     ValidateLegacyAgentConfigFields,
     type IAgentConfiguration,
-    type IAgentInstantiationConfig,
     type LegacyAIAgentConfigColumns,
     type LegacyAIAgentTypeConfigColumns,
 } from '@memberjunction/ai-core-plus';
@@ -496,8 +496,15 @@ export function ValidateAgentInheritanceAndSandbox(
         hops++;
     }
     const ancestors = [...ancestorsBottomUp].reverse(); // root -> ... -> baseAgent
+    const defaultPolicyLayers = collectDefaultPolicyLayers(
+        [...ancestors, Target],
+        ctx.AllCategories,
+        ctx.AllAgentTypes
+    );
 
-    // 3. InstantiationMode & maxInstancesPerUser check on create
+    // 3. InstantiationMode & maxInstancesPerUser check on create (R5-7: monotonic Math.min across
+    //    AgentType -> Categories -> root..baseAgent, counted per root base agent matching
+    //    ManageMyAgentInstanceAction and BaseAIEngine.ResolveEffectiveAgentProperties)
     if (!Target.IsSaved) {
         if (!isAdmin && (baseAgent.InstantiationMode ?? 'None') === 'None') {
             errors.push(
@@ -510,27 +517,50 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
-        let instCfg: IAgentInstantiationConfig | null = null;
+        let effectiveMaxPerUser: number | null = null;
+        const foldMaxPerUser = (candidate: number | null | undefined): void => {
+            if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+                const floored = Math.floor(candidate);
+                effectiveMaxPerUser = effectiveMaxPerUser === null ? floored : Math.min(effectiveMaxPerUser, floored);
+            }
+        };
+        for (const layer of defaultPolicyLayers) {
+            foldMaxPerUser(layer.instantiation?.maxInstancesPerUser);
+        }
         for (const anc of ancestors) {
             const resolved = ResolveAgentInstantiationConfig(anc.Configuration, anc.TypeConfiguration);
-            if (resolved) {
-                instCfg = instCfg ? { ...instCfg, ...resolved } : resolved;
-            }
+            foldMaxPerUser(resolved?.maxInstancesPerUser);
         }
+
         const ownerId = Target.OwnerUserID ?? User?.ID ?? null;
-        if (instCfg?.maxInstancesPerUser && ownerId) {
+        if (effectiveMaxPerUser !== null && ownerId) {
+            const rootBaseId = ancestors[0].ID;
+            const resolveRootId = (agent: typeof baseAgent): string => {
+                const seen = new UUIDSet([agent.ID]);
+                let cur = agent;
+                let depth = 0;
+                while (cur.BaseAgentID && depth < MAX_AGENT_INHERITANCE_DEPTH) {
+                    if (seen.Has(cur.BaseAgentID)) break;
+                    seen.Add(cur.BaseAgentID);
+                    const p = agentsById.Get(cur.BaseAgentID);
+                    if (!p) return cur.BaseAgentID;
+                    cur = p;
+                    depth++;
+                }
+                return cur.ID;
+            };
             const existingCount = AllAgents.filter(
                 (a) =>
                     a.Status === 'Active' &&
                     a.BaseAgentID != null &&
-                    UUIDsEqual(a.BaseAgentID, baseAgent.ID) &&
-                    UUIDsEqual(a.OwnerUserID, ownerId)
+                    UUIDsEqual(a.OwnerUserID, ownerId) &&
+                    UUIDsEqual(resolveRootId(a), rootBaseId)
             ).length;
-            if (existingCount >= instCfg.maxInstancesPerUser) {
+            if (existingCount >= effectiveMaxPerUser) {
                 errors.push(
                     new ValidationErrorInfo(
                         'BaseAgentID',
-                        `Maximum of ${instCfg.maxInstancesPerUser} active instance(s) of '${baseAgent.Name ?? baseAgent.ID}' per user reached.`,
+                        `Maximum of ${effectiveMaxPerUser} active instance(s) of '${baseAgent.Name ?? baseAgent.ID}' per user reached.`,
                         Target.BaseAgentID,
                         ValidationErrorType.Failure
                     )
@@ -695,12 +725,6 @@ export function ValidateAgentInheritanceAndSandbox(
             }
         }
 
-        const defaultPolicyLayers = collectDefaultPolicyLayers(
-            [...ancestors, Target],
-            ctx.AllCategories,
-            ctx.AllAgentTypes
-        );
-
         // Multi-hop upper-bound limit ceilings (B4):
         // - Exceeding an ancestor's finite ceiling is always rejected.
         // - `null` means "inherit ancestor ceiling" (enforced at runtime via Math.min), EXCEPT when
@@ -803,9 +827,15 @@ export function ValidateAgentInheritanceAndSandbox(
                 const stricter = SEARCH_ACCESS_RANK[legacy] < SEARCH_ACCESS_RANK[explicit] ? legacy : explicit;
                 applySearchAccessCeiling(stricter);
             } else {
-                // Every entry in `ancestors` is an ancestor/template above Target, so `legacy === 'None'`
-                // is an active `'None'` ceiling even on middle ancestors where `Configuration` is null.
-                applySearchAccessCeiling(explicit ?? legacy);
+                // Mirror BaseAIEngine's node-property rule (R5-6): only treat an untouched legacy
+                // `'None'` (with no explicit JSON value) as unset on a non-instantiable derived row
+                // (`BaseAgentID != null && InstantiationMode === 'None'`). Roots and instantiable
+                // templates (`InstantiationMode !== 'None'`) enforce `'None'` as an active ceiling.
+                const isNonInstantiableDerived =
+                    Boolean(ancestors[i].BaseAgentID) && (ancestors[i].InstantiationMode ?? 'None') === 'None';
+                applySearchAccessCeiling(
+                    explicit ?? (legacy && (legacy !== 'None' || !isNonInstantiableDerived) ? legacy : null)
+                );
             }
         }
         const targetSearchAccess = targetConfig?.scope?.searchScopeAccess ?? Target.SearchScopeAccess ?? null;
@@ -973,6 +1003,13 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
      */
     private _configDirtyBeforeSync: boolean | null = null;
     private _dirtyLegacyPatchForValidation: Partial<LegacyAIAgentConfigColumns> | null = null;
+    private _saveGuardCache: {
+        AllAgents: MJAIAgentEntity[];
+        AllPermissions: MJAIAgentPermissionEntity[];
+        AllCategories: MJAIAgentCategoryEntity[];
+        AllAgentTypes: MJAIAgentTypeEntity[];
+        ErrorMessage?: string;
+    } | null = null;
 
     /** Enable async validation so TypeConfiguration, BaseAgentID chain, and sandbox checks run. */
     public override get DefaultSkipAsyncValidation(): boolean {
@@ -998,18 +1035,31 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             }
 
             if (this.BaseAgentID) {
-                const [allAgents, allCategories, allAgentTypes] = isCreate
-                    ? await Promise.all([
-                          this.loadAllAgentsForGuard(),
-                          this.loadAllAgentCategoriesForGuard(),
-                          this.loadAllAgentTypesForGuard(),
-                      ])
-                    : [await this.loadAllAgentsForGuard(), undefined, undefined];
+                const guardBatch = await this.loadGuardMetadataBatch();
+                this._saveGuardCache = guardBatch;
+                const { AllAgents: allAgents, AllCategories: allCategories, AllAgentTypes: allAgentTypes } = guardBatch;
                 baseAgent = allAgents.find((a) => UUIDsEqual(a.ID, this.BaseAgentID)) ?? null;
                 if (baseAgent) {
                     resolvedRootBaseId = this.findRootBaseAgentId(baseAgent, allAgents);
                     if (isCreate) {
                         this.inheritDefaultsFromBaseAgent(baseAgent, allAgents, allCategories, allAgentTypes);
+                        // R5-1: If the caller explicitly wrote `SearchScopeAccess = 'None'` (`NeverSet === false`)
+                        // on a derived create under a broader base (`SearchScopeAccess !== 'None'`), persist
+                        // `scope.searchScopeAccess = 'None'` into `Configuration` so runtime resolution honors
+                        // the explicit restriction instead of treating the leaf column `'None'` as unset.
+                        const searchField = this.GetFieldByName('SearchScopeAccess');
+                        const baseSearchAccess =
+                            ParseAgentConfiguration(baseAgent.Configuration)?.scope?.searchScopeAccess ??
+                            baseAgent.SearchScopeAccess ??
+                            'None';
+                        if (
+                            this.SearchScopeAccess === 'None' &&
+                            searchField &&
+                            searchField.NeverSet === false &&
+                            baseSearchAccess !== 'None'
+                        ) {
+                            callerDirtyLegacyFields.add('SearchScopeAccess');
+                        }
                         const primaryDirty = this.GetFieldByName('IsPrimaryInstance')?.Dirty ?? false;
                         if (!primaryDirty && !this.IsPrimaryInstance && this.OwnerUserID) {
                             const existingSiblings = this.findActiveSiblingsForOwnerAndRoot(
@@ -1044,6 +1094,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         } finally {
             this._configDirtyBeforeSync = null;
             this._dirtyLegacyPatchForValidation = null;
+            this._saveGuardCache = null;
         }
     }
 
@@ -1055,14 +1106,15 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             const preSaveOwner =
                 (this.GetFieldByName('OwnerUserID')?.OldValue as string | null | undefined) ?? this.OwnerUserID;
             if (!preSaveBase || !preSaveOwner || !UUIDsEqual(preSaveOwner, user.ID)) {
-                this.LatestResult?.Errors.push(
-                    new ValidationErrorInfo(
-                        'OwnerUserID',
-                        'Non-administrator users can only delete their own derived agent instances.',
-                        this.ID,
-                        ValidationErrorType.Failure
-                    )
+                const err = new ValidationErrorInfo(
+                    'OwnerUserID',
+                    'Non-administrator users can only delete their own derived agent instances.',
+                    this.ID,
+                    ValidationErrorType.Failure
                 );
+                const deleteResult = new BaseEntityResult(false, err.Message, 'delete');
+                deleteResult.Errors = [err];
+                this.RegisterResultHistoryEntry(deleteResult);
                 return false;
             }
         }
@@ -1138,12 +1190,25 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             hasHelperPluginsKey(this.Configuration) ||
             hasHelperPluginsKey(this.TypeConfiguration);
         if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins) {
-            const [allAgents, allPermissions, allCategories, allAgentTypes] = await Promise.all([
-                this.loadAllAgentsForGuard(),
-                this.loadAllAgentPermissionsForGuard(),
-                this.loadAllAgentCategoriesForGuard(),
-                this.loadAllAgentTypesForGuard(),
-            ]);
+            const guardBatch = this._saveGuardCache ?? (await this.loadGuardMetadataBatch());
+            if (guardBatch.ErrorMessage) {
+                result.Errors.push(
+                    new ValidationErrorInfo(
+                        'BaseAgentID',
+                        `Fail-closed: unable to verify agent inheritance and policy guardrails (${guardBatch.ErrorMessage}).`,
+                        this.BaseAgentID,
+                        ValidationErrorType.Failure
+                    )
+                );
+                result.Success = false;
+                return result;
+            }
+            const {
+                AllAgents: allAgents,
+                AllPermissions: allPermissions,
+                AllCategories: allCategories,
+                AllAgentTypes: allAgentTypes,
+            } = guardBatch;
             const dirtyFieldNames = new Set<string>();
             for (const f of this.Fields) {
                 if (f.Dirty) {
@@ -1274,6 +1339,17 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             return false;
         };
 
+        // R5-1: Never treat a written (`NeverSet === false`) strict SQL default as untouched on the
+        // 4 narrow-only columns whose SQL default is the strict side (`SearchScopeAccess = 'None'`,
+        // `AcceptUnregisteredFiles = false`, `AcceptsSkills = 'None'`, `SkillActivationMode = 'RequestedOnly'`),
+        // otherwise an explicit caller restriction is silently loosened to the base agent's value!
+        const STRICT_DEFAULT_NARROW_ONLY_FIELDS = new Set<string>([
+            'SearchScopeAccess',
+            'AcceptUnregisteredFiles',
+            'AcceptsSkills',
+            'SkillActivationMode',
+        ]);
+
         const copyIfNotDirty = <K extends keyof MJAIAgentEntity>(
             fieldName: K,
             overrideVal?: MJAIAgentEntity[K],
@@ -1283,13 +1359,10 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             if (!field) return;
             const val = overrideVal !== undefined ? overrideVal : baseAgent[fieldName];
             if (val === undefined) return;
-            // On GraphQL/client creates (`NewRecord()` + `SetMany(defaults)`), ResolverBase populates
-            // every writable field with its schema SQL default, leaving `field.Dirty === false` while
-            // flipping `field.NeverSet` to `false`. Treat `!field.Dirty && (field.NeverSet || at SQL default)`
-            // as untouched so derived instances inherit parent defaults cleanly (C-R1-1).
-            // For narrow-only security fields, also auto-clamp incoming loose DB defaults even if
-            // marked dirty so personal instances can be created cleanly from the Explorer modal (R2-3).
-            const isUntouched = !field.Dirty && (field.NeverSet || isFieldAtSqlDefault(fieldName));
+            const preserveWrittenStrictDefault = STRICT_DEFAULT_NARROW_ONLY_FIELDS.has(String(fieldName));
+            const isUntouched = preserveWrittenStrictDefault
+                ? !field.Dirty && field.NeverSet
+                : !field.Dirty && (field.NeverSet || isFieldAtSqlDefault(fieldName));
             const isLooseDbDefault =
                 clampLooseDbDefault !== undefined && (this as MJAIAgentEntity)[fieldName] === clampLooseDbDefault;
             if (isUntouched || isLooseDbDefault) {
@@ -1366,7 +1439,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
 
         copyIfNotDirty('ModelSelectionMode');
         copyIfNotDirty('AcceptsSkills');
-        copyIfNotDirty('SkillActivationMode', strictestSkillMode, 'Auto');
+        copyIfNotDirty('SkillActivationMode', strictestSkillMode);
         copyIfNotDirty('SearchScopeAccess', strictestSearchAccess);
         copyIfNotDirty('ArtifactCreationMode');
         copyIfNotDirty('DefaultArtifactTypeID');
@@ -1525,48 +1598,86 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         }
     }
 
+    private async loadGuardMetadataBatch(): Promise<{
+        AllAgents: MJAIAgentEntity[];
+        AllPermissions: MJAIAgentPermissionEntity[];
+        AllCategories: MJAIAgentCategoryEntity[];
+        AllAgentTypes: MJAIAgentTypeEntity[];
+        ErrorMessage?: string;
+    }> {
+        // R5 Follow-up #5: single batched RunViews with ResultType: 'simple' + minimal explicit Fields
+        // (replaces 7 full-table entity_object queries on derived creates) and fail-closed on read errors.
+        const rv = new RunView(this.RunViewProviderToUse);
+        const results = await rv.RunViews(
+            [
+                {
+                    EntityName: 'MJ: AI Agents',
+                    ResultType: 'simple',
+                    Fields: [
+                        'ID', 'Name', 'BaseAgentID', 'RootBaseAgentID', 'OwnerUserID', 'Status',
+                        'CategoryID', 'TypeID', 'InstantiationMode', 'DriverClass', 'Isolation',
+                        'MaxCostPerRun', 'MaxTokensPerRun', 'MaxTimePerRun', 'MaxIterationsPerRun',
+                        'Configuration', 'TypeConfiguration', 'ModelSelectionMode', 'AcceptsSkills',
+                        'SkillActivationMode', 'SearchScopeAccess', 'ArtifactCreationMode',
+                        'DefaultArtifactTypeID', 'InjectNotes', 'MaxNotesToInject', 'NoteInjectionStrategy',
+                        'InjectExamples', 'MaxExamplesToInject', 'ExampleInjectionStrategy',
+                        'AllowMemoryWrite', 'DeclareActionsAsNativeTools', 'SupportsPlanMode',
+                        'RequirePlanMode', 'AllowEphemeralClientTools', 'AcceptUnregisteredFiles',
+                        'MaxExecutionsPerRun', 'MaxSubAgentConsultRounds', 'EnableContextCompression',
+                        'ContextCompressionMessageThreshold', 'ContextCompressionPromptID',
+                        'ContextCompressionMessageRetentionCount', 'RerankerConfiguration',
+                        'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
+                        'ConversationSummaryPromptID',
+                    ],
+                },
+                {
+                    EntityName: 'MJ: AI Agent Permissions',
+                    ResultType: 'simple',
+                    Fields: ['ID', 'AgentID', 'UserID', 'RoleID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
+                },
+                {
+                    EntityName: 'MJ: AI Agent Categories',
+                    ResultType: 'simple',
+                    Fields: ['ID', 'ParentID', 'DefaultConfiguration'],
+                },
+                {
+                    EntityName: 'MJ: AI Agent Types',
+                    ResultType: 'simple',
+                    Fields: [
+                        'ID', 'DefaultAgentConfiguration', 'ContextCompressionMessageThreshold',
+                        'ContextCompressionPromptID', 'ContextCompressionMessageRetentionCount',
+                        'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
+                        'ConversationSummaryPromptID',
+                    ],
+                },
+            ],
+            this.ContextCurrentUser
+        );
+        const failed = results.find((r) => !r.Success);
+        if (failed) {
+            return {
+                AllAgents: [],
+                AllPermissions: [],
+                AllCategories: [],
+                AllAgentTypes: [],
+                ErrorMessage: failed.ErrorMessage || 'Guard metadata RunViews query failed',
+            };
+        }
+        return {
+            AllAgents: results[0].Results as MJAIAgentEntity[],
+            AllPermissions: results[1].Results as MJAIAgentPermissionEntity[],
+            AllCategories: results[2].Results as MJAIAgentCategoryEntity[],
+            AllAgentTypes: results[3].Results as MJAIAgentTypeEntity[],
+        };
+    }
+
     private async loadAllAgentsForGuard(): Promise<MJAIAgentEntity[]> {
         const rv = new RunView(this.RunViewProviderToUse);
         const res = await rv.RunView<MJAIAgentEntity>(
             {
                 EntityName: 'MJ: AI Agents',
-                ResultType: 'entity_object',
-            },
-            this.ContextCurrentUser
-        );
-        return res.Success ? res.Results : [];
-    }
-
-    private async loadAllAgentPermissionsForGuard(): Promise<MJAIAgentPermissionEntity[]> {
-        const rv = new RunView(this.RunViewProviderToUse);
-        const res = await rv.RunView<MJAIAgentPermissionEntity>(
-            {
-                EntityName: 'MJ: AI Agent Permissions',
-                ResultType: 'entity_object',
-            },
-            this.ContextCurrentUser
-        );
-        return res.Success ? res.Results : [];
-    }
-
-    private async loadAllAgentCategoriesForGuard(): Promise<MJAIAgentCategoryEntity[]> {
-        const rv = new RunView(this.RunViewProviderToUse);
-        const res = await rv.RunView<MJAIAgentCategoryEntity>(
-            {
-                EntityName: 'MJ: AI Agent Categories',
-                ResultType: 'entity_object',
-            },
-            this.ContextCurrentUser
-        );
-        return res.Success ? res.Results : [];
-    }
-
-    private async loadAllAgentTypesForGuard(): Promise<MJAIAgentTypeEntity[]> {
-        const rv = new RunView(this.RunViewProviderToUse);
-        const res = await rv.RunView<MJAIAgentTypeEntity>(
-            {
-                EntityName: 'MJ: AI Agent Types',
-                ResultType: 'entity_object',
+                ResultType: 'simple',
+                Fields: ['ID', 'BaseAgentID', 'RootBaseAgentID'],
             },
             this.ContextCurrentUser
         );
@@ -1693,6 +1804,17 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             if (legacyValues[key] !== undefined) {
                 (patch as Record<string, unknown>)[key] = legacyValues[key];
             }
+        }
+        // R5 Follow-up #6: include stored counterparts for cross-field pair constraints when only one side is dirty
+        if (dirtyFields.has('CompactionTargetPercent') && !dirtyFields.has('CompactionTriggerPercent')) {
+            patch.CompactionTriggerPercent = legacyValues.CompactionTriggerPercent;
+        } else if (dirtyFields.has('CompactionTriggerPercent') && !dirtyFields.has('CompactionTargetPercent')) {
+            patch.CompactionTargetPercent = legacyValues.CompactionTargetPercent;
+        }
+        if (dirtyFields.has('MinExecutionsPerRun') && !dirtyFields.has('MaxExecutionsPerRun')) {
+            patch.MaxExecutionsPerRun = legacyValues.MaxExecutionsPerRun;
+        } else if (dirtyFields.has('MaxExecutionsPerRun') && !dirtyFields.has('MinExecutionsPerRun')) {
+            patch.MinExecutionsPerRun = legacyValues.MinExecutionsPerRun;
         }
         return patch;
     }

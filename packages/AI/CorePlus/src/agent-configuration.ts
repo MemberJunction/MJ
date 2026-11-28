@@ -731,6 +731,17 @@ export function ValidateAgentConfigurationJson(
         checkNum('contextWindow', 'maxTokens', cw.maxTokens, 1, undefined, true);
         checkNum('contextWindow', 'compactionTriggerPercent', cw.compactionTriggerPercent, 0, 100);
         checkNum('contextWindow', 'compactionTargetPercent', cw.compactionTargetPercent, 0, 100);
+        if (
+            typeof cw.compactionTargetPercent === 'number' &&
+            typeof cw.compactionTriggerPercent === 'number' &&
+            Number.isFinite(cw.compactionTargetPercent) &&
+            Number.isFinite(cw.compactionTriggerPercent) &&
+            cw.compactionTargetPercent >= cw.compactionTriggerPercent
+        ) {
+            errors.push(
+                `${fieldLabel}.contextWindow.compactionTargetPercent (${cw.compactionTargetPercent}) must be < compactionTriggerPercent (${cw.compactionTriggerPercent}).`
+            );
+        }
         checkStr('contextWindow', 'summaryPromptID', cw.summaryPromptID);
     }
     if (IsPlainObject(obj.memory)) {

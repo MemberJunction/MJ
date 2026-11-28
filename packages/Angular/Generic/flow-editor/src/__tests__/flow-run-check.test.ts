@@ -153,4 +153,37 @@ describe('placing run-check problems on the canvas and in the panel', () => {
     panel.Step = steps[0];
     expect(panel.StepRunProblemMessages).toEqual([]);
   });
+
+  it('R5 Follow-up #3: accepts valid Custom flows and refuses Custom combined with Human steps up front', () => {
+    const customStart = {
+      ID: 'custom-1',
+      Name: 'Compliance Gate',
+      StepType: 'Custom' as const,
+      StartingStep: true,
+      Status: 'Active' as const,
+      Configuration: JSON.stringify({ stepType: 'ApprovalGate' }),
+    };
+    const customEnd = {
+      ID: 'custom-2',
+      Name: 'Audit Log',
+      StepType: 'Custom' as const,
+      StartingStep: false,
+      Status: 'Active' as const,
+      Configuration: JSON.stringify({ stepType: 'AuditStep' }),
+    };
+    expect(CheckFlowRun([customStart, customEnd], [MakePath('pc1', 'custom-1', { DestinationStepID: 'custom-2' })])).toEqual([]);
+
+    const humanStep = {
+      ID: 'human-1',
+      Name: 'Manager Signoff',
+      StepType: 'Human' as const,
+      StartingStep: false,
+      Status: 'Active' as const,
+      Configuration: null,
+    };
+    const mixed = CheckFlowRun([customStart, humanStep], [MakePath('pc2', 'custom-1', { DestinationStepID: 'human-1' })]);
+    expect(mixed).toHaveLength(1);
+    expect(mixed[0].StepID).toBe('human-1');
+    expect(mixed[0].Message).toMatch(/cannot be combined/i);
+  });
 });

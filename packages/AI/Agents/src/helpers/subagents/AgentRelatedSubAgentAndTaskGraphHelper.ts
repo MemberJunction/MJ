@@ -144,7 +144,7 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
                 await ctx.Hooks.FinalizeStepEntity(
                     stepEntity,
                     subAgentResult.success,
-                    subAgentResult.agentRun?.ErrorMessage ?? undefined,
+                    (subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage) ?? undefined,
                     outputData
                 );
 
@@ -190,7 +190,7 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
         await ctx.Hooks.FinalizeStepEntity(
             stepEntity,
             subAgentResult.success,
-            subAgentResult.agentRun?.ErrorMessage ?? undefined,
+            (subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage) ?? undefined,
             outputData
         );
 
@@ -422,7 +422,7 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
             const subAgentParkedOnWorkflow = subAgentResult.agentRun?.Status === 'Paused';
             const shouldTerminate = subAgentRequest.terminateAfter === true || subAgentParkedOnWorkflow;
 
-            const subAgentError = subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage;
+            const subAgentError = subAgentResult.agentRun?.ErrorMessage || subAgentResult.errorMessage;
             const outputData: Record<string, unknown> = {
                 subAgentResult: {
                     success: subAgentResult.success,

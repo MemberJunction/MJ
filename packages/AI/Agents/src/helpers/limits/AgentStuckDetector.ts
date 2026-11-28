@@ -151,6 +151,16 @@ const READ_ONLY_ACTION_TOKENS: readonly string[] = [
     'select',
 ];
 
+/** Keywords identifying explicit wait/poll-delay/no-op actions that neither mutate state nor count as read-only investigation (R5-2). */
+const NEUTRAL_ACTION_TOKENS: readonly string[] = [
+    'wait',
+    'sleep',
+    'delay',
+    'ping',
+    'noop',
+    'pause',
+];
+
 function tokenizeIdentifier(name: string): string[] {
     return name
         .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
@@ -163,9 +173,10 @@ function tokenizeIdentifier(name: string): string[] {
 export type ActionStepClassification = 'mutating' | 'read-only' | 'neutral';
 
 /**
- * Classifies an action/tool into `'mutating'`, `'read-only'`, or `'neutral'` (e.g. `WaitSeconds`,
- * `Sleep`, `Delay`, `Ping`). Prefers structured action metadata (`DisallowWhenTainted`, `Verb`)
- * when available, falling back to token classification.
+ * Classifies an action/tool into `'mutating'`, `'read-only'`, or `'neutral'` (explicit wait/delay/ping/noop
+ * allow-list). Prefers structured action metadata (`DisallowWhenTainted`, `Verb`) when available, and
+ * fails safe to `'mutating'` (recognizing progress) for unknown action names so real state-changing or
+ * output-producing actions never falsely trigger `ReadOnlySpiral` or `StuckToolCallLoop` (R5-2).
  */
 export function ClassifyToolOrActionName(
     name: string,
@@ -176,18 +187,21 @@ export function ClassifyToolOrActionName(
     }
     const verb = metadata?.Verb?.trim().toLowerCase();
     if (verb && verb.length > 0) {
+        if (NEUTRAL_ACTION_TOKENS.includes(verb)) {
+            return 'neutral';
+        }
         if (MUTATING_ACTION_TOKENS.includes(verb) || LEADING_MUTATING_TOKENS.includes(verb)) {
             return 'mutating';
         }
         if (READ_ONLY_ACTION_TOKENS.includes(verb)) {
             return 'read-only';
         }
-        return 'neutral';
+        return 'mutating';
     }
 
     const tokens = tokenizeIdentifier(name);
     if (tokens.length === 0) {
-        return 'neutral';
+        return 'mutating';
     }
     if (tokens.some((t) => MUTATING_ACTION_TOKENS.includes(t))) {
         return 'mutating';
@@ -204,7 +218,13 @@ export function ClassifyToolOrActionName(
     if (firstReadIdx !== -1) {
         return 'read-only';
     }
-    return 'neutral';
+    if (tokens.some((t) => NEUTRAL_ACTION_TOKENS.includes(t))) {
+        return 'neutral';
+    }
+    // Fail-safe: unknown action names count as progress so shipped mutating/output actions without
+    // standard CRUD verbs (e.g. 'Mutate Governed Artifact', 'Reply In Agent Channel', 'Train ML Model')
+    // never falsely trigger read-only spirals or block read-only window resets (R5-2).
+    return 'mutating';
 }
 
 /**
@@ -290,6 +310,7 @@ interface InvokedToolEntry {
 export class AgentStuckDetector {
     private _recentToolFingerprints: string[] = [];
     private readonly _readOnlyFingerprints = new Set<string>();
+    private readonly _neutralFingerprints = new Set<string>();
     private readonly _directiveInjectedFingerprints = new Set<string>();
     private _pendingDirectives: string[] = [];
     private _consecutiveReadOnlySteps = 0;
@@ -301,6 +322,7 @@ export class AgentStuckDetector {
     public Reset(): void {
         this._recentToolFingerprints = [];
         this._readOnlyFingerprints.clear();
+        this._neutralFingerprints.clear();
         this._directiveInjectedFingerprints.clear();
         this._pendingDirectives = [];
         this._consecutiveReadOnlySteps = 0;
@@ -358,8 +380,13 @@ export class AgentStuckDetector {
         const isReadOnly = classification === 'read-only';
         if (isReadOnly) {
             this._readOnlyFingerprints.add(fingerprint);
+            this._neutralFingerprints.delete(fingerprint);
+        } else if (classification === 'neutral') {
+            this._neutralFingerprints.add(fingerprint);
+            this._readOnlyFingerprints.delete(fingerprint);
         } else {
             this._readOnlyFingerprints.delete(fingerprint);
+            this._neutralFingerprints.delete(fingerprint);
         }
 
         const windowSize = Math.max(threshold, config.WindowSize);
@@ -644,6 +671,7 @@ export class AgentStuckDetector {
                 }
                 return -1;
             };
+            let anyReadOnlyResultChanged = false;
             for (let idx = 0; idx < consumedEntries.length; idx++) {
                 const entry = consumedEntries[idx];
                 const matchedIdx = priorArr ? matchPriorIndex(entry, idx) : -1;
@@ -658,6 +686,7 @@ export class AgentStuckDetector {
                 const resultHash = hashShortSignature(StableSortedJSON(matchedPayload));
                 const prevHash = this._lastResultHashByFingerprint.get(entry.BaseFp);
                 if (prevHash !== undefined && prevHash !== resultHash) {
+                    anyReadOnlyResultChanged = true;
                     let keptLatest = false;
                     for (let i = this._recentToolFingerprints.length - 1; i >= 0; i--) {
                         if (this._recentToolFingerprints[i] === entry.BaseFp) {
@@ -671,6 +700,18 @@ export class AgentStuckDetector {
                     this._directiveInjectedFingerprints.delete(entry.BaseFp);
                 }
                 this._lastResultHashByFingerprint.set(entry.BaseFp, resultHash);
+            }
+            // When any read-only poll result changes (real progress), evict prior neutral wait/delay
+            // fingerprints from the sliding window so legitimate poll+wait loops (e.g. GetJobStatus +
+            // Delay(30)) do not falsely pause on the 4th identical wait, while stalled wait loops with
+            // unchanged poll results are still caught (R5-3).
+            if (anyReadOnlyResultChanged && this._neutralFingerprints.size > 0) {
+                this._recentToolFingerprints = this._recentToolFingerprints.filter(
+                    (fp) => !this._neutralFingerprints.has(fp)
+                );
+                for (const fp of this._neutralFingerprints) {
+                    this._directiveInjectedFingerprints.delete(fp);
+                }
             }
             this.pruneAgedDirectiveFingerprints();
         }
@@ -761,6 +802,7 @@ export class AgentStuckDetector {
     private resetToolLoopWindow(): void {
         this._recentToolFingerprints = [];
         this._readOnlyFingerprints.clear();
+        this._neutralFingerprints.clear();
         this._lastInvokedEntries = [];
         this._lastResultHashByFingerprint.clear();
         this._directiveInjectedFingerprints.clear();
@@ -770,7 +812,8 @@ export class AgentStuckDetector {
         if (
             this._directiveInjectedFingerprints.size === 0 &&
             this._lastResultHashByFingerprint.size === 0 &&
-            this._readOnlyFingerprints.size === 0
+            this._readOnlyFingerprints.size === 0 &&
+            this._neutralFingerprints.size === 0
         ) {
             return;
         }
@@ -788,6 +831,11 @@ export class AgentStuckDetector {
         for (const fp of this._readOnlyFingerprints) {
             if (!active.has(fp)) {
                 this._readOnlyFingerprints.delete(fp);
+            }
+        }
+        for (const fp of this._neutralFingerprints) {
+            if (!active.has(fp)) {
+                this._neutralFingerprints.delete(fp);
             }
         }
     }

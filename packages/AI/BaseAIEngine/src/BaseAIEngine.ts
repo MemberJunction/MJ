@@ -61,6 +61,7 @@ import {
     ParseAgentConfigJsonObject,
     ParseAgentConfiguration,
     ParseAgentHelperPlugins,
+    ParseAgentInstantiationConfig,
     type AgentConfigJsonObject,
     type AgentHelperPluginEntry,
     type IAgentConfiguration,
@@ -1998,17 +1999,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     searchAccessRank[legacyVal] < searchAccessRank[explicitJsonVal] ? legacyVal : explicitJsonVal;
                 applySearchAccessNarrow(stricter);
             } else {
-                // Only treat an untouched legacy `'None'` (with no explicit JSON value) as unset on
-                // a non-instantiable derived leaf (`BaseAgentID != null && InstantiationMode === 'None'`).
-                // Any root or intermediate template/ancestor with `SearchScopeAccess === 'None'` enforces
-                // an active `'None'` ceiling (C-R1-2).
-                const isNonInstantiableDerivedLeaf =
-                    i === nodes.length - 1 &&
-                    Boolean(nodes[i].BaseAgentID) &&
-                    (nodes[i].InstantiationMode ?? 'None') === 'None';
+                // Treat an untouched legacy `'None'` (with no explicit JSON value) as unset ONLY by
+                // node property: a non-instantiable derived row (`BaseAgentID != null && InstantiationMode === 'None'`).
+                // Any root or instantiable template with `SearchScopeAccess === 'None'` enforces an
+                // active `'None'` ceiling consistently for both itself and its descendants (C-R1-2, R5-6).
+                const isNonInstantiableDerived =
+                    Boolean(nodes[i].BaseAgentID) && (nodes[i].InstantiationMode ?? 'None') === 'None';
                 const candidate =
                     explicitJsonVal ??
-                    (legacyVal && (legacyVal !== 'None' || !isNonInstantiableDerivedLeaf) ? legacyVal : null);
+                    (legacyVal && (legacyVal !== 'None' || !isNonInstantiableDerived) ? legacyVal : null);
                 applySearchAccessNarrow(candidate);
             }
         }
@@ -2102,6 +2101,25 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             if (cfg) {
                 mergedConfiguration = DeepMergeAgentConfigurations(mergedConfiguration, cfg);
             }
+        }
+        // Clamp instantiation.maxInstancesPerUser monotonically (Math.min) across AgentType,
+        // Categories, and the full BaseAgent chain (both Configuration and legacy TypeConfiguration)
+        // so UI/action pre-checks and server-side ValidateAgentInheritanceAndSandbox agree (R5-7).
+        const effectiveMaxInstancesPerUser = minCeiling([
+            ...orderedDefaultLayers.map((l) => l.instantiation?.maxInstancesPerUser),
+            ...nodes.flatMap((n, i) => [
+                nodeConfigs[i]?.instantiation?.maxInstancesPerUser,
+                ParseAgentInstantiationConfig(n.TypeConfiguration)?.maxInstancesPerUser,
+            ]),
+        ]);
+        if (effectiveMaxInstancesPerUser !== null && effectiveMaxInstancesPerUser > 0) {
+            mergedConfiguration = {
+                ...mergedConfiguration,
+                instantiation: {
+                    ...(mergedConfiguration.instantiation ?? {}),
+                    maxInstancesPerUser: effectiveMaxInstancesPerUser,
+                },
+            };
         }
         if (leaf && leaf.BaseAgentID && (leaf.InstantiationMode ?? 'None') === 'None' && mergedConfiguration.instantiation) {
             delete mergedConfiguration.instantiation;

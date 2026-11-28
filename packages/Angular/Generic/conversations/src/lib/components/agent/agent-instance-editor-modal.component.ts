@@ -630,6 +630,13 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
         entity.InstantiationMode = 'None';
         entity.Status = 'Active';
         entity.TypeID = effectiveBase.TypeID ?? base.TypeID;
+        // Propagate strict-default narrow-only capabilities from the base template explicitly so
+        // GraphQL creates inherit the template's effective capabilities while direct API creates
+        // with explicit strict defaults (e.g. SearchScopeAccess='None') are preserved server-side (R5-1).
+        entity.SearchScopeAccess = effectiveBase.SearchScopeAccess;
+        entity.AcceptUnregisteredFiles = effectiveBase.AcceptUnregisteredFiles;
+        entity.AcceptsSkills = effectiveBase.AcceptsSkills;
+        entity.SkillActivationMode = effectiveBase.SkillActivationMode;
       }
 
       entity.Name = this.InstanceName.trim();

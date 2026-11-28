@@ -152,6 +152,28 @@ export function FormatFlowValidationErrors(errors: readonly TaskGraphValidationE
 }
 
 /**
+ * Returns active steps in `steps` that require the detached task-graph dispatcher and cannot run
+ * inside the in-run walker (`Human` steps or `ForEach` steps configured with `enqueue`).
+ */
+export function FindDispatcherOnlyFlowSteps(
+    steps: ReadonlyArray<Pick<MJAIAgentStepEntity, 'Name' | 'StepType' | 'Status' | 'Configuration'>>
+): Array<Pick<MJAIAgentStepEntity, 'Name' | 'StepType' | 'Status' | 'Configuration'>> {
+    return steps.filter((step) => {
+        if (step.Status !== 'Active') return false;
+        if (step.StepType === 'Human') return true;
+        if (step.StepType === 'ForEach' && typeof step.Configuration === 'string' && step.Configuration.trim().length > 0) {
+            try {
+                const parsed = JSON.parse(step.Configuration) as Record<string, unknown>;
+                return Boolean(parsed && typeof parsed === 'object' && parsed['enqueue'] && typeof parsed['enqueue'] === 'object');
+            } catch {
+                return false;
+            }
+        }
+        return false;
+    });
+}
+
+/**
  * Returns `true` when the Flow agent has at least one active step with `StepType === 'Custom'`.
  * Custom steps invoke `BaseAgentStepHandler.Execute(ctx, ...)` in-process and cannot run on the
  * detached task-graph dispatcher.
@@ -209,13 +231,26 @@ export function CompileAndValidateFlowAgent(
 ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
     const stepEntities = AIEngine.Instance.GetAgentSteps(agentID) ?? [];
     const activeCustomSteps = stepEntities.filter((s) => s.Status === 'Active' && s.StepType === 'Custom');
-    if (activeCustomSteps.length > 0 && !options?.AllowCustomStepPlaceholders) {
-        const names = activeCustomSteps.map((s) => `'${s.Name}'`).join(', ');
-        return {
-            ErrorMessage:
-                `Workflow '${agentName}' contains Custom step(s) (${names}) which execute in-process via ` +
-                `BaseAgentStepHandler and require agentTypeParams.executionMode = 'inRun' (cannot run on the task-graph dispatcher).`,
-        };
+    if (activeCustomSteps.length > 0) {
+        const dispatcherOnlySteps = FindDispatcherOnlyFlowSteps(stepEntities);
+        if (dispatcherOnlySteps.length > 0) {
+            const customNames = activeCustomSteps.map((s) => `'${s.Name}'`).join(', ');
+            const dispNames = dispatcherOnlySteps.map((s) => `'${s.Name}'`).join(', ');
+            return {
+                ErrorMessage:
+                    `Workflow '${agentName}' combines in-process Custom step(s) (${customNames}) with ` +
+                    `dispatcher-only step(s) (${dispNames}). Custom steps require executionMode 'inRun' while ` +
+                    `${dispNames} require the task-graph dispatcher; split these into separate workflows.`,
+            };
+        }
+        if (!options?.AllowCustomStepPlaceholders) {
+            const names = activeCustomSteps.map((s) => `'${s.Name}'`).join(', ');
+            return {
+                ErrorMessage:
+                    `Workflow '${agentName}' contains Custom step(s) (${names}) which execute in-process via ` +
+                    `BaseAgentStepHandler and require agentTypeParams.executionMode = 'inRun' (cannot run on the task-graph dispatcher).`,
+            };
+        }
     }
 
     let compiled: FlowCompileResult;

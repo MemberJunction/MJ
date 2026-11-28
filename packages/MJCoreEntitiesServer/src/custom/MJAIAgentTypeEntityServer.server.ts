@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    BaseEntityResult,
     EntityDeleteOptions,
     EntitySaveOptions,
     UserInfo,
@@ -123,6 +124,20 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
         const isCreate = !this.IsSaved;
         this._configDirtyBeforeSync = isCreate || (this.GetFieldByName('DefaultAgentConfiguration')?.Dirty ?? false);
         const dirtyPatch = this.collectDirtyLegacyPatch(isCreate);
+        if (Object.keys(dirtyPatch).length > 0) {
+            // R5 Follow-up #6: include stored counterpart for compaction pair check when only one side is dirty
+            if (
+                Object.prototype.hasOwnProperty.call(dirtyPatch, 'CompactionTargetPercent') &&
+                !Object.prototype.hasOwnProperty.call(dirtyPatch, 'CompactionTriggerPercent')
+            ) {
+                dirtyPatch.CompactionTriggerPercent = this.CompactionTriggerPercent;
+            } else if (
+                Object.prototype.hasOwnProperty.call(dirtyPatch, 'CompactionTriggerPercent') &&
+                !Object.prototype.hasOwnProperty.call(dirtyPatch, 'CompactionTargetPercent')
+            ) {
+                dirtyPatch.CompactionTargetPercent = this.CompactionTargetPercent;
+            }
+        }
         this._dirtyLegacyPatchForValidation = Object.keys(dirtyPatch).length > 0 ? dirtyPatch : null;
         try {
             this.syncDefaultAgentConfigurationWithLegacyColumns(isCreate);
@@ -136,7 +151,9 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const errors = ValidateAgentTypeDelete(this.ID, this.ContextCurrentUser);
         if (errors.length > 0) {
-            this.LatestResult?.Errors.push(...errors);
+            const deleteResult = new BaseEntityResult(false, errors[0].Message, 'delete');
+            deleteResult.Errors = errors;
+            this.RegisterResultHistoryEntry(deleteResult);
             return false;
         }
         return super.Delete(options);

@@ -127,7 +127,7 @@ const mockEngine = {
     ResolveEffectiveAgentProperties: vi.fn((agent: MockAgentRecord) => ({
         TypeID: agent.TypeID,
         Configuration: agent.Configuration ? JSON.parse(agent.Configuration) : undefined,
-        TypeConfiguration: agent.TypeConfiguration ? JSON.parse(agent.TypeConfiguration) : undefined,
+        TypeConfiguration: agent.TypeConfiguration ?? null,
     })),
     CanUserRunAgent: vi.fn(() => true),
     GetUserDerivedAgents: vi.fn((user: UserInfo) =>

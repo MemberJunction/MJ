@@ -75,7 +75,44 @@ const PROBE_PREFIX = 'path-check:';
  * @param paths the flow's paths (`MJAIAgentStepPathEntity` satisfies the shape as-is)
  */
 export function CheckFlowRun(steps: readonly FlowCompilerStep[], paths: readonly FlowCompilerPath[]): FlowRunProblem[] {
-  const compiled = CompileFlowToTaskGraph(steps, paths, {
+  const activeCustomSteps = steps.filter((s) => s.Status === 'Active' && s.StepType === 'Custom');
+  if (activeCustomSteps.length > 0) {
+    const dispatcherOnlySteps = steps.filter((s) => {
+      if (s.Status !== 'Active') return false;
+      if (s.StepType === 'Human') return true;
+      if (s.StepType === 'ForEach' && typeof s.Configuration === 'string' && s.Configuration.trim().length > 0) {
+        try {
+          const parsed = JSON.parse(s.Configuration) as Record<string, unknown>;
+          return Boolean(parsed && typeof parsed === 'object' && parsed['enqueue'] && typeof parsed['enqueue'] === 'object');
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    });
+    if (dispatcherOnlySteps.length > 0) {
+      return dispatcherOnlySteps.map((step) => ({
+        Code: 'UnsupportedStepType' as const,
+        Message:
+          `Step "${step.Name}" requires the task-graph dispatcher and cannot be combined in the same ` +
+          `workflow as in-process Custom step(s) (${activeCustomSteps.map((c) => `"${c.Name}"`).join(', ')}).`,
+        StepID: step.ID,
+      }));
+    }
+  }
+
+  // Mirror FlowAgentType's in-run pre-flight check (R5 Follow-up #3): substitute active Custom steps
+  // with synthetic External placeholders so valid Custom flows are not falsely flagged as unsupported.
+  const stepsForCompile: readonly FlowCompilerStep[] =
+    activeCustomSteps.length > 0
+      ? steps.map((step) =>
+          step.StepType === 'Custom'
+            ? { ...step, StepType: 'External', Configuration: JSON.stringify({ domain: 'custom-step-placeholder' }) }
+            : step
+        )
+      : steps;
+
+  const compiled = CompileFlowToTaskGraph(stepsForCompile, paths, {
     WorkflowName: 'Flow',
     // Whether a referenced action, prompt or agent still exists is the server's to say — the editor's
     // pickers need not list every row the runtime can run — so names resolve to the IDs here and only

@@ -286,8 +286,8 @@ export class AgentRunFinalizationHelper {
                 ctx.InjectedMemory.notes.length > 0 || ctx.InjectedMemory.examples.length > 0
                     ? ctx.InjectedMemory
                     : undefined,
-            mediaOutputs: ctx.MediaOutputs.length > 0 ? ctx.MediaOutputs : undefined,
-            fileOutputs: ctx.FileOutputs.length > 0 ? ctx.FileOutputs : undefined,
+            mediaOutputs: ctx.MediaOutputs.length > 0 ? [...ctx.MediaOutputs] : undefined,
+            fileOutputs: ctx.FileOutputs.length > 0 ? [...ctx.FileOutputs] : undefined,
             feedbackRequestId: ctx.FeedbackRequestId || undefined,
             taintedSources: ctx.TaintedSources.length > 0 ? [...ctx.TaintedSources] : undefined,
             handoff: ctx.HandoffResult || undefined,
