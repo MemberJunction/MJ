@@ -81,7 +81,7 @@ export class AgentKnowledgeMemoryPanel extends BaseFormPanel<MJAIAgentEntity> im
         { Field: 'Priority', Label: 'Priority', Type: 'number', Placeholder: 'e.g. 10', Width: '90px' },
         { Field: 'MaxResults', Label: 'Max Results', Type: 'number', Placeholder: '10', Width: '110px' },
         { Field: 'MinScore', Label: 'Min Score', Type: 'number', Placeholder: '0.35', Width: '110px' },
-        { Field: 'QueryTemplateID', Label: 'Query Template', Type: 'lookup', LookupEntityName: 'Templates', Width: '180px' },
+        { Field: 'QueryTemplateID', Label: 'Query Template', Type: 'lookup', LookupEntityName: 'MJ: Templates', Width: '180px' },
         { Field: 'FusionWeightsOverride', Label: 'Fusion Weights Override', Type: 'code', Placeholder: '{ "vector": 2.0, "fulltext": 1.0 }' },
         { Field: 'IsDefault', Label: 'Default', Type: 'checkbox', Width: '80px' },
     ];
