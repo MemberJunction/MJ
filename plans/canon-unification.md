@@ -229,7 +229,7 @@ Added 2026-11-28, on the sponsor's direction. Rules 1 to 5 say what Canon is and
 
 **Contradictions.** Resolution by meaning (Rule 5) gains a fourth outcome, *conflicts with*, written as a proposed `Contradicts` edge, and a scheduled sweep checks approved concepts against each other. A contradiction always goes to a person, and an agent asked about either side says that the two disagree.
 
-**Size.** The engine loads a graph when it is asked for, not every graph in every process, and the browser never holds a whole graph. The starting target is 250,000 concepts and 2,000,000 edges in one graph.
+**Size.** The engine loads a graph when it is asked for, not every graph in every process, and the browser never holds a whole graph. This is proven by a load test at 250,000 concepts and 2,000,000 edges in one graph. That is a test size, not a limit: no maximum is enforced.
 
 ### Health: one scorecard over every member
 

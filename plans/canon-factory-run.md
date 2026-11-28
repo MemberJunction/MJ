@@ -120,7 +120,7 @@ Each of these merges with its setting off, so a host behaves as before until som
 | D35 | How do we know Canon improves answers at all? | An answer evaluation set per graph: fixed questions with known right answers, scored with Canon on and off in the weekly live-model tier. A user's correction of an agent's answer can be added as a case. | None |
 | D36 | May Canon propose changes to itself from how it is used? | Yes, through the same ledger as every proposer: a concept retrieved but never cited gets a rewrite proposed, one cited and then corrected gets a revision proposed, and clusters of unanswered questions become new concept proposals. | None |
 | D37 | Contradictions. | The resolution step gains a fourth outcome, *conflicts with*, written as a proposed `Contradicts` edge. A scheduled sweep checks approved concepts against each other. A contradiction always goes to a person, and an agent asked about either side says the two disagree. | None |
-| D38 | How large a graph must this work on? | 250,000 concepts and 2,000,000 edges in one graph, as a starting target the sponsor may change. The engine loads a graph when it is asked for, not every graph in every process, and the browser never holds a whole graph. | None |
+| D38 | At what size do we prove the graph works? | 250,000 concepts and 2,000,000 edges in one graph. This is the size the load test runs at, not a limit: nothing in the code enforces a maximum, and a larger graph is allowed. The sponsor may change the number. To get there the engine loads a graph when it is asked for, not every graph in every process, and the browser never holds a whole graph. | None |
 | D39 | What does the team do during the run? | Nothing on Canon. Work on every Canon pull request and issue is paused; the December 1 close-out and the December 3 review are superseded. The team tests after the merge to `next`, and the retrospective plans how they get involved. | None |
 | D40 | The Skip repositories. | The run finishes the Canon parts of Skip client 50 and Skip-Brain 677 if they are still open. `jordanfanapour` and `MS-BC` merge there, as always. | None |
 
@@ -201,7 +201,7 @@ Slices in a wave are independent of each other. A wave starts when the one befor
 |---|---|---|
 | 7.1 | U6: the Canon scorecard as a scheduled job, with stale approvals, unused members, rejected proposals per proposer, open contradictions, gap alerts, extraction quality and the answer evaluation scores. The workflow health job. | The first report is produced on a database built from the branch. |
 | 7.2 | Retrospective proposals, per D36. | Each of the three cases in D36 produces one proposal with a brief, on fixtures. |
-| 7.3 | The load test, per D38. | At the target size a two-hop context request and a path search finish within the times recorded as the baseline, and no process holds a whole graph it was not asked for. |
+| 7.3 | The load test, per D38. No size limit is added anywhere. | At the test size a two-hop context request and a path search finish within the times recorded as the baseline, and no process holds a whole graph it was not asked for. |
 
 ### Wave 8: remaining backlog
 
