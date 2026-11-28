@@ -1929,6 +1929,67 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
         expect((await runBatchWithOmit('MJ: AI Agents', 'MaxCostPerRun')).ErrorMessage).toMatch(/MaxCostPerRun/);
         expect((await runBatchWithOmit('MJ: AI Agents', 'RequirePlanMode')).ErrorMessage).toMatch(/RequirePlanMode/);
         expect((await runBatchWithOmit('', '')).ErrorMessage).toBeUndefined();
+
+        // 4. R7-1: Fields absent from entity metadata (e.g. PostgreSQL prior to twin migration for
+        //    Configuration / DefaultConfiguration / DefaultAgentConfiguration) are omitted from both
+        //    RunViews Fields and the fail-closed FLS check so saves proceed cleanly, while FLS-denied
+        //    metadata-present fields STILL fail closed.
+        const absentFromSchema = new Set(['Configuration', 'DefaultConfiguration', 'DefaultAgentConfiguration']);
+        const observedFieldsByEntity = new Map<string, string[]>();
+        const pgServer = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        Object.defineProperty(pgServer, 'ContextCurrentUser', { get: () => uiUser, configurable: true });
+        Object.defineProperty(pgServer, 'ProviderToUse', {
+            get: () => ({
+                GetEntityObject: async () => null,
+                Entities: [],
+                EntityByName: () => ({
+                    FieldByName: (name: string) => (absentFromSchema.has(name) ? undefined : { Name: name }),
+                }),
+            }),
+            configurable: true,
+        });
+        Object.defineProperty(pgServer, 'RunViewProviderToUse', {
+            get: () => ({
+                RunViews: async (paramsList: Array<{ EntityName: string; Fields?: string[] }>) =>
+                    paramsList.map((p) => {
+                        observedFieldsByEntity.set(p.EntityName, p.Fields ?? []);
+                        return {
+                            Success: true,
+                            Results: [makeRowFromFields(p.Fields ?? [])],
+                        };
+                    }),
+            }),
+            configurable: true,
+        });
+        const pgBatchRes = await (
+            pgServer as unknown as {
+                loadGuardMetadataBatch(): Promise<{ ErrorMessage?: string }>;
+            }
+        ).loadGuardMetadataBatch();
+        expect(pgBatchRes.ErrorMessage).toBeUndefined();
+        expect(observedFieldsByEntity.get('MJ: AI Agents')).not.toContain('Configuration');
+        expect(observedFieldsByEntity.get('MJ: AI Agent Categories')).not.toContain('DefaultConfiguration');
+        expect(observedFieldsByEntity.get('MJ: AI Agent Types')).not.toContain('DefaultAgentConfiguration');
+
+        // R7 Follow-up #1: fractional maxInstancesPerUser < 1 (e.g. 0.5) is ignored instead of flooring to 0
+        const fractionalCapRoot = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            Configuration: JSON.stringify({ instantiation: { maxInstancesPerUser: 0.5 } }),
+        });
+        const fractionalCapErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                ID: 'f4000000-0000-4000-8000-000000000009',
+                IsSaved: false,
+                BaseAgentID: fractionalCapRoot.ID,
+                OwnerUserID: ALICE,
+                InstantiationMode: 'None',
+            }),
+            User: uiUser,
+            AllAgents: [fractionalCapRoot],
+            AllPermissions: [perm],
+        });
+        expect(fractionalCapErrors).toEqual([]);
     });
 
     it('R6-4: Agent Administrator-only user can save a derived agent and create/update/delete categories and types, backed by shipped entity-permission metadata', async () => {

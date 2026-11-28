@@ -162,8 +162,12 @@ export class ManageMyAgentInstanceAction extends BaseAction {
             effectiveBase.Configuration ?? baseAgent.Configuration,
             effectiveBase.TypeConfiguration ?? baseAgent.TypeConfiguration
         );
-        const maxPerUser = instConfig?.maxInstancesPerUser;
-        if (maxPerUser != null && maxPerUser > 0) {
+        const rawMaxPerUser = instConfig?.maxInstancesPerUser;
+        const maxPerUser =
+            typeof rawMaxPerUser === 'number' && Number.isFinite(rawMaxPerUser) && Math.floor(rawMaxPerUser) >= 1
+                ? Math.floor(rawMaxPerUser)
+                : null;
+        if (maxPerUser != null) {
             const rootBase = AIEngine.Instance.GetRootAgent(baseAgent.ID) ?? baseAgent;
             const existingForRoot = AIEngine.Instance.GetUserDerivedAgents(contextUser).filter((a) => {
                 if (

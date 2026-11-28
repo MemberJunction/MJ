@@ -559,9 +559,11 @@ export function ValidateAgentInheritanceAndSandbox(
 
         let effectiveMaxPerUser: number | null = null;
         const foldMaxPerUser = (candidate: number | null | undefined): void => {
-            if (typeof candidate === 'number' && Number.isFinite(candidate) && candidate > 0) {
+            if (typeof candidate === 'number' && Number.isFinite(candidate)) {
                 const floored = Math.floor(candidate);
-                effectiveMaxPerUser = effectiveMaxPerUser === null ? floored : Math.min(effectiveMaxPerUser, floored);
+                if (floored >= 1) {
+                    effectiveMaxPerUser = effectiveMaxPerUser === null ? floored : Math.min(effectiveMaxPerUser, floored);
+                }
             }
         };
         for (const layer of defaultPolicyLayers) {
@@ -1717,28 +1719,51 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             'ConversationSummaryPromptID',
         ] as const;
 
+        // R7-1: Filter requested guard fields against the active provider's entity metadata so
+        // hosts/databases whose schema has not yet received newly added columns (e.g. PostgreSQL
+        // prior to the twin migration for AIAgent.Configuration) neither emit "not found in entity"
+        // log noise nor misclassify schema-absent columns as field-level security denials.
+        const hasEntityLookup = (p: object | null | undefined): p is Pick<IMetadataProvider, 'EntityByName'> =>
+            Boolean(p && 'EntityByName' in p && typeof (p as Partial<IMetadataProvider>).EntityByName === 'function');
+        const metadataProvider = IsMetadataProvider(this.ProviderToUse)
+            ? this.ProviderToUse
+            : hasEntityLookup(this.RunViewProviderToUse)
+              ? this.RunViewProviderToUse
+              : null;
+        const filterExistingFields = (entityName: string, requested: readonly string[]): string[] => {
+            const entityInfo = metadataProvider?.EntityByName(entityName);
+            if (!entityInfo) {
+                return [...requested];
+            }
+            return requested.filter((fieldName) => Boolean(entityInfo.FieldByName(fieldName)));
+        };
+        const agentFields = filterExistingFields('MJ: AI Agents', AGENT_GUARD_FIELDS);
+        const permissionFields = filterExistingFields('MJ: AI Agent Permissions', PERMISSION_GUARD_FIELDS);
+        const categoryFields = filterExistingFields('MJ: AI Agent Categories', CATEGORY_GUARD_FIELDS);
+        const typeFields = filterExistingFields('MJ: AI Agent Types', TYPE_GUARD_FIELDS);
+
         const rv = new RunView(this.RunViewProviderToUse);
         const results = await rv.RunViews(
             [
                 {
                     EntityName: 'MJ: AI Agents',
                     ResultType: 'simple',
-                    Fields: [...AGENT_GUARD_FIELDS],
+                    Fields: agentFields,
                 },
                 {
                     EntityName: 'MJ: AI Agent Permissions',
                     ResultType: 'simple',
-                    Fields: [...PERMISSION_GUARD_FIELDS],
+                    Fields: permissionFields,
                 },
                 {
                     EntityName: 'MJ: AI Agent Categories',
                     ResultType: 'simple',
-                    Fields: [...CATEGORY_GUARD_FIELDS],
+                    Fields: categoryFields,
                 },
                 {
                     EntityName: 'MJ: AI Agent Types',
                     ResultType: 'simple',
-                    Fields: [...TYPE_GUARD_FIELDS],
+                    Fields: typeFields,
                 },
             ],
             this.ContextCurrentUser
@@ -1753,14 +1778,14 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 ErrorMessage: failed.ErrorMessage || 'Guard metadata RunViews query failed',
             };
         }
-        // R6 Follow-up #5 & C-R4-2: Fail closed if field-level security silently omitted ANY
-        // requested guard column from a `'simple'` RunView projection (e.g. denied
+        // R6 Follow-up #5, C-R4-2 & R7-1: Fail closed if field-level security silently omitted ANY
+        // metadata-present requested guard column from a `'simple'` RunView projection (e.g. denied
         // `DefaultConfiguration`, `MaxCostPerRun`, `TypeConfiguration`, `RequirePlanMode`, etc.).
         const requiredGuardFieldsByResult: ReadonlyArray<{ Entity: string; Rows: unknown[]; RequiredFields: readonly string[] }> = [
-            { Entity: 'MJ: AI Agents', Rows: results[0].Results, RequiredFields: AGENT_GUARD_FIELDS },
-            { Entity: 'MJ: AI Agent Permissions', Rows: results[1].Results, RequiredFields: PERMISSION_GUARD_FIELDS },
-            { Entity: 'MJ: AI Agent Categories', Rows: results[2].Results, RequiredFields: CATEGORY_GUARD_FIELDS },
-            { Entity: 'MJ: AI Agent Types', Rows: results[3].Results, RequiredFields: TYPE_GUARD_FIELDS },
+            { Entity: 'MJ: AI Agents', Rows: results[0].Results, RequiredFields: agentFields },
+            { Entity: 'MJ: AI Agent Permissions', Rows: results[1].Results, RequiredFields: permissionFields },
+            { Entity: 'MJ: AI Agent Categories', Rows: results[2].Results, RequiredFields: categoryFields },
+            { Entity: 'MJ: AI Agent Types', Rows: results[3].Results, RequiredFields: typeFields },
         ];
         for (const check of requiredGuardFieldsByResult) {
             if (check.Rows.length > 0) {

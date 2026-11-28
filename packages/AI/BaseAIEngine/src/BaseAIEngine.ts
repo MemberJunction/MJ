@@ -2106,13 +2106,22 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         // Categories, and the full BaseAgent chain (both Configuration and legacy TypeConfiguration)
         // so UI/action pre-checks and server-side ValidateAgentInheritanceAndSandbox agree (R5-7).
         const effectiveMaxInstancesPerUser = minCeiling([
-            ...orderedDefaultLayers.map((l) => l.instantiation?.maxInstancesPerUser),
+            ...orderedDefaultLayers.map((l) => {
+                const v = l.instantiation?.maxInstancesPerUser;
+                return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
+            }),
             ...nodes.flatMap((n, i) => [
-                nodeConfigs[i]?.instantiation?.maxInstancesPerUser,
-                ParseAgentInstantiationConfig(n.TypeConfiguration)?.maxInstancesPerUser,
+                (() => {
+                    const v = nodeConfigs[i]?.instantiation?.maxInstancesPerUser;
+                    return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
+                })(),
+                (() => {
+                    const v = ParseAgentInstantiationConfig(n.TypeConfiguration)?.maxInstancesPerUser;
+                    return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
+                })(),
             ]),
         ]);
-        if (effectiveMaxInstancesPerUser !== null && effectiveMaxInstancesPerUser > 0) {
+        if (effectiveMaxInstancesPerUser !== null && effectiveMaxInstancesPerUser >= 1) {
             mergedConfiguration = {
                 ...mergedConfiguration,
                 instantiation: {
