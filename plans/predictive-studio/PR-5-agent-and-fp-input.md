@@ -3731,6 +3731,40 @@ Record every decision taken in §9 and, when it changes another plan's interface
   settled run (`ReadRunCost`) and by `TracedNumberChecks.RegenerateReport`/`StoredJson`, so G3.7/G3.8 trace them; A6 owns
   `checks/ps-gates/ps-gate-traced-numbers.ts`. · Every number of the report must trace to a stored row (G3.7), and the
   root agent run is still being written while the builder renders the report. · The session `RunCost` in the report.
+- D5-W4-1 · 2026-11-28 · A target entity that does not exist is caught in `gather`, not only once the plan is complete:
+  `PlanMetadataValidator.ValidateTarget` returns the entity (and the target variable, which cannot resolve on it) when
+  the entity does not resolve, `[]` otherwise; it feeds `DraftFacts.TargetUnresolved`, and the gather transition sends
+  the names to the Goal Analyst (the shared `MAX_REPAIRS` count), then ends `decline-unresolved-reference` listing them.
+  The orchestrator applies that transition in place of the prompt's decision too (`executePromptDecision`): after a
+  sub-agent turn the framework runs the prompt, whose chat reply would otherwise end the turn. The Goal Analyst keeps a
+  name the user asked for as written when the catalog lacks it (never a substitute, never a question instead); only a
+  target-slice repair says so. · The A7a-fix smoke's `Unresolved Reference 15` (3/3 no decision row): the Goal Analyst
+  declined in text and the payload stayed `{}`, so the session ended in chat — a refusal must be typed (§5.1, D5-A3-4).
+  A first version that also checked the variable on a real entity declined Small-N's derived outcome
+  (`SteppedDownNextYear`, which the unit maps to a column) before the profile could run (runs `83197104`, `CE3E51A2`). ·
+  Parsing the user message for names (the control path reads no message); checking a real entity's variable in gather.
+  Integrator ruling, wave-4 integration.
+- D5-W4-2 · 2026-11-28 · `PSRubricOracle` hands the judge the agent run's final message and final payload (labeled, each
+  bounded at the testing engine's 40,000-character default) when the driver built no judge evidence; evidence the driver
+  built is kept. · The testing engine builds evidence only for its own judge types (`JUDGE_ORACLE_TYPES`: `llm-judge`,
+  `decision-judge`, `rubric`), so since D5-59 a `ps-rubric` judge read only the payload: `C1 Committee Chair Small-N
+  Refusal` wrote `decline-small-data` and its fixed message in 2 of 3 runs and still scored `failure-reported` 0 ("the
+  output proceeds to draft a full modeling plan", the judge reading the drafted target). · Adding `ps-rubric` to
+  `JUDGE_ORACLE_TYPES` (non-PS; PS has its own route). Integrator ruling, wave-4 integration.
+- D5-W4-3 · 2026-11-28 · Refines D5-58: the eval rubric's version is authored with no `Status` (Draft by default) and
+  `metadata/rubric-publications/.predictive-studio-agent-eval-rubric-publication.json` publishes it after `rubrics/`
+  (RUBRICS_GUIDE's shipped pattern); the generator writes both. · On the clean `MJ_PS_PR5_claudeint` rebuild `sync push`
+  rolled back: the server accepts a new version only as Draft (`VersionStatusError`) and criteria only under a Draft;
+  D5-58's `Published` had worked only as an update of claudeint's existing Draft. Clean result: Published 1.0.0, 3
+  criteria. · `Status` in both files (sync's conflicting-values validation refuses it). Integrator ruling, wave-4
+  integration.
+- D5-W4-4 · 2026-11-28 · The orchestrator template calls the Goal Analyst first when the user names something to
+  predict (asking only when the message names no outcome), and never decides in chat whether there is enough data or
+  whether a name exists: the system's name check and profile say so, with the names or the counts. · `C1 Committee
+  Chair Small-N Refusal` after D5-W4-2: repeat 1 profiled and declined `decline-small-data` (passed); repeats 2 and 3
+  answered the first message with "12 current chairs is too small a sample" and clarifying questions before any
+  sub-agent ran, so no profile and no typed refusal (runs `a0cafc45`, `a795c309`). · Letting the prompt pre-empt the
+  profile. Integrator ruling, wave-4 integration.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3863,7 +3897,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->DB_PORT, GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL, PS_COMPUTE_USD_PER_SECOND<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->9<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->9<!-- /gen:checks -->
-- Head: <!-- gen:head -->34db666e46<!-- /gen:head -->
+- Head: <!-- gen:head -->d7106416ac<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
