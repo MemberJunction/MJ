@@ -1,6 +1,6 @@
 import { createServer, type Server as HttpServer, type IncomingMessage } from 'node:http';
 import { AddressInfo } from 'node:net';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebSocket as WsClient } from 'ws';
 import * as Y from 'yjs';
 import * as syncProtocol from 'y-protocols/sync';
@@ -28,8 +28,12 @@ import { MutateGovernedArtifactAction } from '@memberjunction/core-actions';
 import {
     ArtifactPermissionEngine,
     DocumentLiveBlockEngine,
+    GetSpreadsheetWorkerRunner,
     QueryEngine,
+    RegisterSpreadsheetWorkerRunner,
+    SetSpreadsheetWorkerIsolationRequired,
     SpreadsheetEngine,
+    type SpreadsheetWorkerIsolationRunner,
 } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import '../agentSessions/index.js';
@@ -264,6 +268,27 @@ describe('Unified Agent Artifacts E2E: CoreAction -> GovernedArtifactService -> 
         };
         return providerStub as IMetadataProvider & IRunViewProvider & IRunQueryProvider;
     }
+
+    /*
+     * This E2E asserts the CoreAction -> GovernedArtifactService -> Yjs/awareness wiring, not spreadsheet worker
+     * isolation, so it runs the engine on the main thread through the engine's own runner registration (D5-61, D-091
+     * item 17). The server runner starts a fresh worker per isolated operation (~11 per mutation, each ~320 ms of cold
+     * module loading), which made this test CPU-bound past its timeout under load. Isolation itself is covered by
+     * MJCoreEntitiesServer MJArtifactEntityServer.test.ts (R6-1 & R7-3), ArtifactAdversarialNextWaveServer.test.ts
+     * (Follow-up 3) and MJCoreEntities SpreadsheetEngine.test.ts (R8-3, R9-2). The registered runner is restored after.
+     */
+    let serverRunner: SpreadsheetWorkerIsolationRunner | null = null;
+
+    beforeAll(() => {
+        serverRunner = GetSpreadsheetWorkerRunner();
+        RegisterSpreadsheetWorkerRunner(null);
+        SetSpreadsheetWorkerIsolationRequired(false);
+    });
+
+    afterAll(() => {
+        RegisterSpreadsheetWorkerRunner(serverRunner);
+        SetSpreadsheetWorkerIsolationRequired(serverRunner !== null);
+    });
 
     beforeEach(async () => {
         // Instantiating ensures the module & @RegisterClass side effect cannot be tree-shaken.

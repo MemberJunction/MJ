@@ -332,6 +332,7 @@ packages/AI/Agents/src/__tests__/AgentStepDispatcher.test.ts  (D-091 item 15)
 packages/MJServer/src/__tests__/artifact-collaboration-agent-presence.test.ts  (D-091 item 16)
 # Owner-batch item 17: the wire-lock adversarial test waited fixed sleeps for the server's control frame (integrator, 2026-11-28)
 packages/MJServer/src/__tests__/ArtifactAdversarialNextWaveServer.test.ts  (D-091 item 17)
+packages/MJServer/src/__tests__/unified-agent-artifacts-e2e.test.ts  (D-091 item 17)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
@@ -3791,6 +3792,13 @@ Record every decision taken in §9 and, when it changes another plan's interface
   item (`vi.waitFor` on the state, or the setup moved to `beforeAll`), proven green alone and with 4 concurrent copies,
   and recorded here and in the allowlist; never a raised timeout or a skip. Anything else goes to the controller. ·
   Controller ruling.
+- D5-61 · 2026-11-28 · The unified agent-artifacts E2E runs the spreadsheet engine on the main thread through the
+  engine's supported runner registration; a warm worker pool is not adopted. · A fresh worker per isolated operation is
+  an isolation boundary; a pool shares module and global state across calls (a security design change outside this
+  PR). **Owner follow-up, outside this PR:** about 11 fresh workers per spreadsheet mutation, each ~320 ms of cold module
+  loading (`MJServer/src/services/isolation/WorkerIsolationRunner.ts:247`,
+  `MJCoreEntitiesServer/src/custom/SpreadsheetWorkerRunner.ts:171`), cost ~2.6 s of product time per mutation
+  (4.05 s CPU); a warm pool that keeps isolation is a separate design decision. · Controller ruling.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
@@ -3907,6 +3915,16 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    sleeps are gone: the connection resolves on sync step 2 and each of the five assertions is `vi.waitFor` on the frame
    (5 s bound, 10 ms interval). Alone 13/13 three times, 4 concurrent copies 4/4; waiting on a frame the server never
    sends fails in 5 s (mutation, restored). Approved by the controller 2026-11-28 (item 17).
+   Second half, `unified-agent-artifacts-e2e.test.ts` (same mirror, its first test timed out at 30 s; 29.5 s even in green
+   run 5): its imports are static, and the cost was no first-use cost — `MutateGovernedArtifactAction.Run` took 2,612 ms
+   and an identical second run 2,598 ms, a `beforeAll` engine warm-up changed nothing, and it burned 4,051 ms of CPU in
+   2,651 ms wall: `--cpu-prof` shows ~11 fresh worker threads per mutation, each ~320 ms of cold module loading
+   (`SpreadsheetWorkerRunner.ts:171`, `WorkerIsolationRunner.ts:247`). Per D5-61 the test (which asserts the action →
+   GovernedArtifactService → Yjs/awareness wiring and the hydrated values, never isolation) runs the engine on the main
+   thread through the engine's own registration (`RegisterSpreadsheetWorkerRunner(null)`,
+   `SetSpreadsheetWorkerIsolationRequired(false)` in `beforeAll`, the saved runner restored in `afterAll`). Isolation stays
+   covered by `MJArtifactEntityServer.test.ts` (R6-1 & R7-3), `ArtifactAdversarialNextWaveServer.test.ts` (Follow-up 3)
+   and `SpreadsheetEngine.test.ts` (R8-3, R9-2). File 3,529 ms → 393 ms; alone 3/3 three times, 4 concurrent copies 4/4.
 ## 10. PR description draft
 
 **Title:** `Predictive Studio PR 5 — the agent as a drafter; Feature Pipelines as a Predictive Studio input`
