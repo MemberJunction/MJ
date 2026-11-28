@@ -4,6 +4,9 @@ import { EscapeSQLString, NormalizeUUID, RegisterClass, UUIDsEqual } from '@memb
 import {
   AgentEvalDriver,
   BaseTestDriver,
+  RubricOracle,
+  type AgentEvalConfig,
+  type RubricOracleEngine,
   type DriverExecutionContext,
   type DriverExecutionResult,
   type IOracle,
@@ -12,6 +15,7 @@ import {
   type OracleResult,
   type SuiteFixtureContext,
 } from '@memberjunction/testing-engine';
+import { PS_RUBRIC_ORACLE_TYPE } from './scenario-manifest';
 import type { AgentEvalWorldId } from './types';
 
 /** Maximum rows fetched per run-tree hop during memory-isolation expansion (F-L3-1 safety). */
@@ -428,6 +432,136 @@ class NotesLeakedOracle implements IOracle {
   }
 }
 
+/** Why the PS rubric oracle refused to judge a repeat, before any judge call. */
+export type PSRubricRefusal = 'no-criteria' | 'no-rubric' | 'no-published-version' | 'unknown-criterion' | 'no-provider';
+
+/** The `ps-rubric` oracle's config: the rubric, the pinned version (filled by the driver) and the named criteria. */
+export interface PSRubricOracleConfig {
+  readonly rubricId?: string;
+  readonly rubricVersionId?: string;
+  readonly versionLabel?: string;
+  readonly criteriaKeys: readonly string[];
+}
+
+/** One criterion as the generic rubric oracle reports it in its result details. */
+interface RubricCriterionDetail {
+  readonly Key: string;
+  readonly NormalizedScore: number | null;
+  readonly Rationale?: string;
+}
+
+/** The generic rubric oracle's result details (`RubricOracle.evaluate`). */
+interface RubricOracleDetails {
+  readonly RubricEvaluationID?: string;
+  readonly RubricVersionLabel?: string;
+  readonly Outcome?: string | null;
+  readonly Criteria: readonly RubricCriterionDetail[];
+}
+
+/** Narrows the generic rubric oracle's `details` to the criteria list it reports. */
+function IsRubricOracleDetails(details: unknown): details is RubricOracleDetails {
+  if (typeof details !== 'object' || details === null) return false;
+  const criteria = (details as { Criteria?: unknown }).Criteria;
+  return Array.isArray(criteria) && criteria.every((c) => typeof c === 'object' && c !== null && typeof (c as { Key?: unknown }).Key === 'string');
+}
+
+/** Reads the `ps-rubric` config: criteria keys trimmed, empty strings dropped. */
+export function ReadPSRubricConfig(config: OracleConfig): PSRubricOracleConfig {
+  const rawKeys = config['criteriaKeys'];
+  const criteriaKeys = Array.isArray(rawKeys) ? rawKeys.map((k) => ReadString(k)).filter((k): k is string => k !== undefined) : [];
+  return {
+    rubricId: ReadString(config['rubricId']),
+    rubricVersionId: ReadString(config['rubricVersionId']),
+    versionLabel: ReadString(config['versionLabel']),
+    criteriaKeys,
+  };
+}
+
+/**
+ * The PS eval suite's rubric oracle (D5-59). It judges the repeat with the rubric engine, through the generic
+ * `RubricOracle`, and passes iff every criterion in `criteriaKeys` is Met; the rubric's other criteria are recorded
+ * but never decide the result. A key the rubric version does not define is refused (`unknown-criterion`) before any
+ * judge call, as are a missing key list, rubric or published version.
+ */
+export class PSRubricOracle implements IOracle {
+  public readonly type = PS_RUBRIC_ORACLE_TYPE;
+
+  public constructor(private readonly engine?: RubricOracleEngine) {}
+
+  public async evaluate(input: OracleInput, config: OracleConfig): Promise<OracleResult> {
+    const settings = ReadPSRubricConfig(config);
+    if (settings.criteriaKeys.length === 0) return this.refuse('no-criteria', 'criteriaKeys names no criterion.');
+    if (!settings.rubricId) return this.refuse('no-rubric', 'rubricId is not set.');
+    if (!input.provider) return this.refuse('no-provider', 'No provider available for the ps-rubric oracle.');
+    const versionId = settings.rubricVersionId ?? (await this.latestPublishedVersionId(input, settings.rubricId));
+    if (!versionId) return this.refuse('no-published-version', `Rubric ${settings.rubricId} has no published version.`);
+    const defined = await this.versionCriterionKeys(input, versionId);
+    const unknown = settings.criteriaKeys.filter((k) => !defined.has(k));
+    if (unknown.length > 0) {
+      return this.refuse('unknown-criterion', `rubric version ${versionId} defines no criterion ${unknown.join(', ')}.`, { UnknownKeys: unknown });
+    }
+    const judged = await new RubricOracle(this.engine).evaluate(input, {
+      rubricId: settings.rubricId,
+      rubricVersionId: versionId,
+      versionLabel: settings.versionLabel,
+    });
+    return this.scoreNamedCriteria(judged, settings.criteriaKeys);
+  }
+
+  /** Passes iff every named criterion is Met (normalized score 1); the score is the share of named criteria Met. */
+  private scoreNamedCriteria(judged: OracleResult, keys: readonly string[]): OracleResult {
+    if (!IsRubricOracleDetails(judged.details)) {
+      return { oracleType: this.type, passed: false, score: 0, message: `ps-rubric: the rubric judge returned no criteria (${judged.message})`, details: judged.details };
+    }
+    const byKey = new Map(judged.details.Criteria.map((c) => [c.Key, c]));
+    const named = keys.map((key) => ({ Key: key, NormalizedScore: byKey.get(key)?.NormalizedScore ?? null, Rationale: byKey.get(key)?.Rationale }));
+    const met = named.filter((c) => c.NormalizedScore !== null && c.NormalizedScore >= 1);
+    const passed = met.length === named.length;
+    return {
+      oracleType: this.type,
+      passed,
+      score: met.length / named.length,
+      message: `ps-rubric: ${met.length}/${named.length} named criteria met (${keys.join(', ')})`,
+      details: { ...judged.details, NamedCriteria: named, JudgeOutcome: judged.details.Outcome ?? null },
+    };
+  }
+
+  private refuse(refusal: PSRubricRefusal, reason: string, extra: { readonly UnknownKeys?: readonly string[] } = {}): OracleResult {
+    return { oracleType: this.type, passed: false, score: 0, message: `ps-rubric-${refusal}: ${reason}`, details: { Refusal: refusal, ...extra } };
+  }
+
+  private async latestPublishedVersionId(input: OracleInput, rubricId: string): Promise<string | undefined> {
+    const rv = RunView.FromMetadataProvider(input.provider!);
+    const rows = await rv.RunView<{ ID: string }>(
+      {
+        EntityName: 'MJ: Rubric Versions',
+        Fields: ['ID'],
+        ExtraFilter: `RubricID='${EscapeSQLString(rubricId)}' AND Status='Published'`,
+        OrderBy: 'PublishedAt DESC',
+        MaxRows: 1,
+        ResultType: 'simple',
+      },
+      input.contextUser
+    );
+    return rows.Success ? ReadString(rows.Results?.[0]?.ID) : undefined;
+  }
+
+  private async versionCriterionKeys(input: OracleInput, versionId: string): Promise<ReadonlySet<string>> {
+    const rv = RunView.FromMetadataProvider(input.provider!);
+    const rows = await rv.RunView<{ Key: string }>(
+      {
+        EntityName: 'MJ: Rubric Criteria',
+        Fields: ['Key'],
+        ExtraFilter: `RubricVersionID='${EscapeSQLString(versionId)}'`,
+        ResultType: 'simple',
+      },
+      input.contextUser
+    );
+    if (!rows.Success) throw new Error(rows.ErrorMessage || 'Could not read MJ: Rubric Criteria for the ps-rubric oracle.');
+    return new Set((rows.Results ?? []).map((r) => r.Key));
+  }
+}
+
 /**
  * Test driver for the Predictive Studio Agent Eval suite (§5.1.8, D5-33, D5-34).
  *
@@ -438,6 +572,8 @@ class NotesLeakedOracle implements IOracle {
  * - Loads child-suite world context in `SetupSuite`.
  * - Supplies deterministic PS oracles (`builds-started`, `models-published`, `excluded-fields`,
  *   `refusal-kind`, `notes-leaked`) that work cleanly against both baseline and PR 5 schemas.
+ * - Judges text only through `ps-rubric` on the criteria a test names (D5-59): it adds no implicit generic rubric
+ *   oracle, and pins each `ps-rubric` oracle to the suite run's rubric version.
  */
 @RegisterClass(BaseTestDriver, 'PredictiveStudioAgentEvalDriver')
 export class PredictiveStudioAgentEvalDriver extends AgentEvalDriver {
@@ -487,6 +623,27 @@ export class PredictiveStudioAgentEvalDriver extends AgentEvalDriver {
         });
       }
     }
+  }
+
+  /**
+   * No implicit generic rubric oracle (D5-59): a PS test judges text only through its own `ps-rubric` oracle, on the
+   * criteria it names. Each `ps-rubric` oracle without a version gets the suite run's pinned version (SetupSuite pins
+   * the suite chain's rubric), else the rubric's latest published version.
+   */
+  protected override async WithResolvedRubric(config: AgentEvalConfig, context: DriverExecutionContext): Promise<AgentEvalConfig> {
+    const oracles = await Promise.all(
+      (config.oracles ?? []).map(async (oracle) => {
+        if (oracle.type !== PS_RUBRIC_ORACLE_TYPE) return oracle;
+        const settings = ReadPSRubricConfig(oracle.config ?? {});
+        if (!settings.rubricId || settings.rubricVersionId) return oracle;
+        const pins = Object.entries(context.fixtures?.PinnedRubricVersions ?? {});
+        const suitePin = pins.find(([rubricId]) => UUIDsEqual(rubricId, settings.rubricId))?.[1];
+        const pinned = suitePin ?? (await this.LookupLatestPublished(context, settings.rubricId));
+        if (!pinned) return oracle;
+        return { ...oracle, config: { ...oracle.config, rubricVersionId: pinned.id, versionLabel: pinned.label } };
+      })
+    );
+    return { ...config, oracles };
   }
 
   /**
@@ -545,6 +702,7 @@ export class PredictiveStudioAgentEvalDriver extends AgentEvalDriver {
       new ExcludedFieldsOracle(),
       new RefusalKindOracle(),
       new NotesLeakedOracle(),
+      new PSRubricOracle(),
     ];
     for (const oracle of builtIns) {
       if (!registry.has(oracle.type)) {

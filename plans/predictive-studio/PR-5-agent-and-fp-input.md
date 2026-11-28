@@ -2321,6 +2321,9 @@ metadata/test-suites/.predictive-studio-agent-eval-suite.json
 metadata/test-types/.predictive-studio-agent-eval-test-type.json
 metadata/tests/predictive-studio-agent/.predictive-studio-agent-eval-tests.json
 metadata/rubrics/.predictive-studio-agent-eval-rubric.json
+packages/AI/PredictiveStudio/TruthSuite/scripts/a7b-world.ts
+packages/AI/PredictiveStudio/TruthSuite/src/__tests__/a7b-world.test.ts
+packages/AI/PredictiveStudio/TruthSuite/package.json
 ```
 
 Hands at integration: `export * from './agent-eval';` to A2's `$E/index.ts` (wave 1).
@@ -2363,7 +2366,9 @@ test suite "Predictive Studio Agent Eval - <world>"`. The world step (`TruthSuit
 byte-identical to the baseline arm's file, sha256 `45f4015342312a79ff185ffaeef6e128e6305ba59a12c8edeb853773177212d9`)
 loads that child's planted-truth dataset through `DatasetLoader` and empties every other membership world and scenario
 table (rows and dataset stamp); C1's child runs on the C1 corpus plus W1-signal s42 (D5-45). The baseline arm runs
-these same bytes in its uncommitted worktree. A re-run of one test loads its child suite's world first.
+these same bytes in its uncommitted worktree. A re-run of one test loads its child suite's world first. Text criteria
+are judged by the driver's `ps-rubric` oracle on the criteria each test names (D5-59); runs judged by the generic
+`rubric` oracle before D5-59 are void.
 
 **Gates and findings.** G4.4 `N1c → C1.4`, G4.5 `C4 → C1.4`, G4.6 `W3 → C1.4`; G4.7's suite run. F-AG-11.
 
@@ -3400,6 +3405,17 @@ Record every decision taken in §9 and, when it changes another plan's interface
   metadata, the sync write-back reverse-applied); `MJ_PS_PR5_claudeint` stays a pure PR 5 schema. A failure (b) cannot
   supply (missing generated classes, host CodeGen) is reported for a ruling on a fresh-clone workspace. · `mj dev
   workspace` over `~/repos` would link 14 MJ clones and replace the main checkout's own install (controller ruling).
+- D5-58 · 2026-11-27 · The eval rubric's version ships `Status: 'Published'` (generator and metadata), and the suite's
+  world-loading step is `TruthSuite/scripts/a7b-world.ts` (the baseline arm's bytes), run as `truth:world <world>`; the
+  parent suite is a grouping and each arm runs the 7 child suites by name, each after loading its world. ·
+  `RegisterWorldLoader` would make the Engine depend on the truth suite (controller ruling, council 30st24).
+- D5-59 · 2026-11-27 · The PS eval tests judge text through their own `ps-rubric` oracle (registered by
+  `PredictiveStudioAgentEvalDriver`): it passes iff every criterion in `criteriaKeys` is Met, records the others without
+  counting them, and refuses a key the rubric version does not define (and an empty key list) before any judge call;
+  the driver adds no implicit generic `rubric` oracle and pins `ps-rubric` to the suite run's version. Tests with no
+  criteria carry no rubric oracle. The generic `RubricOracle` is untouched. The baseline arm's 194 C1 runs before this
+  fix are void and are re-run. · The generic oracle never had a `criteriaKeys` contract and scores every criterion,
+  so a scenario naming one of three `NotAllowed` criteria at PassThreshold 1 could never pass (controller ruling).
 - D5-B2-1 · 2026-11-27 · B2's wave-2 ownership adds `Engine/src/training/training-engine.ts` (`AssembleForTraining`
   resolves each pin through `FeaturePinResolver.Resolve` at train time and passes them to `FeatureResolver`),
   `Core/src/registry-contracts.ts` and `Engine/src/registry/registry-entry.ts` (`PinnedFeatureVersions` widened to the

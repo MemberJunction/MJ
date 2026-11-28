@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  AgentEvalScenarioManifest,
   RubricCalibration,
+  type AgentEvalManifest,
   type AgentEvalRubricCriterionKey,
   type CalibrationFixtureFile,
 } from '../index';
@@ -102,5 +104,15 @@ describe('Predictive Studio Agent Eval rubric metadata (D5-58)', () => {
     expect(versions).toHaveLength(1);
     expect(versions[0].primaryKey.ID).toBe('267FF292-E94E-4ABC-AC40-BB7088324AD3');
     expect(versions[0].fields.Status).toBe('Published');
+  });
+});
+
+describe('the rubric generator (D5-58)', () => {
+  it('writes the version Published, so regenerating the metadata keeps the oracle evaluable', () => {
+    const manifestPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'scenario-manifest.json');
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as AgentEvalManifest;
+    const files = AgentEvalScenarioManifest.SerializeMetadataFiles(manifest);
+    const rubric = JSON.parse(files.rubricJson) as RubricMetadataFile;
+    expect(rubric.relatedEntities['MJ: Rubric Versions'][0].fields.Status).toBe('Published');
   });
 });
