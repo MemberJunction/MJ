@@ -54,7 +54,7 @@ export type WidgetStandardSizeClass = (typeof WIDGET_STANDARD_SIZE_CLASSES)[numb
 /**
  * Open-extensible widget size class allowing standard tokens plus host-specific tokens.
  */
-export type WidgetSizeClass = WidgetStandardSizeClass | (string & {});
+export type WidgetSizeClass = WidgetStandardSizeClass | (string & Record<never, never>);
 
 /**
  * Active visual theme mode communicated by the host shell.
@@ -389,18 +389,21 @@ function isWidgetSettingsSchemaProperty(
         return false;
     }
     seen.add(value);
-    const propType = Reflect.get(value, 'type');
-    if (typeof propType !== 'string' || !VALID_SCHEMA_PROPERTY_TYPES.includes(propType)) {
-        return false;
+    try {
+        const propType = Reflect.get(value, 'type');
+        if (typeof propType !== 'string' || !VALID_SCHEMA_PROPERTY_TYPES.includes(propType)) {
+            return false;
+        }
+        if (!checkSchemaPropertyScalars(value)) {
+            return false;
+        }
+        if (!checkSchemaPropertyNested(value, seen)) {
+            return false;
+        }
+        return true;
+    } finally {
+        seen.delete(value);
     }
-    if (!checkSchemaPropertyScalars(value)) {
-        return false;
-    }
-    if (!checkSchemaPropertyNested(value, seen)) {
-        return false;
-    }
-    seen.delete(value);
-    return true;
 }
 
 function checkSchemaPropertyScalars(value: object): boolean {
@@ -601,8 +604,8 @@ function validateValueAgainstSchemaProperty(
             validateValueAgainstSchemaProperty(`${path}[${i}]`, val[i], prop.items, errors);
         }
     }
-    if (IsPlainObject(val) && prop.type === 'object') {
-        validateObjectSchemaConstraints(path, val as JsonObject, prop, errors);
+    if (prop.type === 'object' && IsJsonObject(val)) {
+        validateObjectSchemaConstraints(path, val, prop, errors);
     }
 }
 
