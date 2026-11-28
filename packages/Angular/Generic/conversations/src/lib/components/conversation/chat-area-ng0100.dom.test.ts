@@ -55,7 +55,7 @@ const CHILD_STUBS: Type<object>[] = [
   stubChild('mj-pinned-messages-panel', ['AllowUnpin', 'isLoading', 'pinnedMessages'], ['closed', 'jumpRequested', 'unpinRequested']),
   stubChild('mj-project-selector', ['currentUser', 'environmentId', 'selectedProjectId'], ['projectSelected']),
   stubChild('mj-realtime-remote-browser-surface', [], []),
-  stubChild('mj-realtime-session-overlay', ['AgentName', 'AllowStartLive', 'Chrome', 'Compact', 'CurrentUser', 'EnvironmentID', 'Hidden', 'OpenLinksInNewTab', 'ReviewData', 'ShowDensityPicker', 'ShowDevLinks'], ['NavigateRequest', 'ReviewClosed', 'StartLiveRequested']),
+  stubChild('mj-realtime-session-overlay', ['AgentName', 'AllowStartLive', 'Chrome', 'Compact', 'CurrentUser', 'EnvironmentID', 'Hidden', 'OpenLinksInNewTab', 'ReviewData', 'ShowDevLinks'], ['NavigateRequest', 'ReviewClosed', 'StartLiveRequested']),
   stubChild('mj-resource-share-dialog', ['Adapter', 'Context', 'Visible'], ['Result']),
   stubChild('mj-task-graph-run-view', ['Height', 'LiveUpdates', 'ParentTaskID', 'ShowVariables', 'WorkflowName'], []),
   stubChild('mj-test-feedback-dialog', ['data', 'visible'], ['closed']),

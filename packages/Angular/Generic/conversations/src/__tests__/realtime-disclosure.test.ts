@@ -74,16 +74,15 @@ describe('EffectiveBaseLevel', () => {
     expect(EffectiveBaseLevel({ Level: 2, Calls: 1, Density: 'auto' })).toBe(2);
   });
 
-  it(`auto density promotes to the full console after ${REALTIME_UX_PRO_CALLS} completed calls`, () => {
-    expect(EffectiveBaseLevel({ Level: 1, Calls: REALTIME_UX_PRO_CALLS, Density: 'auto' })).toBe(REALTIME_UX_MAX_LEVEL);
-    expect(EffectiveBaseLevel({ Level: 1, Calls: REALTIME_UX_PRO_CALLS - 1, Density: 'auto' })).toBe(1);
+  it(`does not promote after ${REALTIME_UX_PRO_CALLS} or more completed calls: one layout for every call`, () => {
+    expect(EffectiveBaseLevel({ Level: 1, Calls: REALTIME_UX_PRO_CALLS, Density: 'auto' })).toBe(1);
+    expect(EffectiveBaseLevel({ Level: 0, Calls: 50, Density: 'auto' })).toBe(0);
   });
 
-  it('manual density overrides win outright (the escape hatch)', () => {
-    const earned = { Level: 4, Calls: 10, Density: 'simple' as const };
-    expect(EffectiveBaseLevel(earned)).toBe(0);
-    expect(EffectiveBaseLevel({ ...earned, Density: 'standard' })).toBe(2);
-    expect(EffectiveBaseLevel({ Level: 0, Calls: 0, Density: 'pro' })).toBe(REALTIME_UX_MAX_LEVEL);
+  it('ignores a stored density, so nobody is stuck on a setting the gear no longer offers', () => {
+    expect(EffectiveBaseLevel({ Level: 4, Calls: 10, Density: 'simple' })).toBe(4);
+    expect(EffectiveBaseLevel({ Level: 1, Calls: 0, Density: 'standard' })).toBe(1);
+    expect(EffectiveBaseLevel({ Level: 0, Calls: 0, Density: 'pro' })).toBe(0);
   });
 });
 
@@ -176,15 +175,15 @@ describe('RealtimeDisclosureModel', () => {
     expect(m.SessionLevel).toBe(1);
   });
 
-  it('SetDensity applies immediately — simple retracts even a mid-call console', () => {
+  it('SetDensity (deprecated) records the choice but leaves the earned base level in place', () => {
     const m = new RealtimeDisclosureModel();
-    m.Load(SerializeUxMilestones({ Level: 4, Calls: 9, Density: 'auto' }));
-    expect(m.SessionLevel).toBe(4);
+    m.Load(SerializeUxMilestones({ Level: 2, Calls: 9, Density: 'auto' }));
+    expect(m.SessionLevel).toBe(2);
     m.SetDensity('simple');
-    expect(m.SessionLevel).toBe(0);
+    expect(m.SessionLevel).toBe(2);
     expect(m.Milestones.Density).toBe('simple');
     m.SetDensity('pro');
-    expect(m.SessionLevel).toBe(REALTIME_UX_MAX_LEVEL);
+    expect(m.SessionLevel).toBe(2);
   });
 
   it('RatchetOnSessionEnd replaces milestones and returns the persistable payload', () => {

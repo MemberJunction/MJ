@@ -4,8 +4,8 @@
   container-type: inline-size;
 }
 
-/* ---------- Levels 0–1: phone-call strip (big round controls, centered) ---------- */
-.strip {
+/* ---------- The call bar (not typing): one bar at every width ---------- */
+.bar {
   position: relative;
   display: flex;
   align-items: flex-start;
@@ -15,14 +15,22 @@
   border-top: 1px solid var(--mj-border-subtle);
 }
 
+/* Compact (Calm Orb · overlay): no labels, so the controls center on one line over a soft fade instead of a rule. */
+.bar--compact {
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px 20px;
+  border-top: 0;
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--mj-bg-page) 35%, transparent));
+}
+
 .ctrl-group {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-
-/* Matches mj-media-controls' own labels, so every control in the strip is named alike. */
+/* Matches mj-media-controls' own labels, so every control in the bar is named alike. */
 .ctrl-label {
   font-size: var(--mj-text-xs);
   color: var(--mj-text-muted);
@@ -30,33 +38,37 @@
   margin-top: var(--mj-space-1-5);
   font-weight: 500;
 }
+.ctrl-label--end {
+  color: var(--mj-status-error);
+}
 
-/* The call's media controls sit in the strip like its other groups. */
-.strip__media {
+/* The call's media controls sit in the bar like its other groups. */
+.bar__media {
   align-items: flex-start;
   gap: 22px;
 }
+.bar--compact .bar__media {
+  align-items: center;
+  gap: 14px;
+}
 
-/* A narrow strip tightens its gaps, then wraps onto a second row, rather than cutting off its first and last controls. */
+/* A narrow bar tightens its gaps, then wraps onto a second row, rather than cutting off its first and last controls. */
 @container (max-width: 600px) {
-  .strip,
-  .strip__media {
+  .bar,
+  .bar__media {
     gap: 12px;
   }
 }
 @container (max-width: 480px) {
-  .strip {
+  .bar {
     flex-wrap: wrap;
-    row-gap: 10px;
+    row-gap: 12px;
     padding: 12px 12px max(12px, env(safe-area-inset-bottom));
   }
-  .strip,
-  .strip__media {
-    gap: 10px;
+  .bar,
+  .bar__media {
+    gap: 8px;
   }
-}
-.ctrl-label--end {
-  color: var(--mj-status-error);
 }
 
 /* ---------- Level 2+: the fused dock (minis + composer in one bar) ---------- */
@@ -152,7 +164,7 @@
   height: 32px;
   border-radius: 50%;
   background: var(--mj-brand-primary);
-  color: var(--mj-text-inverse, #fff);
+  color: var(--mj-text-inverse);
   border: 0;
   display: grid;
   place-items: center;
@@ -167,112 +179,6 @@
 .dock__send:disabled {
   opacity: 0.45;
   cursor: not-allowed;
-}
-
-
-
-/* ============================================================= COMPACT (Calm Orb · overlay)
-   The lean dock — a "•••" that blooms a small sheet (Details / Type), Captions, the microphone and a red End.
-   Design-system circles. No 5-button bar, no overlapping hint. */
-.dock-lean {
-  position: relative;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  row-gap: 10px;
-  padding: 16px 18px 20px;
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--mj-bg-page) 35%, transparent));
-}
-
-/* A narrow lean dock (the call column is at least 420px wide) tightens its gaps, so the microphone's device chevron and
-   the Share arrow fit beside the other controls; where even that is not enough (larger touch targets), it wraps onto a
-   second row rather than cutting off its first and last controls. */
-@container (max-width: 490px) {
-  .dock-lean {
-    gap: 6px;
-    row-gap: 10px;
-    padding: 12px 12px max(16px, env(safe-area-inset-bottom));
-  }
-  .lean__media {
-    gap: 4px;
-  }
-  .lean-sheet {
-    left: auto;
-    right: -48px;
-    transform: translateY(8px);
-  }
-  .lean-more--open .lean-sheet {
-    transform: translateY(0);
-  }
-}
-
-
-/* The "•••" overflow + its blooming sheet. */
-.lean-more {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-.lean-sheet {
-  position: absolute;
-  bottom: calc(100% + 12px);
-  left: 50%;
-  transform: translateX(-50%) translateY(8px);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: calc(100vw - 24px);
-  padding: 10px;
-  border-radius: var(--mj-radius-lg, 16px);
-  background: var(--mj-bg-surface-elevated);
-  border: 1px solid var(--mj-border-default);
-  box-shadow: 0 18px 50px -22px rgba(0, 0, 0, 0.6);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 200ms ease, transform 200ms ease;
-  z-index: 5;
-}
-.lean-sheet__media {
-  align-items: center;
-  gap: 8px;
-}
-.lean-more--open .lean-sheet {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
-}
-.lean-sheet__btn {
-  display: grid;
-  place-items: center;
-  gap: 3px;
-  width: 56px;
-  padding: 8px 4px;
-  border-radius: var(--mj-radius-md, 10px);
-  border: 1px solid transparent;
-  background: var(--mj-bg-surface-card);
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  font-size: 16px;
-  transition: all 140ms ease;
-}
-.lean-sheet__btn:hover {
-  background: var(--mj-bg-surface-hover);
-  color: var(--mj-text-primary);
-}
-.lean-sheet__btn--on {
-  background: color-mix(in srgb, var(--mj-brand-primary) 16%, transparent);
-  border-color: var(--mj-brand-primary);
-  color: var(--mj-brand-accent, var(--mj-brand-primary));
-}
-.lean-sheet__btn small {
-  font-size: 9px;
-  font-weight: 600;
-  color: var(--mj-text-muted);
-}
-.lean-sheet__btn--on small {
-  color: var(--mj-brand-accent, var(--mj-brand-primary));
 }
 
 /* Prevent iOS Safari auto-zoom when focusing the live-session text input on phones. */

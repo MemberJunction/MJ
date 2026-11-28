@@ -1,101 +1,14 @@
-@if (StripMode && Compact) {
-  <!-- COMPACT / ORB (Calm Orb · overlay): the lean dock — primary bar keeps only the microphone,
-       Captions, active Camera/Share (while on), a "•••" that blooms a small sheet with secondary
-       actions (inactive Camera/Share, Details, Type), and a red End. Circles from the design system. -->
-  <div class="dock-lean" role="group" aria-label="Call controls">
-    <mj-media-controls class="lean__media"
+@if (!Open) {
+  <!-- The call bar, one at every width: the microphone with its device chevron, the camera when offered, Share only
+       while sharing (to stop it), Captions, More (Share your screen / Type a message) and End, the rightmost action.
+       Full width names each control beneath it; Compact drops the names. -->
+  <div class="bar" [class.bar--compact]="Compact" role="group" aria-label="Call controls">
+    <mj-media-controls class="bar__media"
                        Size="lg"
-                       [MicrophoneOn]="!IsMuted"
-                       [ShowCamera]="ShowCamera && CameraOn"
-                       [ShowShare]="ShowShare && Sharing"
-                       [CameraOn]="CameraOn"
-                       [Sharing]="Sharing"
-                       [SharePanels]="SharePanels"
-                       [CameraOptional]="true"
-                       [ShowDeviceMenu]="true"
-                       [Devices]="Devices"
-                       [SelectedMicrophoneID]="SelectedMicrophoneID"
-                       [SelectedCameraID]="SelectedCameraID"
-                       (MicrophoneToggled)="ToggleMute()"
-                       (CameraToggled)="CameraToggled.emit($event)"
-                       (ShareRequested)="ShareRequested.emit($event)"
-                       (StopShareRequested)="StopShareRequested.emit()"
-                       (DeviceSelected)="DeviceSelected.emit($event)"></mj-media-controls>
-
-    <!-- Captions: first-class in the lean dock (the overlay's only text toggle now). -->
-    @if (ShowCaptionsControl) {
-      <button type="button" mjButton Shape="circle" [Toggleable]="true" [Selected]="CaptionsOn"
-              AriaLabel="Captions" [title]="CaptionsTitle"
-              (click)="ToggleCaptions()">
-        <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-      </button>
-    }
-
-    @if (HasMoreItems) {
-      <div class="lean-more" [class.lean-more--open]="MoreOpen">
-        <!-- Closed, the sheet is only faded out, so it stays where it opens, over the call body. Inert keeps its
-             buttons out of focus, the accessibility tree and clicks until "•••" opens it (#6545). -->
-        <div class="lean-sheet" (click)="$event.stopPropagation()" role="group" aria-label="More call controls"
-             [attr.inert]="MoreOpen ? null : ''">
-          @if ((ShowCamera && !CameraOn) || (ShowShare && !Sharing)) {
-            <mj-media-controls class="lean-sheet__media"
-                               Size="md"
-                               [ShowMicrophone]="false"
-                               [ShowCamera]="ShowCamera && !CameraOn"
-                               [ShowShare]="ShowShare && !Sharing"
-                               [CameraOn]="CameraOn"
-                               [Sharing]="Sharing"
-                               [SharePanels]="SharePanels"
-                               [CameraOptional]="true"
-                               (CameraToggled)="CameraToggled.emit($event); MoreOpen = false"
-                               (ShareRequested)="ShareRequested.emit($event); MoreOpen = false"
-                               (StopShareRequested)="StopShareRequested.emit()"></mj-media-controls>
-          }
-          @if (ShowDetails) {
-            <button type="button" class="lean-sheet__btn" [class.lean-sheet__btn--on]="DetailsOn"
-                    (click)="DetailsToggled.emit(); MoreOpen = false"
-                    [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
-                    [attr.aria-pressed]="DetailsOn">
-              <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
-              <small>Details</small>
-            </button>
-          }
-          @if (AllowTyping) {
-            <button type="button" class="lean-sheet__btn"
-                    (click)="OpenChanged.emit(true); MoreOpen = false"
-                    title="Type into the live session" aria-label="Open the typed-input composer">
-              <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
-              <small>Type</small>
-            </button>
-          }
-        </div>
-        <button type="button" mjButton Shape="circle" [Variant]="MoreOpen ? 'primary' : 'secondary'"
-                AriaLabel="More call controls" title="More controls"
-                [attr.aria-expanded]="MoreOpen"
-                (click)="ToggleMore($event)">
-          <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
-        </button>
-      </div>
-    }
-
-    @if (ShowEnd) {
-      <button type="button" mjButton Shape="circle" Size="lg" Variant="danger"
-              AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
-        <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
-      </button>
-    }
-  </div>
-} @else if (StripMode) {
-  <!-- Levels 0–1: phone-call strip — big labelled circles: the call's media controls (the microphone with its device
-       chevron, and the camera and Share when the call offers them), Captions (level 1+, arriving WITH the text it
-       controls), the Details peek at the surface panels, Type, and End call, the deliberate rightmost action. -->
-  <div class="strip" role="group" aria-label="Call controls">
-    <mj-media-controls class="strip__media"
-                       Size="lg"
-                       [ShowLabels]="true"
+                       [ShowLabels]="!Compact"
                        [MicrophoneOn]="!IsMuted"
                        [ShowCamera]="ShowCamera"
-                       [ShowShare]="ShowShare"
+                       [ShowShare]="ShowShare && Sharing"
                        [CameraOn]="CameraOn"
                        [Sharing]="Sharing"
                        [SharePanels]="SharePanels"
@@ -117,29 +30,25 @@
                 (click)="ToggleCaptions()">
           <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
         </button>
-        <span class="ctrl-label" aria-hidden="true">Captions</span>
+        @if (!Compact) {
+          <span class="ctrl-label" aria-hidden="true">Captions</span>
+        }
       </div>
     }
 
-    @if (ShowDetails) {
+    @if (HasMoreItems) {
       <div class="ctrl-group">
-        <button type="button" mjButton Shape="circle" Size="lg" [Toggleable]="true" [Selected]="DetailsOn"
-                AriaLabel="Details" [title]="DetailsOn ? 'Hide the session panels' : 'Peek at the session panels'"
-                (click)="DetailsToggled.emit()">
-          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
+        <button #moreTrigger type="button" mjButton Shape="circle" Size="lg"
+                [Variant]="MoreOpen ? 'primary' : 'secondary'"
+                AriaLabel="More call controls" title="More controls"
+                [mjMenuTriggerFor]="moreMenu"
+                (MenuOpened)="MoreOpen = true"
+                (MenuClosed)="MoreOpen = false">
+          <i class="fa-solid fa-ellipsis" aria-hidden="true"></i>
         </button>
-        <span class="ctrl-label" aria-hidden="true">Details</span>
-      </div>
-    }
-
-    @if (AllowTyping) {
-      <div class="ctrl-group">
-        <button type="button" mjButton Shape="circle" Size="lg"
-                AriaLabel="Open the typed-input composer" title="Type into the live session"
-                (click)="OpenChanged.emit(true)">
-          <i class="fa-regular fa-keyboard" aria-hidden="true"></i>
-        </button>
-        <span class="ctrl-label" aria-hidden="true">Type</span>
+        @if (!Compact) {
+          <span class="ctrl-label" aria-hidden="true">More</span>
+        }
       </div>
     }
 
@@ -149,16 +58,41 @@
                 AriaLabel="End call" title="End call" (click)="EndRequested.emit()">
           <i class="fa-solid fa-phone-slash" aria-hidden="true"></i>
         </button>
-        <span class="ctrl-label ctrl-label--end" aria-hidden="true">End call</span>
+        @if (!Compact) {
+          <span class="ctrl-label ctrl-label--end" aria-hidden="true">End call</span>
+        }
       </div>
     }
   </div>
+
+  <ng-template #moreMenu>
+    <mj-menu class="more-menu" AriaLabel="More call controls">
+      @if (ShareInMore) {
+        <!-- One click opens the browser's own picker, which offers every kind of surface (as Share did before). -->
+        <mj-menu-item Icon="fa-solid fa-display" (Triggered)="RequestDisplay()">Share your screen</mj-menu-item>
+        @if (SharePanels.length > 0) {
+          <mj-menu-item Icon="fa-solid fa-crop-simple" [mjMenuTriggerFor]="panelMenu">Share a panel</mj-menu-item>
+        }
+      }
+      @if (AllowTyping) {
+        <mj-menu-item Icon="fa-regular fa-keyboard" (Triggered)="OpenTyping()">Type a message</mj-menu-item>
+      }
+    </mj-menu>
+  </ng-template>
+
+  <ng-template #panelMenu>
+    <mj-menu AriaLabel="This panel">
+      @for (panel of SharePanels; track panel.Key) {
+        <mj-menu-item [Icon]="panel.Icon ?? null" (Triggered)="RequestPanel(panel.Key)">{{ panel.Label }}</mj-menu-item>
+      }
+    </mj-menu>
+  </ng-template>
 } @else {
   <!-- Level 2+: the fused dock — small circles and the in-call composer in ONE bottom bar. -->
   <div class="dock">
     <div class="dock__minis">
       <!-- No Share arrow and no device chevron in the dock, which is short of room: the browser's picker still offers
-           every kind of surface, and Hide brings back the strip, which has the device menu. -->
+           every kind of surface, and Hide brings back the call bar, which has the device menu. -->
       <mj-media-controls Size="sm"
                          [MicrophoneOn]="!IsMuted"
                          [ShowCamera]="ShowCamera"
@@ -176,13 +110,6 @@
                 AriaLabel="Captions" [title]="CaptionsTitle"
                 (click)="ToggleCaptions()">
           <i class="fa-solid fa-closed-captioning" aria-hidden="true"></i>
-        </button>
-      }
-      @if (ShowDetails) {
-        <button type="button" mjButton Shape="circle" Size="sm" [Toggleable]="true" [Selected]="DetailsOn"
-                AriaLabel="Details" [title]="DetailsOn ? 'Hide the session panels' : 'Show the session panels'"
-                (click)="DetailsToggled.emit()">
-          <i class="fa-solid fa-table-columns" aria-hidden="true"></i>
         </button>
       }
     </div>

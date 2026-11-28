@@ -26,7 +26,6 @@ import { BuildReviewThreadItems, RealtimeSessionReview, RealtimeSessionReviewTur
 import { RealtimeSessionState } from './realtime-session-state';
 import { RealtimeAgentBannerComponent } from './realtime-agent-banner.component';
 import { RealtimeSessionThreadComponent } from './realtime-session-thread.component';
-import { RealtimeChannelStripComponent } from './realtime-channel-strip.component';
 import { RealtimePerceptionChipComponent, RealtimePerceptionToggle } from './realtime-perception-chip.component';
 import { RealtimeComposerComponent } from './realtime-composer.component';
 import { RealtimeSurfaceTabsComponent, RealtimeChannelSlot } from './realtime-surface-tabs.component';
@@ -182,7 +181,6 @@ export interface RealtimeAvatarCaption {
     RealtimeAgentOrbComponent,
     RealtimeCameraCheckCardComponent,
     RealtimeSessionThreadComponent,
-    RealtimeChannelStripComponent,
     RealtimePerceptionChipComponent,
     RealtimeComposerComponent,
     RealtimeSurfaceTabsComponent,
@@ -328,7 +326,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   set ShowCaptionsControl(value: boolean | undefined) { this.setUiInput('showCaptionsControl', value); }
   get ShowCaptionsControl(): boolean | undefined { return this._uiInputs.showCaptionsControl; }
 
-  /** Show the density picker inside the gear menu. Default `true`. */
+  /** @deprecated The call has one layout and the gear offers no densities; this no longer has any effect. */
   @Input()
   set ShowDensityPicker(value: boolean | undefined) { this.setUiInput('showDensityPicker', value); }
   get ShowDensityPicker(): boolean | undefined { return this._uiInputs.showDensityPicker; }
@@ -351,7 +349,10 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   set ShowSurfacePanel(value: boolean | undefined) { this.setUiInput('showSurfacePanel', value); }
   get ShowSurfacePanel(): boolean | undefined { return this._uiInputs.showSurfacePanel; }
 
-  /** Show the channel strip (active interactive channels). Default `true`. */
+  /**
+   * @deprecated The channel strip was removed (the surface panel's tabs list the live channels); this no longer has
+   * any effect.
+   */
   @Input()
   set ShowChannels(value: boolean | undefined) { this.setUiInput('showChannels', value); }
   get ShowChannels(): boolean | undefined { return this._uiInputs.showChannels; }
@@ -458,7 +459,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   /** Emitted when the mic mute is toggled; payload is the new muted state. */
   @Output() MuteChanged = new EventEmitter<boolean>();
 
-  /** Emitted when the interface density changes. */
+  /** @deprecated The gear offers no densities, so this never emits. */
   @Output() DensityChanged = new EventEmitter<RealtimeUxDensity>();
 
   /** Emitted (px) when the user finishes resizing the surface panel. */
@@ -1607,18 +1608,11 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
-   * Whether the active-channels strip renders: the resolved {@link Ui.showChannelStrip}, which
-   * honours the host's `[ShowChannels]` input (false hard-disables the strip), needs an active
-   * channel and console chrome, and hides it in channel-focus mode. The strip component itself
-   * self-hides when no channels are active, so this stays decluttered.
+   * @deprecated The overlay no longer renders the active-channels strip: the surface panel's tabs list the same
+   * channels. Always `false`.
    */
   public get ChannelStripVisible(): boolean {
-    // Reads the RESOLVED Ui.showChannelStrip flag — which already ANDs the host's
-    // [ShowChannels] input, an active channel, console chrome, and the no-focus rule.
-    // In orb/compact chrome it is false, so the overlay never shows the "CHANNELS · Voice"
-    // strip (the lean Calm-Orb surface). The strip component itself still self-hides when
-    // no channels are active, keeping the console decluttered too.
-    return this._ui.showChannelStrip;
+    return false;
   }
 
   /**
@@ -1865,6 +1859,7 @@ export class RealtimeSessionOverlayComponent extends BaseAngularComponent implem
   }
 
   /**
+   * @deprecated The gear no longer offers densities and nothing in the overlay calls this; kept for hosts that do.
    * The gear popover picked an interface density — apply + persist + emit. `Simple` IS the
    * "pure audio" surface (the standalone headphones control was folded into the gear here): it
    * returns to the orb-only view AND makes it stick across refresh/next call, so picking it also
