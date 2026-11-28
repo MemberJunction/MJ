@@ -741,7 +741,7 @@ export class PredictiveStudioPipelineBuilderAgent extends BaseAgent {
     const runId = result.run.ID;
     try {
       const rows = await RunView.FromMetadataProvider(provider).RunView<TrainingRunCost>({
-        EntityName: TrustVerdicts.RunEntityName, ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', ...ExperimentReports.COST_COLUMNS], ResultType: 'simple', BypassCache: true,
+        EntityName: 'MJ: ML Training Runs', ExtraFilter: `ID='${EscapeSQLString(runId)}'`, Fields: ['ID', ...ExperimentReports.COST_COLUMNS], ResultType: 'simple', BypassCache: true,
       }, user);
       if (!rows.Success) LogError(`PredictiveStudioPipelineBuilderAgent: reading the cost of training run ${runId} failed: ${rows.ErrorMessage || 'unknown error'}`);
       return rows.Success ? rows.Results[0] || null : null;

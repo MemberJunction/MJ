@@ -21,7 +21,6 @@ import type {
 import { EscapeSQLString } from '@memberjunction/global';
 import { JsonParse, TrainingRunResultsParser, type Budgets, type RunCost } from '@memberjunction/predictive-studio-core';
 import { AgentRunTree } from '../experiment/token-accounting';
-import { BuildApprovalClaims } from './build-approval-claims';
 
 /** The root run's totals: what the framework stored, or what a run still writing its own row holds in memory. */
 export interface RunTotals {
@@ -147,7 +146,7 @@ export class RunCostReport {
     const list = AgentRunTree.InList(tree);
     // One batch, two shapes: a claim row carries `MLTrainingPipelineID`, a session row `ID`.
     const [claims, sessions] = await view.RunViews<Partial<Pick<MJMLBuildApprovalClaimEntity, 'MLTrainingPipelineID'> & Pick<MJExperimentSessionEntity, 'ID'>>>([
-      { EntityName: BuildApprovalClaims.EntityName, ExtraFilter: `ClaimingAgentRunID IN (${list}) AND MLTrainingPipelineID IS NOT NULL`, Fields: ['MLTrainingPipelineID'], ResultType: 'simple', BypassCache: true },
+      { EntityName: 'MJ: ML Build Approval Claims', ExtraFilter: `ClaimingAgentRunID IN (${list}) AND MLTrainingPipelineID IS NOT NULL`, Fields: ['MLTrainingPipelineID'], ResultType: 'simple', BypassCache: true },
       { EntityName: 'MJ: Experiment Sessions', ExtraFilter: `AgentRunID IN (${list})`, Fields: ['ID'], ResultType: 'simple', BypassCache: true },
     ], contextUser);
     if (!claims.Success || !sessions.Success) throw new Error(`RunCostReport: reading the session's builds failed: ${claims.ErrorMessage || sessions.ErrorMessage || 'unknown error'}`);

@@ -5001,6 +5001,12 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   tokens** (G4.9 ×2, G4.8 ×7 incl. the mutation and diagnosis runs, G3.7/G3.8). Wave cap $5 (§6.0 rule 7).
 - **Rulings:** D5-A6-1, D5-A6-2 (A6), D5-A6-3, D5-A6-4, D5-A6-5 (controller, §9). Ownership gained (D5-A6-4/5):
   `Engine/src/agent/pipeline-builder-agent.ts` and its test, `checks/ps-gates/ps-gate-traced-numbers.ts`.
+- **Exit checks.** First full `milestone-exit` run: 48 checks, 3 failed — `check:guards` (`PrimaryKeyCompliance` gate 4:
+  an `ID` field list under an entity name held in a constant, `TrustVerdicts.RunEntityName` in `ReadRunCost` and
+  `BuildApprovalClaims.EntityName` in the `RunCostReport` batch — now the `'MJ: …'` literals; `check:guards` 16 + 5
+  passed) and the two `test:python` commands (no `.venv` in this worktree; with `PREDICTIVE_STUDIO_PYTHON` and
+  `PREDICTIVE_STUDIO_TRUTH_PYTHON` set to the main checkout's venvs: Sidecar **541 passed**, TruthSuite **24 passed**,
+  mypy clean on 55 files). Engine after the fix: 157 files, 2,320 passed.
 - **Not run (D5-51, D5-53):** `ci-mirror` (the controller runs it at integration); no push.
 
 ## 12. Refresh log (append-only)
