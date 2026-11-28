@@ -76,6 +76,7 @@ What a conversation source needs that a folder source does not:
 - **Two read modes.** *Org mode*: an app install with read scopes over the named channels. *Delegated mode*: a person's own token, reading only what that person can see.
 - **Watermarks and rate limits.** One watermark per container, the platforms' rate limits honored, backfill bounded by a configurable start date.
 - **A pointer on every item.** Platform, workspace, container, thread and message IDs, plus a deep link people can click to open the original in Slack, Teams or the mail client.
+- **Cost by model tier.** Continuous ingest is where Canon's volume, and so its cost, lands. A small fast model does the high-volume steps (the `Screen` classifier's first pass, decision extraction); a stronger model does the steps that weigh conflicting evidence (the second check near Block, resolving a decision against existing concepts, conflict summaries). The fixed schema and instructions of each prompt are cached, and backfills go through the Batch API. This is prompt and model configuration, not new code. *(From Anthropic's [knowledge graph cookbook](https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide): Haiku extracts, Sonnet judges.)*
 
 Email follows the same shape: the conversation (thread ID) is the item, mail folders and labels are the containers, and delegated mode is the default.
 
@@ -138,6 +139,8 @@ The topic list is org policy, kept in metadata, with a shipped default that lean
 
 A thread takes the strictest outcome any layer gives. Low confidence anywhere counts as the stricter outcome (principle 6).
 
+The layers are measured against a hand-labeled set of threads, as the graph stage is ([MJ 6997](https://github.com/MemberJunction/MJ/issues/6997)). Recall on Block matters more than precision here, because a miss is a leak, so the set leans toward threads near the Block boundary.
+
 ### The owner-only review queue
 
 Items marked De-identify, or flagged as possibly sensitive, wait in a review queue whose row-level security shows each item only to the owner of the original content (the author of the message, or the mailbox owner) and to named privacy reviewers. The reviewer sees the excerpt and the pointer, and can release, edit, de-identify further or discard. Their choice is recorded like any other decision (Workstream F), so the filters can be tuned against it.
@@ -157,8 +160,9 @@ Each decision becomes a `Proposed` concept of type Policy or Process (the shippe
 | Decider | The MJ user who made or confirmed it, and their role at the time |
 | Evidence | A `SourcedFrom` edge to the pointer: thread, message, deep link, date |
 | Confidence | How sure the extractor is that a decision was made, separately from whether it is right |
+| Effective from | The date the decision takes effect, when the thread says so ("from January"); otherwise its date. Pending the review's ruling on [MJ 6998](https://github.com/MemberJunction/MJ/issues/6998) |
 
-Before a decision record is written, its edges are checked against the edge-type endpoint rows (MJ 6765 Rule 2): a `Governs` edge from something that cannot govern, for example, is dropped and counted, not put in front of a reviewer. The extractor is the highest-volume proposer Canon will have, so it is where this check saves the most review time.
+Before a decision record is written, its statement is resolved against the existing concepts by meaning ([MJ 6996](https://github.com/MemberJunction/MJ/issues/6996)): a restatement of an approved decision becomes evidence on it, not a new proposal, and a narrower one is linked by `BroaderThan`. Its edges are then checked against the edge-type endpoint rows (MJ 6765 Rule 2): a `Governs` edge from something that cannot govern, for example, is dropped and counted, not put in front of a reviewer. The extractor is the highest-volume proposer Canon will have, so it is where this check saves the most review time.
 
 ### Who said it matters
 
@@ -266,6 +270,7 @@ Each gate is the test that lets the next phase start; letters in brackets name t
 - [MJ 6213](https://github.com/MemberJunction/MJ/pull/6213): memory, learning cycles and Canon precedence
 - [`guides/CONTENT_PIPELINE_GUIDE.md`](../guides/CONTENT_PIPELINE_GUIDE.md), [`guides/SEARCH_SCOPES_AND_RAG_GUIDE.md`](../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md), [`guides/UNIFIED_PERMISSIONS_GUIDE.md`](../guides/UNIFIED_PERMISSIONS_GUIDE.md), [`guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md`](../guides/CANON_AND_SEMANTIC_GRAPHS_GUIDE.md)
 - [`packages/MessagingAdapters/README.md`](../packages/MessagingAdapters/README.md)
+- Anthropic's [knowledge graph cookbook](https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide): the source of the 2026-11-28 additions
 
 ## Change log
 
@@ -273,3 +278,4 @@ Each gate is the test that lets the next phase start; letters in brackets name t
 |---|---|
 | 2026-11-19 | Draft created from the sponsor's working doc. |
 | 2026-11-20 | Tied to MJ 6765's additions from the TrustGraph comparison: container checks write the visibility audit event (B2), and decision records are validated against the edge-type contract before they are written (D). |
+| 2026-11-28 | From Anthropic's [knowledge graph cookbook](https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide), accepted by the sponsor: cost by model tier, prompt caching and the Batch API (A); a labeled set to measure the screen ([MJ 6997](https://github.com/MemberJunction/MJ/issues/6997), C); decisions resolved against existing concepts by meaning ([MJ 6996](https://github.com/MemberJunction/MJ/issues/6996)) and an effective date on each decision record ([MJ 6998](https://github.com/MemberJunction/MJ/issues/6998)) (D). |
