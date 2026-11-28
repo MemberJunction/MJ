@@ -1,11 +1,14 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock @memberjunction/global so @RegisterClass is a no-op decorator (ToJSONSafe rides along for
-// the OpenAI provider's LLM module, which the driver's base-class import chain now loads).
-vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target,
-    ToJSONSafe: (value: unknown) => value,
-}));
+// Mock @memberjunction/global so @RegisterClass is a no-op decorator while keeping BaseSingleton intact.
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@memberjunction/global')>();
+    return {
+        ...actual,
+        RegisterClass: () => (target: unknown) => target,
+        ToJSONSafe: (value: unknown) => value,
+    };
+});
 
 // Mock @memberjunction/ai — the driver now subclasses the OpenAI provider's OpenAIRealtime, and
 // importing `@memberjunction/ai-openai` evaluates that package's whole index (LLM, embeddings,

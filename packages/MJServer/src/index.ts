@@ -98,11 +98,7 @@ import { IntegrationProgressEmitter, SweepInterruptedRuns } from '@memberjunctio
 import { PublishIntegrationProgress } from './resolvers/IntegrationProgressResolver.js';
 import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog, InstallDefaultResumeContinuationDispatcher, SqlRealtimeRecordingLedger } from '@memberjunction/ai-agents';
-import {
-  ConfigureLongRunningAIFetch,
-  IsLongRunningAIFetchConfigured,
-  PrimeNodeBuiltinUndiciDispatcher,
-} from '@memberjunction/ai';
+import { AITransportManager } from '@memberjunction/ai';
 import { BindBridgeEngineHostInstance, SessionJanitor, SetHostInstancePort, StartBridgeOrphanReconciliation } from './agentSessions/index.js';
 import { ApplyHandoffOfferExpirySettings } from './agentSessions/HandoffOfferExpiry.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
@@ -1972,10 +1968,10 @@ const setupComplete$ = new ReplaySubject(1);
   // mutating Node's process-global undici dispatcher (preserving ProxyAgent/mTLS and standard
   // timeouts for OAuth, webhooks, and non-AI outbound traffic).
   try {
-    if (!IsLongRunningAIFetchConfigured()) {
-      await PrimeNodeBuiltinUndiciDispatcher();
+    if (!AITransportManager.Instance.IsConfigured()) {
+      await AITransportManager.Instance.PrimeNodeBuiltinUndici();
       const livenessLimits = LimitsConfigResolver.Resolve().Limits.Liveness;
-      const longRunningFetchInstall = ConfigureLongRunningAIFetch({
+      const longRunningFetchInstall = AITransportManager.Instance.Configure({
         headersTimeoutMs: livenessLimits.HttpHeadersTimeoutMs,
         bodyTimeoutMs: livenessLimits.HttpBodyTimeoutMs,
       });

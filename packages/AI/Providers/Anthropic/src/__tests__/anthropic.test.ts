@@ -37,19 +37,47 @@ vi.mock('@memberjunction/global', () => ({
     ToJSONSafe: (value: unknown) => value
 }));
 
-const mockGetLongRunningAIFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
+const mockCustomFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
 
 // Mock @memberjunction/ai
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
+        protected _additionalSettings: Record<string, unknown> = {};
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get CustomFetch() {
+            return mockCustomFetch();
+        }
+        protected BuildTransportClientOptions() {
+            const customFetch = this.CustomFetch;
+            return customFetch ? { fetch: customFetch } : {};
+        }
     }
     class BaseLLM extends BaseModel {
-        protected _additionalSettings: Record<string, unknown> = {};
         public get SupportsStreaming(): boolean { return false; }
+        protected BuildNormalizedModelUsage(p: {
+            rawPromptTokens: number;
+            completionTokens: number;
+            cacheReadTokens?: number;
+            cacheWriteTokens?: number;
+            cost?: number;
+            costCurrency?: string;
+            promptTokensAlreadyExcludesCache?: boolean;
+        }) {
+            const cacheRead = Math.max(0, p.cacheReadTokens ?? 0);
+            const cacheWrite = Math.max(0, p.cacheWriteTokens ?? 0);
+            const netPrompt = p.promptTokensAlreadyExcludesCache
+                ? Math.max(0, p.rawPromptTokens ?? 0)
+                : Math.max(0, (p.rawPromptTokens ?? 0) - cacheRead);
+            const u = new ModelUsage(netPrompt, Math.max(0, p.completionTokens ?? 0));
+            u.cacheReadTokens = cacheRead;
+            u.cacheWriteTokens = cacheWrite;
+            if (p.cost !== undefined) u.cost = p.cost;
+            if (p.costCurrency !== undefined) u.costCurrency = p.costCurrency;
+            return u;
+        }
         // The trailing volatile-state seam, mirroring @memberjunction/ai's BaseLLM: the base test is
         // the metadata flag alone; AnthropicLLM's override adds its tag-literal fallback on top.
         protected isVolatileStateMessage(message?: { metadata?: { volatileState?: boolean } }): boolean {
@@ -70,6 +98,10 @@ vi.mock('@memberjunction/ai', () => {
         promptTokens: number;
         completionTokens: number;
         totalTokens: number;
+        cacheReadTokens: number = 0;
+        cacheWriteTokens: number = 0;
+        cost?: number;
+        costCurrency?: string;
         constructor(promptTokens: number, completionTokens: number) {
             this.promptTokens = promptTokens;
             this.completionTokens = completionTokens;
@@ -142,7 +174,6 @@ vi.mock('@memberjunction/ai', () => {
             return null;
         },
         NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
-        GetLongRunningAIFetch: mockGetLongRunningAIFetch,
     };
 });
 
@@ -168,9 +199,9 @@ describe('AnthropicLLM', () => {
             expect(instance.AnthropicClient.messages).toBeDefined();
         });
 
-        it('should forward GetLongRunningAIFetch to the Anthropic SDK constructor when configured (B6 / R2-15)', async () => {
+        it('should forward BaseModel.CustomFetch to the Anthropic SDK constructor when configured (B6 / R2-15)', async () => {
             const scopedFetch = vi.fn(async () => new Response('ok'));
-            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            mockCustomFetch.mockReturnValueOnce(scopedFetch);
             vi.clearAllMocks();
             new AnthropicLLM('test-key');
             expect(MockAnthropic).toHaveBeenCalledTimes(1);

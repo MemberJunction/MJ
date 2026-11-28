@@ -141,16 +141,7 @@ RunLLMConformanceSuite({
                 throw abortErrorLike();
             })();
         });
-    },
-    KnownDeviations: [
-        {
-            Kind: 'FailedResultLacksErrorInfo',
-            Reason:
-                "OllamaLLM.nonStreamingChatCompletion's generic catch block builds the failed ChatResult " +
-                'without calling ErrorAnalyzer.analyzeError (only its cancellation path populates errorInfo), ' +
-                'so retry/failover layers get no structured classification for genuine Ollama failures.'
-        }
-    ]
+    }
 });
 
 describe('Ollama — fetch abort classification', () => {

@@ -1,9 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 
-// Same module mocks as openAIRealtime.test.ts: no-op @RegisterClass, base classes only, no network.
-vi.mock('@memberjunction/global', () => ({
-  RegisterClass: () => (target: unknown) => target,
-}));
+// Same module mocks as openAIRealtime.test.ts: no-op @RegisterClass (keeping BaseSingleton), base classes only, no network.
+vi.mock('@memberjunction/global', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@memberjunction/global')>();
+  return {
+    ...actual,
+    RegisterClass: () => (target: unknown) => target,
+  };
+});
 vi.mock('@memberjunction/ai', async () => {
   const { BaseModel } = await import('../../../../Core/src/generic/baseModel');
   const baseRealtime = await import('../../../../Core/src/generic/baseRealtime');

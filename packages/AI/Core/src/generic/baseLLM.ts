@@ -1,9 +1,49 @@
 import { SummarizeParams, SummarizeResult } from "./summarize.types";
 import { BaseModel, ModelUsage } from "./baseModel";
-import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
+import { ChatMessage, ChatMessageRole, ChatParams, ChatResult, ChatToolCall, StreamingChatCallbacks, ParallelChatCompletionsCallbacks, ChatCompletionMessage, ValidateToolConversation } from "./chat.types";
 import { ClassifyParams, ClassifyResult } from "./classify.types";
 import { ErrorAnalyzer } from "./errorAnalyzer";
 import { BuildCancellationErrorInfo, DescribeCancellation, IsAbortError } from "./cancellation";
+import {
+    BuildOpenAICompatibleToolCalls,
+    BuildOpenAICompatibleToolChoice,
+    BuildOpenAICompatibleToolResults,
+    BuildOpenAICompatibleTools,
+    ReadOpenAICompatibleToolCalls,
+    type OpenAICompatibleToolCall,
+    type OpenAICompatibleToolCallReadout,
+    type OpenAICompatibleToolChoice,
+    type OpenAICompatibleToolDeclaration,
+    type OpenAICompatibleToolResultMessage,
+    type RawOpenAICompatibleToolCall,
+} from "./openAICompatibleTools";
+import { ThinkingStreamExtractor, type ThinkingTagFormat } from "./thinkingStreamExtractor";
+
+/**
+ * Input shape for {@link BaseLLM.BuildNormalizedModelUsage}, centralizing prompt-cache net-new
+ * token normalization across all LLM drivers.
+ */
+export interface NormalizedModelUsageParams {
+    /** Raw input/prompt token count reported by the provider. */
+    rawPromptTokens: number;
+    /** Output/completion token count reported by the provider. */
+    completionTokens: number;
+    /** Input tokens served from the provider's prompt cache (cache hits / reads). */
+    cacheReadTokens?: number;
+    /** Input tokens written to the provider's prompt cache (cache writes / creation). */
+    cacheWriteTokens?: number;
+    /** Optional authoritative execution cost reported directly by the provider/gateway. */
+    cost?: number;
+    /** Optional ISO 4217 currency code for {@link cost} (e.g., `'USD'`). */
+    costCurrency?: string;
+    /**
+     * When `true` (e.g., Anthropic's `input_tokens`), `rawPromptTokens` already excludes cached
+     * tokens and is mapped straight through. When `false`/omitted (OpenAI, Groq, Cerebras,
+     * Fireworks, Gemini), `cacheReadTokens` is subtracted (clamped at 0) so `ModelUsage.promptTokens`
+     * uniformly holds uncached/net-new input tokens only.
+     */
+    promptTokensAlreadyExcludesCache?: boolean;
+}
 
 /**
  * Type for thinking stream state management
@@ -63,37 +103,6 @@ export abstract class BaseLLM extends BaseModel {
      * requests invalidates every replayed block after it.
      */
     public static readonly ReplayedReasoningRequiresStablePrefix: boolean = false;
-
-    /**
-     * Protected property to store additional provider-specific settings
-     */
-    protected _additionalSettings: Record<string, any> = {};
-    
-    /**
-     * Get the current additional settings
-     */
-    public get AdditionalSettings(): Record<string, any> {
-        return this._additionalSettings;
-    }
-    
-    /**
-     * Set additional provider-specific settings
-     * Subclasses should override this method to validate required settings
-     * 
-     * @param settings Provider-specific settings
-     */
-    public SetAdditionalSettings(settings: Record<string, any>): void {
-        this._additionalSettings = {...this._additionalSettings, ...settings};
-    }
-
-    /**
-     * Clear all additional settings
-     * This is useful for resetting the state of the provider
-     * or when switching between different configurations.
-     */
-    public ClearAdditionalSettings(): void {
-        this._additionalSettings = {};
-    }
 
     /**
      * Process a chat completion request. If streaming is enabled and supported,
@@ -197,23 +206,11 @@ export abstract class BaseLLM extends BaseModel {
         
         // Convert the settled results to an array of ChatResults
         // For rejected promises, create error ChatResults
-        const chatResults = results.map((result, index) => {
+        const chatResults = results.map((result) => {
             if (result.status === 'fulfilled') {
                 return result.value;
             } else {
-                // Create an error result
-                const startTime = new Date();
-                const endTime = new Date();
-                const errorResult = new ChatResult(false, startTime, endTime);
-                errorResult.data = {
-                    choices: [],
-                    usage: new ModelUsage(0, 0)
-                };
-                errorResult.statusText = 'error';
-                errorResult.errorMessage = result.reason?.message || 'Unknown error';
-                errorResult.exception = {exception: result.reason};
-                errorResult.errorInfo = ErrorAnalyzer.analyzeError(result.reason, this.constructor.name);
-                return errorResult;
+                return this.BuildErrorChatResult(new Date(), result.reason);
             }
         });
         
@@ -471,20 +468,7 @@ export abstract class BaseLLM extends BaseModel {
                         params.streamingCallbacks.OnError(error);
                     }
 
-                    const endTime = new Date();
-
-                    // Create a proper ChatResult by extending BaseResult
-                    const errorResult = new ChatResult(false, startTime, endTime);
-                    errorResult.data = {
-                        choices: [],
-                        usage: new ModelUsage(0, 0)
-                    };
-                    errorResult.statusText = 'error';
-                    errorResult.errorMessage = error?.message || 'Unknown error';
-                    errorResult.exception = {exception: error};
-                    errorResult.errorInfo = ErrorAnalyzer.analyzeError(error, this.constructor.name);
-
-                    reject(errorResult);
+                    reject(this.BuildErrorChatResult(startTime, error));
                 } finally {
                     // Release any accumulated streaming buffers (thinking-block
                     // accumulators, pending content, etc.) so they don't pin
@@ -509,7 +493,7 @@ export abstract class BaseLLM extends BaseModel {
      * lifetime.
      */
     protected resetStreamingState(): void {
-        // Default no-op. Providers override.
+        this.resetThinkingStreamState();
     }
 
     /**
@@ -563,6 +547,108 @@ export abstract class BaseLLM extends BaseModel {
         result.errorInfo = BuildCancellationErrorInfo({ error: options.error, signal: options.signal, provider: this.constructor.name });
         return result;
     }
+
+    /**
+     * Builds a normalized {@link ModelUsage} conforming to MemberJunction's uniform cache contract:
+     * `promptTokens` holds UNCACHED/net-new input tokens only, disjoint from `cacheReadTokens` and
+     * `cacheWriteTokens`. Providers whose raw prompt count includes cached tokens (OpenAI, Groq,
+     * Cerebras, Fireworks, Gemini) pass `promptTokensAlreadyExcludesCache: false` (the default) so
+     * `cacheReadTokens` is subtracted (clamped at 0); providers like Anthropic whose `input_tokens`
+     * already excludes cached tokens pass `promptTokensAlreadyExcludesCache: true`.
+     */
+    protected BuildNormalizedModelUsage(params: NormalizedModelUsageParams): ModelUsage {
+        const cacheReadTokens = Math.max(0, params.cacheReadTokens ?? 0);
+        const cacheWriteTokens = Math.max(0, params.cacheWriteTokens ?? 0);
+        const rawPrompt = Math.max(0, params.rawPromptTokens ?? 0);
+        const completionTokens = Math.max(0, params.completionTokens ?? 0);
+        const netPromptTokens = params.promptTokensAlreadyExcludesCache
+            ? rawPrompt
+            : Math.max(0, rawPrompt - cacheReadTokens);
+
+        const usage = new ModelUsage(netPromptTokens, completionTokens, params.cost, params.costCurrency);
+        usage.cacheReadTokens = cacheReadTokens;
+        usage.cacheWriteTokens = cacheWriteTokens;
+        return usage;
+    }
+
+    /**
+     * Builds a standardized error {@link ChatResult} with zeroed {@link ModelUsage} and structured
+     * {@link ErrorAnalyzer.analyzeError} classification.
+     */
+    protected BuildErrorChatResult(
+        startTime: Date,
+        error: unknown,
+        statusText: string = 'error',
+        providerName?: string
+    ): ChatResult {
+        const errorResult = new ChatResult(false, startTime, new Date());
+        errorResult.data = {
+            choices: [],
+            usage: new ModelUsage(0, 0)
+        };
+        errorResult.statusText = statusText;
+        const message = error instanceof Error
+            ? error.message
+            : (typeof error === 'object' && error !== null && 'message' in error && typeof (error as { message?: unknown }).message === 'string')
+                ? (error as { message: string }).message
+                : 'Unknown error';
+        errorResult.errorMessage = message || 'Unknown error';
+        errorResult.exception = { exception: error };
+        errorResult.errorInfo = ErrorAnalyzer.analyzeError(error, providerName ?? this.constructor.name);
+        return errorResult;
+    }
+
+    // ============ OpenAI-Compatible Native Tool Calling Helpers ============
+
+    /**
+     * Formats {@link ChatParams.tools} into OpenAI-compatible function tool declarations, or
+     * returns `undefined` when no tools were declared on `params`.
+     */
+    protected FormatOpenAICompatibleTools(params: ChatParams): OpenAICompatibleToolDeclaration[] | undefined {
+        if (!params.tools || params.tools.length === 0) {
+            return undefined;
+        }
+        return BuildOpenAICompatibleTools(params.tools);
+    }
+
+    /**
+     * Formats {@link ChatParams.toolChoice} into OpenAI-compatible `tool_choice`, or returns
+     * `undefined` when not specified on `params`.
+     */
+    protected FormatOpenAICompatibleToolChoice(params: ChatParams): OpenAICompatibleToolChoice | undefined {
+        if (params.toolChoice === undefined) {
+            return undefined;
+        }
+        return BuildOpenAICompatibleToolChoice(params.toolChoice);
+    }
+
+    /**
+     * Formats normalized prior assistant {@link ChatToolCall}s back onto the OpenAI-compatible wire shape.
+     */
+    protected FormatOpenAICompatibleToolCalls(toolCalls: ChatToolCall[]): OpenAICompatibleToolCall[] {
+        return BuildOpenAICompatibleToolCalls(toolCalls);
+    }
+
+    /**
+     * Expands one MJ `tool`-role {@link ChatMessage} into OpenAI-compatible per-result `tool` messages.
+     */
+    protected FormatOpenAICompatibleToolResults(
+        message: ChatMessage,
+        providerName?: string
+    ): OpenAICompatibleToolResultMessage[] {
+        return BuildOpenAICompatibleToolResults(message, providerName ?? this.constructor.name);
+    }
+
+    /**
+     * Parses raw OpenAI-compatible response `tool_calls`, reporting malformed JSON arguments cleanly
+     * via {@link OpenAICompatibleToolCallReadout.Malformed}.
+     */
+    protected ParseOpenAICompatibleToolCalls(
+        rawCalls: RawOpenAICompatibleToolCall[] | undefined | null,
+        providerName?: string
+    ): OpenAICompatibleToolCallReadout {
+        return ReadOpenAICompatibleToolCalls(rawCalls, providerName ?? this.constructor.name);
+    }
     
     /**
      * Create a provider-specific streaming request
@@ -598,10 +684,35 @@ export abstract class BaseLLM extends BaseModel {
     // ============ Thinking Model Support Helper Methods ============
 
     /**
-     * State tracking for streaming thinking extraction
-     * Providers should initialize this if they support thinking models
+     * Reusable streaming thinking-tag extractor backing {@link processStreamChunkWithThinking} and
+     * {@link flushThinkingStreamRemainder}. Created on demand via {@link CreateThinkingStreamExtractor}
+     * and cleared on {@link resetStreamingState}.
      */
-    protected thinkingStreamState: ThinkingStreamState | null = null;
+    protected _thinkingExtractor: ThinkingStreamExtractor | null = null;
+
+    /**
+     * Factory creating a fresh {@link ThinkingStreamExtractor} configured with the provider's
+     * thinking tag pair (defaults to {@link getThinkingTagFormat}).
+     */
+    protected CreateThinkingStreamExtractor(tags?: ThinkingTagFormat): ThinkingStreamExtractor {
+        return new ThinkingStreamExtractor(tags ?? this.getThinkingTagFormat());
+    }
+
+    /**
+     * Backwards-compatible state view over {@link _thinkingExtractor} for subclasses reading
+     * `this.thinkingStreamState?.accumulatedThinking`.
+     */
+    protected get thinkingStreamState(): ThinkingStreamState | null {
+        if (!this._thinkingExtractor) {
+            return null;
+        }
+        return {
+            accumulatedThinking: this._thinkingExtractor.AccumulatedThinking,
+            inThinkingBlock: this._thinkingExtractor.InThinkingBlock,
+            pendingContent: this._thinkingExtractor.PendingContent,
+            thinkingComplete: this._thinkingExtractor.ThinkingComplete,
+        };
+    }
 
     /**
      * Check if the provider supports thinking models
@@ -615,7 +726,7 @@ export abstract class BaseLLM extends BaseModel {
      * Get the thinking tag format for this provider
      * Providers can override this to customize the thinking tag format
      */
-    protected getThinkingTagFormat(): { open: string; close: string } {
+    protected getThinkingTagFormat(): ThinkingTagFormat {
         return { open: '<think>', close: '</think>' };
     }
 
@@ -660,165 +771,36 @@ export abstract class BaseLLM extends BaseModel {
      * Initialize thinking stream state for streaming extraction
      */
     protected initializeThinkingStreamState(): void {
-        this.thinkingStreamState = {
-            accumulatedThinking: '',
-            inThinkingBlock: false,
-            pendingContent: '',
-            thinkingComplete: false
-        };
+        this._thinkingExtractor = this.CreateThinkingStreamExtractor();
     }
 
     /**
      * Reset thinking stream state
      */
     protected resetThinkingStreamState(): void {
-        this.thinkingStreamState = null;
+        if (this._thinkingExtractor) {
+            this._thinkingExtractor.Reset();
+        }
+        this._thinkingExtractor = null;
     }
 
     /**
      * Returns (and clears) any user-visible content the thinking-tag stripper is still holding back at
-     * the end of a stream. Mid-stream, {@link processStreamChunkWithThinking} holds back a trailing
-     * fragment that could be the start of a `<think>`/`</think>` tag so a split tag never leaks as
-     * partial text; once the stream ends, such a fragment is real content and must be emitted (bug A5).
-     *
-     * Only flushes when NOT inside a thinking block: an unterminated `<think>` block's buffered text is
-     * reasoning, not answer, and is left held back (never surfaced as visible content). Returns `''`
-     * when thinking extraction isn't active (no state) or there's nothing to flush.
+     * the end of a stream. Delegates to {@link ThinkingStreamExtractor.Flush}.
      */
     protected flushThinkingStreamRemainder(): string {
-        const state = this.thinkingStreamState;
-        if (!state || state.inThinkingBlock) {
-            return '';
-        }
-        const remainder = state.pendingContent;
-        state.pendingContent = '';
-        return remainder;
+        return this._thinkingExtractor ? this._thinkingExtractor.Flush() : '';
     }
 
     /**
-     * Process streaming chunk with thinking extraction
-     * This method handles case-insensitive extraction across chunk boundaries
+     * Process streaming chunk with thinking extraction.
+     * Delegates to {@link ThinkingStreamExtractor.ProcessChunk}.
      */
     protected processStreamChunkWithThinking(rawContent: string): string {
-        if (!this.thinkingStreamState) {
-            // If thinking extraction is not enabled, return content as-is
+        if (!this._thinkingExtractor) {
             return rawContent;
         }
-        
-        let contentToEmit = '';
-        this.thinkingStreamState.pendingContent += rawContent;
-        
-        // If thinking is already complete, just return the pending content
-        if (this.thinkingStreamState.thinkingComplete) {
-            contentToEmit = this.thinkingStreamState.pendingContent;
-            this.thinkingStreamState.pendingContent = '';
-            return contentToEmit;
-        }
-        
-        const tags = this.getThinkingTagFormat();
-        const pending = this.thinkingStreamState.pendingContent;
-        const pendingLower = pending.toLowerCase();
-        
-        // Check if we're starting a thinking block (case-insensitive)
-        if (!this.thinkingStreamState.inThinkingBlock && pendingLower.includes(tags.open.toLowerCase())) {
-            const thinkStartIndex = pendingLower.indexOf(tags.open.toLowerCase());
-            
-            // If <think> is not at the start, emit content before it
-            if (thinkStartIndex > 0) {
-                contentToEmit = pending.substring(0, thinkStartIndex);
-                this.thinkingStreamState.pendingContent = pending.substring(thinkStartIndex);
-                return contentToEmit;
-            }
-            
-            // We're now in a thinking block
-            this.thinkingStreamState.inThinkingBlock = true;
-            
-            // Remove the opening tag
-            this.thinkingStreamState.pendingContent = pending.substring(tags.open.length);
-        }
-        
-        // If we're in a thinking block, look for the end (case-insensitive)
-        if (this.thinkingStreamState.inThinkingBlock) {
-            const pendingInBlockLower = this.thinkingStreamState.pendingContent.toLowerCase();
-            const thinkEndIndex = pendingInBlockLower.indexOf(tags.close.toLowerCase());
-            
-            if (thinkEndIndex !== -1) {
-                // Found the end of thinking block
-                this.thinkingStreamState.accumulatedThinking += this.thinkingStreamState.pendingContent.substring(0, thinkEndIndex);
-                this.thinkingStreamState.pendingContent = this.thinkingStreamState.pendingContent.substring(thinkEndIndex + tags.close.length);
-                this.thinkingStreamState.inThinkingBlock = false;
-                this.thinkingStreamState.thinkingComplete = true;
-                
-                // Process any remaining content recursively
-                return this.processStreamChunkWithThinking('');
-            } else {
-                // Still accumulating thinking content. The close tag can be split across chunk
-                // boundaries (e.g. pending ends with "</thi"); if we consumed that fragment into
-                // the thinking text we would never recognize the completed "</think>" and would
-                // swallow the rest of the response as thinking forever. Hold back any suffix that
-                // could be the start of the close tag.
-                const closeHoldBack = this.partialTagSuffixLength(this.thinkingStreamState.pendingContent, tags.close);
-                const closeCut = this.thinkingStreamState.pendingContent.length - closeHoldBack;
-                this.thinkingStreamState.accumulatedThinking += this.thinkingStreamState.pendingContent.substring(0, closeCut);
-                this.thinkingStreamState.pendingContent = this.thinkingStreamState.pendingContent.substring(closeCut);
-                return '';
-            }
-        }
-
-        // Not in a thinking block and no complete open tag found. A partial open tag can be split
-        // across streaming chunk boundaries (e.g. pending ends with "<thi"); emitting that fragment
-        // leaks a literal "<thi" into user-visible text and it becomes "<think>" once the next chunk
-        // arrives (bug A5). Hold back any suffix that could be the start of the open tag, and avoid
-        // cutting in the middle of a UTF-16 surrogate pair.
-        const openHoldBack = this.partialTagSuffixLength(this.thinkingStreamState.pendingContent, tags.open);
-        let emitEnd = this.avoidSurrogateSplit(
-            this.thinkingStreamState.pendingContent,
-            this.thinkingStreamState.pendingContent.length - openHoldBack
-        );
-        contentToEmit = this.thinkingStreamState.pendingContent.substring(0, emitEnd);
-        this.thinkingStreamState.pendingContent = this.thinkingStreamState.pendingContent.substring(emitEnd);
-        return contentToEmit;
-    }
-
-    /**
-     * Returns the length of the longest suffix of `text` that is a non-empty prefix of `tag`
-     * (case-insensitive). Used to detect a tag that may be split across streaming chunk
-     * boundaries so the caller can hold that partial fragment back instead of emitting it.
-     * Returns 0 when no suffix of `text` is a prefix of `tag`.
-     */
-    private partialTagSuffixLength(text: string, tag: string): number {
-        if (!text || !tag) {
-            return 0;
-        }
-        const t = text.toLowerCase();
-        const g = tag.toLowerCase();
-        // A held-back fragment is at most tag.length - 1 chars (a full tag is handled elsewhere).
-        const max = Math.min(t.length, g.length - 1);
-        for (let len = max; len > 0; len--) {
-            if (t.endsWith(g.substring(0, len))) {
-                return len;
-            }
-        }
-        return 0;
-    }
-
-    /**
-     * Defensive guard for the tag hold-back: if the emit/hold boundary would fall *between* the two
-     * halves of a UTF-16 surrogate pair (which renders as U+FFFD), move the cut back by one so the
-     * full pair stays together in the held-back remainder. In the common case the held-back fragment
-     * is an ASCII tag prefix (e.g. "<thi"), so `cut` lands on an ASCII boundary and this is a no-op;
-     * it only bites when a hold-back boundary happens to land mid-pair. Note it does NOT hold back a
-     * lone trailing high surrogate when nothing else is being held back (holdBack === 0) — a pair
-     * split exactly at a streaming chunk boundary is left to render and is corrected by the next chunk.
-     */
-    private avoidSurrogateSplit(text: string, cut: number): number {
-        if (cut > 0 && cut < text.length) {
-            const code = text.charCodeAt(cut - 1);
-            if (code >= 0xD800 && code <= 0xDBFF) {
-                return cut - 1;
-            }
-        }
-        return cut;
+        return this._thinkingExtractor.ProcessChunk(rawContent).contentDelta;
     }
 
     /**

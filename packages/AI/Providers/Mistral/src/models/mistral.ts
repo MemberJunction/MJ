@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, NormalizeFinishReason, GetLongRunningAIFetch } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ChatMessage, NormalizeFinishReason } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Mistral, HTTPClient } from "@mistralai/mistralai";
 import { ChatCompletionChoice, ResponseFormat, CompletionEvent, CompletionResponseStreamChoice, ChatCompletionStreamRequest } from '@mistralai/mistralai/models/components';
@@ -10,25 +10,12 @@ import type { RequestOptions } from '@mistralai/mistralai/lib/sdks';
 export class MistralLLM extends BaseLLM {
     private _client: Mistral;
 
-    // State tracking for streaming thinking extraction
-    private _streamingState: {
-        accumulatedThinking: string;
-        inThinkingBlock: boolean;
-        pendingContent: string;
-        thinkingComplete: boolean;
-    } = {
-        accumulatedThinking: '',
-        inThinkingBlock: false,
-        pendingContent: '',
-        thinkingComplete: false
-    };
-
     constructor(apiKey: string) {
         super(apiKey);
-        const longRunningFetch = GetLongRunningAIFetch();
+        const customFetch = this.CustomFetch;
         this._client = new Mistral({
             apiKey: apiKey,
-            ...(longRunningFetch ? { httpClient: new HTTPClient({ fetcher: longRunningFetch }) } : {}),
+            ...(customFetch ? { httpClient: new HTTPClient({ fetcher: customFetch }) } : {}),
         });
     }
 
@@ -45,6 +32,13 @@ export class MistralLLM extends BaseLLM {
      * Mistral natively supports assistant prefill via the prefix flag
      */
     public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
+     * Mistral (Magistral) supports thinking models using `<think>...</think>` blocks.
+     */
+    protected override supportsThinkingModels(): boolean {
         return true;
     }
 
@@ -125,23 +119,14 @@ export class MistralLLM extends BaseLLM {
                 rawContent = choice.message.content.join(' ');
             }
 
-            // Extract thinking content from Magistral models
-            let content: string = rawContent.trim();
-            let thinkingContent: string | undefined = undefined;
-            if (content.startsWith('<think>') && content.includes('</think>')) {
-                // extract thinking content
-                const thinkStart = content.indexOf('<think>') + '<think>'.length;
-                const thinkEnd = content.indexOf('</think>');
-                thinkingContent = content.substring(thinkStart, thinkEnd).trim();
-                // remove thinking content from main content
-                content = content.substring(thinkEnd + '</think>'.length).trim();
-            }
+            // Extract thinking content from Magistral models via BaseLLM's shared helper
+            const extracted = this.extractThinkingFromContent(rawContent);
 
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
-                    content: content,
-                    thinking: thinkingContent || undefined
+                    content: extracted.content,
+                    thinking: extracted.thinking || undefined
                 },
                 finish_reason: NormalizeFinishReason(choice.finishReason),
                 index: choice.index
@@ -180,18 +165,6 @@ export class MistralLLM extends BaseLLM {
     }
     
     /**
-     * Reset streaming state for a new request
-     */
-    protected resetStreamingState(): void {
-        this._streamingState = {
-            accumulatedThinking: '',
-            inThinkingBlock: false,
-            pendingContent: '',
-            thinkingComplete: false
-        };
-    }
-
-    /**
      * Build the per-call Mistral {@link RequestOptions}, threading the caller's cancellation token
      * through as the `fetch` request's `signal`. `RequestOptions` extends `RequestInit`, so the
      * signal reaches the underlying `fetch` directly and an abort tears down the HTTP socket.
@@ -204,8 +177,8 @@ export class MistralLLM extends BaseLLM {
      * Create a streaming request for Mistral
      */
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
-        // Reset streaming state for new request
-        this.resetStreamingState();
+        // Initialize BaseLLM's ThinkingStreamExtractor for this stream
+        this.initializeThinkingStreamState();
         let responseFormat: ResponseFormat | undefined = undefined;
         switch (params.responseFormat) {
             case 'JSON':
@@ -289,11 +262,10 @@ export class MistralLLM extends BaseLLM {
                     rawContent = choice.delta.content.join('');
                 }
                 
-                // Add raw content to pending content for processing
-                this._streamingState.pendingContent += rawContent;
-                
-                // Process the pending content to extract thinking
-                content = this.processThinkingInStreamingContent();
+                if (!this._thinkingExtractor) {
+                    this.initializeThinkingStreamState();
+                }
+                content = this.processStreamChunkWithThinking(rawContent);
             }
             
             if (choice?.finishReason) {
@@ -317,85 +289,6 @@ export class MistralLLM extends BaseLLM {
     }
     
     /**
-     * Process pending content to extract thinking blocks
-     * Returns content that should be emitted to the user
-     */
-    private processThinkingInStreamingContent(): string {
-        const state = this._streamingState;
-        let outputContent = '';
-        
-        // If thinking is already complete, just pass through content
-        if (state.thinkingComplete) {
-            outputContent = state.pendingContent;
-            state.pendingContent = '';
-            return outputContent;
-        }
-        
-        // Check if we're currently in a thinking block
-        if (state.inThinkingBlock) {
-            // Look for end of thinking block
-            const endIndex = state.pendingContent.indexOf('</think>');
-            
-            if (endIndex !== -1) {
-                // Found end of thinking block
-                state.accumulatedThinking += state.pendingContent.substring(0, endIndex);
-                state.inThinkingBlock = false;
-                state.thinkingComplete = true;
-                
-                // Keep remaining content after </think> for output
-                state.pendingContent = state.pendingContent.substring(endIndex + '</think>'.length);
-                outputContent = state.pendingContent.trim();
-                state.pendingContent = '';
-            } else {
-                // Still in thinking block, accumulate all content
-                state.accumulatedThinking += state.pendingContent;
-                state.pendingContent = '';
-            }
-        } else {
-            // Not in thinking block, check if one is starting
-            const startIndex = state.pendingContent.indexOf('<think>');
-            
-            if (startIndex !== -1) {
-                // Found start of thinking block
-                if (startIndex === 0) {
-                    // Thinking starts at beginning
-                    state.inThinkingBlock = true;
-                    state.pendingContent = state.pendingContent.substring('<think>'.length);
-                    
-                    // Process again to check for end tag in same chunk
-                    return this.processThinkingInStreamingContent();
-                } else {
-                    // There's content before thinking block - this shouldn't happen
-                    // with Mistral Magistral models, but handle it just in case
-                    outputContent = state.pendingContent.substring(0, startIndex);
-                    state.pendingContent = state.pendingContent.substring(startIndex);
-                    state.inThinkingBlock = true;
-                    state.pendingContent = state.pendingContent.substring('<think>'.length);
-                }
-            } else {
-                // No thinking block found
-                // Check if we might be at the start of a partial tag
-                if (state.pendingContent.endsWith('<') || 
-                    state.pendingContent.endsWith('<t') ||
-                    state.pendingContent.endsWith('<th') ||
-                    state.pendingContent.endsWith('<thi') ||
-                    state.pendingContent.endsWith('<thin')) {
-                    // Hold back content that might be start of tag
-                    const lastOpenBracket = state.pendingContent.lastIndexOf('<');
-                    outputContent = state.pendingContent.substring(0, lastOpenBracket);
-                    state.pendingContent = state.pendingContent.substring(lastOpenBracket);
-                } else {
-                    // No thinking block and no partial tag, output all content
-                    outputContent = state.pendingContent;
-                    state.pendingContent = '';
-                }
-            }
-        }
-        
-        return outputContent;
-    }
-    
-    /**
      * Create the final response from streaming results for Mistral
      */
     protected finalizeStreamingResponse(
@@ -409,8 +302,8 @@ export class MistralLLM extends BaseLLM {
         // Create a proper ChatResult instance with constructor params
         const result = new ChatResult(true, now, now);
 
-        // Get thinking content from streaming state
-        const thinkingContent = this._streamingState.accumulatedThinking.trim();
+        // Get thinking content from BaseLLM's ThinkingStreamExtractor
+        const thinkingContent = this.thinkingStreamState?.accumulatedThinking.trim();
         
         // Set all properties
         result.data = {

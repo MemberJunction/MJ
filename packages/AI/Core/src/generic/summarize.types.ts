@@ -1,4 +1,4 @@
-import { BaseParams, BaseResult } from "./baseModel"
+import { BaseParams, BaseResult } from "./baseModel.types"
 import { ChatMessageContent, ChatMessageContentBlock, ChatParams } from "./chat.types";
 
 

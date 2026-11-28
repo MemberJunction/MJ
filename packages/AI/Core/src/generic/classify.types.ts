@@ -1,4 +1,4 @@
-import { BaseResult, BaseParams } from "./baseModel"
+import { BaseResult, BaseParams } from "./baseModel.types"
 import { ChatParams } from "./chat.types";
 
 /**
