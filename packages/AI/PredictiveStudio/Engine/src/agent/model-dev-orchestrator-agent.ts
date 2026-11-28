@@ -119,9 +119,26 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     stepCount: number = 0,
   ): Promise<BaseAgentNextStep<P>> {
     if (previousDecision === null) return this.firstTurn<P>(params, config, stepCount);
+    const halted = await this.haltOnRunGuardrail<P>(params, previousDecision);
+    if (halted !== null) return halted;
     if (this.codeSteps.has(previousDecision)) return this.executeCodeStep<P>(params, config, previousDecision, stepCount);
     if (previousDecision.step === 'Retry') return this.decisionTurn<P>(params, config, previousDecision, stepCount);
     return this.executePromptDecision<P>(params, config, previousDecision, stepCount);
+  }
+
+  /**
+   * The run's own guardrails (`MaxTokensPerRun` and the others), checked before every turn after the first (G4.9). The
+   * framework checks them only after a prompt's decision, so a sub-agent whose call crossed the cap would be followed by
+   * one more orchestrator prompt; this ends the run on the framework's own check instead (its reason, the
+   * `guardrailExceeded` record on the run's last step, `Failed`), or returns null when no limit is reached.
+   */
+  private async haltOnRunGuardrail<P>(params: ExecuteAgentParams, previous: BaseAgentNextStep<P>): Promise<BaseAgentNextStep<P> | null> {
+    const run = this.AgentRun;
+    const steps = run?.Steps || [];
+    if (!run || steps.length === 0 || previous.terminate === true || previous.step === 'Chat' || previous.step === 'Failed') return null;
+    const probe: BaseAgentNextStep<P> = { ...previous, step: 'Retry' };
+    const checked = await this.checkExecutionGuardrails<P>(params, probe, this.payloadOf(params, previous) as P, run, steps[steps.length - 1]);
+    return checked.step === 'Failed' ? checked : null;
   }
 
   /**

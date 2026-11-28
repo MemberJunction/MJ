@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import type { IMetadataProvider, UserInfo } from '@memberjunction/core';
-import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
+import type { AgentConfiguration, BaseAgentNextStep, ExecuteAgentParams, MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import type { MJAIAgentExampleEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import type { BuildApproval, ModelingPlanSpec } from '@memberjunction/predictive-studio-core';
 import * as orchestratorModule from '../model-dev-orchestrator-agent';
@@ -449,6 +449,35 @@ describe('wave-4 integration: an unresolved target in gather is decided by code,
 
   it('a resolved target leaves the prompt its reply', async () => {
     await new TestOrchestrator(gathered([], 0)).Next(params([], { ...TARGET }), chat());
+    expect(superNext).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('wave-4 integration: the run guardrails are checked before a turn, so a sub-agent that crossed the cap gets no further prompt (G4.9)', () => {
+  type GuardrailCheck = (params: ExecuteAgentParams, next: BaseAgentNextStep, payload: PredictiveStudioBuilderPayload, run: object, step: object) => Promise<BaseAgentNextStep>;
+  const runWithStep = { ID: 'RUN2', Steps: [{ ID: 'STEP5', StepType: 'Sub-Agent' }] };
+
+  class RunningOrchestrator extends TestOrchestrator {
+    public override get AgentRun(): MJAIAgentRunEntityExtended {
+      return runWithStep as unknown as MJAIAgentRunEntityExtended;
+    }
+  }
+
+  it('a token cap the last sub-agent crossed ends the run Failed before the prompt runs', async () => {
+    const checked = vi.spyOn(BaseAgent.prototype as unknown as { checkExecutionGuardrails: GuardrailCheck }, 'checkExecutionGuardrails')
+      .mockImplementation(async (_p, next) => ({ ...next, step: 'Failed', terminate: true, message: 'Maximum token limit of 15000 exceeded. Current tokens: 21228' } as BaseAgentNextStep));
+    const s = await new RunningOrchestrator(facts({ PlanComplete: false, PresentedPlanHash: null })).Next(params(), retry());
+    expect(checked).toHaveBeenCalledTimes(1);
+    expect(checked.mock.calls[0][4]).toBe(runWithStep.Steps[0]);
+    expect(superNext).not.toHaveBeenCalled();
+    expect(s.step).toBe('Failed');
+    expect(s.terminate).toBe(true);
+  });
+
+  it('within the caps the turn goes on as before', async () => {
+    vi.spyOn(BaseAgent.prototype as unknown as { checkExecutionGuardrails: GuardrailCheck }, 'checkExecutionGuardrails')
+      .mockImplementation(async (_p, next) => next);
+    await new RunningOrchestrator(facts({ PlanComplete: false, PresentedPlanHash: null })).Next(params(), retry());
     expect(superNext).toHaveBeenCalledTimes(1);
   });
 });

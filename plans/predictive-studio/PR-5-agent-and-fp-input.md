@@ -3773,6 +3773,13 @@ Record every decision taken in §9 and, when it changes another plan's interface
   answered the first message with "12 current chairs is too small a sample" and clarifying questions before any
   sub-agent ran, so no profile and no typed refusal (runs `a0cafc45`, `a795c309`). · Letting the prompt pre-empt the
   profile. Integrator ruling, wave-4 integration.
+- D5-W4-5 · 2026-11-28 · The orchestrator checks the run's own guardrails before every turn after the first
+  (`haltOnRunGuardrail`, through the framework's `checkExecutionGuardrails`: its reason, its `guardrailExceeded` record on
+  the run's last step, `Failed`). · The framework checks `MaxTokensPerRun` only after a prompt's decision, so a sub-agent
+  whose call crosses the cap is followed by one more orchestrator prompt: the wave-4 agent suite's G4.9 low half
+  (`ECA491D5`) crossed on the Data Scout's 12,954-token call (21,228 of 15,000) and spent another 2,615-token prompt,
+  23,843 > 15,000 + 2,615. A6's runs crossed on an orchestrator prompt, so it never showed. · Changing the framework's
+  check order (non-PS; the orchestrator owns its turn routing). Integrator ruling, wave-4 integration.
 
 **Owner batch (D-091; non-PS items with no PS-side route).** Work proceeds on each item's default; only the milestone
 named waits, and only if the owner rejects it (then that milestone is re-planned and the others continue). An approved
