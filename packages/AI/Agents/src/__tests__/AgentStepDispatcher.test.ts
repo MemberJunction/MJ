@@ -1,6 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { beforeAll, describe, it, expect } from 'vitest';
 import { AgentStepDispatcher } from '../AgentStepDispatcher';
 import { BaseAgentNextStep } from '@memberjunction/ai-core-plus';
+
+/**
+ * Budget for the one cold load of `base-agent` (the whole agent framework graph through Vite's transform): ~4 s alone on a
+ * dev machine, over 30 s inside a full-repo test run (PR 5 wave-4 full mirror). It is a hook timeout, so the load is never
+ * counted against a test's own timeout (D-091 item 15).
+ */
+const MODULE_LOAD_TIMEOUT_MS = 300_000;
 
 describe('AgentStepDispatcher', () => {
     describe('BuildActionInvocationMessage & FormatActionResultsAsMarkdown', () => {
@@ -153,8 +160,15 @@ describe('AgentStepDispatcher', () => {
     });
 
     describe('BaseAgent subclass protected override hooks', () => {
+        let agentModule: typeof import('../base-agent');
+
+        // base-agent loads once, here, so its cold load is never counted inside a test (D-091 item 15).
+        beforeAll(async () => {
+            agentModule = await import('../base-agent');
+        }, MODULE_LOAD_TIMEOUT_MS);
+
         it('should run a subclass override of resolveTemplates for nested objects at every depth', async () => {
-            const { BaseAgent } = await import('../base-agent');
+            const { BaseAgent } = agentModule;
 
             const seen: string[] = [];
             class TaggingTemplatesAgent extends BaseAgent {
@@ -185,7 +199,7 @@ describe('AgentStepDispatcher', () => {
 
 
         it('should route internal loop and sub-agent methods through subclass overrides of formatActionResultsAsMarkdown, cloneSubAgentPayload, and getValueFromPath', async () => {
-            const { BaseAgent } = await import('../base-agent');
+            const { BaseAgent } = agentModule;
 
             const formatCalls: number[] = [];
             const cloneCalls: unknown[] = [];

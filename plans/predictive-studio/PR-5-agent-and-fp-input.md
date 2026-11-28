@@ -326,6 +326,8 @@ packages/MJCLI/src/__tests__/app-commands.test.ts  (D-091 item 13)
 # Owner-batch item 14: an explicit metadata Refresh() left the debounced member-refresh timer armed (integrator, 2026-11-28)
 packages/MJCore/src/generic/providerBase.ts  (D-091 item 14)
 packages/MJCore/src/__tests__/providerBase.metadataMemberRefresh.test.ts  (D-091 item 14)
+# Owner-batch item 15: the BaseAgent override-hook tests' cold base-agent load counted inside a test (integrator, 2026-11-28)
+packages/AI/Agents/src/__tests__/AgentStepDispatcher.test.ts  (D-091 item 15)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
@@ -3879,6 +3881,14 @@ wave. **Item 3 ruled in 2026-11-26** under that same statement (D5-22); A2 imple
    member refresh before it reloads (a write during the reload re-arms it). Tests: a member write then `Refresh()` runs no
    timer refresh after it (red before), a write after `Refresh()` still schedules one; MJCore 306 files, 4,418 passed.
    Fixed by the integrator at wave-4 integration under the owner's 2026-11-26 statement.
+15. `packages/AI/Agents/src/__tests__/AgentStepDispatcher.test.ts` — the two "BaseAgent subclass protected override hooks"
+   tests each did `await import('../base-agent')` in their body (the agent framework graph, cold): 3.4 s alone; in wave-4's
+   sixth full mirror (`20261128-104133-50196`, the only red, `ai-agents` 2 failed / 5,426 passed) the first timed out at
+   30 s and the second read the module while that load was still evaluating (`TypeError: Class extends value undefined
+   is not a constructor or null`). It now loads once in the describe's `beforeAll` under a documented 300 s hook timeout.
+   Mutation: the nested `resolveTemplates` callback in `base-agent.ts` bypassing the override turns its test red,
+   restored. `ai-agents` 303 files, 5,428 passed. Fixed by the integrator at wave-4 integration under the owner's
+   2026-11-26 statement.
 
 ## 10. PR description draft
 
