@@ -23,7 +23,8 @@
   "scripts": {
     "start": "ts-node-dev src/index.ts",
     "build": "tsc && tsc-alias -f",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run src/__tests__/integration/legacy-jsx-and-widget-fixtures.test.ts"
   },
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",

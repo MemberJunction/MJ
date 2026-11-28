@@ -3,6 +3,7 @@ import { ComponentDataRequirements } from "./data-requirements";
 import { ComponentLibraryDependency } from "./library-dependency";
 import { ComponentTypeDefinition } from "./component-constraints";
 import type { FormContributionSpec } from "./forms/form-contribution-spec";
+import type { ComponentLanguage, ComponentTsxMetadata } from "./component-language";
 
 /**
  * Contract a component commits to implementing. Hosts use this to decide how
@@ -258,9 +259,26 @@ export class ComponentSpec {
     formContribution?: FormContributionSpec;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format, written by Skip and stored in component specs
 
     /**
-     * JavaScript code
+     * JavaScript or TypeScript JSX source code for the component.
      */
     code: string;  // case-violation-ok-legacy-back-compat: object literals are assigned to this class, so an accessor stub changes what they must supply
+
+    /**
+     * Source language of `code` (`'jsx'` or `'tsx'`).
+     * Defaults to `'jsx'` when omitted so all legacy ComponentSpec payloads remain compatible (G9).
+     */
+    language?: ComponentLanguage;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format
+
+    /**
+     * Whether `code` uses only TypeScript syntax that can be erased without semantic emit
+     * (no runtime `enum`, value `namespace`, or constructor parameter properties) (P6).
+     */
+    erasableSyntaxOnly?: boolean;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format
+
+    /**
+     * Optional detailed compilation & syntax-constraint metadata for TSX components (P6).
+     */
+    tsxMetadata?: ComponentTsxMetadata;  // case-violation-ok-legacy-back-compat: ComponentSpec JSON wire format
 
     /**
      * A functional description of what the component should do in markdown. 
