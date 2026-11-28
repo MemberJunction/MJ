@@ -4919,6 +4919,55 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
 - **Rulings:** D5-A4-12 (supersedes D5-A4-1), D5-A4-13 (the chunk export line, allowlisted after the push hook's
   audit named it: `allowlist 290 paths, 1 outside`), D5-B3-9; no owner-batch item.
 
+### 2026-11-27 — eval follow-up fixes: the rubric published, the world step, the ps-rubric oracle (council 30st24) — A7a
+
+- **Branch** `ps/pr-5-agent-fp-input--A7a-fix` from `5658dca511` (local only, D5-53): `df3c51c4cc` (D5-58), `9458d74f62`
+  (D5-59), `e36257efab` (source guard), this entry. Item 3 of the task (the barrel's `export * from './agent-eval'` and the driver in both server
+  manifests) was already on the PR head from `4df6beae26`; nothing to change.
+- **D5-58.** The rubric version `267FF292…` ships `Status: 'Published'`, in the metadata and in the generator (which
+  otherwise rewrote it Draft). `mj sync push --include=rubrics` on `MJ_PS_PR5_claudeint`: 1 updated; sqlcmd → `Published`,
+  v1.0.0, `PublishedAt 2026-11-27 22:32:40`; a second push: no changes. `TruthSuite/scripts/a7b-world.ts` committed
+  byte-identical to the baseline arm's file (sha256 `45f40153…77212d9`, no diff needed: `tsc` on it and its test, 0
+  errors), run as `truth:world <world>`; `truth:world C1` on claudeint → `{"loaded":"W1-signal s42","rows":16776, W2..N1c
+  0, C1Person 2015}`.
+- **D5-59** (found by the smoke: the generic `RubricOracle` ignores `criteriaKeys` and scores all three `NotAllowed`
+  criteria at PassThreshold 1, so no scenario could pass; `MJ_PS_PR5_claudebase` had 194/194 C1 runs failing it).
+  `PSRubricOracle` and the driver's `WithResolvedRubric` override as recorded in §9; the test metadata regenerated (72
+  tests `ps-rubric`, 32 with none); sync push on claudeint: tests 72 updated, rubric unchanged; sqlcmd: 72 tests name
+  `ps-rubric`, 0 the generic `rubric`, of 104. **The baseline arm's 194 C1 runs before this fix are void and are re-run.**
+- **Tests** (red first: the two rubric-status tests, the generator test, the world-loader test): Engine **155 files,
+  2308 passed**; TruthSuite **29 files, 206 passed** (before D5-59, unchanged after); builds of both clean. New: the
+  rubric version Published (metadata and generator), the world loader for all 7 child suites (+ grouping, + an unknown
+  world refused), `ps-rubric` passes/fails on the named criteria and ignores the others, needs all of two, refuses an
+  unknown key and an empty list with no judge call, the generated tests never name the generic oracle, and the driver
+  adds no implicit rubric oracle and pins the suite version.
+- **Mutations** (each restored; the world script re-checked by sha256):
+
+  | Mutation | Result |
+  |---|---|
+  | rubric metadata `Status` back to Draft | rubric-status test red (1 of 3) |
+  | world script: W2-noise seed 100 → 42 | world-loader test red (1 of 9) |
+  | `ps-rubric` judges every criterion, not the named ones | 3 of 9 red |
+  | unknown-key refusal skipped | 1 of 9 red |
+  | generator names the generic `rubric` oracle | 1 of 9 red |
+  | the driver's `WithResolvedRubric` override removed | 2 of 11 red |
+  | generator without `Status: 'Published'` | generator test red |
+
+- **Smoke on claudeint** (MJAPI 4054 restarted on the new build; C1 world loaded; behind the D5-33 suite lock while
+  the baseline's C1 suite ran): `C1 Rebuild Clarification Asks What To Improve` before D5-59 (`DAB0E497`, `FBE5B169`,
+  `1C4B64BD`: the rubric evaluated, generic oracle failed on unnamed criteria); `C1 Committee Chair Small-N Refusal`
+  after (`4BC48C63`, `12831759`, `FD0F8392`: `ps-rubric` 0/1, the judge scored `failure-reported` 0 — the agent drafted a
+  plan); **`Unresolved Reference 15` after: `ps-rubric` passed 3/3** (`DA696CCB`, `9AA2F026`, `3D90EB74`: `failure-reported`
+  1, `censoring-named` 0 and `asks-what-to-improve` 0 recorded, not counted). Those three tests fail overall on
+  `refusal-kind` (no `decline-unresolved-reference` Decision Log row in 3 of 3) — agent behaviour, outside this task.
+- **milestone-exit A7a:** before D5-59 `# checks 48 · failed 0` (on `df3c51c4cc`; the first run's 2 Python failures
+  were this fresh worktree's missing venvs, `setup:python` fixed them); after, on `e36257efab`,
+  `# checks 48 · failed 0`; the interim run on `9458d74f62` failed `check:guards` (`UUIDCompliance`: a nested
+  `UUIDsEqual` scan in the pin lookup), fixed in `e36257efab` (one `UUIDMap`).
+- **Not run (D5-51, D5-53):** `ci-mirror` (the controller's at integration); no push.
+- **LLM spend** (§2.4 query on claudeint, `RunAt >= 2026-11-27T22:20Z`): 54 prompt runs, **$0.2187**, 307,271 tokens (the
+  three smoke tests' agent runs and their rubric judge calls; no CodeGen).
+
 ## 12. Refresh log (append-only)
 
 ### 2026-10-12 — refresh (written; precedes trigger a) — plan author (Claude Opus 5.5)
