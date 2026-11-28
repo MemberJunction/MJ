@@ -7,6 +7,7 @@
 - **Sponsor**: Amith Nagarajan (`AN-BC`)
 - **Checked against**: `next` at `8d445db1` (2026-11-18). Paths are relative to the repo root. Line numbers move, so search by name.
 - **Relation to the Canon master plan** ([MJ 6675](https://github.com/MemberJunction/MJ/pull/6675), `plans/canon-master-plan.md` on its branch): that plan closes the *coordination* problem by December 1. This plan is about the *shape* Canon takes after that. It keeps all seven of its decisions, adds none that contradict them, and asks for nothing before December 1.
+- **Superseded in part, 2026-11-28**: the sponsor ruled the decisions this plan left for the December 3 review, and one Software Factory run builds U1 to U6 and Rule 6. See [`canon-factory-run.md`](canon-factory-run.md). The text below is kept as the design.
 - **Freeze**: MJ 6675 asks for no new Canon pull requests before December 1. This is a plan-only pull request opened by the sponsor as a named exception, so the December 3 review has a single document to work from. Nothing here should be built before that review. Each phase below becomes one or more `canon` issues there.
 - **Where to discuss**: comments on this plan's pull request.
 
@@ -197,6 +198,39 @@ The content pipeline is the training half of Canon, and it should hand its resul
 - **Profiles for the most-connected concepts.** For the concepts with the most edges, training proposes a short `Specification` draft: a summary, three to five facts, and the time range the evidence covers. Every fact links to a `SourcedFrom` chunk, so a reviewer can check each one, and the draft goes through MJ 6213's ledger like any other proposal. Once approved, `RenderCanonDocument` (MJ 6404) shows it to readers. *(From the cookbook's entity summaries.)*
 - Permission metadata stamped on vectors at ingest (role, owner, tenant) stays the recall mechanism; Rule 3 stays the truth.
 
+### Rule 6. Promotion: one policy from proposal to Canon, and evidence that it helped
+
+Added 2026-11-28, on the sponsor's direction. Rules 1 to 5 say what Canon is and how it is read. This rule says how something becomes Canon without every decision waiting on a person, and how we know it was worth promoting. It brings together three things that were written separately: the evidence ladder and verification in [MJ 6213](https://github.com/MemberJunction/MJ/pull/6213), graduated autonomy in [`living-canon-continuous-ingest.md`](living-canon-continuous-ingest.md) (workstream F), and the health scorecard below. The rulings are D26 to D40 of [`canon-factory-run.md`](canon-factory-run.md).
+
+**Every proposal carries two scores**, computed, stored on its ledger row with their inputs:
+
+- **Impact** (Low, Medium, High, Critical): what it costs if this is wrong. It comes from the concept's type; how many queries, views, agents and skills depend on it; how often it is cited; whether outside users see it; and whether it changes something already approved. Authority tiers are a different thing: they say how far to trust a source.
+- **Confidence**: how strong the evidence is. It comes from the number of independent sources and their authority, the resolution outcome (Rule 5), whether a contradiction was found, and whether replay (below) showed it helped.
+
+**Four routes**, chosen from the two scores and the class's setting:
+
+| Route | When | Result |
+|---|---|---|
+| Approved by policy | Low impact, strong evidence, class set to Auto | `Approved`, recorded with the rule that allowed it |
+| Provisional | The middle band, class set to Auto with audit | `Provisional`: in use, labelled, ranked below `Approved`, with a review-by date; replay and the holdout then decide whether it is proposed for approval or withdrawn |
+| A person | High impact, or any class still in Review | A review request with a brief |
+| A named owner | Critical, or a contradiction of approved Canon | The same, to the owner of that domain |
+
+- **Every class starts in Review.** A class is a combination an org defines: concept type, domain, source. While a class is in Review the AI reviewer still records what it would have decided, so its agreement with people is known before anyone trusts it. A person moves a class to Auto with audit or Auto, with that record in front of them. **The system never raises a threshold or moves a class.**
+- **Some things are never approved automatically**, whatever the settings: Policy and Process concepts; anything that contradicts or supersedes an approved concept; anything whose evidence traces to an untrusted outside source; and anything in a graph shown to outside users, unless the org has opted that graph in.
+- **A non-human approval does not publish.** Today a person approving a Canon concept makes it visible to readers who cannot see its sources (Rule 3). A concept approved by policy or by the AI reviewer stays bound to its sources' permissions. This is a setting per graph, off as shipped; an org may turn it on.
+- **The review brief.** Every request to a person shows what is proposed, the evidence with links, what depends on it, the case for and against, and a recommendation. The reviewer accepts, overrules or edits, and similar requests are handled together. An overrule is recorded with its reason and counts against the class's record. The reviewing model is never the proposing model.
+
+**Evidence that an item helped** uses MJ 6213's ladder, for every Canon member and not only notes: was it shown, was it cited, do runs with it do better, does replaying a past decision with and without it change the answer for the better, and does withholding it from a random share of runs make them worse. Rule 4's context items record the first two. Replay is the main evidence, because it costs little and has no side effects. The random holdout is read per class, never per concept: one concept sees too few runs to say anything. A human-approved Policy concept is never withheld.
+
+**Evidence that Canon helps at all** is an answer evaluation set per graph: fixed questions with known right answers, scored with Canon on and with Canon off, in the weekly live-model tier. A user's correction of an agent's answer can be added as a case, so the set grows from real mistakes.
+
+**Canon proposes changes to itself.** A scheduled retrospective reads the context items and outcomes and writes proposals through the same ledger: a concept often retrieved but never cited gets a rewrite proposed; one cited and then corrected by the user gets a revision proposed; a cluster of questions with no match becomes a proposed concept. This is one more proposer, under the same routes.
+
+**Contradictions.** Resolution by meaning (Rule 5) gains a fourth outcome, *conflicts with*, written as a proposed `Contradicts` edge, and a scheduled sweep checks approved concepts against each other. A contradiction always goes to a person, and an agent asked about either side says that the two disagree.
+
+**Size.** The engine loads a graph when it is asked for, not every graph in every process, and the browser never holds a whole graph. The starting target is 250,000 concepts and 2,000,000 edges in one graph.
+
 ### Health: one scorecard over every member
 
 Because every member now has a `CanonState` and a node key, one scheduled job can score all of Canon, not just workflows:
@@ -207,6 +241,7 @@ Because every member now has a `CanonState` and a node key, one scheduled job ca
 - `Contradicts` edges awaiting review
 - questions that returned `NO_MATCH` or `AMBIGUOUS_CONCEPT` (MJ 6667), as gap alerts
 - extraction quality: precision and recall of the graph stage against a hand-labeled gold set, scored in the weekly live-model tier, so a prompt or model change shows its effect on what training misses or invents, not only on what reviewers reject ([MJ 6997](https://github.com/MemberJunction/MJ/issues/6997); the cookbook's evaluation step)
+- answer accuracy with Canon on against Canon off, the agreement between the AI reviewer and people per class, and reversals of policy approvals (Rule 6)
 - the workflow telemetry and promotion discovery that already exist in `ai-core-plus`
 
 This is the "Canon audit" report: deterministic findings first, then an AI green, yellow or red per member, then human review.
@@ -297,3 +332,4 @@ Indicative only; each issue names its own.
 | 2026-11-20 | Folded in four ideas from a review of TrustGraph (an open-source RDF/OWL "ontology runtime for agents"): proposers validate against the edge-type contract (Rule 2); three visibility outcomes and a visibility audit event (Rule 3); retrieval traces and seeded walks (Rule 4); taxonomy import as a proposer (Rule 5). Export bundles go to MJ 6675's backlog. |
 | 2026-11-22 | The sponsor approved U0 as a bug-fix exception. It shipped in MJ 6842 (merge `454ef7d0f`): F3, F4 (artifact → concept, with flip Record Processes) and F11's remaining gap are fixed, and decisions 2 and 6 are recorded as settled. The same pull request repaired the integration checks `fls-closeout-client.CW7`/`CW8` and `work-bus-core.WBC10`, broken on `next` since MJ 6817 and 6825. |
 | 2026-11-28 | Folded in five ideas from Anthropic's [knowledge graph cookbook](https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide), accepted by the sponsor: citing is required by the resolver's contract (Rule 4); resolution by meaning for every proposer, with a proposed amendment to MJ 6675 decision 6, and profiles for the most-connected concepts (Rule 5); extraction quality on the scorecard (Health); decisions 7 and 8 for the review. Issues [MJ 6996](https://github.com/MemberJunction/MJ/issues/6996), [MJ 6997](https://github.com/MemberJunction/MJ/issues/6997) and [MJ 6998](https://github.com/MemberJunction/MJ/issues/6998). |
+| 2026-11-28 | Added Rule 6, promotion and evidence: impact and confidence on every proposal, four routes including `Provisional`, autonomy by class that only a person raises, a review brief, the evidence ladder for every Canon member, an answer evaluation set, retrospective proposals, contradictions and a size target. The sponsor ruled the open decisions; one Software Factory run builds all of it ([`canon-factory-run.md`](canon-factory-run.md)). |
