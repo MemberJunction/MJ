@@ -559,6 +559,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Graph Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJGraphPermissions"
+        SectionName="Graph Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJGraphPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Graph Permissions','RoleID')"
+                [NewRecordValues]="NewRecordValues('MJ: Graph Permissions','RoleID')"
+                [AllowLoad]="IsSectionExpanded('mJGraphPermissions')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJGraphPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

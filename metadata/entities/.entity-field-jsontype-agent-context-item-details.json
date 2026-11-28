@@ -1,0 +1,31 @@
+[
+  {
+    "_comments": [
+      "Binds IAgentContextItemDetails to Details on MJ: AI Agent Context Items so CodeGen emits a strongly-typed DetailsObject accessor."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Context Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAgentContextItemDetails",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentContextItemDetails.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Context Items&Name=Details"
+          },
+          "sync": {
+            "lastModified": "2026-11-28T18:00:11.962Z",
+            "checksum": "6807a0cd234a72bf801546a09bf6a09cf9f3ef9b72f9a459b8babfd84d26f65f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Context Items"
+    }
+  }
+]

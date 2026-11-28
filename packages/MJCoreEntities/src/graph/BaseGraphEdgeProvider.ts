@@ -6,7 +6,7 @@ import type {
 } from '@memberjunction/core';
 import { LogStatus } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
-import type { MJGraphEntity } from '../generated/entity_subclasses';
+import type { MJGraphEdgeEntity, MJGraphEntity } from '../generated/entity_subclasses';
 
 /**
  * Polymorphic reference to any entity record node in a semantic graph (`EntityName` + `RecordID`).
@@ -57,7 +57,7 @@ export interface GraphEdgeView {
     Description: string | null;
     Attributes: Record<string, unknown> | null;
     Origin: 'Derived' | 'Declared' | 'Inferred';
-    Status: 'Proposed' | 'Approved' | 'Rejected';
+    Status: MJGraphEdgeEntity['Status'];
     Confidence: number | null;
     InverseTypeName?: string | null;
 }

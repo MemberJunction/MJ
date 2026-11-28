@@ -14,6 +14,7 @@ import type { ConceptSeedCluster } from './ConceptSeedClustering.js';
 import type {
     GraphAuthorityTier,
     GraphAuthorityTierDescriptor,
+    GraphConceptStatus,
     GraphConceptType,
     ResolvedGraphOverlayConfig,
 } from './GraphOverlay.types.js';
@@ -33,7 +34,7 @@ export interface SynthesizedGraphConcept {
     /** Existing `ConceptID` when updating/enriching an existing concept, or `undefined` when creating a new one. */
     readonly ExistingConceptID?: string;
     /** Existing governance status when matched to an existing `GraphConcept` so `GraphStage` never overwrites it. */
-    readonly ExistingStatus?: 'Draft' | 'Proposed' | 'Approved' | 'Deprecated';
+    readonly ExistingStatus?: GraphConceptStatus;
     readonly Name: string;
     readonly ConceptType: GraphConceptType;
     /** Optional foreign key to `MJ: Graph Concept Types` (`__mj.GraphConceptType.ID`). */

@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { MJAIAgentExampleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+import {  } from "@memberjunction/ng-entity-viewer"
 
 @RegisterClass(BaseFormComponent, 'MJ: AI Agent Examples') // Tell MemberJunction about this class
 @Component({
@@ -20,7 +21,8 @@ export class MJAIAgentExampleFormComponent extends BaseFormComponent {
             { sectionKey: 'sourceProvenance', sectionName: 'Source Provenance', isExpanded: true },
             { sectionKey: 'semanticIndexing', sectionName: 'Semantic Indexing', isExpanded: true },
             { sectionKey: 'usageLifecycle', sectionName: 'Usage & Lifecycle', isExpanded: true },
-            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJAIAgentContextItems', sectionName: 'AI Agent Context Items', isExpanded: false }
         ]);
     }
 }

@@ -84,6 +84,107 @@
   },
   {
     "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Context Items: ItemRecordID pairs with ItemEntityID."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Context Items"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "ItemRecordID",
+            "EntityIDFieldName": "ItemEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@parent:ID&Name=ItemRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-28T18:00:13.020Z",
+            "checksum": "2d3da49f6287b8d55ba1fc6e2a1e409fb471304841be548a0ac956ce0858c612"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Context Items"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Learning Cycle Proposal Sources: SourceRecordID pairs with SourceEntityID."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Learning Cycle Proposal Sources"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "SourceRecordID",
+            "EntityIDFieldName": "SourceEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@parent:ID&Name=SourceRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-28T18:00:13.041Z",
+            "checksum": "f488bfef7c121354fdd5d7199db30ad27a66921394e79e94edff772e71ad67ed"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycle Proposal Sources"
+    }
+  },
+  {
+    "_comments": [
+      "Polymorphic foreign key declaration(s) on MJ: AI Agent Learning Cycle Proposals: PrimaryScopeRecordID and AppliedRecordID pair with their companion EntityID fields."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Learning Cycle Proposals"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "PrimaryScopeRecordID",
+            "EntityIDFieldName": "PrimaryScopeEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@parent:ID&Name=PrimaryScopeRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-28T18:00:13.060Z",
+            "checksum": "cdbf59e2683c390a269181b04aca050a3f26977fb00647b35ef95e8da6a397c1"
+          }
+        },
+        {
+          "fields": {
+            "EntityID": "@parent:ID",
+            "Name": "AppliedRecordID",
+            "EntityIDFieldName": "AppliedEntityID"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@parent:ID&Name=AppliedRecordID"
+          },
+          "sync": {
+            "lastModified": "2026-11-28T18:00:13.077Z",
+            "checksum": "4a6dc694ce07ceed9e626dd14f7aeee8a74bdaf7cd1c61996b668413d4925ecb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycle Proposals"
+    }
+  },
+  {
+    "_comments": [
       "Polymorphic foreign key declaration(s) on MJ: AI Agent Notes: each payload field sets EntityIDFieldName to its companion EntityID discriminator field."
     ],
     "fields": {

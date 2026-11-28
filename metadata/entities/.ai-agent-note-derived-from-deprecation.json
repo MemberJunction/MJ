@@ -1,0 +1,34 @@
+[
+  {
+    "_comments": [
+      "Deprecates DerivedFromNoteIDs on MJ: AI Agent Notes in favor of the relational MJ: AI Agent Note Sources join entity.",
+      "Existing arrays are backfilled into __mj.AIAgentNoteSource during the Wave 0.1 migration. Column remains in v6.x for publish-then-no-break compatibility and is slated for removal in v7.0.",
+      "IncludeInGeneratedForm=false removes form clutter; AutoUpdateDescription=false preserves the deprecation guidance across CodeGen passes."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Notes"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "Status": "Deprecated",
+            "IncludeInGeneratedForm": false,
+            "AutoUpdateDescription": false,
+            "Description": "DEPRECATED (slated for removal in v7.0) — superseded by the relational MJ: AI Agent Note Sources table. Existing IDs are backfilled into __mj.AIAgentNoteSource."
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Notes&Name=DerivedFromNoteIDs"
+          },
+          "sync": {
+            "lastModified": "2026-11-28T18:00:10.408Z",
+            "checksum": "710a1fce06fb411092a51ac691c869eedc23da11b200235f7d0a982c796efe76"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Notes"
+    }
+  }
+]

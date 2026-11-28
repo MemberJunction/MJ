@@ -414,6 +414,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope Graphs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeGraphs"
+        SectionName="Search Scope Graphs"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeGraphs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Graphs','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Graphs','SearchScopeID')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeGraphs')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeGraphs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

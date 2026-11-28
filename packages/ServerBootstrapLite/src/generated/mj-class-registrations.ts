@@ -225,7 +225,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (536 classes)
+// @memberjunction/core-entities (542 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -255,15 +255,19 @@ import {
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentContextItemEntity,
     MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
     MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
+    MJAIAgentLearningCycleProposalEntity,
+    MJAIAgentLearningCycleProposalSourceEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
     MJAIAgentNoteEntity,
+    MJAIAgentNoteSourceEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
     MJAIAgentPersonaEntity,
@@ -546,6 +550,7 @@ import {
     MJGraphEdgeTypeEndpointEntity,
     MJGraphEdgeTypeEntity,
     MJGraphEntity,
+    MJGraphPermissionEntity,
     MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
@@ -679,6 +684,7 @@ import {
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopeGraphEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -1782,15 +1788,19 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentClientToolEntity,
     MJAIAgentCoAgentEntity,
     MJAIAgentConfigurationEntity,
+    MJAIAgentContextItemEntity,
     MJAIAgentCredentialEntity,
     MJAIAgentDataSourceEntity,
     MJAIAgentEntity,
     MJAIAgentExampleEntity,
     MJAIAgentHarnessEntity,
     MJAIAgentLearningCycleEntity,
+    MJAIAgentLearningCycleProposalEntity,
+    MJAIAgentLearningCycleProposalSourceEntity,
     MJAIAgentModalityEntity,
     MJAIAgentModelEntity,
     MJAIAgentNoteEntity,
+    MJAIAgentNoteSourceEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
     MJAIAgentPersonaEntity,
@@ -1884,14 +1894,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJArchiveRunDetailEntity,
     MJArchiveRunEntity,
     MJArtifactEntity,
-    MJArtifactGuestShareLinkEntity,
-    MJArtifactPermissionEntity,
-    MJArtifactPermissionEntityExtended,
-    MJArtifactTypeEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJArtifactGuestShareLinkEntity,
+    MJArtifactPermissionEntity,
+    MJArtifactPermissionEntityExtended,
+    MJArtifactTypeEntity,
     MJArtifactUseEntity,
     MJArtifactVersionAttributeEntity,
     MJArtifactVersionEntity,
@@ -2077,6 +2087,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJGraphEdgeTypeEndpointEntity,
     MJGraphEdgeTypeEntity,
     MJGraphEntity,
+    MJGraphPermissionEntity,
     MJGraphTypeEntity,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
@@ -2087,15 +2098,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJIntegrationSourceTypeEntity,
     MJIntegrationURLFormatEntity,
     MJInteractionEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJInteractionEventEntity,
     MJInteractionLinkEntity,
     MJInteractionOfferEntity,
     MJJurisdictionEntity,
     MJJurisdictionMemberEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJKnowledgeHubSavedSearchEntity,
     MJLibraryEntity,
     MJLibraryItemEntity,
@@ -2214,6 +2225,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
     MJSearchScopeExternalIndexEntity,
+    MJSearchScopeGraphEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -2290,16 +2302,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     MJvwLatestFeatureValuesEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     ParentArtifactPermissionDelegate,
     QueryEdgeProvider,
     QueryMetadataEdgeProvider,
     QueryPermissionProvider,
     RecordLinkEdgeProvider,
     ResourcePermissionProvider,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     SavedQueryDocumentBlock,
     SharedConceptEdgeProvider,
     MJActionEntityExtended,
@@ -2494,16 +2506,16 @@ const CLASS_REGISTRATIONS_3: any[] = [
     SubsetOfEntityFieldsValidator,
     RecordCloneDescribeServerOperation,
     RecordCloneExecuteServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     RecordCloneGetLineageServerOperation,
     RecordClonePlanServerOperation,
     RecordComparisonCompareServerOperation,
     RubricEngineBase,
     MJScheduledJobEntityExtended,
     TagEngineBase,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     AIPromptExtension,
     TemplateEmbedExtension,
     TemplateRunServerOperation,
@@ -2698,16 +2710,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
     MJDashboardEntityServer,
     MJDataContextItemEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityAlternateBaseViewEntityServer,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2902,16 +2914,16 @@ const CLASS_REGISTRATIONS_5: any[] = [
     MaterializeListFromViewAction,
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_6: any[] = [
     ModifyInteractiveFormAction,
     MoveListMembersAction,
     MoveObjectAction,
     MutateGovernedArtifactAction,
     OAuthFlowAction,
     ObjectExistsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_6: any[] = [
     OpenAgentChannelAction,
     PDFExtractorAction,
     ParallelExecuteAction,
@@ -3057,7 +3069,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1328;
+export const CLASS_REGISTRATIONS_COUNT = 1334;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

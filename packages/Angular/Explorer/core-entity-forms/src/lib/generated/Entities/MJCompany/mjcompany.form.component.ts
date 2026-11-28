@@ -28,7 +28,9 @@ export class MJCompanyFormComponent extends BaseFormComponent {
             { sectionKey: 'mJBrandKits', sectionName: 'Brand Kits', isExpanded: false },
             { sectionKey: 'mJVideoArchetypes', sectionName: 'Video Archetypes', isExpanded: false },
             { sectionKey: 'mJDiagnosticSessions', sectionName: 'Diagnostic Sessions', isExpanded: false },
-            { sectionKey: 'mJDiagnosticBundles', sectionName: 'Diagnostic Bundles', isExpanded: false }
+            { sectionKey: 'mJDiagnosticBundles', sectionName: 'Diagnostic Bundles', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycles', sectionName: 'AI Agent Learning Cycles', isExpanded: false }
         ]);
     }
 }

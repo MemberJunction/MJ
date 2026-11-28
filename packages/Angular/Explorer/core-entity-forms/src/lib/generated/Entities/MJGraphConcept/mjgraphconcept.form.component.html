@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Concept Details Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="conceptDetails"
+        SectionName="Concept Details"
+        Icon="fa fa-sitemap"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -61,6 +61,16 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Content and Specification Section -->
+    <mj-collapsible-panel
+        SectionKey="contentAndSpecification"
+        SectionName="Content and Specification"
+        Icon="fa fa-file-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -85,6 +95,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Governance and Lifecycle Section -->
+    <mj-collapsible-panel
+        SectionKey="governanceAndLifecycle"
+        SectionName="Governance and Lifecycle"
+        Icon="fa fa-shield-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -93,6 +113,40 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Origin"
+            Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EffectiveFrom"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EffectiveTo"
+            Type="datepicker"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -109,14 +163,6 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Origin"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -130,7 +176,7 @@
     <mj-collapsible-panel
         SectionKey="mJGraphConcepts"
         SectionName="Graph Concepts"
-        Icon="fa fa-table"
+        Icon="fa fa-project-diagram"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
@@ -145,6 +191,81 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJGraphConcepts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Context Items Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentContextItems"
+        SectionName="AI Agent Context Items"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentContextItems')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Context Items','GraphConceptID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Context Items','GraphConceptID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentContextItems')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentContextItems', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposal Sources Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposalSources"
+        SectionName="AI Agent Learning Cycle Proposal Sources"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposalSources')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposal Sources','SourceGraphConceptID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposal Sources','SourceGraphConceptID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposalSources')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposalSources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposals Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposals"
+        SectionName="AI Agent Learning Cycle Proposals"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposals')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','AppliedGraphConceptID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','AppliedGraphConceptID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposals')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposals', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

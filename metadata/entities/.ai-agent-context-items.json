@@ -1,0 +1,19 @@
+[
+  {
+    "_comments": [
+      "MJ: AI Agent Context Items is append-only per-run retrieval/citation telemetry: no Record Change history and no entity caching."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Context Items",
+      "TrackRecordChanges": false,
+      "AllowCaching": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Context Items"
+    },
+    "sync": {
+      "lastModified": "2026-11-28T18:00:10.294Z",
+      "checksum": "f112389d1515e1f1fb90e56a8cbc73ba92367a0071a8802bad04425bf9a7f16b"
+    }
+  }
+]

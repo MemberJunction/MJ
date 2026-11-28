@@ -28,7 +28,9 @@ export class MJAISkillFormComponent extends BaseFormComponent {
             { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
             { sectionKey: 'mJAISkillSearchScopes', sectionName: 'AI Skill Search Scopes', isExpanded: false },
             { sectionKey: 'mJConversationSkills', sectionName: 'Conversation Skills', isExpanded: false },
-            { sectionKey: 'mJAIAgentRhythmTemplates', sectionName: 'AI Agent Rhythm Templates', isExpanded: false }
+            { sectionKey: 'mJAIAgentRhythmTemplates', sectionName: 'AI Agent Rhythm Templates', isExpanded: false },
+            { sectionKey: 'mJAIAgentContextItems', sectionName: 'AI Agent Context Items', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false }
         ]);
     }
 }

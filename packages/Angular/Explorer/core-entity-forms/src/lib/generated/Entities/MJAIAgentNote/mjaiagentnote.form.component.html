@@ -96,6 +96,24 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CanonApprovedByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="OriginProposalID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -160,6 +178,14 @@
             [ShowLabel]="true"
             FieldName="AuthorType"
             Type="select"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsCanonical"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -244,14 +270,6 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DerivedFromNoteIDs"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
             FieldName="ProtectionTier"
             Type="select"
             [EditMode]="EditMode"
@@ -262,6 +280,14 @@
             [ShowLabel]="true"
             FieldName="ImportanceScore"
             Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="CanonApprovedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -319,6 +345,131 @@
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentNotes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Context Items Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentContextItems"
+        SectionName="AI Agent Context Items"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentContextItems')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Context Items','AgentNoteID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Context Items','AgentNoteID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentContextItems')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentContextItems', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposal Sources Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposalSources"
+        SectionName="AI Agent Learning Cycle Proposal Sources"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposalSources')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposal Sources','SourceNoteID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposal Sources','SourceNoteID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposalSources')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposalSources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Note Sources (Note) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentNoteSourcesNoteID"
+        SectionName="AI Agent Note Sources (Note)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentNoteSourcesNoteID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Note Sources','NoteID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Note Sources','NoteID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentNoteSourcesNoteID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNoteSourcesNoteID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Note Sources (Source Note) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentNoteSourcesSourceNoteID"
+        SectionName="AI Agent Note Sources (Source Note)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentNoteSourcesSourceNoteID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Note Sources','SourceNoteID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Note Sources','SourceNoteID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentNoteSourcesSourceNoteID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentNoteSourcesSourceNoteID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposals Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposals"
+        SectionName="AI Agent Learning Cycle Proposals"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposals')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','AppliedNoteID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','AppliedNoteID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposals')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposals', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

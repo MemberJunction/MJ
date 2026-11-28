@@ -23,15 +23,19 @@ import { MJAIAgentChannelFormComponent } from "./Entities/MJAIAgentChannel/mjaia
 import { MJAIAgentClientToolFormComponent } from "./Entities/MJAIAgentClientTool/mjaiagentclienttool.form.component";
 import { MJAIAgentCoAgentFormComponent } from "./Entities/MJAIAgentCoAgent/mjaiagentcoagent.form.component";
 import { MJAIAgentConfigurationFormComponent } from "./Entities/MJAIAgentConfiguration/mjaiagentconfiguration.form.component";
+import { MJAIAgentContextItemFormComponent } from "./Entities/MJAIAgentContextItem/mjaiagentcontextitem.form.component";
 import { MJAIAgentCredentialFormComponent } from "./Entities/MJAIAgentCredential/mjaiagentcredential.form.component";
 import { MJAIAgentDataSourceFormComponent } from "./Entities/MJAIAgentDataSource/mjaiagentdatasource.form.component";
 import { MJAIAgentExampleFormComponent } from "./Entities/MJAIAgentExample/mjaiagentexample.form.component";
 import { MJAIAgentFormComponent } from "./Entities/MJAIAgent/mjaiagent.form.component";
 import { MJAIAgentHarnessFormComponent } from "./Entities/MJAIAgentHarness/mjaiagentharness.form.component";
 import { MJAIAgentLearningCycleFormComponent } from "./Entities/MJAIAgentLearningCycle/mjaiagentlearningcycle.form.component";
+import { MJAIAgentLearningCycleProposalFormComponent } from "./Entities/MJAIAgentLearningCycleProposal/mjaiagentlearningcycleproposal.form.component";
+import { MJAIAgentLearningCycleProposalSourceFormComponent } from "./Entities/MJAIAgentLearningCycleProposalSource/mjaiagentlearningcycleproposalsource.form.component";
 import { MJAIAgentModalityFormComponent } from "./Entities/MJAIAgentModality/mjaiagentmodality.form.component";
 import { MJAIAgentModelFormComponent } from "./Entities/MJAIAgentModel/mjaiagentmodel.form.component";
 import { MJAIAgentNoteFormComponent } from "./Entities/MJAIAgentNote/mjaiagentnote.form.component";
+import { MJAIAgentNoteSourceFormComponent } from "./Entities/MJAIAgentNoteSource/mjaiagentnotesource.form.component";
 import { MJAIAgentNoteTypeFormComponent } from "./Entities/MJAIAgentNoteType/mjaiagentnotetype.form.component";
 import { MJAIAgentPermissionFormComponent } from "./Entities/MJAIAgentPermission/mjaiagentpermission.form.component";
 import { MJAIAgentPersonaFormComponent } from "./Entities/MJAIAgentPersona/mjaiagentpersona.form.component";
@@ -303,6 +307,7 @@ import { MJGraphEdgeProviderFormComponent } from "./Entities/MJGraphEdgeProvider
 import { MJGraphEdgeTypeEndpointFormComponent } from "./Entities/MJGraphEdgeTypeEndpoint/mjgraphedgetypeendpoint.form.component";
 import { MJGraphEdgeTypeFormComponent } from "./Entities/MJGraphEdgeType/mjgraphedgetype.form.component";
 import { MJGraphFormComponent } from "./Entities/MJGraph/mjgraph.form.component";
+import { MJGraphPermissionFormComponent } from "./Entities/MJGraphPermission/mjgraphpermission.form.component";
 import { MJGraphTypeFormComponent } from "./Entities/MJGraphType/mjgraphtype.form.component";
 import { MJIdentityClaimFormComponent } from "./Entities/MJIdentityClaim/mjidentityclaim.form.component";
 import { MJIdentityClaimTypeFormComponent } from "./Entities/MJIdentityClaimType/mjidentityclaimtype.form.component";
@@ -431,6 +436,7 @@ import { MJSearchProviderFormComponent } from "./Entities/MJSearchProvider/mjsea
 import { MJSearchScopeEntityFormComponent } from "./Entities/MJSearchScopeEntity/mjsearchscopeentity.form.component";
 import { MJSearchScopeExternalIndexFormComponent } from "./Entities/MJSearchScopeExternalIndex/mjsearchscopeexternalindex.form.component";
 import { MJSearchScopeFormComponent } from "./Entities/MJSearchScope/mjsearchscope.form.component";
+import { MJSearchScopeGraphFormComponent } from "./Entities/MJSearchScopeGraph/mjsearchscopegraph.form.component";
 import { MJSearchScopePermissionFormComponent } from "./Entities/MJSearchScopePermission/mjsearchscopepermission.form.component";
 import { MJSearchScopeProviderFormComponent } from "./Entities/MJSearchScopeProvider/mjsearchscopeprovider.form.component";
 import { MJSearchScopeStorageAccountFormComponent } from "./Entities/MJSearchScopeStorageAccount/mjsearchscopestorageaccount.form.component";
@@ -635,6 +641,7 @@ export class GeneratedForms_SubModule_3 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentContextItemFormComponent,
     MJAIAgentLearningCycleFormComponent,
     MJAISkillActionFormComponent,
     MJArtifactPermissionFormComponent,
@@ -921,6 +928,7 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentNoteSourceFormComponent,
     MJAIModelPriceUnitTypeFormComponent,
     MJApplicationSettingFormComponent,
     MJArtifactVersionAttributeFormComponent,
@@ -1084,6 +1092,7 @@ export class GeneratedForms_SubModule_17 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentLearningCycleProposalFormComponent,
     MJAIPromptRunMediaFormComponent,
     MJCompanyIntegrationFormComponent,
     MJConversationTypeFormComponent,
@@ -1221,6 +1230,7 @@ declarations: [
     MJDuplicateRunDetailFormComponent,
     MJEmployeeCompanyIntegrationFormComponent,
     MJEntityDocumentRunFormComponent,
+    MJGraphPermissionFormComponent,
     MJIntegrationObjectFieldFormComponent,
     MJListInvitationFormComponent,
     MJNumberPoolFormComponent,
@@ -1399,6 +1409,7 @@ declarations: [
     MJFeaturePipelineVersionFormComponent,
     MJInteractionEventFormComponent,
     MJMagicLinkInviteApplicationFormComponent,
+    MJSearchScopeGraphFormComponent,
     MJTagSuggestionFormComponent,
     MJTestSuiteFormComponent,
     MJTestSuiteTestFormComponent,
@@ -1457,6 +1468,7 @@ export class GeneratedForms_SubModule_28 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentLearningCycleProposalSourceFormComponent,
     MJAIBridgeProviderFormComponent,
     MJAIClientToolDefinitionFormComponent,
     MJContentProcessRunPromptRunFormComponent,

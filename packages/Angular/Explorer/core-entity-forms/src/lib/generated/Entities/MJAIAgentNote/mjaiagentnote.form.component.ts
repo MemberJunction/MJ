@@ -21,7 +21,12 @@ export class MJAIAgentNoteFormComponent extends BaseFormComponent {
             { sectionKey: 'embeddingAIData', sectionName: 'Embedding & AI Data', isExpanded: true },
             { sectionKey: 'usageLifecycle', sectionName: 'Usage & Lifecycle', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false }
+            { sectionKey: 'mJAIAgentNotes', sectionName: 'AI Agent Notes', isExpanded: false },
+            { sectionKey: 'mJAIAgentContextItems', sectionName: 'AI Agent Context Items', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalSources', sectionName: 'AI Agent Learning Cycle Proposal Sources', isExpanded: false },
+            { sectionKey: 'mJAIAgentNoteSourcesNoteID', sectionName: 'AI Agent Note Sources (Note)', isExpanded: false },
+            { sectionKey: 'mJAIAgentNoteSourcesSourceNoteID', sectionName: 'AI Agent Note Sources (Source Note)', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false }
         ]);
     }
 }

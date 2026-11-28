@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Details Section -->
+    <!-- Graph Relationships Section -->
     <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
+        SectionKey="graphRelationships"
+        SectionName="Graph Relationships"
+        Icon="fa fa-project-diagram"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -35,6 +35,16 @@
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Source and Target Nodes Section -->
+    <mj-collapsible-panel
+        SectionKey="sourceAndTargetNodes"
+        SectionName="Source and Target Nodes"
+        Icon="fa fa-exchange-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -69,6 +79,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Edge Properties Section -->
+    <mj-collapsible-panel
+        SectionKey="edgeProperties"
+        SectionName="Edge Properties"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -93,6 +113,16 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Governance and Origin Section -->
+    <mj-collapsible-panel
+        SectionKey="governanceAndOrigin"
+        SectionName="Governance and Origin"
+        Icon="fa fa-shield-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -120,6 +150,25 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="AuthorityTierID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="__mj_CreatedAt"
             Type="textbox"
             [EditMode]="EditMode"
@@ -137,6 +186,60 @@
     </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-fields" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
+
+    <!-- ========================================
+         RELATED ENTITY PANELS
+         ======================================== -->
+
+    <!-- AI Agent Learning Cycle Proposal Sources Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposalSources"
+        SectionName="AI Agent Learning Cycle Proposal Sources"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposalSources')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposal Sources','SourceGraphEdgeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposal Sources','SourceGraphEdgeID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposalSources')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposalSources', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposals Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposals"
+        SectionName="AI Agent Learning Cycle Proposals"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposals')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','AppliedGraphEdgeID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','AppliedGraphEdgeID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposals')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposals', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>

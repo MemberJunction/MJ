@@ -31,7 +31,9 @@ export class MJConversationDetailFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJAgentChannelParticipants', sectionName: 'Agent Channel Participants', isExpanded: false },
-            { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false }
+            { sectionKey: 'mJConversationCompactionRuns', sectionName: 'Conversation Compaction Runs', isExpanded: false },
+            { sectionKey: 'mJAIAgentContextItems', sectionName: 'AI Agent Context Items', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalSources', sectionName: 'AI Agent Learning Cycle Proposal Sources', isExpanded: false }
         ]);
     }
 }

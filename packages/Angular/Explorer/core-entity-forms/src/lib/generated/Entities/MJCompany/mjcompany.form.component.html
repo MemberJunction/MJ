@@ -354,6 +354,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent Learning Cycle Proposals Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposals"
+        SectionName="AI Agent Learning Cycle Proposals"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposals')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','CompanyID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposals')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposals', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycles Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycles"
+        SectionName="AI Agent Learning Cycles"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycles')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycles','CompanyID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycles','CompanyID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycles')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycles', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

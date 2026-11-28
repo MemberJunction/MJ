@@ -10,13 +10,17 @@ import type {
   MJAIAgentClientToolEntityType,
   MJAIAgentCoAgentEntityType,
   MJAIAgentConfigurationEntityType,
+  MJAIAgentContextItemEntityType,
   MJAIAgentCredentialEntityType,
   MJAIAgentDataSourceEntityType,
   MJAIAgentExampleEntityType,
   MJAIAgentHarnessEntityType,
+  MJAIAgentLearningCycleProposalSourceEntityType,
+  MJAIAgentLearningCycleProposalEntityType,
   MJAIAgentLearningCycleEntityType,
   MJAIAgentModalityEntityType,
   MJAIAgentModelEntityType,
+  MJAIAgentNoteSourceEntityType,
   MJAIAgentNoteTypeEntityType,
   MJAIAgentNoteEntityType,
   MJAIAgentPermissionEntityType,
@@ -289,6 +293,7 @@ import type {
   MJGraphEdgeTypeEndpointEntityType,
   MJGraphEdgeTypeEntityType,
   MJGraphEdgeEntityType,
+  MJGraphPermissionEntityType,
   MJGraphTypeEntityType,
   MJGraphEntityType,
   MJIdentityClaimTypeEntityType,
@@ -418,6 +423,7 @@ import type {
   MJSearchProviderEntityType,
   MJSearchScopeEntityEntityType,
   MJSearchScopeExternalIndexEntityType,
+  MJSearchScopeGraphEntityType,
   MJSearchScopePermissionEntityType,
   MJSearchScopeProviderEntityType,
   MJSearchScopeStorageAccountEntityType,
@@ -2901,6 +2907,445 @@ export class MJAIAgentConfigurationEntity extends BaseEntity<MJAIAgentConfigurat
 
 
 /**
+ * Structured telemetry details for an `MJ: AI Agent Context Items` row (`AIAgentContextItem.Details`).
+ *
+ * Records how the item was selected, which retrieval lane surfaced it, scoring signals,
+ * a snapshot of the item's lifecycle/canon status at injection time, holdout bucket assignment,
+ * and citation detection source.
+ */
+export interface MJAIAgentContextItemEntity_IAgentContextItemDetails {
+    /** Schema version for forward-compatible evolution; readers branch on it. */
+    Version: 1;
+    /** How the item was selected for context injection. */
+    Strategy?:
+        | 'Relevant'
+        | 'Recent'
+        | 'All'
+        | 'Semantic'
+        | 'Rated'
+        | 'Canon Lane'
+        | 'Graph Expansion'
+        | 'In-Flight Search'
+        | 'Other';
+    /** Two-lane retrieval lane (§4.2). */
+    Lane?: 'Canon' | 'Dynamic';
+    /** Reranker score when a reranker evaluated the item. */
+    RerankScore?: number;
+    /** Authority-boosted effective score (§4.2). */
+    EffectiveScore?: number;
+    /** Snapshot of the item's status at injection time (the item itself may change later). */
+    StatusAtInjection?: string;
+    /** Snapshot of the item's protection tier at injection time. */
+    ProtectionTierAtInjection?: string;
+    /** Snapshot of whether the item was canonical at injection time. */
+    IsCanonicalAtInjection?: boolean;
+    /** Scope level at which the item matched (e.g., User, Company, Global). */
+    ScopeLevel?: string;
+    /** Deterministic sample bucket value so holdout arms can be re-derived. */
+    HoldoutBucket?: number;
+    /** For Cited rows: where the citation was detected. */
+    CitationSource?: 'Agent Response' | 'Post-Session Judge' | 'Other';
+}
+
+/**
+ * MJ: AI Agent Context Items - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentContextItem
+ * * Base View: vwAIAgentContextItems
+ * * @description Per-execution context exposure, holdout, and citation telemetry trace linking loop runs and realtime sessions to retrieved/injected items.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Context Items')
+export class MJAIAgentContextItemEntity extends BaseEntity<MJAIAgentContextItemEntityType> {
+    /**
+    * Loads the MJ: AI Agent Context Items record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Context Items record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentContextItemEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+    * * Field Name: AgentRunStepID
+    * * Display Name: Agent Run Step ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
+    */
+    get AgentRunStepID(): string | null {
+        return this.Get('AgentRunStepID');
+    }
+    set AgentRunStepID(value: string | null) {
+        this.Set('AgentRunStepID', value);
+    }
+
+    /**
+    * * Field Name: AgentSessionID
+    * * Display Name: Agent Session ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Sessions (vwAIAgentSessions.ID)
+    */
+    get AgentSessionID(): string | null {
+        return this.Get('AgentSessionID');
+    }
+    set AgentSessionID(value: string | null) {
+        this.Set('AgentSessionID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+    */
+    get ConversationDetailID(): string | null {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string | null) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: EventType
+    * * Display Name: Event Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Cited
+    *   * Injected
+    *   * Other
+    *   * Retrieved
+    *   * Withheld
+    * * Description: Context telemetry event kind: Retrieved, Injected, Withheld, Cited, or Other.
+    */
+    get EventType(): 'Cited' | 'Injected' | 'Other' | 'Retrieved' | 'Withheld' {
+        return this.Get('EventType');
+    }
+    set EventType(value: 'Cited' | 'Injected' | 'Other' | 'Retrieved' | 'Withheld') {
+        this.Set('EventType', value);
+    }
+
+    /**
+    * * Field Name: ItemType
+    * * Display Name: Item Type
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Example
+    *   * Graph Concept
+    *   * Note
+    *   * Other
+    *   * Scoped Prompt Part
+    *   * Skill
+    * * Description: Context item classification: Note, Example, Skill, Graph Concept, Scoped Prompt Part, or Other.
+    */
+    get ItemType(): 'Example' | 'Graph Concept' | 'Note' | 'Other' | 'Scoped Prompt Part' | 'Skill' {
+        return this.Get('ItemType');
+    }
+    set ItemType(value: 'Example' | 'Graph Concept' | 'Note' | 'Other' | 'Scoped Prompt Part' | 'Skill') {
+        this.Set('ItemType', value);
+    }
+
+    /**
+    * * Field Name: AgentNoteID
+    * * Display Name: Agent Note ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    */
+    get AgentNoteID(): string | null {
+        return this.Get('AgentNoteID');
+    }
+    set AgentNoteID(value: string | null) {
+        this.Set('AgentNoteID', value);
+    }
+
+    /**
+    * * Field Name: AgentExampleID
+    * * Display Name: Agent Example ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Examples (vwAIAgentExamples.ID)
+    */
+    get AgentExampleID(): string | null {
+        return this.Get('AgentExampleID');
+    }
+    set AgentExampleID(value: string | null) {
+        this.Set('AgentExampleID', value);
+    }
+
+    /**
+    * * Field Name: SkillID
+    * * Display Name: Skill ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    */
+    get SkillID(): string | null {
+        return this.Get('SkillID');
+    }
+    set SkillID(value: string | null) {
+        this.Set('SkillID', value);
+    }
+
+    /**
+    * * Field Name: GraphConceptID
+    * * Display Name: Graph Concept ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
+    */
+    get GraphConceptID(): string | null {
+        return this.Get('GraphConceptID');
+    }
+    set GraphConceptID(value: string | null) {
+        this.Set('GraphConceptID', value);
+    }
+
+    /**
+    * * Field Name: ScopedPromptPartID
+    * * Display Name: Scoped Prompt Part ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scoped Prompt Parts (vwScopedPromptParts.ID)
+    */
+    get ScopedPromptPartID(): string | null {
+        return this.Get('ScopedPromptPartID');
+    }
+    set ScopedPromptPartID(value: string | null) {
+        this.Set('ScopedPromptPartID', value);
+    }
+
+    /**
+    * * Field Name: ItemEntityID
+    * * Display Name: Item Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get ItemEntityID(): string | null {
+        return this.Get('ItemEntityID');
+    }
+    set ItemEntityID(value: string | null) {
+        this.Set('ItemEntityID', value);
+    }
+
+    /**
+    * * Field Name: ItemRecordID
+    * * Display Name: Item Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Polymorphic target record ID paired with ItemEntityID for item types without dedicated FK columns.
+    */
+    get ItemRecordID(): string | null {
+        return this.Get('ItemRecordID');
+    }
+    set ItemRecordID(value: string | null) {
+        this.Set('ItemRecordID', value);
+    }
+
+    /**
+    * * Field Name: ShortID
+    * * Display Name: Short ID
+    * * SQL Data Type: nvarchar(10)
+    * * Description: Compact reference identifier rendered into the prompt so cited items resolve reliably.
+    */
+    get ShortID(): string | null {
+        return this.Get('ShortID');
+    }
+    set ShortID(value: string | null) {
+        this.Set('ShortID', value);
+    }
+
+    /**
+    * * Field Name: Rank
+    * * Display Name: Rank
+    * * SQL Data Type: int
+    * * Description: Zero-based or 1-based display rank position within the assembled context block.
+    */
+    get Rank(): number | null {
+        return this.Get('Rank');
+    }
+    set Rank(value: number | null) {
+        this.Set('Rank', value);
+    }
+
+    /**
+    * * Field Name: Similarity
+    * * Display Name: Similarity
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Vector similarity score captured during semantic retrieval when available.
+    */
+    get Similarity(): number | null {
+        return this.Get('Similarity');
+    }
+    set Similarity(value: number | null) {
+        this.Set('Similarity', value);
+    }
+
+    /**
+    * * Field Name: Details
+    * * Display Name: Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentContextItemEntity_IAgentContextItemDetails
+    * * Description: Structured JSON telemetry details conforming to IAgentContextItemDetails (strategy, lane, scores, snapshot flags, citation source).
+    */
+    get Details(): string | null {
+        return this.Get('Details');
+    }
+    set Details(value: string | null) {
+        this.Set('Details', value);
+    }
+
+    /**
+    * Typed accessor for Details — a live view of the parsed JSON as MJAIAgentContextItemEntity_IAgentContextItemDetails.
+    * Edits made through it, at any depth (`obj.a.b = 1`, `arr.push(x)`, `delete obj.k`), update the
+    * underlying Details field, so it becomes dirty and Save() persists them. If the raw value changes by
+    * any other route (Load, Set, revert) the next read re-parses, and objects obtained earlier are
+    * detached: writing through one throws. To clone, structuredClone or postMessage the value use
+    * ToPlainJSON() from @memberjunction/core.
+    */
+    get DetailsObject(): MJAIAgentContextItemEntity_IAgentContextItemDetails | null {
+        return this.GetJSONFieldObject<MJAIAgentContextItemEntity_IAgentContextItemDetails>('Details');
+    }
+    set DetailsObject(value: MJAIAgentContextItemEntity_IAgentContextItemDetails | null) {
+        this.SetJSONFieldObject<MJAIAgentContextItemEntity_IAgentContextItemDetails>('Details', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: AgentRun
+    * * Display Name: Agent Run
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRun(): string | null {
+        return this.Get('AgentRun');
+    }
+
+    /**
+    * * Field Name: AgentRunStep
+    * * Display Name: Agent Run Step
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AgentRunStep(): string | null {
+        return this.Get('AgentRunStep');
+    }
+
+    /**
+    * * Field Name: ConversationDetail
+    * * Display Name: Conversation Detail
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ConversationDetail(): string | null {
+        return this.Get('ConversationDetail');
+    }
+
+    /**
+    * * Field Name: AgentNote
+    * * Display Name: Agent Note
+    * * SQL Data Type: nvarchar(20)
+    */
+    get AgentNote(): string | null {
+        return this.Get('AgentNote');
+    }
+
+    /**
+    * * Field Name: AgentExample
+    * * Display Name: Agent Example
+    * * SQL Data Type: nvarchar(20)
+    */
+    get AgentExample(): string | null {
+        return this.Get('AgentExample');
+    }
+
+    /**
+    * * Field Name: Skill
+    * * Display Name: Skill
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Skill(): string | null {
+        return this.Get('Skill');
+    }
+
+    /**
+    * * Field Name: GraphConcept
+    * * Display Name: Graph Concept
+    * * SQL Data Type: nvarchar(255)
+    */
+    get GraphConcept(): string | null {
+        return this.Get('GraphConcept');
+    }
+
+    /**
+    * * Field Name: ScopedPromptPart
+    * * Display Name: Scoped Prompt Part
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScopedPromptPart(): string | null {
+        return this.Get('ScopedPromptPart');
+    }
+
+    /**
+    * * Field Name: ItemEntity
+    * * Display Name: Item Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ItemEntity(): string | null {
+        return this.Get('ItemEntity');
+    }
+}
+
+
+/**
  * MJ: AI Agent Credentials - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentCredential
@@ -4283,6 +4728,1283 @@ export class MJAIAgentHarnessEntity extends BaseEntity<MJAIAgentHarnessEntityTyp
 
 
 /**
+ * MJ: AI Agent Learning Cycle Proposal Sources - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentLearningCycleProposalSource
+ * * Base View: vwAIAgentLearningCycleProposalSources
+ * * @description Provenance evidence links attaching notes, agent runs, conversation turns, graph concepts/edges, or polymorphic records to a Learning Cycle Proposal.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Learning Cycle Proposal Sources')
+export class MJAIAgentLearningCycleProposalSourceEntity extends BaseEntity<MJAIAgentLearningCycleProposalSourceEntityType> {
+    /**
+    * Loads the MJ: AI Agent Learning Cycle Proposal Sources record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Learning Cycle Proposal Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentLearningCycleProposalSourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ProposalID
+    * * Display Name: Proposal
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)
+    */
+    get ProposalID(): string {
+        return this.Get('ProposalID');
+    }
+    set ProposalID(value: string) {
+        this.Set('ProposalID', value);
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Bridge Node
+    *   * Contradicting Note
+    *   * Exemplar Run
+    *   * Failed Run
+    *   * Other
+    *   * Supporting Note
+    *   * User Correction
+    * * Description: Evidentiary role of this source: Supporting Note, Contradicting Note, Failed Run, Exemplar Run, User Correction, Bridge Node, or Other.
+    */
+    get Role(): 'Bridge Node' | 'Contradicting Note' | 'Exemplar Run' | 'Failed Run' | 'Other' | 'Supporting Note' | 'User Correction' {
+        return this.Get('Role');
+    }
+    set Role(value: 'Bridge Node' | 'Contradicting Note' | 'Exemplar Run' | 'Failed Run' | 'Other' | 'Supporting Note' | 'User Correction') {
+        this.Set('Role', value);
+    }
+
+    /**
+    * * Field Name: TrustTierAtSnapshot
+    * * Display Name: Trust Tier At Snapshot
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Canonical
+    *   * Provisional User
+    *   * Untrusted External
+    *   * Verified Active
+    * * Description: Trust tier snapshot recorded when the source was attached to the proposal.
+    */
+    get TrustTierAtSnapshot(): 'Canonical' | 'Provisional User' | 'Untrusted External' | 'Verified Active' {
+        return this.Get('TrustTierAtSnapshot');
+    }
+    set TrustTierAtSnapshot(value: 'Canonical' | 'Provisional User' | 'Untrusted External' | 'Verified Active') {
+        this.Set('TrustTierAtSnapshot', value);
+    }
+
+    /**
+    * * Field Name: SourceNoteID
+    * * Display Name: Source Note
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    */
+    get SourceNoteID(): string | null {
+        return this.Get('SourceNoteID');
+    }
+    set SourceNoteID(value: string | null) {
+        this.Set('SourceNoteID', value);
+    }
+
+    /**
+    * * Field Name: SourceAgentRunID
+    * * Display Name: Source Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    */
+    get SourceAgentRunID(): string | null {
+        return this.Get('SourceAgentRunID');
+    }
+    set SourceAgentRunID(value: string | null) {
+        this.Set('SourceAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: SourceConversationDetailID
+    * * Display Name: Source Conversation Detail
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Conversation Details (vwConversationDetails.ID)
+    */
+    get SourceConversationDetailID(): string | null {
+        return this.Get('SourceConversationDetailID');
+    }
+    set SourceConversationDetailID(value: string | null) {
+        this.Set('SourceConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: SourceGraphConceptID
+    * * Display Name: Source Graph Concept
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
+    */
+    get SourceGraphConceptID(): string | null {
+        return this.Get('SourceGraphConceptID');
+    }
+    set SourceGraphConceptID(value: string | null) {
+        this.Set('SourceGraphConceptID', value);
+    }
+
+    /**
+    * * Field Name: SourceGraphEdgeID
+    * * Display Name: Source Graph Edge
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Edges (vwGraphEdges.ID)
+    */
+    get SourceGraphEdgeID(): string | null {
+        return this.Get('SourceGraphEdgeID');
+    }
+    set SourceGraphEdgeID(value: string | null) {
+        this.Set('SourceGraphEdgeID', value);
+    }
+
+    /**
+    * * Field Name: SourceEntityID
+    * * Display Name: Source Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get SourceEntityID(): string | null {
+        return this.Get('SourceEntityID');
+    }
+    set SourceEntityID(value: string | null) {
+        this.Set('SourceEntityID', value);
+    }
+
+    /**
+    * * Field Name: SourceRecordID
+    * * Display Name: Source Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Polymorphic source record ID paired with SourceEntityID when the source is outside the dedicated FK columns.
+    */
+    get SourceRecordID(): string | null {
+        return this.Get('SourceRecordID');
+    }
+    set SourceRecordID(value: string | null) {
+        this.Set('SourceRecordID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SourceNote
+    * * Display Name: Source Note Text
+    * * SQL Data Type: nvarchar(20)
+    */
+    get SourceNote(): string | null {
+        return this.Get('SourceNote');
+    }
+
+    /**
+    * * Field Name: SourceAgentRun
+    * * Display Name: Source Agent Run Text
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceAgentRun(): string | null {
+        return this.Get('SourceAgentRun');
+    }
+
+    /**
+    * * Field Name: SourceConversationDetail
+    * * Display Name: Source Conversation Detail Text
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SourceConversationDetail(): string | null {
+        return this.Get('SourceConversationDetail');
+    }
+
+    /**
+    * * Field Name: SourceGraphConcept
+    * * Display Name: Source Graph Concept Text
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceGraphConcept(): string | null {
+        return this.Get('SourceGraphConcept');
+    }
+
+    /**
+    * * Field Name: SourceEntity
+    * * Display Name: Source Entity Text
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntity(): string | null {
+        return this.Get('SourceEntity');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Learning Cycle Proposals - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentLearningCycleProposal
+ * * Base View: vwAIAgentLearningCycleProposals
+ * * @description Quarantine ledger and RL/Rule-6 promotion workbench for candidate notes, skills, graph concepts/edges, and harness revisions.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Learning Cycle Proposals')
+export class MJAIAgentLearningCycleProposalEntity extends BaseEntity<MJAIAgentLearningCycleProposalEntityType> {
+    /**
+    * Loads the MJ: AI Agent Learning Cycle Proposals record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Learning Cycle Proposals record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentLearningCycleProposalEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: LearningCycleID
+    * * Display Name: Learning Cycle
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycles (vwAIAgentLearningCycles.ID)
+    */
+    get LearningCycleID(): string {
+        return this.Get('LearningCycleID');
+    }
+    set LearningCycleID(value: string) {
+        this.Set('LearningCycleID', value);
+    }
+
+    /**
+    * * Field Name: TargetAgentID
+    * * Display Name: Target Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get TargetAgentID(): string | null {
+        return this.Get('TargetAgentID');
+    }
+    set TargetAgentID(value: string | null) {
+        this.Set('TargetAgentID', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntityID
+    * * Display Name: Primary Scope Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get PrimaryScopeEntityID(): string | null {
+        return this.Get('PrimaryScopeEntityID');
+    }
+    set PrimaryScopeEntityID(value: string | null) {
+        this.Set('PrimaryScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: PrimaryScopeRecordID
+    * * Display Name: Primary Scope Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Record identifier within PrimaryScopeEntityID when the proposal is scoped to a single entity record.
+    */
+    get PrimaryScopeRecordID(): string | null {
+        return this.Get('PrimaryScopeRecordID');
+    }
+    set PrimaryScopeRecordID(value: string | null) {
+        this.Set('PrimaryScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: SecondaryScopes
+    * * Display Name: Secondary Scopes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON specification matching ScopedPromptPart/AIAgentNote SecondaryScopes isolation filters.
+    */
+    get SecondaryScopes(): string | null {
+        return this.Get('SecondaryScopes');
+    }
+    set SecondaryScopes(value: string | null) {
+        this.Set('SecondaryScopes', value);
+    }
+
+    /**
+    * * Field Name: ProposalType
+    * * Display Name: Proposal Type
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Create Canon Concept
+    *   * Create Graph Edge
+    *   * Create Note
+    *   * Draft Skill
+    *   * Evolve Workflow
+    *   * Promote To Canon
+    *   * Promote Workflow
+    *   * Prompt Revision
+    *   * Resolve Graph Contradiction
+    *   * Supersede Notes
+    * * Description: Kind of change proposed (Create Note, Supersede Notes, Promote To Canon, Draft Skill, Create Graph Edge, Create Canon Concept, Promote Workflow, Evolve Workflow, Resolve Graph Contradiction, Prompt Revision).
+    */
+    get ProposalType(): 'Create Canon Concept' | 'Create Graph Edge' | 'Create Note' | 'Draft Skill' | 'Evolve Workflow' | 'Promote To Canon' | 'Promote Workflow' | 'Prompt Revision' | 'Resolve Graph Contradiction' | 'Supersede Notes' {
+        return this.Get('ProposalType');
+    }
+    set ProposalType(value: 'Create Canon Concept' | 'Create Graph Edge' | 'Create Note' | 'Draft Skill' | 'Evolve Workflow' | 'Promote To Canon' | 'Promote Workflow' | 'Prompt Revision' | 'Resolve Graph Contradiction' | 'Supersede Notes') {
+        this.Set('ProposalType', value);
+    }
+
+    /**
+    * * Field Name: SamplerStrategy
+    * * Display Name: Sampler Strategy
+    * * SQL Data Type: nvarchar(40)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Contradiction Resolution
+    *   * Cross User Pattern
+    *   * Distant Note Pair
+    *   * Failed Run Cluster
+    *   * Graph Bridge Walk
+    *   * Graph Overlay Conflict
+    *   * Harness Refiner Probe
+    *   * Successful Trajectory
+    *   * Taxonomy Import
+    *   * Workflow Telemetry
+    * * Description: Sampler or generator pipeline stage that discovered this candidate proposal.
+    */
+    get SamplerStrategy(): 'Contradiction Resolution' | 'Cross User Pattern' | 'Distant Note Pair' | 'Failed Run Cluster' | 'Graph Bridge Walk' | 'Graph Overlay Conflict' | 'Harness Refiner Probe' | 'Successful Trajectory' | 'Taxonomy Import' | 'Workflow Telemetry' {
+        return this.Get('SamplerStrategy');
+    }
+    set SamplerStrategy(value: 'Contradiction Resolution' | 'Cross User Pattern' | 'Distant Note Pair' | 'Failed Run Cluster' | 'Graph Bridge Walk' | 'Graph Overlay Conflict' | 'Harness Refiner Probe' | 'Successful Trajectory' | 'Taxonomy Import' | 'Workflow Telemetry') {
+        this.Set('SamplerStrategy', value);
+    }
+
+    /**
+    * * Field Name: Title
+    * * Display Name: Title
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Concise human-readable title summarizing the proposed change.
+    */
+    get Title(): string {
+        return this.Get('Title');
+    }
+    set Title(value: string) {
+        this.Set('Title', value);
+    }
+
+    /**
+    * * Field Name: Claim
+    * * Display Name: Claim
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Core factual or behavioral claim asserted by this proposal.
+    */
+    get Claim(): string {
+        return this.Get('Claim');
+    }
+    set Claim(value: string) {
+        this.Set('Claim', value);
+    }
+
+    /**
+    * * Field Name: TestablePrediction
+    * * Display Name: Testable Prediction
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional falsifiable prediction describing how downstream evaluation should improve if this proposal holds.
+    */
+    get TestablePrediction(): string | null {
+        return this.Get('TestablePrediction');
+    }
+    set TestablePrediction(value: string | null) {
+        this.Set('TestablePrediction', value);
+    }
+
+    /**
+    * * Field Name: ProposedPayload
+    * * Display Name: Proposed Payload
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured JSON payload consumed by the deterministic materializer when the proposal is applied.
+    */
+    get ProposedPayload(): string {
+        return this.Get('ProposedPayload');
+    }
+    set ProposedPayload(value: string) {
+        this.Set('ProposedPayload', value);
+    }
+
+    /**
+    * * Field Name: ClaimHash
+    * * Display Name: Claim Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: SHA-256 hash of the canonicalized claim used for deduplication and anti-redreaming lookup.
+    */
+    get ClaimHash(): string {
+        return this.Get('ClaimHash');
+    }
+    set ClaimHash(value: string) {
+        this.Set('ClaimHash', value);
+    }
+
+    /**
+    * * Field Name: SourceTrustCeiling
+    * * Display Name: Source Trust Ceiling
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Provisional User
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Canonical
+    *   * Provisional User
+    *   * Untrusted External
+    *   * Verified Active
+    * * Description: Monotonic minimum trust tier across all attached proposal sources.
+    */
+    get SourceTrustCeiling(): 'Canonical' | 'Provisional User' | 'Untrusted External' | 'Verified Active' {
+        return this.Get('SourceTrustCeiling');
+    }
+    set SourceTrustCeiling(value: 'Canonical' | 'Provisional User' | 'Untrusted External' | 'Verified Active') {
+        this.Set('SourceTrustCeiling', value);
+    }
+
+    /**
+    * * Field Name: DistinctUserCount
+    * * Display Name: Distinct User Count
+    * * SQL Data Type: int
+    * * Description: Number of distinct users represented in the supporting evidence (for k-anonymity cross-user promotion rules).
+    */
+    get DistinctUserCount(): number | null {
+        return this.Get('DistinctUserCount');
+    }
+    set DistinctUserCount(value: number | null) {
+        this.Set('DistinctUserCount', value);
+    }
+
+    /**
+    * * Field Name: GeneratorMetadata
+    * * Display Name: Generator Metadata
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON metadata describing candidate generation prompts, temperatures, and ensemble members.
+    */
+    get GeneratorMetadata(): string | null {
+        return this.Get('GeneratorMetadata');
+    }
+    set GeneratorMetadata(value: string | null) {
+        this.Set('GeneratorMetadata', value);
+    }
+
+    /**
+    * * Field Name: CrossModelAgreementCount
+    * * Display Name: Cross Model Agreement Count
+    * * SQL Data Type: int
+    * * Default Value: 1
+    * * Description: Count of independent proposer models agreeing on this claim.
+    */
+    get CrossModelAgreementCount(): number {
+        return this.Get('CrossModelAgreementCount');
+    }
+    set CrossModelAgreementCount(value: number) {
+        this.Set('CrossModelAgreementCount', value);
+    }
+
+    /**
+    * * Field Name: IsSingleModelOutlier
+    * * Display Name: Is Single Model Outlier
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True if surfaced by a single high-temperature outlier generator rather than consensus.
+    */
+    get IsSingleModelOutlier(): boolean {
+        return this.Get('IsSingleModelOutlier');
+    }
+    set IsSingleModelOutlier(value: boolean) {
+        this.Set('IsSingleModelOutlier', value);
+    }
+
+    /**
+    * * Field Name: GateProbability
+    * * Display Name: Gate Probability
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Pre-verification admission probability assigned by the proposal gate (0.0000 to 1.0000).
+    */
+    get GateProbability(): number | null {
+        return this.Get('GateProbability');
+    }
+    set GateProbability(value: number | null) {
+        this.Set('GateProbability', value);
+    }
+
+    /**
+    * * Field Name: FalsifierVerdict
+    * * Display Name: Falsifier Verdict
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Needs Scope Narrowing
+    *   * Passed
+    *   * Rejected
+    * * Description: Result from the falsifier check: Passed, Rejected, or Needs Scope Narrowing.
+    */
+    get FalsifierVerdict(): 'Needs Scope Narrowing' | 'Passed' | 'Rejected' | null {
+        return this.Get('FalsifierVerdict');
+    }
+    set FalsifierVerdict(value: 'Needs Scope Narrowing' | 'Passed' | 'Rejected' | null) {
+        this.Set('FalsifierVerdict', value);
+    }
+
+    /**
+    * * Field Name: FalsifierCritique
+    * * Display Name: Falsifier Critique
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed critique explaining why the falsifier rejected or requested scope narrowing.
+    */
+    get FalsifierCritique(): string | null {
+        return this.Get('FalsifierCritique');
+    }
+    set FalsifierCritique(value: string | null) {
+        this.Set('FalsifierCritique', value);
+    }
+
+    /**
+    * * Field Name: VerificationMethod
+    * * Display Name: Verification Method
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Counterfactual Replay
+    *   * Hybrid
+    *   * Manual Only
+    *   * None
+    *   * Query Check
+    * * Description: Verification mechanism used for this proposal: Counterfactual Replay, Query Check, Hybrid, Manual Only, or None.
+    */
+    get VerificationMethod(): 'Counterfactual Replay' | 'Hybrid' | 'Manual Only' | 'None' | 'Query Check' {
+        return this.Get('VerificationMethod');
+    }
+    set VerificationMethod(value: 'Counterfactual Replay' | 'Hybrid' | 'Manual Only' | 'None' | 'Query Check') {
+        this.Set('VerificationMethod', value);
+    }
+
+    /**
+    * * Field Name: ReplayTrialsCount
+    * * Display Name: Replay Trials Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of counterfactual replay trials executed.
+    */
+    get ReplayTrialsCount(): number {
+        return this.Get('ReplayTrialsCount');
+    }
+    set ReplayTrialsCount(value: number) {
+        this.Set('ReplayTrialsCount', value);
+    }
+
+    /**
+    * * Field Name: ReplayWinsCount
+    * * Display Name: Replay Wins Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of replay trials won with this proposal active.
+    */
+    get ReplayWinsCount(): number {
+        return this.Get('ReplayWinsCount');
+    }
+    set ReplayWinsCount(value: number) {
+        this.Set('ReplayWinsCount', value);
+    }
+
+    /**
+    * * Field Name: ReplayLossesCount
+    * * Display Name: Replay Losses Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of replay trials lost with this proposal active.
+    */
+    get ReplayLossesCount(): number {
+        return this.Get('ReplayLossesCount');
+    }
+    set ReplayLossesCount(value: number) {
+        this.Set('ReplayLossesCount', value);
+    }
+
+    /**
+    * * Field Name: ReplayWinDelta
+    * * Display Name: Replay Win Delta
+    * * SQL Data Type: decimal(6, 4)
+    * * Description: Net win-rate delta observed across paired counterfactual replay trials.
+    */
+    get ReplayWinDelta(): number | null {
+        return this.Get('ReplayWinDelta');
+    }
+    set ReplayWinDelta(value: number | null) {
+        this.Set('ReplayWinDelta', value);
+    }
+
+    /**
+    * * Field Name: QueryCheckPassed
+    * * Display Name: Query Check Passed
+    * * SQL Data Type: bit
+    * * Description: Outcome of deterministic SQL/query verification checks when applicable.
+    */
+    get QueryCheckPassed(): boolean | null {
+        return this.Get('QueryCheckPassed');
+    }
+    set QueryCheckPassed(value: boolean | null) {
+        this.Set('QueryCheckPassed', value);
+    }
+
+    /**
+    * * Field Name: VerificationEvidence
+    * * Display Name: Verification Evidence
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Structured JSON verification evidence linking paired trial prompt runs, judges, and query outputs.
+    */
+    get VerificationEvidence(): string | null {
+        return this.Get('VerificationEvidence');
+    }
+    set VerificationEvidence(value: string | null) {
+        this.Set('VerificationEvidence', value);
+    }
+
+    /**
+    * * Field Name: ProblemKey
+    * * Display Name: Problem Key
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Normalized recurring problem key grouping prior attempts for Self-Improvement Memory retrieval.
+    */
+    get ProblemKey(): string {
+        return this.Get('ProblemKey');
+    }
+    set ProblemKey(value: string) {
+        this.Set('ProblemKey', value);
+    }
+
+    /**
+    * * Field Name: ProblemSummary
+    * * Display Name: Problem Summary
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of the underlying problem targeted by this proposal.
+    */
+    get ProblemSummary(): string | null {
+        return this.Get('ProblemSummary');
+    }
+    set ProblemSummary(value: string | null) {
+        this.Set('ProblemSummary', value);
+    }
+
+    /**
+    * * Field Name: Rationale
+    * * Display Name: Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Proposer rationale explaining why this edit is expected to improve outcomes.
+    */
+    get Rationale(): string {
+        return this.Get('Rationale');
+    }
+    set Rationale(value: string) {
+        this.Set('Rationale', value);
+    }
+
+    /**
+    * * Field Name: PredictedEffect
+    * * Display Name: Predicted Effect
+    * * SQL Data Type: decimal(6, 4)
+    * * Description: Proposer forecast of expected metric improvement prior to verification.
+    */
+    get PredictedEffect(): number | null {
+        return this.Get('PredictedEffect');
+    }
+    set PredictedEffect(value: number | null) {
+        this.Set('PredictedEffect', value);
+    }
+
+    /**
+    * * Field Name: ObservedEffect
+    * * Display Name: Observed Effect
+    * * SQL Data Type: decimal(6, 4)
+    * * Description: Measured metric effect observed during verification or post-promotion evaluation.
+    */
+    get ObservedEffect(): number | null {
+        return this.Get('ObservedEffect');
+    }
+    set ObservedEffect(value: number | null) {
+        this.Set('ObservedEffect', value);
+    }
+
+    /**
+    * * Field Name: EffectMetric
+    * * Display Name: Effect Metric
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of the metric quantified by PredictedEffect and ObservedEffect.
+    */
+    get EffectMetric(): string | null {
+        return this.Get('EffectMetric');
+    }
+    set EffectMetric(value: string | null) {
+        this.Set('EffectMetric', value);
+    }
+
+    /**
+    * * Field Name: EvaluationContext
+    * * Display Name: Evaluation Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of model, vendor, prompt version, agent config, cohort, and sample size under which effects were measured.
+    */
+    get EvaluationContext(): string | null {
+        return this.Get('EvaluationContext');
+    }
+    set EvaluationContext(value: string | null) {
+        this.Set('EvaluationContext', value);
+    }
+
+    /**
+    * * Field Name: SupersedesProposalID
+    * * Display Name: Supersedes Proposal
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)
+    */
+    get SupersedesProposalID(): string | null {
+        return this.Get('SupersedesProposalID');
+    }
+    set SupersedesProposalID(value: string | null) {
+        this.Set('SupersedesProposalID', value);
+    }
+
+    /**
+    * * Field Name: ImpactLevel
+    * * Display Name: Impact Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Critical
+    *   * High
+    *   * Low
+    *   * Medium
+    * * Description: Rule 6 computed impact classification: Low, Medium, High, or Critical.
+    */
+    get ImpactLevel(): 'Critical' | 'High' | 'Low' | 'Medium' | null {
+        return this.Get('ImpactLevel');
+    }
+    set ImpactLevel(value: 'Critical' | 'High' | 'Low' | 'Medium' | null) {
+        this.Set('ImpactLevel', value);
+    }
+
+    /**
+    * * Field Name: ImpactInputs
+    * * Display Name: Impact Inputs
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON capture of exact inputs that produced ImpactLevel.
+    */
+    get ImpactInputs(): string | null {
+        return this.Get('ImpactInputs');
+    }
+    set ImpactInputs(value: string | null) {
+        this.Set('ImpactInputs', value);
+    }
+
+    /**
+    * * Field Name: ConfidenceScore
+    * * Display Name: Confidence Score
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Rule 6 computed evidence confidence score (0.0000 to 1.0000).
+    */
+    get ConfidenceScore(): number | null {
+        return this.Get('ConfidenceScore');
+    }
+    set ConfidenceScore(value: number | null) {
+        this.Set('ConfidenceScore', value);
+    }
+
+    /**
+    * * Field Name: ConfidenceInputs
+    * * Display Name: Confidence Inputs
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON capture of exact evidence inputs that produced ConfidenceScore.
+    */
+    get ConfidenceInputs(): string | null {
+        return this.Get('ConfidenceInputs');
+    }
+    set ConfidenceInputs(value: string | null) {
+        this.Set('ConfidenceInputs', value);
+    }
+
+    /**
+    * * Field Name: PromotionRoute
+    * * Display Name: Promotion Route
+    * * SQL Data Type: nvarchar(30)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved by Policy
+    *   * Human
+    *   * Named Owner
+    *   * Provisional
+    * * Description: Selected Rule 6 promotion route: Approved by Policy, Provisional, Human, or Named Owner.
+    */
+    get PromotionRoute(): 'Approved by Policy' | 'Human' | 'Named Owner' | 'Provisional' | null {
+        return this.Get('PromotionRoute');
+    }
+    set PromotionRoute(value: 'Approved by Policy' | 'Human' | 'Named Owner' | 'Provisional' | null) {
+        this.Set('PromotionRoute', value);
+    }
+
+    /**
+    * * Field Name: ReviewByDate
+    * * Display Name: Review By Date
+    * * SQL Data Type: datetimeoffset
+    * * Description: Deadline by which a Provisional approval must be ratified, re-evaluated, or withdrawn.
+    */
+    get ReviewByDate(): Date | null {
+        return this.Get('ReviewByDate');
+    }
+    set ReviewByDate(value: Date | null) {
+        this.Set('ReviewByDate', value);
+    }
+
+    /**
+    * * Field Name: ReviewBrief
+    * * Display Name: Review Brief
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON or structured markdown review brief presenting evidence, dependents, and pros/cons to reviewers.
+    */
+    get ReviewBrief(): string | null {
+        return this.Get('ReviewBrief');
+    }
+    set ReviewBrief(value: string | null) {
+        this.Set('ReviewBrief', value);
+    }
+
+    /**
+    * * Field Name: ProposingModelID
+    * * Display Name: Proposing Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get ProposingModelID(): string | null {
+        return this.Get('ProposingModelID');
+    }
+    set ProposingModelID(value: string | null) {
+        this.Set('ProposingModelID', value);
+    }
+
+    /**
+    * * Field Name: AIReviewerModelID
+    * * Display Name: AI Reviewer Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get AIReviewerModelID(): string | null {
+        return this.Get('AIReviewerModelID');
+    }
+    set AIReviewerModelID(value: string | null) {
+        this.Set('AIReviewerModelID', value);
+    }
+
+    /**
+    * * Field Name: AIReviewerDecision
+    * * Display Name: AI Reviewer Decision
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approve
+    *   * Needs Revision
+    *   * Reject
+    * * Description: AI reviewer recommendation: Approve, Reject, or Needs Revision.
+    */
+    get AIReviewerDecision(): 'Approve' | 'Needs Revision' | 'Reject' | null {
+        return this.Get('AIReviewerDecision');
+    }
+    set AIReviewerDecision(value: 'Approve' | 'Needs Revision' | 'Reject' | null) {
+        this.Set('AIReviewerDecision', value);
+    }
+
+    /**
+    * * Field Name: AIReviewerRationale
+    * * Display Name: AI Reviewer Rationale
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Written rationale recorded by the independent AI reviewer model.
+    */
+    get AIReviewerRationale(): string | null {
+        return this.Get('AIReviewerRationale');
+    }
+    set AIReviewerRationale(value: string | null) {
+        this.Set('AIReviewerRationale', value);
+    }
+
+    /**
+    * * Field Name: AIReviewerConfidence
+    * * Display Name: AI Reviewer Confidence
+    * * SQL Data Type: decimal(5, 4)
+    * * Description: Confidence score reported by the AI reviewer model (0.0000 to 1.0000).
+    */
+    get AIReviewerConfidence(): number | null {
+        return this.Get('AIReviewerConfidence');
+    }
+    set AIReviewerConfidence(value: number | null) {
+        this.Set('AIReviewerConfidence', value);
+    }
+
+    /**
+    * * Field Name: AIReviewedAt
+    * * Display Name: AI Reviewed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the AI reviewer evaluation completed.
+    */
+    get AIReviewedAt(): Date | null {
+        return this.Get('AIReviewedAt');
+    }
+    set AIReviewedAt(value: Date | null) {
+        this.Set('AIReviewedAt', value);
+    }
+
+    /**
+    * * Field Name: HumanOverruleReason
+    * * Display Name: Human Overrule Reason
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human reviewer explanation captured when overruling the AI reviewer recommendation or policy route.
+    */
+    get HumanOverruleReason(): string | null {
+        return this.Get('HumanOverruleReason');
+    }
+    set HumanOverruleReason(value: string | null) {
+        this.Set('HumanOverruleReason', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Draft
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Applied
+    *   * Approved
+    *   * Awaiting Approval
+    *   * Draft
+    *   * Filtered Out
+    *   * Rejected
+    *   * Rolled Back
+    *   * Verification Failed
+    *   * Verifying
+    * * Description: Proposal lifecycle status (Draft, Filtered Out, Verifying, Verification Failed, Awaiting Approval, Approved, Applied, Rejected, or Rolled Back).
+    */
+    get Status(): 'Applied' | 'Approved' | 'Awaiting Approval' | 'Draft' | 'Filtered Out' | 'Rejected' | 'Rolled Back' | 'Verification Failed' | 'Verifying' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Applied' | 'Approved' | 'Awaiting Approval' | 'Draft' | 'Filtered Out' | 'Rejected' | 'Rolled Back' | 'Verification Failed' | 'Verifying') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ApprovalRequestID
+    * * Display Name: Approval Request
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Requests (vwAIAgentRequests.ID)
+    */
+    get ApprovalRequestID(): string | null {
+        return this.Get('ApprovalRequestID');
+    }
+    set ApprovalRequestID(value: string | null) {
+        this.Set('ApprovalRequestID', value);
+    }
+
+    /**
+    * * Field Name: AppliedNoteID
+    * * Display Name: Applied Note
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    */
+    get AppliedNoteID(): string | null {
+        return this.Get('AppliedNoteID');
+    }
+    set AppliedNoteID(value: string | null) {
+        this.Set('AppliedNoteID', value);
+    }
+
+    /**
+    * * Field Name: AppliedSkillID
+    * * Display Name: Applied Skill
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Skills (vwAISkills.ID)
+    */
+    get AppliedSkillID(): string | null {
+        return this.Get('AppliedSkillID');
+    }
+    set AppliedSkillID(value: string | null) {
+        this.Set('AppliedSkillID', value);
+    }
+
+    /**
+    * * Field Name: AppliedGraphConceptID
+    * * Display Name: Applied Graph Concept
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Concepts (vwGraphConcepts.ID)
+    */
+    get AppliedGraphConceptID(): string | null {
+        return this.Get('AppliedGraphConceptID');
+    }
+    set AppliedGraphConceptID(value: string | null) {
+        this.Set('AppliedGraphConceptID', value);
+    }
+
+    /**
+    * * Field Name: AppliedGraphEdgeID
+    * * Display Name: Applied Graph Edge
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Edges (vwGraphEdges.ID)
+    */
+    get AppliedGraphEdgeID(): string | null {
+        return this.Get('AppliedGraphEdgeID');
+    }
+    set AppliedGraphEdgeID(value: string | null) {
+        this.Set('AppliedGraphEdgeID', value);
+    }
+
+    /**
+    * * Field Name: AppliedEntityID
+    * * Display Name: Applied Entity
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    */
+    get AppliedEntityID(): string | null {
+        return this.Get('AppliedEntityID');
+    }
+    set AppliedEntityID(value: string | null) {
+        this.Set('AppliedEntityID', value);
+    }
+
+    /**
+    * * Field Name: AppliedRecordID
+    * * Display Name: Applied Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Polymorphic applied record ID paired with AppliedEntityID when the materialized target is outside the dedicated FK columns.
+    */
+    get AppliedRecordID(): string | null {
+        return this.Get('AppliedRecordID');
+    }
+    set AppliedRecordID(value: string | null) {
+        this.Set('AppliedRecordID', value);
+    }
+
+    /**
+    * * Field Name: AppliedAt
+    * * Display Name: Applied At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the approved proposal was materialized to target records.
+    */
+    get AppliedAt(): Date | null {
+        return this.Get('AppliedAt');
+    }
+    set AppliedAt(value: Date | null) {
+        this.Set('AppliedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: LearningCycle
+    * * Display Name: Learning Cycle Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get LearningCycle(): string | null {
+        return this.Get('LearningCycle');
+    }
+
+    /**
+    * * Field Name: TargetAgent
+    * * Display Name: Target Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetAgent(): string | null {
+        return this.Get('TargetAgent');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: PrimaryScopeEntity
+    * * Display Name: Primary Scope Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get PrimaryScopeEntity(): string | null {
+        return this.Get('PrimaryScopeEntity');
+    }
+
+    /**
+    * * Field Name: ProposingModel
+    * * Display Name: Proposing Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get ProposingModel(): string | null {
+        return this.Get('ProposingModel');
+    }
+
+    /**
+    * * Field Name: AIReviewerModel
+    * * Display Name: AI Reviewer Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get AIReviewerModel(): string | null {
+        return this.Get('AIReviewerModel');
+    }
+
+    /**
+    * * Field Name: AppliedNote
+    * * Display Name: Applied Note Name
+    * * SQL Data Type: nvarchar(20)
+    */
+    get AppliedNote(): string | null {
+        return this.Get('AppliedNote');
+    }
+
+    /**
+    * * Field Name: AppliedSkill
+    * * Display Name: Applied Skill Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AppliedSkill(): string | null {
+        return this.Get('AppliedSkill');
+    }
+
+    /**
+    * * Field Name: AppliedGraphConcept
+    * * Display Name: Applied Graph Concept Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AppliedGraphConcept(): string | null {
+        return this.Get('AppliedGraphConcept');
+    }
+
+    /**
+    * * Field Name: AppliedEntity
+    * * Display Name: Applied Entity Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get AppliedEntity(): string | null {
+        return this.Get('AppliedEntity');
+    }
+}
+
+
+/**
  * MJ: AI Agent Learning Cycles - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentLearningCycle
@@ -4419,12 +6141,132 @@ export class MJAIAgentLearningCycleEntity extends BaseEntity<MJAIAgentLearningCy
     }
 
     /**
+    * * Field Name: CycleType
+    * * Display Name: Cycle Type
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Mixed
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consolidation
+    *   * Dreaming
+    *   * Harness Refinement
+    *   * Mixed
+    *   * Skill Extraction
+    * * Description: Classification of the learning cycle pass: Consolidation, Dreaming, Skill Extraction, Harness Refinement, or Mixed.
+    */
+    get CycleType(): 'Consolidation' | 'Dreaming' | 'Harness Refinement' | 'Mixed' | 'Skill Extraction' {
+        return this.Get('CycleType');
+    }
+    set CycleType(value: 'Consolidation' | 'Dreaming' | 'Harness Refinement' | 'Mixed' | 'Skill Extraction') {
+        this.Set('CycleType', value);
+    }
+
+    /**
+    * * Field Name: CompanyID
+    * * Display Name: Company
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Companies (vwCompanies.ID)
+    */
+    get CompanyID(): string | null {
+        return this.Get('CompanyID');
+    }
+    set CompanyID(value: string | null) {
+        this.Set('CompanyID', value);
+    }
+
+    /**
+    * * Field Name: ExecutedByAgentRunID
+    * * Display Name: Executed By Agent Run
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    */
+    get ExecutedByAgentRunID(): string | null {
+        return this.Get('ExecutedByAgentRunID');
+    }
+    set ExecutedByAgentRunID(value: string | null) {
+        this.Set('ExecutedByAgentRunID', value);
+    }
+
+    /**
+    * * Field Name: ProposalsGenerated
+    * * Display Name: Proposals Generated
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of candidate proposals generated during this learning cycle.
+    */
+    get ProposalsGenerated(): number {
+        return this.Get('ProposalsGenerated');
+    }
+    set ProposalsGenerated(value: number) {
+        this.Set('ProposalsGenerated', value);
+    }
+
+    /**
+    * * Field Name: ProposalsVerified
+    * * Display Name: Proposals Verified
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of proposals verified by replay or deterministic checks during this learning cycle.
+    */
+    get ProposalsVerified(): number {
+        return this.Get('ProposalsVerified');
+    }
+    set ProposalsVerified(value: number) {
+        this.Set('ProposalsVerified', value);
+    }
+
+    /**
+    * * Field Name: ProposalsApplied
+    * * Display Name: Proposals Applied
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Count of proposals materialized/applied to live records during this learning cycle.
+    */
+    get ProposalsApplied(): number {
+        return this.Get('ProposalsApplied');
+    }
+    set ProposalsApplied(value: number) {
+        this.Set('ProposalsApplied', value);
+    }
+
+    /**
+    * * Field Name: TotalCostUSD
+    * * Display Name: Total Cost (USD)
+    * * SQL Data Type: decimal(10, 4)
+    * * Description: Total LLM and execution cost in USD incurred by this learning cycle.
+    */
+    get TotalCostUSD(): number | null {
+        return this.Get('TotalCostUSD');
+    }
+    set TotalCostUSD(value: number | null) {
+        this.Set('TotalCostUSD', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
     */
     get Agent(): string | null {
         return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Company
+    * * Display Name: Company Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Company(): string | null {
+        return this.Get('Company');
+    }
+
+    /**
+    * * Field Name: ExecutedByAgentRun
+    * * Display Name: Executed By Agent Run Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ExecutedByAgentRun(): string | null {
+        return this.Get('ExecutedByAgentRun');
     }
 }
 
@@ -4730,6 +6572,150 @@ export class MJAIAgentModelEntity extends BaseEntity<MJAIAgentModelEntityType> {
     */
     get Model(): string | null {
         return this.Get('Model');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Note Sources - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentNoteSource
+ * * Base View: vwAIAgentNoteSources
+ * * @description Relational lineage edges linking consolidated or synthesized AI Agent Notes back to their upstream source notes.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Note Sources')
+export class MJAIAgentNoteSourceEntity extends BaseEntity<MJAIAgentNoteSourceEntityType> {
+    /**
+    * Loads the MJ: AI Agent Note Sources record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Note Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentNoteSourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: NoteID
+    * * Display Name: Note
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    */
+    get NoteID(): string {
+        return this.Get('NoteID');
+    }
+    set NoteID(value: string) {
+        this.Set('NoteID', value);
+    }
+
+    /**
+    * * Field Name: SourceNoteID
+    * * Display Name: Source Note
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Notes (vwAIAgentNotes.ID)
+    */
+    get SourceNoteID(): string {
+        return this.Get('SourceNoteID');
+    }
+    set SourceNoteID(value: string) {
+        this.Set('SourceNoteID', value);
+    }
+
+    /**
+    * * Field Name: RelationshipType
+    * * Display Name: Relationship Type
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Consolidated From
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Consolidated From
+    *   * Disambiguated From
+    *   * Dream Synthesized From
+    *   * Other
+    *   * Supersedes
+    * * Description: Provenance relationship kind: Consolidated From, Supersedes, Disambiguated From, Dream Synthesized From, or Other.
+    */
+    get RelationshipType(): 'Consolidated From' | 'Disambiguated From' | 'Dream Synthesized From' | 'Other' | 'Supersedes' {
+        return this.Get('RelationshipType');
+    }
+    set RelationshipType(value: 'Consolidated From' | 'Disambiguated From' | 'Dream Synthesized From' | 'Other' | 'Supersedes') {
+        this.Set('RelationshipType', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Zero-based ordering position among source notes contributing to the derived note.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Note
+    * * Display Name: Note Text
+    * * SQL Data Type: nvarchar(20)
+    */
+    get Note(): string | null {
+        return this.Get('Note');
+    }
+
+    /**
+    * * Field Name: SourceNote
+    * * Display Name: Source Note Text
+    * * SQL Data Type: nvarchar(20)
+    */
+    get SourceNote(): string | null {
+        return this.Get('SourceNote');
     }
 }
 
@@ -5288,8 +7274,9 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     /**
     * * Field Name: DerivedFromNoteIDs
     * * Display Name: Derived From Note IDs
-    * * SQL Data Type: nvarchar(MAX)
-    * * Description: JSON array of source note IDs that were consolidated into this note. Enables provenance chain resolution and rollback.
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: nvarchar(MAX)
+    * * Description: DEPRECATED (slated for removal in v7.0) — superseded by the relational MJ: AI Agent Note Sources table. Existing IDs are backfilled into __mj.AIAgentNoteSource.
     */
     get DerivedFromNoteIDs(): string | null {
         return this.Get('DerivedFromNoteIDs');
@@ -5362,6 +7349,59 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     }
     set EmbeddingVectorBinary(value: string | null) {
         this.Set('EmbeddingVectorBinary', value);
+    }
+
+    /**
+    * * Field Name: IsCanonical
+    * * Display Name: Is Canonical
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when this note has been ratified as authoritative organizational behavioral Canon.
+    */
+    get IsCanonical(): boolean {
+        return this.Get('IsCanonical');
+    }
+    set IsCanonical(value: boolean) {
+        this.Set('IsCanonical', value);
+    }
+
+    /**
+    * * Field Name: CanonApprovedByUserID
+    * * Display Name: Canon Approved By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get CanonApprovedByUserID(): string | null {
+        return this.Get('CanonApprovedByUserID');
+    }
+    set CanonApprovedByUserID(value: string | null) {
+        this.Set('CanonApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CanonApprovedAt
+    * * Display Name: Canon Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this note was approved into organizational Canon.
+    */
+    get CanonApprovedAt(): Date | null {
+        return this.Get('CanonApprovedAt');
+    }
+    set CanonApprovedAt(value: Date | null) {
+        this.Set('CanonApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: OriginProposalID
+    * * Display Name: Origin Proposal
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)
+    */
+    get OriginProposalID(): string | null {
+        return this.Get('OriginProposalID');
+    }
+    set OriginProposalID(value: string | null) {
+        this.Set('OriginProposalID', value);
     }
 
     /**
@@ -5452,6 +7492,15 @@ export class MJAIAgentNoteEntity extends BaseEntity<MJAIAgentNoteEntityType> {
     */
     get ConsolidatedIntoNote(): string | null {
         return this.Get('ConsolidatedIntoNote');
+    }
+
+    /**
+    * * Field Name: CanonApprovedByUser
+    * * Display Name: Canon Approved By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CanonApprovedByUser(): string | null {
+        return this.Get('CanonApprovedByUser');
     }
 }
 
@@ -16742,6 +18791,20 @@ if this limit is exceeded.
     }
     set ConfigurationObject(value: MJAIAgentEntity_IAgentConfiguration | null) {
         this.SetJSONFieldObject<MJAIAgentEntity_IAgentConfiguration>('Configuration', value);
+    }
+
+    /**
+    * * Field Name: AllowInFlightMemorySearch
+    * * Display Name: Allow In-Flight Memory Search
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, permits the agent to invoke in-flight memory search tools during a run; off by default.
+    */
+    get AllowInFlightMemorySearch(): boolean {
+        return this.Get('AllowInFlightMemorySearch');
+    }
+    set AllowInFlightMemorySearch(value: boolean) {
+        this.Set('AllowInFlightMemorySearch', value);
     }
 
     /**
@@ -29881,12 +31944,74 @@ export class MJAISkillEntity extends BaseEntity<MJAISkillEntityType> {
     }
 
     /**
+    * * Field Name: IsCanonical
+    * * Display Name: Is Canonical
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True when this skill has been ratified as authoritative organizational procedural Canon.
+    */
+    get IsCanonical(): boolean {
+        return this.Get('IsCanonical');
+    }
+    set IsCanonical(value: boolean) {
+        this.Set('IsCanonical', value);
+    }
+
+    /**
+    * * Field Name: CanonApprovedByUserID
+    * * Display Name: Canon Approved By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get CanonApprovedByUserID(): string | null {
+        return this.Get('CanonApprovedByUserID');
+    }
+    set CanonApprovedByUserID(value: string | null) {
+        this.Set('CanonApprovedByUserID', value);
+    }
+
+    /**
+    * * Field Name: CanonApprovedAt
+    * * Display Name: Canon Approved At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this skill was approved into organizational Canon.
+    */
+    get CanonApprovedAt(): Date | null {
+        return this.Get('CanonApprovedAt');
+    }
+    set CanonApprovedAt(value: Date | null) {
+        this.Set('CanonApprovedAt', value);
+    }
+
+    /**
+    * * Field Name: OriginProposalID
+    * * Display Name: Origin Proposal ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Learning Cycle Proposals (vwAIAgentLearningCycleProposals.ID)
+    */
+    get OriginProposalID(): string | null {
+        return this.Get('OriginProposalID');
+    }
+    set OriginProposalID(value: string | null) {
+        this.Set('OriginProposalID', value);
+    }
+
+    /**
     * * Field Name: CreatedByUser
     * * Display Name: Created By User
     * * SQL Data Type: nvarchar(100)
     */
     get CreatedByUser(): string | null {
         return this.Get('CreatedByUser');
+    }
+
+    /**
+    * * Field Name: CanonApprovedByUser
+    * * Display Name: Canon Approved By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get CanonApprovedByUser(): string | null {
+        return this.Get('CanonApprovedByUser');
     }
 }
 
@@ -82170,12 +84295,13 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     *   * Deprecated
     *   * Draft
     *   * Proposed
-    * * Description: Governance lifecycle status of the concept: Draft, Proposed, Approved, or Deprecated.
+    *   * Provisional
+    * * Description: Governance lifecycle status of the concept: Draft, Proposed, Provisional, Approved, or Deprecated.
     */
-    get Status(): 'Approved' | 'Deprecated' | 'Draft' | 'Proposed' {
+    get Status(): 'Approved' | 'Deprecated' | 'Draft' | 'Proposed' | 'Provisional' {
         return this.Get('Status');
     }
-    set Status(value: 'Approved' | 'Deprecated' | 'Draft' | 'Proposed') {
+    set Status(value: 'Approved' | 'Deprecated' | 'Draft' | 'Proposed' | 'Provisional') {
         this.Set('Status', value);
     }
 
@@ -82215,6 +84341,32 @@ export class MJGraphConceptEntity extends BaseEntity<MJGraphConceptEntityType> {
     }
     set Origin(value: 'Declared' | 'Inferred') {
         this.Set('Origin', value);
+    }
+
+    /**
+    * * Field Name: EffectiveFrom
+    * * Display Name: Effective From
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional inclusive start timestamp from which this concept takes effect for date-scoped Canon queries.
+    */
+    get EffectiveFrom(): Date | null {
+        return this.Get('EffectiveFrom');
+    }
+    set EffectiveFrom(value: Date | null) {
+        this.Set('EffectiveFrom', value);
+    }
+
+    /**
+    * * Field Name: EffectiveTo
+    * * Display Name: Effective To
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional inclusive end timestamp after which this concept is superseded/expired for date-scoped Canon queries.
+    */
+    get EffectiveTo(): Date | null {
+        return this.Get('EffectiveTo');
+    }
+    set EffectiveTo(value: Date | null) {
+        this.Set('EffectiveTo', value);
     }
 
     /**
@@ -82904,13 +85056,14 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     * * Possible Values 
     *   * Approved
     *   * Proposed
+    *   * Provisional
     *   * Rejected
-    * * Description: Governance lifecycle status of the edge: Proposed, Approved, or Rejected. Default graph traversal includes Approved edges only.
+    * * Description: Governance lifecycle status of the edge: Proposed, Provisional, Approved, or Rejected. Default graph traversal includes Approved edges only.
     */
-    get Status(): 'Approved' | 'Proposed' | 'Rejected' {
+    get Status(): 'Approved' | 'Proposed' | 'Provisional' | 'Rejected' {
         return this.Get('Status');
     }
-    set Status(value: 'Approved' | 'Proposed' | 'Rejected') {
+    set Status(value: 'Approved' | 'Proposed' | 'Provisional' | 'Rejected') {
         this.Set('Status', value);
     }
 
@@ -82948,6 +85101,20 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     }
 
     /**
+    * * Field Name: AuthorityTierID
+    * * Display Name: Authority Tier
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graph Authority Tiers (vwGraphAuthorityTiers.ID)
+    * * Description: Optional foreign key to GraphAuthorityTier overriding the source authority tier for this specific edge.
+    */
+    get AuthorityTierID(): string | null {
+        return this.Get('AuthorityTierID');
+    }
+    set AuthorityTierID(value: string | null) {
+        this.Set('AuthorityTierID', value);
+    }
+
+    /**
     * * Field Name: Graph
     * * Display Name: Graph
     * * SQL Data Type: nvarchar(255)
@@ -82981,6 +85148,165 @@ export class MJGraphEdgeEntity extends BaseEntity<MJGraphEdgeEntityType> {
     */
     get TargetEntity(): string | null {
         return this.Get('TargetEntity');
+    }
+
+    /**
+    * * Field Name: AuthorityTier
+    * * Display Name: Authority Tier Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get AuthorityTier(): string | null {
+        return this.Get('AuthorityTier');
+    }
+}
+
+
+/**
+ * MJ: Graph Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: GraphPermission
+ * * Base View: vwGraphPermissions
+ * * @description Per-user or per-role permission grant on a semantic Graph. Exactly one of UserID or RoleID is set on each row; PermissionLevel is None, Read, Use, or Approve.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Graph Permissions')
+export class MJGraphPermissionEntity extends BaseEntity<MJGraphPermissionEntityType> {
+    /**
+    * Loads the MJ: Graph Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Graph Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJGraphPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: PermissionLevel
+    * * Display Name: Permission Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approve
+    *   * None
+    *   * Read
+    *   * Use
+    * * Description: Grant level on the graph: None, Read, Use, or Approve.
+    */
+    get PermissionLevel(): 'Approve' | 'None' | 'Read' | 'Use' {
+        return this.Get('PermissionLevel');
+    }
+    set PermissionLevel(value: 'Approve' | 'None' | 'Read' | 'Use') {
+        this.Set('PermissionLevel', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string | null {
+        return this.Get('Graph');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
     }
 }
 
@@ -83333,6 +85659,38 @@ export class MJGraphEntity extends BaseEntity<MJGraphEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: StaleMemberPolicy
+    * * Display Name: Stale Member Policy
+    * * SQL Data Type: nvarchar(30)
+    * * Default Value: Hide
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Hide
+    *   * Show With Warning
+    * * Description: Default handling and ceiling for stale fingerprinted Canon members on this graph: Hide (default) or Show With Warning.
+    */
+    get StaleMemberPolicy(): 'Hide' | 'Show With Warning' {
+        return this.Get('StaleMemberPolicy');
+    }
+    set StaleMemberPolicy(value: 'Hide' | 'Show With Warning') {
+        this.Set('StaleMemberPolicy', value);
+    }
+
+    /**
+    * * Field Name: PublishNonHumanApprovals
+    * * Display Name: Publish Non-Human Approvals
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, permits concepts approved by policy or AI reviewer to publish to readers who cannot see underlying sources; off by default.
+    */
+    get PublishNonHumanApprovals(): boolean {
+        return this.Get('PublishNonHumanApprovals');
+    }
+    set PublishNonHumanApprovals(value: boolean) {
+        this.Set('PublishNonHumanApprovals', value);
     }
 
     /**
@@ -116404,6 +118762,142 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     */
     get VectorIndex(): string | null {
         return this.Get('VectorIndex');
+    }
+}
+
+
+/**
+ * MJ: Search Scope Graphs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: SearchScopeGraph
+ * * Base View: vwSearchScopeGraphs
+ * * @description Binds a SearchScope to a semantic Graph as a first-class retrieval lane with Priority ordering and an optional MaxResults cap.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Search Scope Graphs')
+export class MJSearchScopeGraphEntity extends BaseEntity<MJSearchScopeGraphEntityType> {
+    /**
+    * Loads the MJ: Search Scope Graphs record from the database
+    * @param ID: string - primary key value to load the MJ: Search Scope Graphs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJSearchScopeGraphEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: SearchScopeID
+    * * Display Name: Search Scope
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Search Scopes (vwSearchScopes.ID)
+    */
+    get SearchScopeID(): string {
+        return this.Get('SearchScopeID');
+    }
+    set SearchScopeID(value: string) {
+        this.Set('SearchScopeID', value);
+    }
+
+    /**
+    * * Field Name: GraphID
+    * * Display Name: Graph
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Graphs (vwGraphs.ID)
+    */
+    get GraphID(): string {
+        return this.Get('GraphID');
+    }
+    set GraphID(value: string) {
+        this.Set('GraphID', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 100
+    * * Description: Relative retrieval priority across graphs bound to the same SearchScope; lower values are queried first.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: MaxResults
+    * * Display Name: Max Results
+    * * SQL Data Type: int
+    * * Description: Optional per-graph result cap within the SearchScope retrieval lane.
+    */
+    get MaxResults(): number | null {
+        return this.Get('MaxResults');
+    }
+    set MaxResults(value: number | null) {
+        this.Set('MaxResults', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SearchScope
+    * * Display Name: Search Scope Name
+    * * SQL Data Type: nvarchar(200)
+    */
+    get SearchScope(): string | null {
+        return this.Get('SearchScope');
+    }
+
+    /**
+    * * Field Name: Graph
+    * * Display Name: Graph Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Graph(): string | null {
+        return this.Get('Graph');
     }
 }
 

@@ -1009,6 +1009,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Agent Learning Cycle Proposals (Proposing Model) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposalsProposingModelID"
+        SectionName="AI Agent Learning Cycle Proposals (Proposing Model)"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposalsProposingModelID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','ProposingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','ProposingModelID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposalsProposingModelID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposalsProposingModelID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Learning Cycle Proposals (AI Reviewer Model) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentLearningCycleProposalsAIReviewerModelID"
+        SectionName="AI Agent Learning Cycle Proposals (AI Reviewer Model)"
+        Icon="fa fa-brain"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentLearningCycleProposalsAIReviewerModelID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Learning Cycle Proposals','AIReviewerModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Learning Cycle Proposals','AIReviewerModelID')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentLearningCycleProposalsAIReviewerModelID')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentLearningCycleProposalsAIReviewerModelID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

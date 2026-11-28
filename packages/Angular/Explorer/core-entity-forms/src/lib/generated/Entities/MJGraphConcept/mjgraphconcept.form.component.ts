@@ -16,8 +16,14 @@ export class MJGraphConceptFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false }
+            { sectionKey: 'conceptDetails', sectionName: 'Concept Details', isExpanded: true },
+            { sectionKey: 'contentAndSpecification', sectionName: 'Content and Specification', isExpanded: true },
+            { sectionKey: 'governanceAndLifecycle', sectionName: 'Governance and Lifecycle', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
+            { sectionKey: 'mJGraphConcepts', sectionName: 'Graph Concepts', isExpanded: false },
+            { sectionKey: 'mJAIAgentContextItems', sectionName: 'AI Agent Context Items', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposalSources', sectionName: 'AI Agent Learning Cycle Proposal Sources', isExpanded: false },
+            { sectionKey: 'mJAIAgentLearningCycleProposals', sectionName: 'AI Agent Learning Cycle Proposals', isExpanded: false }
         ]);
     }
 }

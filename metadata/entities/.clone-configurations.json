@@ -673,6 +673,94 @@
   },
   {
     "_comments": [
+      "Negative catalog: MJ: AI Agent Context Items is runtime run-telemetry — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Context Items",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Runtime agent run context telemetry"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Context Items"
+    },
+    "sync": {
+      "lastModified": "2026-11-28T18:00:11.112Z",
+      "checksum": "e31451006b4c204136182c6bf5fb37aca5526e995c615e7ad8ec4aa027f18115"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Learning Cycle Proposals is learned optimization telemetry — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Learning Cycle Proposals",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Learned learning-cycle optimization proposal"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycle Proposals"
+    },
+    "sync": {
+      "lastModified": "2026-11-28T18:00:11.153Z",
+      "checksum": "4d1b2d2a8d559264838c2b412f3a60455d1d2484ff63f6da38515109dd266096"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Learning Cycle Proposal Sources is proposal provenance telemetry — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Learning Cycle Proposal Sources",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Learning-cycle proposal evidence link"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Learning Cycle Proposal Sources"
+    },
+    "sync": {
+      "lastModified": "2026-11-28T18:00:11.188Z",
+      "checksum": "7dec24963e1808a4834191a56036b311519ff29abb740920ab2d52b8b70d0d42"
+    }
+  },
+  {
+    "_comments": [
+      "Negative catalog: MJ: AI Agent Note Sources is learned note lineage — not cloneable."
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Note Sources",
+      "Configuration": {
+        "Clone": {
+          "Enabled": false,
+          "NotCloneable": true,
+          "NotCloneableReason": "Learned note lineage provenance"
+        }
+      }
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Note Sources"
+    },
+    "sync": {
+      "lastModified": "2026-11-28T18:00:11.211Z",
+      "checksum": "1d07d32387afb4541c9affde74c882b3c4cad9436374e9ecefea54f412aec4de"
+    }
+  },
+  {
+    "_comments": [
       "Negative catalog: MJ: AI Agent Runs is runtime execution history — not cloneable."
     ],
     "fields": {
