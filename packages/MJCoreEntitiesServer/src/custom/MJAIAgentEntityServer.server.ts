@@ -1687,50 +1687,58 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         AllAgentTypes: MJAIAgentTypeEntity[];
         ErrorMessage?: string;
     }> {
-        // R5 Follow-up #5: single batched RunViews with ResultType: 'simple' + minimal explicit Fields
-        // (replaces 7 full-table entity_object queries on derived creates) and fail-closed on read errors.
+        // R5 Follow-up #5 & C-R4-2: single batched RunViews with ResultType: 'simple' + minimal
+        // explicit Fields (replaces 7 full-table entity_object queries on derived creates) and
+        // fail-closed on read errors OR FLS-omitted requested guard columns.
+        const AGENT_GUARD_FIELDS = [
+            'ID', 'Name', 'BaseAgentID', 'RootBaseAgentID', 'OwnerUserID', 'Status',
+            'CategoryID', 'TypeID', 'InstantiationMode', 'DriverClass', 'Isolation',
+            'MaxCostPerRun', 'MaxTokensPerRun', 'MaxTimePerRun', 'MaxIterationsPerRun',
+            'Configuration', 'TypeConfiguration', 'ModelSelectionMode', 'AcceptsSkills',
+            'SkillActivationMode', 'SearchScopeAccess', 'ArtifactCreationMode',
+            'DefaultArtifactTypeID', 'InjectNotes', 'MaxNotesToInject', 'NoteInjectionStrategy',
+            'InjectExamples', 'MaxExamplesToInject', 'ExampleInjectionStrategy',
+            'AllowMemoryWrite', 'DeclareActionsAsNativeTools', 'SupportsPlanMode',
+            'RequirePlanMode', 'AllowEphemeralClientTools', 'AcceptUnregisteredFiles',
+            'MaxExecutionsPerRun', 'MaxSubAgentConsultRounds', 'EnableContextCompression',
+            'ContextCompressionMessageThreshold', 'ContextCompressionPromptID',
+            'ContextCompressionMessageRetentionCount', 'RerankerConfiguration',
+            'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
+            'ConversationSummaryPromptID',
+        ] as const;
+        const PERMISSION_GUARD_FIELDS = [
+            'ID', 'AgentID', 'UserID', 'RoleID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete',
+        ] as const;
+        const CATEGORY_GUARD_FIELDS = ['ID', 'ParentID', 'DefaultConfiguration'] as const;
+        const TYPE_GUARD_FIELDS = [
+            'ID', 'DefaultAgentConfiguration', 'ContextCompressionMessageThreshold',
+            'ContextCompressionPromptID', 'ContextCompressionMessageRetentionCount',
+            'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
+            'ConversationSummaryPromptID',
+        ] as const;
+
         const rv = new RunView(this.RunViewProviderToUse);
         const results = await rv.RunViews(
             [
                 {
                     EntityName: 'MJ: AI Agents',
                     ResultType: 'simple',
-                    Fields: [
-                        'ID', 'Name', 'BaseAgentID', 'RootBaseAgentID', 'OwnerUserID', 'Status',
-                        'CategoryID', 'TypeID', 'InstantiationMode', 'DriverClass', 'Isolation',
-                        'MaxCostPerRun', 'MaxTokensPerRun', 'MaxTimePerRun', 'MaxIterationsPerRun',
-                        'Configuration', 'TypeConfiguration', 'ModelSelectionMode', 'AcceptsSkills',
-                        'SkillActivationMode', 'SearchScopeAccess', 'ArtifactCreationMode',
-                        'DefaultArtifactTypeID', 'InjectNotes', 'MaxNotesToInject', 'NoteInjectionStrategy',
-                        'InjectExamples', 'MaxExamplesToInject', 'ExampleInjectionStrategy',
-                        'AllowMemoryWrite', 'DeclareActionsAsNativeTools', 'SupportsPlanMode',
-                        'RequirePlanMode', 'AllowEphemeralClientTools', 'AcceptUnregisteredFiles',
-                        'MaxExecutionsPerRun', 'MaxSubAgentConsultRounds', 'EnableContextCompression',
-                        'ContextCompressionMessageThreshold', 'ContextCompressionPromptID',
-                        'ContextCompressionMessageRetentionCount', 'RerankerConfiguration',
-                        'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
-                        'ConversationSummaryPromptID',
-                    ],
+                    Fields: [...AGENT_GUARD_FIELDS],
                 },
                 {
                     EntityName: 'MJ: AI Agent Permissions',
                     ResultType: 'simple',
-                    Fields: ['ID', 'AgentID', 'UserID', 'RoleID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete'],
+                    Fields: [...PERMISSION_GUARD_FIELDS],
                 },
                 {
                     EntityName: 'MJ: AI Agent Categories',
                     ResultType: 'simple',
-                    Fields: ['ID', 'ParentID', 'DefaultConfiguration'],
+                    Fields: [...CATEGORY_GUARD_FIELDS],
                 },
                 {
                     EntityName: 'MJ: AI Agent Types',
                     ResultType: 'simple',
-                    Fields: [
-                        'ID', 'DefaultAgentConfiguration', 'ContextCompressionMessageThreshold',
-                        'ContextCompressionPromptID', 'ContextCompressionMessageRetentionCount',
-                        'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
-                        'ConversationSummaryPromptID',
-                    ],
+                    Fields: [...TYPE_GUARD_FIELDS],
                 },
             ],
             this.ContextCurrentUser
@@ -1745,29 +1753,14 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 ErrorMessage: failed.ErrorMessage || 'Guard metadata RunViews query failed',
             };
         }
-        // R6 Follow-up #5: Fail closed if field-level security silently omitted a required guard
-        // column from a `'simple'` RunView projection (e.g. denied `DefaultConfiguration`).
+        // R6 Follow-up #5 & C-R4-2: Fail closed if field-level security silently omitted ANY
+        // requested guard column from a `'simple'` RunView projection (e.g. denied
+        // `DefaultConfiguration`, `MaxCostPerRun`, `TypeConfiguration`, `RequirePlanMode`, etc.).
         const requiredGuardFieldsByResult: ReadonlyArray<{ Entity: string; Rows: unknown[]; RequiredFields: readonly string[] }> = [
-            {
-                Entity: 'MJ: AI Agents',
-                Rows: results[0].Results,
-                RequiredFields: ['ID', 'BaseAgentID', 'Configuration', 'SearchScopeAccess', 'Isolation'],
-            },
-            {
-                Entity: 'MJ: AI Agent Permissions',
-                Rows: results[1].Results,
-                RequiredFields: ['AgentID', 'CanRun'],
-            },
-            {
-                Entity: 'MJ: AI Agent Categories',
-                Rows: results[2].Results,
-                RequiredFields: ['ID', 'ParentID', 'DefaultConfiguration'],
-            },
-            {
-                Entity: 'MJ: AI Agent Types',
-                Rows: results[3].Results,
-                RequiredFields: ['ID', 'DefaultAgentConfiguration'],
-            },
+            { Entity: 'MJ: AI Agents', Rows: results[0].Results, RequiredFields: AGENT_GUARD_FIELDS },
+            { Entity: 'MJ: AI Agent Permissions', Rows: results[1].Results, RequiredFields: PERMISSION_GUARD_FIELDS },
+            { Entity: 'MJ: AI Agent Categories', Rows: results[2].Results, RequiredFields: CATEGORY_GUARD_FIELDS },
+            { Entity: 'MJ: AI Agent Types', Rows: results[3].Results, RequiredFields: TYPE_GUARD_FIELDS },
         ];
         for (const check of requiredGuardFieldsByResult) {
             if (check.Rows.length > 0) {

@@ -4,6 +4,8 @@
  * test style (entity instantiation needs live metadata, so the DB-coupled wrapper is thin and
  * the matrix lives here).
  */
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { BaseEntity, UserInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { MJAIAgentEntity, MJAIAgentPermissionEntity } from '@memberjunction/core-entities';
@@ -1895,26 +1897,171 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
         });
         expect(subTemplateErrors).toEqual([]);
 
-        // 3. Follow-up #5: loadGuardMetadataBatch fails closed if FLS drops DefaultConfiguration on Categories
-        const flsServer = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
-        Object.defineProperty(flsServer, 'ContextCurrentUser', { get: () => uiUser, configurable: true });
-        Object.defineProperty(flsServer, 'RunViewProviderToUse', {
-            get: () => ({
-                RunViews: async () => [
-                    { Success: true, Results: [{ ID: COS_ID, BaseAgentID: null, Configuration: null, SearchScopeAccess: 'All', Isolation: 'InProcess' }] },
-                    { Success: true, Results: [{ AgentID: COS_ID, CanRun: true }] },
-                    // DefaultConfiguration omitted by FLS!
-                    { Success: true, Results: [{ ID: 'cat-1', ParentID: null }] },
-                    { Success: true, Results: [{ ID: 'type-1', DefaultAgentConfiguration: null }] },
-                ],
-            }),
-            configurable: true,
-        });
-        const batchRes = await (
-            flsServer as unknown as {
-                loadGuardMetadataBatch(): Promise<{ ErrorMessage?: string }>;
+        // 3. Follow-up #5 & C-R4-2: loadGuardMetadataBatch fails closed if FLS drops ANY requested guard field
+        const makeRowFromFields = (fields: readonly string[], omit?: string): Record<string, unknown> => {
+            const row: Record<string, unknown> = {};
+            for (const f of fields) {
+                if (f === omit) continue;
+                row[f] = null;
             }
-        ).loadGuardMetadataBatch();
-        expect(batchRes.ErrorMessage).toMatch(/DefaultConfiguration/);
+            return row;
+        };
+        const runBatchWithOmit = async (omitEntity: string, omitField: string): Promise<{ ErrorMessage?: string }> => {
+            const flsServer = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+            Object.defineProperty(flsServer, 'ContextCurrentUser', { get: () => uiUser, configurable: true });
+            Object.defineProperty(flsServer, 'RunViewProviderToUse', {
+                get: () => ({
+                    RunViews: async (paramsList: Array<{ EntityName: string; Fields?: string[] }>) =>
+                        paramsList.map((p) => ({
+                            Success: true,
+                            Results: [makeRowFromFields(p.Fields ?? [], p.EntityName === omitEntity ? omitField : undefined)],
+                        })),
+                }),
+                configurable: true,
+            });
+            return (
+                flsServer as unknown as {
+                    loadGuardMetadataBatch(): Promise<{ ErrorMessage?: string }>;
+                }
+            ).loadGuardMetadataBatch();
+        };
+        expect((await runBatchWithOmit('MJ: AI Agent Categories', 'DefaultConfiguration')).ErrorMessage).toMatch(/DefaultConfiguration/);
+        expect((await runBatchWithOmit('MJ: AI Agents', 'MaxCostPerRun')).ErrorMessage).toMatch(/MaxCostPerRun/);
+        expect((await runBatchWithOmit('MJ: AI Agents', 'RequirePlanMode')).ErrorMessage).toMatch(/RequirePlanMode/);
+        expect((await runBatchWithOmit('', '')).ErrorMessage).toBeUndefined();
+    });
+
+    it('R6-4: Agent Administrator-only user can save a derived agent and create/update/delete categories and types, backed by shipped entity-permission metadata', async () => {
+        const agentAdminOnlyUser = makeUser(ALICE, 'User', ['Agent Administrator']);
+        const baseAgent = baseAgentRow({
+            ID: COS_ID,
+            Name: 'Root Agent',
+            InstantiationMode: 'Optional',
+            TypeID: '33333333-3333-4333-8333-333333333333',
+            CategoryID: '44444444-4444-4444-8444-444444444444',
+        });
+
+        const baseValidateSpy = vi.spyOn(BaseEntity.prototype, 'ValidateAsync').mockImplementation(async () => {
+            const vr = new ValidationResult();
+            vr.Success = true;
+            return vr;
+        });
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: BaseEntity) {
+            const vr = await this.ValidateAsync();
+            return vr.Success;
+        });
+        const baseDeleteSpy = vi.spyOn(BaseEntity.prototype, 'Delete').mockResolvedValue(true);
+
+        try {
+            // 1. Derived agent save as Agent Administrator-only user passes full ValidateAsync + guard batch
+            const derived = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+            derived['GetFieldByName'] = () => undefined;
+            Object.defineProperty(derived, 'Fields', { get: () => [], configurable: true });
+            Object.defineProperty(derived, 'IsSaved', { get: () => false, configurable: true });
+            Object.defineProperty(derived, 'ContextCurrentUser', { get: () => agentAdminOnlyUser, configurable: true });
+            Object.defineProperty(derived, 'ID', { value: 'aa000000-0000-4000-8000-000000000001', writable: true, configurable: true });
+            Object.defineProperty(derived, 'BaseAgentID', { value: baseAgent.ID, writable: true, configurable: true });
+            Object.defineProperty(derived, 'OwnerUserID', { value: ALICE, writable: true, configurable: true });
+            Object.defineProperty(derived, 'TypeID', { value: baseAgent.TypeID, writable: true, configurable: true });
+            Object.defineProperty(derived, 'CategoryID', { value: baseAgent.CategoryID, writable: true, configurable: true });
+            Object.defineProperty(derived, 'InstantiationMode', { value: 'None', writable: true, configurable: true });
+            Object.defineProperty(derived, 'IsPrimaryInstance', { value: false, writable: true, configurable: true });
+            Object.defineProperty(derived, 'Configuration', { value: null, writable: true, configurable: true });
+            Object.defineProperty(derived, 'TypeConfiguration', { value: null, writable: true, configurable: true });
+            vi.spyOn(
+                derived as unknown as {
+                    loadGuardMetadataBatch(): Promise<{
+                        AllAgents: MJAIAgentEntity[];
+                        AllPermissions: MJAIAgentPermissionEntity[];
+                        AllCategories: unknown[];
+                        AllAgentTypes: unknown[];
+                    }>;
+                },
+                'loadGuardMetadataBatch'
+            ).mockResolvedValue({ AllAgents: [baseAgent], AllPermissions: [], AllCategories: [], AllAgentTypes: [] });
+            vi.spyOn(
+                derived as unknown as { clearOtherPrimaryInstances(): Promise<void> },
+                'clearOtherPrimaryInstances'
+            ).mockResolvedValue(undefined);
+            expect(await derived.Save()).toBe(true);
+
+            // 2. Category create, update, and delete as Agent Administrator-only user all succeed
+            for (const isSaved of [false, true]) {
+                const cat = Object.create(MJAIAgentCategoryEntityServer.prototype) as MJAIAgentCategoryEntityServer & Record<string, unknown>;
+                cat['GetFieldByName'] = () => ({ Name: 'DefaultConfiguration', Dirty: true, NeverSet: false });
+                Object.defineProperty(cat, 'IsSaved', { get: () => isSaved, configurable: true });
+                Object.defineProperty(cat, 'ContextCurrentUser', { get: () => agentAdminOnlyUser, configurable: true });
+                Object.defineProperty(cat, 'ID', { value: 'aa000000-0000-4000-8000-000000000002', writable: true, configurable: true });
+                Object.defineProperty(cat, 'Name', { value: 'Governed Category', writable: true, configurable: true });
+                Object.defineProperty(cat, 'DefaultConfiguration', {
+                    value: JSON.stringify({ execution: { requirePlanMode: true } }),
+                    writable: true,
+                    configurable: true,
+                });
+                expect(await cat.Save()).toBe(true);
+                expect(await cat.Delete()).toBe(true);
+            }
+
+            // 3. AgentType create, update, and delete as Agent Administrator-only user all succeed
+            for (const isSaved of [false, true]) {
+                const agentType = Object.create(MJAIAgentTypeEntityServer.prototype) as MJAIAgentTypeEntityServer & Record<string, unknown>;
+                agentType['GetFieldByName'] = () => ({ Name: 'DefaultAgentConfiguration', Dirty: true, NeverSet: false });
+                Object.defineProperty(agentType, 'IsSaved', { get: () => isSaved, configurable: true });
+                Object.defineProperty(agentType, 'ContextCurrentUser', { get: () => agentAdminOnlyUser, configurable: true });
+                Object.defineProperty(agentType, 'ID', { value: 'aa000000-0000-4000-8000-000000000003', writable: true, configurable: true });
+                Object.defineProperty(agentType, 'Name', { value: 'Custom Type', writable: true, configurable: true });
+                Object.defineProperty(agentType, 'DefaultAgentConfiguration', {
+                    value: JSON.stringify({ contextWindow: { compactionTriggerPercent: 80, compactionTargetPercent: 35 } }),
+                    writable: true,
+                    configurable: true,
+                });
+                Object.defineProperty(agentType, 'ContextCompressionMessageThreshold', { value: null, writable: true, configurable: true });
+                Object.defineProperty(agentType, 'ContextCompressionPromptID', { value: null, writable: true, configurable: true });
+                Object.defineProperty(agentType, 'ContextCompressionMessageRetentionCount', { value: null, writable: true, configurable: true });
+                Object.defineProperty(agentType, 'ContextWindowMaxTokens', { value: null, writable: true, configurable: true });
+                Object.defineProperty(agentType, 'ConversationSummaryPromptID', { value: null, writable: true, configurable: true });
+                Object.defineProperty(agentType, 'CompactionTriggerPercent', { value: 80, writable: true, configurable: true });
+                Object.defineProperty(agentType, 'CompactionTargetPercent', { value: 35, writable: true, configurable: true });
+                expect(await agentType.Save()).toBe(true);
+                expect(await agentType.Delete()).toBe(true);
+            }
+
+            // 4. Verify shipped metadata/entity-permissions/.agent-instance-permissions.json grants
+            //    Agent Administrator read on Permissions and full CRUD on Categories & Types (R6-4).
+            const permsPath = path.resolve(
+                __dirname,
+                '../../../../metadata/entity-permissions/.agent-instance-permissions.json'
+            );
+            const perms = JSON.parse(fs.readFileSync(permsPath, 'utf8')) as Array<{
+                fields: {
+                    EntityID: string;
+                    RoleID: string;
+                    CanRead: boolean;
+                    CanCreate: boolean;
+                    CanUpdate: boolean;
+                    CanDelete: boolean;
+                };
+                primaryKey?: Record<string, unknown>;
+            }>;
+            const findAdminGrant = (entityName: string) =>
+                perms.find(
+                    (p) =>
+                        p.fields.RoleID === '@lookup:MJ: Roles.Name=Agent Administrator' &&
+                        p.fields.EntityID === `@lookup:MJ: Entities.Name=${entityName}`
+                );
+            const permGrant = findAdminGrant('MJ: AI Agent Permissions');
+            const catGrant = findAdminGrant('MJ: AI Agent Categories');
+            const typeGrant = findAdminGrant('MJ: AI Agent Types');
+            expect(permGrant?.fields.CanRead).toBe(true);
+            expect(permGrant?.primaryKey).toBeDefined();
+            expect(catGrant?.fields).toMatchObject({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true });
+            expect(catGrant?.primaryKey).toBeDefined();
+            expect(typeGrant?.fields).toMatchObject({ CanRead: true, CanCreate: true, CanUpdate: true, CanDelete: true });
+            expect(typeGrant?.primaryKey).toBeDefined();
+        } finally {
+            baseDeleteSpy.mockRestore();
+            baseSaveSpy.mockRestore();
+            baseValidateSpy.mockRestore();
+        }
     });
 });

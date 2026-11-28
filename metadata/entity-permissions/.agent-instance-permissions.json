@@ -44,9 +44,9 @@
       "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
       "Type": "Allow",
       "CanRead": true,
-      "CanCreate": true,
-      "CanUpdate": true,
-      "CanDelete": true
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entity Permissions.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Permissions&RoleID=@lookup:MJ: Roles.Name=Agent Administrator&Type=Allow?create"

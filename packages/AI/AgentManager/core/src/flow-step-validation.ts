@@ -259,12 +259,15 @@ export function ValidateFlowGraph(
     if (activeCustomSteps.length > 0) {
         const dispatcherOnly = steps.filter((s) => {
             if (s.StepType === 'Human' || s.StepType === 'Wait' || s.StepType === 'External') return true;
-            if (s.StepType === 'ForEach' && typeof s.Configuration === 'string' && s.Configuration.trim().length > 0) {
-                try {
-                    const parsed = JSON.parse(s.Configuration) as Record<string, unknown>;
-                    return Boolean(parsed && typeof parsed === 'object' && parsed['enqueue'] && typeof parsed['enqueue'] === 'object');
-                } catch {
-                    return false;
+            if (s.StepType === 'ForEach') {
+                const cfgText = StepConfigurationText(s);
+                if (cfgText && cfgText.trim().length > 0) {
+                    try {
+                        const parsed = JSON.parse(cfgText) as Record<string, unknown>;
+                        return Boolean(parsed && typeof parsed === 'object' && parsed['enqueue'] && typeof parsed['enqueue'] === 'object');
+                    } catch {
+                        return false;
+                    }
                 }
             }
             return false;
@@ -272,7 +275,7 @@ export function ValidateFlowGraph(
         if (dispatcherOnly.length > 0) {
             return dispatcherOnly.map(
                 (s) =>
-                    `Step "${s.Name}" requires the task-graph dispatcher and cannot be combined in the same ` +
+                    `❌ [UnsupportedStepType] Step "${s.Name}" requires the task-graph dispatcher and cannot be combined in the same ` +
                     `workflow as in-process Custom step(s) (${activeCustomSteps.map((c) => `"${c.Name}"`).join(', ')}).`
             );
         }
