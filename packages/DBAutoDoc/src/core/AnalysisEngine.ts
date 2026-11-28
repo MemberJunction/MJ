@@ -4,7 +4,7 @@
  */
 
 import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
-import { ApplyBestPrimaryKeys } from '../discovery/ApplyPrimaryKeys.js';
+import { ApplyBestPrimaryKeys, HasDeclaredPrimaryKey } from '../discovery/ApplyPrimaryKeys.js';
 import type { RelationshipDiscoveryPhase } from '../types/discovery.js';
 import { EnsureArray } from "../utils/ensureArray.js";
 import type { BaseAutoDocDriver } from "../drivers/BaseAutoDocDriver.js";
@@ -1451,6 +1451,12 @@ export class AnalysisEngine {
     // New PK proposal — verify it deterministically
     const table = this.stateManager.findTable(state, schemaName, tableName);
     if (!table) return;
+    const tableCandidates = discoveryPhase.discovered.primaryKeys.filter(pk => pk.schemaName === schemaName && pk.tableName === tableName);
+    if (HasDeclaredPrimaryKey(table, tableCandidates)) {
+      // A proposal that shares a column with the declared key would otherwise be flagged alongside it.
+      console.log(`[AnalysisEngine] LLM PK ignored: ${schemaName}.${tableName} has a declared primary key`);
+      return;
+    }
     const sampleSize = this.config.analysis.relationshipDiscovery?.sampling?.maxRowsPerTable ?? 1000;
     const driver = this.driver;
     const verdict = await CheckPKProposal(table, columns,
