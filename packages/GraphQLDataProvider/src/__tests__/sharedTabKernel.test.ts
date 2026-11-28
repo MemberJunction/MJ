@@ -5,8 +5,16 @@
  * and {@link GraphQLDataProvider} integration).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { EntityInfo, getGraphQLTypeNameBase, InMemoryLocalStorageProvider } from '@memberjunction/core';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import {
+    CacheCategory,
+    EntityInfo,
+    getGraphQLTypeNameBase,
+    InMemoryLocalStorageProvider,
+    LocalCacheManager,
+    Metadata,
+    type RunViewParams,
+} from '@memberjunction/core';
+import { GetGlobalObjectStore, MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import type { BaseEntityEvent } from '@memberjunction/core';
 import {
     GraphQLDataProvider,
@@ -1159,7 +1167,8 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         await flushMicrotasksAndTimers(20);
 
         expect(tabs[0].LocalStorageProvider.SupportsCrossProcessPersistence).toBe(true);
-        expect(tabs[0].LocalStorageProvider.SharedAcrossProcesses).toBe(true);
+        expect(tabs[0].LocalStorageProvider.SharedAcrossProcesses).toBe(false);
+        expect(tabs[0].LocalStorageProvider.ProcessLocalRegistry).toBe(true);
         expect(tabs[0].LocalStorageProvider.SharesReferences).toBe(false);
 
         const metadataPayload = { version: 42, entities: [{ Name: 'Users' }, { Name: 'Roles' }] };
@@ -1199,6 +1208,101 @@ describe('SharedTabKernel — Cross-Tab SharedWorker WS, Cache & IDB Multiplexin
         expect(stats!.StorageL1HitCount).toBeGreaterThanOrEqual(9);
         expect(stats!.StorageCoalescedReadCount).toBeGreaterThanOrEqual(1);
         expect(stats!.StorageIdbDeduplicatedWriteCount).toBe(9);
+    });
+
+    it('drops and replaces a stale-schema RunView slot immediately via LocalCacheManager without a 60s write hold', async () => {
+        const storage = new InstrumentedStorageProvider();
+        const host = new SharedTabKernelHost({
+            CreateWsClient: new FakeWsServerRegistry().CreateFactory(),
+            CreateStorageProvider: () => storage,
+        });
+        hostsToDispose.push(host);
+
+        const tab = createTestTabProvider({
+            sessionId: 'schema-stale-tab-0',
+            kernelEnv: createKernelWorkerEnv(host),
+        });
+        providersToDispose.push(tab);
+        tab.SubscribeToCacheInvalidation();
+        await tab.SharedTabKernel!.WaitUntilReady();
+        await flushMicrotasksAndTimers(20);
+
+        const provider = tab.LocalStorageProvider;
+        expect(provider.SharedAcrossProcesses).toBe(false);
+        expect(provider.ProcessLocalRegistry).toBe(true);
+
+        const entityName = 'Users';
+        const fp = `${entityName}|_|_|-1|0|_|_`;
+        const params: RunViewParams = { EntityName: entityName };
+        const staleRows = [{ ID: 'u-1', Name: 'StaleRow' }];
+        const freshRows = [{ ID: 'u-1', Name: 'FreshRow', NewCol: 'v2' }];
+
+        const oldMetadata = {
+            AllowCaching: true,
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+            Fields: [
+                { Name: 'ID', __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z') },
+                { Name: 'Name', __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z') },
+            ],
+        };
+        const newMetadata = {
+            AllowCaching: true,
+            __mj_UpdatedAt: new Date('2026-01-01T00:00:00Z'),
+            Fields: [
+                ...oldMetadata.Fields,
+                { Name: 'NewCol', __mj_UpdatedAt: new Date('2026-02-01T00:00:00Z') },
+            ],
+        };
+
+        const g = GetGlobalObjectStore();
+        const previousManager = g['___SINGLETON__LocalCacheManager'];
+        const spy = vi.spyOn(Metadata.prototype, 'EntityByName');
+        try {
+            delete g['___SINGLETON__LocalCacheManager'];
+            const cacheManager = LocalCacheManager.Instance;
+            await cacheManager.Initialize(provider, { evictionSweepIntervalMs: 0 });
+
+            // 1. Seed a cached RunView slot under the pre-migration schema.
+            spy.mockReturnValue(oldMetadata as unknown as ReturnType<Metadata['EntityByName']>);
+            await cacheManager.SetRunViewResult(fp, params, staleRows, '2026-01-01T00:00:00Z');
+            const oldHash = cacheManager.ComputeSchemaHash(undefined, entityName)!;
+            const seeded = await cacheManager.GetRunViewResult(fp);
+            expect(seeded?.schemaHash).toBe(oldHash);
+            expect(seeded?.results).toEqual(staleRows);
+
+            // Registry stays process-local (never written to the worker-owned store).
+            expect(await storage.GetItem('__MJ_CACHE_REGISTRY__', CacheCategory.Metadata)).toBeNull();
+
+            // 2. Simulate post-migration reload with a new column in entity metadata.
+            delete g['___SINGLETON__LocalCacheManager'];
+            const postMigrationManager = LocalCacheManager.Instance;
+            await postMigrationManager.Initialize(provider, { evictionSweepIntervalMs: 0 });
+            spy.mockReturnValue(newMetadata as unknown as ReturnType<Metadata['EntityByName']>);
+            const newHash = postMigrationManager.ComputeSchemaHash(undefined, entityName)!;
+            expect(newHash).not.toBe(oldHash);
+
+            // First serving read misses on schema hash and immediately drops the stale slot.
+            const miss = await postMigrationManager.GetRunViewResult(fp);
+            expect(miss).toBeNull();
+            await flushMicrotasksAndTimers(20);
+            expect(storage.PhysicalRemoves).toBeGreaterThanOrEqual(1);
+
+            // Immediate write-back lands right away (no 60s rolling-deploy write hold).
+            await postMigrationManager.SetRunViewResult(fp, params, freshRows, '2026-02-01T00:00:00Z');
+
+            // Subsequent read hits cache with fresh rows and the new schema hash.
+            const hit = await postMigrationManager.GetRunViewResult(fp);
+            expect(hit).not.toBeNull();
+            expect(hit?.schemaHash).toBe(newHash);
+            expect(hit?.results).toEqual(freshRows);
+        } finally {
+            spy.mockRestore();
+            if (previousManager !== undefined) {
+                g['___SINGLETON__LocalCacheManager'] = previousManager;
+            } else {
+                delete g['___SINGLETON__LocalCacheManager'];
+            }
+        }
     });
 
     // ── 6. Graceful Fallback to BroadcastChannel + Web Locks ─────────────────

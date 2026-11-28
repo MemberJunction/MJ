@@ -47,6 +47,11 @@ export class InstrumentedLocalStorageProvider implements ILocalStorageProvider {
         return this.inner.SharedAcrossProcesses;
     }
 
+    /** Delegated, like {@link SharedAcrossProcesses}: registry locality is a property of the inner store. */
+    public get ProcessLocalRegistry(): boolean | undefined {
+        return this.inner.ProcessLocalRegistry;
+    }
+
     public GetItemCount = 0;
     public GetItemsCount = 0;
     public SetItemCount = 0;

@@ -5068,14 +5068,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     /**
-     * True when the registry must stay in this process: the storage is shared with other
-     * processes, so a persisted registry would be one key every server overwrites with its own
-     * view (and publishes to every peer on each write), and a booting server would adopt another
-     * server's accounting. Entries written by other processes are found through the provider's
+     * True when the registry must stay in this process: either the storage is shared across a
+     * multi-server fleet (`SharedAcrossProcesses`), or the provider explicitly requests a
+     * process/tab-local registry (`ProcessLocalRegistry`, e.g. browser tabs sharing IndexedDB
+     * through a SharedWorker without multi-server fleet semantics). Keeping the registry in
+     * memory prevents peers/tabs from overwriting one shared registry key with their own
+     * accounting. Entries written by other processes are found through the provider's
      * per-entity index instead ({@link resolveFingerprintsForEntity}).
      */
     private registryIsProcessLocalOnly(): boolean {
-        return this._storageProvider?.SharedAcrossProcesses === true;
+        return this._storageProvider?.SharedAcrossProcesses === true
+            || this._storageProvider?.ProcessLocalRegistry === true;
     }
 
     /**
