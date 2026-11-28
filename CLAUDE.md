@@ -3,9 +3,7 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 
 # MemberJunction Development Guide
 
-<!-- Deliberately small (~200 lines): longer files eat context and reduce adherence. Detailed guidance
-     lives in path-scoped rules, nested CLAUDE.md files, and skills — see the routing table below.
-     `npm run check:claude-md` enforces the budget, parity with AGENTS.md, and link health. -->
+<!-- Kept <18 KB; details live in .claude/rules/, nested CLAUDE.md, and skills. Checked by npm run check:claude-md. -->
 
 Everything below is either **unrecoverable if violated** (so it must survive `/compact`) or **true
 on every task regardless of what you're touching**. Everything else loads on demand — see
@@ -17,6 +15,7 @@ on every task regardless of what you're touching**. Everything else loads on dem
 
 ### 1. SAFE COMMITS & PR WORKFLOW
 - **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Changeset required**: Every PR touching `packages/`, migrations, or `metadata/` needs a `.changeset/<slug>.md` ([rules](.claude/rules/changesets.md)); run `npm run check:changeset`
 - **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
 - **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
 - **NEVER commit or push directly to `next` or `main`**

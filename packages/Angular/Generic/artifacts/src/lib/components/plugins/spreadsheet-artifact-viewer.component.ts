@@ -470,65 +470,6 @@ export interface ResolvedSheetsToolbarItem {
             >
               <i class="fa-solid fa-ellipsis"></i>
             </button>
-
-            @if (ShowMoreToolsMenu) {
-              <div class="mj-sheets-more-menu" role="menu" data-testid="sheets-more-tools-menu">
-                <div class="mj-sheets-more-menu-header">
-                  <div>
-                    <span class="mj-sheets-more-menu-title">Tools &amp; View</span>
-                    <span class="mj-sheets-more-menu-hint">
-                      Pin up to {{ MaxPinnedToolbarActions }} actions ({{ PinnedToolbarActions.length }}/{{ MaxPinnedToolbarActions }})
-                    </span>
-                  </div>
-                  @if (HasCustomToolbarPreferences) {
-                    <button
-                      type="button"
-                      class="mj-sheets-more-reset-btn"
-                      data-testid="sheets-reset-toolbar-btn"
-                      (click)="ResetToolbarPreferences()"
-                    >
-                      Reset
-                    </button>
-                  }
-                </div>
-
-                @for (section of OverflowToolbarSections; track section.Category) {
-                  <div class="mj-sheets-more-section">
-                    <div class="mj-sheets-more-section-label">{{ section.Category }}</div>
-                    @for (item of section.Items; track item.Key) {
-                      <div class="mj-sheets-more-row">
-                        <button
-                          type="button"
-                          class="mj-sheets-more-action"
-                          [class.active]="item.Active"
-                          [disabled]="item.Disabled"
-                          role="menuitem"
-                          [attr.data-testid]="'sheets-overflow-' + item.Key"
-                          (click)="ExecuteToolbarItem(item, true)"
-                        >
-                          <i class="fa-solid" [ngClass]="item.Icon"></i>
-                          <div class="mj-sheets-more-action-text">
-                            <span class="mj-sheets-more-action-label">{{ item.Label }}</span>
-                            <span class="mj-sheets-more-action-desc">{{ item.Description }}</span>
-                          </div>
-                        </button>
-                        <button
-                          type="button"
-                          class="mj-sheets-pin-btn"
-                          [class.pinned]="IsToolbarItemPinned(item.Key)"
-                          [disabled]="!IsToolbarItemPinned(item.Key) && PinnedToolbarActions.length >= MaxPinnedToolbarActions"
-                          [title]="IsToolbarItemPinned(item.Key) ? 'Unpin from toolbar' : 'Pin to toolbar'"
-                          [attr.data-testid]="'sheets-pin-btn-' + item.Key"
-                          (click)="TogglePinToolbarAction(item.Key, $event)"
-                        >
-                          <i class="fa-solid fa-thumbtack"></i>
-                        </button>
-                      </div>
-                    }
-                  </div>
-                }
-              </div>
-            }
           </div>
 
           <div
@@ -577,6 +518,73 @@ export interface ResolvedSheetsToolbarItem {
           ></mj-artifact-agent-presence-bar>
         </div>
       </div>
+
+      <!-- Rendered outside .mj-sheets-toolbar so toolbar horizontal scrolling (overflow-x: auto) never clips the menu -->
+      @if (ShowMoreToolsMenu) {
+        <div
+          class="mj-sheets-more-menu"
+          #moreToolsPanel
+          role="menu"
+          [style.top.px]="MoreMenuTopPx"
+          [style.right.px]="MoreMenuRightPx"
+          data-testid="sheets-more-tools-menu"
+        >
+          <div class="mj-sheets-more-menu-header">
+            <div>
+              <span class="mj-sheets-more-menu-title">Tools &amp; View</span>
+              <span class="mj-sheets-more-menu-hint">
+                Pin up to {{ MaxPinnedToolbarActions }} actions ({{ PinnedToolbarActions.length }}/{{ MaxPinnedToolbarActions }})
+              </span>
+            </div>
+            @if (HasCustomToolbarPreferences) {
+              <button
+                type="button"
+                class="mj-sheets-more-reset-btn"
+                data-testid="sheets-reset-toolbar-btn"
+                (click)="ResetToolbarPreferences()"
+              >
+                Reset
+              </button>
+            }
+          </div>
+
+          @for (section of OverflowToolbarSections; track section.Category) {
+            <div class="mj-sheets-more-section">
+              <div class="mj-sheets-more-section-label">{{ section.Category }}</div>
+              @for (item of section.Items; track item.Key) {
+                <div class="mj-sheets-more-row">
+                  <button
+                    type="button"
+                    class="mj-sheets-more-action"
+                    [class.active]="item.Active"
+                    [disabled]="item.Disabled"
+                    role="menuitem"
+                    [attr.data-testid]="'sheets-overflow-' + item.Key"
+                    (click)="ExecuteToolbarItem(item, true)"
+                  >
+                    <i class="fa-solid" [ngClass]="item.Icon"></i>
+                    <div class="mj-sheets-more-action-text">
+                      <span class="mj-sheets-more-action-label">{{ item.Label }}</span>
+                      <span class="mj-sheets-more-action-desc">{{ item.Description }}</span>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    class="mj-sheets-pin-btn"
+                    [class.pinned]="IsToolbarItemPinned(item.Key)"
+                    [disabled]="!IsToolbarItemPinned(item.Key) && PinnedToolbarActions.length >= MaxPinnedToolbarActions"
+                    [title]="IsToolbarItemPinned(item.Key) ? 'Unpin from toolbar' : 'Pin to toolbar'"
+                    [attr.data-testid]="'sheets-pin-btn-' + item.Key"
+                    (click)="TogglePinToolbarAction(item.Key, $event)"
+                  >
+                    <i class="fa-solid fa-thumbtack"></i>
+                  </button>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
 
       @if (LiveSyncUnavailable) {
         <div
@@ -2923,6 +2931,7 @@ export interface ResolvedSheetsToolbarItem {
         flex-direction: column;
         height: 100%;
         width: 100%;
+        position: relative;
         background: var(--mj-bg-surface);
         color: var(--mj-text-primary);
         font-family: var(--mj-font-family, Inter, system-ui, sans-serif);
@@ -3038,11 +3047,11 @@ export interface ResolvedSheetsToolbarItem {
 
       .mj-sheets-more-menu {
         position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        z-index: 40;
+        top: 44px;
+        right: 10px;
+        z-index: 200;
         width: 310px;
-        max-height: 440px;
+        max-height: min(440px, calc(100% - 56px));
         overflow-y: auto;
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);
@@ -5029,6 +5038,7 @@ export class SpreadsheetArtifactViewerComponent
 
   @ViewChild('fileInput') private fileInputRef?: ElementRef<HTMLInputElement>;
   @ViewChild('moreToolsAnchor') private moreToolsAnchorRef?: ElementRef<HTMLElement>;
+  @ViewChild('moreToolsPanel') private moreToolsPanelRef?: ElementRef<HTMLElement>;
   @ViewChild('sheetsGridContainer') private sheetsGridContainerRef?: ElementRef<HTMLElement>;
 
   public readonly MaxPinnedToolbarActions = 4;
@@ -7415,9 +7425,23 @@ export class SpreadsheetArtifactViewerComponent
     }
   }
 
+  public MoreMenuTopPx = 44;
+  public MoreMenuRightPx = 10;
+
   public ToggleMoreToolsMenu(): void {
     this.ShowMoreToolsMenu = !this.ShowMoreToolsMenu;
     if (this.ShowMoreToolsMenu) {
+      const anchorEl = this.moreToolsAnchorRef?.nativeElement;
+      const shellEl = anchorEl?.closest('.mj-sheets-shell') as HTMLElement | null;
+      const anchorRect = anchorEl?.getBoundingClientRect();
+      const shellRect = shellEl?.getBoundingClientRect();
+      if (anchorRect && shellRect && anchorRect.height > 0 && shellRect.width > 0) {
+        this.MoreMenuTopPx = Math.max(36, Math.round(anchorRect.bottom - shellRect.top + 6));
+        this.MoreMenuRightPx = Math.max(8, Math.round(shellRect.right - anchorRect.right));
+      } else {
+        this.MoreMenuTopPx = 44;
+        this.MoreMenuRightPx = 10;
+      }
       this.startMoreMenuDocumentListeners();
     } else {
       this.stopMoreMenuDocumentListeners();
@@ -7438,7 +7462,8 @@ export class SpreadsheetArtifactViewerComponent
     const unlistenClick = this.renderer.listen('document', 'click', (evt: MouseEvent) => {
       const target = evt.target as Node | null;
       const anchor = this.moreToolsAnchorRef?.nativeElement;
-      if (anchor && target && anchor.contains(target)) {
+      const panel = this.moreToolsPanelRef?.nativeElement;
+      if (target && ((anchor && anchor.contains(target)) || (panel && panel.contains(target)))) {
         return;
       }
       this.CloseMoreToolsMenu();

@@ -27,6 +27,8 @@ export const MUTATING_ARTIFACT_TOOL_NAMES: ReadonlySet<string> = new Set([
     'upsert_table',
     'mutate_markdown_table',
     'upsert_frontmatter',
+    'set_design_preset',
+    'batch',
     'insert_live_block',
     'embed_artifact_block',
     // SpreadsheetToolLibrary
