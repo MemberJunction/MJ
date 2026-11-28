@@ -316,7 +316,10 @@ export class AgentControlPath {
 
   /** The exact error a repair hands the owning sub-agent: what is wrong, where, and what to do. */
   public static RepairReason(refusal: DraftRefusal): string {
-    return `${AgentControlPath.DescribeRefusal(refusal)} Correct your slice of the plan so that it uses only names from the entity catalog, and change nothing else. A name the user asked for that the catalog does not have: keep it as the user wrote it, never swap in another entity or column.`;
+    const fix = `${AgentControlPath.DescribeRefusal(refusal)} Correct your slice of the plan so that it uses only names from the entity catalog, and change nothing else.`;
+    // Only the target slice holds names the user asked for (D5-W4-1); an invented source or feature is always replaced.
+    const targetOnly = refusal.kind === 'unresolved-reference' && refusal.references.every((r) => r.path.startsWith('TargetDefinition.'));
+    return targetOnly ? `${fix} A name the user asked for that the catalog does not have: keep it as the user wrote it, never swap in another entity or column.` : fix;
   }
 
   /** A draft refusal in words, naming the slice and the sub-agent that fixes it. */

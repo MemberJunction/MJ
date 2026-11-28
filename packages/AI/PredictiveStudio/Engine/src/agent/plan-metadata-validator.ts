@@ -50,17 +50,17 @@ export class PlanMetadataValidator {
   }
 
   /**
-   * The target slice's unresolved names (the entity and the target variable), for a plan still being gathered: a
-   * target naming an entity or column the catalog lacks is caught before the rest of the plan is drafted. `[]` while
-   * the target names no entity yet; the variable is checked once it is named.
+   * For a plan still being gathered: the target entity when it does not exist (with the target variable, which cannot
+   * resolve on it), so a request for an entity the database lacks is caught before the rest of the plan is drafted.
+   * `[]` while the target names no entity yet, and whenever the entity resolves: on a real entity the variable may be a
+   * derived outcome the unit maps to a column, checked by the unit draft and `Validate` (D5-W4-1).
    */
   public static ValidateTarget(plan: Pick<ModelingPlanSpec, 'TargetDefinition'>, provider: PlanValidationProvider): UnresolvedReference[] {
     const t = plan.TargetDefinition;
-    if (!t?.EntityName?.trim()) return [];
+    if (!t?.EntityName?.trim() || PredictiveStudioPipelineBuilder.ResolveEntity(t.EntityName, provider)) return [];
     const out = new ReferenceCollector();
-    const entity = PredictiveStudioPipelineBuilder.ResolveEntity(t.EntityName, provider) || null;
-    if (!entity) out.Add('TargetDefinition.EntityName', t.EntityName, 'entity');
-    if (t.TargetVariable?.trim() && !PlanMetadataValidator.HasField(entity, t.TargetVariable)) out.Add('TargetDefinition.TargetVariable', t.TargetVariable, 'field');
+    out.Add('TargetDefinition.EntityName', t.EntityName, 'entity');
+    if (t.TargetVariable?.trim()) out.Add('TargetDefinition.TargetVariable', t.TargetVariable, 'field');
     return out.References;
   }
 

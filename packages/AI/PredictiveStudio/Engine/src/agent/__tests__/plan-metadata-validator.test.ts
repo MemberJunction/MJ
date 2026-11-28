@@ -202,6 +202,13 @@ describe('wave-4 integration: a target naming things that do not exist ends decl
     expect(PlanMetadataValidator.ValidateTarget(noVariable, ValidatorProvider())).toEqual([]);
   });
 
+  it('a real entity with a derived target variable resolves to []: the unit maps the outcome to a column later (Small-N runtime)', () => {
+    const derived: Pick<ModelingPlanSpec, 'TargetDefinition'> = {
+      TargetDefinition: { EntityName: 'PS Truth W1 Membership Years', TargetVariable: 'SteppedDownNextYear', ProblemType: 'classification', SuccessMetric: 'AUC' },
+    };
+    expect(PlanMetadataValidator.ValidateTarget(derived, ValidatorProvider())).toEqual([]);
+  });
+
   it('in gather, an unresolved target goes to the Goal Analyst for a repair (twice), naming the names', () => {
     for (const repairs of [0, 1]) {
       const f = gatheredFacts(USER_NAMED, repairs);
@@ -228,5 +235,10 @@ describe('wave-4 integration: a target naming things that do not exist ends decl
   it('the repair keeps a name the user asked for: it is never swapped for another entity', () => {
     const t = AgentControlPath.Next('gather', gatheredFacts(USER_NAMED, 0));
     expect(t.Kind === 'repair' ? t.Reason : '').toContain('keep it as the user wrote it');
+  });
+
+  it('a repair of other slices (a feature the Data Scout invented) carries no keep-as-written sentence', () => {
+    const t = AgentControlPath.Next('validate-plan', validatedFacts(INVENTED, 0));
+    expect(t.Kind === 'repair' ? t.Reason : 'none').not.toContain('keep it as the user wrote it');
   });
 });
