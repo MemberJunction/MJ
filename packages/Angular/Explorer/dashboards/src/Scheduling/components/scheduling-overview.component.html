@@ -115,7 +115,7 @@
               <mj-empty-state Size="compact" Icon="fa-solid fa-inbox"
                 Title="No recent executions" />
             }
-            @for (exec of LiveExecutions; track exec) {
+            @for (exec of LiveExecutions; track exec.id) {
               <div class="execution-item">
                 <div class="exec-status">
                   <i [class]="GetStatusIcon(exec.status)" [ngClass]="GetStatusClass(exec.status)"></i>
@@ -152,7 +152,7 @@
                 <mj-empty-state Variant="success" Size="compact"
                   Title="No active alerts" />
               }
-              @for (alert of Alerts; track alert) {
+              @for (alert of Alerts; track GetAlertTrackKey(alert)) {
                 <mj-alert Size="sm" [Title]="alert.title"
                   [Variant]="alert.severity === 'error' ? 'error' : 'warning'">
                   {{alert.message}}
@@ -178,7 +178,7 @@
                 <mj-empty-state Size="compact" Icon="fa-solid fa-calendar-xmark"
                   Title="No upcoming executions" />
               }
-              @for (upcoming of UpcomingExecutions; track upcoming) {
+              @for (upcoming of UpcomingExecutions; track upcoming.jobId) {
                 <div class="upcoming-item">
                   <div class="upcoming-info">
                     <div class="upcoming-name">{{upcoming.jobName}}</div>
@@ -218,7 +218,7 @@
                 </tr>
               </thead>
               <tbody>
-                @for (lock of Locks; track lock) {
+                @for (lock of Locks; track lock.jobId) {
                   <tr [class.stale-row]="lock.isStale">
                     <td class="cell-name">{{lock.jobName}}</td>
                     <td class="cell-meta">{{lock.lockedBy}}</td>
