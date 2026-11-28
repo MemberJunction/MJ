@@ -97,6 +97,22 @@ Migration `V202611261235__v6.3.x__RecordArtifact_Schema.sql` adds `[__mj].[Recor
 
 Uniqueness is enforced across `(EntityID, RecordID, ArtifactID, Role)` (`UQ_RecordArtifact_Record_Artifact_Role`), with composite lookup index `IDX_RecordArtifact_Entity_Record (EntityID, RecordID, Sequence)` and full entity-deletion cleanup in `spDeleteEntityWithCoreDependencies`. See [`guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md`](../../guides/MJ_DOCS_COMMENTS_AND_NOTES_GUIDE.md) for the complete decision rubric and UI recipes.
 
+#### Wave 0.1 Canon Full-Run Schema (v6.3.x+)
+
+Migrations `V202611281150__v6.3.x__Canon_Full_Run_Schema.sql` and `migrations-pg/v6/V202611281150__v6.3.x__Canon_Full_Run_Schema.pg.sql` deliver the Wave 0.1 schema foundation across SQL Server and PostgreSQL:
+
+| Entity / Table | Generated Class | Highlights |
+|---|---|---|
+| `MJ: Graph Permissions` (`GraphPermission`) | `MJGraphPermissionEntity` | Per-graph `Read` / `Use` / `Approve` grants with exclusive-arc `UserID`/`RoleID` CHECK and partial unique indexes (`UX_GraphPermission_Graph_User`, `UX_GraphPermission_Graph_Role`) |
+| `MJ: Search Scope Graphs` (`SearchScopeGraph`) | `MJSearchScopeGraphEntity` | Dedicated `SearchScope` → `Graph` lane binding (`Priority` default `100`, nullable `MaxResults`, `UQ_SearchScopeGraph_Scope_Graph`) |
+| `MJ: AI Agent Note Sources` (`AIAgentNoteSource`) | `MJAIAgentNoteSourceEntity` | Normalized note provenance DAG (`Consolidated From`, `Supersedes`, `Disambiguated From`, `Dream Synthesized From`, `Other`), backfilled from `DerivedFromNoteIDs` / `ConsolidatedIntoNoteID` (`DerivedFromNoteIDs` marked `Deprecated`); `NotCloneable: true` |
+| `MJ: AI Agent Learning Cycle Proposals` (`AIAgentLearningCycleProposal`) | `MJAIAgentLearningCycleProposalEntity` | Quarantine & verification ledger with Self-Improvement Memory (`ProblemKey`, `Rationale`, `PredictedEffect`, `ObservedEffect`, `EvaluationContext`, `SupersedesProposalID`) and Rule 6 impact/confidence/routing/AI-reviewer fields; `NotCloneable: true` |
+| `MJ: AI Agent Learning Cycle Proposal Sources` (`AIAgentLearningCycleProposalSource`) | `MJAIAgentLearningCycleProposalSourceEntity` | Provenance links with exclusive-arc real FKs (`SourceNoteID`, `SourceAgentRunID`, `SourceConversationDetailID`, `SourceGraphConceptID`, `SourceGraphEdgeID`) + polymorphic `(SourceEntityID, SourceRecordID)`; `NotCloneable: true` |
+| `MJ: AI Agent Context Items` (`AIAgentContextItem`) | `MJAIAgentContextItemEntity` | Per-run and per-realtime-session exposure/holdout/citation trace (`EventType`, `ItemType`, exclusive-arc targets, typed `DetailsObject` via `IAgentContextItemDetails`, `TrackRecordChanges: false`, `AllowCaching: false`); `NotCloneable: true` |
+| Existing entities (`AIAgentLearningCycle`, `AIAgentNote`, `AISkill`, `AIAgent`, `GraphConcept`, `GraphEdge`, `Graph`) | Respective generated subclasses | Cycle telemetry counters/type, `IsCanonical`/`CanonApproved*`/`OriginProposalID`, `AllowInFlightMemorySearch`, `EffectiveFrom`/`EffectiveTo` range CHECK, `GraphEdge.AuthorityTierID`, `Provisional` status on `GraphConcept` & `GraphEdge`, `StaleMemberPolicy` (`Hide` / `Show With Warning`), and `PublishNonHumanApprovals` |
+
+Polymorphic `EntityIDFieldName` metadata declarations are registered in [`metadata/entities/.polymorphic-fk-entity-fields.json`](../../metadata/entities/.polymorphic-fk-entity-fields.json) for `ItemRecordID`, `PrimaryScopeRecordID`, `AppliedRecordID`, and `SourceRecordID`, and entity-delete cascade/cleanup rules are registered in `spDeleteEntityWithCoreDependencies` and `packages/CodeGenLib/src/__tests__/fixtures/entity-delete-fk-policy.json`.
+
 ### Extended Entity Classes
 
 Several entities require custom business logic beyond what CodeGen can generate. Extended classes use `@RegisterClass` to override the generated base class in MJ's class factory:
