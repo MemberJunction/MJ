@@ -12,6 +12,9 @@ const mockList = vi.hoisted(() => vi.fn());
 const mockPull = vi.hoisted(() => vi.fn());
 const mockEmbeddings = vi.hoisted(() => vi.fn());
 const mockShow = vi.hoisted(() => vi.fn());
+const mockCustomFetch = vi.hoisted(
+  () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 
 // Records the config every Ollama client is constructed with, so tests can assert that a
 // per-request client carrying the caller's cancellation token (via Config.fetch) was built.
@@ -46,16 +49,50 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 vi.mock('@memberjunction/ai', () => {
-  class MockBaseLLM {
+  class MockBaseModel {
     protected _additionalSettings: Record<string, unknown> = {};
+    private _cachedClient: unknown = undefined;
+    private _hasCachedClient: boolean = false;
     constructor(_apiKey: string) {}
-    get SupportsStreaming() { return true; }
+    protected get CustomFetch() {
+      return mockCustomFetch();
+    }
+    protected BuildTransportClientOptions() {
+      const customFetch = this.CustomFetch;
+      return customFetch ? { fetch: customFetch } : {};
+    }
+    protected GetOrCreateClient<T>(factory: () => T): T {
+      if (!this._hasCachedClient) {
+        this._cachedClient = factory();
+        this._hasCachedClient = true;
+      }
+      return this._cachedClient as T;
+    }
+    protected InvalidateClient() {
+      this._cachedClient = undefined;
+      this._hasCachedClient = false;
+    }
+    protected OnAdditionalSettingsChanged() {
+      this.InvalidateClient();
+    }
     public SetAdditionalSettings(settings: Record<string, unknown>) {
       this._additionalSettings = { ...this._additionalSettings, ...settings };
+      this.OnAdditionalSettingsChanged();
     }
+  }
+  class MockBaseLLM extends MockBaseModel {
+    get SupportsStreaming() { return true; }
     protected resetStreamingState() {}
     // Cancellation itself is covered against the real BaseLLM in ollama.conformance.test.ts.
     protected IsCancellationError(_error: unknown, signal?: AbortSignal | null): boolean { return signal?.aborted === true; }
+    protected BuildErrorChatResult(startTime: Date, error: unknown, statusText: string = 'error') {
+      const result = new MockChatResult(false, startTime, new Date());
+      result.statusText = statusText;
+      result.data = { choices: [], usage: new MockModelUsage(0, 0) };
+      result.errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      result.exception = { exception: error };
+      return result;
+    }
     protected initializeThinkingStreamState() {}
     protected processStreamChunkWithThinking(content: string) { return content; }
     protected extractThinkingFromContent(content: string) {
@@ -75,12 +112,7 @@ vi.mock('@memberjunction/ai', () => {
       return msg;
     }
   }
-  class MockBaseEmbeddings {
-    protected _additionalSettings: Record<string, unknown> = {};
-    constructor(_apiKey: string) {}
-    public SetAdditionalSettings(settings: Record<string, unknown>) {
-      this._additionalSettings = { ...this._additionalSettings, ...settings };
-    }
+  class MockBaseEmbeddings extends MockBaseModel {
     // Embedding cancellation itself is covered against the real BaseEmbeddings in ollamaEmbedding.test.ts.
     protected ThrowIfRequestAborted(error: unknown, signal?: AbortSignal | null): void {
       if (signal?.aborted) { throw error; }
@@ -172,6 +204,20 @@ describe('OllamaLLM', () => {
 
     it('should expose client alias', () => {
       expect(llm.client).toBe(llm.OllamaClient);
+    });
+
+    it('should forward BaseModel.CustomFetch to Ollama constructor and SetAdditionalSettings when configured (R2-9)', () => {
+      const scopedFetch = vi.fn<() => Promise<Response>>();
+      mockCustomFetch.mockReturnValue(scopedFetch);
+      mockOllamaConfigs.length = 0;
+
+      const scopedLlm = new OllamaLLM();
+      expect(mockOllamaConfigs[0]).toEqual({ host: 'http://localhost:11434', fetch: scopedFetch });
+
+      scopedLlm.SetAdditionalSettings({ baseUrl: 'http://remote:11434' });
+      expect(mockOllamaConfigs[1]).toEqual({ host: 'http://remote:11434', fetch: scopedFetch });
+
+      mockCustomFetch.mockReturnValue(undefined);
     });
   });
 

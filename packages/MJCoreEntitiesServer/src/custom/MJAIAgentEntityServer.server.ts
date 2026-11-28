@@ -1,15 +1,21 @@
 import {
+    AuthorizationEvaluator,
+    AuthorizationInfo,
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityInfo,
+    EntityPermissionType,
     EntitySaveOptions,
     IEntityDataProvider,
     IMetadataProvider,
+    Metadata,
     RunView,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
+    WellKnownUserSource,
 } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
@@ -39,6 +45,13 @@ import {
 } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { ValidateJsonAgainstSchemaLite } from './json-schema-lite';
+
+/**
+ * Canonical `MJ: Authorizations` capability name granting full administrative authority over
+ * AI Agents, Categories, Types, Step Types, and Personas. Evaluated with ancestors via
+ * `AuthorizationEvaluator` alongside the legacy administrative role fallback.
+ */
+export const AI_AGENT_ADMINISTRATION_AUTHORIZATION = 'AI: Agent Administration';
 
 const ADMIN_ROLE_NAMES = new Set([
     'system administrator',
@@ -82,18 +95,100 @@ export function IsMetadataProvider(
     return Boolean(provider && 'GetEntityObject' in provider && 'Entities' in provider);
 }
 
+function authorizationsForAdminCheck(
+    provider: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null | undefined
+): AuthorizationInfo[] {
+    const mdProvider =
+        provider && 'Authorizations' in provider && Array.isArray((provider as Partial<IMetadataProvider>).Authorizations)
+            ? (provider as Pick<IMetadataProvider, 'Authorizations'>)
+            : undefined;
+    try {
+        const md = mdProvider ?? new Metadata();
+        return Array.isArray(md.Authorizations) ? md.Authorizations : [];
+    } catch {
+        return [];
+    }
+}
+
 /**
- * Returns true when `user` is an Owner-type user or holds an administrative / Agent Administrator role.
+ * Returns true when `user` is the server system user, an Owner-type user, holds the
+ * `AI: Agent Administration` authorization (direct or via an ancestor authorization), or holds
+ * an administrative / `Agent Administrator` role.
  */
-export function IsAgentAdminOrOwnerUser(user: UserInfo | null | undefined): boolean {
+export function IsAgentAdminOrOwnerUser(
+    user: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null
+): boolean {
     if (!user) {
         return true; // System / unauthenticated internal context
     }
-    if (user.Type?.trim().toLowerCase() === 'owner') {
+    if (user.Type?.trim().toLowerCase() === 'owner' || WellKnownUserSource.Instance.IsSystemUser(user)) {
         return true;
+    }
+    const authorizations = authorizationsForAdminCheck(provider);
+    if (authorizations.length > 0) {
+        const auth = authorizations.find(
+            (a) => a.Name?.trim().toLowerCase() === AI_AGENT_ADMINISTRATION_AUTHORIZATION.toLowerCase()
+        );
+        if (auth) {
+            const evaluator = new AuthorizationEvaluator();
+            if (evaluator.UserCanExecuteWithAncestors(auth, user, authorizations)) {
+                return true;
+            }
+        }
     }
     const roles = user.UserRoles ?? [];
     return roles.some((ur) => ADMIN_ROLE_NAMES.has((ur.Role ?? '').trim().toLowerCase()));
+}
+
+/**
+ * Minimal entity context required by {@link CheckAgentAdminEntityPermissions}.
+ */
+export interface AgentAdminPermissionCheckContext {
+    readonly ActiveUser: UserInfo | null | undefined;
+    readonly EntityInfo: Pick<EntityInfo, 'VirtualEntity' | 'AllowCreateAPI' | 'AllowUpdateAPI' | 'AllowDeleteAPI'> | null | undefined;
+    readonly ProviderToUse: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null | undefined;
+}
+
+/**
+ * Shared `CheckPermissions` helper for admin-governed AI Agent definition entities
+ * (`MJ: AI Agent Categories`, `MJ: AI Agent Types`, `MJ: AI Agent Step Types`).
+ *
+ * Baseline `Developer` and `Integration` role grants on these entities are read-only
+ * (`CanRead: true`, `CanCreate/Update/Delete: false`), while `User: System` (and other `Owner`
+ * users or holders of the `AI: Agent Administration` authorization / admin roles) may not carry
+ * the dedicated `Agent Administrator` role in `UserRoles`. This helper authorizes those admin /
+ * owner / system callers for Create/Update/Delete once entity-level API flags allow the operation,
+ * while delegating reads and non-admin callers to `super.CheckPermissions`.
+ */
+export function CheckAgentAdminEntityPermissions(
+    context: AgentAdminPermissionCheckContext,
+    type: EntityPermissionType,
+    throwError: boolean,
+    superCheck: (type: EntityPermissionType, throwError: boolean) => boolean
+): boolean {
+    if (type === EntityPermissionType.Read) {
+        return superCheck(type, throwError);
+    }
+    const user = context.ActiveUser;
+    if (!user) {
+        return superCheck(type, throwError);
+    }
+    const info = context.EntityInfo;
+    if (!info || info.VirtualEntity) {
+        return superCheck(type, throwError);
+    }
+    const apiAllowed =
+        (type === EntityPermissionType.Create && info.AllowCreateAPI) ||
+        (type === EntityPermissionType.Update && info.AllowUpdateAPI) ||
+        (type === EntityPermissionType.Delete && info.AllowDeleteAPI);
+    if (!apiAllowed) {
+        return superCheck(type, throwError);
+    }
+    if (IsAgentAdminOrOwnerUser(user, context.ProviderToUse)) {
+        return true;
+    }
+    return superCheck(type, throwError);
 }
 
 /**
@@ -156,6 +251,8 @@ export interface AgentSandboxValidationTarget {
 export interface AgentSandboxValidationContext {
     Target: AgentSandboxValidationTarget;
     User: UserInfo | null | undefined;
+    /** Optional data/metadata provider for resolving `MJ: Authorizations` (`AI: Agent Administration`). */
+    Provider?: IEntityDataProvider | null;
     /** Full agent list (used to trace BaseAgentID chains, cycles, depth, and user instance counts). */
     AllAgents: ReadonlyArray<
         Pick<
@@ -331,7 +428,7 @@ export function ValidateAgentInheritanceAndSandbox(
 ): ValidationErrorInfo[] {
     const errors: ValidationErrorInfo[] = [];
     const { Target, User, AllAgents, AllPermissions } = ctx;
-    const isAdmin = IsAgentAdminOrOwnerUser(User);
+    const isAdmin = IsAgentAdminOrOwnerUser(User, ctx.Provider);
 
     // 0. Per-agent helperPlugins security guard (Extension Point #3):
     //    - Code-only security seams (limits, actionPolicy, policy, permissions) are forbidden in
@@ -1122,7 +1219,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         const user = this.ContextCurrentUser;
-        if (!IsAgentAdminOrOwnerUser(user) && user) {
+        if (!IsAgentAdminOrOwnerUser(user, this.ProviderToUse) && user) {
             const preSaveBase =
                 (this.GetFieldByName('BaseAgentID')?.OldValue as string | null | undefined) ?? this.BaseAgentID;
             const preSaveOwner =
@@ -1251,7 +1348,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
 
         // 1. BaseAgentID inheritance, helperPlugins & non-admin sandbox checks
         const user = this.ContextCurrentUser;
-        const isAdmin = IsAgentAdminOrOwnerUser(user);
+        const isAdmin = IsAgentAdminOrOwnerUser(user, this.ProviderToUse);
         const hasHelperPluginsKey = (raw: string | null | undefined): boolean => {
             if (!raw || raw.trim().length === 0) return false;
             try {
@@ -1347,6 +1444,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     },
                 },
                 User: user,
+                Provider: this.ProviderToUse,
                 AllAgents: allAgents,
                 AllPermissions: allPermissions,
                 AllCategories: allCategories,

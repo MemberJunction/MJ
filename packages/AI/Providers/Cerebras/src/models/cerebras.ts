@@ -1,6 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessage, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL,
-    type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Cerebras } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
@@ -19,7 +18,10 @@ export class CerebrasLLM extends BaseLLM {
      */
     constructor(apiKey: string) {
         super(apiKey);
-        this._client = new Cerebras({ apiKey });
+        this._client = new Cerebras({
+            apiKey,
+            ...this.BuildTransportClientOptions(),
+        });
     }
 
     /**
@@ -124,7 +126,7 @@ export class CerebrasLLM extends BaseLLM {
         const out: OpenAICompatibleMessage[] = [];
         for (const m of params.messages) {
             if (m.role === ChatMessageRole.tool) {
-                out.push(...buildOpenAICompatibleToolResults(m, 'Cerebras provider'));
+                out.push(...this.FormatOpenAICompatibleToolResults(m, 'Cerebras provider'));
                 continue;
             }
             const content = typeof m.content === 'string'
@@ -133,7 +135,7 @@ export class CerebrasLLM extends BaseLLM {
                 : m.content.filter(block => block.type === 'text').map(block => block.content).join('\n\n');
             const role = toClassicChatMessageRole(m.role);
             out.push(role === 'assistant'
-                ? { role, content, ...(m.toolCalls?.length ? { tool_calls: buildOpenAICompatibleToolCalls(m.toolCalls) } : {}) }
+                ? { role, content, ...(m.toolCalls?.length ? { tool_calls: this.FormatOpenAICompatibleToolCalls(m.toolCalls) } : {}) }
                 : { role, content });
         }
         return out;
@@ -147,13 +149,15 @@ export class CerebrasLLM extends BaseLLM {
      * default the caller never chose on a catalog that rotates.
      */
     protected applyToolParams(request: Chat.ChatCompletionCreateParams, params: ChatParams): void {
-        if (!params.tools || params.tools.length === 0) {
+        const tools = this.FormatOpenAICompatibleTools(params);
+        if (!tools) {
             return;
         }
         const body = request as unknown as Record<string, unknown>;
-        body.tools = buildOpenAICompatibleTools(params.tools);
-        if (params.toolChoice !== undefined) {
-            body.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        body.tools = tools;
+        const toolChoice = this.FormatOpenAICompatibleToolChoice(params);
+        if (toolChoice !== undefined) {
+            body.tool_choice = toolChoice;
         }
         if (params.parallelToolCalls !== undefined) {
             body.parallel_tool_calls = params.parallelToolCalls;
@@ -257,7 +261,7 @@ export class CerebrasLLM extends BaseLLM {
             // Extract thinking content if present using base class helper
             const extracted = this.extractThinkingFromContent(rawMessage);
 
-            const read = ReadOpenAICompatibleToolCalls(
+            const read = this.ParseOpenAICompatibleToolCalls(
                 choice.message?.tool_calls as RawOpenAICompatibleToolCall[] | undefined, 'Cerebras provider');
             const toolCalls = read.Calls;
             const res: ChatResultChoice = {
@@ -288,9 +292,11 @@ export class CerebrasLLM extends BaseLLM {
         // UNCACHED/net-new only, so subtract the cache-read count (clamped at 0) and record it
         // disjointly. Cerebras does not bill cache writes separately, so cacheWriteTokens stays 0.
         const cerebrasCached = (usage as { prompt_tokens_details?: { cached_tokens?: number } }).prompt_tokens_details?.cached_tokens ?? 0;
-        const cerebrasNetPromptTokens = Math.max(0, (usage.prompt_tokens ?? 0) - cerebrasCached);
-        const modelUsage = new ModelUsage(cerebrasNetPromptTokens, usage.completion_tokens);
-        modelUsage.cacheReadTokens = cerebrasCached;
+        const modelUsage = this.BuildNormalizedModelUsage({
+            rawPromptTokens: usage.prompt_tokens ?? 0,
+            completionTokens: usage.completion_tokens,
+            cacheReadTokens: cerebrasCached,
+        });
         return {
             success: true,
             statusText: "OK",

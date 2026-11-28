@@ -37,6 +37,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { UUIDsEqual } from '@memberjunction/global';
 import type { DecisionAnswer } from '@memberjunction/ai';
 import { AgentDecisionService } from './AgentDecisionService';
+import { SafeResolveEffectiveAgentProperties } from './helpers/AgentHelperResolver';
 import {
     BuildMemoryNoteQuestions,
     BuildMemoryNoteState,
@@ -769,15 +770,12 @@ export class MemoryManagerAgent extends BaseAgent {
         return runCache.get(sourceAgentRunId) || null;
     }
 
-    /**
-     * Load agents that have note or example injection enabled.
-     * Only extract notes/examples for agents that actually use these features.
-     */
+    /** Load agents with effective InjectNotes or InjectExamples enabled. */
     private async loadAgentsUsingMemory(contextUser: UserInfo): Promise<MJAIAgentEntityExtended[]> {
         const allAgents = AIEngine.Instance.Agents;
-        const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (a.InjectNotes || a.InjectExamples));
+        const mem = (a: MJAIAgentEntityExtended) => { const e = SafeResolveEffectiveAgentProperties(a); return { notes: e?.InjectNotes ?? Boolean(a.InjectNotes), examples: e?.InjectExamples ?? Boolean(a.InjectExamples) }; };
+        const filteredAgents = allAgents.filter(a => a.Status === 'Active' && (mem(a).notes || mem(a).examples));
 
-        // Resolve the configured default conversation manager agent (if any) without hardcoding an agent name
         let defaultAgent: MJAIAgentEntityExtended | undefined;
         try {
             await ApplicationSettingEngine.Instance.Config(false, contextUser);
@@ -789,15 +787,15 @@ export class MemoryManagerAgent extends BaseAgent {
             // Non-fatal: debug diagnostics only
         }
 
-        // Debug logging only in verbose mode
         if (this._verbose) {
             LogStatus(`Memory Manager: AIEngine has ${allAgents.length} total agents cached`);
             if (filteredAgents.length > 0) {
-                const agentNames = filteredAgents.map(a => `${a.Name} (InjectNotes=${a.InjectNotes}, InjectExamples=${a.InjectExamples})`).join(', ');
+                const agentNames = filteredAgents.map(a => `${a.Name} (InjectNotes=${mem(a).notes}, InjectExamples=${mem(a).examples})`).join(', ');
                 LogStatus(`Memory Manager: Agents with memory enabled: ${agentNames}`);
             }
             if (defaultAgent) {
-                LogStatus(`Memory Manager: Default agent (${defaultAgent.Name}) - ID=${defaultAgent.ID}, InjectNotes=${defaultAgent.InjectNotes}, InjectExamples=${defaultAgent.InjectExamples}, Status=${defaultAgent.Status}`);
+                const dm = mem(defaultAgent);
+                LogStatus(`Memory Manager: Default agent (${defaultAgent.Name}) - ID=${defaultAgent.ID}, InjectNotes=${dm.notes}, InjectExamples=${dm.examples}, Status=${defaultAgent.Status}`);
             }
         }
 
@@ -3549,7 +3547,7 @@ export class MemoryManagerAgent extends BaseAgent {
     }> {
         const archiveEnabledAgentIds = new Set(
             AIEngine.Instance.Agents
-                .filter(a => a.AutoArchiveEnabled !== false)
+                .filter(a => (SafeResolveEffectiveAgentProperties(a)?.AutoArchiveEnabled ?? a.AutoArchiveEnabled) !== false)
                 .map(a => a.ID?.toLowerCase())
         );
 

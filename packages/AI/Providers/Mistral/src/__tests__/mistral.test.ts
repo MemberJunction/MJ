@@ -1,9 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as actualChatTypes from '../../../../Core/src/generic/chat.types';
+import { ThinkingStreamExtractor } from '../../../../Core/src/generic/thinkingStreamExtractor';
 
 // Hoisted mock variables
 const mockComplete = vi.hoisted(() => vi.fn());
 const mockStream = vi.hoisted(() => vi.fn());
+const mockCustomFetch = vi.hoisted(
+    () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 const MockMistral = vi.hoisted(() => vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.chat = {
         complete: mockComplete,
@@ -13,7 +17,13 @@ const MockMistral = vi.hoisted(() => vi.fn().mockImplementation(function (this: 
 
 // Mock the Mistral SDK
 vi.mock('@mistralai/mistralai', () => ({
-    Mistral: MockMistral
+    Mistral: MockMistral,
+    HTTPClient: class MockHTTPClient {
+        public options: unknown;
+        constructor(options?: unknown) {
+            this.options = options;
+        }
+    },
 }));
 
 // Mock @memberjunction/global
@@ -26,13 +36,60 @@ vi.mock('@memberjunction/global', () => ({
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
+        protected _additionalSettings: Record<string, unknown> = {};
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get CustomFetch() {
+            return mockCustomFetch();
+        }
+        protected BuildTransportClientOptions() {
+            const customFetch = this.CustomFetch;
+            return customFetch ? { fetch: customFetch } : {};
+        }
     }
     class BaseLLM extends BaseModel {
-        protected _additionalSettings: Record<string, unknown> = {};
+        protected _thinkingExtractor: ThinkingStreamExtractor | null = null;
         public get SupportsStreaming(): boolean { return false; }
+        protected getThinkingTagFormat(): { open: string; close: string } {
+            return { open: '<think>', close: '</think>' };
+        }
+        protected CreateThinkingStreamExtractor(tags?: { open: string; close: string }): ThinkingStreamExtractor {
+            return new ThinkingStreamExtractor(tags ?? this.getThinkingTagFormat());
+        }
+        protected get thinkingStreamState() {
+            if (!this._thinkingExtractor) return null;
+            return {
+                accumulatedThinking: this._thinkingExtractor.AccumulatedThinking,
+                inThinkingBlock: this._thinkingExtractor.InThinkingBlock,
+                pendingContent: this._thinkingExtractor.PendingContent,
+                thinkingComplete: this._thinkingExtractor.ThinkingComplete,
+            };
+        }
+        protected initializeThinkingStreamState(): void {
+            this._thinkingExtractor = this.CreateThinkingStreamExtractor();
+        }
+        protected resetThinkingStreamState(): void {
+            this._thinkingExtractor?.Reset();
+            this._thinkingExtractor = null;
+        }
+        protected resetStreamingState(): void {
+            this.resetThinkingStreamState();
+        }
+        protected processStreamChunkWithThinking(rawContent: string): string {
+            return this._thinkingExtractor ? this._thinkingExtractor.ProcessChunk(rawContent).contentDelta : rawContent;
+        }
+        protected extractThinkingFromContent(content: string): { content: string; thinking: string | undefined } {
+            const trimmed = content.trim();
+            if (trimmed.startsWith('<think>') && trimmed.includes('</think>')) {
+                const thinkEnd = trimmed.indexOf('</think>');
+                return {
+                    thinking: trimmed.substring('<think>'.length, thinkEnd).trim(),
+                    content: trimmed.substring(thinkEnd + '</think>'.length).trim()
+                };
+            }
+            return { content: trimmed, thinking: undefined };
+        }
     }
     class ModelUsage {
         promptTokens: number;
@@ -108,6 +165,18 @@ describe('MistralLLM', () => {
             expect(instance.Client).toBeDefined();
             expect(instance.Client.chat).toBeDefined();
         });
+
+        it('should forward BaseModel.CustomFetch via HTTPClient when configured (R2-9)', () => {
+            const scopedFetch = vi.fn<() => Promise<Response>>();
+            mockCustomFetch.mockReturnValueOnce(scopedFetch);
+            MockMistral.mockClear();
+
+            new MistralLLM('scoped-key');
+            expect(MockMistral).toHaveBeenCalledTimes(1);
+            const opts = MockMistral.mock.calls[0][0] as { apiKey: string; httpClient?: unknown };
+            expect(opts.apiKey).toBe('scoped-key');
+            expect(opts.httpClient).toBeDefined();
+        });
     });
 
     describe('SupportsStreaming', () => {
@@ -117,24 +186,19 @@ describe('MistralLLM', () => {
     });
 
     describe('resetStreamingState', () => {
-        it('should reset all streaming state fields', () => {
+        it('should reset ThinkingStreamExtractor state cleanly', () => {
+            const initMethod = (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState'].bind(instance);
+            const processChunk = (instance as ReturnType<typeof Object.create>)['processStreamingChunk'].bind(instance);
             const resetMethod = (instance as ReturnType<typeof Object.create>)['resetStreamingState'].bind(instance);
-            const getState = () => (instance as ReturnType<typeof Object.create>)['_streamingState'];
+            const getState = () => (instance as ReturnType<typeof Object.create>)['thinkingStreamState'];
 
-            // Modify state first
-            const state = getState();
-            state.accumulatedThinking = 'deep thoughts';
-            state.inThinkingBlock = true;
-            state.pendingContent = 'pending stuff';
-            state.thinkingComplete = true;
+            initMethod();
+            processChunk({ data: { choices: [{ delta: { content: '<think>deep thoughts' } }] } });
+            expect(getState().accumulatedThinking).toBe('deep thoughts');
+            expect(getState().inThinkingBlock).toBe(true);
 
-            // Reset and verify
             resetMethod();
-            const resetState = getState();
-            expect(resetState.accumulatedThinking).toBe('');
-            expect(resetState.inThinkingBlock).toBe(false);
-            expect(resetState.pendingContent).toBe('');
-            expect(resetState.thinkingComplete).toBe(false);
+            expect(getState()).toBeNull();
         });
     });
 
@@ -189,42 +253,36 @@ describe('MistralLLM', () => {
         });
     });
 
-    describe('processThinkingInStreamingContent', () => {
-        const callMethod = (): string => {
-            return (instance as ReturnType<typeof Object.create>)['processThinkingInStreamingContent']();
+    describe('streaming thinking extraction via BaseLLM ThinkingStreamExtractor', () => {
+        const callChunk = (rawText: string): string => {
+            const res = (instance as ReturnType<typeof Object.create>)['processStreamingChunk']({
+                data: { choices: [{ delta: { content: rawText } }] }
+            });
+            return res.content;
         };
-        const getState = () => (instance as ReturnType<typeof Object.create>)['_streamingState'];
-        const resetState = () => (instance as ReturnType<typeof Object.create>)['resetStreamingState']();
+        const getState = () => (instance as ReturnType<typeof Object.create>)['thinkingStreamState'];
+        const initState = () => (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState']();
 
         it('should pass through content when thinking is already complete', () => {
-            resetState();
-            const state = getState();
-            state.thinkingComplete = true;
-            state.pendingContent = 'Hello world';
-
-            const result = callMethod();
+            initState();
+            callChunk('<think>plan</think>');
+            const result = callChunk('Hello world');
             expect(result).toBe('Hello world');
-            expect(getState().pendingContent).toBe('');
+            expect(getState().thinkingComplete).toBe(true);
         });
 
         it('should detect and enter thinking block', () => {
-            resetState();
-            const state = getState();
-            state.pendingContent = '<think>starting to think';
-
-            const result = callMethod();
+            initState();
+            const result = callChunk('<think>starting to think');
             expect(result).toBe('');
             expect(getState().inThinkingBlock).toBe(true);
             expect(getState().accumulatedThinking).toBe('starting to think');
         });
 
         it('should accumulate thinking and extract content after close tag', () => {
-            resetState();
-            const state = getState();
-            state.inThinkingBlock = true;
-            state.pendingContent = 'more thinking</think>actual output';
-
-            const result = callMethod();
+            initState();
+            callChunk('<think>more thinking');
+            const result = callChunk('</think>actual output');
             expect(result).toBe('actual output');
             expect(getState().accumulatedThinking).toBe('more thinking');
             expect(getState().thinkingComplete).toBe(true);
@@ -232,43 +290,30 @@ describe('MistralLLM', () => {
         });
 
         it('should continue accumulating when still in thinking block with no close tag', () => {
-            resetState();
-            const state = getState();
-            state.inThinkingBlock = true;
-            state.pendingContent = 'still thinking about it';
-
-            const result = callMethod();
+            initState();
+            callChunk('<think>');
+            const result = callChunk('still thinking about it');
             expect(result).toBe('');
             expect(getState().accumulatedThinking).toBe('still thinking about it');
-            expect(getState().pendingContent).toBe('');
         });
 
         it('should output regular content when no thinking tags found', () => {
-            resetState();
-            const state = getState();
-            state.pendingContent = 'regular content here';
-
-            const result = callMethod();
+            initState();
+            const result = callChunk('regular content here');
             expect(result).toBe('regular content here');
             expect(getState().pendingContent).toBe('');
         });
 
         it('should hold back content that might be a partial tag', () => {
-            resetState();
-            const state = getState();
-            state.pendingContent = 'some content<';
-
-            const result = callMethod();
+            initState();
+            const result = callChunk('some content<');
             expect(result).toBe('some content');
             expect(getState().pendingContent).toBe('<');
         });
 
         it('should hold back partial <thin tag', () => {
-            resetState();
-            const state = getState();
-            state.pendingContent = 'hello<thin';
-
-            const result = callMethod();
+            initState();
+            const result = callChunk('hello<thin');
             expect(result).toBe('hello');
             expect(getState().pendingContent).toBe('<thin');
         });
@@ -439,10 +484,7 @@ describe('MistralLLM', () => {
         };
 
         it('should extract content from streaming chunk', () => {
-            // Reset streaming state and set thinkingComplete
-            (instance as ReturnType<typeof Object.create>)['resetStreamingState']();
-            const state = (instance as ReturnType<typeof Object.create>)['_streamingState'];
-            state.thinkingComplete = true;
+            (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState']();
 
             const chunk = {
                 data: {
@@ -457,7 +499,7 @@ describe('MistralLLM', () => {
         });
 
         it('should detect finish reason', () => {
-            (instance as ReturnType<typeof Object.create>)['resetStreamingState']();
+            (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState']();
             const chunk = {
                 data: {
                     choices: [{
@@ -471,15 +513,13 @@ describe('MistralLLM', () => {
         });
 
         it('should return empty content for null chunk', () => {
-            (instance as ReturnType<typeof Object.create>)['resetStreamingState']();
+            (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState']();
             const result = callMethod(null);
             expect(result.content).toBe('');
         });
 
         it('should extract usage information when present', () => {
-            (instance as ReturnType<typeof Object.create>)['resetStreamingState']();
-            const state = (instance as ReturnType<typeof Object.create>)['_streamingState'];
-            state.thinkingComplete = true;
+            (instance as ReturnType<typeof Object.create>)['initializeThinkingStreamState']();
 
             const chunk = {
                 data: {

@@ -17,6 +17,10 @@ import type {
     MJAIAgentRunStepEntityExtended,
 } from '@memberjunction/ai-core-plus';
 import type { AgentRunContext } from '../AgentRunContext';
+import {
+    ValidateCustomStepDataAgainstConfigSchema,
+    type CustomStepConfigSchemaValidationResult,
+} from './CustomStepConfigSchemaValidator';
 
 /**
  * Abstract base class for pluggable agent next-step handlers (Extension Point #1).
@@ -46,6 +50,17 @@ export abstract class BaseAgentStepHandler {
      * Conversational pause steps (`Chat`) set this to `false`.
      */
     public readonly CountsAgainstTreeBudget: boolean = true;
+
+    /**
+     * Validates `customStepData` against the step type's `AIAgentStepType.ConfigSchema` JSON Schema
+     * before handler validation/execution (`R2-12`). Subclasses may override to extend validation.
+     */
+    public ValidateConfigSchema(
+        configSchemaJson: string | null | undefined,
+        customStepData: unknown
+    ): CustomStepConfigSchemaValidationResult {
+        return ValidateCustomStepDataAgainstConfigSchema(configSchemaJson, customStepData);
+    }
 
     /**
      * Validates a model- or agent-type-emitted next step before execution.

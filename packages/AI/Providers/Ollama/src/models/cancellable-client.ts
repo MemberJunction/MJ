@@ -21,7 +21,11 @@ export interface CancellableOllamaClient {
  *
  * An AbortController is used rather than `AbortSignal.any`, which not every supported Node version has.
  */
-export function CreateCancellableOllamaClient(host: string, token: AbortSignal): CancellableOllamaClient {
+export function CreateCancellableOllamaClient(
+    host: string,
+    token: AbortSignal,
+    customFetch?: Fetch
+): CancellableOllamaClient {
     const requestController = new AbortController();
     const onTokenAbort = (): void => requestController.abort(token.reason);
     if (token.aborted) {
@@ -30,10 +34,11 @@ export function CreateCancellableOllamaClient(host: string, token: AbortSignal):
         token.addEventListener('abort', onTokenAbort, { once: true });
     }
 
+    const baseFetch: Fetch = customFetch ?? fetch;
     const cancellableFetch: Fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
         const existing = init?.signal;
         if (!existing) {
-            return fetch(input, { ...init, signal: requestController.signal });
+            return baseFetch(input, { ...init, signal: requestController.signal });
         }
         // `existing` is the Ollama client's own per-request signal, so this listener dies with it
         const combined = new AbortController();
@@ -45,7 +50,7 @@ export function CreateCancellableOllamaClient(host: string, token: AbortSignal):
             }
             source.addEventListener('abort', () => forward(source), { once: true });
         }
-        return fetch(input, { ...init, signal: combined.signal });
+        return baseFetch(input, { ...init, signal: combined.signal });
     };
 
     return {

@@ -397,3 +397,49 @@ describe('InsertRule — DELETE through a CTE inside a larger batch (issue #3166
     expect(out).toContain(`UPDATE __mj."ListDetail" SET "Status" = 'Active'`);
   });
 });
+
+describe('InsertRule — V202611271804 JSON_MODIFY / JSON_QUERY / ISJSON backfill UPDATE', () => {
+  it('transpiles the exact V202611271804 derived-agent SearchScopeAccess backfill UPDATE to valid PostgreSQL jsonb_set', () => {
+    const sql = [
+      'UPDATE a',
+      'SET a.[Configuration] = CASE',
+      "    WHEN a.[Configuration] IS NULL OR LTRIM(RTRIM(a.[Configuration])) = N''",
+      '        THEN N\'{"scope":{"searchScopeAccess":"None"}}\'',
+      '    WHEN ISJSON(a.[Configuration]) = 1',
+      "        AND JSON_VALUE(a.[Configuration], '$.scope.searchScopeAccess') IS NULL",
+      '        THEN JSON_MODIFY(',
+      '            CASE',
+      "                WHEN JSON_QUERY(a.[Configuration], '$.scope') IS NULL",
+      "                    THEN JSON_MODIFY(a.[Configuration], '$.scope', JSON_QUERY(N'{}'))",
+      '                ELSE a.[Configuration]',
+      '            END,',
+      "            '$.scope.searchScopeAccess',",
+      "            N'None'",
+      '        )',
+      '    ELSE a.[Configuration]',
+      'END',
+      'FROM [__mj].[AIAgent] a',
+      'WHERE a.[BaseAgentID] IS NOT NULL',
+      "  AND COALESCE(a.[InstantiationMode], N'None') = N'None'",
+      "  AND a.[SearchScopeAccess] = N'None';",
+    ].join('\n');
+
+    const out = convert(sql);
+
+    // Zero unconverted T-SQL JSON functions
+    expect(out).not.toMatch(/\bJSON_MODIFY\s*\(/i);
+    expect(out).not.toMatch(/\bJSON_QUERY\s*\(/i);
+    expect(out).not.toMatch(/\bJSON_VALUE\s*\(/i);
+    expect(out).not.toMatch(/\bISJSON\s*\(/i);
+
+    // Valid PostgreSQL UPDATE ... AS alias + jsonb_set + IS JSON + ::text CASE branch parity
+    expect(out).toContain('UPDATE __mj."AIAgent" AS a');
+    expect(out).toContain('("Configuration") IS JSON');
+    expect(out).toContain(`("Configuration")::jsonb #>> '{scope,searchScopeAccess}' IS NULL`);
+    expect(out).toContain(`("Configuration")::jsonb -> 'scope' IS NULL`);
+    expect(out).toContain(`jsonb_set(("Configuration")::jsonb, '{scope}', ('{}')::jsonb, true)::text`);
+    expect(out).toContain(`'{scope,searchScopeAccess}', to_jsonb('None'::text), true)::text`);
+    expect(out).toContain('WHERE a."BaseAgentID" IS NOT NULL');
+    expect(out).not.toContain('FROM __mj."AIAgent"');
+  });
+});

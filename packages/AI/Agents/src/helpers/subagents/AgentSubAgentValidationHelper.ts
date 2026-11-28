@@ -562,7 +562,9 @@ export class AgentSubAgentValidationHelper {
         parentAgent: MJAIAgentEntityExtended,
         relationship?: MJAIAgentRelationshipEntity
     ): MJAIAgentEntity['ChatHandlingOption'] {
-        return relationship?.ChatHandlingOption ?? parentAgent.ChatHandlingOption ?? null;
+        const effectiveParentOption =
+            SafeResolveEffectiveAgentProperties(parentAgent)?.ChatHandlingOption ?? parentAgent.ChatHandlingOption;
+        return relationship?.ChatHandlingOption ?? effectiveParentOption ?? null;
     }
 
     public IsSubAgentConsultActive(

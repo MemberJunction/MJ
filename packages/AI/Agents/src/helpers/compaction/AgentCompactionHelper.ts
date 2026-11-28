@@ -44,7 +44,7 @@ import {
     type EffectiveContextBudget,
 } from '../../ConversationCompactionManager';
 import { CompactToolResultContent, CompactToolResultContentAsync } from '../../native-tools/tool-result-turns';
-import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
+import { DEFAULT_AGENT_HELPER_KEY, SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import { AgentStoppedRunContinuationHelper } from '../messaging/AgentStoppedRunContinuationHelper';
 import { AgentContextRecoveryHelper } from './AgentContextRecoveryHelper';
@@ -742,7 +742,10 @@ export class AgentCompactionHelper extends BaseAgentCompactionHelper {
         agentRun: MJAIAgentRunEntityExtended
     ): Promise<void> {
         const agent = params?.agent;
-        if (!agent || (!agent.InjectNotes && !agent.InjectExamples)) {
+        const effectiveMemory = agent ? SafeResolveEffectiveAgentProperties(agent) : undefined;
+        const injectNotes = effectiveMemory?.InjectNotes ?? agent?.InjectNotes;
+        const injectExamples = effectiveMemory?.InjectExamples ?? agent?.InjectExamples;
+        if (!agent || (!injectNotes && !injectExamples)) {
             return;
         }
         if (agent.DriverClass === 'MemoryManagerAgent' || agent.Name === 'Memory Manager') {

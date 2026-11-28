@@ -2,6 +2,9 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityPermissionType,
+    IEntityDataProvider,
+    IMetadataProvider,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -9,7 +12,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentStepTypeEntity } from '@memberjunction/core-entities';
-import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
+import { CheckAgentAdminEntityPermissions, IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
 
 interface BuiltInStepTypeSecurityFloor {
     readonly DriverClass: string;
@@ -46,9 +49,10 @@ export interface AgentStepTypeValidationTarget {
 /** Pure validation helper for `MJ: AI Agent Step Types` create/update rules. */
 export function ValidateAgentStepTypeMutation(
     target: AgentStepTypeValidationTarget,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'Name',
@@ -112,9 +116,10 @@ export function ValidateAgentStepTypeMutation(
 export function ValidateAgentStepTypeDelete(
     stepTypeName: string | null | undefined,
     stepTypeId: string | null | undefined,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'Name',
@@ -151,6 +156,19 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
         return false;
     }
 
+    public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        return CheckAgentAdminEntityPermissions(
+            {
+                ActiveUser: this.ActiveUser,
+                EntityInfo: this.EntityInfo,
+                ProviderToUse: this.ProviderToUse,
+            },
+            type,
+            throwError,
+            (permType, shouldThrow) => super.CheckPermissions(permType, shouldThrow)
+        );
+    }
+
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         if (!result.Success) {
@@ -165,7 +183,8 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
                 CountsAgainstTreeBudget: this.CountsAgainstTreeBudget,
                 Status: this.Status,
             },
-            this.ContextCurrentUser
+            this.ContextCurrentUser,
+            this.ProviderToUse
         );
         result.Errors.push(...errors);
         result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
@@ -173,7 +192,7 @@ export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const errors = ValidateAgentStepTypeDelete(this.Name, this.ID, this.ContextCurrentUser);
+        const errors = ValidateAgentStepTypeDelete(this.Name, this.ID, this.ContextCurrentUser, this.ProviderToUse);
         if (errors.length > 0) {
             const deleteResult = new BaseEntityResult(false, '', 'delete');
             deleteResult.Errors = errors;

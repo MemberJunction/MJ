@@ -248,7 +248,10 @@ export class AgentTurnToolsAndFinishIfHelper {
         }
         if (agent.ParentID) {
             const parentAgent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, agent.ParentID));
-            if (parentAgent && parentAgent.ArtifactCreationMode === 'Always') {
+            const parentArtifactMode = parentAgent
+                ? (SafeResolveEffectiveAgentProperties(parentAgent)?.ArtifactCreationMode ?? parentAgent.ArtifactCreationMode)
+                : undefined;
+            if (parentArtifactMode === 'Always') {
                 return true;
             }
         }

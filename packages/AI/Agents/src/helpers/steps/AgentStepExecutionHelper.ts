@@ -28,7 +28,7 @@ import { ActiveRunGovernanceRegistry } from '../../ActiveRunGovernanceRegistry';
 import { COMPLETE_TASK_TOOL } from '../../native-tools/control-tools';
 import { BuildToolResultTurn, type NativeToolResult } from '../../native-tools/tool-result-turns';
 import { IsPromptTurnStep, RepeatedFailingStepTracker } from '../../repeated-failing-step';
-import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
+import { DEFAULT_AGENT_HELPER_KEY, SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import { AgentPayloadHelper } from '../payload/AgentPayloadHelper';
 import { AgentStepTypeRegistry } from './AgentStepTypeRegistry';
@@ -350,6 +350,32 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
                 `Step type '${execPolicy.StepKey}' does not apply to agent type '${execAgentTypeName}' (AppliesTo='${execPolicy.AppliesTo}')`
             );
         }
+        if (execPolicy.ConfigSchema && execPolicy.ConfigSchema.trim().length > 0) {
+            const schemaResult = execPolicy.Handler.ValidateConfigSchema(
+                execPolicy.ConfigSchema,
+                previousDecision.customStepData
+            );
+            if (!schemaResult.Valid) {
+                const errorMessage = `Custom step '${execPolicy.StepKey}' customStepData failed ConfigSchema validation: ${schemaResult.Errors.join('; ')}`;
+                ctx.Hooks.LogError(errorMessage, {
+                    agent: params.agent,
+                    category: 'CustomStepConfigSchemaValidation',
+                    metadata: {
+                        stepKey: execPolicy.StepKey,
+                        validationErrors: schemaResult.Errors,
+                    },
+                });
+                return {
+                    ...previousDecision,
+                    step: 'Failed',
+                    terminate: true,
+                    previousPayload: currentPayload,
+                    newPayload: currentPayload,
+                    message: errorMessage,
+                    errorMessage,
+                };
+            }
+        }
         return execPolicy.Handler.Execute<P>(ctx, params, config, previousDecision, stepCount);
     }
 
@@ -641,9 +667,11 @@ export class AgentStepExecutionHelper extends BaseAgentStepExecutionHelper {
         if (subAgentResult.payloadArtifactTypeID) {
             return subAgentResult.payloadArtifactTypeID;
         }
-        if (subAgentEntity?.ArtifactCreationMode === 'Never') {
+        const effective = subAgentEntity ? SafeResolveEffectiveAgentProperties(subAgentEntity) : undefined;
+        const creationMode = effective?.ArtifactCreationMode ?? subAgentEntity?.ArtifactCreationMode;
+        if (creationMode === 'Never') {
             return undefined;
         }
-        return subAgentEntity?.DefaultArtifactTypeID || undefined;
+        return (effective?.DefaultArtifactTypeID ?? subAgentEntity?.DefaultArtifactTypeID) || undefined;
     }
 }

@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BaseLLM } from '../generic/baseLLM';
-import { ChatMessage, ChatParams, ChatResult, ChatResultData } from '../generic/chat.types';
+import { BaseLLM, type NormalizedModelUsageParams } from '../generic/baseLLM';
+import { ChatMessage, ChatParams, ChatResult, ChatResultData, ChatToolCall } from '../generic/chat.types';
 import { ClassifyParams, ClassifyResult } from '../generic/classify.types';
 import { SummarizeParams, SummarizeResult } from '../generic/summarize.types';
+import { ThinkingStreamExtractor } from '../generic/thinkingStreamExtractor';
 
 // Concrete test implementation of BaseLLM
 class TestLLM extends BaseLLM {
@@ -428,6 +429,93 @@ describe('BaseLLM', () => {
         it('default base-class resetStreamingState is a no-op', () => {
             // Calling reset on a vanilla TestLLM doesn't throw and has no observable effect.
             expect(() => (llm as unknown as { resetStreamingState(): void }).resetStreamingState()).not.toThrow();
+        });
+    });
+
+    describe('OO BaseLLM helpers (BuildNormalizedModelUsage, BuildErrorChatResult, OpenAI tool helpers, ThinkingStreamExtractor)', () => {
+        it('BuildNormalizedModelUsage subtracts cacheReadTokens by default and preserves raw promptTokens when promptTokensAlreadyExcludesCache=true', () => {
+            const buildUsage = (p: NormalizedModelUsageParams) =>
+                (llm as unknown as { BuildNormalizedModelUsage(p: NormalizedModelUsageParams): ReturnType<BaseLLM['BuildNormalizedModelUsage']> }).BuildNormalizedModelUsage(p);
+
+            // Inclusive provider (OpenAI / Groq / Cerebras)
+            const inclusive = buildUsage({
+                rawPromptTokens: 1000,
+                completionTokens: 200,
+                cacheReadTokens: 750,
+                cost: 0.012,
+                costCurrency: 'USD',
+            });
+            expect(inclusive.promptTokens).toBe(250);
+            expect(inclusive.completionTokens).toBe(200);
+            expect(inclusive.cacheReadTokens).toBe(750);
+            expect(inclusive.cacheWriteTokens).toBe(0);
+            expect(inclusive.totalInputTokens).toBe(1000);
+            expect(inclusive.cost).toBe(0.012);
+            expect(inclusive.costCurrency).toBe('USD');
+
+            // Clamped at 0 when cacheReadTokens exceeds rawPromptTokens
+            const clamped = buildUsage({ rawPromptTokens: 100, completionTokens: 10, cacheReadTokens: 250 });
+            expect(clamped.promptTokens).toBe(0);
+
+            // Exclusive provider (Anthropic)
+            const exclusive = buildUsage({
+                rawPromptTokens: 300,
+                completionTokens: 150,
+                cacheReadTokens: 1200,
+                cacheWriteTokens: 400,
+                promptTokensAlreadyExcludesCache: true,
+            });
+            expect(exclusive.promptTokens).toBe(300);
+            expect(exclusive.cacheReadTokens).toBe(1200);
+            expect(exclusive.cacheWriteTokens).toBe(400);
+            expect(exclusive.totalInputTokens).toBe(1900);
+        });
+
+        it('BuildErrorChatResult builds a standardized error ChatResult with ErrorAnalyzer classification', () => {
+            const start = new Date('2026-01-01T00:00:00Z');
+            const err = new Error('Upstream 503 unavailable');
+            const result = (llm as unknown as { BuildErrorChatResult(s: Date, e: unknown, st?: string): ChatResult })
+                .BuildErrorChatResult(start, err, 'Error');
+
+            expect(result.success).toBe(false);
+            expect(result.statusText).toBe('Error');
+            expect(result.errorMessage).toBe('Upstream 503 unavailable');
+            expect(result.data.choices).toEqual([]);
+            expect(result.data.usage.promptTokens).toBe(0);
+            expect(result.errorInfo).toBeDefined();
+        });
+
+        it('FormatOpenAICompatibleTools / ToolChoice / ToolCalls / ToolResults / ParseOpenAICompatibleToolCalls wrap wire mapping cleanly', () => {
+            const helpers = llm as unknown as {
+                FormatOpenAICompatibleTools(p: ChatParams): unknown;
+                FormatOpenAICompatibleToolChoice(p: ChatParams): unknown;
+                FormatOpenAICompatibleToolCalls(c: ChatToolCall[]): unknown;
+                FormatOpenAICompatibleToolResults(m: ChatMessage): unknown;
+                ParseOpenAICompatibleToolCalls(raw: unknown): { Calls?: ChatToolCall[]; Malformed?: string };
+                CreateThinkingStreamExtractor(): ThinkingStreamExtractor;
+            };
+
+            const params = new ChatParams();
+            expect(helpers.FormatOpenAICompatibleTools(params)).toBeUndefined();
+            expect(helpers.FormatOpenAICompatibleToolChoice(params)).toBeUndefined();
+
+            params.tools = [{ name: 'search', description: 'Search docs', inputSchema: { type: 'object' } }];
+            params.toolChoice = { type: 'tool', name: 'search' };
+            expect(helpers.FormatOpenAICompatibleTools(params)).toEqual([
+                { type: 'function', function: { name: 'search', description: 'Search docs', parameters: { type: 'object' } } },
+            ]);
+            expect(helpers.FormatOpenAICompatibleToolChoice(params)).toEqual({
+                type: 'function',
+                function: { name: 'search' },
+            });
+
+            const parsed = helpers.ParseOpenAICompatibleToolCalls([
+                { id: 'c1', type: 'function', function: { name: 'search', arguments: '{"q":"mj"}' } },
+            ]);
+            expect(parsed.Calls).toEqual([{ id: 'c1', name: 'search', arguments: { q: 'mj' } }]);
+
+            const extractor = helpers.CreateThinkingStreamExtractor();
+            expect(extractor).toBeInstanceOf(ThinkingStreamExtractor);
         });
     });
 });

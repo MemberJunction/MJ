@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "AuthorizationID": "@lookup:MJ: Authorizations.Name=AI: Agent Administration",
+      "RoleID": "@lookup:MJ: Roles.Name=Agent Administrator",
+      "Type": "Allow"
+    },
+    "primaryKey": {
+      "ID": "5A9F4974-9198-4FC8-A440-1269C3D26840"
+    }
+  }
+]

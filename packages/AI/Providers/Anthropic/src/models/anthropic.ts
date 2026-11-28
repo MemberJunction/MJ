@@ -3,7 +3,7 @@ import { ContentBlock, MessageCreateParams, MessageParam, RedactedThinkingBlockP
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
     SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
-    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, NormalizeFinishReason, GetLongRunningAIFetch } from "@memberjunction/ai";
+    ChatToolCall, ChatReasoningBlock, CHAT_FINISH_REASON_TOOL_CALLS, NormalizeFinishReason } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
 import { BuildAnthropicThinking, ResolveSamplingParams, UsesAdaptiveThinking, type AnthropicThinkingRequest } from "./thinking-config";
 
@@ -84,10 +84,10 @@ export class AnthropicLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        const longRunningFetch = GetLongRunningAIFetch();
+        const customFetch = this.CustomFetch;
         const anthropicFetch: NonNullable<ConstructorParameters<typeof Anthropic>[0]['fetch']> | undefined =
-            longRunningFetch
-                ? (url, init) => longRunningFetch(url, init)
+            customFetch
+                ? (url, init) => customFetch(url, init)
                 : undefined;
         this._anthropic = new Anthropic({
             apiKey,
@@ -944,9 +944,13 @@ export class AnthropicLLM extends BaseLLM {
             // captured.)
             const cacheReadTokens = result.usage.cache_read_input_tokens ?? 0;
             const cacheWriteTokens = result.usage.cache_creation_input_tokens ?? 0;
-            const usage = new ModelUsage(result.usage.input_tokens, result.usage.output_tokens);
-            usage.cacheReadTokens = cacheReadTokens;
-            usage.cacheWriteTokens = cacheWriteTokens;
+            const usage = this.BuildNormalizedModelUsage({
+                rawPromptTokens: result.usage.input_tokens,
+                completionTokens: result.usage.output_tokens,
+                cacheReadTokens,
+                cacheWriteTokens,
+                promptTokensAlreadyExcludesCache: true,
+            });
 
             // Normalize any native tool calls the model made. A turn can carry BOTH text and tool
             // calls, so this never displaces `content`.
@@ -1318,9 +1322,13 @@ export class AnthropicLLM extends BaseLLM {
         const thinkingContent = this._streamingState.accumulatedThinking.trim();
 
         // promptTokens stays "uncached input only"; cache buckets are disjoint (see ModelUsage).
-        const modelUsage = new ModelUsage(promptTokens, completionTokens);
-        modelUsage.cacheReadTokens = cacheReadTokens;
-        modelUsage.cacheWriteTokens = cacheWriteTokens;
+        const modelUsage = this.BuildNormalizedModelUsage({
+            rawPromptTokens: promptTokens,
+            completionTokens,
+            cacheReadTokens,
+            cacheWriteTokens,
+            promptTokensAlreadyExcludesCache: true,
+        });
 
         // Set all properties
         result.data = {

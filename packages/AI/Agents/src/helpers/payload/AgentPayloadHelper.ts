@@ -33,7 +33,7 @@ import {
     type PayloadFeedbackResponse,
 } from '../../PayloadFeedbackManager';
 import type { PayloadChangeResultSummary, PayloadManagerResult } from '../../PayloadManager';
-import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
+import { DEFAULT_AGENT_HELPER_KEY, SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import { BaseAgentPayloadHelper } from './BaseAgentPayloadHelper';
 
@@ -296,14 +296,16 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
         params: ExecuteAgentParams<unknown, P>
     ): Promise<ExecuteAgentResult | null> {
         const agent = params.agent;
-        if (!agent.StartingPayloadValidation || params.payload === undefined) {
+        const effective = SafeResolveEffectiveAgentProperties(agent);
+        const startingSchema = effective?.StartingPayloadValidation ?? agent.StartingPayloadValidation;
+        if (!startingSchema || params.payload === undefined) {
             return null;
         }
 
         try {
             let validationSchema: unknown;
             try {
-                validationSchema = JSON.parse(agent.StartingPayloadValidation);
+                validationSchema = JSON.parse(startingSchema);
             } catch (parseError) {
                 const msg = parseError instanceof Error ? parseError.message : String(parseError);
                 ctx.Hooks.LogError(`Invalid StartingPayloadValidation JSON for agent ${agent.Name}: ${msg}`, {
@@ -311,7 +313,7 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
                     metadata: {
                         agentName: agent.Name,
                         agentId: agent.ID,
-                        validationSchema: agent.StartingPayloadValidation,
+                        validationSchema: startingSchema,
                     },
                 });
                 return null;
@@ -346,7 +348,10 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
         params: ExecuteAgentParams,
         errorMessages: string[]
     ): ExecuteAgentResult | null {
-        const mode = params.agent.StartingPayloadValidationMode || 'Fail';
+        const mode =
+            SafeResolveEffectiveAgentProperties(params.agent)?.StartingPayloadValidationMode ??
+            params.agent.StartingPayloadValidationMode ??
+            'Fail';
         const validationFeedback = `Starting payload validation failed:\n${errorMessages.map((e, i) => `${i + 1}. ${e}`).join('\n')}`;
 
         if (mode === 'Fail') {
@@ -403,14 +408,16 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
         }
 
         const agent = params.agent;
-        if (!agent.FinalPayloadValidation || !currentPayload) {
+        const effective = SafeResolveEffectiveAgentProperties(agent);
+        const finalSchema = effective?.FinalPayloadValidation ?? agent.FinalPayloadValidation;
+        if (!finalSchema || !currentPayload) {
             return nextStep;
         }
 
         try {
             let validationSchema: unknown;
             try {
-                validationSchema = JSON.parse(agent.FinalPayloadValidation);
+                validationSchema = JSON.parse(finalSchema);
             } catch (parseError) {
                 const msg = parseError instanceof Error ? parseError.message : String(parseError);
                 ctx.Hooks.LogError(`Invalid FinalPayloadValidation JSON for agent ${agent.Name}: ${msg}`, {
@@ -418,22 +425,24 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
                     metadata: {
                         agentName: agent.Name,
                         agentId: agent.ID,
-                        validationSchema: agent.FinalPayloadValidation,
+                        validationSchema: finalSchema,
                     },
                 });
                 return nextStep;
             }
 
             let payloadToValidate = currentPayload;
-            if (agent.PayloadScope) {
-                payloadToValidate = ctx.PayloadManager.applyPayloadScope(currentPayload, agent.PayloadScope) as P;
+            const effectiveScope = effective?.PayloadScope ?? agent.PayloadScope;
+            const effectiveFinalMode = effective?.FinalPayloadValidationMode ?? agent.FinalPayloadValidationMode ?? 'Retry';
+            if (effectiveScope) {
+                payloadToValidate = ctx.PayloadManager.applyPayloadScope(currentPayload, effectiveScope) as P;
                 if (payloadToValidate === null) {
-                    const errorMessage = `PayloadScope '${agent.PayloadScope}' not found in payload`;
+                    const errorMessage = `PayloadScope '${effectiveScope}' not found in payload`;
                     return ctx.Hooks.HandleFinalPayloadValidationFailure(
                         params,
                         nextStep,
                         currentPayload,
-                        agent.FinalPayloadValidationMode || 'Retry',
+                        effectiveFinalMode,
                         [errorMessage],
                         agentRun,
                         currentStep
@@ -445,7 +454,7 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
             const validationResult = jsonValidator.validate(payloadToValidate, validationSchema);
 
             if (!validationResult.Success) {
-                const mode = agent.FinalPayloadValidationMode || 'Retry';
+                const mode = effectiveFinalMode;
                 const errorMessages = validationResult.Errors.map(e => e.Message);
 
                 ctx.Hooks.LogStatus(`⚠️ Final payload validation failed for agent ${agent.Name} (mode: ${mode}):`, true, params);
@@ -523,6 +532,7 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
                 case 'Retry': {
                     ctx.ValidationRetryCount++;
                     const maxRetries =
+                        SafeResolveEffectiveAgentProperties(params.agent)?.FinalPayloadValidationMaxRetries ||
                         params.agent.FinalPayloadValidationMaxRetries ||
                         ctx.Hooks.ResolvedLimits(params).ResourceGuards.FinalPayloadValidationMaxRetries;
                     if (ctx.ValidationRetryCount >= maxRetries) {
@@ -798,9 +808,11 @@ export class AgentPayloadHelper extends BaseAgentPayloadHelper {
         isUnmodifiedInheritedPayload: boolean
     ): PayloadManagerResult<P> {
         const change = step.payloadChangeRequest!;
-        const allowedPaths = params.agent.PayloadSelfWritePaths
-            ? JSON.parse(params.agent.PayloadSelfWritePaths)
-            : this.GetDefaultPayloadSelfWritePaths(ctx);
+        const allowedPaths =
+            SafeResolveEffectiveAgentProperties(params.agent)?.PayloadSelfWritePaths ??
+            (params.agent.PayloadSelfWritePaths
+                ? (JSON.parse(params.agent.PayloadSelfWritePaths) as string[])
+                : this.GetDefaultPayloadSelfWritePaths(ctx));
         const basePayload =
             step.artifactDirective?.behavior === 'create-new' &&
             (ctx.PromptTurnCount <= 1 || isUnmodifiedInheritedPayload || Boolean(change.replaceElements))

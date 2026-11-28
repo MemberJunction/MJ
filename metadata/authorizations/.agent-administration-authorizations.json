@@ -1,0 +1,14 @@
+[
+  {
+    "fields": {
+      "Name": "AI: Agent Administration",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants full administrative authority over MJ: AI Agents (root catalog management, helperPlugins, and DriverClass overrides), MJ: AI Agent Categories, MJ: AI Agent Types, MJ: AI Agent Step Types, and MJ: AI Agent Personas."
+    },
+    "primaryKey": {
+      "ID": "318F7ABE-238E-4DB0-B6B8-50247EEA6256"
+    }
+  }
+]

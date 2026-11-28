@@ -1,6 +1,5 @@
 import { BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock,
-    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls, CHAT_FINISH_REASON_MALFORMED_TOOL_CALL,
-    CHAT_FINISH_REASON_TOOL_CALLS, type ChatToolCall, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, CHAT_FINISH_REASON_TOOL_CALLS, type ChatToolCall, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { GetToolUseFailedGeneration, ParseFailedGeneration } from './failedGeneration';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq from 'groq-sdk';
@@ -15,7 +14,10 @@ export class GroqLLM extends BaseLLM {
 
     constructor(apiKey: string) {
         super(apiKey);
-        this._client = new Groq({ apiKey: apiKey });
+        this._client = new Groq({
+            apiKey: apiKey,
+            ...this.BuildTransportClientOptions(),
+        });
     }
 
     /**
@@ -126,12 +128,14 @@ export class GroqLLM extends BaseLLM {
         request: ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming,
         params: ChatParams
     ): void {
-        if (!params.tools || params.tools.length === 0) {
+        const tools = this.FormatOpenAICompatibleTools(params);
+        if (!tools) {
             return;
         }
-        request.tools = buildOpenAICompatibleTools(params.tools);
-        if (params.toolChoice !== undefined) {
-            request.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        request.tools = tools;
+        const toolChoice = this.FormatOpenAICompatibleToolChoice(params);
+        if (toolChoice !== undefined) {
+            request.tool_choice = toolChoice;
         }
         // Deliberately only when asked — see SupportsTools on the gpt-oss parallel gap.
         if (params.parallelToolCalls !== undefined) {
@@ -146,7 +150,7 @@ export class GroqLLM extends BaseLLM {
             // A tool turn is not one message: it expands into one `tool` message per result, each
             // carrying the id of the call it answers.
             if (msg.role === ChatMessageRole.tool) {
-                groqMessages.push(...buildOpenAICompatibleToolResults(msg, 'Groq provider'));
+                groqMessages.push(...this.FormatOpenAICompatibleToolResults(msg, 'Groq provider'));
                 continue;
             }
 
@@ -156,7 +160,7 @@ export class GroqLLM extends BaseLLM {
                 groqMessages.push(role === 'assistant'
                     // The assistant's own calls must ride along, or the tool results answering
                     // them are orphaned and the request is rejected.
-                    ? { role, content: msg.content, ...(msg.toolCalls?.length ? { tool_calls: buildOpenAICompatibleToolCalls(msg.toolCalls) } : {}) }
+                    ? { role, content: msg.content, ...(msg.toolCalls?.length ? { tool_calls: this.FormatOpenAICompatibleToolCalls(msg.toolCalls) } : {}) }
                     : { role, content: msg.content });
                 continue;
             }
@@ -296,7 +300,7 @@ export class GroqLLM extends BaseLLM {
             // Extract thinking content if present using base class helper
             const extracted = this.extractThinkingFromContent(rawMessage);
 
-            const read = ReadOpenAICompatibleToolCalls(
+            const read = this.ParseOpenAICompatibleToolCalls(
                 choice.message?.tool_calls as RawOpenAICompatibleToolCall[] | undefined, 'Groq provider');
             const toolCalls = read.Calls;
             const res: ChatResultChoice = {
@@ -322,9 +326,11 @@ export class GroqLLM extends BaseLLM {
         // bill cache writes separately, so cacheWriteTokens stays 0.
         const groqUsage = chatResponse.usage as typeof chatResponse.usage & { prompt_tokens_details?: { cached_tokens?: number } };
         const groqCachedTokens = groqUsage.prompt_tokens_details?.cached_tokens ?? 0;
-        const groqNetPromptTokens = Math.max(0, (chatResponse.usage.prompt_tokens ?? 0) - groqCachedTokens);
-        const usage = new ModelUsage(groqNetPromptTokens, chatResponse.usage.completion_tokens);
-        usage.cacheReadTokens = groqCachedTokens;
+        const usage = this.BuildNormalizedModelUsage({
+            rawPromptTokens: chatResponse.usage.prompt_tokens ?? 0,
+            completionTokens: chatResponse.usage.completion_tokens,
+            cacheReadTokens: groqCachedTokens,
+        });
         // Convert from seconds to milliseconds and truncate to integer.
         // Groq returns sub-second precision (e.g. 0.07161... s) which becomes
         // 71.610... ms after the multiply — those fractional ms reach

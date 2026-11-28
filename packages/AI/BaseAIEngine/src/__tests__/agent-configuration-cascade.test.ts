@@ -682,4 +682,102 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         const engine3 = seedEngine({ _agents: [cappedRoot, looserMid] });
         expect(engine3.ResolveEffectiveAgentProperties(looserMid).Configuration.instantiation?.maxInstancesPerUser).toBe(1);
     });
+
+    it('cascades all 10 payload.* keys across AgentType -> Category -> BaseAgent -> Leaf with legacy dual-read fallback (R2-10)', () => {
+        const typeRow = makeAgentType({
+            ID: 'b0000000-0000-4000-8000-000000000051',
+            DefaultAgentConfiguration: JSON.stringify({
+                payload: {
+                    downstreamPaths: ['context.*'],
+                    upstreamPaths: ['output.*'],
+                    startingValidationMode: 'Warn',
+                    finalValidationMode: 'Fail',
+                    finalValidationMaxRetries: 5,
+                },
+            }),
+        });
+        const catRow = makeCategory({
+            ID: 'c0000000-0000-4000-8000-000000000051',
+            DefaultConfiguration: JSON.stringify({
+                payload: {
+                    selfReadPaths: ['context.user'],
+                    selfWritePaths: ['draft.*'],
+                    scope: '/workspace',
+                    startingValidationSchema: '{"type":"object"}',
+                    finalValidationSchema: '{"type":"object","required":["answer"]}',
+                },
+            }),
+        });
+        const root = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000051',
+            TypeID: typeRow.ID,
+            CategoryID: catRow.ID,
+            PayloadDownstreamPaths: '["*"]', // DB default wildcard must NOT mask category/type default
+            PayloadUpstreamPaths: '["*"]',
+            StartingPayloadValidationMode: 'Fail',
+            FinalPayloadValidationMode: 'Retry',
+            FinalPayloadValidationMaxRetries: 3,
+            Configuration: null,
+        });
+        const leaf = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000052',
+            BaseAgentID: root.ID,
+            TypeID: typeRow.ID,
+            PayloadDownstreamPaths: '["*"]',
+            PayloadUpstreamPaths: '["*"]',
+            StartingPayloadValidationMode: 'Fail',
+            FinalPayloadValidationMode: 'Retry',
+            FinalPayloadValidationMaxRetries: 3,
+            Configuration: JSON.stringify({
+                payload: {
+                    upstreamPaths: ['result.summary'],
+                    finalValidationMaxRetries: 2,
+                },
+            }),
+        });
+
+        const engine = seedEngine({
+            _agentTypes: [typeRow],
+            _agentCategories: [catRow],
+            _agents: [root, leaf],
+        });
+
+        const eff = engine.ResolveEffectiveAgentProperties(leaf);
+        expect(eff.PayloadDownstreamPaths).toEqual(['context.*']);
+        expect(eff.PayloadUpstreamPaths).toEqual(['result.summary']);
+        expect(eff.PayloadSelfReadPaths).toEqual(['context.user']);
+        expect(eff.PayloadSelfWritePaths).toEqual(['draft.*']);
+        expect(eff.PayloadScope).toBe('/workspace');
+        expect(eff.StartingPayloadValidation).toBe('{"type":"object"}');
+        expect(eff.StartingPayloadValidationMode).toBe('Warn');
+        expect(eff.FinalPayloadValidation).toBe('{"type":"object","required":["answer"]}');
+        expect(eff.FinalPayloadValidationMode).toBe('Fail');
+        expect(eff.FinalPayloadValidationMaxRetries).toBe(2);
+
+        // Non-default legacy columns still dual-read cleanly when Configuration JSON omits payload
+        const legacyOnly = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000053',
+            PayloadDownstreamPaths: '["input.query"]',
+            PayloadUpstreamPaths: '["output.rows"]',
+            PayloadSelfReadPaths: '["input.*"]',
+            PayloadSelfWritePaths: '["output.*"]',
+            PayloadScope: '/legacy',
+            StartingPayloadValidation: '{"type":"object"}',
+            StartingPayloadValidationMode: 'Warn',
+            FinalPayloadValidation: '{"type":"object"}',
+            FinalPayloadValidationMode: 'Warn',
+            FinalPayloadValidationMaxRetries: 7,
+            Configuration: null,
+        });
+        const legacyEngine = seedEngine({ _agents: [legacyOnly] });
+        const legEff = legacyEngine.ResolveEffectiveAgentProperties(legacyOnly);
+        expect(legEff.PayloadDownstreamPaths).toEqual(['input.query']);
+        expect(legEff.PayloadUpstreamPaths).toEqual(['output.rows']);
+        expect(legEff.PayloadSelfReadPaths).toEqual(['input.*']);
+        expect(legEff.PayloadSelfWritePaths).toEqual(['output.*']);
+        expect(legEff.PayloadScope).toBe('/legacy');
+        expect(legEff.StartingPayloadValidationMode).toBe('Warn');
+        expect(legEff.FinalPayloadValidationMode).toBe('Warn');
+        expect(legEff.FinalPayloadValidationMaxRetries).toBe(7);
+    });
 });

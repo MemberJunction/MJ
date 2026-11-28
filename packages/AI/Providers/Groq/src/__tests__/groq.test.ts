@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoisted mock variables
 const mockCreate = vi.hoisted(() => vi.fn());
+const mockCustomFetch = vi.hoisted(
+    () => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined)
+);
 const MockGroq = vi.hoisted(() => vi.fn().mockImplementation(function (this: Record<string, unknown>) {
     this.chat = {
         completions: {
@@ -44,13 +47,54 @@ import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
+        protected _additionalSettings: Record<string, unknown> = {};
         constructor(apiKey: string) {
             this._apiKey = apiKey;
         }
+        protected get CustomFetch() {
+            return mockCustomFetch();
+        }
+        protected BuildTransportClientOptions() {
+            const customFetch = this.CustomFetch;
+            return customFetch ? { fetch: customFetch } : {};
+        }
     }
     class BaseLLM extends BaseModel {
-        protected _additionalSettings: Record<string, unknown> = {};
         public get SupportsStreaming(): boolean { return false; }
+        protected BuildNormalizedModelUsage(p: {
+            rawPromptTokens: number;
+            completionTokens: number;
+            cacheReadTokens?: number;
+            cacheWriteTokens?: number;
+            cost?: number;
+            costCurrency?: string;
+            promptTokensAlreadyExcludesCache?: boolean;
+        }) {
+            const cacheRead = Math.max(0, p.cacheReadTokens ?? 0);
+            const cacheWrite = Math.max(0, p.cacheWriteTokens ?? 0);
+            const netPrompt = p.promptTokensAlreadyExcludesCache
+                ? Math.max(0, p.rawPromptTokens ?? 0)
+                : Math.max(0, (p.rawPromptTokens ?? 0) - cacheRead);
+            const u = new ModelUsage(netPrompt, Math.max(0, p.completionTokens ?? 0));
+            u.cacheReadTokens = cacheRead;
+            u.cacheWriteTokens = cacheWrite;
+            return u;
+        }
+        protected FormatOpenAICompatibleTools(p: { tools?: unknown[] }) {
+            return p.tools && p.tools.length > 0 ? actualToolMapping.BuildOpenAICompatibleTools(p.tools as never) : undefined;
+        }
+        protected FormatOpenAICompatibleToolChoice(p: { toolChoice?: unknown }) {
+            return p.toolChoice !== undefined ? actualToolMapping.BuildOpenAICompatibleToolChoice(p.toolChoice as never) : undefined;
+        }
+        protected FormatOpenAICompatibleToolCalls(calls: unknown[]) {
+            return actualToolMapping.BuildOpenAICompatibleToolCalls(calls as never);
+        }
+        protected FormatOpenAICompatibleToolResults(msg: unknown, providerName?: string) {
+            return actualToolMapping.BuildOpenAICompatibleToolResults(msg as never, providerName ?? this.constructor.name);
+        }
+        protected ParseOpenAICompatibleToolCalls(raw: unknown, providerName?: string) {
+            return actualToolMapping.ReadOpenAICompatibleToolCalls(raw as never, providerName ?? this.constructor.name);
+        }
         protected thinkingStreamState: {
             accumulatedThinking: string;
             inThinkingBlock: boolean;
@@ -108,6 +152,8 @@ vi.mock('@memberjunction/ai', () => {
         promptTokens: number;
         completionTokens: number;
         totalTokens: number;
+        cacheReadTokens: number = 0;
+        cacheWriteTokens: number = 0;
         queueTime?: number;
         promptTime?: number;
         completionTime?: number;
@@ -195,6 +241,15 @@ describe('GroqLLM', () => {
             expect(instance.GroqClient).toBeDefined();
             expect(instance.client).toBeDefined();
             expect(instance.client).toBe(instance.GroqClient);
+        });
+
+        it('should forward BaseModel.CustomFetch to the Groq SDK constructor when configured (R2-9)', () => {
+            const scopedFetch = vi.fn<() => Promise<Response>>();
+            mockCustomFetch.mockReturnValueOnce(scopedFetch);
+            MockGroq.mockClear();
+
+            new GroqLLM('scoped-key');
+            expect(MockGroq).toHaveBeenCalledWith({ apiKey: 'scoped-key', fetch: scopedFetch });
         });
     });
 

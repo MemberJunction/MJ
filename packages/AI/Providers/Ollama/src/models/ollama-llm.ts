@@ -9,20 +9,23 @@ import { CancellableOllamaClient, CreateCancellableOllamaClient } from './cancel
  */
 @RegisterClass(BaseLLM, "OllamaLLM")
 export class OllamaLLM extends BaseLLM {
-    private _client: Ollama;
     private _baseUrl: string = 'http://localhost:11434';
     private _keepAlive: string | number = '5m'; // Default keep model loaded for 5 minutes
 
     constructor(apiKey?: string) {
         super(apiKey || ''); // Ollama doesn't require API key for local usage
-        this._client = new Ollama({ host: this._baseUrl });
+        void this.OllamaClient;
     }
 
     /**
-     * Read only getter method to get the Ollama client instance
+     * Read only getter method to get the Ollama client instance (cached via BaseModel.GetOrCreateClient
+     * and automatically rebuilt whenever SetAdditionalSettings/ClearAdditionalSettings invalidates it).
      */
     public get OllamaClient(): Ollama {
-        return this._client;
+        return this.GetOrCreateClient<Ollama>(() => new Ollama({
+            host: this._baseUrl,
+            ...this.BuildTransportClientOptions(),
+        }));
     }
 
     /**
@@ -63,16 +66,18 @@ export class OllamaLLM extends BaseLLM {
      * Override SetAdditionalSettings to handle Ollama specific settings
      */
     public override SetAdditionalSettings(settings: Record<string, any>): void {
-        super.SetAdditionalSettings(settings);
-        
-        // Handle Ollama-specific settings
         if (settings.baseUrl || settings.host) {
             this._baseUrl = settings.baseUrl || settings.host;
-            this._client = new Ollama({ host: this._baseUrl });
         }
-        
         if (settings.keepAlive !== undefined) {
             this._keepAlive = settings.keepAlive;
+        }
+
+        // super.SetAdditionalSettings triggers OnAdditionalSettingsChanged() -> InvalidateClient().
+        super.SetAdditionalSettings(settings);
+
+        if (settings.baseUrl || settings.host) {
+            void this.OllamaClient;
         }
     }
 
@@ -89,9 +94,9 @@ export class OllamaLLM extends BaseLLM {
      */
     private clientForRequest(token: AbortSignal | undefined): CancellableOllamaClient {
         if (!token) {
-            return { Client: this._client, Dispose: () => undefined };
+            return { Client: this.OllamaClient, Dispose: () => undefined };
         }
-        return CreateCancellableOllamaClient(this._baseUrl, token);
+        return CreateCancellableOllamaClient(this._baseUrl, token, this.CustomFetch);
     }
 
     /**
@@ -349,22 +354,7 @@ export class OllamaLLM extends BaseLLM {
                 return this.BuildCancelledChatResult(startTime, { error, signal: params.cancellationToken });
             }
 
-            const endTime = new Date();
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-
-            return {
-                success: false,
-                statusText: "Error",
-                startTime: startTime,
-                endTime: endTime,
-                timeElapsed: endTime.getTime() - startTime.getTime(),
-                data: {
-                    choices: [],
-                    usage: new ModelUsage(0, 0)
-                },
-                errorMessage: errorMessage,
-                exception: error,
-            } as ChatResult;
+            return this.BuildErrorChatResult(startTime, error, 'Error');
         }
     }
     

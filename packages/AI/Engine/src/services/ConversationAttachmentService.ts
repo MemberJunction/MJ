@@ -12,6 +12,8 @@
  * @since 2.130.0
  */
 
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ParseAgentConfiguration } from '@memberjunction/ai-core-plus';
 import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
     MJAIAgentEntity,
@@ -232,8 +234,25 @@ export class ConversationAttachmentService {
             };
         }
 
-        // Determine storage mode using agent's threshold if available
-        const agentThreshold = agent?.InlineStorageThresholdBytes ?? null;
+        // Determine storage mode using cascaded effective threshold if available (fallback to raw column)
+        const agentThreshold = (() => {
+            if (!agent) {
+                return null;
+            }
+            try {
+                const engine = AIEngineBase.Instance;
+                if (agent.ID && typeof engine?.ResolveEffectiveAgentProperties === 'function' && engine.GetAgentByID(agent.ID)) {
+                    const effective = engine.ResolveEffectiveAgentProperties(agent.ID).InlineStorageThresholdBytes;
+                    if (effective !== null && effective !== undefined) {
+                        return effective;
+                    }
+                }
+            } catch {
+                // Unit tests or uninitialized engine: fall back to direct config/column read
+            }
+            const parsedThreshold = ParseAgentConfiguration(agent.Configuration)?.attachments?.inlineStorageThresholdBytes;
+            return parsedThreshold ?? agent.InlineStorageThresholdBytes ?? null;
+        })();
         const storeInline = ConversationUtility.ShouldStoreInline(
             sizeBytes,
             agentThreshold,

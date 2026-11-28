@@ -44,6 +44,7 @@ export * from './helpers/subagents/BaseAgentSubAgentHelper';
 export * from './helpers/subagents/AgentSubAgentHelper';
 export * from './helpers/steps/BaseAgentStepExecutionHelper';
 export * from './helpers/steps/BaseAgentStepHandler';
+export * from './helpers/steps/CustomStepConfigSchemaValidator';
 export * from './helpers/steps/BuiltInAgentStepHandlers';
 export * from './helpers/steps/AgentStepTypeRegistry';
 export * from './helpers/steps/AgentStepExecutionHelper';

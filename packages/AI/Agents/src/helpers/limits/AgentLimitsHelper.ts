@@ -273,16 +273,15 @@ export class AgentLimitsHelper extends BaseAgentLimitsHelper {
             }
         }
 
-        const subAgents = AIEngine.Instance.GetSubAgents(agent.ID, 'Active').filter(
-            a => a.MinExecutionsPerRun != null && a.MinExecutionsPerRun > 0
-        );
-
+        const minExecFor = (a: MJAIAgentEntityExtended): number =>
+            (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function'
+                ? AIEngine.Instance.ResolveEffectiveAgentProperties(a).MinExecutionsPerRun : a.MinExecutionsPerRun) ?? 0;
+        const subAgents = AIEngine.Instance.GetSubAgents(agent.ID, 'Active').filter(a => minExecFor(a) > 0);
         for (const subAgent of subAgents) {
+            const minReq = minExecFor(subAgent);
             const executionCount = await ctx.Hooks.GetSubAgentExecutionCount(agentRun.ID, subAgent.ID);
-            if (executionCount < subAgent.MinExecutionsPerRun!) {
-                violations.push(
-                    `Sub-agent '${subAgent.Name}' requires ${subAgent.MinExecutionsPerRun} execution(s) but was executed ${executionCount} time(s)`
-                );
+            if (executionCount < minReq) {
+                violations.push(`Sub-agent '${subAgent.Name}' requires ${minReq} execution(s) but was executed ${executionCount} time(s)`);
             }
         }
 

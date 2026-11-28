@@ -1415,34 +1415,163 @@ function splitArgs(body: string): string[] {
 }
 
 /**
+ * Parse a T-SQL JSON path literal such as `'$.a.b'`, `N'$.a.b'`, `'strict $.a.b'`,
+ * `'lax $.items[0].name'`, or `'$'` into its mode and PostgreSQL path segments.
+ * Returns `null` when the argument is not a supported string literal path.
+ */
+function parseJsonPathLiteral(pathLit: string): { strict: boolean; segments: string[] } | null {
+  const pm = pathLit.trim().match(/^N?'(.*)'$/s);
+  if (!pm) return null;
+  let body = pm[1].trim();
+  let strict = false;
+  if (/^strict\s+/i.test(body)) {
+    strict = true;
+    body = body.replace(/^strict\s+/i, '');
+  } else if (/^lax\s+/i.test(body)) {
+    body = body.replace(/^lax\s+/i, '');
+  }
+  if (!body.startsWith('$')) return null;
+  const rest = body.slice(1);
+  if (rest.length === 0) {
+    return { strict, segments: [] };
+  }
+  // Support dotted keys (`$.a.b`) and bracketed array indices (`$.items[0].name`).
+  const segments: string[] = [];
+  const tokenRe = /\.([^.[\]]+)|\[(\d+)\]/g;
+  let consumed = 0;
+  let tm: RegExpExecArray | null;
+  while ((tm = tokenRe.exec(rest)) !== null) {
+    if (tm.index !== consumed) return null;
+    segments.push(tm[1] ?? tm[2]);
+    consumed = tm.index + tm[0].length;
+  }
+  if (consumed !== rest.length) return null;
+  return { strict, segments };
+}
+
+/** Format a PostgreSQL `text[]` path literal like `'{scope,searchScopeAccess}'`. */
+function formatPgJsonPathArray(segments: string[]): string {
+  const escaped = segments.map(s => s.replace(/'/g, "''"));
+  return `'{${escaped.join(',')}}'`;
+}
+
+/**
+ * Convert the 3rd (`newValue`) argument of T-SQL `JSON_MODIFY(target, path, newValue)`
+ * into a PostgreSQL `jsonb` expression suitable for `jsonb_set(...)`.
+ */
+function formatJsonModifyValue(rawValue: string): string {
+  const trimmed = rawValue.trim();
+  // Already a jsonb expression (e.g. produced by nested JSON_QUERY('...') -> ('...')::jsonb)
+  if (/::jsonb\s*$/i.test(trimmed)) {
+    return trimmed;
+  }
+  // String literal (with optional T-SQL N prefix if called standalone before RemoveNPrefix)
+  const strMatch = trimmed.match(/^N?('(?:''|[^'])*')$/s);
+  if (strMatch) {
+    return `to_jsonb(${strMatch[1]}::text)`;
+  }
+  // Numeric or boolean literal, or typed SQL expression
+  return `to_jsonb(${trimmed})`;
+}
+
+/** Returns true when character index `pos` falls inside a single-quoted SQL string literal. */
+function isInsideSqlString(sql: string, pos: number): boolean {
+  let inStr = false;
+  for (let i = 0; i < pos; i++) {
+    if (sql[i] === "'") {
+      if (inStr && sql[i + 1] === "'") {
+        i++;
+      } else {
+        inStr = !inStr;
+      }
+    }
+  }
+  return inStr;
+}
+
+/**
  * Convert SQL Server JSON functions to PostgreSQL equivalents:
- *   JSON_VALUE(expr, '$.a.b')  →  (expr)::jsonb #>> '{a,b}'   (->> for a single segment)
- *   ISJSON(expr) = 1           →  (expr) IS JSON
- *   ISJSON(expr) = 0           →  (expr) IS NOT JSON
- *   ISJSON(expr)               →  (expr) IS JSON
+ *   JSON_MODIFY(expr, '$.a.b', val)  →  jsonb_set((expr)::jsonb, '{a,b}', to_jsonb(val), true)::text
+ *   JSON_MODIFY(expr, '$.a.b', NULL) →  ((expr)::jsonb #- '{a,b}')::text   (lax mode deletes key)
+ *   JSON_QUERY(expr)                 →  (expr)::jsonb
+ *   JSON_QUERY(expr, '$.a.b')        →  (expr)::jsonb #> '{a,b}'   (-> for a single segment)
+ *   JSON_VALUE(expr, '$.a.b')        →  (expr)::jsonb #>> '{a,b}'  (->> for a single segment)
+ *   ISJSON(expr) = 1                 →  (expr) IS JSON
+ *   ISJSON(expr) = 0                 →  (expr) IS NOT JSON
+ *   ISJSON(expr)                     →  (expr) IS JSON
  * Accepts both bare (`JSON_VALUE(...)`) and already-quoted (`"JSON_VALUE"(...)`) forms,
- * so it is order-independent relative to identifier quoting. PG 16+ provides the IS JSON
- * predicate; JSON_VALUE's `$.`-rooted path is rewritten to jsonb path-extraction operators.
+ * so it is order-independent relative to identifier quoting, and handles arbitrarily nested
+ * calls (e.g., `JSON_MODIFY(CASE WHEN JSON_QUERY(...) IS NULL THEN JSON_MODIFY(..., JSON_QUERY('{}')) ...)`).
+ * PG 16+ provides the IS JSON predicate; `jsonb_set` results are cast to `::text` so they stay
+ * type-compatible with `TEXT` columns and `CASE ... ELSE col END` expressions.
  */
 export function ConvertJsonFunctions(sql: string): string {
+  sql = convertNamedJsonCall(sql, 'JSON_MODIFY', (args, after) => {
+    if (args.length !== 3) return null;
+    const targetExpr = ConvertJsonFunctions(args[0]);
+    const parsedPath = parseJsonPathLiteral(args[1]);
+    if (!parsedPath) return null;
+    const convertedValue = ConvertJsonFunctions(args[2]).trim();
+    if (parsedPath.segments.length === 0) {
+      if (convertedValue.toUpperCase() === 'NULL') {
+        return { replacement: parsedPath.strict ? `'null'::jsonb::text` : 'NULL', consume: 0, after };
+      }
+      return { replacement: `(${formatJsonModifyValue(convertedValue)})::text`, consume: 0, after };
+    }
+    const pgPath = formatPgJsonPathArray(parsedPath.segments);
+    if (convertedValue.toUpperCase() === 'NULL') {
+      if (parsedPath.strict) {
+        return {
+          replacement: `jsonb_set((${targetExpr})::jsonb, ${pgPath}, 'null'::jsonb, true)::text`,
+          consume: 0,
+          after,
+        };
+      }
+      return {
+        replacement: `((${targetExpr})::jsonb #- ${pgPath})::text`,
+        consume: 0,
+        after,
+      };
+    }
+    const valJsonb = formatJsonModifyValue(convertedValue);
+    return {
+      replacement: `jsonb_set((${targetExpr})::jsonb, ${pgPath}, ${valJsonb}, true)::text`,
+      consume: 0,
+      after,
+    };
+  });
+
+  sql = convertNamedJsonCall(sql, 'JSON_QUERY', (args, after) => {
+    if (args.length < 1 || args.length > 2) return null;
+    const expr = ConvertJsonFunctions(args[0]).trim().replace(/^N('(?:''|[^'])*')$/s, '$1');
+    if (args.length === 1) {
+      return { replacement: `(${expr})::jsonb`, consume: 0, after };
+    }
+    const parsedPath = parseJsonPathLiteral(args[1]);
+    if (!parsedPath) return null;
+    if (parsedPath.segments.length === 0) {
+      return { replacement: `(${expr})::jsonb`, consume: 0, after };
+    }
+    const replacement = parsedPath.segments.length === 1
+      ? `(${expr})::jsonb -> '${parsedPath.segments[0].replace(/'/g, "''")}'`
+      : `(${expr})::jsonb #> ${formatPgJsonPathArray(parsedPath.segments)}`;
+    return { replacement, consume: 0, after };
+  });
+
   sql = convertNamedJsonCall(sql, 'JSON_VALUE', (args, after) => {
     if (args.length < 2) return null;
-    const expr = args[0];
-    const pathLit = args[1].trim();
-    const pm = pathLit.match(/^'(.*)'$/s);
-    if (!pm) return null;
-    // Strip leading '$.' / '$' and split into segments.
-    const segs = pm[1].replace(/^\$\.?/, '').split('.').filter(s => s.length > 0);
-    if (segs.length === 0) return null;
-    const replacement = segs.length === 1
-      ? `(${expr})::jsonb ->> '${segs[0]}'`
-      : `(${expr})::jsonb #>> '{${segs.join(',')}}'`;
+    const expr = ConvertJsonFunctions(args[0]);
+    const parsedPath = parseJsonPathLiteral(args[1]);
+    if (!parsedPath || parsedPath.segments.length === 0) return null;
+    const replacement = parsedPath.segments.length === 1
+      ? `(${expr})::jsonb ->> '${parsedPath.segments[0].replace(/'/g, "''")}'`
+      : `(${expr})::jsonb #>> ${formatPgJsonPathArray(parsedPath.segments)}`;
     return { replacement, consume: 0, after };
   });
 
   sql = convertNamedJsonCall(sql, 'ISJSON', (args, after) => {
     if (args.length < 1) return null;
-    const expr = args[0];
+    const expr = ConvertJsonFunctions(args[0]);
     // Look for a trailing `= 1` / `= 0` comparison to fold into IS [NOT] JSON.
     const cmp = after.match(/^\s*=\s*([01])(?![\w.])/);
     if (cmp) {
@@ -1470,13 +1599,17 @@ function convertNamedJsonCall(
   name: string,
   build: (args: string[], after: string) => { replacement: string; consume: number; after: string } | null,
 ): string {
-  const callRe = new RegExp(`"?${name}"?\\s*\\(`, 'gi');
+  const callRe = new RegExp(`(?<!\\w)"?${name}"?\\s*\\(`, 'gi');
   let result = sql;
   let searchFrom = 0;
   while (true) {
     callRe.lastIndex = searchFrom;
     const m = callRe.exec(result);
     if (!m) break;
+    if (isInsideSqlString(result, m.index)) {
+      searchFrom = m.index + m[0].length;
+      continue;
+    }
     const openParen = result.indexOf('(', m.index);
     const close = matchParen(result, openParen);
     if (close < 0) { searchFrom = m.index + m[0].length; continue; }

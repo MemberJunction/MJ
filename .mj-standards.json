@@ -111,8 +111,8 @@
         "HeaderReasonPattern": "//\\s*file-size-ok:\\s*\\S+",
         "Allowlist": {
           "packages/AI/Agents/src/realtime/realtime-client-session-service.ts": 5215,
-          "packages/AI/Agents/src/memory-manager-agent.ts": 4480,
-          "packages/AI/Agents/src/AgentRunner.ts": 4279,
+          "packages/AI/Agents/src/memory-manager-agent.ts": 4478,
+          "packages/AI/Agents/src/AgentRunner.ts": 4270,
           "packages/AI/Agents/src/ArtifactToolManager.ts": 3980,
           "packages/AI/Agents/src/artifact-tools/SpreadsheetToolLibrary.ts": 3973,
           "packages/AI/Agents/src/GovernedArtifactService.ts": 3411,

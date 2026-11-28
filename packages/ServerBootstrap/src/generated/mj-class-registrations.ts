@@ -60,11 +60,6 @@ import {
     CohereReranker,
 } from '@memberjunction/ai-cohere';
 
-// @memberjunction/ai-fireworks (1 classes)
-import {
-    FireworksLLM,
-} from '@memberjunction/ai-fireworks';
-
 // @memberjunction/ai-gemini (5 classes)
 import {
     GeminiDecision,
@@ -140,6 +135,11 @@ import {
     ElevenLabsRealtime,
     ElevenRealtime,
 } from '@memberjunction/ai-elevenlabs';
+
+// @memberjunction/ai-fireworks (1 classes)
+import {
+    FireworksLLM,
+} from '@memberjunction/ai-fireworks';
 
 // @memberjunction/ai-huggingface (1 classes)
 import {
@@ -2087,7 +2087,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     CloudflareDecision,
     CohereEmbedding,
     CohereReranker,
-    FireworksLLM,
     GeminiDecision,
     GeminiEmbedding,
     GeminiImageGenerator,
@@ -2116,6 +2115,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ElevenLabsAudioGenerator,
     ElevenLabsRealtime,
     ElevenRealtime,
+    FireworksLLM,
     HuggingFaceRealtime,
     InceptionDecision,
     InceptionLLM,
@@ -3647,7 +3647,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-cerebras',
     '@memberjunction/ai-cloudflare',
     '@memberjunction/ai-cohere',
-    '@memberjunction/ai-fireworks',
     '@memberjunction/ai-gemini',
     '@memberjunction/ai-groq',
     '@memberjunction/ai-heygen',
@@ -3660,6 +3659,7 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-assemblyai',
     '@memberjunction/ai-deepinfra',
     '@memberjunction/ai-elevenlabs',
+    '@memberjunction/ai-fireworks',
     '@memberjunction/ai-huggingface',
     '@memberjunction/ai-inception',
     '@memberjunction/ai-llamacpp',

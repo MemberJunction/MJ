@@ -7,7 +7,7 @@
  * @module @memberjunction/ai
  */
 
-import { BaseResult, ModelUsage } from './baseModel';
+import { BaseResult, ModelUsage } from './baseModel.types';
 
 /**
  * A decision question with a yes/no outcome, asking whether a statement is true.

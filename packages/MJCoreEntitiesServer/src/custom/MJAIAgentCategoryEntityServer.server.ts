@@ -2,6 +2,9 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityPermissionType,
+    IEntityDataProvider,
+    IMetadataProvider,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -14,7 +17,7 @@ import {
     ParseAgentHelperPlugins,
     ValidateAgentConfigurationJson,
 } from '@memberjunction/ai-core-plus';
-import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
+import { CheckAgentAdminEntityPermissions, IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
 
 /**
  * Pure admin-only guard for creating or updating `MJ: AI Agent Categories` (`AIAgentCategory`).
@@ -22,9 +25,10 @@ import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
  */
 export function ValidateAgentCategoryMutation(
     categoryName: string | null | undefined,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'Name',
@@ -43,9 +47,10 @@ export function ValidateAgentCategoryMutation(
  */
 export function ValidateAgentCategoryDelete(
     categoryId: string | null | undefined,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | null
 ): ValidationErrorInfo[] {
-    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+    if (!IsAgentAdminOrOwnerUser(contextUser, provider)) {
         return [
             new ValidationErrorInfo(
                 'ID',
@@ -67,7 +72,8 @@ export function ValidateAgentScopedConfigurationJson(
     configJson: string | null | undefined,
     fieldName: 'DefaultConfiguration' | 'DefaultAgentConfiguration',
     entityLabel: string,
-    contextUser: UserInfo | null | undefined
+    contextUser: UserInfo | null | undefined,
+    provider?: IEntityDataProvider | null
 ): ValidationErrorInfo[] {
     const errors: ValidationErrorInfo[] = [];
 
@@ -86,7 +92,7 @@ export function ValidateAgentScopedConfigurationJson(
             return false;
         }
     })();
-    const isAdmin = IsAgentAdminOrOwnerUser(contextUser);
+    const isAdmin = IsAgentAdminOrOwnerUser(contextUser, provider);
     for (const plugin of declaredPlugins) {
         if (IsForbiddenMetadataHelperSeam(plugin.seam)) {
             errors.push(
@@ -135,13 +141,26 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
         return false;
     }
 
+    public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        return CheckAgentAdminEntityPermissions(
+            {
+                ActiveUser: this.ActiveUser,
+                EntityInfo: this.EntityInfo,
+                ProviderToUse: this.ProviderToUse,
+            },
+            type,
+            throwError,
+            (permType, shouldThrow) => super.CheckPermissions(permType, shouldThrow)
+        );
+    }
+
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         if (!result.Success) {
             return result;
         }
 
-        const authErrors = ValidateAgentCategoryMutation(this.Name, this.ContextCurrentUser);
+        const authErrors = ValidateAgentCategoryMutation(this.Name, this.ContextCurrentUser, this.ProviderToUse);
         if (authErrors.length > 0) {
             result.Errors.push(...authErrors);
             result.Success = false;
@@ -158,7 +177,8 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
             this.DefaultConfiguration,
             'DefaultConfiguration',
             'AI Agent Category',
-            this.ContextCurrentUser
+            this.ContextCurrentUser,
+            this.ProviderToUse
         );
         result.Errors.push(...errors);
         result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
@@ -166,7 +186,7 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        const errors = ValidateAgentCategoryDelete(this.ID, this.ContextCurrentUser);
+        const errors = ValidateAgentCategoryDelete(this.ID, this.ContextCurrentUser, this.ProviderToUse);
         if (errors.length > 0) {
             const deleteResult = new BaseEntityResult(false, '', 'delete');
             deleteResult.Errors = errors;

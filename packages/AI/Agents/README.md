@@ -92,7 +92,7 @@ npm install @memberjunction/ai-agents
 - **Four Extension Points:** (1) `BaseAgentType`, (2) `AIAgentStepType` + `BaseAgentStepHandler` via `AgentStepTypeRegistry`, (3) `BaseAgent*Helper` global `@RegisterClass` or admin-only `AIAgent.Configuration.helperPlugins`, and (4) `BaseAgent` subclassing (`AIAgent.DriverClass`). See [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md).
 - **Pluggable Step-Type Registry (`AgentStepTypeRegistry`):** Replaces monolithic step `switch` blocks with 14 built-in `BaseAgentStepHandler` classes (`BuiltInAgentStepHandlers.ts`) plus metadata-driven (`MJ: AI Agent Step Types`) and programmatic OpenApp step handlers, each declaring `AllowedInUnapprovedPlanMode` and `CountsAgainstTreeBudget`.
 - **Sliding Liveness Watchdog & `AgentStuckDetector` (`helpers/limits/`):**
-  - `AgentLivenessWatchdog` replaces blunt wall-clock aborts with a sliding inactivity window (`Liveness.InactivityTimeoutMs`, default `900_000` ms = 15m) reset by streaming chunks (via an always-on headless liveness sink), step completions, and action/sub-agent heartbeats, suspended during external waits (`SuspendForExternalWait` / `ResumeFromExternalWait`), plus a 32-bit-safe outer ceiling (`Liveness.OuterMaxWallClockMs`, default `259_200_000` ms = 72h). Pair with `ConfigureLongRunningAIFetch` from `@memberjunction/ai` to avoid Node `undici`'s 300s `headersTimeout` on AI provider SDK requests without replacing the process-global dispatcher.
+  - `AgentLivenessWatchdog` replaces blunt wall-clock aborts with a sliding inactivity window (`Liveness.InactivityTimeoutMs`, default `900_000` ms = 15m) reset by streaming chunks (via an always-on headless liveness sink), step completions, and action/sub-agent heartbeats, suspended during external waits (`SuspendForExternalWait` / `ResumeFromExternalWait`), plus a 32-bit-safe outer ceiling (`Liveness.OuterMaxWallClockMs`, default `259_200_000` ms = 72h). Pair with `AITransportManager.Instance.Configure(...)` from `@memberjunction/ai` to avoid Node `undici`'s 300s `headersTimeout` on AI provider SDK requests without replacing the process-global dispatcher.
   - `AgentStuckDetector` catches identical succeeding canonical tool-call loops (`IdenticalToolCallThreshold`, default `3` in `WindowSize = 10`) and consecutive read-only spirals (`ReadOnlyStepThreshold`, default `30` + `5` grace steps), injecting course-correction/wrap-up directives before escalating to a non-destructive checkpoint pause (`StuckToolCallLoop` / `ReadOnlySpiral`).
 - **Zero-Breakage `v6.x` Compatibility:** All 494 historical `protected` methods remain callable and overridable via logic-free `@deprecated` 1-line delegates in `helpers/compat/BaseAgentDeprecatedDelegates*.ts` (retiring in `v7.0`; see [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)).
 
@@ -840,7 +840,7 @@ Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../g
 
 ## Dependencies
 
-- `@memberjunction/ai` -- Core AI abstractions (including `httpDispatcher.ts` long-running fetch dispatcher)
+- `@memberjunction/ai` -- Core AI abstractions (including `AITransportManager`, `BaseModel` transport/client caching, and `ThinkingStreamExtractor`)
 - `@memberjunction/ai-prompts` -- AIPromptRunner for prompt execution
 - `@memberjunction/aiengine` -- AIEngine for metadata and vector search
 - `@memberjunction/ai-core-plus` -- Shared types (`ExecuteAgentParams`, `ExecuteAgentResult`, `IAgentConfiguration`)

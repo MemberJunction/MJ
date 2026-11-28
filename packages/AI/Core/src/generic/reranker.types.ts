@@ -8,7 +8,7 @@
  * @since 3.0.0
  */
 
-import type { ModelUsage } from './baseModel';
+import type { ModelUsage } from './baseModel.types';
 import type { AIErrorInfo } from './errorTypes.js';
 
 /**

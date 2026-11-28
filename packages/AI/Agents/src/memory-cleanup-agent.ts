@@ -301,6 +301,16 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Get note retention days for an agent (uses agent config or default)
      */
     private getNoteRetentionDays(agent: MJAIAgentEntityExtended): number {
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                const effective = AIEngine.Instance.ResolveEffectiveAgentProperties(agent).NoteRetentionDays;
+                if (typeof effective === 'number' && effective > 0) {
+                    return effective;
+                }
+            }
+        } catch {
+            // Fallback to direct property check when AIEngine is uninitialized in unit tests
+        }
         // Check if agent has NoteRetentionDays property using GetAll() for plain object access
         // fls-guard: reads one agent setting on the server; nothing is returned
         const agentData = agent.GetAll();
@@ -315,6 +325,16 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Get example retention days for an agent (uses agent config or default)
      */
     private getExampleRetentionDays(agent: MJAIAgentEntityExtended): number {
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                const effective = AIEngine.Instance.ResolveEffectiveAgentProperties(agent).ExampleRetentionDays;
+                if (typeof effective === 'number' && effective > 0) {
+                    return effective;
+                }
+            }
+        } catch {
+            // Fallback to direct property check when AIEngine is uninitialized in unit tests
+        }
         // fls-guard: reads one agent setting on the server; nothing is returned
         const agentData = agent.GetAll();
         const retention = agentData['ExampleRetentionDays'];
@@ -328,6 +348,13 @@ export class MemoryCleanupAgent extends BaseAgent {
      * Check if auto-archive is enabled for an agent
      */
     private getAutoArchiveEnabled(agent: MJAIAgentEntityExtended): boolean {
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                return AIEngine.Instance.ResolveEffectiveAgentProperties(agent).AutoArchiveEnabled;
+            }
+        } catch {
+            // Fallback to direct property check when AIEngine is uninitialized in unit tests
+        }
         // fls-guard: reads one agent setting on the server; nothing is returned
         const agentData = agent.GetAll();
         const enabled = agentData['AutoArchiveEnabled'];

@@ -27,6 +27,7 @@ import { GetArtifactLiveContentReaderHook } from './artifact-presence-locator';
 import { CreateAgentInstance } from './agent-instance';
 import { HostAllowedAgentIDs } from './decision-discovery';
 import { ResolveHandoffTarget, HandoffRefusalReasonText } from './handoff-target';
+import { SafeResolveEffectiveAgentProperties } from './helpers/AgentHelperResolver';
 import {
     MJConversationEntity, MJConversationDetailEntity, MJConversationDetailEntityExtended, MJArtifactEntity, MJArtifactVersionEntity,
     MJArtifactPermissionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJAIAgentConfigurationEntity,
@@ -1926,30 +1927,20 @@ export class AgentRunner {
         await AIEngine.Instance.Config(false, contextUser);
         const agentsById = IndexByUUID(AIEngine.Instance.Agents);
         let agent = (agentRun?.AgentID ? agentsById.Get(agentRun.AgentID) : undefined) ?? fallbackAgent;
-        let creationMode = agent?.ArtifactCreationMode;
-
-        // When an orchestrator with ArtifactCreationMode='Never' or 'System Only' (or no
-        // DefaultArtifactTypeID, such as Sage) delegates a folded single-node task graph (or
-        // sub-agent step) to a specialist agent (such as Query Builder or Research Agent) that
-        // DOES produce user-visible artifacts, resolve the artifact creation mode and
-        // DefaultArtifactTypeID from the last completed Sub-Agent step's specialist agent so
-        // the specialist's deliverable artifact is persisted with the specialist's
-        // DefaultArtifactTypeID and visibility.
-        if ((creationMode === 'Never' || creationMode === 'System Only' || !agent?.DefaultArtifactTypeID) && agentRun?.Steps?.length) {
+        const initEff = agent ? SafeResolveEffectiveAgentProperties(agent) : undefined;
+        let creationMode = initEff?.ArtifactCreationMode ?? agent?.ArtifactCreationMode;
+        if ((creationMode === 'Never' || creationMode === 'System Only' || !(initEff?.DefaultArtifactTypeID ?? agent?.DefaultArtifactTypeID)) && agentRun?.Steps?.length) {
             for (let i = agentRun.Steps.length - 1; i >= 0; i--) {
                 const step = agentRun.Steps[i];
                 if (step.StepType === 'Sub-Agent' && step.Success && !AgentRunner.isRelatedSubAgentStep(step)) {
                     const subAgentId = step.TargetID || step.SubAgentRun?.AgentID;
-                    const delegatedAgent = subAgentId
-                        ? agentsById.Get(subAgentId)
-                        : undefined;
-                    if (
-                        delegatedAgent &&
-                        delegatedAgent.ArtifactCreationMode !== 'Never' &&
-                        (delegatedAgent.DefaultArtifactTypeID != null || delegatedAgent.ArtifactCreationMode === 'Always')
-                    ) {
+                    const delegatedAgent = subAgentId ? agentsById.Get(subAgentId) : undefined;
+                    const delEff = delegatedAgent ? SafeResolveEffectiveAgentProperties(delegatedAgent) : undefined;
+                    const delMode = delEff?.ArtifactCreationMode ?? delegatedAgent?.ArtifactCreationMode;
+                    const delTypeId = delEff?.DefaultArtifactTypeID ?? delegatedAgent?.DefaultArtifactTypeID;
+                    if (delegatedAgent && delMode !== 'Never' && (delTypeId != null || delMode === 'Always')) {
                         agent = delegatedAgent;
-                        creationMode = delegatedAgent.ArtifactCreationMode;
+                        creationMode = delMode;
                         break;
                     }
                 }
@@ -2854,7 +2845,7 @@ export class AgentRunner {
             : undefined;
         const hasReportHtml = typeof reportObj?.html === 'string' && reportObj.html.trim().length > 0;
         artifact.TypeID = payloadArtifactTypeID
-            || agent?.DefaultArtifactTypeID
+            || (agent ? (SafeResolveEffectiveAgentProperties(agent)?.DefaultArtifactTypeID ?? agent.DefaultArtifactTypeID) : undefined)
             || (hasReportHtml ? AgentRunner.RESEARCH_CONTENT_ARTIFACT_TYPE_ID : AgentRunner.JSON_ARTIFACT_TYPE_ID);
 
         artifact.UserID = contextUser.ID;

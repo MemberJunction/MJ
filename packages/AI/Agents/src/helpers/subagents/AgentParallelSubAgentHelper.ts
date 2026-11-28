@@ -385,10 +385,12 @@ export class AgentParallelSubAgentHelper {
         }
 
         let resultPayloadForMerge = execution.result.payload;
-        if (execution.subAgentEntity.PayloadScope) {
+        const effectiveScope =
+            SafeResolveEffectiveAgentProperties(execution.subAgentEntity)?.PayloadScope ?? execution.subAgentEntity.PayloadScope;
+        if (effectiveScope) {
             resultPayloadForMerge = ctx.PayloadManager.reversePayloadScope(
                 execution.result.payload,
-                execution.subAgentEntity.PayloadScope
+                effectiveScope
             ) as SR;
         }
         const mergeResult = ctx.PayloadManager.mergeUpstreamPayload(
