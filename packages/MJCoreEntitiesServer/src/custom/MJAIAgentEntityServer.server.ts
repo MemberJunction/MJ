@@ -4,6 +4,8 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityInfo,
+    EntityPermissionType,
     EntitySaveOptions,
     IEntityDataProvider,
     IMetadataProvider,
@@ -13,6 +15,7 @@ import {
     ValidationErrorInfo,
     ValidationErrorType,
     ValidationResult,
+    WellKnownUserSource,
 } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDsEqual, UUIDSet } from '@memberjunction/global';
 import {
@@ -108,9 +111,9 @@ function authorizationsForAdminCheck(
 }
 
 /**
- * Returns true when `user` is an Owner-type user, holds the `AI: Agent Administration`
- * authorization (direct or via an ancestor authorization), or holds an administrative /
- * `Agent Administrator` role.
+ * Returns true when `user` is the server system user, an Owner-type user, holds the
+ * `AI: Agent Administration` authorization (direct or via an ancestor authorization), or holds
+ * an administrative / `Agent Administrator` role.
  */
 export function IsAgentAdminOrOwnerUser(
     user: UserInfo | null | undefined,
@@ -119,7 +122,7 @@ export function IsAgentAdminOrOwnerUser(
     if (!user) {
         return true; // System / unauthenticated internal context
     }
-    if (user.Type?.trim().toLowerCase() === 'owner') {
+    if (user.Type?.trim().toLowerCase() === 'owner' || WellKnownUserSource.Instance.IsSystemUser(user)) {
         return true;
     }
     const authorizations = authorizationsForAdminCheck(provider);
@@ -136,6 +139,56 @@ export function IsAgentAdminOrOwnerUser(
     }
     const roles = user.UserRoles ?? [];
     return roles.some((ur) => ADMIN_ROLE_NAMES.has((ur.Role ?? '').trim().toLowerCase()));
+}
+
+/**
+ * Minimal entity context required by {@link CheckAgentAdminEntityPermissions}.
+ */
+export interface AgentAdminPermissionCheckContext {
+    readonly ActiveUser: UserInfo | null | undefined;
+    readonly EntityInfo: Pick<EntityInfo, 'VirtualEntity' | 'AllowCreateAPI' | 'AllowUpdateAPI' | 'AllowDeleteAPI'> | null | undefined;
+    readonly ProviderToUse: IEntityDataProvider | Pick<IMetadataProvider, 'Authorizations'> | null | undefined;
+}
+
+/**
+ * Shared `CheckPermissions` helper for admin-governed AI Agent definition entities
+ * (`MJ: AI Agent Categories`, `MJ: AI Agent Types`, `MJ: AI Agent Step Types`).
+ *
+ * Baseline `Developer` and `Integration` role grants on these entities are read-only
+ * (`CanRead: true`, `CanCreate/Update/Delete: false`), while `User: System` (and other `Owner`
+ * users or holders of the `AI: Agent Administration` authorization / admin roles) may not carry
+ * the dedicated `Agent Administrator` role in `UserRoles`. This helper authorizes those admin /
+ * owner / system callers for Create/Update/Delete once entity-level API flags allow the operation,
+ * while delegating reads and non-admin callers to `super.CheckPermissions`.
+ */
+export function CheckAgentAdminEntityPermissions(
+    context: AgentAdminPermissionCheckContext,
+    type: EntityPermissionType,
+    throwError: boolean,
+    superCheck: (type: EntityPermissionType, throwError: boolean) => boolean
+): boolean {
+    if (type === EntityPermissionType.Read) {
+        return superCheck(type, throwError);
+    }
+    const user = context.ActiveUser;
+    if (!user) {
+        return superCheck(type, throwError);
+    }
+    const info = context.EntityInfo;
+    if (!info || info.VirtualEntity) {
+        return superCheck(type, throwError);
+    }
+    const apiAllowed =
+        (type === EntityPermissionType.Create && info.AllowCreateAPI) ||
+        (type === EntityPermissionType.Update && info.AllowUpdateAPI) ||
+        (type === EntityPermissionType.Delete && info.AllowDeleteAPI);
+    if (!apiAllowed) {
+        return superCheck(type, throwError);
+    }
+    if (IsAgentAdminOrOwnerUser(user, context.ProviderToUse)) {
+        return true;
+    }
+    return superCheck(type, throwError);
 }
 
 /**

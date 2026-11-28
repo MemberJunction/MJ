@@ -2,6 +2,7 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityPermissionType,
     EntitySaveOptions,
     IEntityDataProvider,
     IMetadataProvider,
@@ -20,7 +21,7 @@ import {
     type LegacyAIAgentTypeConfigColumns,
 } from '@memberjunction/ai-core-plus';
 import { ValidateAgentScopedConfigurationJson } from './MJAIAgentCategoryEntityServer.server';
-import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
+import { CheckAgentAdminEntityPermissions, IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
 
 /**
  * Pure admin-only guard for creating or updating `MJ: AI Agent Types` (`AIAgentType`).
@@ -80,6 +81,19 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
 
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
+    }
+
+    public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        return CheckAgentAdminEntityPermissions(
+            {
+                ActiveUser: this.ActiveUser,
+                EntityInfo: this.EntityInfo,
+                ProviderToUse: this.ProviderToUse,
+            },
+            type,
+            throwError,
+            (permType, shouldThrow) => super.CheckPermissions(permType, shouldThrow)
+        );
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {

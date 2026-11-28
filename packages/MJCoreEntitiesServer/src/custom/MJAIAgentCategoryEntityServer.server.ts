@@ -2,6 +2,7 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityPermissionType,
     IEntityDataProvider,
     IMetadataProvider,
     UserInfo,
@@ -16,7 +17,7 @@ import {
     ParseAgentHelperPlugins,
     ValidateAgentConfigurationJson,
 } from '@memberjunction/ai-core-plus';
-import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
+import { CheckAgentAdminEntityPermissions, IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
 
 /**
  * Pure admin-only guard for creating or updating `MJ: AI Agent Categories` (`AIAgentCategory`).
@@ -138,6 +139,19 @@ export function ValidateAgentScopedConfigurationJson(
 export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
+    }
+
+    public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        return CheckAgentAdminEntityPermissions(
+            {
+                ActiveUser: this.ActiveUser,
+                EntityInfo: this.EntityInfo,
+                ProviderToUse: this.ProviderToUse,
+            },
+            type,
+            throwError,
+            (permType, shouldThrow) => super.CheckPermissions(permType, shouldThrow)
+        );
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {

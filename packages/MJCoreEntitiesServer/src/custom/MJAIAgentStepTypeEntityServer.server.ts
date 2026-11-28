@@ -2,6 +2,7 @@ import {
     BaseEntity,
     BaseEntityResult,
     EntityDeleteOptions,
+    EntityPermissionType,
     IEntityDataProvider,
     IMetadataProvider,
     UserInfo,
@@ -11,7 +12,7 @@ import {
 } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentStepTypeEntity } from '@memberjunction/core-entities';
-import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
+import { CheckAgentAdminEntityPermissions, IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
 
 interface BuiltInStepTypeSecurityFloor {
     readonly DriverClass: string;
@@ -153,6 +154,19 @@ export function ValidateAgentStepTypeDelete(
 export class MJAIAgentStepTypeEntityServer extends MJAIAgentStepTypeEntity {
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
+    }
+
+    public override CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
+        return CheckAgentAdminEntityPermissions(
+            {
+                ActiveUser: this.ActiveUser,
+                EntityInfo: this.EntityInfo,
+                ProviderToUse: this.ProviderToUse,
+            },
+            type,
+            throwError,
+            (permType, shouldThrow) => super.CheckPermissions(permType, shouldThrow)
+        );
     }
 
     public override async ValidateAsync(): Promise<ValidationResult> {

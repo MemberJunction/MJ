@@ -15,10 +15,11 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { AuthorizationInfo, AuthorizationRoleInfo, IMetadataProvider, UserInfo, ValidationErrorType } from '@memberjunction/core';
+import { AuthorizationInfo, AuthorizationRoleInfo, EntityPermissionType, IMetadataProvider, UserInfo, ValidationErrorType } from '@memberjunction/core';
 import { MJAIAgentPermissionEntity } from '@memberjunction/core-entities';
 import {
     AI_AGENT_ADMINISTRATION_AUTHORIZATION,
+    CheckAgentAdminEntityPermissions,
     IsAgentAdminOrOwnerUser,
     ValidateAgentInheritanceAndSandbox,
     type AgentSandboxValidationContext,
@@ -446,5 +447,125 @@ describe('#6852 Agent Instance Security & Dual-Dialect RLS Audit (§2.4 & §3.1)
         );
         ancestorProvider.Authorizations.push(parentAuth, childAuth);
         expect(IsAgentAdminOrOwnerUser(opsUser, ancestorProvider)).toBe(true);
+    });
+
+    it('CheckAgentAdminEntityPermissions authorizes Owner/System and AI: Agent Administration callers while delegating non-admins and disabled API flags to super', () => {
+        const entityInfo = {
+            VirtualEntity: false,
+            AllowCreateAPI: true,
+            AllowUpdateAPI: true,
+            AllowDeleteAPI: true,
+        };
+        const denySuper = (_type: EntityPermissionType, shouldThrow: boolean): boolean => {
+            if (shouldThrow) {
+                throw new Error('super denied');
+            }
+            return false;
+        };
+        const allowSuper = (): boolean => true;
+
+        // System / Owner user with only Developer, Integration, UI roles succeeds on C/U/D even though EntityPermission for those roles is read-only
+        const systemOwnerUser = makeUser('ecafccec-6a37-ef11-86d4-000d3a4e707e', 'Owner', ['Developer', 'Integration', 'UI']);
+        for (const perm of [EntityPermissionType.Create, EntityPermissionType.Update, EntityPermissionType.Delete]) {
+            expect(
+                CheckAgentAdminEntityPermissions(
+                    { ActiveUser: systemOwnerUser, EntityInfo: entityInfo, ProviderToUse: undefined },
+                    perm,
+                    true,
+                    denySuper,
+                ),
+            ).toBe(true);
+        }
+
+        // Non-Owner Developer and Integration users delegate to super.CheckPermissions (read-only EntityPermission rejects C/U/D)
+        for (const nonAdmin of [makeUser(ALICE_ID, 'User', ['Developer']), makeUser(BOB_ID, 'User', ['Integration'])]) {
+            expect(
+                CheckAgentAdminEntityPermissions(
+                    { ActiveUser: nonAdmin, EntityInfo: entityInfo, ProviderToUse: undefined },
+                    EntityPermissionType.Create,
+                    false,
+                    denySuper,
+                ),
+            ).toBe(false);
+            expect(() =>
+                CheckAgentAdminEntityPermissions(
+                    { ActiveUser: nonAdmin, EntityInfo: entityInfo, ProviderToUse: undefined },
+                    EntityPermissionType.Update,
+                    true,
+                    denySuper,
+                ),
+            ).toThrow('super denied');
+            // Reads always delegate to super
+            expect(
+                CheckAgentAdminEntityPermissions(
+                    { ActiveUser: nonAdmin, EntityInfo: entityInfo, ProviderToUse: undefined },
+                    EntityPermissionType.Read,
+                    true,
+                    allowSuper,
+                ),
+            ).toBe(true);
+        }
+
+        // Custom role holder with AI: Agent Administration authorization succeeds on C/U/D
+        const customOpsRoleId = 'c3000000-0000-4000-8000-000000000077';
+        const authId = 'c4000000-0000-4000-8000-000000000077';
+        const authProvider: Pick<IMetadataProvider, 'Authorizations' | 'AuthorizationRoles'> = {
+            Authorizations: [],
+            AuthorizationRoles: [
+                new AuthorizationRoleInfo({
+                    ID: 'c5000000-0000-4000-8000-000000000077',
+                    AuthorizationID: authId,
+                    RoleID: customOpsRoleId,
+                    Type: 'Allow',
+                }),
+            ],
+        };
+        authProvider.Authorizations.push(
+            new AuthorizationInfo(
+                { ID: authId, Name: AI_AGENT_ADMINISTRATION_AUTHORIZATION, ParentID: null, IsActive: true },
+                authProvider as IMetadataProvider,
+            ),
+        );
+        const opsUser = new UserInfo(undefined, {
+            ID: ALICE_ID,
+            Name: 'Ops User',
+            Email: 'ops@test.mj',
+            Type: 'User',
+            UserRoles: [{ RoleID: customOpsRoleId, Role: 'AI Ops', UserID: ALICE_ID }],
+        });
+        expect(
+            CheckAgentAdminEntityPermissions(
+                { ActiveUser: opsUser, EntityInfo: entityInfo, ProviderToUse: authProvider },
+                EntityPermissionType.Create,
+                true,
+                denySuper,
+            ),
+        ).toBe(true);
+
+        // Entity-level disabled API flags and VirtualEntity are never bypassed, even for Owner users
+        expect(
+            CheckAgentAdminEntityPermissions(
+                { ActiveUser: systemOwnerUser, EntityInfo: { ...entityInfo, AllowDeleteAPI: false }, ProviderToUse: undefined },
+                EntityPermissionType.Delete,
+                false,
+                denySuper,
+            ),
+        ).toBe(false);
+        expect(
+            CheckAgentAdminEntityPermissions(
+                { ActiveUser: systemOwnerUser, EntityInfo: { ...entityInfo, VirtualEntity: true }, ProviderToUse: undefined },
+                EntityPermissionType.Create,
+                false,
+                denySuper,
+            ),
+        ).toBe(false);
+        expect(
+            CheckAgentAdminEntityPermissions(
+                { ActiveUser: null, EntityInfo: entityInfo, ProviderToUse: undefined },
+                EntityPermissionType.Create,
+                false,
+                denySuper,
+            ),
+        ).toBe(false);
     });
 });
