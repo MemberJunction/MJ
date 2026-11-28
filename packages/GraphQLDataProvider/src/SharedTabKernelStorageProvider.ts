@@ -47,15 +47,26 @@ export class SharedTabKernelStorageProvider implements ILocalStorageProvider {
     }
 
     /**
-     * `true` while the SharedWorker kernel is active so `LocalCacheManager` keeps its
-     * per-tab eviction registry isolated.
+     * Reflects the fallback provider's cross-process fleet contract (`false` for browser
+     * IndexedDB / in-memory). The SharedWorker kernel is a local single-origin IDB proxy,
+     * NOT a multi-server Redis fleet — returning `true` here would enable rolling-deploy
+     * schema write-holds and disable local TTL expiry in `LocalCacheManager`.
      */
     public get SharedAcrossProcesses(): boolean {
+        return this._getFallbackProvider().SharedAcrossProcesses ?? false;
+    }
+
+    /**
+     * `true` while the SharedWorker kernel is active so `LocalCacheManager` keeps its
+     * per-tab eviction registry (`__MJ_CACHE_REGISTRY__`) isolated in memory without
+     * opting into multi-server Redis fleet semantics (`SharedAcrossProcesses`).
+     */
+    public get ProcessLocalRegistry(): boolean {
         const client = this._getKernelClient();
         if (client && (client.IsKernelConnected || client.Mode === 'connecting')) {
             return true;
         }
-        return this._getFallbackProvider().SharedAcrossProcesses ?? false;
+        return this._getFallbackProvider().ProcessLocalRegistry ?? false;
     }
 
     private async resolveActiveClient(): Promise<SharedTabKernelClient | null> {
