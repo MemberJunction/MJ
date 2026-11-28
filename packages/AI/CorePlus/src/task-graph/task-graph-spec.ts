@@ -522,8 +522,9 @@ export type TaskGraphSpec = {
 
     /**
      * Per-graph execution isolation level (`'InProcess' | 'Worker' | 'Process' | 'Container'`).
-     * Derived from the owning workflow entity or `LimitsConfigResolver` (`'InProcess'` default for
-     * upgraded workflows/graphs; `'Worker'` default for newly drafted `Workflow.Draft` graphs).
+     * Derived from the owning workflow entity or `LimitsConfigResolver` (`'Worker'` default for
+     * submitted/model-written task graphs and `Workflow.Draft`; `'InProcess'` preserved for upgraded
+     * Flow agent rows with `AIAgent.Isolation = 'InProcess'` or explicit opt-in).
      */
     isolation?: TaskGraphIsolationLevel;
 

@@ -25,7 +25,15 @@ import {
     type TaskSecurityEnvelope,
 } from '@memberjunction/ai-core-plus';
 import type { ChatMessage } from '@memberjunction/ai';
-import { IsVerboseLoggingEnabled, LogError, LogStatus } from '@memberjunction/core';
+import {
+    IsTaskGraphIsolationLevel,
+    IsVerboseLoggingEnabled,
+    LimitsConfigResolver,
+    LogError,
+    LogStatus,
+    TASK_GRAPH_ISOLATION_LEVELS,
+    type TaskGraphIsolationLevel,
+} from '@memberjunction/core';
 import { MJEnvironmentEntityExtended, type MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { AgentAudienceReaderIDs } from '../../agent-audience';
 import { SanitizeToolName } from '../../native-tools/action-tool-builder';
@@ -680,6 +688,24 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
             };
         }
 
+        // Enforce narrow-only agent isolation when the submitting agent itself is configured at a
+        // stricter isolation level than the graph's requested/default isolation (e.g. a Process or
+        // Container agent cannot emit a weaker InProcess/Worker task graph). Legacy/default agents
+        // with InProcess (or unset) isolation leave `Isolation` unset so TaskGraphService applies
+        // `spec.isolation ?? Limits.Isolation.DefaultIsolation` ('Worker' by default).
+        const agentIsolation = params.agent?.Isolation;
+        let enforcedIsolation: TaskGraphIsolationLevel | undefined;
+        if (IsTaskGraphIsolationLevel(agentIsolation) && agentIsolation !== 'InProcess') {
+            const baselineIsolation =
+                spec.isolation ??
+                LimitsConfigResolver.Resolve({
+                    AgentOrWorkflowMetadata: params.limitsOverride ?? spec.limitsOverride,
+                }).Limits.Isolation.DefaultIsolation;
+            if (TASK_GRAPH_ISOLATION_LEVELS.indexOf(agentIsolation) > TASK_GRAPH_ISOLATION_LEVELS.indexOf(baselineIsolation)) {
+                enforcedIsolation = agentIsolation;
+            }
+        }
+
         const outcome = await submitter.Submit({
             Spec: spec,
             EnvironmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
@@ -696,6 +722,7 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
             Debug: BuildTaskGraphStartDebug(params.taskGraphDebug),
             ContextUser: params.contextUser,
             Provider: ctx.ProviderToUse,
+            ...(enforcedIsolation ? { Isolation: enforcedIsolation } : {}),
             ...(securityEnvelope ? { SecurityEnvelope: securityEnvelope } : {}),
         });
 

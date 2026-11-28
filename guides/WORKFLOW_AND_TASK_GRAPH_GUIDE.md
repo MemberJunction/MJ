@@ -1060,18 +1060,18 @@ Workflows (`AIAgent.Isolation`) and submitted graphs (`TaskGraphSpec.isolation`)
 
 | Mode | Substrate | Default Scope | Fault-Boundary Guarantee & Limitations |
 |---|---|---|---|
-| `'InProcess'` | Host Node.js event loop (`InProcessIsolationRunner`) | Upgraded existing workflows (`AIAgent.Isolation` backfill) & `DefaultIsolation` | Zero IPC serialization overhead; shares V8 heap, native memory, and crash domain with host MJAPI. |
-| `'Worker'` | Node `worker_threads.Worker` (`WorkerIsolationRunner`) | Newly drafted workflows (`Workflow.Draft` → `DraftDefaultIsolation`) | Bounded by V8 `resourceLimits` (`WorkerMaxOldGenerationSizeMb`, `WorkerMaxYoungGenerationSizeMb`). Guarantees clean worker termination (`ERR_WORKER_OUT_OF_MEMORY`) without crashing host MJAPI for unbounded V8 JavaScript heap allocations (objects, arrays, strings, closures), plus wall-clock `WorkerTimeoutMs` termination. **Important limitation**: V8 heap `resourceLimits` do NOT constrain native C++ addon allocations or off-heap `Buffer` / `ArrayBuffer` / `SharedArrayBuffer` / WASM linear memory — workloads that allocate untrusted or unbounded native/`Buffer` memory MUST use `'Process'` or `'Container'` isolation for OS-level containment. |
+| `'InProcess'` | Host Node.js event loop (`InProcessIsolationRunner`) | Upgraded pre-isolation Flow agents (`AIAgent.Isolation = 'InProcess'`) & explicit opt-in (`isolation: 'InProcess'` / `Limits.Isolation.DefaultIsolation`) | Zero IPC serialization overhead; shares V8 heap, native memory, and crash domain with host MJAPI. |
+| `'Worker'` | Node `worker_threads.Worker` (`WorkerIsolationRunner`) | Default for submitted / model-written task graphs (`Limits.Isolation.DefaultIsolation`) & newly drafted workflows (`Workflow.Draft` → `DraftDefaultIsolation`) | Bounded by V8 `resourceLimits` (`WorkerMaxOldGenerationSizeMb`, `WorkerMaxYoungGenerationSizeMb`). Guarantees clean worker termination (`ERR_WORKER_OUT_OF_MEMORY`) without crashing host MJAPI for unbounded V8 JavaScript heap allocations (objects, arrays, strings, closures), plus wall-clock `WorkerTimeoutMs` termination and post-completion worker teardown. **Important limitation**: V8 heap `resourceLimits` do NOT constrain native C++ addon allocations or off-heap `Buffer` / `ArrayBuffer` / `SharedArrayBuffer` / WASM linear memory — workloads that allocate untrusted or unbounded native/`Buffer` memory MUST use `'Process'` or `'Container'` isolation for OS-level containment. |
 | `'Process'` | Isolated OS `child_process` (`ProcessIsolationRunner`) | Explicit workflow/graph override | Separate OS process crash domain with `--max-old-space-size`, active RSS monitoring (`ProcessMaxMemoryMb`), hard `SIGTERM`→`SIGKILL` timeout (`ProcessTimeoutMs`), and exit-code / signal propagation across both V8 heap and native/`Buffer` allocations. |
 | `'Container'` | Hardened OCI container (`ContainerIsolationRunner`) | Explicit workflow/graph override | Full kernel namespace (PID/mount/network/IPC) and cgroup v2 containment (`--rm`, `--network=none`, `--read-only`, `--security-opt=no-new-privileges`, `--memory`, `--memory-swap`, `--cpus`). Detects cgroup OOM kills (`exit 137`), timeouts, startup errors, and non-zero exits cleanly. |
 
 ### Precedence (`ResolveTaskGraphIsolation`)
 
 Effective isolation resolves in order:
-1. Explicit submit/runtime override (`TaskGraphSubmitContext.Isolation`)
+1. Explicit submit/runtime override (`TaskGraphSubmitContext.Isolation`) — also enforced monotonically when a submitting agent itself runs under a stricter `AIAgent.Isolation` (e.g., `'Process'` or `'Container'`)
 2. Graph / workflow spec setting (`TaskGraphSpec.isolation` / `WorkflowSpec.isolation`)
 3. Owning Flow agent entity property (`MJAIAgentEntity.Isolation`)
-4. `LimitsConfigResolver` fallback (`Limits.Isolation.DefaultIsolation`, default `'InProcess'`; `Workflow.Draft` uses `Limits.Isolation.DraftDefaultIsolation`, default `'Worker'`)
+4. `LimitsConfigResolver` fallback (`Limits.Isolation.DefaultIsolation`, default `'Worker'`; `Workflow.Draft` uses `Limits.Isolation.DraftDefaultIsolation`, default `'Worker'`; hosts can still opt back into `'InProcess'` via `mj.config.cjs` `limits.isolation.defaultIsolation = 'InProcess'` or per-graph `isolation: 'InProcess'`)
 
 ### Container Runtime Prerequisites
 
