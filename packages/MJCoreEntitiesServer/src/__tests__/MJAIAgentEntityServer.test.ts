@@ -2025,6 +2025,7 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             Object.defineProperty(derived, 'OwnerUserID', { value: ALICE, writable: true, configurable: true });
             Object.defineProperty(derived, 'TypeID', { value: baseAgent.TypeID, writable: true, configurable: true });
             Object.defineProperty(derived, 'CategoryID', { value: baseAgent.CategoryID, writable: true, configurable: true });
+            Object.defineProperty(derived, 'Isolation', { value: baseAgent.Isolation, writable: true, configurable: true });
             Object.defineProperty(derived, 'InstantiationMode', { value: 'None', writable: true, configurable: true });
             Object.defineProperty(derived, 'IsPrimaryInstance', { value: false, writable: true, configurable: true });
             Object.defineProperty(derived, 'Configuration', { value: null, writable: true, configurable: true });

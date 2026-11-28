@@ -29,7 +29,7 @@ import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDsEqual, UUIDSet } from
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { BaseAgentType } from '../../agent-types/base-agent-type';
 import { IsTemplatedSkillInstructions } from '../../skill-instructions-template';
-import { DEFAULT_AGENT_HELPER_KEY } from '../AgentHelperResolver';
+import { DEFAULT_AGENT_HELPER_KEY, SafeResolveEffectiveAgentProperties } from '../AgentHelperResolver';
 import type { AgentRunContext } from '../AgentRunContext';
 import { BaseAgentSkillsHelper } from './BaseAgentSkillsHelper';
 
@@ -593,14 +593,15 @@ export class AgentSkillsHelper extends BaseAgentSkillsHelper {
         activationType: AgentSkillInvocation['ActivationType'],
         reason?: string
     ): AgentSkillInvocation {
+        const eff = SafeResolveEffectiveAgentProperties(agent);
         return {
             SkillID: skill.ID,
             SkillName: skill.Name,
             ActivationType: activationType,
             Provenance: {
-                AgentAcceptsSkills: agent.AcceptsSkills,
+                AgentAcceptsSkills: eff?.AcceptsSkills ?? agent.AcceptsSkills,
                 SkillActivationMode: skill.ActivationMode,
-                AgentSkillActivationMode: agent.SkillActivationMode,
+                AgentSkillActivationMode: eff?.SkillActivationMode ?? agent.SkillActivationMode,
                 RequestedBy: activationType === 'requested' ? 'user-request' : 'agent-decision',
             },
             ...(reason ? { Reason: reason } : {}),

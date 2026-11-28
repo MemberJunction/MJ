@@ -41,8 +41,31 @@ Every narrow-only invariant enforced by `AIEngineBase.ResolveEffectiveAgentPrope
 | **`Configuration.clientTools.allowEphemeral`** (`AllowEphemeralClientTools`) | Monotonic `AND` | Once `false` on a Category, AgentType, or ancestor, descendants cannot enable ephemeral client tools. |
 | **`Configuration.attachments.acceptUnregisteredFiles`** (`AcceptUnregisteredFiles`) | Monotonic `AND` | Once `false`, descendants cannot widen to `true`. |
 | **Run Ceilings** (`MaxCostPerRun`, `MaxTokensPerRun`, `MaxTimePerRun`, `MaxIterationsPerRun`) | Monotonic `Math.min` | Clamped against every ancestor agent, every ancestor `AIAgentUserPolicy`, and `mj.config.cjs` ceilings. |
-| **Sub-Agent Ceilings** (`subAgentExecution.maxExecutionsPerRun`, `subAgentExecution.maxConsultRounds`) | Monotonic `Math.min` | Clamped to the minimum finite positive value across defaults and the inheritance chain. |
-| **Inherited Actions & Grants** | Descendant Veto | Any descendant `AIAgentAction` or `AIAgentSkill` row with `Status !== 'Active'` (`Revoked`, `Pending`) vetoes the inherited grant. |
+| **Sub-Agent Ceilings** (`subAgentExecution.maxExecutionsPerRun`, `subAgentExecution.maxConsultRounds`) | Monotonic `Math.min` | Clamped to the minimum finite positive value across defaults and the inheritance chain; cross-cascade `effectiveMinExecutionsPerRun <= effectiveMaxExecutionsPerRun` is also validated at save time. |
+| **Payload Paths & Scope** (`payload.downstreamPaths`, `upstreamPaths`, `selfReadPaths`, `selfWritePaths`, `scope`) | Glob-set intersection & subtree prefix lock | Path sets intersect across the chain (`null`/`['*']` = top, `[]` = bottom). `PayloadScope` and `AttachmentRootPath` must remain within ancestor prefix without `..` traversal. |
+| **Payload Validation Chains** (`startingValidationSchema`, `finalValidationSchema`, modes & maxRetries) | Additive schemas, strictest mode (`Fail < Retry < Warn`), `Math.min` retries | Ancestor and descendant schemas accumulate root → leaf in `StartingPayloadValidationSchemas` / `FinalPayloadValidationSchemas` and all run at runtime. |
+| **Secondary Scope & Persistence** (`scope.secondaryScopeConfig`, `artifacts.creationMode`, `attachments.messageMode`, `maxMessages`, memory/context ceilings, `autoArchiveEnabled`) | Per-key intersection, ranked enum min, `Math.min` | Scalar `ScopeConfig` keys lock to ancestor; array keys intersect; `ArtifactCreationMode` (`Never < System Only < Always`), `MessageMode` (`None < Latest < Bookend < All`), and retention/token ceilings narrow monotonically. `AutoArchiveEnabled` cannot flip `true -> false` under finite retention. |
+| **Prompt Feature Gates** (`AgentTypePromptParams`) | Narrow-only (`false` locked) | `enableHandoff: false` and `enableTaskGraphs: false` cannot flip to `true` down `BaseAgentID`. |
+| **Inherited Relational Grants** (`Actions`, `Relationships`, `Skills`, `ClientTools`, `Modalities`) | Subset / Veto Only | Derived agents cannot attach net-new `'Active'` (or `IsAllowed = true`) relational grants or widen inherited per-grant ceilings at save time or runtime; vetoes (`Status !== 'Active'` / `IsAllowed = false`) are always permitted. |
+
+#### Opt-In Admin Rebase Escape Hatch (`Configuration.allowWidenFromBase`)
+
+By default, save-time validation (`MJAIAgentEntityServer` + relational join entity servers) enforces all narrow-only invariants for **every** user — including administrators — so save-time and runtime behavior never diverge.
+
+When an administrator intentionally authors a privileged intermediate template tier (for example, `L1: Executive Chief of Staff` extending `L0: Chief of Staff` with extra actions or higher ceilings), set `"allowWidenFromBase": true` at the root of `AIAgent.Configuration`:
+
+```json
+{
+  "allowWidenFromBase": true,
+  "subAgentExecution": { "maxConsultRounds": 8 },
+  "execution": { "requirePlanMode": false }
+}
+```
+
+- **Admin-only:** Non-administrator users cannot set, modify, or clear `Configuration.allowWidenFromBase`.
+- **Rebases explicit overrides & grants:** Explicit settings and active relational grants on the `allowWidenFromBase: true` tier establish a new baseline ceiling above its `BaseAgentID` ancestors, while unset fields still inherit live.
+- **Downstream descendants still narrow:** Any `L2` descendant without `allowWidenFromBase: true` narrows strictly beneath the `L1` rebased baseline.
+- **Unconditional invariants NEVER bypassed:** Transitive ancestor `CanRun` checks, `Isolation` minimums (`InProcess < Worker < Process < Container`), path traversal (`..`) rejection, and `mj.config.cjs` org ceilings still apply unconditionally even when `allowWidenFromBase: true`.
 
 ### 1.2 Non-Admin (`UI` Role) Ownership & RLS Sandbox (`#6852`)
 

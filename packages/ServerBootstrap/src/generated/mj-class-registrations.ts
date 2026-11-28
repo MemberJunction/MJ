@@ -1572,21 +1572,25 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (102 classes)
+// @memberjunction/core-entities-server (106 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     GraphFindPathServerOperation,
+    MJAIAgentActionEntityServer,
     MJAIAgentCategoryEntityServer,
+    MJAIAgentClientToolEntityServer,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
+    MJAIAgentModalityEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentSkillEntityServer,
     MJAIAgentStepTypeEntityServer,
     MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
@@ -3186,16 +3190,20 @@ const CLASS_REGISTRATIONS_5: any[] = [
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     GraphFindPathServerOperation,
+    MJAIAgentActionEntityServer,
     MJAIAgentCategoryEntityServer,
+    MJAIAgentClientToolEntityServer,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
+    MJAIAgentModalityEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentSkillEntityServer,
     MJAIAgentStepTypeEntityServer,
     MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
@@ -3290,14 +3298,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     PostgreSQLCodeGenProvider,
     SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
-    MLModelInferenceProcessor,
-    MLModelScoreEnricher,
-    PredictiveStudioControlExperimentSessionServerOperation,
-    PredictiveStudioCreateScoringProcessServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    MLModelInferenceProcessor,
+    MLModelScoreEnricher,
+    PredictiveStudioControlExperimentSessionServerOperation,
+    PredictiveStudioCreateScoringProcessServerOperation,
     PredictiveStudioGetModelEvidenceServerOperation,
     PredictiveStudioMigratePipelinesAction,
     PredictiveStudioMigratePreGateModelsServerOperation,
@@ -3494,14 +3502,14 @@ const CLASS_REGISTRATIONS_6: any[] = [
     ModifyDocumentSectionAction,
     ModifyFormContributionAction,
     ModifyInteractiveFormAction,
-    MoveListMembersAction,
-    MoveObjectAction,
-    MutateGovernedArtifactAction,
-    OAuthFlowAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_7: any[] = [
+    MoveListMembersAction,
+    MoveObjectAction,
+    MutateGovernedArtifactAction,
+    OAuthFlowAction,
     ObjectExistsAction,
     OpenAgentChannelAction,
     PDFExtractorAction,
@@ -3634,7 +3642,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1514;
+export const CLASS_REGISTRATIONS_COUNT = 1518;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

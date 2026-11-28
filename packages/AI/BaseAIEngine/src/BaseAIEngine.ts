@@ -55,9 +55,25 @@ import {
     MJAIModelEntityExtended,
     MJAIAgentEntityExtended,
     MAX_AGENT_INHERITANCE_DEPTH,
+    AGENT_ACCEPTS_SKILLS_RANK,
+    AGENT_ARTIFACT_CREATION_MODE_RANK,
+    AGENT_FINAL_VALIDATION_MODE_RANK,
+    AGENT_ISOLATION_RANK,
+    AGENT_MESSAGE_MODE_RANK,
+    AGENT_SEARCH_SCOPE_ACCESS_RANK,
+    AGENT_SKILL_ACTIVATION_RANK,
+    AGENT_STARTING_VALIDATION_MODE_RANK,
     BuildAgentTypeConfigurationFromLegacyFields,
     DeepMergeAgentConfigObjects,
     DeepMergeAgentConfigurations,
+    DoesAgentAllowWidenFromBase,
+    FoldRebaseAwareChain,
+    HasPathTraversalSegment,
+    IntersectPayloadPathSets,
+    NARROW_ONLY_PROMPT_PARAM_GATES,
+    NarrowAttachmentRootPath,
+    NarrowPayloadScope,
+    NarrowScopeConfigObjects,
     ParseAgentConfigJsonObject,
     ParseAgentConfiguration,
     ParseAgentHelperPlugins,
@@ -120,16 +136,18 @@ export interface EffectiveAgentProperties {
     NoteRetentionDays: number | null;
     ExampleRetentionDays: number | null;
     AutoArchiveEnabled: boolean;
-    PayloadDownstreamPaths: string[] | null;
-    PayloadUpstreamPaths: string[] | null;
+    PayloadDownstreamPaths: string[];
+    PayloadUpstreamPaths: string[];
     PayloadSelfReadPaths: string[] | null;
     PayloadSelfWritePaths: string[] | null;
     PayloadScope: string | null;
     StartingPayloadValidation: string | null;
+    StartingPayloadValidationSchemas: string[];
     StartingPayloadValidationMode: MJAIAgentEntity['StartingPayloadValidationMode'];
     FinalPayloadValidation: string | null;
+    FinalPayloadValidationSchemas: string[];
     FinalPayloadValidationMode: MJAIAgentEntity['FinalPayloadValidationMode'];
-    FinalPayloadValidationMaxRetries: number | null;
+    FinalPayloadValidationMaxRetries: number;
     ExecutionMode: MJAIAgentEntity['ExecutionMode'];
     MinExecutionsPerRun: number | null;
     MaxExecutionsPerRun: number | null;
@@ -1614,6 +1632,101 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      * @returns MJAIAgentEntityExtended[] - Array of sub-agent entities matching the criteria (deduplicated by ID).
      * @memberof
      */
+    /**
+     * Resolves effective `MJAIAgentRelationshipEntity` rows for `agentID` along its `BaseAgentID`
+     * inheritance chain (root -> leaf, keyed by `SubAgentID`).
+     *
+     * - On derived hops without `allowWidenFromBase: true`, only vetoes (`Status !== relStatus`) or
+     *   narrowing overrides on already-inherited `SubAgentID`s are applied (`MessageMode` via min rank,
+     *   `MaxMessages` via `Math.min`, `SubAgentContextPaths` via glob intersection); net-new
+     *   `SubAgentID` rows are ignored.
+     * - On derived hops with `allowWidenFromBase: true`, active rows may add net-new `SubAgentID`s
+     *   and rebase per-relationship bounds.
+     */
+    public GetEffectiveAgentRelationships(
+        agentID: string,
+        relationshipStatus?: MJAIAgentRelationshipEntity['Status']
+    ): MJAIAgentRelationshipEntity[] {
+        this.ensureAgentsIndex();
+        this.ensureAgentRelationshipsIndex();
+
+        const chain = this.GetAgentInheritanceChain(agentID);
+        const relStatus = relationshipStatus ?? 'Active';
+        const nodes: Array<{ id: string; canWiden: boolean }> =
+            chain.length > 0
+                ? chain.map((a, idx) => ({
+                      id: NormalizeUUID(a.ID),
+                      canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                  }))
+                : [{ id: NormalizeUUID(agentID), canWiden: false }];
+
+        const parsePaths = (raw: string | null | undefined): string[] | null => {
+            if (!raw || raw.trim().length === 0) return null;
+            try {
+                const parsed: unknown = JSON.parse(raw);
+                if (Array.isArray(parsed) && parsed.every((item): item is string => typeof item === 'string')) {
+                    return parsed;
+                }
+            } catch {
+                // Non-JSON legacy value treated as unset
+            }
+            return null;
+        };
+
+        const effectiveBySubId = new Map<string, MJAIAgentRelationshipEntity>();
+        for (let idx = 0; idx < nodes.length; idx++) {
+            const { id: normChainAgentId, canWiden } = nodes[idx];
+            const isRoot = idx === 0;
+            const rawRelationships = this._agentRelationshipsByAgentID!.get(normChainAgentId) ?? [];
+            for (const ar of rawRelationships) {
+                if (!ar.SubAgentID) continue;
+                const normSubId = NormalizeUUID(ar.SubAgentID);
+                if (ar.Status !== relStatus) {
+                    effectiveBySubId.delete(normSubId);
+                    continue;
+                }
+                const prev = effectiveBySubId.get(normSubId);
+                if (!prev) {
+                    if (isRoot || canWiden) {
+                        effectiveBySubId.set(normSubId, ar);
+                    }
+                    continue;
+                }
+                if (canWiden) {
+                    effectiveBySubId.set(normSubId, ar);
+                    continue;
+                }
+                // Narrow per-relationship bounds without mutating cached entity instances
+                const narrowedMsgMode: MJAIAgentRelationshipEntity['MessageMode'] =
+                    AGENT_MESSAGE_MODE_RANK[ar.MessageMode] < AGENT_MESSAGE_MODE_RANK[prev.MessageMode]
+                        ? ar.MessageMode
+                        : prev.MessageMode;
+                const narrowedMaxMessages: number | null =
+                    typeof prev.MaxMessages === 'number' && typeof ar.MaxMessages === 'number'
+                        ? Math.min(prev.MaxMessages, ar.MaxMessages)
+                        : typeof ar.MaxMessages === 'number'
+                          ? ar.MaxMessages
+                          : prev.MaxMessages;
+                const prevCtx = parsePaths(prev.SubAgentContextPaths);
+                const nextCtx = parsePaths(ar.SubAgentContextPaths);
+                const narrowedCtx = IntersectPayloadPathSets(prevCtx, nextCtx);
+                const narrowed = Object.create(ar) as MJAIAgentRelationshipEntity;
+                Object.defineProperty(narrowed, 'MessageMode', { value: narrowedMsgMode, enumerable: true, configurable: true });
+                Object.defineProperty(narrowed, 'MaxMessages', { value: narrowedMaxMessages, enumerable: true, configurable: true });
+                if (narrowedCtx !== null) {
+                    Object.defineProperty(narrowed, 'SubAgentContextPaths', {
+                        value: JSON.stringify(narrowedCtx),
+                        enumerable: true,
+                        configurable: true,
+                    });
+                }
+                effectiveBySubId.set(normSubId, narrowed);
+            }
+        }
+
+        return Array.from(effectiveBySubId.values());
+    }
+
     public GetSubAgents(
         agentID: string,
         status?: MJAIAgentEntityExtended['Status'],
@@ -1623,32 +1736,45 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         this.ensureAgentRelationshipsIndex();
 
         const chain = this.GetAgentInheritanceChain(agentID);
-        const chainIds = chain.length > 0 ? chain.map(a => NormalizeUUID(a.ID)) : [NormalizeUUID(agentID)];
+        const nodes: Array<{ id: string; canWiden: boolean }> =
+            chain.length > 0
+                ? chain.map((a, idx) => ({
+                      id: NormalizeUUID(a.ID),
+                      canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                  }))
+                : [{ id: NormalizeUUID(agentID), canWiden: false }];
         const relStatus = relationshipStatus ?? 'Active';
 
-        // Accumulate root -> leaf so derived instances inherit parent sub-agents live,
-        // while allowing a descendant AIAgentRelationship row with Status !== relStatus
-        // (e.g. 'Disabled') to veto an inherited sub-agent.
+        // Accumulate root -> leaf: derived hops without allowWidenFromBase can only subset/veto
+        // inherited sub-agents; derived hops with allowWidenFromBase: true may add net-new sub-agents.
         const subAgentsById = new Map<string, MJAIAgentEntityExtended>();
 
-        for (const normChainAgentId of chainIds) {
+        for (let idx = 0; idx < nodes.length; idx++) {
+            const { id: normChainAgentId, canWiden } = nodes[idx];
+            const isRoot = idx === 0;
+
             // 1. Structural child agents (ParentID relationship)
-            const rawChildAgents = this._childAgentsByParentID!.get(normChainAgentId) ?? [];
-            const childAgents = status ? rawChildAgents.filter(a => a.Status === status) : rawChildAgents;
-            for (const child of childAgents) {
-                const normChildId = NormalizeUUID(child.ID);
-                if (!subAgentsById.has(normChildId)) {
-                    subAgentsById.set(normChildId, child);
+            if (isRoot || canWiden) {
+                const rawChildAgents = this._childAgentsByParentID!.get(normChainAgentId) ?? [];
+                const childAgents = status ? rawChildAgents.filter(a => a.Status === status) : rawChildAgents;
+                for (const child of childAgents) {
+                    const normChildId = NormalizeUUID(child.ID);
+                    if (!subAgentsById.has(normChildId)) {
+                        subAgentsById.set(normChildId, child);
+                    }
                 }
             }
 
-            // 2. Explicit AIAgentRelationship rows (active adds; non-matching status vetoes)
+            // 2. Explicit AIAgentRelationship rows (non-matching status vetoes; active adds only on root or allowWidenFromBase)
             const rawRelationships = this._agentRelationshipsByAgentID!.get(normChainAgentId) ?? [];
             for (const ar of rawRelationships) {
                 if (!ar.SubAgentID) continue;
                 const normSubId = NormalizeUUID(ar.SubAgentID);
                 if (ar.Status !== relStatus) {
                     subAgentsById.delete(normSubId);
+                    continue;
+                }
+                if (!isRoot && !canWiden && !subAgentsById.has(normSubId)) {
                     continue;
                 }
                 const subAgent = this._agentsByID!.get(normSubId);
@@ -1856,60 +1982,76 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             return null;
         };
 
-        // Strictest Isolation wins down the chain: Container (3) > Process (2) > Worker (1) > InProcess (0)
-        const isolationRank: Record<MJAIAgentEntity['Isolation'], number> = {
-            InProcess: 0,
-            Worker: 1,
-            Process: 2,
-            Container: 3,
-        };
+        // Strictest Isolation wins down the chain unconditionally (NEVER loosened even with allowWidenFromBase):
+        // Container (3) > Process (2) > Worker (1) > InProcess (0)
         let effectiveIsolation: MJAIAgentEntity['Isolation'] = 'InProcess';
         for (const node of nodes) {
             const iso = node.Isolation ?? 'InProcess';
-            if ((isolationRank[iso] ?? 0) > (isolationRank[effectiveIsolation] ?? 0)) {
+            if ((AGENT_ISOLATION_RANK[iso] ?? 0) > (AGENT_ISOLATION_RANK[effectiveIsolation] ?? 0)) {
                 effectiveIsolation = iso;
             }
         }
 
-        // AcceptsSkills narrows monotonically down the chain: All (2) -> Limited (1) -> None (0).
-        const acceptsRank: Record<MJAIAgentEntity['AcceptsSkills'], number> = {
-            None: 0,
-            Limited: 1,
-            All: 2,
-        };
-        let effectiveAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] = root?.AcceptsSkills ?? 'None';
-        for (let i = 1; i < nodes.length; i++) {
-            const nodeAccepts = nodes[i].AcceptsSkills;
-            if (nodeAccepts != null && (acceptsRank[nodeAccepts] ?? 0) < (acceptsRank[effectiveAcceptsSkills] ?? 0)) {
-                effectiveAcceptsSkills = nodeAccepts;
-            }
-        }
+        const canWidenAt = (index: number): boolean =>
+            index > 0 && nodeConfigs[index]?.allowWidenFromBase === true;
 
-        // SkillActivationMode narrows monotonically across EVERY tier (AgentType -> Categories -> BaseAgent Chain -> Agent):
-        // Auto (1) -> RequestedOnly (0). On each agent node, take stricter-of-two between JSON and legacy column.
-        const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
-            RequestedOnly: 0,
-            Auto: 1,
-        };
-        let effectiveSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] | null = null;
-        const applySkillModeNarrow = (val: MJAIAgentEntity['SkillActivationMode'] | null | undefined): void => {
-            if (val == null) return;
-            if (
-                effectiveSkillActivationMode === null ||
-                (skillModeRank[val] ?? 0) < (skillModeRank[effectiveSkillActivationMode] ?? 0)
-            ) {
-                effectiveSkillActivationMode = val;
+        // AcceptsSkills: rebase-aware narrow-only fold (None: 0 < Limited: 1 < All: 2).
+        const effectiveAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] = FoldRebaseAwareChain({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: root?.AcceptsSkills ?? 'None',
+            GetNodeValue: (node) => node.AcceptsSkills ?? undefined,
+            Narrow: (acc, next) =>
+                (AGENT_ACCEPTS_SKILLS_RANK[next] ?? 0) < (AGENT_ACCEPTS_SKILLS_RANK[acc] ?? 0) ? next : acc,
+        });
+
+        // SkillActivationMode: rebase-aware narrow-only fold across AgentType -> Categories -> BaseAgent Chain -> Agent
+        // (RequestedOnly: 0 < Auto: 1). On derived rows, untouched SQL default 'RequestedOnly' (no JSON key) inherits.
+        let seedSkillMode: MJAIAgentEntity['SkillActivationMode'] | null = null;
+        const narrowSkillMode = (
+            acc: MJAIAgentEntity['SkillActivationMode'] | null,
+            val: MJAIAgentEntity['SkillActivationMode'] | null | undefined
+        ): MJAIAgentEntity['SkillActivationMode'] | null => {
+            if (val == null) return acc;
+            if (acc === null || (AGENT_SKILL_ACTIVATION_RANK[val] ?? 0) < (AGENT_SKILL_ACTIVATION_RANK[acc] ?? 0)) {
+                return val;
             }
+            return acc;
         };
         for (const layer of orderedDefaultLayers) {
-            applySkillModeNarrow(layer.skills?.activationMode);
+            seedSkillMode = narrowSkillMode(seedSkillMode, layer.skills?.activationMode);
         }
-        for (let i = 0; i < nodes.length; i++) {
-            applySkillModeNarrow(nodeConfigs[i]?.skills?.activationMode);
-            applySkillModeNarrow(nodes[i].SkillActivationMode);
+        if (nodes.length > 0) {
+            seedSkillMode = narrowSkillMode(seedSkillMode, nodeConfigs[0]?.skills?.activationMode);
+            seedSkillMode = narrowSkillMode(seedSkillMode, nodes[0].SkillActivationMode);
         }
         const resolvedSkillActivationMode: MJAIAgentEntity['SkillActivationMode'] =
-            effectiveSkillActivationMode ?? 'RequestedOnly';
+            FoldRebaseAwareChain<MJAIAgentEntityExtended, MJAIAgentEntity['SkillActivationMode'] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedSkillMode,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = cfg?.skills?.activationMode ?? null;
+                    const legacy = node.SkillActivationMode ?? null;
+                    if (canWidenAt(idx)) {
+                        if (explicit != null) return explicit;
+                        return legacy != null && legacy !== 'RequestedOnly' ? legacy : undefined;
+                    }
+                    if (explicit != null && legacy != null) {
+                        return (AGENT_SKILL_ACTIVATION_RANK[legacy] ?? 0) < (AGENT_SKILL_ACTIVATION_RANK[explicit] ?? 0)
+                            ? legacy
+                            : explicit;
+                    }
+                    if (explicit != null) return explicit;
+                    const isNonInstantiableDerived =
+                        Boolean(node.BaseAgentID) && (node.InstantiationMode ?? 'None') === 'None';
+                    if (legacy != null && (legacy !== 'RequestedOnly' || !isNonInstantiableDerived)) {
+                        return legacy;
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => narrowSkillMode(acc, next),
+            }) ?? 'RequestedOnly';
 
         // ModelSelectionMode: if leaf owns active prompts use leaf's mode; otherwise inherit from
         // the nearest prompt-owning ancestor (or root), falling back to category/type default.
@@ -1948,162 +2090,394 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             delete mergedTypeConfig['instantiation'];
         }
 
-        // Deep-merge AgentTypePromptParams (category/type promptDefaults beneath root -> leaf)
+        // Deep-merge AgentTypePromptParams (category/type promptDefaults beneath root -> leaf),
+        // enforcing narrow-only gates (`enableHandoff: false`, `enableTaskGraphs: false`) unless `canWidenAt(i)`.
         let mergedPromptParams: AgentConfigJsonObject | null = null;
+        const lockedPromptGates = new Map<string, boolean>();
+        const trackPromptGates = (obj: AgentConfigJsonObject | null, allowRebase: boolean): void => {
+            if (!obj) return;
+            for (const gate of NARROW_ONLY_PROMPT_PARAM_GATES) {
+                if (typeof obj[gate] === 'boolean') {
+                    if (allowRebase) {
+                        lockedPromptGates.set(gate, obj[gate] as boolean);
+                    } else if (obj[gate] === false) {
+                        lockedPromptGates.set(gate, false);
+                    } else if (!lockedPromptGates.has(gate)) {
+                        lockedPromptGates.set(gate, true);
+                    }
+                }
+            }
+        };
         if (defaultsLayer.promptDefaults && Object.keys(defaultsLayer.promptDefaults).length > 0) {
             mergedPromptParams = ParseAgentConfigJsonObject(JSON.stringify(defaultsLayer.promptDefaults));
+            trackPromptGates(mergedPromptParams, false);
         }
-        for (const node of nodes) {
-            const parsed = ParseAgentConfigJsonObject(node.AgentTypePromptParams);
+        for (let i = 0; i < nodes.length; i++) {
+            const parsed = ParseAgentConfigJsonObject(nodes[i].AgentTypePromptParams);
             if (parsed) {
                 mergedPromptParams = mergedPromptParams
                     ? DeepMergeAgentConfigObjects(mergedPromptParams, parsed)
                     : { ...parsed };
+                trackPromptGates(parsed, canWidenAt(i));
+            }
+        }
+        if (mergedPromptParams) {
+            for (const gate of NARROW_ONLY_PROMPT_PARAM_GATES) {
+                if (lockedPromptGates.get(gate) === false) {
+                    mergedPromptParams[gate] = false;
+                }
             }
         }
 
-        // RequirePlanMode is monotonic OR across EVERY tier (AgentType -> Categories -> BaseAgent chain -> leaf)
-        // and takes stricter-of-two (JSON || legacy) on each node.
-        const effectiveRequirePlanMode =
+        // RequirePlanMode: rebase-aware monotonic OR across default layers + root -> leaf
+        const seedRequirePlanMode =
             orderedDefaultLayers.some((l) => l.execution?.requirePlanMode === true) ||
-            nodes.some((n, i) => nodeConfigs[i]?.execution?.requirePlanMode === true || n.RequirePlanMode === true);
-        // SupportsPlanMode is monotonic AND across EVERY tier and takes stricter-of-two (false wins) on each node.
-        const effectiveSupportsPlanMode =
+            (nodes.length > 0 &&
+                (nodeConfigs[0]?.execution?.requirePlanMode === true || nodes[0].RequirePlanMode === true));
+        const effectiveRequirePlanMode = FoldRebaseAwareChain<MJAIAgentEntityExtended, boolean>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedRequirePlanMode,
+            GetNodeValue: (node, cfg, idx) => {
+                const explicit = cfg?.execution?.requirePlanMode;
+                const legacy = node.RequirePlanMode;
+                if (canWidenAt(idx)) {
+                    if (typeof explicit === 'boolean') return explicit;
+                    return legacy === true ? true : undefined;
+                }
+                if (explicit === true || legacy === true) return true;
+                if (typeof explicit === 'boolean') return explicit;
+                return undefined;
+            },
+            Narrow: (acc, next) => acc || next,
+        });
+
+        // SupportsPlanMode: rebase-aware monotonic AND across default layers + root -> leaf
+        const seedSupportsPlanMode =
             orderedDefaultLayers.some((l) => l.execution?.supportsPlanMode === false)
                 ? false
                 : nodes.length > 0
-                    ? nodes.every(
-                          (n, i) =>
-                              nodeConfigs[i]?.execution?.supportsPlanMode !== false && n.SupportsPlanMode !== false
-                      )
+                    ? nodeConfigs[0]?.execution?.supportsPlanMode !== false && nodes[0].SupportsPlanMode !== false
                     : (defaultsLayer.execution?.supportsPlanMode ?? true);
+        const effectiveSupportsPlanMode = FoldRebaseAwareChain<MJAIAgentEntityExtended, boolean>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedSupportsPlanMode,
+            GetNodeValue: (node, cfg, idx) => {
+                const explicit = cfg?.execution?.supportsPlanMode;
+                const legacy = node.SupportsPlanMode;
+                if (canWidenAt(idx)) {
+                    if (typeof explicit === 'boolean') return explicit;
+                    return legacy === false ? false : undefined;
+                }
+                if (explicit === false || legacy === false) return false;
+                if (typeof explicit === 'boolean') return explicit;
+                return undefined;
+            },
+            Narrow: (acc, next) => acc && next,
+        });
 
-        // SearchScopeAccess: narrow-only across EVERY tier (AgentType -> Categories -> BaseAgent chain -> leaf)
-        // (`All: 2 > Assigned: 1 > None: 0`) with stricter-of-two between JSON and legacy column on each node,
-        // while allowing minimal derived rows with untouched default legacy 'None' (and no explicit JSON) to inherit.
-        const searchAccessRank: Record<MJAIAgentEntity['SearchScopeAccess'], number> = {
-            None: 0,
-            Assigned: 1,
-            All: 2,
-        };
-        let effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] = 'None';
-        let establishedSearchAccess = false;
-        const applySearchAccessNarrow = (candidate: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
-            if (candidate == null) return;
-            if (!establishedSearchAccess) {
-                effectiveSearchScopeAccess = candidate;
-                establishedSearchAccess = true;
-            } else if (searchAccessRank[candidate] < searchAccessRank[effectiveSearchScopeAccess]) {
-                effectiveSearchScopeAccess = candidate;
+        // SearchScopeAccess: rebase-aware narrow-only fold (`All: 2 > Assigned: 1 > None: 0`)
+        let seedSearchAccess: MJAIAgentEntity['SearchScopeAccess'] | null = null;
+        const narrowSearchAccess = (
+            acc: MJAIAgentEntity['SearchScopeAccess'] | null,
+            val: MJAIAgentEntity['SearchScopeAccess'] | null | undefined
+        ): MJAIAgentEntity['SearchScopeAccess'] | null => {
+            if (val == null) return acc;
+            if (acc === null || AGENT_SEARCH_SCOPE_ACCESS_RANK[val] < AGENT_SEARCH_SCOPE_ACCESS_RANK[acc]) {
+                return val;
             }
+            return acc;
         };
         for (const layer of orderedDefaultLayers) {
-            applySearchAccessNarrow(layer.scope?.searchScopeAccess);
+            seedSearchAccess = narrowSearchAccess(seedSearchAccess, layer.scope?.searchScopeAccess);
         }
-        for (let i = 0; i < nodes.length; i++) {
-            const explicitJsonVal = nodeConfigs[i]?.scope?.searchScopeAccess ?? null;
-            const legacyVal = nodes[i].SearchScopeAccess ?? null;
-            if (explicitJsonVal != null && legacyVal != null) {
-                // Stricter-of-two: if a direct SQL edit tightened the legacy column below JSON, legacy wins.
+        if (nodes.length > 0) {
+            const explicit0 = nodeConfigs[0]?.scope?.searchScopeAccess ?? null;
+            const legacy0 = nodes[0].SearchScopeAccess ?? null;
+            if (explicit0 != null && legacy0 != null) {
                 const stricter =
-                    searchAccessRank[legacyVal] < searchAccessRank[explicitJsonVal] ? legacyVal : explicitJsonVal;
-                applySearchAccessNarrow(stricter);
+                    AGENT_SEARCH_SCOPE_ACCESS_RANK[legacy0] < AGENT_SEARCH_SCOPE_ACCESS_RANK[explicit0]
+                        ? legacy0
+                        : explicit0;
+                seedSearchAccess = narrowSearchAccess(seedSearchAccess, stricter);
             } else {
-                // Treat an untouched legacy `'None'` (with no explicit JSON value) as unset ONLY by
-                // node property: a non-instantiable derived row (`BaseAgentID != null && InstantiationMode === 'None'`).
-                // Any root or instantiable template with `SearchScopeAccess === 'None'` enforces an
-                // active `'None'` ceiling consistently for both itself and its descendants (C-R1-2, R5-6).
-                const isNonInstantiableDerived =
-                    Boolean(nodes[i].BaseAgentID) && (nodes[i].InstantiationMode ?? 'None') === 'None';
-                const candidate =
-                    explicitJsonVal ??
-                    (legacyVal && (legacyVal !== 'None' || !isNonInstantiableDerived) ? legacyVal : null);
-                applySearchAccessNarrow(candidate);
+                const isNonInstantiableDerived0 =
+                    Boolean(nodes[0].BaseAgentID) && (nodes[0].InstantiationMode ?? 'None') === 'None';
+                const cand0 =
+                    explicit0 ?? (legacy0 && (legacy0 !== 'None' || !isNonInstantiableDerived0) ? legacy0 : null);
+                seedSearchAccess = narrowSearchAccess(seedSearchAccess, cand0);
             }
         }
+        const effectiveSearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'] =
+            FoldRebaseAwareChain<MJAIAgentEntityExtended, MJAIAgentEntity['SearchScopeAccess'] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedSearchAccess,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = cfg?.scope?.searchScopeAccess ?? null;
+                    const legacy = node.SearchScopeAccess ?? null;
+                    if (canWidenAt(idx)) {
+                        if (explicit != null) return explicit;
+                        return legacy != null && legacy !== 'None' ? legacy : undefined;
+                    }
+                    if (explicit != null && legacy != null) {
+                        return AGENT_SEARCH_SCOPE_ACCESS_RANK[legacy] < AGENT_SEARCH_SCOPE_ACCESS_RANK[explicit]
+                            ? legacy
+                            : explicit;
+                    }
+                    if (explicit != null) return explicit;
+                    const isNonInstantiableDerived =
+                        Boolean(node.BaseAgentID) && (node.InstantiationMode ?? 'None') === 'None';
+                    if (legacy != null && (legacy !== 'None' || !isNonInstantiableDerived)) {
+                        return legacy;
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => narrowSearchAccess(acc, next),
+            }) ?? 'None';
 
-        // ArtifactCreationMode: explicit JSON override wins (including `'Never'`); legacy fallback treats `'Always'`
-        // as the DB default rather than misclassifying `'Never'` as unset.
-        const effectiveArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] = (() => {
-            for (let i = nodes.length - 1; i >= 0; i--) {
-                const explicit = nodeConfigs[i]?.artifacts?.creationMode;
-                if (explicit != null) {
-                    return explicit;
-                }
-                const legacy = nodes[i].ArtifactCreationMode;
-                if (legacy != null && legacy !== 'Always') {
-                    return legacy;
-                }
+        // ArtifactCreationMode: rebase-aware narrow-only fold ('Never' < 'System Only' < 'Always').
+        // Untouched SQL default 'Always' on derived rows (with no JSON override) inherits cleanly.
+        let seedArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] | null = null;
+        const narrowArtifactMode = (
+            acc: MJAIAgentEntity['ArtifactCreationMode'] | null,
+            val: MJAIAgentEntity['ArtifactCreationMode'] | null | undefined
+        ): MJAIAgentEntity['ArtifactCreationMode'] | null => {
+            if (val == null) return acc;
+            if (acc === null || AGENT_ARTIFACT_CREATION_MODE_RANK[val] < AGENT_ARTIFACT_CREATION_MODE_RANK[acc]) {
+                return val;
             }
-            if (defaultsLayer.artifacts?.creationMode != null) {
-                return defaultsLayer.artifacts.creationMode;
+            return acc;
+        };
+        for (const layer of orderedDefaultLayers) {
+            seedArtifactCreationMode = narrowArtifactMode(seedArtifactCreationMode, layer.artifacts?.creationMode);
+        }
+        if (nodes.length > 0) {
+            const exp0 = nodeConfigs[0]?.artifacts?.creationMode ?? null;
+            const leg0 = nodes[0].ArtifactCreationMode ?? null;
+            if (exp0 != null && leg0 != null) {
+                seedArtifactCreationMode = narrowArtifactMode(
+                    seedArtifactCreationMode,
+                    AGENT_ARTIFACT_CREATION_MODE_RANK[leg0] < AGENT_ARTIFACT_CREATION_MODE_RANK[exp0] ? leg0 : exp0
+                );
+            } else if (exp0 != null) {
+                seedArtifactCreationMode = narrowArtifactMode(seedArtifactCreationMode, exp0);
+            } else if (leg0 != null && leg0 !== 'Always') {
+                seedArtifactCreationMode = narrowArtifactMode(seedArtifactCreationMode, leg0);
+            } else if (seedArtifactCreationMode === null && leg0 != null) {
+                seedArtifactCreationMode = leg0;
             }
-            return nearestNonNull((a) => a.ArtifactCreationMode) ?? 'Always';
-        })();
+        }
+        const effectiveArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'] =
+            FoldRebaseAwareChain<MJAIAgentEntityExtended, MJAIAgentEntity['ArtifactCreationMode'] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedArtifactCreationMode,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = cfg?.artifacts?.creationMode ?? null;
+                    const legacy = node.ArtifactCreationMode ?? null;
+                    if (canWidenAt(idx)) {
+                        if (explicit != null) return explicit;
+                        return legacy != null && legacy !== 'Always' ? legacy : undefined;
+                    }
+                    if (explicit != null && legacy != null) {
+                        return AGENT_ARTIFACT_CREATION_MODE_RANK[legacy] < AGENT_ARTIFACT_CREATION_MODE_RANK[explicit]
+                            ? legacy
+                            : explicit;
+                    }
+                    if (explicit != null) return explicit;
+                    return legacy != null && legacy !== 'Always' ? legacy : undefined;
+                },
+                Narrow: (acc, next) => narrowArtifactMode(acc, next),
+            }) ?? 'Always';
 
         // Narrow-only boolean capabilities: AllowEphemeralClientTools, AcceptUnregisteredFiles, AllowMemoryWrite
-        // Monotonic AND across EVERY tier (AgentType -> Categories -> BaseAgent chain -> leaf) with stricter-of-two
-        // (`false` wins if either JSON or legacy column is `false` on any node).
-        const resolveNarrowBoolean = (
+        // Rebase-aware monotonic AND across default layers + root -> leaf.
+        const resolveRebaseNarrowBoolean = (
             jsonPicker: (cfg: IAgentConfiguration | null) => boolean | null | undefined,
             legacyPicker: (a: MJAIAgentEntityExtended) => boolean | null | undefined,
+            sqlDefault: boolean,
             fallback: boolean
         ): boolean => {
-            let resolved: boolean | null = null;
-            const fold = (val: boolean | null | undefined): void => {
-                if (typeof val !== 'boolean') {
-                    return;
-                }
-                resolved = resolved === null ? val : resolved && val;
+            let seed: boolean | null = null;
+            const foldAnd = (acc: boolean | null, val: boolean | null | undefined): boolean | null => {
+                if (typeof val !== 'boolean') return acc;
+                return acc === null ? val : acc && val;
             };
             for (const layer of orderedDefaultLayers) {
-                fold(jsonPicker(layer));
+                seed = foldAnd(seed, jsonPicker(layer));
             }
-            for (let i = 0; i < nodes.length; i++) {
-                const explicit = jsonPicker(nodeConfigs[i]);
-                const legacy = legacyPicker(nodes[i]);
-                if (typeof explicit === 'boolean' && typeof legacy === 'boolean') {
-                    fold(explicit && legacy);
+            if (nodes.length > 0) {
+                const exp0 = jsonPicker(nodeConfigs[0]);
+                const leg0 = legacyPicker(nodes[0]);
+                if (typeof exp0 === 'boolean' && typeof leg0 === 'boolean') {
+                    seed = foldAnd(seed, exp0 && leg0);
                 } else {
-                    fold(explicit ?? legacy);
+                    seed = foldAnd(seed, exp0 ?? leg0);
                 }
             }
+            const resolved = FoldRebaseAwareChain<MJAIAgentEntityExtended, boolean | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seed,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = jsonPicker(cfg);
+                    const legacy = legacyPicker(node);
+                    if (canWidenAt(idx)) {
+                        if (typeof explicit === 'boolean') return explicit;
+                        return typeof legacy === 'boolean' && legacy !== sqlDefault ? legacy : undefined;
+                    }
+                    if (typeof explicit === 'boolean' && typeof legacy === 'boolean') {
+                        return explicit && legacy;
+                    }
+                    if (typeof explicit === 'boolean') return explicit;
+                    // For strict-default booleans (AcceptUnregisteredFiles=false), untouched SQL default
+                    // on a non-instantiable derived row inherits unless explicitly persisted in JSON.
+                    if (typeof legacy === 'boolean') {
+                        if (sqlDefault === false && legacy === false) {
+                            const isNonInstantiableDerived =
+                                Boolean(node.BaseAgentID) && (node.InstantiationMode ?? 'None') === 'None';
+                            return isNonInstantiableDerived ? undefined : false;
+                        }
+                        return legacy !== sqlDefault ? legacy : undefined;
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => foldAnd(acc, next),
+            });
             return resolved ?? fallback;
         };
 
-        const effectiveAllowEphemeralClientTools = resolveNarrowBoolean(
+        const effectiveAllowEphemeralClientTools = resolveRebaseNarrowBoolean(
             (cfg) => cfg?.clientTools?.allowEphemeral,
             (a) => a.AllowEphemeralClientTools,
+            true,
             false
         );
-        const effectiveAcceptUnregisteredFiles = resolveNarrowBoolean(
+        const effectiveAcceptUnregisteredFiles = resolveRebaseNarrowBoolean(
             (cfg) => cfg?.attachments?.acceptUnregisteredFiles,
             (a) => a.AcceptUnregisteredFiles,
+            false,
             false
         );
 
-        // Narrow-only numeric ceilings (min of non-null finite values across EVERY default layer + EVERY agent node,
-        // taking stricter-of-two between JSON and legacy column on each node).
-        const minCeiling = (
-            values: Array<number | null | undefined>
+        // Rebase-aware numeric ceiling fold helper (`Math.min` when !canWidenAt, explicit value rebases when canWidenAt).
+        // Treats untouched SQL defaults (when `sqlDefault !== null` and JSON key is `undefined`) on derived rows as unset.
+        const resolveRebaseMinCeiling = (
+            jsonPicker: (cfg: IAgentConfiguration | null) => number | null | undefined,
+            legacyPicker: (a: MJAIAgentEntityExtended) => number | null | undefined,
+            sqlDefault: number | null,
+            seedUsesLayerFallbackWhenRootAtSqlDefault: boolean = false
         ): number | null => {
-            let best: number | null = null;
-            for (const v of values) {
-                if (typeof v === 'number' && Number.isFinite(v)) {
-                    best = best === null ? v : Math.min(best, v);
-                }
+            const minFinite = (a: number | null, b: number | null | undefined): number | null => {
+                if (typeof b !== 'number' || !Number.isFinite(b)) return a;
+                return a === null ? b : Math.min(a, b);
+            };
+            let seed: number | null = null;
+            for (const layer of orderedDefaultLayers) {
+                seed = minFinite(seed, jsonPicker(layer));
             }
-            return best;
+            if (nodes.length > 0) {
+                const exp0 = jsonPicker(nodeConfigs[0]);
+                const leg0 = legacyPicker(nodes[0]);
+                const leg0Effective =
+                    seedUsesLayerFallbackWhenRootAtSqlDefault &&
+                    exp0 === undefined &&
+                    sqlDefault !== null &&
+                    leg0 === sqlDefault &&
+                    seed !== null
+                        ? null
+                        : leg0;
+                seed = minFinite(seed, exp0);
+                seed = minFinite(seed, leg0Effective);
+            }
+            return FoldRebaseAwareChain<MJAIAgentEntityExtended, number | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seed,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = jsonPicker(cfg);
+                    const legacy = legacyPicker(node);
+                    if (canWidenAt(idx)) {
+                        if (explicit === null) return null; // explicit JSON null clears ceiling on rebase
+                        if (typeof explicit === 'number' && Number.isFinite(explicit)) return explicit;
+                        if (typeof legacy === 'number' && Number.isFinite(legacy) && legacy !== sqlDefault) {
+                            return legacy;
+                        }
+                        return undefined;
+                    }
+                    if (typeof explicit === 'number' && Number.isFinite(explicit)) {
+                        if (typeof legacy === 'number' && Number.isFinite(legacy) && legacy !== sqlDefault) {
+                            return Math.min(explicit, legacy);
+                        }
+                        return explicit;
+                    }
+                    if (typeof legacy === 'number' && Number.isFinite(legacy) && legacy !== sqlDefault) {
+                        return legacy;
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => minFinite(acc, next),
+            });
         };
 
-        const effectiveMaxExecutionsPerRun = minCeiling([
-            ...orderedDefaultLayers.map((l) => l.subAgentExecution?.maxExecutionsPerRun),
-            ...nodes.flatMap((n, i) => [nodeConfigs[i]?.subAgentExecution?.maxExecutionsPerRun, n.MaxExecutionsPerRun]),
-        ]);
-        const effectiveMaxSubAgentConsultRounds = minCeiling([
-            ...orderedDefaultLayers.map((l) => l.subAgentExecution?.maxConsultRounds),
-            ...nodes.flatMap((n, i) => [nodeConfigs[i]?.subAgentExecution?.maxConsultRounds, n.MaxSubAgentConsultRounds]),
-        ]);
+        const effectiveMaxExecutionsPerRun = resolveRebaseMinCeiling(
+            (cfg) => cfg?.subAgentExecution?.maxExecutionsPerRun,
+            (a) => a.MaxExecutionsPerRun,
+            null
+        );
+        const effectiveMaxSubAgentConsultRounds = resolveRebaseMinCeiling(
+            (cfg) => cfg?.subAgentExecution?.maxConsultRounds,
+            (a) => a.MaxSubAgentConsultRounds,
+            null
+        );
+        const effectiveContextWindowMaxTokens = resolveRebaseMinCeiling(
+            (cfg) => cfg?.contextWindow?.maxTokens,
+            (a) => a.ContextWindowMaxTokens,
+            null
+        );
+        const effectiveMaxNotesToInject = resolveRebaseMinCeiling(
+            (cfg) => cfg?.memory?.maxNotesToInject,
+            (a) => a.MaxNotesToInject,
+            5, // SQL schema default DF_AIAgent_MaxNotesToInject
+            true
+        );
+        const effectiveMaxExamplesToInject = resolveRebaseMinCeiling(
+            (cfg) => cfg?.memory?.maxExamplesToInject,
+            (a) => a.MaxExamplesToInject,
+            3, // SQL schema default DF_AIAgent_MaxExamplesToInject
+            true
+        );
+        const effectiveNoteRetentionDays = resolveRebaseMinCeiling(
+            (cfg) => cfg?.memory?.noteRetentionDays,
+            (a) => a.NoteRetentionDays,
+            90, // SQL schema default DF_AIAgent_NoteRetentionDays
+            true
+        );
+        const effectiveExampleRetentionDays = resolveRebaseMinCeiling(
+            (cfg) => cfg?.memory?.exampleRetentionDays,
+            (a) => a.ExampleRetentionDays,
+            180, // SQL schema default DF_AIAgent_ExampleRetentionDays
+            true
+        );
+        const effectiveMaxMessages = resolveRebaseMinCeiling(
+            (cfg) => cfg?.attachments?.maxMessages,
+            (a) => a.MaxMessages,
+            null
+        );
+        const effectiveInlineStorageThresholdBytes = resolveRebaseMinCeiling(
+            (cfg) => cfg?.attachments?.inlineStorageThresholdBytes,
+            (a) => a.InlineStorageThresholdBytes,
+            null
+        );
+        const effectiveFinalValidationMaxRetries: number =
+            resolveRebaseMinCeiling(
+                (cfg) => cfg?.payload?.finalValidationMaxRetries,
+                (a) => a.FinalPayloadValidationMaxRetries,
+                3, // SQL schema default DF_AIAgent_FinalPayloadValidationMaxRetries
+                true
+            ) ?? 3; // SQL schema default DF_AIAgent_FinalPayloadValidationMaxRetries
 
         // Merge full IAgentConfiguration bag: AgentType -> Categories -> rootAgent..leafAgent
         let mergedConfiguration: IAgentConfiguration = DeepMergeAgentConfigurations({}, defaultsLayer);
@@ -2112,25 +2486,41 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 mergedConfiguration = DeepMergeAgentConfigurations(mergedConfiguration, cfg);
             }
         }
-        // Clamp instantiation.maxInstancesPerUser monotonically (Math.min) across AgentType,
-        // Categories, and the full BaseAgent chain (both Configuration and legacy TypeConfiguration)
-        // so UI/action pre-checks and server-side ValidateAgentInheritanceAndSandbox agree (R5-7).
-        const effectiveMaxInstancesPerUser = minCeiling([
-            ...orderedDefaultLayers.map((l) => {
-                const v = l.instantiation?.maxInstancesPerUser;
-                return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
-            }),
-            ...nodes.flatMap((n, i) => [
-                (() => {
-                    const v = nodeConfigs[i]?.instantiation?.maxInstancesPerUser;
-                    return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
-                })(),
-                (() => {
-                    const v = ParseAgentInstantiationConfig(n.TypeConfiguration)?.maxInstancesPerUser;
-                    return typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
-                })(),
-            ]),
-        ]);
+        // Rebase-aware clamp on instantiation.maxInstancesPerUser across AgentType, Categories, and
+        // the full BaseAgent chain (both Configuration and legacy TypeConfiguration) (R5-7).
+        const sanitizePositiveInt = (v: number | null | undefined): number | null =>
+            typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
+        let seedMaxInstances: number | null = null;
+        const minInst = (a: number | null, b: number | null): number | null =>
+            b === null ? a : a === null ? b : Math.min(a, b);
+        for (const layer of orderedDefaultLayers) {
+            seedMaxInstances = minInst(seedMaxInstances, sanitizePositiveInt(layer.instantiation?.maxInstancesPerUser));
+        }
+        if (nodes.length > 0) {
+            seedMaxInstances = minInst(seedMaxInstances, sanitizePositiveInt(nodeConfigs[0]?.instantiation?.maxInstancesPerUser));
+            seedMaxInstances = minInst(
+                seedMaxInstances,
+                sanitizePositiveInt(ParseAgentInstantiationConfig(nodes[0].TypeConfiguration)?.maxInstancesPerUser)
+            );
+        }
+        const effectiveMaxInstancesPerUser = FoldRebaseAwareChain<MJAIAgentEntityExtended, number | null>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedMaxInstances,
+            GetNodeValue: (node, cfg, idx) => {
+                const fromJson = sanitizePositiveInt(cfg?.instantiation?.maxInstancesPerUser);
+                const fromTypeCfg = sanitizePositiveInt(
+                    ParseAgentInstantiationConfig(node.TypeConfiguration)?.maxInstancesPerUser
+                );
+                if (canWidenAt(idx)) {
+                    if (fromJson !== null) return fromJson;
+                    return fromTypeCfg !== null ? fromTypeCfg : undefined;
+                }
+                const combined = minInst(fromJson, fromTypeCfg);
+                return combined !== null ? combined : undefined;
+            },
+            Narrow: (acc, next) => minInst(acc, next),
+        });
         if (effectiveMaxInstancesPerUser !== null && effectiveMaxInstancesPerUser >= 1) {
             mergedConfiguration = {
                 ...mergedConfiguration,
@@ -2163,10 +2553,45 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             (a, cfg) => (cfg?.memory?.reranker ? JSON.stringify(cfg.memory.reranker) : a.RerankerConfiguration),
             defaultsLayer.memory?.reranker ? JSON.stringify(defaultsLayer.memory.reranker) : null
         );
-        const effectiveScopeConfig = nearestOrDefault(
-            (a, cfg) => (cfg?.scope?.secondaryScopeConfig ? JSON.stringify(cfg.scope.secondaryScopeConfig) : a.ScopeConfig),
-            defaultsLayer.scope?.secondaryScopeConfig ? JSON.stringify(defaultsLayer.scope.secondaryScopeConfig) : null
-        );
+
+        // ScopeConfig (`scope.secondaryScopeConfig`): rebase-aware per-key intersection
+        const parsePlainScopeObj = (raw: string | null | undefined): Record<string, unknown> | null => {
+            if (!raw || raw.trim().length === 0) return null;
+            const parsed = ParseAgentConfigJsonObject(raw);
+            return parsed ? { ...parsed } : null;
+        };
+        let seedScopeObj: Record<string, unknown> | null = null;
+        for (const layer of orderedDefaultLayers) {
+            if (layer.scope?.secondaryScopeConfig) {
+                seedScopeObj = NarrowScopeConfigObjects(seedScopeObj, layer.scope.secondaryScopeConfig);
+            }
+        }
+        if (nodes.length > 0) {
+            const rootScope = nodeConfigs[0]?.scope?.secondaryScopeConfig ?? parsePlainScopeObj(nodes[0].ScopeConfig);
+            if (rootScope) {
+                seedScopeObj = NarrowScopeConfigObjects(seedScopeObj, rootScope);
+            }
+        }
+        const effectiveScopeObj = FoldRebaseAwareChain<MJAIAgentEntityExtended, Record<string, unknown> | null>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedScopeObj,
+            GetNodeValue: (node, cfg, idx) => {
+                if (canWidenAt(idx) && cfg?.scope?.secondaryScopeConfig === null) {
+                    return null;
+                }
+                const fromJson = cfg?.scope?.secondaryScopeConfig;
+                if (fromJson && typeof fromJson === 'object' && !Array.isArray(fromJson)) {
+                    return fromJson;
+                }
+                const fromLegacy = parsePlainScopeObj(node.ScopeConfig);
+                return fromLegacy ?? undefined;
+            },
+            Narrow: (acc, next) => NarrowScopeConfigObjects(acc, next),
+            Rebase: (_acc, next) => (next ? { ...next } : null),
+        });
+        const effectiveScopeConfig =
+            effectiveScopeObj && Object.keys(effectiveScopeObj).length > 0 ? JSON.stringify(effectiveScopeObj) : null;
 
         // Overridable booleans: nearest explicit agent-chain Configuration override wins (so an agent
         // setting `false` overrides a Category/AgentType default of `true`), falling back to defaultsLayer
@@ -2230,9 +2655,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             (a) => a.DeclareActionsAsNativeTools,
             true
         );
-        const effectiveAllowMemoryWrite = resolveNarrowBoolean(
+        const effectiveAllowMemoryWrite = resolveRebaseNarrowBoolean(
             (cfg) => cfg?.memory?.allowMemoryWrite,
             (a) => a.AllowMemoryWrite,
+            true,
             true
         );
         const effectiveInjectNotes = resolveOverridableBoolean(
@@ -2245,11 +2671,34 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             (a) => a.InjectExamples,
             false
         );
-        const effectiveAutoArchive = resolveOverridableBoolean(
-            (cfg) => cfg?.memory?.autoArchiveEnabled,
-            (a) => a.AutoArchiveEnabled,
-            true
-        );
+
+        // AutoArchiveEnabled: cannot flip true -> false when ancestor enforces finite retention unless canWidenAt(i)
+        const seedAutoArchive: boolean = (() => {
+            if (nodes.length > 0) {
+                const exp0 = nodeConfigs[0]?.memory?.autoArchiveEnabled;
+                if (typeof exp0 === 'boolean') return exp0;
+                const leg0 = nodes[0].AutoArchiveEnabled;
+                if (typeof leg0 === 'boolean' && leg0 !== true) return leg0;
+            }
+            if (typeof defaultsLayer.memory?.autoArchiveEnabled === 'boolean') {
+                return defaultsLayer.memory.autoArchiveEnabled;
+            }
+            return true;
+        })();
+        const hasFiniteRetention =
+            effectiveNoteRetentionDays !== null || effectiveExampleRetentionDays !== null;
+        const effectiveAutoArchive = FoldRebaseAwareChain<MJAIAgentEntityExtended, boolean>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedAutoArchive,
+            GetNodeValue: (node, cfg) => {
+                const explicit = cfg?.memory?.autoArchiveEnabled;
+                if (typeof explicit === 'boolean') return explicit;
+                const legacy = node.AutoArchiveEnabled;
+                return typeof legacy === 'boolean' && legacy !== true ? legacy : undefined;
+            },
+            Narrow: (acc, next) => (acc === true && hasFiniteRetention && next === false ? true : next),
+        });
 
         const parseStringArrayColumn = (raw: string | null | undefined): string[] | null => {
             if (!raw || raw.trim().length === 0) {
@@ -2261,52 +2710,335 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     return parsed;
                 }
             } catch {
-                // Invalid legacy JSON string; treat as unset so cascade/default handles cleanly
+                // Invalid legacy JSON string; treat as unset so single-node fail-open (PG9) is preserved
             }
             return null;
         };
 
-        const resolvePayloadPaths = (
+        // Rebase-aware glob-set intersection for all 4 payload path lists.
+        // Preserves `[]` (bottom / deny-all) and treats untouched legacy '["*"]' on derived rows as inheritable.
+        const resolveRebasePayloadPaths = (
             jsonPicker: (cfg: IAgentConfiguration | null) => string[] | null | undefined,
             legacyPicker: (a: MJAIAgentEntityExtended) => string | null | undefined,
-            layerDefault: string[] | null | undefined,
             treatWildcardAsDbDefault: boolean
         ): string[] | null => {
-            for (let i = nodes.length - 1; i >= 0; i--) {
-                const explicit = jsonPicker(nodeConfigs[i]);
-                if (Array.isArray(explicit)) {
-                    return [...explicit];
+            let seed: string[] | null = null;
+            for (const layer of orderedDefaultLayers) {
+                const layerPaths = jsonPicker(layer);
+                if (Array.isArray(layerPaths)) {
+                    seed = IntersectPayloadPathSets(seed, layerPaths);
                 }
-                const legacy = parseStringArrayColumn(legacyPicker(nodes[i]));
-                if (legacy !== null) {
-                    const isDbWildcardDefault =
-                        treatWildcardAsDbDefault && legacy.length === 1 && legacy[0] === '*';
-                    if (!isDbWildcardDefault) {
-                        return legacy;
+            }
+            if (nodes.length > 0) {
+                const exp0 = jsonPicker(nodeConfigs[0]);
+                if (Array.isArray(exp0)) {
+                    seed = IntersectPayloadPathSets(seed, exp0);
+                } else {
+                    const leg0 = parseStringArrayColumn(legacyPicker(nodes[0]));
+                    if (leg0 !== null) {
+                        const isDbWildcard = treatWildcardAsDbDefault && leg0.length === 1 && leg0[0] === '*';
+                        if (!isDbWildcard) {
+                            seed = IntersectPayloadPathSets(seed, leg0);
+                        } else if (seed === null) {
+                            seed = leg0;
+                        }
                     }
                 }
             }
-            if (Array.isArray(layerDefault)) {
-                return [...layerDefault];
-            }
-            for (let i = nodes.length - 1; i >= 0; i--) {
-                const legacy = parseStringArrayColumn(legacyPicker(nodes[i]));
-                if (legacy !== null) {
-                    return legacy;
-                }
-            }
-            return null;
+            return FoldRebaseAwareChain<MJAIAgentEntityExtended, string[] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seed,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = jsonPicker(cfg);
+                    if (canWidenAt(idx) && explicit === null) {
+                        return null;
+                    }
+                    if (Array.isArray(explicit)) {
+                        return [...explicit];
+                    }
+                    const legacy = parseStringArrayColumn(legacyPicker(node));
+                    if (legacy !== null) {
+                        const isDbWildcard = treatWildcardAsDbDefault && legacy.length === 1 && legacy[0] === '*';
+                        if (!isDbWildcard) {
+                            return legacy;
+                        }
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => IntersectPayloadPathSets(acc, next),
+                Rebase: (_acc, next) => (next === null ? null : [...next]),
+            });
         };
+
+        const effectivePayloadDownstreamPaths: string[] =
+            resolveRebasePayloadPaths(
+                (cfg) => cfg?.payload?.downstreamPaths,
+                (a) => a.PayloadDownstreamPaths,
+                true
+            ) ?? ['*'];
+        const effectivePayloadUpstreamPaths: string[] =
+            resolveRebasePayloadPaths(
+                (cfg) => cfg?.payload?.upstreamPaths,
+                (a) => a.PayloadUpstreamPaths,
+                true
+            ) ?? ['*'];
+        const effectivePayloadSelfReadPaths = resolveRebasePayloadPaths(
+            (cfg) => cfg?.payload?.selfReadPaths,
+            (a) => a.PayloadSelfReadPaths,
+            false
+        );
+        const effectivePayloadSelfWritePaths = resolveRebasePayloadPaths(
+            (cfg) => cfg?.payload?.selfWritePaths,
+            (a) => a.PayloadSelfWritePaths,
+            false
+        );
+
+        // PayloadScope: rebase-aware subtree prefix lock (rejects `..` traversal, clearing to null, or unrelated subtrees)
+        let seedPayloadScope: string | null = null;
+        for (const layer of orderedDefaultLayers) {
+            if (typeof layer.payload?.scope === 'string' && layer.payload.scope.trim().length > 0) {
+                seedPayloadScope = NarrowPayloadScope(seedPayloadScope, layer.payload.scope);
+            }
+        }
+        if (nodes.length > 0) {
+            const rootScope = nodeConfigs[0]?.payload?.scope ?? nodes[0].PayloadScope ?? null;
+            if (typeof rootScope === 'string' && rootScope.trim().length > 0) {
+                seedPayloadScope = NarrowPayloadScope(seedPayloadScope, rootScope);
+            }
+        }
+        const effectivePayloadScope = FoldRebaseAwareChain<MJAIAgentEntityExtended, string | null>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedPayloadScope,
+            GetNodeValue: (node, cfg, idx) => {
+                const explicit = cfg?.payload?.scope;
+                if (canWidenAt(idx) && explicit === null) {
+                    return null;
+                }
+                if (typeof explicit === 'string' && explicit.trim().length > 0) {
+                    return explicit.trim();
+                }
+                const legacy = node.PayloadScope?.trim();
+                return legacy && legacy.length > 0 ? legacy : undefined;
+            },
+            Narrow: (acc, next) => NarrowPayloadScope(acc, next),
+            Rebase: (acc, next) => (next === null ? null : HasPathTraversalSegment(next) ? acc : next),
+        });
+
+        // Additive validation schema chains (StartingPayloadValidationSchemas / FinalPayloadValidationSchemas)
+        // Ancestor + child schemas accumulate root -> leaf; `canWidenAt(i)` resets if explicitly overridden.
+        const resolveValidationSchemas = (
+            jsonPicker: (cfg: IAgentConfiguration | null) => string | null | undefined,
+            legacyPicker: (a: MJAIAgentEntityExtended) => string | null | undefined
+        ): string[] => {
+            const seedSchemas: string[] = [];
+            const pushUnique = (list: string[], schema: string | null | undefined): void => {
+                if (typeof schema === 'string' && schema.trim().length > 0 && !list.includes(schema)) {
+                    list.push(schema);
+                }
+            };
+            for (const layer of orderedDefaultLayers) {
+                pushUnique(seedSchemas, jsonPicker(layer));
+            }
+            if (nodes.length > 0) {
+                pushUnique(seedSchemas, jsonPicker(nodeConfigs[0]) ?? legacyPicker(nodes[0]));
+            }
+            return FoldRebaseAwareChain<MJAIAgentEntityExtended, string[]>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedSchemas,
+                GetNodeValue: (node, cfg, idx) => {
+                    const explicit = jsonPicker(cfg);
+                    if (canWidenAt(idx) && explicit === null) {
+                        return [];
+                    }
+                    if (typeof explicit === 'string' && explicit.trim().length > 0) {
+                        return [explicit];
+                    }
+                    const legacy = legacyPicker(node);
+                    if (typeof legacy === 'string' && legacy.trim().length > 0) {
+                        return [legacy];
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => {
+                    const out = [...acc];
+                    for (const s of next) {
+                        pushUnique(out, s);
+                    }
+                    return out;
+                },
+                Rebase: (_acc, next) => [...next],
+            });
+        };
+
+        const effectiveStartingValidationSchemas = resolveValidationSchemas(
+            (cfg) => cfg?.payload?.startingValidationSchema,
+            (a) => a.StartingPayloadValidation
+        );
+        const effectiveFinalValidationSchemas = resolveValidationSchemas(
+            (cfg) => cfg?.payload?.finalValidationSchema,
+            (a) => a.FinalPayloadValidation
+        );
+
+        // StartingPayloadValidationMode ('Fail' < 'Warn') & FinalPayloadValidationMode ('Fail' < 'Retry' < 'Warn')
+        let seedStartingValMode: MJAIAgentEntity['StartingPayloadValidationMode'] | null = null;
+        const narrowStartingValMode = (
+            acc: MJAIAgentEntity['StartingPayloadValidationMode'] | null,
+            val: MJAIAgentEntity['StartingPayloadValidationMode'] | null | undefined
+        ): MJAIAgentEntity['StartingPayloadValidationMode'] | null => {
+            if (val == null) return acc;
+            if (acc === null || AGENT_STARTING_VALIDATION_MODE_RANK[val] < AGENT_STARTING_VALIDATION_MODE_RANK[acc]) {
+                return val;
+            }
+            return acc;
+        };
+        for (const layer of orderedDefaultLayers) {
+            seedStartingValMode = narrowStartingValMode(seedStartingValMode, layer.payload?.startingValidationMode);
+        }
+        if (nodes.length > 0) {
+            const exp0 = nodeConfigs[0]?.payload?.startingValidationMode ?? null;
+            const leg0 = nodes[0].StartingPayloadValidationMode ?? null;
+            if (exp0 != null) {
+                seedStartingValMode = narrowStartingValMode(seedStartingValMode, exp0);
+            } else if (leg0 != null && leg0 !== 'Fail') {
+                seedStartingValMode = narrowStartingValMode(seedStartingValMode, leg0);
+            } else if (seedStartingValMode === null && leg0 != null) {
+                seedStartingValMode = leg0;
+            }
+        }
+        const effectiveStartingValidationMode: MJAIAgentEntity['StartingPayloadValidationMode'] =
+            FoldRebaseAwareChain<MJAIAgentEntityExtended, MJAIAgentEntity['StartingPayloadValidationMode'] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedStartingValMode,
+                GetNodeValue: (node, cfg) => {
+                    const explicit = cfg?.payload?.startingValidationMode ?? null;
+                    if (explicit != null) return explicit;
+                    const legacy = node.StartingPayloadValidationMode ?? null;
+                    return legacy != null && legacy !== 'Fail' ? legacy : undefined;
+                },
+                Narrow: (acc, next) => narrowStartingValMode(acc, next),
+            }) ?? 'Fail';
+
+        let seedFinalValMode: MJAIAgentEntity['FinalPayloadValidationMode'] | null = null;
+        const narrowFinalValMode = (
+            acc: MJAIAgentEntity['FinalPayloadValidationMode'] | null,
+            val: MJAIAgentEntity['FinalPayloadValidationMode'] | null | undefined
+        ): MJAIAgentEntity['FinalPayloadValidationMode'] | null => {
+            if (val == null) return acc;
+            if (acc === null || AGENT_FINAL_VALIDATION_MODE_RANK[val] < AGENT_FINAL_VALIDATION_MODE_RANK[acc]) {
+                return val;
+            }
+            return acc;
+        };
+        for (const layer of orderedDefaultLayers) {
+            seedFinalValMode = narrowFinalValMode(seedFinalValMode, layer.payload?.finalValidationMode);
+        }
+        if (nodes.length > 0) {
+            const exp0 = nodeConfigs[0]?.payload?.finalValidationMode ?? null;
+            const leg0 = nodes[0].FinalPayloadValidationMode ?? null;
+            if (exp0 != null) {
+                seedFinalValMode = narrowFinalValMode(seedFinalValMode, exp0);
+            } else if (leg0 != null && leg0 !== 'Retry') {
+                seedFinalValMode = narrowFinalValMode(seedFinalValMode, leg0);
+            } else if (seedFinalValMode === null && leg0 != null) {
+                seedFinalValMode = leg0;
+            }
+        }
+        const effectiveFinalValidationMode: MJAIAgentEntity['FinalPayloadValidationMode'] =
+            FoldRebaseAwareChain<MJAIAgentEntityExtended, MJAIAgentEntity['FinalPayloadValidationMode'] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedFinalValMode,
+                GetNodeValue: (node, cfg) => {
+                    const explicit = cfg?.payload?.finalValidationMode ?? null;
+                    if (explicit != null) return explicit;
+                    const legacy = node.FinalPayloadValidationMode ?? null;
+                    return legacy != null && legacy !== 'Retry' ? legacy : undefined;
+                },
+                Narrow: (acc, next) => narrowFinalValMode(acc, next),
+            }) ?? 'Retry';
+
+        // MessageMode: rebase-aware narrow-only fold ('None' < 'Latest' < 'Bookend' < 'All')
+        let seedMessageMode: MJAIAgentEntity['MessageMode'] | null = null;
+        const narrowMessageMode = (
+            acc: MJAIAgentEntity['MessageMode'] | null,
+            val: MJAIAgentEntity['MessageMode'] | null | undefined
+        ): MJAIAgentEntity['MessageMode'] | null => {
+            if (val == null) return acc;
+            if (acc === null || AGENT_MESSAGE_MODE_RANK[val] < AGENT_MESSAGE_MODE_RANK[acc]) {
+                return val;
+            }
+            return acc;
+        };
+        for (const layer of orderedDefaultLayers) {
+            seedMessageMode = narrowMessageMode(seedMessageMode, layer.attachments?.messageMode);
+        }
+        if (nodes.length > 0) {
+            const exp0 = nodeConfigs[0]?.attachments?.messageMode ?? null;
+            const leg0 = nodes[0].MessageMode ?? null;
+            if (exp0 != null) {
+                seedMessageMode = narrowMessageMode(seedMessageMode, exp0);
+            } else if (leg0 != null && leg0 !== 'None') {
+                seedMessageMode = narrowMessageMode(seedMessageMode, leg0);
+            } else if (seedMessageMode === null && leg0 != null) {
+                seedMessageMode = leg0;
+            }
+        }
+        const effectiveMessageMode: MJAIAgentEntity['MessageMode'] =
+            FoldRebaseAwareChain<MJAIAgentEntityExtended, MJAIAgentEntity['MessageMode'] | null>({
+                Nodes: nodes,
+                NodeConfigs: nodeConfigs,
+                Seed: seedMessageMode,
+                GetNodeValue: (node, cfg) => {
+                    const explicit = cfg?.attachments?.messageMode ?? null;
+                    if (explicit != null) return explicit;
+                    const legacy = node.MessageMode ?? null;
+                    return legacy != null && legacy !== 'None' ? legacy : undefined;
+                },
+                Narrow: (acc, next) => narrowMessageMode(acc, next),
+            }) ?? 'All';
+
+        // AttachmentRootPath: rebase-aware subtree prefix lock (keeps ancestor prefix or appends clean relative sub-prefix, no `..`)
+        let seedAttachmentRootPath: string | null = null;
+        for (const layer of orderedDefaultLayers) {
+            if (typeof layer.attachments?.rootPath === 'string' && layer.attachments.rootPath.trim().length > 0) {
+                seedAttachmentRootPath = NarrowAttachmentRootPath(seedAttachmentRootPath, layer.attachments.rootPath);
+            }
+        }
+        if (nodes.length > 0) {
+            const rootPath0 = nodeConfigs[0]?.attachments?.rootPath ?? nodes[0].AttachmentRootPath ?? null;
+            if (typeof rootPath0 === 'string' && rootPath0.trim().length > 0) {
+                seedAttachmentRootPath = NarrowAttachmentRootPath(seedAttachmentRootPath, rootPath0);
+            }
+        }
+        const effectiveAttachmentRootPath = FoldRebaseAwareChain<MJAIAgentEntityExtended, string | null>({
+            Nodes: nodes,
+            NodeConfigs: nodeConfigs,
+            Seed: seedAttachmentRootPath,
+            GetNodeValue: (node, cfg, idx) => {
+                const explicit = cfg?.attachments?.rootPath;
+                if (canWidenAt(idx) && explicit === null) {
+                    return null;
+                }
+                if (typeof explicit === 'string' && explicit.trim().length > 0) {
+                    return explicit.trim();
+                }
+                const legacy = node.AttachmentRootPath?.trim();
+                return legacy && legacy.length > 0 ? legacy : undefined;
+            },
+            Narrow: (acc, next) => NarrowAttachmentRootPath(acc, next),
+            Rebase: (acc, next) => (next === null ? null : HasPathTraversalSegment(next) ? acc : next),
+        });
 
         return {
             TypeID: effectiveTypeId,
             DriverClass: nearestNonNull((a) => a.DriverClass),
             ModelSelectionMode: effectiveModelSelectionMode,
             Isolation: effectiveIsolation,
-            ContextWindowMaxTokens: nearestOrDefault(
-                (a, cfg) => cfg?.contextWindow?.maxTokens ?? a.ContextWindowMaxTokens,
-                defaultsLayer.contextWindow?.maxTokens
-            ),
+            ContextWindowMaxTokens: effectiveContextWindowMaxTokens,
             CompactionTriggerPercent: nearestOrDefault(
                 (a, cfg) => cfg?.contextWindow?.compactionTriggerPercent ?? a.CompactionTriggerPercent,
                 defaultsLayer.contextWindow?.compactionTriggerPercent
@@ -2355,12 +3087,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             SearchScopeAccess: effectiveSearchScopeAccess,
             AllowMemoryWrite: effectiveAllowMemoryWrite,
             InjectNotes: effectiveInjectNotes,
-            MaxNotesToInject: resolveOverridableWithDbDefault(
-                (cfg) => cfg?.memory?.maxNotesToInject,
-                (a) => a.MaxNotesToInject,
-                defaultsLayer.memory?.maxNotesToInject,
-                5
-            ),
+            MaxNotesToInject: effectiveMaxNotesToInject,
             NoteInjectionStrategy:
                 resolveOverridableWithDbDefault(
                     (cfg) => cfg?.memory?.noteInjectionStrategy,
@@ -2369,12 +3096,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     'Relevant'
                 ) ?? 'Relevant',
             InjectExamples: effectiveInjectExamples,
-            MaxExamplesToInject: resolveOverridableWithDbDefault(
-                (cfg) => cfg?.memory?.maxExamplesToInject,
-                (a) => a.MaxExamplesToInject,
-                defaultsLayer.memory?.maxExamplesToInject,
-                3
-            ),
+            MaxExamplesToInject: effectiveMaxExamplesToInject,
             ExampleInjectionStrategy:
                 resolveOverridableWithDbDefault(
                     (cfg) => cfg?.memory?.exampleInjectionStrategy,
@@ -2382,75 +3104,27 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     defaultsLayer.memory?.exampleInjectionStrategy,
                     'Semantic'
                 ) ?? 'Semantic',
-            NoteRetentionDays: resolveOverridableWithDbDefault(
-                (cfg) => cfg?.memory?.noteRetentionDays,
-                (a) => a.NoteRetentionDays,
-                defaultsLayer.memory?.noteRetentionDays,
-                90
-            ),
-            ExampleRetentionDays: resolveOverridableWithDbDefault(
-                (cfg) => cfg?.memory?.exampleRetentionDays,
-                (a) => a.ExampleRetentionDays,
-                defaultsLayer.memory?.exampleRetentionDays,
-                180
-            ),
+            NoteRetentionDays: effectiveNoteRetentionDays,
+            ExampleRetentionDays: effectiveExampleRetentionDays,
             AutoArchiveEnabled: effectiveAutoArchive,
-            PayloadDownstreamPaths: resolvePayloadPaths(
-                (cfg) => cfg?.payload?.downstreamPaths,
-                (a) => a.PayloadDownstreamPaths,
-                defaultsLayer.payload?.downstreamPaths,
-                true
-            ),
-            PayloadUpstreamPaths: resolvePayloadPaths(
-                (cfg) => cfg?.payload?.upstreamPaths,
-                (a) => a.PayloadUpstreamPaths,
-                defaultsLayer.payload?.upstreamPaths,
-                true
-            ),
-            PayloadSelfReadPaths: resolvePayloadPaths(
-                (cfg) => cfg?.payload?.selfReadPaths,
-                (a) => a.PayloadSelfReadPaths,
-                defaultsLayer.payload?.selfReadPaths,
-                false
-            ),
-            PayloadSelfWritePaths: resolvePayloadPaths(
-                (cfg) => cfg?.payload?.selfWritePaths,
-                (a) => a.PayloadSelfWritePaths,
-                defaultsLayer.payload?.selfWritePaths,
-                false
-            ),
-            PayloadScope: nearestOrDefault(
-                (a, cfg) => cfg?.payload?.scope ?? a.PayloadScope,
-                defaultsLayer.payload?.scope
-            ),
-            StartingPayloadValidation: nearestOrDefault(
-                (a, cfg) => cfg?.payload?.startingValidationSchema ?? a.StartingPayloadValidation,
-                defaultsLayer.payload?.startingValidationSchema
-            ),
-            StartingPayloadValidationMode:
-                resolveOverridableWithDbDefault(
-                    (cfg) => cfg?.payload?.startingValidationMode,
-                    (a) => a.StartingPayloadValidationMode,
-                    defaultsLayer.payload?.startingValidationMode,
-                    'Fail'
-                ) ?? 'Fail',
-            FinalPayloadValidation: nearestOrDefault(
-                (a, cfg) => cfg?.payload?.finalValidationSchema ?? a.FinalPayloadValidation,
-                defaultsLayer.payload?.finalValidationSchema
-            ),
-            FinalPayloadValidationMode:
-                resolveOverridableWithDbDefault(
-                    (cfg) => cfg?.payload?.finalValidationMode,
-                    (a) => a.FinalPayloadValidationMode,
-                    defaultsLayer.payload?.finalValidationMode,
-                    'Retry'
-                ) ?? 'Retry',
-            FinalPayloadValidationMaxRetries: resolveOverridableWithDbDefault(
-                (cfg) => cfg?.payload?.finalValidationMaxRetries,
-                (a) => a.FinalPayloadValidationMaxRetries,
-                defaultsLayer.payload?.finalValidationMaxRetries,
-                3
-            ),
+            PayloadDownstreamPaths: effectivePayloadDownstreamPaths,
+            PayloadUpstreamPaths: effectivePayloadUpstreamPaths,
+            PayloadSelfReadPaths: effectivePayloadSelfReadPaths,
+            PayloadSelfWritePaths: effectivePayloadSelfWritePaths,
+            PayloadScope: effectivePayloadScope,
+            StartingPayloadValidation:
+                effectiveStartingValidationSchemas.length > 0
+                    ? effectiveStartingValidationSchemas[effectiveStartingValidationSchemas.length - 1]
+                    : null,
+            StartingPayloadValidationSchemas: effectiveStartingValidationSchemas,
+            StartingPayloadValidationMode: effectiveStartingValidationMode,
+            FinalPayloadValidation:
+                effectiveFinalValidationSchemas.length > 0
+                    ? effectiveFinalValidationSchemas[effectiveFinalValidationSchemas.length - 1]
+                    : null,
+            FinalPayloadValidationSchemas: effectiveFinalValidationSchemas,
+            FinalPayloadValidationMode: effectiveFinalValidationMode,
+            FinalPayloadValidationMaxRetries: effectiveFinalValidationMaxRetries,
             ExecutionMode:
                 resolveOverridableWithDbDefault(
                     (cfg) => cfg?.subAgentExecution?.mode,
@@ -2464,25 +3138,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             ),
             MaxExecutionsPerRun: effectiveMaxExecutionsPerRun,
             MaxSubAgentConsultRounds: effectiveMaxSubAgentConsultRounds,
-            MessageMode:
-                resolveOverridableWithDbDefault(
-                    (cfg) => cfg?.attachments?.messageMode,
-                    (a) => a.MessageMode,
-                    defaultsLayer.attachments?.messageMode,
-                    'None'
-                ) ?? 'All',
-            MaxMessages: nearestOrDefault(
-                (a, cfg) => cfg?.attachments?.maxMessages ?? a.MaxMessages,
-                defaultsLayer.attachments?.maxMessages
-            ),
-            AttachmentRootPath: nearestOrDefault(
-                (a, cfg) => cfg?.attachments?.rootPath ?? a.AttachmentRootPath,
-                defaultsLayer.attachments?.rootPath
-            ),
-            InlineStorageThresholdBytes: nearestOrDefault(
-                (a, cfg) => cfg?.attachments?.inlineStorageThresholdBytes ?? a.InlineStorageThresholdBytes,
-                defaultsLayer.attachments?.inlineStorageThresholdBytes
-            ),
+            MessageMode: effectiveMessageMode,
+            MaxMessages: effectiveMaxMessages,
+            AttachmentRootPath: effectiveAttachmentRootPath,
+            InlineStorageThresholdBytes: effectiveInlineStorageThresholdBytes,
             AcceptUnregisteredFiles: effectiveAcceptUnregisteredFiles,
             AllowEphemeralClientTools: effectiveAllowEphemeralClientTools,
             RecordingDefault: nearestOrDefault(
@@ -2537,15 +3196,28 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /**
      * Resolves effective `AIAgentAction` rows for `agentId` across its `BaseAgentID` chain
-     * (root -> leaf, keyed by `ActionID`). A descendant row with `Status !== 'Active'`
-     * (e.g. `'Disabled'` or `'Revoked'`) vetoes an inherited action.
+     * (root -> leaf, keyed by `ActionID`).
+     * - A descendant row with `Status !== 'Active'` (e.g. `'Disabled'` or `'Revoked'`) vetoes an
+     *   inherited action.
+     * - On derived hops without `allowWidenFromBase: true`, active rows can only narrow per-item
+     *   bounds (`MaxExecutionsPerRun` via `Math.min`, `ResultExpirationTurns` via `Math.min`,
+     *   `MinExecutionsPerRun` via `Math.max`) on already-inherited `ActionID`s; net-new `ActionID`s
+     *   are ignored.
+     * - On derived hops with `allowWidenFromBase: true`, active rows may add net-new `ActionID`s
+     *   and rebase per-item bounds.
      */
     public GetEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
         const chain = this.GetAgentInheritanceChain(agentId);
-        const idsRootToLeaf = chain.length > 0
-            ? chain.map(a => a.ID)
-            : agentId ? [agentId] : [];
-        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const nodes: Array<{ id: string; canWiden: boolean }> =
+            chain.length > 0
+                ? chain.map((a, idx) => ({
+                      id: a.ID,
+                      canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                  }))
+                : agentId
+                  ? [{ id: agentId, canWiden: false }]
+                  : [];
+        const chainIdSet = new UUIDSet(nodes.map((n) => n.id));
         const actionsByAgentId = new Map<string, MJAIAgentActionEntity[]>();
         for (const aa of this._agentActions) {
             if (chainIdSet.Has(aa.AgentID)) {
@@ -2556,18 +3228,62 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
 
+        const minNullable = (a: number | null | undefined, b: number | null | undefined): number | null => {
+            if (typeof a === 'number' && typeof b === 'number') return Math.min(a, b);
+            if (typeof b === 'number') return b;
+            return typeof a === 'number' ? a : null;
+        };
+        const maxNullable = (a: number | null | undefined, b: number | null | undefined): number | null => {
+            if (typeof a === 'number' && typeof b === 'number') return Math.max(a, b);
+            if (typeof b === 'number') return b;
+            return typeof a === 'number' ? a : null;
+        };
+
         const effectiveByActionId = new Map<string, MJAIAgentActionEntity>();
-        for (const id of idsRootToLeaf) {
+        for (let idx = 0; idx < nodes.length; idx++) {
+            const { id, canWiden } = nodes[idx];
+            const isRoot = idx === 0;
             const rows = actionsByAgentId.get(NormalizeUUID(id)) ?? [];
             for (const row of rows) {
                 if (!row.ActionID) continue;
                 const normActionId = NormalizeUUID(row.ActionID);
-                if (row.Status === 'Active') {
-                    effectiveByActionId.set(normActionId, row);
-                } else {
+                if (row.Status !== 'Active') {
                     // Explicit veto on descendant disables the inherited action
                     effectiveByActionId.delete(normActionId);
+                    continue;
                 }
+                const prev = effectiveByActionId.get(normActionId);
+                if (!prev) {
+                    if (isRoot || canWiden) {
+                        effectiveByActionId.set(normActionId, row);
+                    }
+                    continue;
+                }
+                if (canWiden) {
+                    effectiveByActionId.set(normActionId, row);
+                    continue;
+                }
+                // Narrow per-action bounds without mutating cached entity instances
+                const narrowedMaxExec = minNullable(prev.MaxExecutionsPerRun, row.MaxExecutionsPerRun);
+                const narrowedExpTurns = minNullable(prev.ResultExpirationTurns, row.ResultExpirationTurns);
+                const narrowedMinExec = maxNullable(prev.MinExecutionsPerRun, row.MinExecutionsPerRun);
+                const narrowed = Object.create(row) as MJAIAgentActionEntity;
+                Object.defineProperty(narrowed, 'MaxExecutionsPerRun', {
+                    value: narrowedMaxExec,
+                    enumerable: true,
+                    configurable: true,
+                });
+                Object.defineProperty(narrowed, 'ResultExpirationTurns', {
+                    value: narrowedExpTurns,
+                    enumerable: true,
+                    configurable: true,
+                });
+                Object.defineProperty(narrowed, 'MinExecutionsPerRun', {
+                    value: narrowedMinExec,
+                    enumerable: true,
+                    configurable: true,
+                });
+                effectiveByActionId.set(normActionId, narrowed);
             }
         }
         return Array.from(effectiveByActionId.values());
@@ -3215,7 +3931,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             agentSkills = activeSkills;
         } else {
             // 'Limited' — walk BaseAgentID inheritance chain root -> leaf;
-            // active grants accumulate down the chain and descendant non-Active rows veto.
+            // non-Active rows always veto; net-new Active grants on derived hops require allowWidenFromBase: true.
             const nodes = this.resolveInheritanceNodesForAgent(agent);
             const chainIds = nodes.map(a => a.ID);
             const chainIdSet = new UUIDSet(chainIds);
@@ -3229,14 +3945,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 }
             }
             const grantedSkillIDs = new Set<string>();
-            for (const chainAgentId of chainIds) {
-                const grants = grantsByAgentId.get(NormalizeUUID(chainAgentId)) ?? [];
+            for (let idx = 0; idx < nodes.length; idx++) {
+                const isRoot = idx === 0;
+                const canWiden = idx > 0 && DoesAgentAllowWidenFromBase(nodes[idx].Configuration);
+                const grants = grantsByAgentId.get(NormalizeUUID(nodes[idx].ID)) ?? [];
                 for (const grant of grants) {
                     const normSkillId = NormalizeUUID(grant.SkillID);
-                    if (grant.Status === 'Active') {
-                        grantedSkillIDs.add(normSkillId);
-                    } else {
+                    if (grant.Status !== 'Active') {
                         grantedSkillIDs.delete(normSkillId);
+                    } else if (isRoot || canWiden) {
+                        grantedSkillIDs.add(normSkillId);
                     }
                 }
             }
@@ -4303,8 +5021,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public GetClientToolsForAgent(agentId: string): MJAIClientToolDefinitionEntity[] {
         const chain = this.GetAgentInheritanceChain(agentId);
-        const idsRootToLeaf = chain.length > 0 ? chain.map(a => a.ID) : [agentId];
-        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const nodes: Array<{ id: string; canWiden: boolean }> =
+            chain.length > 0
+                ? chain.map((a, idx) => ({
+                      id: a.ID,
+                      canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                  }))
+                : [{ id: agentId, canWiden: false }];
+        const chainIdSet = new UUIDSet(nodes.map((n) => n.id));
         const toolsByAgentId = new Map<string, MJAIAgentClientToolEntity[]>();
         for (const j of this._agentClientTools) {
             if (chainIdSet.Has(j.AgentID)) {
@@ -4316,11 +5040,16 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         const mergedByToolId = new Map<string, MJAIAgentClientToolEntity>();
-        for (const id of idsRootToLeaf) {
+        for (let idx = 0; idx < nodes.length; idx++) {
+            const { id, canWiden } = nodes[idx];
+            const isRoot = idx === 0;
             const rows = toolsByAgentId.get(NormalizeUUID(id)) ?? [];
             for (const row of rows) {
                 if (!row.ClientToolDefinitionID) continue;
-                mergedByToolId.set(NormalizeUUID(row.ClientToolDefinitionID), row);
+                const normToolId = NormalizeUUID(row.ClientToolDefinitionID);
+                if (isRoot || canWiden || mergedByToolId.has(normToolId)) {
+                    mergedByToolId.set(normToolId, row);
+                }
             }
         }
 
@@ -4420,10 +5149,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             resultMap.set(NormalizeUUID(m.ID), m);
         }
 
-        // Apply agent-level explicit overrides/vetoes root -> leaf along BaseAgentID chain
+        // Apply agent-level explicit overrides/vetoes root -> leaf along BaseAgentID chain.
+        // Derived hops without allowWidenFromBase: true may veto (IsAllowed=false) but cannot add net-new modalities.
         const chain = this.GetAgentInheritanceChain(agentId);
-        const idsRootToLeaf = chain.length > 0 ? chain.map(a => a.ID) : [agentId];
-        const chainIdSet = new UUIDSet(idsRootToLeaf);
+        const nodes: Array<{ id: string; canWiden: boolean }> =
+            chain.length > 0
+                ? chain.map((a, idx) => ({
+                      id: a.ID,
+                      canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                  }))
+                : [{ id: agentId, canWiden: false }];
+        const chainIdSet = new UUIDSet(nodes.map((n) => n.id));
         const modalitiesByAgentId = new Map<string, MJAIAgentModalityEntity[]>();
         for (const am of this._agentModalities) {
             if (am.Direction === direction && chainIdSet.Has(am.AgentID)) {
@@ -4434,15 +5170,19 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
 
-        for (const id of idsRootToLeaf) {
+        for (let idx = 0; idx < nodes.length; idx++) {
+            const { id, canWiden } = nodes[idx];
+            const isRoot = idx === 0;
             const agentRecords = modalitiesByAgentId.get(NormalizeUUID(id)) ?? [];
             for (const am of agentRecords) {
                 const normId = NormalizeUUID(am.ModalityID);
                 const isAllowed = am.IsAllowed !== false;
                 if (isAllowed) {
-                    const modality = this._modalitiesByID!.get(normId);
-                    if (modality) {
-                        resultMap.set(normId, modality);
+                    if (isRoot || canWiden || resultMap.has(normId)) {
+                        const modality = this._modalitiesByID!.get(normId);
+                        if (modality) {
+                            resultMap.set(normId, modality);
+                        }
                     }
                 } else {
                     // Hard veto at agent layer
@@ -4522,12 +5262,23 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output', modelId?: string): boolean {
         this.ensureModalitiesIndex();
         const targetModality = this._modalitiesByName!.get(modalityName.toLowerCase());
+        const resolvedModelId = this.resolveAgentModelId(agentId, modelId);
+        let supported = resolvedModelId
+            ? this.ModelSupportsModality(resolvedModelId, modalityName, direction)
+            : modalityName.toLowerCase() === 'text';
 
-        // Check agent-level explicit record walking leaf -> root along BaseAgentID chain
+        // Fold agent-level explicit records root -> leaf along BaseAgentID chain.
+        // Derived hops without allowWidenFromBase: true may veto (IsAllowed=false) but cannot re-enable or add.
         if (targetModality) {
             const chain = this.GetAgentInheritanceChain(agentId);
-            const idsLeafToRoot = chain.length > 0 ? chain.map(a => a.ID).reverse() : [agentId];
-            const chainIdSet = new UUIDSet(idsLeafToRoot);
+            const nodes: Array<{ id: string; canWiden: boolean }> =
+                chain.length > 0
+                    ? chain.map((a, idx) => ({
+                          id: a.ID,
+                          canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                      }))
+                    : [{ id: agentId, canWiden: false }];
+            const chainIdSet = new UUIDSet(nodes.map((n) => n.id));
             const recordByAgentId = new Map<string, MJAIAgentModalityEntity>();
             for (const am of this._agentModalities) {
                 if (
@@ -4541,23 +5292,22 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     }
                 }
             }
-            for (const id of idsLeafToRoot) {
+            for (let idx = 0; idx < nodes.length; idx++) {
+                const { id, canWiden } = nodes[idx];
+                const isRoot = idx === 0;
                 const agentRecord = recordByAgentId.get(NormalizeUUID(id));
-                if (agentRecord) {
-                    // Nearest explicit record wins (IsAllowed = false is a hard veto)
-                    return agentRecord.IsAllowed !== false;
+                if (!agentRecord) {
+                    continue;
+                }
+                if (agentRecord.IsAllowed === false) {
+                    supported = false;
+                } else if (isRoot || canWiden) {
+                    supported = true;
                 }
             }
         }
 
-        // No explicit agent record for this modality - fall through to model's effective modalities
-        const resolvedModelId = this.resolveAgentModelId(agentId, modelId);
-        if (resolvedModelId) {
-            return this.ModelSupportsModality(resolvedModelId, modalityName, direction);
-        }
-
-        // No model resolvable - default to text-only (system default for LLMs)
-        return modalityName.toLowerCase() === 'text';
+        return supported;
     }
 
     /**
@@ -4629,10 +5379,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             };
         }
 
-        // Check agent-specific modality settings walking leaf -> root along BaseAgentID chain
+        // Fold agent-specific modality limits root -> leaf along BaseAgentID chain.
+        // Derived hops without allowWidenFromBase: true narrow IsAllowed / MaxSizeBytes / MaxCountPerMessage.
         const chain = this.GetAgentInheritanceChain(agentId);
-        const idsLeafToRoot = chain.length > 0 ? chain.map(a => a.ID).reverse() : [agentId];
-        const chainIdSet = new UUIDSet(idsLeafToRoot);
+        const nodes: Array<{ id: string; canWiden: boolean }> =
+            chain.length > 0
+                ? chain.map((a, idx) => ({
+                      id: a.ID,
+                      canWiden: idx > 0 && DoesAgentAllowWidenFromBase(a.Configuration),
+                  }))
+                : [{ id: agentId, canWiden: false }];
+        const chainIdSet = new UUIDSet(nodes.map((n) => n.id));
         const modalityByAgentId = new Map<string, MJAIAgentModalityEntity>();
         for (const am of this._agentModalities) {
             if (
@@ -4646,23 +5403,45 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 }
             }
         }
-        let agentModality: MJAIAgentModalityEntity | undefined;
-        for (const id of idsLeafToRoot) {
+
+        const minNullable = (a: number | null, b: number | null | undefined): number | null => {
+            if (typeof b !== 'number' || !Number.isFinite(b)) return a;
+            return a === null ? b : Math.min(a, b);
+        };
+
+        let matchedAnyAgentRow = false;
+        let resolvedMaxSizeBytes: number | null = null;
+        let resolvedMaxCount: number | null = null;
+        let resolvedIsAllowed = true;
+        for (let idx = 0; idx < nodes.length; idx++) {
+            const { id, canWiden } = nodes[idx];
             const found = modalityByAgentId.get(NormalizeUUID(id));
-            if (found) {
-                agentModality = found;
-                break;
+            if (!found) continue;
+            if (!matchedAnyAgentRow) {
+                matchedAnyAgentRow = true;
+                resolvedMaxSizeBytes = found.MaxSizeBytes ?? null;
+                resolvedMaxCount = found.MaxCountPerMessage ?? null;
+                resolvedIsAllowed = found.IsAllowed !== false;
+                continue;
+            }
+            if (canWiden) {
+                resolvedIsAllowed = found.IsAllowed !== false;
+                if (found.MaxSizeBytes != null) resolvedMaxSizeBytes = found.MaxSizeBytes;
+                if (found.MaxCountPerMessage != null) resolvedMaxCount = found.MaxCountPerMessage;
+            } else {
+                if (found.IsAllowed === false) resolvedIsAllowed = false;
+                resolvedMaxSizeBytes = minNullable(resolvedMaxSizeBytes, found.MaxSizeBytes);
+                resolvedMaxCount = minNullable(resolvedMaxCount, found.MaxCountPerMessage);
             }
         }
 
-        if (agentModality) {
-            // Agent has explicit modality configuration
+        if (matchedAnyAgentRow) {
             return {
-                maxSizeBytes: agentModality.MaxSizeBytes,
-                maxCountPerMessage: agentModality.MaxCountPerMessage,
+                maxSizeBytes: resolvedMaxSizeBytes,
+                maxCountPerMessage: resolvedMaxCount,
                 maxDimension: null, // Agent modality doesn't have MaxDimension
                 supportedFormats: null, // Agent modality doesn't have SupportedFormats
-                isAllowed: agentModality.IsAllowed,
+                isAllowed: resolvedIsAllowed,
                 source: 'Agent'
             };
         }

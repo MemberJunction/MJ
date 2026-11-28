@@ -730,7 +730,7 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
             FinalPayloadValidationMaxRetries: 3,
             Configuration: JSON.stringify({
                 payload: {
-                    upstreamPaths: ['result.summary'],
+                    upstreamPaths: ['output.summary'],
                     finalValidationMaxRetries: 2,
                 },
             }),
@@ -744,7 +744,7 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
 
         const eff = engine.ResolveEffectiveAgentProperties(leaf);
         expect(eff.PayloadDownstreamPaths).toEqual(['context.*']);
-        expect(eff.PayloadUpstreamPaths).toEqual(['result.summary']);
+        expect(eff.PayloadUpstreamPaths).toEqual(['output.summary']);
         expect(eff.PayloadSelfReadPaths).toEqual(['context.user']);
         expect(eff.PayloadSelfWritePaths).toEqual(['draft.*']);
         expect(eff.PayloadScope).toBe('/workspace');

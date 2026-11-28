@@ -1,10 +1,14 @@
 import { BaseEntity, IMetadataProvider, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentConfigurationEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
+import { HasRelationalGrantGuardProvider, ValidateDerivedAgentRelationalGrantLive } from './agentRelationalGrantGuard';
 
 /**
- * Server-side `MJ: AI Agent Relationships` entity enforcing that when `ConfigurationPresetID` is set,
- * the referenced `MJ: AI Agent Configurations` preset exists and belongs to the relationship's `SubAgentID`.
+ * Server-side `MJ: AI Agent Relationships` entity enforcing:
+ * 1. When `ConfigurationPresetID` is set, the referenced `MJ: AI Agent Configurations` preset exists
+ *    and belongs to the relationship's `SubAgentID`.
+ * 2. Derived agents (`BaseAgentID != null`) without `Configuration.allowWidenFromBase === true`
+ *    cannot attach net-new `'Active'` sub-agents or loosen inherited relationship bounds.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Relationships')
 export class MJAIAgentRelationshipEntityServer extends MJAIAgentRelationshipEntity {
@@ -16,6 +20,26 @@ export class MJAIAgentRelationshipEntityServer extends MJAIAgentRelationshipEnti
         const result = await super.ValidateAsync();
         if (!result.Success) {
             return result;
+        }
+
+        if (HasRelationalGrantGuardProvider(this)) {
+            const guardErrors = await ValidateDerivedAgentRelationalGrantLive(this, {
+                Kind: 'Sub-Agent Relationship',
+                EntityName: 'MJ: AI Agent Relationships',
+                FieldName: 'SubAgentID',
+                AgentID: this.AgentID,
+                GrantTargetID: this.SubAgentID,
+                IsActiveGrant: this.Status === 'Active',
+                TargetBounds: {
+                    MessageMode: this.MessageMode,
+                    MaxMessages: this.MaxMessages,
+                    SubAgentContextPaths: this.SubAgentContextPaths,
+                },
+            });
+            if (guardErrors.length > 0) {
+                result.Errors.push(...guardErrors);
+                result.Success = result.Success && guardErrors.every((e) => e.Type !== ValidationErrorType.Failure);
+            }
         }
 
         if (!this.ConfigurationPresetID) {

@@ -32,6 +32,7 @@ import {
 } from '@memberjunction/core';
 import type { MJAIAgentEntity, MJAIAgentUserPolicyEntity } from '@memberjunction/core-entities';
 import { IsPlainObject, SafeJSONParse } from '@memberjunction/global';
+import { DoesAgentAllowWidenFromBase } from './agent-configuration-narrowing';
 import type { ExecuteAgentParams } from './agent-types';
 import type { MJAIAgentRunEntityExtended } from './MJAIAgentRunEntityExtended';
 import type { RunawayJsonObject, RunawayJsonValue } from './runaway-governance';
@@ -87,7 +88,9 @@ export interface WorkflowLimitsMetadataInput {
 export type AgentLimitsMetadataInput = Pick<
     MJAIAgentEntity,
     'MaxCostPerRun' | 'MaxTimePerRun' | 'MaxTokensPerRun' | 'TypeConfiguration'
->;
+> & {
+    Configuration?: string | null;
+};
 
 /**
  * Minimal structural subset of `MJAIAgentUserPolicyEntity` needed for Tier 4 limits extraction,
@@ -614,14 +617,39 @@ function clampLimitsOverrideToCeiling(
  */
 export function ResolveAgentRunLimits(input: ResolveAgentRunLimitsInput): MJLimitsResolutionResult {
     let agentOrWorkflow: MJLimitsOverride = {};
-    if (input.AncestorAgents && input.AncestorAgents.length > 0) {
-        for (const ancestorAgent of input.AncestorAgents) {
-            const ancestorOverride = ExtractAgentMetadataLimitsOverride(ancestorAgent, null);
-            agentOrWorkflow = clampLimitsOverrideToCeiling(agentOrWorkflow, ancestorOverride);
+    let usedAllowWiden = false;
+    const ancestorAgents = input.AncestorAgents ?? [];
+    for (let i = 0; i < ancestorAgents.length; i++) {
+        const ancestorAgent = ancestorAgents[i];
+        const ancestorOverride = ExtractAgentMetadataLimitsOverride(ancestorAgent, null);
+        const canWiden = i > 0 && DoesAgentAllowWidenFromBase(ancestorAgent.Configuration);
+        if (canWiden) {
+            usedAllowWiden = true;
         }
+        agentOrWorkflow = canWiden
+            ? mergeLimitsOverrides(agentOrWorkflow, ancestorOverride)
+            : clampLimitsOverrideToCeiling(agentOrWorkflow, ancestorOverride);
     }
-    const leafAgentOverride = ExtractAgentMetadataLimitsOverride(input.Agent, input.WorkflowMetadata);
-    agentOrWorkflow = clampLimitsOverrideToCeiling(agentOrWorkflow, leafAgentOverride);
+    const leafAgentOnlyOverride = ExtractAgentMetadataLimitsOverride(input.Agent, null);
+    const leafCanWiden = ancestorAgents.length > 0 && DoesAgentAllowWidenFromBase(input.Agent?.Configuration);
+    if (leafCanWiden) {
+        usedAllowWiden = true;
+    }
+    agentOrWorkflow = leafCanWiden
+        ? mergeLimitsOverrides(agentOrWorkflow, leafAgentOnlyOverride)
+        : clampLimitsOverrideToCeiling(agentOrWorkflow, leafAgentOnlyOverride);
+    if (input.WorkflowMetadata) {
+        const workflowOnlyOverride = ExtractAgentMetadataLimitsOverride(null, input.WorkflowMetadata);
+        agentOrWorkflow = clampLimitsOverrideToCeiling(agentOrWorkflow, workflowOnlyOverride);
+    }
+    // Regardless of allowWidenFromBase, mj.config.cjs org ceilings ALWAYS apply unconditionally.
+    const effectiveMjConfig =
+        input.MjConfigLimits !== undefined
+            ? input.MjConfigLimits
+            : LimitsConfigResolver.Instance.GetMjConfigLimits();
+    if (usedAllowWiden && effectiveMjConfig) {
+        agentOrWorkflow = clampLimitsOverrideToCeiling(NormalizeLimitsInput(effectiveMjConfig), agentOrWorkflow);
+    }
 
     let userPolicy: MJLimitsOverride = {};
     if (input.AncestorUserPolicies && input.AncestorUserPolicies.length > 0) {
