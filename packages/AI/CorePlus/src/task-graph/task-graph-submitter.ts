@@ -18,7 +18,7 @@
  * @module @memberjunction/ai-core-plus
  */
 import { GetGlobalObjectStore, MJGlobal } from '@memberjunction/global';
-import { UserInfo, IMetadataProvider, type MJLimitsOverride } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, type MJLimitsOverride, type TaskGraphIsolationLevel } from '@memberjunction/core';
 import type { TaskGraphDispatchMode, TaskGraphSpec } from './task-graph-spec';
 import type { TaskSecurityEnvelope } from './task-security-envelope';
 import { SanitizeForPersistence } from '../safe-persist';
@@ -86,6 +86,8 @@ export type TaskGraphSubmitRequest = {
      * first poll.
      */
     Debug?: TaskGraphStartDebug;
+    /** Optional per-graph isolation level override (defaults from `Spec.isolation` then `LimitsConfigResolver` `'Worker'`). */
+    Isolation?: TaskGraphIsolationLevel;
     /** Execution dispatch mode (`'Inline'` default, or `'Queue'` to enqueue the graph run onto WorkQueue). */
     Dispatch?: TaskGraphDispatchMode;
     /** Optional WorkQueue topic override when `Dispatch === 'Queue'`. */

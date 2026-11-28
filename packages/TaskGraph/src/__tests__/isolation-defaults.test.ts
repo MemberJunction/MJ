@@ -42,7 +42,7 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
 
     it('exposes Isolation defaults and bounds in CODE_FALLBACK_LIMITS and TASK_GRAPH_ISOLATION_LEVELS', () => {
         expect(TASK_GRAPH_ISOLATION_LEVELS).toEqual(['InProcess', 'Worker', 'Process', 'Container']);
-        expect(CODE_FALLBACK_LIMITS.Isolation.DefaultIsolation).toBe('InProcess');
+        expect(CODE_FALLBACK_LIMITS.Isolation.DefaultIsolation).toBe('Worker');
         expect(CODE_FALLBACK_LIMITS.Isolation.DraftDefaultIsolation).toBe('Worker');
         expect(CODE_FALLBACK_LIMITS.Isolation.WorkerMaxOldGenerationSizeMb).toBe(256);
         expect(CODE_FALLBACK_LIMITS.Isolation.WorkerMaxYoungGenerationSizeMb).toBe(64);
@@ -93,7 +93,7 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
         expect(limitsConfiguredResult.graph?.isolation).toBe('Process');
     });
 
-    it('defaults upgraded/legacy parent task metadata without isolation to InProcess and round-trips explicit isolation', () => {
+    it('defaults unspecified parent task metadata to Worker, honors explicit InProcess opt-in, and round-trips explicit isolation', () => {
         const legacyRaw = JSON.stringify({
             continuation: 'message',
             reinvokeDepth: 0,
@@ -102,7 +102,16 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
         });
         const parsedLegacy = ParseTaskGraphParentMetadata(legacyRaw);
         expect(parsedLegacy.isolation).toBeUndefined();
-        expect(ResolveTaskGraphIsolation({ GraphIsolation: parsedLegacy.isolation })).toBe('InProcess');
+        expect(ResolveTaskGraphIsolation({ GraphIsolation: parsedLegacy.isolation })).toBe('Worker');
+
+        // Explicit InProcess opt-in via graph metadata, workflow entity, or host MjConfig override still wins cleanly
+        expect(ResolveTaskGraphIsolation({ GraphIsolation: 'InProcess' })).toBe('InProcess');
+        expect(ResolveTaskGraphIsolation({ WorkflowIsolation: 'InProcess' })).toBe('InProcess');
+        LimitsConfigResolver.Instance.RegisterMjConfigLimits({
+            Isolation: { DefaultIsolation: 'InProcess' },
+        });
+        expect(ResolveTaskGraphIsolation({})).toBe('InProcess');
+        LimitsConfigResolver.Instance.ClearMjConfigLimits();
 
         const builtWorker = BuildTaskGraphParentInputPayload({
             continuation: 'none',
@@ -114,6 +123,16 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
         });
         const parsedWorker = ParseTaskGraphParentMetadata(JSON.stringify(builtWorker));
         expect(parsedWorker.isolation).toBe('Worker');
+
+        const builtInProcess = BuildTaskGraphParentInputPayload({
+            continuation: 'none',
+            reinvokeDepth: 0,
+            failureSemantics: 'block',
+            submittedByAgentRunID: null,
+            submittedByUserID: 'user-1',
+            isolation: 'InProcess',
+        });
+        expect(ParseTaskGraphParentMetadata(JSON.stringify(builtInProcess)).isolation).toBe('InProcess');
 
         expect(
             ResolveTaskGraphIsolation({
@@ -127,7 +146,7 @@ describe('TaskGraph Isolation Defaults, Metadata & Validation', () => {
                 WorkflowIsolation: 'Process',
             }),
         ).toBe('Process');
-        expect(ResolveTaskGraphIsolation({})).toBe('InProcess');
+        expect(ResolveTaskGraphIsolation({})).toBe('Worker');
     });
 
     it('validates TaskGraphSpec and WorkflowSpec isolation levels strictly', () => {
