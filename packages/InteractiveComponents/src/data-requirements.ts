@@ -1,4 +1,191 @@
 import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import { IsJsonObject, IsNonEmptyString, IsPlainObject, JsonObject } from './json-types';
+
+/**
+ * Execution mode mirrored from `@memberjunction/core` `RemoteOpExecMode` for
+ * declaring expected remote operation behavior in component metadata.
+ */
+export type ComponentOperationExecutionMode = 'Sync' | 'LongRunning';
+
+/**
+ * Declares a single `BaseRemotableOperation` that a sandboxed interactive component
+ * is explicitly permitted to invoke via `utilities.ops` (P11).
+ *
+ * Security model: default-deny. Omitting `ComponentDataRequirements.operations`
+ * resolves to an empty allowlist `[]` (zero permitted operations). Empty keys and
+ * wildcard patterns (`*`) are invalid and rejected by runtime validators.
+ */
+export interface ComponentOperationDataRequirement {
+    /**
+     * Exact canonical `BaseRemotableOperation` key registered in MJ metadata / ClassFactory
+     * (e.g., `'Template.Run'`, `'RecordProcess.GetRunStatus'`).
+     * Must be non-empty and must not contain wildcards (`*`, `?`) or whitespace.
+     */
+    operationKey: string;
+
+    /**
+     * Human-readable explanation of why the component invokes this operation.
+     */
+    description?: string;
+
+    /**
+     * Expected execution mode (`'Sync'` or `'LongRunning'`).
+     */
+    executionMode?: ComponentOperationExecutionMode;
+
+    /**
+     * Optional API/capability scope required for invoking this operation.
+     */
+    requiredScope?: string;
+
+    /**
+     * Optional JSON Schema or structured input parameter descriptor for documentation and linting.
+     */
+    inputSchema?: JsonObject;
+
+    /**
+     * Advisory per-session invocation rate ceiling per minute for host governance.
+     */
+    maxCallsPerMinute?: number;
+
+    /**
+     * When true, the component can gracefully degrade if the host or user lacks access.
+     */
+    optional?: boolean;
+}
+
+const VALID_OPERATION_KEY_REGEX = /^[A-Za-z0-9][A-Za-z0-9._:/-]*$/;
+
+/**
+ * Runtime type guard validating a single `BaseRemotableOperation` key in an allowlist.
+ * Rejects empty strings, whitespace, wildcards (`*`, `?`), and control characters.
+ */
+export function IsValidOperationKey(value: unknown): value is string {
+    if (!IsNonEmptyString(value)) {
+        return false;
+    }
+    if (value !== value.trim()) {
+        return false;
+    }
+    if (value.includes('*') || value.includes('?')) {
+        return false;
+    }
+    return VALID_OPERATION_KEY_REGEX.test(value);
+}
+
+/**
+ * Runtime type guard for {@link ComponentOperationDataRequirement}.
+ */
+export function IsComponentOperationDataRequirement(value: unknown): value is ComponentOperationDataRequirement {
+    if (!IsPlainObject(value)) {
+        return false;
+    }
+    if (!('operationKey' in value) || !IsValidOperationKey(value.operationKey)) {
+        return false;
+    }
+    if ('description' in value && value.description !== undefined && typeof value.description !== 'string') {
+        return false;
+    }
+    if (
+        'executionMode' in value &&
+        value.executionMode !== undefined &&
+        value.executionMode !== 'Sync' &&
+        value.executionMode !== 'LongRunning'
+    ) {
+        return false;
+    }
+    if ('requiredScope' in value && value.requiredScope !== undefined && !IsNonEmptyString(value.requiredScope)) {
+        return false;
+    }
+    if ('inputSchema' in value && value.inputSchema !== undefined && !IsJsonObject(value.inputSchema)) {
+        return false;
+    }
+    if (
+        'maxCallsPerMinute' in value &&
+        value.maxCallsPerMinute !== undefined &&
+        (typeof value.maxCallsPerMinute !== 'number' || !Number.isFinite(value.maxCallsPerMinute) || value.maxCallsPerMinute <= 0)
+    ) {
+        return false;
+    }
+    if ('optional' in value && value.optional !== undefined && typeof value.optional !== 'boolean') {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Validates an entire `operations` allowlist array, rejecting malformed entries,
+ * empty or wildcard operation keys, and duplicate `operationKey` declarations.
+ */
+export function ValidateOperationAllowlist(
+    operations: unknown
+): { valid: boolean; errors: string[]; allowlist: ComponentOperationDataRequirement[] } {
+    if (operations === undefined || operations === null) {
+        return { valid: true, errors: [], allowlist: [] };
+    }
+    if (!Array.isArray(operations)) {
+        return {
+            valid: false,
+            errors: ['ComponentDataRequirements.operations must be an array when provided.'],
+            allowlist: [],
+        };
+    }
+
+    const errors: string[] = [];
+    const allowlist: ComponentOperationDataRequirement[] = [];
+    const seenKeys = new Set<string>();
+
+    for (let i = 0; i < operations.length; i++) {
+        const entry: unknown = operations[i];
+        if (!IsComponentOperationDataRequirement(entry)) {
+            errors.push(`operations[${i}] is invalid: operationKey must be a non-empty exact key without wildcards.`);
+            continue;
+        }
+        if (seenKeys.has(entry.operationKey)) {
+            errors.push(`operations[${i}] duplicates operationKey "${entry.operationKey}".`);
+            continue;
+        }
+        seenKeys.add(entry.operationKey);
+        allowlist.push(entry);
+    }
+
+    return {
+        valid: errors.length === 0,
+        errors,
+        allowlist,
+    };
+}
+
+/**
+ * Resolves the effective allowlist of permitted `BaseRemotableOperation` requirements.
+ * Enforces strict default-deny: omitted or null `operations` resolves to `[]` (zero
+ * permitted operations), and invalid/wildcard entries are never included.
+ */
+export function ResolveAllowedOperations(
+    requirements: Pick<ComponentDataRequirements, 'operations'> | null | undefined
+): readonly ComponentOperationDataRequirement[] {
+    if (!requirements || !Array.isArray(requirements.operations)) {
+        return [];
+    }
+    const { allowlist } = ValidateOperationAllowlist(requirements.operations);
+    return allowlist;
+}
+
+/**
+ * Checks whether a specific `operationKey` is explicitly permitted by `requirements.operations`.
+ * Always returns `false` when `operations` is omitted (default-deny) or when `operationKey` is
+ * empty or contains wildcards.
+ */
+export function IsOperationAllowed(
+    requirements: Pick<ComponentDataRequirements, 'operations'> | null | undefined,
+    operationKey: string
+): boolean {
+    if (!IsValidOperationKey(operationKey)) {
+        return false;
+    }
+    const allowed = ResolveAllowedOperations(requirements);
+    return allowed.some((entry) => entry.operationKey === operationKey);
+}
 
 export interface ComponentDataRequirements {
     /**
@@ -18,6 +205,12 @@ export interface ComponentDataRequirements {
      * Stored Queries that the component will use to fetch data.
      */
     queries: ComponentQueryDataRequirement[];
+
+    /**
+     * Optional allowlist of `BaseRemotableOperation` keys this component is permitted
+     * to invoke via `utilities.ops` (P11). Defaults to `[]` (default-deny) when omitted.
+     */
+    operations?: ComponentOperationDataRequirement[];
 
     /**
      * Description of data access patterns

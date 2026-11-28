@@ -1,3 +1,4 @@
+export * from './json-types';
 export * from './data-requirements';
 export * from './component-option';
 export * from './runtime-types';
@@ -5,7 +6,10 @@ export * from './shared';
 export * from './component-props-events';
 export * from './component-constraints';
 export * from './util';
+export * from './component-language';
 export * from './component-spec';
 export * from './component-spec-runtime';
 export * from './library-dependency';
 export * from './component-events';
+export * from './widget-host';
+export * from './update-host-adapter';
