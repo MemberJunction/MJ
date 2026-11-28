@@ -11,13 +11,20 @@ import {
     type ArtifactToolExecutionContext
 } from '@memberjunction/ai-core-plus';
 import {
+    ApplyDocumentDesignConfigToMarkdown,
     ArtifactEmbedMode,
     CompileSafeUserRegex,
+    ComputeDocumentStats,
+    DOCUMENT_DESIGN_PRESETS,
     DocumentBlockKind,
     DocumentBlockMode,
     DocumentBlockSpec,
+    DocumentDesignConfig,
     DocumentLiveBlockEngine,
-    IsSafeUserRegex
+    ExtractDocumentDesignConfig,
+    IsSafeUserRegex,
+    IsValidDocumentDesignPresetID,
+    ValidateFrozenBlockSnapshot
 } from '@memberjunction/core-entities';
 import { EnsureNodeVmSafeRegexExecutorRegistered, ExecuteSafeRegexBatchWithRecovery } from './node-vm-safe-regex';
 import { ExecuteStructuredLineGrep, UnsearchableLine as UnsearchableDocumentLine } from './grepHelper';
@@ -569,6 +576,111 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                     }
                 }
             },
+            {
+                name: 'get_design_options',
+                description:
+                    'Returns the available Document Design Presets (typography, accent palette, margins, page defaults), the document’s active design configuration from frontmatter, and live document stats (words, estimated reading time, estimated pages).',
+                inputSchema: {
+                    type: 'object',
+                    properties: {},
+                    required: []
+                }
+            },
+            {
+                name: 'set_design_preset',
+                description:
+                    'Applies a Document Design Preset and optional page setup (pageSize, orientation, watermark, runningHeader, runningFooter, showPageNumbers) into YAML frontmatter so viewer rendering, .docx export, and PDF print stay in lockstep.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        presetId: {
+                            type: 'string',
+                            enum: DOCUMENT_DESIGN_PRESETS.map((p) => p.ID),
+                            description: 'Canonical preset ID from get_design_options.'
+                        },
+                        pageSize: {
+                            type: 'string',
+                            enum: ['letter', 'a4'],
+                            description: 'Optional paper size override.'
+                        },
+                        orientation: {
+                            type: 'string',
+                            enum: ['portrait', 'landscape'],
+                            description: 'Optional page orientation override.'
+                        },
+                        watermark: {
+                            type: 'string',
+                            description: 'Optional diagonal watermark text (e.g., "DRAFT", "CONFIDENTIAL"); empty string clears it.'
+                        },
+                        runningHeader: {
+                            type: 'string',
+                            description: 'Optional running page header text; empty string clears it.'
+                        },
+                        runningFooter: {
+                            type: 'string',
+                            description: 'Optional running page footer text; empty string clears it.'
+                        },
+                        showPageNumbers: {
+                            type: 'boolean',
+                            description: 'Optional explicit boolean enabling/disabling page numbers in export.'
+                        },
+                        expectedRevisionHash: {
+                            type: 'string',
+                            description: 'Optional SHA-256 revision hash of the document prior to edit.'
+                        }
+                    }
+                }
+            },
+            {
+                name: 'export_preflight',
+                description:
+                    'Runs a non-mutating fidelity preflight before .docx or PDF export, checking for broken/untrusted image URLs, unverified frozen :::mj-block snapshots, malformed directives, and wide tables that may clip in portrait orientation.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        strict: {
+                            type: 'boolean',
+                            description: 'When true, flags strictFailed=true if any error-severity issue is detected.'
+                        },
+                        orientation: {
+                            type: 'string',
+                            enum: ['portrait', 'landscape'],
+                            description: 'Optional target page orientation (defaults to document frontmatter orientation).'
+                        }
+                    }
+                }
+            },
+            {
+                name: 'batch',
+                description:
+                    'Executes an ordered sequence of document tool operations (up to 50) against the document in a single atomic turn. Rolls back completely on the first failure unless keepGoing is true. Nested batch calls are rejected.',
+                inputSchema: {
+                    type: 'object',
+                    properties: {
+                        operations: {
+                            type: 'array',
+                            description: 'Ordered list of { tool, args } document tool calls to apply sequentially.',
+                            items: {
+                                type: 'object',
+                                properties: {
+                                    tool: { type: 'string', description: 'Document tool name (cannot be "batch").' },
+                                    args: { type: 'object', description: 'Arguments object for that tool.' }
+                                },
+                                required: ['tool']
+                            }
+                        },
+                        keepGoing: {
+                            type: 'boolean',
+                            description: 'Optional (default false): continue running remaining operations when an individual step fails instead of rolling back.'
+                        },
+                        expectedRevisionHash: {
+                            type: 'string',
+                            description: 'Optional SHA-256 revision hash checked once before the first operation runs.'
+                        }
+                    },
+                    required: ['operations']
+                }
+            },
             ...GetSharedCommentAndSuggestionToolDefinitions('document')
         ];
     }
@@ -614,51 +726,61 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
         input: ArtifactToolArgs,
         context?: ArtifactToolExecutionContext
     ): Promise<ArtifactToolResult> {
+        const safeInput: ArtifactToolArgs =
+            input && typeof input === 'object' && !Array.isArray(input) ? input : {};
 
         switch (toolName) {
             case 'get_outline':
                 return this.handleGetOutline(contentStr);
             case 'get_section':
-                return this.handleGetSection(contentStr, input);
+                return this.handleGetSection(contentStr, safeInput);
             case 'get_blocks':
-                return this.handleGetBlocks(contentStr, input);
+                return this.handleGetBlocks(contentStr, safeInput);
             case 'search_blocks':
-                return this.handleSearchBlocks(contentStr, input);
+                return this.handleSearchBlocks(contentStr, safeInput);
             case 'grep':
-                return this.handleGrep(contentStr, input);
+                return this.handleGrep(contentStr, safeInput);
             case 'get_lines':
-                return this.handleGetLines(contentStr, input);
+                return this.handleGetLines(contentStr, safeInput);
             case 'insert_block_after':
-                return this.handleInsertBlockAfter(contentStr, input, context);
+                return this.handleInsertBlockAfter(contentStr, safeInput, context);
             case 'replace_block':
-                return this.handleReplaceBlock(contentStr, input, context);
+                return this.handleReplaceBlock(contentStr, safeInput, context);
             case 'delete_block':
-                return this.handleDeleteBlock(contentStr, input);
+                return this.handleDeleteBlock(contentStr, safeInput);
             case 'upsert_table':
-                return this.handleUpsertTable(contentStr, input, context);
+                return this.handleUpsertTable(contentStr, safeInput, context);
             case 'insert_live_block':
-                return this.handleInsertLiveBlock(contentStr, input, context);
+                return this.handleInsertLiveBlock(contentStr, safeInput, context);
             case 'embed_artifact_block':
-                return this.handleEmbedArtifactBlock(contentStr, input, context);
+                return this.handleEmbedArtifactBlock(contentStr, safeInput, context);
             case 'move_block':
-                return this.handleMoveBlock(contentStr, input);
+                return this.handleMoveBlock(contentStr, safeInput);
             case 'duplicate_block':
-                return this.handleDuplicateBlock(contentStr, input);
+                return this.handleDuplicateBlock(contentStr, safeInput);
             case 'mutate_markdown_table':
-                return this.handleMutateMarkdownTable(contentStr, input, context);
+                return this.handleMutateMarkdownTable(contentStr, safeInput, context);
             case 'upsert_frontmatter':
-                return this.handleUpsertFrontmatter(contentStr, input);
+                return this.handleUpsertFrontmatter(contentStr, safeInput);
             case 'set_lock':
-                return this.handleToggleLock(contentStr, input, true, context);
+                return this.handleToggleLock(contentStr, safeInput, true, context);
             case 'release_lock':
-                return this.handleToggleLock(contentStr, input, false, context);
+                return this.handleToggleLock(contentStr, safeInput, false, context);
+            case 'get_design_options':
+                return this.handleGetDesignOptions(contentStr);
+            case 'set_design_preset':
+                return this.handleSetDesignPreset(contentStr, safeInput);
+            case 'export_preflight':
+                return this.handleExportPreflight(contentStr, safeInput);
+            case 'batch':
+                return this.handleBatch(contentStr, safeInput, context);
             case 'list_comments':
             case 'add_comment':
             case 'reply_comment':
             case 'resolve_comment':
                 return ExecuteArtifactCommentTool({
                     toolName,
-                    input,
+                    input: safeInput,
                     context,
                     domain: 'document'
                 });
@@ -666,13 +788,13 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 return ExecuteListSuggestionsTool({
                     domain: 'document',
                     artifactContent: contentStr,
-                    input,
+                    input: safeInput,
                     context
                 });
             case 'propose_suggestion':
-                return this.handleProposeSuggestion(contentStr, input, context);
+                return this.handleProposeSuggestion(contentStr, safeInput, context);
             case 'review_suggestion':
-                return this.handleReviewSuggestion(contentStr, input, context);
+                return this.handleReviewSuggestion(contentStr, safeInput, context);
             default:
                 return { success: false, data: null, errorMessage: `Unknown tool: "${toolName}"` };
         }
@@ -2241,5 +2363,463 @@ export class DocumentToolLibrary extends BaseArtifactToolLibrary {
                 };
             }
         });
+    }
+
+    private handleGetDesignOptions(content: string): ArtifactToolResult {
+        const activeDesign = ExtractDocumentDesignConfig(content);
+        const stats = ComputeDocumentStats(content);
+        return {
+            success: true,
+            data: {
+                activeDesign: {
+                    presetId: activeDesign.PresetID,
+                    pageSize: activeDesign.PageSize,
+                    orientation: activeDesign.Orientation,
+                    watermark: activeDesign.Watermark,
+                    runningHeader: activeDesign.RunningHeader,
+                    runningFooter: activeDesign.RunningFooter,
+                    showPageNumbers: activeDesign.ShowPageNumbers
+                },
+                stats: {
+                    wordCount: stats.WordCount,
+                    charCount: stats.CharCount,
+                    charCountNoSpaces: stats.CharCountNoSpaces,
+                    paragraphCount: stats.ParagraphCount,
+                    headingCount: stats.HeadingCount,
+                    liveBlockCount: stats.LiveBlockCount,
+                    estimatedReadMinutes: stats.EstimatedReadMinutes,
+                    estimatedPages: stats.EstimatedPages
+                },
+                presets: DOCUMENT_DESIGN_PRESETS.map((p) => ({
+                    id: p.ID,
+                    name: p.Name,
+                    description: p.Description,
+                    category: p.Category,
+                    headingFont: p.HeadingFont,
+                    bodyFont: p.BodyFont,
+                    headingUnderline: p.HeadingUnderline,
+                    bodyFontSizePt: p.BodyFontSizePt,
+                    marginMm: p.MarginMm,
+                    defaultPageSize: p.DefaultPageSize
+                }))
+            }
+        };
+    }
+
+    private handleSetDesignPreset(content: string, input: ArtifactToolArgs): ArtifactToolResult {
+        const conflict = this.checkRevision(content, input.expectedRevisionHash);
+        if (conflict) {
+            return { success: false, data: null, errorMessage: conflict };
+        }
+        const patch: Partial<DocumentDesignConfig> = {};
+        let hasPatch = false;
+
+        if (input.presetId !== undefined) {
+            if (typeof input.presetId !== 'string' || !IsValidDocumentDesignPresetID(input.presetId.trim())) {
+                const validIds = DOCUMENT_DESIGN_PRESETS.map((p) => p.ID).join(', ');
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Invalid presetId "${String(input.presetId)}". Valid presets: ${validIds}.`
+                };
+            }
+            patch.PresetID = input.presetId.trim() as DocumentDesignConfig['PresetID'];
+            hasPatch = true;
+        }
+        if (input.pageSize !== undefined) {
+            if (input.pageSize !== 'letter' && input.pageSize !== 'a4') {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Invalid pageSize "${String(input.pageSize)}". Expected "letter" or "a4".`
+                };
+            }
+            patch.PageSize = input.pageSize;
+            hasPatch = true;
+        }
+        if (input.orientation !== undefined) {
+            if (input.orientation !== 'portrait' && input.orientation !== 'landscape') {
+                return {
+                    success: false,
+                    data: null,
+                    errorMessage: `Invalid orientation "${String(input.orientation)}". Expected "portrait" or "landscape".`
+                };
+            }
+            patch.Orientation = input.orientation;
+            hasPatch = true;
+        }
+        if (input.watermark !== undefined) {
+            if (typeof input.watermark !== 'string') {
+                return { success: false, data: null, errorMessage: 'watermark must be a string.' };
+            }
+            patch.Watermark = input.watermark.slice(0, 64);
+            hasPatch = true;
+        }
+        if (input.runningHeader !== undefined) {
+            if (typeof input.runningHeader !== 'string') {
+                return { success: false, data: null, errorMessage: 'runningHeader must be a string.' };
+            }
+            patch.RunningHeader = input.runningHeader.slice(0, 140);
+            hasPatch = true;
+        }
+        if (input.runningFooter !== undefined) {
+            if (typeof input.runningFooter !== 'string') {
+                return { success: false, data: null, errorMessage: 'runningFooter must be a string.' };
+            }
+            patch.RunningFooter = input.runningFooter.slice(0, 140);
+            hasPatch = true;
+        }
+        if (input.showPageNumbers !== undefined) {
+            if (typeof input.showPageNumbers !== 'boolean') {
+                return { success: false, data: null, errorMessage: 'showPageNumbers must be a boolean.' };
+            }
+            patch.ShowPageNumbers = input.showPageNumbers;
+            hasPatch = true;
+        }
+
+        if (!hasPatch) {
+            return {
+                success: false,
+                data: null,
+                errorMessage:
+                    'set_design_preset requires at least one of presetId, pageSize, orientation, watermark, runningHeader, runningFooter, or showPageNumbers.'
+            };
+        }
+
+        const updatedContent = ApplyDocumentDesignConfigToMarkdown(content, patch);
+        const applied = ExtractDocumentDesignConfig(updatedContent);
+        return {
+            success: true,
+            data: {
+                design: {
+                    presetId: applied.PresetID,
+                    pageSize: applied.PageSize,
+                    orientation: applied.Orientation,
+                    watermark: applied.Watermark,
+                    runningHeader: applied.RunningHeader,
+                    runningFooter: applied.RunningFooter,
+                    showPageNumbers: applied.ShowPageNumbers
+                },
+                updatedContent,
+                revisionHash: this.ComputeRevisionHash(updatedContent)
+            }
+        };
+    }
+
+    private handleExportPreflight(content: string, input: ArtifactToolArgs): ArtifactToolResult {
+        const strict = input.strict === true;
+        const activeDesign = ExtractDocumentDesignConfig(content);
+        const orientation =
+            input.orientation === 'landscape' || input.orientation === 'portrait'
+                ? input.orientation
+                : activeDesign.Orientation;
+        const stats = ComputeDocumentStats(content);
+        const issues: Array<{
+            severity: 'error' | 'warning' | 'info';
+            code: string;
+            message: string;
+            line?: number;
+            blockId?: string;
+        }> = [];
+
+        const segments = DocumentLiveBlockEngine.Instance.ParseMarkdownDirectives(content);
+        const seenBlockIds = new Set<string>();
+        let hasWideTable = false;
+
+        for (const seg of segments) {
+            if (seg.Type === 'mj-block') {
+                const spec = seg.BlockSpec;
+                if (!spec) {
+                    issues.push({
+                        severity: 'error',
+                        code: 'malformed_mj_block',
+                        message: `Malformed :::mj-block directive at line ${seg.StartLine} could not be parsed.`,
+                        line: seg.StartLine
+                    });
+                    continue;
+                }
+                if (spec.BlockID) {
+                    if (seenBlockIds.has(spec.BlockID)) {
+                        issues.push({
+                            severity: 'warning',
+                            code: 'duplicate_block_id',
+                            message: `Duplicate :::mj-block ID "${spec.BlockID}" at line ${seg.StartLine} may prevent clean .docx round-trip recovery.`,
+                            line: seg.StartLine,
+                            blockId: spec.BlockID
+                        });
+                    }
+                    seenBlockIds.add(spec.BlockID);
+                }
+                if (spec.Mode === 'Frozen') {
+                    const snapshotCheck = ValidateFrozenBlockSnapshot(spec.FrozenSnapshot);
+                    const hasHmac = Boolean(spec.FrozenSnapshot?.SnapshotContentHash?.startsWith('hmac-sha256:'));
+                    if (!snapshotCheck.Valid || !hasHmac) {
+                        issues.push({
+                            severity: 'warning',
+                            code: 'unverified_frozen_snapshot',
+                            message: `Frozen block "${spec.Title || spec.BlockID}" has an unverified or incomplete snapshot signature.`,
+                            line: seg.StartLine,
+                            blockId: spec.BlockID
+                        });
+                    }
+                }
+            }
+        }
+
+        // Scan Markdown lines linearly for untrusted/empty image links and wide tables
+        const lines = (content ?? '').replace(/\r\n?/g, '\n').split('\n');
+        let inFence = false;
+        for (let idx = 0; idx < lines.length; idx++) {
+            const trimmed = lines[idx].trim();
+            if (trimmed.startsWith('```') || trimmed.startsWith(':::mj-block')) {
+                inFence = !inFence;
+                continue;
+            }
+            if (inFence && trimmed === ':::') {
+                inFence = false;
+                continue;
+            }
+            if (inFence) {
+                continue;
+            }
+
+            // Linear scan for Markdown images: ![alt](url)
+            let searchFrom = 0;
+            while (searchFrom < trimmed.length) {
+                const bang = trimmed.indexOf('![', searchFrom);
+                if (bang < 0) break;
+                const closeBracket = trimmed.indexOf('](', bang + 2);
+                if (closeBracket < 0) break;
+                const closeParen = trimmed.indexOf(')', closeBracket + 2);
+                if (closeParen < 0) break;
+                const rawUrl = trimmed.slice(closeBracket + 2, closeParen).trim();
+                const lowerUrl = rawUrl.toLowerCase();
+                if (!rawUrl) {
+                    issues.push({
+                        severity: 'error',
+                        code: 'empty_image_url',
+                        message: `Image at line ${idx + 1} has an empty URL and will be omitted on export.`,
+                        line: idx + 1
+                    });
+                } else if (
+                    !lowerUrl.startsWith('https://') &&
+                    !lowerUrl.startsWith('http://') &&
+                    !lowerUrl.startsWith('data:image/')
+                ) {
+                    issues.push({
+                        severity: 'error',
+                        code: 'untrusted_or_relative_image_url',
+                        message: `Image URL "${rawUrl.slice(0, 80)}" at line ${idx + 1} is not an absolute http(s) or data:image URL and may fail in .docx/PDF export.`,
+                        line: idx + 1
+                    });
+                }
+                searchFrom = closeParen + 1;
+            }
+
+            // Detect wide pipe tables (> 6 columns)
+            if (trimmed.startsWith('|') && trimmed.endsWith('|') && idx + 1 < lines.length) {
+                const nextTrimmed = lines[idx + 1].trim();
+                if (nextTrimmed.startsWith('|') && nextTrimmed.includes('---')) {
+                    const colCount = trimmed
+                        .slice(1, -1)
+                        .split('|')
+                        .filter((c) => c.trim().length > 0).length;
+                    if (colCount > 6 && orientation === 'portrait') {
+                        hasWideTable = true;
+                        issues.push({
+                            severity: 'warning',
+                            code: 'wide_table_portrait',
+                            message: `Table at line ${idx + 1} has ${colCount} columns; portrait orientation may clip columns (consider landscape).`,
+                            line: idx + 1
+                        });
+                    }
+                }
+            }
+        }
+
+        const errorCount = issues.filter((i) => i.severity === 'error').length;
+        const warningCount = issues.filter((i) => i.severity === 'warning').length;
+        const strictFailed = strict && errorCount > 0;
+
+        return {
+            success: true,
+            data: {
+                passed: errorCount === 0,
+                strictFailed,
+                errorCount,
+                warningCount,
+                recommendedOrientation: hasWideTable ? 'landscape' : orientation,
+                stats: {
+                    wordCount: stats.WordCount,
+                    estimatedReadMinutes: stats.EstimatedReadMinutes,
+                    estimatedPages: stats.EstimatedPages,
+                    liveBlockCount: stats.LiveBlockCount
+                },
+                issues
+            }
+        };
+    }
+
+    private async handleBatch(
+        content: string,
+        input: ArtifactToolArgs,
+        context?: ArtifactToolExecutionContext
+    ): Promise<ArtifactToolResult> {
+        const conflict = this.checkRevision(content, input.expectedRevisionHash);
+        if (conflict) {
+            return { success: false, data: null, errorMessage: conflict };
+        }
+        const rawOps = input.operations;
+        if (!Array.isArray(rawOps) || rawOps.length === 0) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: 'batch requires a non-empty operations array.'
+            };
+        }
+        const MAX_BATCH_OPERATIONS = 50;
+        if (rawOps.length > MAX_BATCH_OPERATIONS) {
+            return {
+                success: false,
+                data: null,
+                errorMessage: `batch supports at most ${MAX_BATCH_OPERATIONS} operations per call (received ${rawOps.length}).`
+            };
+        }
+
+        const keepGoing = input.keepGoing === true;
+        let workingContent = content;
+        const stepResults: Array<{
+            index: number;
+            tool: string;
+            success: boolean;
+            errorMessage?: string;
+        }> = [];
+        let succeededCount = 0;
+        let failedCount = 0;
+
+        for (let i = 0; i < rawOps.length; i++) {
+            const rawOp = rawOps[i];
+            if (!rawOp || typeof rawOp !== 'object' || Array.isArray(rawOp)) {
+                failedCount++;
+                const msg = `Operation at index ${i} must be an object with { tool, args? }.`;
+                stepResults.push({ index: i, tool: '', success: false, errorMessage: msg });
+                if (!keepGoing) {
+                    return {
+                        success: false,
+                        data: { rolledBack: true, failedIndex: i, results: stepResults },
+                        errorMessage: `batch rolled back at step ${i}: ${msg}`
+                    };
+                }
+                continue;
+            }
+            const opRecord = rawOp as { tool?: ArtifactJsonValue; args?: ArtifactJsonValue };
+            const opTool = typeof opRecord.tool === 'string' ? opRecord.tool.trim() : '';
+            if (!opTool) {
+                failedCount++;
+                const msg = `Operation at index ${i} is missing a valid string "tool" name.`;
+                stepResults.push({ index: i, tool: '', success: false, errorMessage: msg });
+                if (!keepGoing) {
+                    return {
+                        success: false,
+                        data: { rolledBack: true, failedIndex: i, results: stepResults },
+                        errorMessage: `batch rolled back at step ${i}: ${msg}`
+                    };
+                }
+                continue;
+            }
+            if (opTool === 'batch') {
+                failedCount++;
+                const msg = 'Nested batch operations are not permitted.';
+                stepResults.push({ index: i, tool: opTool, success: false, errorMessage: msg });
+                if (!keepGoing) {
+                    return {
+                        success: false,
+                        data: { rolledBack: true, failedIndex: i, results: stepResults },
+                        errorMessage: `batch rolled back at step ${i}: ${msg}`
+                    };
+                }
+                continue;
+            }
+
+            const opArgs: ArtifactToolArgs =
+                opRecord.args && typeof opRecord.args === 'object' && !Array.isArray(opRecord.args)
+                    ? ({ ...(opRecord.args as ArtifactToolArgs) } as ArtifactToolArgs)
+                    : {};
+            // Strip per-step expectedRevisionHash because the batch already checked concurrency at entry
+            delete opArgs.expectedRevisionHash;
+
+            let stepOutcome: ArtifactToolResult;
+            try {
+                stepOutcome = await this.dispatchSubclassTool(opTool, workingContent, opArgs, context);
+            } catch (err) {
+                stepOutcome = {
+                    success: false,
+                    data: null,
+                    errorMessage: err instanceof Error ? err.message : String(err)
+                };
+            }
+
+            if (!stepOutcome.success) {
+                failedCount++;
+                stepResults.push({
+                    index: i,
+                    tool: opTool,
+                    success: false,
+                    errorMessage: stepOutcome.errorMessage || 'Operation failed.'
+                });
+                if (!keepGoing) {
+                    return {
+                        success: false,
+                        data: { rolledBack: true, failedIndex: i, results: stepResults },
+                        errorMessage: `batch rolled back at step ${i} (${opTool}): ${stepOutcome.errorMessage || 'Operation failed.'}`
+                    };
+                }
+                continue;
+            }
+
+            if (stepOutcome.data && typeof stepOutcome.data === 'object' && !Array.isArray(stepOutcome.data)) {
+                const nextContent = (stepOutcome.data as { updatedContent?: ArtifactJsonValue }).updatedContent;
+                if (typeof nextContent === 'string') {
+                    workingContent = nextContent;
+                }
+            }
+            succeededCount++;
+            stepResults.push({ index: i, tool: opTool, success: true });
+        }
+
+        // Enforce lock checks on the aggregate edit before committing
+        if (workingContent !== content) {
+            const actorUserId = context?.actorUserId ?? context?.contextUser?.ID;
+            const ownerUserId = context?.ownerUserId;
+            const isEditor = Boolean(context?.isEditor);
+            const lockCheck = DocumentLiveBlockEngine.Instance.ValidateDocumentEditAgainstLocks(
+                content,
+                workingContent,
+                actorUserId,
+                ownerUserId,
+                isEditor
+            );
+            if (!lockCheck.Allowed) {
+                return {
+                    success: false,
+                    data: { rolledBack: true, results: stepResults },
+                    errorMessage:
+                        lockCheck.ViolationReason ||
+                        'Cannot modify a locked region (<!-- mj-lock: owner-only -->) inside batch.'
+                };
+            }
+        }
+
+        return {
+            success: true,
+            data: {
+                operationsExecuted: rawOps.length,
+                succeededCount,
+                failedCount,
+                results: stepResults,
+                ...(workingContent !== content ? { updatedContent: workingContent } : {}),
+                revisionHash: this.ComputeRevisionHash(workingContent)
+            }
+        };
     }
 }

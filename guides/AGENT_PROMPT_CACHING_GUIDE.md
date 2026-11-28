@@ -6,6 +6,10 @@ How the Loop agent lays out each request so that provider prompt caches survive 
 
 **Ships with**: `@memberjunction/ai-agents`, `@memberjunction/ai`, `@memberjunction/ai-core-plus`, `@memberjunction/ai-prompts`, `@memberjunction/ai-anthropic` (PR #4508). Before-and-after numbers: [`packages/AI/Agents/docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md`](../packages/AI/Agents/docs/PROMPT_CACHE_PERFORMANCE_BRIEFING.md).
 
+**Canonical Guides:** [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) (see §5 *Prompt Prefix-Cache Discipline*) · [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md).
+
+> **Refactored Seam Locations:** Following the `BaseAgent` helper decomposition (`base-agent.ts` = 536 lines), prompt assembly and trailing runtime-state logic (`preparePromptParams`, `assembleOutgoingMessages`, `resolvePrefixPromptCache`) live in `BaseAgentPromptHelper` (`packages/AI/Agents/src/helpers/prompt/AgentPromptExecutionHelper.ts` and `AgentNativeToolsAndPrefixCacheHelper.ts`), and the action-failure circuit breaker lives in `BaseAgentActionsHelper` (`packages/AI/Agents/src/helpers/actions/AgentActionCircuitBreakerHelper.ts`). All historical `BaseAgent` method names remain preserved as `@deprecated` delegates throughout `v6.x` (see [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md)).
+
 ---
 
 ## 1. The problem

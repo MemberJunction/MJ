@@ -203,6 +203,40 @@ export interface MJLimitsProgressDetectorConfig {
 }
 
 /**
+ * Sliding forward-progress liveness watchdog and long-running HTTP transport timeout settings.
+ */
+export interface MJLimitsLivenessConfig {
+    /** Master switch enabling sliding forward-progress liveness monitoring (default `true`). */
+    Enabled: boolean;
+    /** Sliding inactivity window (ms) without progress before declaring a hung run (default `900_000` = 15m). */
+    InactivityTimeoutMs: number;
+    /** Absolute outer wall-clock safety ceiling (ms) when no tighter explicit run/policy/workflow cap is set (default `259_200_000` = 72h). */
+    OuterMaxWallClockMs: number;
+    /** Minimum interval (ms) between streaming-chunk timer resets to avoid hot-loop churn (default `5_000` = 5s). */
+    StreamChunkTouchThrottleMs: number;
+    /** HTTP headers timeout (ms) for long-running Node `undici` LLM calls (`0` = disabled, rely on `AbortSignal`; default `1_800_000` = 30m). */
+    HttpHeadersTimeoutMs: number;
+    /** HTTP body timeout (ms) for long-running Node `undici` LLM calls (`0` = disabled, rely on `AbortSignal`; default `0`). */
+    HttpBodyTimeoutMs: number;
+}
+
+/**
+ * Semantic stuck-run detection thresholds (canonical repeated tool-call breaker and read-only spiral wrap-up).
+ */
+export interface MJLimitsStuckDetectorConfig {
+    /** Master switch enabling semantic stuck-run detection (default `true`). */
+    Enabled: boolean;
+    /** Number of recent tool/action invocations retained in the sliding repetition window (default `10`). */
+    WindowSize: number;
+    /** Identical canonical tool-call count within {@link WindowSize} triggering correction/escalation (default `3`). */
+    IdenticalToolCallThreshold: number;
+    /** Consecutive read-only steps without mutation or terminal action before injecting a wrap-up directive (default `30`). */
+    ReadOnlyStepThreshold: number;
+    /** Additional consecutive read-only steps permitted after a wrap-up directive before non-destructive pause (default `5`). */
+    ReadOnlyPostDirectiveGraceSteps: number;
+}
+
+/**
  * Bounded resource, retry, depth, and concurrency guard ceilings resolved at current defaults.
  */
 export interface MJLimitsResourceGuardsConfig {
@@ -331,6 +365,10 @@ export interface MJLimitsConfig {
     Isolation: MJLimitsIsolationConfig;
     /** Task graph queue dispatch, bounded fan-out, runner backpressure, and notification retention limits. */
     TaskGraphQueue: MJLimitsTaskGraphQueueConfig;
+    /** Sliding forward-progress liveness watchdog and long-running HTTP transport timeout settings. */
+    Liveness: MJLimitsLivenessConfig;
+    /** Semantic stuck-run detection thresholds (canonical repeated tool-call breaker and read-only spiral). */
+    StuckDetector: MJLimitsStuckDetectorConfig;
 }
 
 /** Partial override for {@link MJLimitsScopeBudget}. */
@@ -388,6 +426,12 @@ export type MJLimitsIsolationOverride = Partial<MJLimitsIsolationConfig>;
 /** Partial override for {@link MJLimitsTaskGraphQueueConfig}. */
 export type MJLimitsTaskGraphQueueOverride = Partial<MJLimitsTaskGraphQueueConfig>;
 
+/** Partial override for {@link MJLimitsLivenessConfig}. */
+export type MJLimitsLivenessOverride = Partial<MJLimitsLivenessConfig>;
+
+/** Partial override for {@link MJLimitsStuckDetectorConfig}. */
+export type MJLimitsStuckDetectorOverride = Partial<MJLimitsStuckDetectorConfig>;
+
 /**
  * Partial override object accepted by any tier of {@link LimitsConfigResolver}.
  */
@@ -407,6 +451,8 @@ export interface MJLimitsOverride {
     Tuning?: MJLimitsTuningOverride;
     Isolation?: MJLimitsIsolationOverride;
     TaskGraphQueue?: MJLimitsTaskGraphQueueOverride;
+    Liveness?: MJLimitsLivenessOverride;
+    StuckDetector?: MJLimitsStuckDetectorOverride;
 }
 
 /**
@@ -526,6 +572,21 @@ export const CODE_FALLBACK_LIMITS: Readonly<MJLimitsConfig> = {
         EnqueuePublishRetryAttempts: 3,
         CallerNotificationRetentionMs: 86_400_000,
     },
+    Liveness: {
+        Enabled: true,
+        InactivityTimeoutMs: 900_000,
+        OuterMaxWallClockMs: 259_200_000,
+        StreamChunkTouchThrottleMs: 5_000,
+        HttpHeadersTimeoutMs: 1_800_000,
+        HttpBodyTimeoutMs: 1_800_000,
+    },
+    StuckDetector: {
+        Enabled: true,
+        WindowSize: 10,
+        IdenticalToolCallThreshold: 3,
+        ReadOnlyStepThreshold: 30,
+        ReadOnlyPostDirectiveGraceSteps: 5,
+    },
 };
 
 /**
@@ -538,11 +599,15 @@ type ResourceGuardKey = keyof MJLimitsResourceGuardsConfig;
 type TuningKey = keyof MJLimitsTuningConfig;
 type IsolationKey = keyof MJLimitsIsolationConfig;
 type TaskGraphQueueKey = keyof MJLimitsTaskGraphQueueConfig;
+type LivenessKey = keyof MJLimitsLivenessConfig;
+type StuckDetectorKey = keyof MJLimitsStuckDetectorConfig;
 
 export type ResourceGuardKeyPath = `ResourceGuards.${ResourceGuardKey}`;
 export type TuningKeyPath = `Tuning.${TuningKey}`;
 export type IsolationKeyPath = `Isolation.${IsolationKey}`;
 export type TaskGraphQueueKeyPath = `TaskGraphQueue.${TaskGraphQueueKey}`;
+export type LivenessKeyPath = `Liveness.${LivenessKey}`;
+export type StuckDetectorKeyPath = `StuckDetector.${StuckDetectorKey}`;
 
 /**
  * Union of all canonical dot-separated limit key paths tracked for provenance.
@@ -584,7 +649,9 @@ export type LimitsKeyPath =
     | ResourceGuardKeyPath
     | TuningKeyPath
     | IsolationKeyPath
-    | TaskGraphQueueKeyPath;
+    | TaskGraphQueueKeyPath
+    | LivenessKeyPath
+    | StuckDetectorKeyPath;
 
 const RESOURCE_GUARD_KEYS: readonly ResourceGuardKey[] = [
     'MaxValidationRetries',
@@ -685,6 +752,32 @@ const TASK_GRAPH_QUEUE_KEYS: readonly TaskGraphQueueKey[] = [
     ...TASK_GRAPH_QUEUE_NUMERIC_KEYS,
 ] as const;
 
+const LIVENESS_KEYS: readonly LivenessKey[] = [
+    'Enabled',
+    'InactivityTimeoutMs',
+    'OuterMaxWallClockMs',
+    'StreamChunkTouchThrottleMs',
+    'HttpHeadersTimeoutMs',
+    'HttpBodyTimeoutMs',
+] as const;
+
+const STUCK_DETECTOR_NUMERIC_KEYS: readonly (
+    | 'WindowSize'
+    | 'IdenticalToolCallThreshold'
+    | 'ReadOnlyStepThreshold'
+    | 'ReadOnlyPostDirectiveGraceSteps'
+)[] = [
+    'WindowSize',
+    'IdenticalToolCallThreshold',
+    'ReadOnlyStepThreshold',
+    'ReadOnlyPostDirectiveGraceSteps',
+] as const;
+
+const STUCK_DETECTOR_KEYS: readonly StuckDetectorKey[] = [
+    'Enabled',
+    ...STUCK_DETECTOR_NUMERIC_KEYS,
+] as const;
+
 /**
  * Ordered list of every {@link LimitsKeyPath} covered by {@link LimitsConfigResolver}.
  */
@@ -726,6 +819,8 @@ export const LIMITS_KEY_PATHS: readonly LimitsKeyPath[] = [
     ...TUNING_KEYS.map((k): TuningKeyPath => `Tuning.${k}`),
     ...ISOLATION_KEYS.map((k): IsolationKeyPath => `Isolation.${k}`),
     ...TASK_GRAPH_QUEUE_KEYS.map((k): TaskGraphQueueKeyPath => `TaskGraphQueue.${k}`),
+    ...LIVENESS_KEYS.map((k): LivenessKeyPath => `Liveness.${k}`),
+    ...STUCK_DETECTOR_KEYS.map((k): StuckDetectorKeyPath => `StuckDetector.${k}`),
 ] as const;
 
 /** Primitive value type for an individual resolved limit key. */
@@ -860,6 +955,11 @@ const NUMERIC_CEILING_KEYS: ReadonlySet<LimitsKeyPath> = new Set<LimitsKeyPath>(
     ...RESOURCE_GUARD_KEYS.map((k): ResourceGuardKeyPath => `ResourceGuards.${k}`),
     ...ISOLATION_NUMERIC_KEYS.map((k): IsolationKeyPath => `Isolation.${k}`),
     ...TASK_GRAPH_QUEUE_NUMERIC_KEYS.map((k): TaskGraphQueueKeyPath => `TaskGraphQueue.${k}`),
+    'Liveness.InactivityTimeoutMs',
+    'Liveness.OuterMaxWallClockMs',
+    'StuckDetector.IdenticalToolCallThreshold',
+    'StuckDetector.ReadOnlyStepThreshold',
+    'StuckDetector.ReadOnlyPostDirectiveGraceSteps',
 ]);
 
 /**
@@ -1049,6 +1149,48 @@ function normalizeTaskGraphQueueOverride(raw: LimitsInputValue): MJLimitsTaskGra
     return Object.keys(out).length > 0 ? out : undefined;
 }
 
+function normalizeLivenessOverride(raw: LimitsInputValue): MJLimitsLivenessOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
+        return undefined;
+    }
+    const out: MJLimitsLivenessOverride = {};
+    const enabled = readBoolean(readObjectProperty(raw, ['Enabled', 'enabled', 'LivenessEnabled', 'livenessEnabled']));
+    if (enabled !== undefined) out.Enabled = enabled;
+    const inactivity = readPositiveInteger(readObjectProperty(raw, ['InactivityTimeoutMs', 'inactivityTimeoutMs']));
+    if (inactivity !== undefined) out.InactivityTimeoutMs = inactivity;
+    const outerMax = readPositiveInteger(readObjectProperty(raw, ['OuterMaxWallClockMs', 'outerMaxWallClockMs']));
+    if (outerMax !== undefined) out.OuterMaxWallClockMs = outerMax;
+    const throttle = readFiniteNonNegativeNumber(readObjectProperty(raw, ['StreamChunkTouchThrottleMs', 'streamChunkTouchThrottleMs']));
+    if (throttle !== undefined) out.StreamChunkTouchThrottleMs = Math.trunc(throttle);
+    const headersTimeout = readFiniteNonNegativeNumber(readObjectProperty(raw, ['HttpHeadersTimeoutMs', 'httpHeadersTimeoutMs']));
+    if (headersTimeout !== undefined) out.HttpHeadersTimeoutMs = Math.trunc(headersTimeout);
+    const bodyTimeout = readFiniteNonNegativeNumber(readObjectProperty(raw, ['HttpBodyTimeoutMs', 'httpBodyTimeoutMs']));
+    if (bodyTimeout !== undefined) out.HttpBodyTimeoutMs = Math.trunc(bodyTimeout);
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeStuckDetectorOverride(raw: LimitsInputValue): MJLimitsStuckDetectorOverride | undefined {
+    if (!isLimitsInputObject(raw)) {
+        return undefined;
+    }
+    const out: MJLimitsStuckDetectorOverride = {};
+    const enabled = readBoolean(readObjectProperty(raw, ['Enabled', 'enabled']));
+    if (enabled !== undefined) out.Enabled = enabled;
+    const numeric = normalizePositiveIntSection(raw, STUCK_DETECTOR_NUMERIC_KEYS);
+    if (numeric) {
+        Object.assign(out, numeric);
+    }
+    const legacyIdentical = readPositiveInteger(readObjectProperty(raw, ['RepeatedToolCallThreshold', 'repeatedToolCallThreshold']));
+    if (out.IdenticalToolCallThreshold === undefined && legacyIdentical !== undefined) {
+        out.IdenticalToolCallThreshold = legacyIdentical;
+    }
+    const legacyReadOnly = readPositiveInteger(readObjectProperty(raw, ['ReadOnlySpiralThreshold', 'readOnlySpiralThreshold']));
+    if (out.ReadOnlyStepThreshold === undefined && legacyReadOnly !== undefined) {
+        out.ReadOnlyStepThreshold = legacyReadOnly;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function normalizeScopeBudgetOverride(raw: LimitsInputValue): MJLimitsScopeBudgetOverride | undefined {
     if (!isLimitsInputObject(raw)) {
         return undefined;
@@ -1220,6 +1362,10 @@ export function NormalizeLimitsInput(raw: LimitsInputValue): MJLimitsOverride {
     if (isolation) out.Isolation = isolation;
     const taskGraphQueue = normalizeTaskGraphQueueOverride(readObjectProperty(raw, ['TaskGraphQueue', 'taskGraphQueue']));
     if (taskGraphQueue) out.TaskGraphQueue = taskGraphQueue;
+    const liveness = normalizeLivenessOverride(readObjectProperty(raw, ['Liveness', 'liveness']));
+    if (liveness) out.Liveness = liveness;
+    const stuckDetector = normalizeStuckDetectorOverride(readObjectProperty(raw, ['StuckDetector', 'stuckDetector']));
+    if (stuckDetector) out.StuckDetector = stuckDetector;
     return out;
 }
 
@@ -1239,6 +1385,8 @@ function cloneDefaultLimits(): MJLimitsConfig {
         Tuning: { ...CODE_FALLBACK_LIMITS.Tuning },
         Isolation: { ...CODE_FALLBACK_LIMITS.Isolation },
         TaskGraphQueue: { ...CODE_FALLBACK_LIMITS.TaskGraphQueue },
+        Liveness: { ...CODE_FALLBACK_LIMITS.Liveness },
+        StuckDetector: { ...CODE_FALLBACK_LIMITS.StuckDetector },
     };
 }
 
@@ -1258,6 +1406,14 @@ function extractTierValue(layer: MJLimitsOverride, key: LimitsKeyPath): LimitsSc
     if (key.startsWith('TaskGraphQueue.')) {
         const subKey = key.slice('TaskGraphQueue.'.length) as TaskGraphQueueKey;
         return layer.TaskGraphQueue?.[subKey];
+    }
+    if (key.startsWith('Liveness.')) {
+        const subKey = key.slice('Liveness.'.length) as LivenessKey;
+        return layer.Liveness?.[subKey];
+    }
+    if (key.startsWith('StuckDetector.')) {
+        const subKey = key.slice('StuckDetector.'.length) as StuckDetectorKey;
+        return layer.StuckDetector?.[subKey];
     }
     switch (key) {
         case 'AgentChannelConsecutiveTurns': return layer.AgentChannelConsecutiveTurns;
@@ -1324,6 +1480,24 @@ function assignResolvedValue(target: MJLimitsConfig, key: LimitsKeyPath, value: 
             target.TaskGraphQueue[subKey] = value as string;
         } else {
             target.TaskGraphQueue[subKey] = value as number;
+        }
+        return;
+    }
+    if (key.startsWith('Liveness.')) {
+        const subKey = key.slice('Liveness.'.length) as LivenessKey;
+        if (subKey === 'Enabled') {
+            target.Liveness.Enabled = value as boolean;
+        } else {
+            target.Liveness[subKey] = value as number;
+        }
+        return;
+    }
+    if (key.startsWith('StuckDetector.')) {
+        const subKey = key.slice('StuckDetector.'.length) as StuckDetectorKey;
+        if (subKey === 'Enabled') {
+            target.StuckDetector.Enabled = value as boolean;
+        } else {
+            target.StuckDetector[subKey] = value as number;
         }
         return;
     }
@@ -1507,10 +1681,23 @@ export function ValidateLimitsConfig(config: MJLimitsConfig): LimitsValidationRe
         ...TUNING_KEYS.map((k): [LimitsKeyPath, number] => [`Tuning.${k}`, config.Tuning[k]]),
         ...ISOLATION_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`Isolation.${k}`, config.Isolation[k]]),
         ...TASK_GRAPH_QUEUE_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`TaskGraphQueue.${k}`, config.TaskGraphQueue[k]]),
+        ['Liveness.InactivityTimeoutMs', config.Liveness.InactivityTimeoutMs],
+        ['Liveness.OuterMaxWallClockMs', config.Liveness.OuterMaxWallClockMs],
+        ...STUCK_DETECTOR_NUMERIC_KEYS.map((k): [LimitsKeyPath, number] => [`StuckDetector.${k}`, config.StuckDetector[k]]),
     ];
     for (const [key, val] of positiveIntChecks) {
         if (!Number.isFinite(val) || val < 1) {
             issues.push({ Key: key, Message: `${key} must be a positive number >= 1.` });
+        }
+    }
+    const nonNegativeLivenessChecks: Array<[LimitsKeyPath, number]> = [
+        ['Liveness.StreamChunkTouchThrottleMs', config.Liveness.StreamChunkTouchThrottleMs],
+        ['Liveness.HttpHeadersTimeoutMs', config.Liveness.HttpHeadersTimeoutMs],
+        ['Liveness.HttpBodyTimeoutMs', config.Liveness.HttpBodyTimeoutMs],
+    ];
+    for (const [key, val] of nonNegativeLivenessChecks) {
+        if (!Number.isFinite(val) || val < 0) {
+            issues.push({ Key: key, Message: `${key} must be a non-negative number >= 0.` });
         }
     }
     if (!IsTaskGraphIsolationLevel(config.Isolation.DefaultIsolation)) {

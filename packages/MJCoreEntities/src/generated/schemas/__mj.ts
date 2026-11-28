@@ -268,6 +268,12 @@ export const MJAIAgentCategorySchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: File Storage Accounts (vwFileStorageAccounts.ID)
         * * Description: Default file storage account for agents in this category. Inherited by child categories that do not define their own value — resolution walks up the ParentID tree until a non-null value is found. Overrides the Type-level default. FK to FileStorageAccount.`),
+    DefaultConfiguration: z.any().nullable().describe(`
+        * * Field Name: DefaultConfiguration
+        * * Display Name: Default Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentCategoryEntity_IAgentConfiguration
+        * * Description: Default typed JSON configuration bag (IAgentConfiguration) inherited by agents in this category and child categories (walks ParentID tree). Narrow-only security invariants cannot be loosened by category defaults.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -2486,7 +2492,7 @@ export const MJAIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Decision'), z.literal('ForEach'), z.literal('Handoff'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Compaction'), z.literal('Custom'), z.literal('Decision'), z.literal('ForEach'), z.literal('Handoff'), z.literal('Plan'), z.literal('Prompt'), z.literal('Skill'), z.literal('Sub-Agent'), z.literal('TaskGraph'), z.literal('Tool'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -2496,6 +2502,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Actions
     *   * Chat
     *   * Compaction
+    *   * Custom
     *   * Decision
     *   * ForEach
     *   * Handoff
@@ -2507,7 +2514,7 @@ export const MJAIAgentRunStepSchema = z.object({
     *   * Tool
     *   * Validation
     *   * While
-        * * Description: Type of execution step: Actions, Chat, Compaction, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.`),
+        * * Description: Type of execution step: Actions, Chat, Compaction, Custom, Decision, ForEach, Handoff, Plan, Prompt, Skill, Sub-Agent, TaskGraph, Tool, Validation, While.`),
     StepName: z.string().describe(`
         * * Field Name: StepName
         * * Display Name: Step Name
@@ -2665,6 +2672,12 @@ detailed information about what validation rules failed.`),
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Run Steps (vwAIAgentRunSteps.ID)
         * * Description: When set, PayloadAtEnd is not stored on this row because it equals the PayloadAtEnd of the referenced step in the same run. Read that step's PayloadAtEnd to get this step's ending payload.`),
+    StepTypeID: z.string().nullable().describe(`
+        * * Field Name: StepTypeID
+        * * Display Name: Step Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+        * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition executed by this run step (especially when StepType is Custom).`),
     AgentRun: z.string().nullable().describe(`
         * * Field Name: AgentRun
         * * Display Name: Agent Run Context
@@ -2681,6 +2694,10 @@ detailed information about what validation rules failed.`),
         * * Field Name: PayloadAtEndSourceStep
         * * Display Name: Payload At End Source Step
         * * SQL Data Type: nvarchar(255)`),
+    StepType_Virtual: z.string().nullable().describe(`
+        * * Field Name: StepType_Virtual
+        * * Display Name: Step Type Virtual
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -3863,6 +3880,100 @@ export const MJAIAgentStepPathSchema = z.object({
 export type MJAIAgentStepPathEntityType = z.infer<typeof MJAIAgentStepPathSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Step Types
+ */
+export const MJAIAgentStepTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique canonical step key (e.g. Actions, Sub-Agent, Skill, Plan, Handoff, or a custom OpenApp step key).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what this step type performs during agent execution.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: @RegisterClass(BaseAgentStepHandler, DriverClass) key used by AgentStepTypeRegistry to instantiate the runtime handler for this step type.`),
+    AppliesTo: z.union([z.literal('All'), z.literal('Both'), z.literal('Flow'), z.literal('Loop')]).describe(`
+        * * Field Name: AppliesTo
+        * * Display Name: Applies To
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Loop
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Both
+    *   * Flow
+    *   * Loop
+        * * Description: Which agent execution models support this step type: Loop, Flow, Both, or All.`),
+    AllowedInUnapprovedPlanMode: z.boolean().describe(`
+        * * Field Name: AllowedInUnapprovedPlanMode
+        * * Display Name: Allowed In Unapproved Plan Mode
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When false, invoking this step while Plan Mode is active and unapproved is rejected with a Retry prompting the agent to present a Plan first.`),
+    CountsAgainstTreeBudget: z.boolean().describe(`
+        * * Field Name: CountsAgainstTreeBudget
+        * * Display Name: Counts Against Tree Budget
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, dispatching this step checks and counts against cumulative AgentTreeBudget limits.`),
+    DefaultEnabledInPrompt: z.boolean().describe(`
+        * * Field Name: DefaultEnabledInPrompt
+        * * Display Name: Default Enabled In Prompt
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether prompt templates should advertise this step type by default when constructing agent instructions.`),
+    PromptDocsTemplate: z.string().nullable().describe(`
+        * * Field Name: PromptDocsTemplate
+        * * Display Name: Prompt Docs Template
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional Nunjucks/Markdown prompt documentation snippet describing how an LLM invokes this step type.`),
+    ResponseSchemaSnippet: z.string().nullable().describe(`
+        * * Field Name: ResponseSchemaSnippet
+        * * Display Name: Response Schema Snippet
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON schema fragment describing the payload fields emitted by an LLM response envelope for this step type.`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Disabled
+        * * Description: Lifecycle status of this step type registration: Active, Deprecated, or Disabled.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON configuration bag specific to this step type handler.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIAgentStepTypeEntityType = z.infer<typeof MJAIAgentStepTypeSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Steps
  */
 export const MJAIAgentStepSchema = z.object({
@@ -3884,13 +3995,14 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Wait'), z.literal('While')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('Custom'), z.literal('Decision'), z.literal('External'), z.literal('ForEach'), z.literal('Human'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Wait'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * Custom
     *   * Decision
     *   * External
     *   * ForEach
@@ -3899,7 +4011,7 @@ export const MJAIAgentStepSchema = z.object({
     *   * Sub-Agent
     *   * Wait
     *   * While
-        * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), Prompt (run an AI prompt), Decision (one typed decision call whose answers the outgoing paths route on), Human (ask a person), or ForEach / While (a loop).`),
+        * * Description: Type of step: Action (execute an action), Custom (pluggable step type referenced by StepTypeID), Decision (one typed decision call whose answers the outgoing paths route on), External, ForEach / While (a loop), Human (ask a person), Prompt (run an AI prompt), Sub-Agent (delegate to another agent), or Wait.`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
         * * Display Name: Starting Step
@@ -4007,6 +4119,12 @@ export const MJAIAgentStepSchema = z.object({
         * * Display Name: Configuration
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For Decision steps: { key, state?, questions }, where key names the step in path conditions (decisions.<key>.<question>), state is "payload" or "payload.<path>", and questions are Likelihood, Choice or Score questions. For Human steps: { assignToUserID?, expiresInHours? }.`),
+    StepTypeID: z.string().nullable().describe(`
+        * * Field Name: StepTypeID
+        * * Display Name: Step Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Step Types (vwAIAgentStepTypes.ID)
+        * * Description: Optional foreign key to AIAgentStepType identifying the pluggable step type definition for this flow agent step (especially when StepType is Custom).`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -4023,6 +4141,10 @@ export const MJAIAgentStepSchema = z.object({
         * * Field Name: Prompt
         * * Display Name: Prompt
         * * SQL Data Type: nvarchar(255)`),
+    StepType_Virtual: z.string().nullable().describe(`
+        * * Field Name: StepType_Virtual
+        * * Display Name: Step Type Virtual
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJAIAgentStepEntityType = z.infer<typeof MJAIAgentStepSchema>;
@@ -4213,41 +4335,47 @@ export const MJAIAgentTypeSchema = z.object({
         * * Field Name: ContextCompressionMessageThreshold
         * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
-        * * Description: Type-level default for the in-turn context-compression message-count threshold. Overridable per agent via AIAgent.ContextCompressionMessageThreshold.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionMessageThreshold. Kept bidirectionally synced during v6.x.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
         * * Display Name: Context Compression Prompt ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-        * * Description: Type-level default prompt used for in-turn context compression. Overridable per agent via AIAgent.ContextCompressionPromptID.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionPromptID. Kept bidirectionally synced during v6.x.`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
         * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
-        * * Description: Type-level default for the number of most-recent messages kept uncompressed (the "hot tail") when context compression is applied. Overridable per agent via AIAgent.ContextCompressionMessageRetentionCount.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compressionMessageRetentionCount. Kept bidirectionally synced during v6.x.`),
     ContextWindowMaxTokens: z.number().nullable().describe(`
         * * Field Name: ContextWindowMaxTokens
         * * Display Name: Context Window Max Tokens
         * * SQL Data Type: int
-        * * Description: Type-level default effective working-context budget, in tokens. Null means use the selected model's MaxInputTokens. The resolved value is clamped to the model's limit at runtime (a warning is logged if it would exceed it). Overridable per agent via AIAgent.ContextWindowMaxTokens.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.maxTokens. Kept bidirectionally synced during v6.x.`),
     CompactionTriggerPercent: z.number().describe(`
         * * Field Name: CompactionTriggerPercent
         * * Display Name: Compaction Trigger Percent
         * * SQL Data Type: int
         * * Default Value: 75
-        * * Description: Type-level default: the percentage of the effective context budget at which cross-turn conversation compaction is triggered. Defaults to 75. Overridable per agent via AIAgent.CompactionTriggerPercent.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compactionTriggerPercent. Kept bidirectionally synced during v6.x.`),
     CompactionTargetPercent: z.number().describe(`
         * * Field Name: CompactionTargetPercent
         * * Display Name: Compaction Target Percent
         * * SQL Data Type: int
         * * Default Value: 30
-        * * Description: Type-level default: the target percentage of the effective context budget to reduce to after a cross-turn compaction. Defaults to 30. Overridable per agent via AIAgent.CompactionTargetPercent.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.compactionTargetPercent. Kept bidirectionally synced during v6.x.`),
     ConversationSummaryPromptID: z.string().nullable().describe(`
         * * Field Name: ConversationSummaryPromptID
         * * Display Name: Conversation Summary Prompt ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
-        * * Description: Type-level default prompt used for cross-turn conversation compaction (the durable summary baseline). Distinct from ContextCompressionPromptID, which governs in-turn compression. Overridable per agent via AIAgent.ConversationSummaryPromptID.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by DefaultAgentConfiguration.contextWindow.summaryPromptID. Kept bidirectionally synced during v6.x.`),
+    DefaultAgentConfiguration: z.any().nullable().describe(`
+        * * Field Name: DefaultAgentConfiguration
+        * * Display Name: Default Agent Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentTypeEntity_IAgentConfiguration
+        * * Description: Default typed JSON configuration bag (IAgentConfiguration) providing agent-type-level defaults (such as contextWindow settings) inherited by agents of this type beneath category and agent overrides. Distinct from DefaultConfiguration, which seeds type-specific TypeConfiguration.`),
     SystemPrompt: z.string().nullable().describe(`
         * * Field Name: SystemPrompt
         * * Display Name: System Prompt
@@ -4530,28 +4658,29 @@ export const MJAIAgentSchema = z.object({
     * * Possible Values 
     *   * Parallel
     *   * Sequential
-        * * Description: Controls how this agent's child agents are executed. Sequential runs children in order, Parallel runs them simultaneously.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.mode. Kept bidirectionally synced during v6.x.`),
     EnableContextCompression: z.boolean().describe(`
         * * Field Name: EnableContextCompression
         * * Display Name: Enable Context Compression
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.enableCompression. Kept bidirectionally synced during v6.x.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
         * * Display Name: Context Compression Message Threshold
         * * SQL Data Type: int
-        * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionMessageThreshold. Kept bidirectionally synced during v6.x.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPromptID
         * * Display Name: Context Compression Prompt ID
         * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)`),
+        * * Related Entity/Foreign Key: MJ: AI Prompts (vwAIPrompts.ID)
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionPromptID. Kept bidirectionally synced during v6.x.`),
     ContextCompressionMessageRetentionCount: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageRetentionCount
         * * Display Name: Context Compression Message Retention Count
         * * SQL Data Type: int
-        * * Description: Number of recent messages to keep uncompressed when context compression is applied.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compressionMessageRetentionCount. Kept bidirectionally synced during v6.x.`),
     TypeID: z.string().nullable().describe(`
         * * Field Name: TypeID
         * * Display Name: Type
@@ -4588,41 +4717,39 @@ export const MJAIAgentSchema = z.object({
     * * Possible Values 
     *   * Agent
     *   * Agent Type
-        * * Description: Controls whether model selection is driven by the Agent Type's system prompt or the Agent's specific prompt. Default is Agent Type for backward compatibility.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.modelSelectionMode. Kept bidirectionally synced during v6.x.`),
     PayloadDownstreamPaths: z.string().describe(`
         * * Field Name: PayloadDownstreamPaths
         * * Display Name: Payload Downstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
-        * * Description: JSON array of paths that define which parts of the payload should be sent downstream to sub-agents. Use ["*"] to send entire payload, or specify paths like ["customer.id", "campaign.*", "analysis.sentiment"]`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.downstreamPaths. Kept bidirectionally synced during v6.x.`),
     PayloadUpstreamPaths: z.string().describe(`
         * * Field Name: PayloadUpstreamPaths
         * * Display Name: Payload Upstream Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Default Value: ["*"]
-        * * Description: JSON array of paths that define which parts of the payload sub-agents are allowed to write back upstream. Use ["*"] to allow all writes, or specify paths like ["analysis.results", "recommendations.*"]`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.upstreamPaths. Kept bidirectionally synced during v6.x.`),
     PayloadSelfReadPaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfReadPaths
         * * Display Name: Payload Self Read Paths
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can read. Controls downstream data 
-flow when the agent executes its own prompt step.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.selfReadPaths. Kept bidirectionally synced during v6.x.`),
     PayloadSelfWritePaths: z.string().nullable().describe(`
         * * Field Name: PayloadSelfWritePaths
         * * Display Name: Payload Self Write Paths
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON array of paths that specify what parts of the payload the agent's own prompt can write back. Controls upstream 
-data flow when the agent executes its own prompt step.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.selfWritePaths. Kept bidirectionally synced during v6.x.`),
     PayloadScope: z.string().nullable().describe(`
         * * Field Name: PayloadScope
         * * Display Name: Payload Scope
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.scope. Kept bidirectionally synced during v6.x.`),
     FinalPayloadValidation: z.string().nullable().describe(`
         * * Field Name: FinalPayloadValidation
         * * Display Name: Final Payload Validation
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationSchema. Kept bidirectionally synced during v6.x.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
         * * Field Name: FinalPayloadValidationMode
         * * Display Name: Final Payload Validation Mode
@@ -4633,14 +4760,13 @@ data flow when the agent executes its own prompt step.`),
     *   * Fail
     *   * Retry
     *   * Warn
-        * * Description: Determines how to handle validation failures when FinalPayloadValidation is specified. Options: Retry (default) - retry the agent with validation feedback, Fail - fail the agent run immediately, Warn - log a warning but allow success.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationMode. Kept bidirectionally synced during v6.x.`),
     FinalPayloadValidationMaxRetries: z.number().describe(`
         * * Field Name: FinalPayloadValidationMaxRetries
         * * Display Name: Final Payload Validation Max Retries
         * * SQL Data Type: int
         * * Default Value: 3
-        * * Description: Maximum number of retry attempts allowed when FinalPayloadValidation fails with
-Retry mode. After reaching this limit, the validation will fail permanently.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.finalValidationMaxRetries. Kept bidirectionally synced during v6.x.`),
     MaxCostPerRun: z.number().nullable().describe(`
         * * Field Name: MaxCostPerRun
         * * Display Name: Max Cost Per Run
@@ -4669,17 +4795,17 @@ if this limit is exceeded.`),
         * * Field Name: MinExecutionsPerRun
         * * Display Name: Min Executions Per Run
         * * SQL Data Type: int
-        * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.minExecutionsPerRun. Kept bidirectionally synced during v6.x.`),
     MaxExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxExecutionsPerRun
         * * Display Name: Max Executions Per Run
         * * SQL Data Type: int
-        * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.maxExecutionsPerRun. Kept bidirectionally synced during v6.x.`),
     StartingPayloadValidation: z.string().nullable().describe(`
         * * Field Name: StartingPayloadValidation
         * * Display Name: Starting Payload Validation
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.startingValidationSchema. Kept bidirectionally synced during v6.x.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
         * * Field Name: StartingPayloadValidationMode
         * * Display Name: Starting Payload Validation Mode
@@ -4689,12 +4815,12 @@ if this limit is exceeded.`),
     * * Possible Values 
     *   * Fail
     *   * Warn
-        * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.payload.startingValidationMode. Kept bidirectionally synced during v6.x.`),
     DefaultPromptEffortLevel: z.number().nullable().describe(`
         * * Field Name: DefaultPromptEffortLevel
         * * Display Name: Default Effort Level
         * * SQL Data Type: int
-        * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.defaultPromptEffortLevel. Kept bidirectionally synced during v6.x.`),
     ChatHandlingOption: z.union([z.literal('Consult'), z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
         * * Field Name: ChatHandlingOption
         * * Display Name: Chat Handling Option
@@ -4705,7 +4831,7 @@ if this limit is exceeded.`),
     *   * Failed
     *   * Retry
     *   * Success
-        * * Description: Controls how Chat next steps are handled. NULL (default): Chat propagates to the caller. Success, Failed or Retry: the Chat is remapped to that step. Consult: when a sub-agent of this agent returns Chat, this agent answers it itself (or asks its own caller) instead of ending its run; this agent's own Chat still goes to its caller. AIAgentRelationship.ChatHandlingOption overrides this per sub-agent.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.chatHandlingOption. Kept bidirectionally synced during v6.x.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
         * * Display Name: Default Artifact Type
@@ -4740,7 +4866,7 @@ if this limit is exceeded.`),
     *   * Always
     *   * Never
     *   * System Only
-        * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.artifacts.creationMode. Kept bidirectionally synced during v6.x.`),
     FunctionalRequirements: z.string().nullable().describe(`
         * * Field Name: FunctionalRequirements
         * * Display Name: Functional Requirements
@@ -4756,13 +4882,13 @@ if this limit is exceeded.`),
         * * Display Name: Inject Notes
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: When enabled, agent notes will be automatically injected into the agent context based on scoping rules.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.injectNotes. Kept bidirectionally synced during v6.x.`),
     MaxNotesToInject: z.number().describe(`
         * * Field Name: MaxNotesToInject
         * * Display Name: Max Notes To Inject
         * * SQL Data Type: int
         * * Default Value: 5
-        * * Description: Maximum number of notes to inject into agent context per request.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.maxNotesToInject. Kept bidirectionally synced during v6.x.`),
     NoteInjectionStrategy: z.union([z.literal('All'), z.literal('Recent'), z.literal('Relevant')]).describe(`
         * * Field Name: NoteInjectionStrategy
         * * Display Name: Note Injection Strategy
@@ -4773,19 +4899,19 @@ if this limit is exceeded.`),
     *   * All
     *   * Recent
     *   * Relevant
-        * * Description: Strategy for selecting which notes to inject: Relevant (semantic search), Recent (most recent first), or All (up to max limit).`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.noteInjectionStrategy. Kept bidirectionally synced during v6.x.`),
     InjectExamples: z.boolean().describe(`
         * * Field Name: InjectExamples
         * * Display Name: Inject Examples
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When enabled, agent examples will be automatically injected into the agent context based on scoping rules.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.injectExamples. Kept bidirectionally synced during v6.x.`),
     MaxExamplesToInject: z.number().describe(`
         * * Field Name: MaxExamplesToInject
         * * Display Name: Max Examples To Inject
         * * SQL Data Type: int
         * * Default Value: 3
-        * * Description: Maximum number of examples to inject into agent context per request.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.maxExamplesToInject. Kept bidirectionally synced during v6.x.`),
     ExampleInjectionStrategy: z.union([z.literal('Rated'), z.literal('Recent'), z.literal('Semantic')]).describe(`
         * * Field Name: ExampleInjectionStrategy
         * * Display Name: Example Injection Strategy
@@ -4796,7 +4922,7 @@ if this limit is exceeded.`),
     *   * Rated
     *   * Recent
     *   * Semantic
-        * * Description: Strategy for selecting which examples to inject: Semantic (vector similarity), Recent (most recent first), or Rated (highest success score first).`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.exampleInjectionStrategy. Kept bidirectionally synced during v6.x.`),
     IsRestricted: z.boolean().describe(`
         * * Field Name: IsRestricted
         * * Display Name: Is Restricted
@@ -4814,12 +4940,12 @@ if this limit is exceeded.`),
     *   * Bookend
     *   * Latest
     *   * None
-        * * Description: Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.messageMode. Kept bidirectionally synced during v6.x.`),
     MaxMessages: z.number().nullable().describe(`
         * * Field Name: MaxMessages
         * * Display Name: Max Messages
         * * SQL Data Type: int
-        * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.maxMessages. Kept bidirectionally synced during v6.x.`),
     AttachmentStorageProviderID: z.string().nullable().describe(`
         * * Field Name: AttachmentStorageProviderID
         * * Display Name: Attachment Storage Provider
@@ -4830,12 +4956,12 @@ if this limit is exceeded.`),
         * * Field Name: AttachmentRootPath
         * * Display Name: Attachment Root Path
         * * SQL Data Type: nvarchar(500)
-        * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.rootPath. Kept bidirectionally synced during v6.x.`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
         * * Display Name: Inline Storage Threshold (Bytes)
         * * SQL Data Type: int
-        * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.inlineStorageThresholdBytes. Kept bidirectionally synced during v6.x.`),
     AgentTypePromptParams: z.string().nullable().describe(`
         * * Field Name: AgentTypePromptParams
         * * Display Name: Agent Type Prompt Params
@@ -4845,30 +4971,30 @@ if this limit is exceeded.`),
         * * Field Name: ScopeConfig
         * * Display Name: Scope Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration defining scope dimensions for multi-tenant deployments. Example: {"dimensions":[{"name":"OrganizationID","entityId":"...","isPrimary":true,"required":true},{"name":"ContactID","entityId":"...","isPrimary":false,"required":false}],"inheritanceMode":"cascading"}`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.scope.secondaryScopeConfig. Kept bidirectionally synced during v6.x.`),
     NoteRetentionDays: z.number().nullable().describe(`
         * * Field Name: NoteRetentionDays
         * * Display Name: Note Retention Days
         * * SQL Data Type: int
         * * Default Value: 90
-        * * Description: Number of days to retain notes before archiving due to inactivity. Default 90. NULL means use system default.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.noteRetentionDays. Kept bidirectionally synced during v6.x.`),
     ExampleRetentionDays: z.number().nullable().describe(`
         * * Field Name: ExampleRetentionDays
         * * Display Name: Example Retention Days
         * * SQL Data Type: int
         * * Default Value: 180
-        * * Description: Number of days to retain examples before archiving due to inactivity. Default 180. NULL means use system default.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.exampleRetentionDays. Kept bidirectionally synced during v6.x.`),
     AutoArchiveEnabled: z.boolean().describe(`
         * * Field Name: AutoArchiveEnabled
         * * Display Name: Auto Archive Enabled
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: Whether automatic archival of stale notes/examples is enabled for this agent. Default true.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.autoArchiveEnabled. Kept bidirectionally synced during v6.x.`),
     RerankerConfiguration: z.string().nullable().describe(`
         * * Field Name: RerankerConfiguration
         * * Display Name: Reranker Configuration
         * * SQL Data Type: nvarchar(MAX)
-        * * Description: JSON configuration for optional reranking of retrieved memory items. Schema: { enabled: boolean, rerankerModelId: string, retrievalMultiplier: number (default 3), minRelevanceThreshold: number (default 0.5), rerankPromptId?: string, contextFields?: string[], fallbackOnError: boolean (default true) }. When null or disabled, vector search results are used directly without reranking.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.reranker. Kept bidirectionally synced during v6.x.`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
         * * Display Name: Category
@@ -4880,7 +5006,7 @@ if this limit is exceeded.`),
         * * Display Name: Allow Ephemeral Client Tools
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: When true (default), this agent accepts runtime-registered ephemeral client tools that are not defined in metadata. Set to false for agents that require strict tool governance.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.clientTools.allowEphemeral. Kept bidirectionally synced during v6.x.`),
     DefaultStorageAccountID: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccountID
         * * Display Name: Default Storage Account
@@ -4897,13 +5023,13 @@ if this limit is exceeded.`),
     *   * All
     *   * Assigned
     *   * None
-        * * Description: Controls the agent's search capability. All = may use any scope including Global; search action does not restrict. Assigned = may use ONLY scopes explicitly linked via AIAgentSearchScope; scoped search action enforces this. None = agent has no search capability; the scoped search action rejects all requests.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.scope.searchScopeAccess. Kept bidirectionally synced during v6.x.`),
     AcceptUnregisteredFiles: z.boolean().describe(`
         * * Field Name: AcceptUnregisteredFiles
         * * Display Name: Accept Unregistered Files
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.attachments.acceptUnregisteredFiles. Kept bidirectionally synced during v6.x.`),
     DefaultCoAgentID: z.string().nullable().describe(`
         * * Field Name: DefaultCoAgentID
         * * Display Name: Default Co-Agent
@@ -4920,7 +5046,7 @@ if this limit is exceeded.`),
         * * Display Name: Allow Memory Write
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: When enabled, the agent may commit durable memories mid-run via the memoryWrites loop-response field. Writes are framework-guarded (type restriction, scope clamp, near-duplicate check, per-run cap) and land as Provisional notes pending Memory Manager hardening. On by default; disable for restricted or experimental agents.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.memory.allowMemoryWrite. Kept bidirectionally synced during v6.x.`),
     RecordingDefault: z.union([z.literal('Audio'), z.literal('AudioVideo'), z.literal('None')]).nullable().describe(`
         * * Field Name: RecordingDefault
         * * Display Name: Recording Default
@@ -4930,7 +5056,7 @@ if this limit is exceeded.`),
     *   * Audio
     *   * AudioVideo
     *   * None
-        * * Description: Agent-level default recording media for realtime sessions: None, Audio, or AudioVideo. Overridden per session by a runtime parameter; if unset, recording is OFF. Capture only runs when a storage provider is resolvable (RecordingStorageProviderID, else the agent's AttachmentStorageProviderID) AND consent is satisfied.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.recording.defaultMode. Kept bidirectionally synced during v6.x.`),
     RecordingStorageProviderID: z.string().nullable().describe(`
         * * Field Name: RecordingStorageProviderID
         * * Display Name: Recording Storage Provider
@@ -4948,7 +5074,7 @@ if this limit is exceeded.`),
         * * Display Name: Supports Plan Mode
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: Whether this agent supports Plan Mode. Defaults ON (opt-out). Plan-mode instructions are only injected when this is on AND plan mode is enabled per-request, so default runtime behavior is unchanged. Realtime agents are seeded to 0 (they skip plan mode structurally); Remote Proxy agents will be seeded when that type ships.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.supportsPlanMode. Kept bidirectionally synced during v6.x.`),
     AcceptsSkills: z.union([z.literal('All'), z.literal('Limited'), z.literal('None')]).describe(`
         * * Field Name: AcceptsSkills
         * * Display Name: Accepts Skills
@@ -4969,28 +5095,28 @@ if this limit is exceeded.`),
     * * Possible Values 
     *   * Auto
     *   * RequestedOnly
-        * * Description: Controls whether this agent may ever self-activate skills from its prompt catalog. Auto: the agent sees its allowed skills whose own ActivationMode is Auto (double gate) and may activate them mid-run on its own judgment. RequestedOnly (default): the agent's prompt catalog is empty and skills only enter a run via an explicit user request (/skill mention). Orthogonal to AcceptsSkills, which governs which skills are available at all; this governs who may pull the activation trigger.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.skills.activationMode. Kept bidirectionally synced during v6.x.`),
     RequirePlanMode: z.boolean().describe(`
         * * Field Name: RequirePlanMode
         * * Display Name: Require Plan Mode
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When 1, every root-level run of this agent executes in plan mode regardless of the per-request planMode flag — the agent must present a plan and receive human approval before any Actions or Sub-Agent steps execute. SupportsPlanMode is irrelevant when this is set. Use for high-consequence agents (e.g. ones with outbound-communication capabilities) where human-in-the-loop review is mandatory.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.requirePlanMode. Kept bidirectionally synced during v6.x.`),
     ContextWindowMaxTokens: z.number().nullable().describe(`
         * * Field Name: ContextWindowMaxTokens
         * * Display Name: Context Window Max Tokens
         * * SQL Data Type: int
-        * * Description: Per-agent override for the effective working-context budget, in tokens. Null inherits the agent type's value (which, if also null, falls back to the selected model's MaxInputTokens). The resolved value is clamped to the model's limit at runtime.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.maxTokens. Kept bidirectionally synced during v6.x.`),
     CompactionTriggerPercent: z.number().nullable().describe(`
         * * Field Name: CompactionTriggerPercent
         * * Display Name: Compaction Trigger Percent
         * * SQL Data Type: int
-        * * Description: Per-agent override for the cross-turn compaction trigger percentage. Null inherits the agent type's value.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compactionTriggerPercent. Kept bidirectionally synced during v6.x.`),
     CompactionTargetPercent: z.number().nullable().describe(`
         * * Field Name: CompactionTargetPercent
         * * Display Name: Compaction Target Percent
         * * SQL Data Type: int
-        * * Description: Per-agent override for the cross-turn compaction target percentage. Null inherits the agent type's value.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.contextWindow.compactionTargetPercent. Kept bidirectionally synced during v6.x.`),
     ConversationSummaryPromptID: z.string().nullable().describe(`
         * * Field Name: ConversationSummaryPromptID
         * * Display Name: Conversation Summary Prompt ID
@@ -5002,12 +5128,12 @@ if this limit is exceeded.`),
         * * Display Name: Declare Actions As Native Tools
         * * SQL Data Type: bit
         * * Default Value: 1
-        * * Description: When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.execution.declareActionsAsNativeTools. Kept bidirectionally synced during v6.x.`),
     MaxSubAgentConsultRounds: z.number().nullable().describe(`
         * * Field Name: MaxSubAgentConsultRounds
         * * Display Name: Max Sub Agent Consult Rounds
         * * SQL Data Type: int
-        * * Description: Maximum number of Consult rounds this agent answers for a sub-agent before that sub-agent's question propagates to this agent's caller. NULL uses the framework default (3).`),
+        * * Description: DEPRECATED (slated for removal in v7.0) — superseded by Configuration.subAgentExecution.maxConsultRounds. Kept bidirectionally synced during v6.x.`),
     Isolation: z.union([z.literal('Container'), z.literal('InProcess'), z.literal('Process'), z.literal('Worker')]).describe(`
         * * Field Name: Isolation
         * * Display Name: Isolation
@@ -5048,6 +5174,12 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, marks this derived agent as the owner's primary instance among multiple instances sharing the same RootBaseAgentID for deterministic routing (e.g., inbound mailbox wakes, inter-agent requests, default dashboard selection).`),
+    Configuration: z.any().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentEntity_IAgentConfiguration
+        * * Description: Unified typed JSON configuration bag (IAgentConfiguration) consolidating operational agent settings across execution, contextWindow, memory, payload, subAgentExecution, attachments, artifacts, scope, skills, clientTools, recording, helperPlugins, instantiation, and promptDefaults. Cascades across Instance -> BaseAgent Chain -> Category -> Parent Categories -> AgentType -> System Default.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent

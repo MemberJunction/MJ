@@ -4,6 +4,10 @@ How MemberJunction agents remember things — the complete architecture for dura
 
 **Audience**: developers building or configuring agents, and anyone debugging "why does (or doesn't) my agent remember X?"
 
+**Canonical Guides:** [Agent Administrator Guide](AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent End-User Guide](AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](BASE_AGENT_REBASE_MAP.md).
+
+> **v6.x `IAgentConfiguration` Note:** Memory settings (`InjectNotes`, `MaxNotesToInject`, `NoteInjectionStrategy`, `InjectExamples`, `MaxExamplesToInject`, `ExampleInjectionStrategy`, `NoteRetentionDays`, `ExampleRetentionDays`, `AutoArchiveEnabled`, `AllowMemoryWrite`, `RerankerConfiguration`) now live canonically under `AIAgent.Configuration.memory.*` (inheriting from `AIAgentCategory.DefaultConfiguration` and `AIAgentType.DefaultAgentConfiguration`) with automatic bidirectional sync to the deprecated legacy columns throughout `v6.x` (removal slated for `v7.0`). See [Agent Administrator Guide §2–3](AGENT_ADMINISTRATOR_GUIDE.md#2-three-table-iagentconfiguration-cascade).
+
 ---
 
 ## 1. The mental model
@@ -36,7 +40,7 @@ The scratchpad is **never** a memory mechanism: it is per-run, in-memory, and no
 
 ## 2. Reading memory: injection at run start
 
-`BaseAgent.InjectContextMemory()` runs at the start of every agent run and prepends a system message containing the agent's relevant notes (and optionally examples), via `AgentContextInjector` (`packages/AI/Agents/src/agent-context-injector.ts`).
+`BaseAgentPromptHelper.InjectContextMemory()` (`packages/AI/Agents/src/helpers/prompt/AgentPromptContextAndDiscoveryHelper.ts`, also accessible via the `@deprecated` `BaseAgent.InjectContextMemory` delegate during `v6.x`) runs at the start of every agent run and prepends a system message containing the agent's relevant notes (and optionally examples), via `AgentContextInjector` (`packages/AI/Agents/src/agent-context-injector.ts`).
 
 ### Retrieval strategies (`AIAgent.NoteInjectionStrategy`)
 

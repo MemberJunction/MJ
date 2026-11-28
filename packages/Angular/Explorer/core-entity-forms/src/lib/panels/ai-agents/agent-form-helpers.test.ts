@@ -20,11 +20,16 @@ import {
     FormatCostUsd,
     FormatDurationBetween,
     FormatDurationMs,
+    FormatStringList,
     FormatTokenCount,
     GetRunResultPreview,
     HasRunResult,
     OrderFlowStepsForPreview,
+    ParseStringList,
+    PatchAgentConfig,
+    ReadAgentConfig,
     ResolveAgentStudioDescriptor,
+    ResolveEffectiveDisplayValues,
     ResolveLinkedPromptsAndActions,
 } from './agent-form-helpers';
 
@@ -289,8 +294,90 @@ describe('OrderFlowStepsForPreview & Formatters', () => {
 
         expect(FlowStepTypeIcon('Prompt')).toContain('comment-dots');
         expect(FlowStepTypeIcon('Action')).toContain('bolt');
+        expect(FlowStepTypeIcon('Custom')).toContain('puzzle-piece');
         expect(DefaultAgentIcon(null, 'Flow')).toContain('diagram-project');
         expect(DefaultAgentIcon(null, 'Realtime')).toContain('tower-broadcast');
         expect(DefaultAgentIcon('fa-solid fa-star', 'Flow')).toBe('fa-solid fa-star');
+    });
+});
+
+describe('IAgentConfiguration cascade & patch helpers (PR #6992)', () => {
+    it('reads, patches, and cleans empty sections on Record.Configuration', () => {
+        const rec: { Configuration: string | null } = { Configuration: null };
+        expect(ReadAgentConfig(rec)).toEqual({});
+
+        PatchAgentConfig(rec, (cfg) => {
+            cfg.execution = { modelSelectionMode: 'Agent', requirePlanMode: true };
+            cfg.scope = { searchScopeAccess: 'Assigned' };
+        });
+
+        expect(rec.Configuration).toBeTruthy();
+        const parsed = ReadAgentConfig(rec);
+        expect(parsed.execution?.modelSelectionMode).toBe('Agent');
+        expect(parsed.execution?.requirePlanMode).toBe(true);
+        expect(parsed.scope?.searchScopeAccess).toBe('Assigned');
+
+        // Clearing all sections sets Configuration back to null
+        PatchAgentConfig(rec, (cfg) => {
+            delete cfg.execution;
+            cfg.scope = {};
+        });
+        expect(rec.Configuration).toBeNull();
+    });
+
+    it('formats and parses comma/newline string lists for payload paths', () => {
+        expect(FormatStringList(['customer.*', 'orderId'])).toBe('customer.*, orderId');
+        expect(FormatStringList(null)).toBe('');
+        expect(ParseStringList(' customer.*, orderId \n totals.net ')).toEqual(['customer.*', 'orderId', 'totals.net']);
+        expect(ParseStringList('   ')).toBeNull();
+    });
+
+    it('resolves effective display values preferring local Configuration > EffectiveAgentProperties > legacy fallback', () => {
+        const effective = {
+            ModelSelectionMode: 'Agent Type',
+            SupportsPlanMode: true,
+            RequirePlanMode: true,
+            DeclareActionsAsNativeTools: false,
+            ExecutionMode: 'Parallel',
+            AllowMemoryWrite: false,
+            SearchScopeAccess: 'Assigned',
+            SkillActivationMode: 'RequestedOnly',
+            AllowEphemeralClientTools: false,
+            AcceptUnregisteredFiles: false,
+            ChatHandlingOption: 'Retry',
+            MessageMode: 'Latest',
+            MaxMessages: 20,
+            RecordingDefault: 'Audio',
+            ArtifactCreationMode: 'System Only',
+            ContextWindowMaxTokens: 64000,
+            CompactionTriggerPercent: 80,
+            CompactionTargetPercent: 50,
+            DefaultPromptEffortLevel: 50,
+            MinExecutionsPerRun: null,
+            MaxExecutionsPerRun: 3,
+            MaxSubAgentConsultRounds: 2,
+            InjectNotes: true,
+            MaxNotesToInject: 5,
+            NoteInjectionStrategy: 'Relevant',
+            InjectExamples: false,
+            MaxExamplesToInject: 3,
+            ExampleInjectionStrategy: 'Semantic',
+            HelperPlugins: [{ seam: 'messaging', driverClass: 'CustomMessagingHelper' }],
+        } as unknown as Parameters<typeof ResolveEffectiveDisplayValues>[1];
+
+        const rec = {
+            Configuration: JSON.stringify({ execution: { modelSelectionMode: 'Agent' } }),
+            ModelSelectionMode: 'Agent Type' as const,
+            SearchScopeAccess: 'All' as const,
+        };
+
+        const out = ResolveEffectiveDisplayValues(rec, effective);
+        // Local Configuration override wins over cascade
+        expect(out.ModelSelectionMode).toBe('Agent');
+        // Cascade wins over legacy column fallback
+        expect(out.SearchScopeAccess).toBe('Assigned');
+        expect(out.RequirePlanMode).toBe(true);
+        expect(out.ExecutionMode).toBe('Parallel');
+        expect(out.HelperPlugins).toEqual([{ seam: 'messaging', driverClass: 'CustomMessagingHelper' }]);
     });
 });

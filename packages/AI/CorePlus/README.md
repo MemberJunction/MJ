@@ -320,19 +320,41 @@ Provider mappings:
 - **Groq**: Experimental reasoning_effort parameter
 - **Gemini**: Reasoning mode intensity
 
-## Agent Instances, Instantiation Config & Policy Ceiling Inheritance
+## Agent Configuration (`IAgentConfiguration`), Instances & Policy Ceiling Inheritance
 
-`@memberjunction/ai-core-plus` defines the shared instantiation schema helpers, strictest-wins chain policy intersection, and ancestor-clamped run-limit resolution used across server engines and Angular UI studios.
+`@memberjunction/ai-core-plus` defines the unified 3-table **`IAgentConfiguration`** contract, bidirectional legacy-column sync helpers, per-agent `helperPlugins` security guards, instantiation schema helpers, strictest-wins chain policy intersection, and ancestor-clamped run-limit resolution used across server engines and Angular UI studios.
+
+### Unified 3-Table `IAgentConfiguration` (`agent-configuration.ts`)
+
+`IAgentConfiguration` is defined canonically in `metadata/entities/JSONType-interfaces/IAgentConfiguration.ts`, auto-copied into `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild` (`npm run sync:json-types`), and re-exported from `agent-configuration.ts`. It powers the 3-table cascade (`AIAgentType.DefaultAgentConfiguration` → `AIAgentCategory.DefaultConfiguration` → `AIAgent.Configuration`), absorbing 49 operational columns from `MJ: AI Agents` and 7 context-window columns from `MJ: AI Agent Types` (kept bidirectionally synchronized through `v6.x` and slated for column removal in `v7.0`):
+
+| Export | Purpose |
+| --- | --- |
+| `IAgentConfiguration` | Strongly-typed 14-section configuration bag (`execution`, `contextWindow`, `memory`, `payload`, `subAgentExecution`, `attachments`, `artifacts`, `scope`, `skills`, `clientTools`, `recording`, `helperPlugins`, `instantiation`, `promptDefaults`). |
+| `ParseAgentConfiguration` | Tolerant, non-throwing JSON parser validating section types (`IsPlainObject` / `Array.isArray`). |
+| `DeepMergeAgentConfigurations` | Non-mutating recursive deep merge across AgentType → Category chain → `BaseAgentID` chain → Agent instance. |
+| `BuildAgentConfigurationFromLegacyFields` / `BuildAgentTypeConfigurationFromLegacyFields` | Extracts an `IAgentConfiguration` snapshot from deprecated legacy columns for dual-read fallback. |
+| `SyncAgentLegacyColumnsAndConfiguration` / `SyncAgentTypeLegacyColumnsAndConfiguration` | Pure bidirectional dirty-field sync core invoked by `MJAIAgentEntityServer.Save()` and `MJAIAgentTypeEntityServer.Save()`. |
+| `LegacyAIAgentConfigColumns` / `LegacyAIAgentTypeConfigColumns` | Exact `Pick<>` types enumerating the 49 + 7 legacy columns kept in sync during `v6.x`. |
+
+### Instantiation, Per-Agent `helperPlugins` Security & Policy Inheritance
 
 | Export | Module | Purpose |
 | --- | --- | --- |
 | `AgentInstantiationMode`, `MAX_AGENT_INHERITANCE_DEPTH` (5) | `agent-instantiation.ts` | Strongly-typed instantiation mode derived from `MJAIAgentEntity['InstantiationMode']` and the maximum prototype chain depth constant. |
-| `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig` | `agent-instantiation.ts` | Typed parser for `TypeConfiguration.instantiation` onboarding hints (suggested names, default icons, personality presets, `maxInstancesPerUser`). |
+| `IAgentInstantiationConfig`, `IAgentPersonalityPreset`, `ParseAgentInstantiationConfig` | `agent-instantiation.ts` | Typed parser for `Configuration.instantiation` / `TypeConfiguration.instantiation` onboarding hints (suggested names, default icons, personality presets, `maxInstancesPerUser`). |
+| `AgentHelperPluginEntry`, `ParseAgentHelperPlugins` | `agent-instantiation.ts` | Typed schema & tolerant parser for admin-authored per-agent `helperPlugins` overrides (`{ seam, driverClass, priority? }`). |
+| `FORBIDDEN_METADATA_HELPER_SEAMS`, `IsForbiddenMetadataHelperSeam` | `agent-instantiation.ts` | Shared security guard blocking metadata overrides of code-only seams (`limits`, `actionPolicy`, `policy`, `permissions`, `permission`) at both entity-save and runtime resolution. |
 | `DeepMergeAgentConfigObjects`, `ParseAgentConfigJsonObject` | `agent-instantiation.ts` | Deterministic root → leaf JSON object merge for `TypeConfiguration` and `AgentTypePromptParams` across `BaseAgentID` chains. |
 | `AgentUserPolicyEngine.GetEffectivePolicyForAgentChain` / `IntersectPolicies` | `AgentUserPolicyEngine.ts` | Intersects active user policies across `[root … leaf]` using strictest-wins ceiling semantics without mutating underlying entities. |
 | `ResolveAgentRunLimits` (`AncestorAgents`, `AncestorUserPolicies`) | `limits-diagnostics.ts` | Clamps derived agent cost, token, time, and iteration ceilings against every ancestor agent and ancestor policy in the chain. |
 
-Full architecture & diagrams: [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md).
+Canonical guides:
+- [Agent Administrator Guide](../../../guides/AGENT_ADMINISTRATOR_GUIDE.md)
+- [Agent Builder & Extension Guide](../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md)
+- [Agent End-User Guide](../../../guides/AGENT_END_USER_GUIDE.md)
+- [BaseAgent Rebase Map](../../../guides/BASE_AGENT_REBASE_MAP.md)
+- [Agent Permissions & Inheritance Guide](../../../guides/AGENT_PERMISSIONS_AND_INHERITANCE_GUIDE.md)
 
 ## Dependencies
 

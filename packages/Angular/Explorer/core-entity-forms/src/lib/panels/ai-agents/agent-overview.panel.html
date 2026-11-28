@@ -77,12 +77,25 @@
                         }
 
                         <div class="ao-hero-meta">
+                            @if (Record.BaseAgentID) {
+                                <button type="button" class="ao-meta-link" (click)="OpenBaseAgent()">
+                                    <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
+                                    Inherits from {{ Record.BaseAgent || 'Base Agent' }}
+                                    <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+                                </button>
+                            }
                             @if (Record.Parent) {
                                 <button type="button" class="ao-meta-link" (click)="OpenParentAgent()">
                                     <i class="fa-solid fa-sitemap" aria-hidden="true"></i>
                                     Child of {{ Record.Parent }}
                                     <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
                                 </button>
+                            }
+                            @if (Effective.HelperPlugins.length > 0) {
+                                <span class="ao-meta-item">
+                                    <i class="fa-solid fa-plug" aria-hidden="true"></i>
+                                    {{ Effective.HelperPlugins.length }} Helper {{ Effective.HelperPlugins.length === 1 ? 'Plugin' : 'Plugins' }}
+                                </span>
                             }
                             @if (Record.OwnerUser) {
                                 <span class="ao-meta-item">
@@ -265,25 +278,25 @@
                             <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Prompts)">
                                 <span class="ao-stage-tag"><i class="fa-solid fa-comment-dots" aria-hidden="true"></i> 1 · Reason</span>
                                 <span class="ao-stage-name">{{ PromptCount }} {{ PromptCount === 1 ? 'Prompt' : 'Prompts' }}</span>
-                                <span class="ao-stage-sub">{{ Record.SupportsPlanMode ? 'Plan Mode ON' : (Record.ModelSelectionMode || 'Agent Type') }}</span>
+                                <span class="ao-stage-sub">{{ ReasonStageCaption }}</span>
                             </button>
                             <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
                             <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Capabilities)">
                                 <span class="ao-stage-tag"><i class="fa-solid fa-bolt" aria-hidden="true"></i> 2 · Act</span>
                                 <span class="ao-stage-name">{{ ActionCount }} Actions · {{ SkillCount }} Skills</span>
-                                <span class="ao-stage-sub">{{ Record.DeclareActionsAsNativeTools ? 'Native tools ON' : 'Standard tools' }}</span>
+                                <span class="ao-stage-sub">{{ Effective.DeclareActionsAsNativeTools ? 'Native tools ON' : 'Standard tools' }}</span>
                             </button>
                             <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
                             <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Capabilities)">
                                 <span class="ao-stage-tag"><i class="fa-solid fa-sitemap" aria-hidden="true"></i> 3 · Delegate</span>
                                 <span class="ao-stage-name">{{ SubAgentCount }} {{ SubAgentCount === 1 ? 'Sub-Agent' : 'Sub-Agents' }}</span>
-                                <span class="ao-stage-sub">{{ Record.ExecutionMode || 'Sequential' }}</span>
+                                <span class="ao-stage-sub">{{ Effective.ExecutionMode || 'Sequential' }}</span>
                             </button>
                             <i class="fa-solid fa-arrow-right ao-stage-arrow" aria-hidden="true"></i>
                             <button type="button" class="ao-stage-node" (click)="NavigateToSection(SectionKeys.Knowledge)">
                                 <span class="ao-stage-tag"><i class="fa-solid fa-brain" aria-hidden="true"></i> 4 · Ground</span>
                                 <span class="ao-stage-name">{{ SearchScopeCount }} Search {{ SearchScopeCount === 1 ? 'Scope' : 'Scopes' }}</span>
-                                <span class="ao-stage-sub">{{ Record.AllowMemoryWrite ? 'Memory write ON' : (Record.SearchScopeAccess || 'All') }}</span>
+                                <span class="ao-stage-sub">{{ Effective.AllowMemoryWrite ? 'Memory write ON' : (Effective.SearchScopeAccess || 'All') }}</span>
                             </button>
                         </div>
                     }
@@ -312,7 +325,7 @@
                         }
                     </div>
                     <div class="ao-bento-foot">
-                        <span>Model selection: {{ Record.ModelSelectionMode || 'Agent Type' }}</span>
+                        <span>Model selection: {{ Effective.ModelSelectionMode || 'Agent Type' }}</span>
                         <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
                     </div>
                 </button>

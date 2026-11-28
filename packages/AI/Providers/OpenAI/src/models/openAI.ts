@@ -1,6 +1,6 @@
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
     buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, ReadOpenAICompatibleToolCalls,
-    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, type OpenAICompatibleToolCallReadout } from "@memberjunction/ai";
+    CHAT_FINISH_REASON_MALFORMED_TOOL_CALL, GetLongRunningAIFetch, type OpenAICompatibleToolCallReadout } from "@memberjunction/ai";
 import { OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
@@ -26,9 +26,11 @@ export class OpenAILLM extends BaseLLM {
         super(apiKey);
 
         // now create the OpenAI instance
-        const params: Record<string, any> = {
-            apiKey
-        }
+        const longRunningFetch = GetLongRunningAIFetch();
+        const params: Record<string, unknown> = {
+            apiKey,
+            ...(longRunningFetch ? { fetch: longRunningFetch } : {}),
+        };
         if (baseURL && baseURL.length > 0) {
             params.baseURL = baseURL; // OpenAI base URL is optional, lots of sub-classes and users might use other providers that are Open AI compatible
         }

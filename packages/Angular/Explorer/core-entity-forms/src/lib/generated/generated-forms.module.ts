@@ -53,6 +53,7 @@ import { MJAIAgentSessionRecordingShardFormComponent } from "./Entities/MJAIAgen
 import { MJAIAgentSkillFormComponent } from "./Entities/MJAIAgentSkill/mjaiagentskill.form.component";
 import { MJAIAgentStepFormComponent } from "./Entities/MJAIAgentStep/mjaiagentstep.form.component";
 import { MJAIAgentStepPathFormComponent } from "./Entities/MJAIAgentStepPath/mjaiagentsteppath.form.component";
+import { MJAIAgentStepTypeFormComponent } from "./Entities/MJAIAgentStepType/mjaiagentsteptype.form.component";
 import { MJAIAgentSuggestionFormComponent } from "./Entities/MJAIAgentSuggestion/mjaiagentsuggestion.form.component";
 import { MJAIAgentTypeFormComponent } from "./Entities/MJAIAgentType/mjaiagenttype.form.component";
 import { MJAIAgentUserPolicyFormComponent } from "./Entities/MJAIAgentUserPolicy/mjaiagentuserpolicy.form.component";
@@ -1019,6 +1020,7 @@ export class GeneratedForms_SubModule_15 { }
 @NgModule({
 declarations: [
     MJAIAgentSearchScopeFormComponent,
+    MJAIAgentStepTypeFormComponent,
     MJAIModelPersonaFormComponent,
     MJAgentChannelParticipantFormComponent,
     MJArtifactUseFormComponent,

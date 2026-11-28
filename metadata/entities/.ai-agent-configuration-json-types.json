@@ -1,0 +1,80 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: AI Agents.Configuration so CodeGen emits a typed ConfigurationObject accessor.",
+      "Source: metadata/entities/JSONType-interfaces/IAgentConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: AI Agents"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAgentConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agents&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agents"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: AI Agent Categories.DefaultConfiguration so CodeGen emits a typed DefaultConfigurationObject accessor.",
+      "Source: metadata/entities/JSONType-interfaces/IAgentConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Categories"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAgentConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Categories&Name=DefaultConfiguration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Categories"
+    }
+  },
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: AI Agent Types.DefaultAgentConfiguration so CodeGen emits a typed DefaultAgentConfigurationObject accessor.",
+      "Source: metadata/entities/JSONType-interfaces/IAgentConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: AI Agent Types"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IAgentConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IAgentConfiguration.ts"
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Types&Name=DefaultAgentConfiguration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Types"
+    }
+  }
+]

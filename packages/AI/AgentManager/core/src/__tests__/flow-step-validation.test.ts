@@ -457,6 +457,35 @@ describe('ValidateFlowGraph — what the runtime refuses is refused here', () =>
         expect(errors).toContain('decisions.unknown1');
         expect(errors).toContain('decisions.unknown2');
     });
+
+    it('C-R4-1: accepts valid Custom flows and refuses Custom combined with object-configured ForEach(enqueue)', () => {
+        const validCustom: AgentSpec = {
+            Name: 'Custom Flow',
+            Steps: [
+                { Name: 'Compliance Gate', StepType: 'Custom', StartingStep: true, Configuration: { stepType: 'ApprovalGate' } },
+                { Name: 'Finish', StepType: 'Action', ActionID: 'act-1' },
+            ],
+            Paths: [path('Compliance Gate', 'Finish')],
+        };
+        expect(validate(validCustom)).toEqual([]);
+
+        const mixedObjectEnqueue: AgentSpec = {
+            Name: 'Mixed Custom + ForEach Enqueue Flow',
+            Steps: [
+                { Name: 'Compliance Gate', StepType: 'Custom', StartingStep: true, Configuration: { stepType: 'ApprovalGate' } },
+                {
+                    Name: 'Fan Out',
+                    StepType: 'ForEach',
+                    Configuration: { collectionPath: 'payload.items', enqueue: { agentName: 'Worker' } },
+                },
+            ],
+            Paths: [path('Compliance Gate', 'Fan Out')],
+        };
+        const errors = validate(mixedObjectEnqueue);
+        expect(errors).toHaveLength(1);
+        expect(errors[0]).toMatch(/^❌ \[UnsupportedStepType\]/);
+        expect(errors[0]).toContain('Fan Out');
+    });
 });
 
 describe('StepConfigurationText', () => {

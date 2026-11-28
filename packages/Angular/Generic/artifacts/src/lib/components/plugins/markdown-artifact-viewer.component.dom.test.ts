@@ -2106,7 +2106,12 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
       expect(mdDownload).toHaveBeenCalledWith('See Pricing Policy and Executive Memo.', expect.any(String));
 
       await comp.ExportPDF();
-      expect(pdfExport).toHaveBeenCalledWith(expect.stringContaining('See Pricing Policy and Executive Memo.'), expect.any(String), 'portrait');
+      expect(pdfExport).toHaveBeenCalledWith(
+        expect.stringContaining('See Pricing Policy and Executive Memo.'),
+        expect.any(String),
+        'portrait',
+        expect.objectContaining({ ExportMode: 'clean' }),
+      );
       expect(pdfExport.mock.calls[0][0]).not.toContain('"_mode":"mention"');
       expect(comp.MarkdownContent).toBe(content);
     } finally {
@@ -2269,5 +2274,61 @@ describe('MarkdownArtifactViewerComponent (DOM)', () => {
     expect(rendered).toContain('"Open Order 7 Line 2"');
     expect(rendered).toContain('[Beta](#mj-doc-link-unreadable/');
     expect(rendered).toContain('[Order 9 Line 1](#mj-doc-link-unreadable/');
+  });
+
+  it('supports Design Presets, Paginated Sheet View, live stats cycling, and Export & Preflight Studio', async () => {
+    const content = [
+      '# Q4 Product Review',
+      '',
+      'Quarterly metrics expanded cleanly across enterprise accounts.',
+      '',
+      '| C1 | C2 | C3 | C4 | C5 | C6 | C7 |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+      '| 1 | 2 | 3 | 4 | 5 | 6 | 7 |',
+    ].join('\n');
+
+    const f = await renderDocsViewer(content, false);
+    const comp = f.componentInstance;
+    f.detectChanges();
+
+    const root = f.nativeElement as HTMLElement;
+    expect(root.querySelector('[data-testid="docs-status-footer"]')).toBeTruthy();
+
+    // Cycle stats metric: words -> chars -> charsNoSpaces
+    const statsBtn = root.querySelector<HTMLButtonElement>('[data-testid="docs-stats-cycle-btn"]');
+    expect(statsBtn?.textContent).toContain('words');
+    statsBtn?.click();
+    f.detectChanges();
+    expect(statsBtn?.textContent).toContain('chars');
+    statsBtn?.click();
+    f.detectChanges();
+    expect(statsBtn?.textContent).toContain('no spaces');
+
+    // Open Design popover, apply Executive Memo preset, and switch to Paginated Sheet View
+    comp.ToggleDesignPopover();
+    f.detectChanges();
+    expect(root.querySelector('[data-testid="docs-design-popover"]')).toBeTruthy();
+    comp.ApplyDesignPreset('executive-memo');
+    comp.UpdateDesignConfig({ Watermark: 'DRAFT', RunningHeader: 'Executive Briefing' });
+    comp.SetPageLayoutMode('paginated');
+    f.detectChanges();
+
+    const pageEl = root.querySelector<HTMLElement>('[data-testid="docs-canvas-page"]');
+    expect(pageEl?.getAttribute('data-doc-preset')).toBe('executive-memo');
+    expect(pageEl?.classList.contains('mj-docs-page--paginated')).toBe(true);
+    expect(root.querySelector('[data-testid="docs-paginated-watermark"]')?.textContent?.trim()).toBe('DRAFT');
+    expect(root.querySelector('[data-testid="docs-paginated-footer"]')).toBeTruthy();
+
+    // Open Export & Preflight dialog and verify wide portrait table warning + quick Landscape fix
+    comp.OpenExportDialog('docx');
+    f.detectChanges();
+    expect(comp.ExportPreflightReport?.WarningCount).toBeGreaterThanOrEqual(1);
+    expect(comp.ExportPreflightReport?.Issues.some((i) => i.Code === 'wide_table_portrait')).toBe(true);
+    expect(root.querySelector('[data-testid="preflight-issue-wide_table_portrait"]')).toBeTruthy();
+
+    comp.ExportDialogOrientation = 'landscape';
+    comp.RefreshExportPreflight();
+    f.detectChanges();
+    expect(comp.ExportPreflightReport?.Issues.some((i) => i.Code === 'wide_table_portrait')).toBe(false);
   });
 });

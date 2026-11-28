@@ -18,6 +18,7 @@ you're touching**. Everything else loads on demand — see
 
 ### 1. SAFE COMMITS & PR WORKFLOW
 - **PR & branch tasks**: When asked to create, fix, or update a PR/branch, commit and push your changes to that branch
+- **Changeset required**: Every PR touching `packages/`, migrations, or `metadata/` needs a `.changeset/<slug>.md` ([rules](.claude/rules/changesets.md)); run `npm run check:changeset`
 - **Shared checkouts**: When not asked for a PR or commit, ask before running `git commit`
 - **Stage explicitly**: Use `git add <file>` for your task's files — **NEVER `git add -A`/`.`** or commit unrelated WIP
 - **NEVER commit or push directly to `next` or `main`**

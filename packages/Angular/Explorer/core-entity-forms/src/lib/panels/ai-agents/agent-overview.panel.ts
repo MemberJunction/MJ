@@ -23,6 +23,7 @@ import {
     BuildUnifiedSubAgents,
     ComputeAgentTelemetry,
     DefaultAgentIcon,
+    EffectiveAgentDisplayValues,
     FlowStepPreviewRow,
     FlowStepTypeIcon,
     FormatCostUsd,
@@ -30,6 +31,7 @@ import {
     FormatTokenCount,
     OrderFlowStepsForPreview,
     ResolveAgentStudioDescriptor,
+    ResolveEffectiveDisplayValues,
     ResolveLinkedPromptsAndActions,
 } from './agent-form-helpers';
 
@@ -89,6 +91,17 @@ export class AgentOverviewPanel extends BaseFormPanel<MJAIAgentEntity> implement
 
     public get HostForm(): MJAIAgentFormComponentExtended | null {
         return (this.FormComponent as unknown as MJAIAgentFormComponentExtended) ?? null;
+    }
+
+    /** Effective operational properties resolved across local Configuration edits and 3-table cascade. */
+    public get Effective(): EffectiveAgentDisplayValues {
+        return ResolveEffectiveDisplayValues(this.Record, this.HostForm?.EffectiveProperties);
+    }
+
+    public get ReasonStageCaption(): string {
+        if (this.Effective.RequirePlanMode) return 'Plan Mode REQUIRED';
+        if (this.Effective.SupportsPlanMode) return 'Plan Mode ON';
+        return this.Effective.ModelSelectionMode || 'Agent Type';
     }
 
     public get AgentType(): MJAIAgentTypeEntity | null {
@@ -192,6 +205,12 @@ export class AgentOverviewPanel extends BaseFormPanel<MJAIAgentEntity> implement
     public OpenParentAgent(): void {
         if (!this.Record?.ParentID) return;
         SharedService.Instance.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(this.Record.ParentID));
+    }
+
+    /** Opens the prototype base agent record (`BaseAgentID`) in Explorer. */
+    public OpenBaseAgent(): void {
+        if (!this.Record?.BaseAgentID) return;
+        SharedService.Instance.OpenEntityRecord('MJ: AI Agents', CompositeKey.FromID(this.Record.BaseAgentID));
     }
 
     /** Opens the Permissions dialog on the host form. */

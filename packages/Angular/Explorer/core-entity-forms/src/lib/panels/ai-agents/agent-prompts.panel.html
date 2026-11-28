@@ -22,7 +22,8 @@
                     @if (EditMode) {
                         <select
                             class="mj-input ap-mode-select"
-                            [(ngModel)]="Record.ModelSelectionMode"
+                            [ngModel]="ModelSelectionMode"
+                            (ngModelChange)="SetModelSelectionMode($event)"
                             name="agentPromptsModelSelectionMode"
                             aria-label="Model Selection Mode">
                             @for (mode of ModelSelectionModes; track mode) {
@@ -30,7 +31,10 @@
                             }
                         </select>
                     } @else {
-                        <span class="ap-pill">{{ Record.ModelSelectionMode || 'Agent Type' }}</span>
+                        <span class="ap-pill">{{ ModelSelectionMode }}</span>
+                        @if (IsModelSelectionInherited && Record.BaseAgentID) {
+                            <span class="ap-mode-label">(inherited)</span>
+                        }
                     }
                 </div>
                 @if (EditMode) {

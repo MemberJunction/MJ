@@ -133,6 +133,8 @@ Concepts are now proposed from structure (MJ 6667), from documents (the `Graph` 
 - A proposer skips any name already in the graph in any status, so a rejected proposal stays rejected.
 - A proposer writes nothing by default. Writing is an explicit option.
 
+**Proposed amendment** (the sponsor, 2026-11-28, for the December 3 review; [MJ 6996](https://github.com/MemberJunction/MJ/issues/6996)): widen the first rule from names to meaning. Before writing, a proposer resolves each candidate against the existing concepts through one shared step: vector similarity narrows the field, then a model decides within the concept type, using each concept's description. The outcome is *same concept* (propose a synonym or `Same As`), *narrower or broader* (propose `BroaderThan`) or *distinct* (propose a new concept), and every outcome is a `Proposed` row through decision 2's ledger. A candidate that resolves as *same* to a rejected concept is skipped, so a rejection still sticks under another name. Today the Content Pipeline matches by word overlap with names and synonyms (`ConceptSeedClustering`), which misses a near-duplicate under a different name. Adapted from the entity-resolution step in Anthropic's [knowledge graph cookbook](https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide).
+
 ### 7. The DBAutoDoc interface
 
 MJ 6586 certifies schema descriptions and wants query history as evidence.
@@ -175,7 +177,9 @@ Betty consumes Canon for many tenants, so its plan depends on 5b and 5c: its tra
 
 Not started and not to be opened as pull requests. Each becomes a `canon` issue and is taken up at the first monthly review.
 
-- Steward tools in the Graph Explorer: a review queue for proposed concepts and edges, and matching by meaning, not only by name and synonym.
+- Steward tools in the Graph Explorer: a review queue for proposed concepts and edges. Matching by meaning moved to proposal time, where every proposer gets it: [MJ 6996](https://github.com/MemberJunction/MJ/issues/6996), and decision 6's proposed amendment.
+- Extraction quality ([MJ 6997](https://github.com/MemberJunction/MJ/issues/6997)): a hand-labeled gold set scored for precision and recall in the weekly live-model tier, feeding MJ 6765's health scorecard. The same method checks MJ 6769's sensitivity screen.
+- Effective dates ([MJ 6998](https://github.com/MemberJunction/MJ/issues/6998)): a fact that holds from one date to another, which `Supersedes` cannot express. A schema change for the review.
 - Learning from usage: query runs and Skip's approved queries as sources of proposed `Measures` edges.
 - Gap alerts: log the `NO_MATCH` and `AMBIGUOUS_CONCEPT` results from MJ 6667, so stewards see what people ask about that Canon does not define.
 - Wiring workflow promotion discovery and workflow health scoring to a scheduled job.
@@ -248,3 +252,4 @@ December 1 closes the *coordination* problem. It does not mean the v6.3 learning
 | 2026-11-22 | The sponsor asked to merge the plan-only pull requests rather than hold them for the dates, which were meant to pace the team over the holiday, not to slow ready work. MJ 6765 and 6769 merged; decision 7 was written into MJ 6586. MJ 4155's future is the sponsor's call (close, with its memory recommendations carried into 6213). Code pull requests wait. |
 | 2026-11-23 | MJ 4155 closed by the sponsor. Its memory recommendations R1, R2, R4 and R10 moved into MJ 6213, which `arie-glazier-bcc` picks up the week of November 30 after a deep review of the Canon unification plan, since Canon has grown a great deal since 6213 was written. |
 | 2026-11-24 | MJ 6404 merged (`35e1257f`): workstream 1 is done. Skip client 50 and Skip-Brain 677 re-cut by `MS-BC` and green, meeting the November 25 outcome; they are reviewed and merged by `jordanfanapour` and `MS-BC`, in that order. MJ 6835 merged. The integration tier on `next` stayed green. |
+| 2026-11-28 | A review of Anthropic's [knowledge graph cookbook](https://platform.claude.com/cookbook/capabilities-knowledge-graph-guide) found six ideas, all accepted by the sponsor. Filed as `canon` issues for the December 3 review: [MJ 6996](https://github.com/MemberJunction/MJ/issues/6996) (resolve proposed concepts by meaning, with a proposed amendment to decision 6), [MJ 6997](https://github.com/MemberJunction/MJ/issues/6997) (gold-set extraction eval) and [MJ 6998](https://github.com/MemberJunction/MJ/issues/6998) (effective dates). The other three are text in MJ 6765 and MJ 6769: cited retrieval made a requirement of Rule 4, profiles for the most-connected concepts in Rule 5, and model tiering, prompt caching and the Batch API for continuous ingest (config, after December 1). |

@@ -5,7 +5,6 @@
         "codegen-determinism.CD2": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
         "codegen-determinism.CD3": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
         "codegen-determinism.CD5": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
-        "codegen-determinism.CD6": "PG metadata gap: the hierarchy fields SQL Server views carry (ParentID Depth/Path/IsLeaf/ChildCount, 48 fields) are absent, and PG has an extra MJ: System Events entity with no generated class.",
         "comms-v2-send.CV2S6": "Since #6766 (Communications v2): the check needs the server transport's raw SQL Server pool to age a log row, and has no PostgreSQL implementation.",
         "comms-v2-send.CV2S7": "Since #6766 (Communications v2): the check needs the server transport's raw SQL Server pool to age a log row, and has no PostgreSQL implementation.",
         "docs-slides-sheets-library-client.DSLC5": "PG metadata gap: no EntityField rows for MJ: Artifact Guest Share Links.Artifact, ArtifactVersion and CreatedByUser.",

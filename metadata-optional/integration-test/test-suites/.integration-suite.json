@@ -175,6 +175,16 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT195 - Agent Extensions, Configuration Cascade, and Sandbox Enforcement",
+            "Sequence": 49
+          },
+          "primaryKey": {
+            "ID": "BFE11147-30C5-42C9-A19A-C2D635C54CAD"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT193 - List Member Mutations (client transport)",
             "Sequence": 70,
             "Status": "Active"

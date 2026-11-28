@@ -2,11 +2,20 @@ import { UUIDsEqual, NormalizeUUID, FilterByUUIDs } from '@memberjunction/global
 import type {
     MJActionEntity,
     MJAIAgentActionEntity,
+    MJAIAgentEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentTypeEntity,
 } from '@memberjunction/core-entities';
-import type { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import {
+    ParseAgentConfiguration,
+    type AgentHelperPluginEntry,
+    type IAgentConfiguration,
+    type MJAIAgentEntityExtended,
+    type MJAIAgentRunEntityExtended,
+    type MJAIPromptEntityExtended,
+} from '@memberjunction/ai-core-plus';
+import type { EffectiveAgentProperties } from '@memberjunction/ai-engine-base';
 
 /** Section keys for the modern AI Agent form's first-class left-rail contributions. */
 export const AGENT_SECTION_KEYS = {
@@ -354,8 +363,165 @@ export function FlowStepTypeIcon(stepType: string | null | undefined, isStart = 
         case 'subagent': return 'fa-solid fa-sitemap';
         case 'foreach':
         case 'while': return 'fa-solid fa-repeat';
+        case 'custom': return 'fa-solid fa-puzzle-piece';
         default: return 'fa-solid fa-circle-nodes';
     }
+}
+
+/**
+ * Reads the parsed `IAgentConfiguration` JSON bag from an agent record, returning `{}`
+ * when `Configuration` is null, empty, or not yet configured.
+ */
+export function ReadAgentConfig(
+    record: Pick<MJAIAgentEntity, 'Configuration'> | null | undefined,
+): IAgentConfiguration {
+    return ParseAgentConfiguration(record?.Configuration) ?? {};
+}
+
+/**
+ * Mutates an agent's canonical `Configuration` JSON (`IAgentConfiguration`) cleanly and writes
+ * the serialized result back to `record.Configuration` so `MJAIAgentEntityServer.Save()`
+ * persists it and bidirectionally syncs legacy v6.x columns automatically.
+ */
+export function PatchAgentConfig(
+    record: Pick<MJAIAgentEntity, 'Configuration'>,
+    mutator: (draft: IAgentConfiguration) => void,
+): IAgentConfiguration {
+    const current = ReadAgentConfig(record);
+    const draft = JSON.parse(JSON.stringify(current)) as IAgentConfiguration;
+    mutator(draft);
+
+    // Strip empty section objects so the serialized Configuration JSON stays compact and clean
+    for (const key of Object.keys(draft) as Array<keyof IAgentConfiguration>) {
+        const val = draft[key];
+        if (val !== null && typeof val === 'object' && !Array.isArray(val) && Object.keys(val).length === 0) {
+            delete draft[key];
+        }
+    }
+
+    record.Configuration = Object.keys(draft).length > 0 ? JSON.stringify(draft, null, 2) : null;
+    return draft;
+}
+
+/** Formats a string array (`Configuration.payload.*Paths`) into a comma-separated editable string. */
+export function FormatStringList(items: readonly string[] | null | undefined): string {
+    if (!items || items.length === 0) return '';
+    return items.join(', ');
+}
+
+/** Parses a comma- or newline-delimited string into a trimmed `string[]` (or `null` when empty). */
+export function ParseStringList(raw: string | null | undefined): string[] | null {
+    if (!raw) return null;
+    const parts = raw
+        .split(/[\n,]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+    return parts.length > 0 ? parts : null;
+}
+
+/** Effective operational configuration values resolved across local edits, 3-table cascade, and legacy fallback. */
+export interface EffectiveAgentDisplayValues {
+    ModelSelectionMode: MJAIAgentEntity['ModelSelectionMode'];
+    SupportsPlanMode: boolean;
+    RequirePlanMode: boolean;
+    DeclareActionsAsNativeTools: boolean;
+    ExecutionMode: MJAIAgentEntity['ExecutionMode'];
+    AllowMemoryWrite: boolean;
+    SearchScopeAccess: MJAIAgentEntity['SearchScopeAccess'];
+    SkillActivationMode: MJAIAgentEntity['SkillActivationMode'];
+    AllowEphemeralClientTools: boolean;
+    AcceptUnregisteredFiles: boolean;
+    ChatHandlingOption: MJAIAgentEntity['ChatHandlingOption'];
+    MessageMode: MJAIAgentEntity['MessageMode'];
+    MaxMessages: number | null;
+    RecordingDefault: MJAIAgentEntity['RecordingDefault'];
+    ArtifactCreationMode: MJAIAgentEntity['ArtifactCreationMode'];
+    ContextWindowMaxTokens: number | null;
+    CompactionTriggerPercent: number | null;
+    CompactionTargetPercent: number | null;
+    DefaultPromptEffortLevel: number | null;
+    MinExecutionsPerRun: number | null;
+    MaxExecutionsPerRun: number | null;
+    MaxSubAgentConsultRounds: number | null;
+    InjectNotes: boolean;
+    MaxNotesToInject: number | null;
+    NoteInjectionStrategy: MJAIAgentEntity['NoteInjectionStrategy'];
+    InjectExamples: boolean;
+    MaxExamplesToInject: number | null;
+    ExampleInjectionStrategy: MJAIAgentEntity['ExampleInjectionStrategy'];
+    HelperPlugins: AgentHelperPluginEntry[];
+}
+
+/**
+ * Resolves effective display values for an AI Agent across:
+ * 1. Explicit unsaved/saved values in `record.Configuration` (`IAgentConfiguration`),
+ * 2. The 3-table cascade (`AIEngineBase.ResolveEffectiveAgentProperties`: AgentType → Categories → BaseAgent → Agent),
+ * 3. Legacy flat columns on `record` as final fallback for partial/unmigrated rows.
+ */
+export function ResolveEffectiveDisplayValues(
+    record: Partial<MJAIAgentEntity> | null | undefined,
+    effective: EffectiveAgentProperties | null | undefined,
+): EffectiveAgentDisplayValues {
+    const cfg = record?.Configuration ? ReadAgentConfig({ Configuration: record.Configuration }) : {};
+    return {
+        ModelSelectionMode:
+            cfg.execution?.modelSelectionMode ?? effective?.ModelSelectionMode ?? record?.ModelSelectionMode ?? 'Agent Type',
+        SupportsPlanMode:
+            cfg.execution?.supportsPlanMode ?? effective?.SupportsPlanMode ?? record?.SupportsPlanMode ?? true,
+        RequirePlanMode:
+            cfg.execution?.requirePlanMode ?? effective?.RequirePlanMode ?? record?.RequirePlanMode ?? false,
+        DeclareActionsAsNativeTools:
+            cfg.execution?.declareActionsAsNativeTools ?? effective?.DeclareActionsAsNativeTools ?? record?.DeclareActionsAsNativeTools ?? true,
+        ExecutionMode:
+            cfg.subAgentExecution?.mode ?? effective?.ExecutionMode ?? record?.ExecutionMode ?? 'Sequential',
+        AllowMemoryWrite:
+            cfg.memory?.allowMemoryWrite ?? effective?.AllowMemoryWrite ?? record?.AllowMemoryWrite ?? true,
+        SearchScopeAccess:
+            cfg.scope?.searchScopeAccess ?? effective?.SearchScopeAccess ?? record?.SearchScopeAccess ?? 'All',
+        SkillActivationMode:
+            cfg.skills?.activationMode ?? effective?.SkillActivationMode ?? record?.SkillActivationMode ?? 'Auto',
+        AllowEphemeralClientTools:
+            cfg.clientTools?.allowEphemeral ?? effective?.AllowEphemeralClientTools ?? record?.AllowEphemeralClientTools ?? true,
+        AcceptUnregisteredFiles:
+            cfg.attachments?.acceptUnregisteredFiles ?? effective?.AcceptUnregisteredFiles ?? record?.AcceptUnregisteredFiles ?? false,
+        ChatHandlingOption:
+            cfg.execution?.chatHandlingOption ?? effective?.ChatHandlingOption ?? record?.ChatHandlingOption ?? null,
+        MessageMode:
+            cfg.attachments?.messageMode ?? effective?.MessageMode ?? record?.MessageMode ?? 'None',
+        MaxMessages:
+            cfg.attachments?.maxMessages ?? effective?.MaxMessages ?? record?.MaxMessages ?? null,
+        RecordingDefault:
+            cfg.recording?.defaultMode ?? effective?.RecordingDefault ?? record?.RecordingDefault ?? null,
+        ArtifactCreationMode:
+            cfg.artifacts?.creationMode ?? effective?.ArtifactCreationMode ?? record?.ArtifactCreationMode ?? 'Always',
+        ContextWindowMaxTokens:
+            cfg.contextWindow?.maxTokens ?? effective?.ContextWindowMaxTokens ?? record?.ContextWindowMaxTokens ?? null,
+        CompactionTriggerPercent:
+            cfg.contextWindow?.compactionTriggerPercent ?? effective?.CompactionTriggerPercent ?? record?.CompactionTriggerPercent ?? null,
+        CompactionTargetPercent:
+            cfg.contextWindow?.compactionTargetPercent ?? effective?.CompactionTargetPercent ?? record?.CompactionTargetPercent ?? null,
+        DefaultPromptEffortLevel:
+            cfg.execution?.defaultPromptEffortLevel ?? effective?.DefaultPromptEffortLevel ?? record?.DefaultPromptEffortLevel ?? null,
+        MinExecutionsPerRun:
+            cfg.subAgentExecution?.minExecutionsPerRun ?? effective?.MinExecutionsPerRun ?? record?.MinExecutionsPerRun ?? null,
+        MaxExecutionsPerRun:
+            cfg.subAgentExecution?.maxExecutionsPerRun ?? effective?.MaxExecutionsPerRun ?? record?.MaxExecutionsPerRun ?? null,
+        MaxSubAgentConsultRounds:
+            cfg.subAgentExecution?.maxConsultRounds ?? effective?.MaxSubAgentConsultRounds ?? record?.MaxSubAgentConsultRounds ?? null,
+        InjectNotes:
+            cfg.memory?.injectNotes ?? effective?.InjectNotes ?? record?.InjectNotes ?? true,
+        MaxNotesToInject:
+            cfg.memory?.maxNotesToInject ?? effective?.MaxNotesToInject ?? record?.MaxNotesToInject ?? null,
+        NoteInjectionStrategy:
+            cfg.memory?.noteInjectionStrategy ?? effective?.NoteInjectionStrategy ?? record?.NoteInjectionStrategy ?? 'Relevant',
+        InjectExamples:
+            cfg.memory?.injectExamples ?? effective?.InjectExamples ?? record?.InjectExamples ?? false,
+        MaxExamplesToInject:
+            cfg.memory?.maxExamplesToInject ?? effective?.MaxExamplesToInject ?? record?.MaxExamplesToInject ?? null,
+        ExampleInjectionStrategy:
+            cfg.memory?.exampleInjectionStrategy ?? effective?.ExampleInjectionStrategy ?? record?.ExampleInjectionStrategy ?? 'Semantic',
+        HelperPlugins: effective?.HelperPlugins ?? cfg.helperPlugins ?? [],
+    };
 }
 
 /** Maps an Agent Type name to a clean default Font Awesome icon when the agent has no custom IconClass. */

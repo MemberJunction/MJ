@@ -3,7 +3,7 @@ import { Subject } from 'rxjs';
 import { BaseEntity, RunView } from '@memberjunction/core';
 import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, type EffectiveAgentProperties } from '@memberjunction/ai-engine-base';
 import { RegisterClass, RegisterClassEx, UUIDsEqual } from '@memberjunction/global';
 import {
     BaseFormComponent,
@@ -49,6 +49,12 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
     /** Resolved AI Agent Type metadata for the active record. */
     public AgentType: MJAIAgentTypeEntity | null = null;
 
+    /**
+     * Effective cascaded operational properties across `AgentType -> Categories -> BaseAgent Chain -> Agent`
+     * (with narrow-only security clamps applied by `AIEngineBase.ResolveEffectiveAgentProperties`).
+     */
+    public EffectiveProperties: EffectiveAgentProperties | null = null;
+
     /** Emits whenever `AgentType` finishes loading or changes (panels subscribe to re-evaluate gating). */
     public readonly AgentTypeChanged$ = new Subject<MJAIAgentTypeEntity | null>();
 
@@ -77,11 +83,28 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     public override async ngOnInit(): Promise<void> {
         this.tryResolveAgentTypeSync();
+        this.RefreshEffectiveProperties();
         await super.ngOnInit();
         await Promise.all([
             this.ResolveAgentType(),
             this.RefreshPermissionState(),
         ]);
+        this.RefreshEffectiveProperties();
+    }
+
+    /** Computes effective 3-table cascaded properties via `AIEngineBase` (gracefully null when engine uninitialized). */
+    public RefreshEffectiveProperties(): void {
+        if (!this.record) {
+            this.EffectiveProperties = null;
+            return;
+        }
+        try {
+            if (typeof AIEngineBase.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                this.EffectiveProperties = AIEngineBase.Instance.ResolveEffectiveAgentProperties(this.record);
+            }
+        } catch {
+            this.EffectiveProperties = null;
+        }
     }
 
     /**
@@ -247,6 +270,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             const saved = await super.InternalSaveRecord();
             if (saved) {
                 await this.ResolveAgentType(true);
+                this.RefreshEffectiveProperties();
             }
             return saved;
         }
@@ -288,6 +312,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             if (submitted) {
                 this.agentTypeSection?.OnHostSaveCompleted();
                 await this.ResolveAgentType(true);
+                this.RefreshEffectiveProperties();
             }
             return submitted;
         } finally {

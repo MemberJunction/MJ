@@ -10,7 +10,13 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AIAgentManagementService } from '../../custom/AIAgents/ai-agent-management.service';
 import type { MJAIAgentFormComponentExtended } from '../../custom/AIAgents/ai-agent-form.component';
-import { AGENT_SECTION_KEYS, ResolveLinkedPromptsAndActions } from './agent-form-helpers';
+import {
+    AGENT_SECTION_KEYS,
+    PatchAgentConfig,
+    ReadAgentConfig,
+    ResolveEffectiveDisplayValues,
+    ResolveLinkedPromptsAndActions,
+} from './agent-form-helpers';
 
 /**
  * Prompts & Models panel (`BaseFormPanel` — `after-fields`, `sortKey: 180`, `inclusion: 'Primary'`).
@@ -51,6 +57,29 @@ export class AgentPromptsPanel extends BaseFormPanel<MJAIAgentEntity> implements
     public Loading = false;
     public Prompts: MJAIPromptEntityExtended[] = [];
     public AgentPromptLinks: MJAIAgentPromptEntity[] = [];
+
+    private get hostForm(): MJAIAgentFormComponentExtended | null {
+        return (this.FormComponent as unknown as MJAIAgentFormComponentExtended) ?? null;
+    }
+
+    /** Effective model selection mode resolved through the 3-table `IAgentConfiguration` cascade. */
+    public get ModelSelectionMode(): MJAIAgentEntity['ModelSelectionMode'] {
+        return ResolveEffectiveDisplayValues(this.Record, this.hostForm?.EffectiveProperties).ModelSelectionMode;
+    }
+
+    /** True when `Configuration.execution.modelSelectionMode` is not explicitly set on this agent. */
+    public get IsModelSelectionInherited(): boolean {
+        return ReadAgentConfig(this.Record).execution?.modelSelectionMode == null;
+    }
+
+    /** Writes `Configuration.execution.modelSelectionMode` (server-side sync keeps v6.x column aligned). */
+    public SetModelSelectionMode(mode: MJAIAgentEntity['ModelSelectionMode']): void {
+        if (!this.EditMode || !this.Record) return;
+        PatchAgentConfig(this.Record, (cfg) => {
+            cfg.execution = { ...(cfg.execution ?? {}), modelSelectionMode: mode };
+        });
+        this.cdr.markForCheck();
+    }
 
     public async ngOnInit(): Promise<void> {
         await this.loadPrompts();

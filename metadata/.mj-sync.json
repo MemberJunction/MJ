@@ -61,6 +61,7 @@
     "agent-request-types",
     "ai-agent-channels",
     "agent-types",
+    "agent-step-types",
     "client-tool-definitions",
     "rubric-scales",
     "rubrics",

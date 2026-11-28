@@ -46,8 +46,29 @@ export interface IAgentInstantiationConfig {
     personalityPresets?: IAgentPersonalityPreset[];
 }
 
+// Only `__proto__` is dangerous for own-key assignment on plain objects; preserve legitimate
+// free-form user schema keys like `constructor` or `prototype` in TypeConfiguration/promptParams.
+const FORBIDDEN_JSON_OBJECT_KEYS = new Set(['__proto__']);
+
 function isJsonObject(value: AgentConfigJsonValue | undefined): value is AgentConfigJsonObject {
     return value !== null && value !== undefined && typeof value === 'object' && !Array.isArray(value);
+}
+
+function sanitizeJsonValue(value: AgentConfigJsonValue): AgentConfigJsonValue {
+    if (Array.isArray(value)) {
+        return value.map((item) => sanitizeJsonValue(item));
+    }
+    if (isJsonObject(value)) {
+        const clean: AgentConfigJsonObject = {};
+        for (const key of Object.keys(value)) {
+            if (FORBIDDEN_JSON_OBJECT_KEYS.has(key)) {
+                continue;
+            }
+            clean[key] = sanitizeJsonValue(value[key]);
+        }
+        return clean;
+    }
+    return value;
 }
 
 function parseJsonObject(raw: string | null | undefined): AgentConfigJsonObject | null {
@@ -56,7 +77,7 @@ function parseJsonObject(raw: string | null | undefined): AgentConfigJsonObject 
     }
     try {
         const parsed = JSON.parse(raw) as AgentConfigJsonValue;
-        return isJsonObject(parsed) ? parsed : null;
+        return isJsonObject(parsed) ? (sanitizeJsonValue(parsed) as AgentConfigJsonObject) : null;
     } catch {
         return null;
     }
@@ -157,10 +178,16 @@ export function DeepMergeAgentConfigObjects(
 ): AgentConfigJsonObject {
     const merged: AgentConfigJsonObject = {};
     for (const key of Object.keys(base)) {
+        if (FORBIDDEN_JSON_OBJECT_KEYS.has(key)) {
+            continue;
+        }
         merged[key] = base[key];
     }
     for (const key of Object.keys(override)) {
-        const baseVal = merged[key];
+        if (FORBIDDEN_JSON_OBJECT_KEYS.has(key)) {
+            continue;
+        }
+        const baseVal = Object.prototype.hasOwnProperty.call(merged, key) ? merged[key] : undefined;
         const overVal = override[key];
         if (isJsonObject(baseVal) && isJsonObject(overVal)) {
             merged[key] = DeepMergeAgentConfigObjects(baseVal, overVal);
@@ -169,6 +196,105 @@ export function DeepMergeAgentConfigObjects(
         }
     }
     return merged;
+}
+
+/**
+ * Strongly-typed entry inside `AIAgent.Configuration.helperPlugins` (or `TypeConfiguration.helperPlugins`)
+ * configuring a per-agent pluggable `BaseAgent*Helper` seam override (Extension Point #3).
+ */
+export interface AgentHelperPluginEntry {
+    /** Canonical seam key (e.g. `'messaging'`, `'payload'`, `'compaction'`, `'prompt'`, `'actions'`). */
+    seam: string;
+    /** Registered `@RegisterClass(BaseAgent<Seam>Helper, driverClass)` key. */
+    driverClass: string;
+    /** Optional precedence weight when merging multiple plugin lists (higher wins). */
+    priority?: number;
+}
+
+/**
+ * Canonical `BaseAgent` helper seam keys recognized across runtime resolution and metadata validation.
+ */
+export const VALID_AGENT_HELPER_SEAMS: ReadonlySet<string> = new Set<string>([
+    'messaging',
+    'payload',
+    'compaction',
+    'realtime',
+    'iteration',
+    'skills',
+    'limits',
+    'actions',
+    'actionPolicy',
+    'prompt',
+    'subAgents',
+    'steps',
+    'setup',
+]);
+
+/**
+ * Lowercased helper seam names that are strictly **code-only** — metadata overrides via
+ * `helperPlugins` are rejected both at entity save time (`ValidateAgentInheritanceAndSandbox`)
+ * and at runtime (`AgentHelperCache.ResetForRun` / `ResolveAgentHelper`).
+ *
+ * Includes both the security enforcement callees (`limits`, `actionPolicy`, `policy`, `permissions`)
+ * AND their orchestration callers (`setup`, `steps`, `actions`, `subAgents`) so a metadata plugin
+ * cannot bypass run-permission, plan-mode gate, action-policy, or budget checks by replacing a caller.
+ */
+export const FORBIDDEN_METADATA_HELPER_SEAMS: ReadonlySet<string> = new Set<string>([
+    'limits',
+    'actionpolicy',
+    'policy',
+    'permissions',
+    'permission',
+    'setup',
+    'steps',
+    'actions',
+    'subagents',
+    'subagent',
+]);
+
+/**
+ * Returns `true` when `seam` identifies a code-only security/limits/policy seam that cannot
+ * be replaced via agent metadata `helperPlugins`.
+ */
+export function IsForbiddenMetadataHelperSeam(seam: string | null | undefined): boolean {
+    if (typeof seam !== 'string') {
+        return false;
+    }
+    const normalized = seam.trim().toLowerCase().replace(/[-_\s]/g, '');
+    return FORBIDDEN_METADATA_HELPER_SEAMS.has(normalized);
+}
+
+/**
+ * Tolerantly parses `helperPlugins` from an agent configuration JSON string (`Configuration` or
+ * `TypeConfiguration`). Returns an empty array when absent, malformed, or not an array.
+ */
+export function ParseAgentHelperPlugins(configJson: string | null | undefined): AgentHelperPluginEntry[] {
+    const root = parseJsonObject(configJson);
+    if (!root) {
+        return [];
+    }
+    const rawPlugins = root['helperPlugins'];
+    if (!Array.isArray(rawPlugins)) {
+        return [];
+    }
+    const parsed: AgentHelperPluginEntry[] = [];
+    for (const item of rawPlugins) {
+        if (!isJsonObject(item)) {
+            continue;
+        }
+        const seam = typeof item['seam'] === 'string' ? item['seam'].trim() : '';
+        const driverClass = typeof item['driverClass'] === 'string' ? item['driverClass'].trim() : '';
+        if (!seam || !driverClass) {
+            continue;
+        }
+        const rawPriority = item['priority'];
+        const entry: AgentHelperPluginEntry = { seam, driverClass };
+        if (typeof rawPriority === 'number' && Number.isFinite(rawPriority)) {
+            entry.priority = rawPriority;
+        }
+        parsed.push(entry);
+    }
+    return parsed;
 }
 
 /**

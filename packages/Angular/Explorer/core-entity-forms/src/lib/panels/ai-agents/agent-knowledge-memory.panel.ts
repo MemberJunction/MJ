@@ -5,7 +5,13 @@ import { GroupByUUID, RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import type { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 import { SharedService } from '@memberjunction/ng-shared';
-import { AGENT_SECTION_KEYS } from './agent-form-helpers';
+import type { MJAIAgentFormComponentExtended } from '../../custom/AIAgents/ai-agent-form.component';
+import {
+    AGENT_SECTION_KEYS,
+    EffectiveAgentDisplayValues,
+    PatchAgentConfig,
+    ResolveEffectiveDisplayValues,
+} from './agent-form-helpers';
 
 interface ScopePermissionAuditGroup {
     ScopeID: string;
@@ -92,9 +98,34 @@ export class AgentKnowledgeMemoryPanel extends BaseFormPanel<MJAIAgentEntity> im
         void Promise.all([this.LoadPermissionSummary(), this.loadRecentNotes()]);
     }
 
+    private get hostForm(): MJAIAgentFormComponentExtended | null {
+        return (this.FormComponent as unknown as MJAIAgentFormComponentExtended) ?? null;
+    }
+
+    /** Effective scope & memory properties resolved across local Configuration and 3-table cascade. */
+    public get Effective(): EffectiveAgentDisplayValues {
+        return ResolveEffectiveDisplayValues(this.Record, this.hostForm?.EffectiveProperties);
+    }
+
     public SetSearchScopeAccess(mode: MJAIAgentEntity['SearchScopeAccess']): void {
         if (!this.EditMode || !this.Record) return;
-        this.Record.SearchScopeAccess = mode;
+        PatchAgentConfig(this.Record, (cfg) => {
+            cfg.scope = { ...(cfg.scope ?? {}), searchScopeAccess: mode };
+        });
+        this.cdr.markForCheck();
+    }
+
+    public OnMemoryWriteChange(event: Event): void {
+        const input = event.target as HTMLInputElement | null;
+        if (!input) return;
+        this.SetAllowMemoryWrite(input.checked);
+    }
+
+    public SetAllowMemoryWrite(allow: boolean): void {
+        if (!this.EditMode || !this.Record) return;
+        PatchAgentConfig(this.Record, (cfg) => {
+            cfg.memory = { ...(cfg.memory ?? {}), allowMemoryWrite: allow };
+        });
         this.cdr.markForCheck();
     }
 
