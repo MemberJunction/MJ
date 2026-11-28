@@ -1998,8 +1998,17 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                     searchAccessRank[legacyVal] < searchAccessRank[explicitJsonVal] ? legacyVal : explicitJsonVal;
                 applySearchAccessNarrow(stricter);
             } else {
+                // Only treat an untouched legacy `'None'` (with no explicit JSON value) as unset on
+                // a non-instantiable derived leaf (`BaseAgentID != null && InstantiationMode === 'None'`).
+                // Any root or intermediate template/ancestor with `SearchScopeAccess === 'None'` enforces
+                // an active `'None'` ceiling (C-R1-2).
+                const isNonInstantiableDerivedLeaf =
+                    i === nodes.length - 1 &&
+                    Boolean(nodes[i].BaseAgentID) &&
+                    (nodes[i].InstantiationMode ?? 'None') === 'None';
                 const candidate =
-                    explicitJsonVal ?? (legacyVal && legacyVal !== 'None' ? legacyVal : (i === 0 ? legacyVal : null));
+                    explicitJsonVal ??
+                    (legacyVal && (legacyVal !== 'None' || !isNonInstantiableDerivedLeaf) ? legacyVal : null);
                 applySearchAccessNarrow(candidate);
             }
         }

@@ -49,10 +49,13 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
     private readonly _init = new AgentRunInitializationHelper();
     private readonly _finalization = new AgentRunFinalizationHelper();
 
-    public override async ExecuteRun<C, R>(
-        ctx: AgentRunContext,
-        params: ExecuteAgentParams<C>
-    ): Promise<ExecuteAgentResult<R>> {
+    /**
+     * Resets all mutable per-run state fields at the start of `ExecuteRun` so sequential
+     * `BaseAgent.Execute()` calls on a reused `BaseAgent` instance never leak counters, outputs,
+     * skills, feedback IDs, consults, or prompt/tool state across runs (C-R1-3).
+     * Preserves caller/hierarchy inputs (`Depth`, `AgentHierarchy`, `ParentStepCounts`).
+     */
+    private resetPerRunState(ctx: AgentRunContext, params: ExecuteAgentParams): void {
         ctx.TreeBudget = undefined;
         ctx.AgentRun = null;
         ctx.PausedRunOutcome = null;
@@ -80,6 +83,67 @@ export class AgentRunSetupHelper extends BaseAgentRunSetupHelper {
         ctx.ProgressDetector.Reset();
         ctx.StuckDetector.Reset();
         ctx.FastConvergenceJudge.ResetTracking();
+
+        ctx.ExecutionCounts.clear();
+        ctx.FileOutputs.length = 0;
+        ctx.MediaOutputs = [];
+        ctx.FeedbackRequestId = undefined;
+        ctx.ActivatedSkillIDs = [];
+        ctx.ConversationSkillIDs = [];
+        ctx.SkillInvocations = [];
+        ctx.SubAgentRuns.length = 0;
+        ctx.AllProgressSteps = [];
+        ctx.PromptTurnCount = 0;
+        ctx.LastRecordedPromptStack = null;
+        ctx.PlanModeActive = false;
+        ctx.PlanApproved = false;
+        ctx.ActionResultCrush = undefined;
+        ctx.InjectedMemory = { notes: [], examples: [] };
+        ctx.InjectedRAG = null;
+        ctx.HeldDecisions = undefined;
+        ctx.HeldCompletionChanges = [];
+        ctx.LastNativeTurnAppended = undefined;
+        ctx.PendingAgentToolResults = undefined;
+        ctx.NativeToolBindings = undefined;
+        ctx.ConversationToolTurn = undefined;
+        ctx.NativeControl = undefined;
+        ctx.AgentTypePromptParams = undefined;
+        ctx.AgentTypeState = null;
+        ctx.AgentTypeInstance = undefined;
+        ctx.AwaitingWorkflowTaskID = null;
+        ctx.HandoffResult = null;
+        ctx.ResolvedHandoffTarget = null;
+        ctx.ResolvedStorageAccountId = null;
+        ctx.LastSubAgentArtifactDirective = undefined;
+        ctx.LastSubAgentPayloadArtifactTypeID = undefined;
+        ctx.OpenSubAgentConsults.clear();
+        ctx.SubAgentConsultRounds.clear();
+        ctx.LoggedConsultUnsupportedAgentType = false;
+        ctx.RealtimeInFlightTurns.clear();
+        ctx.RealtimePersistQueues.clear();
+        ctx.RealtimeRecording = null;
+        ctx.RealtimeRecordingAccountId = null;
+        ctx.EffectiveActions = [];
+        ctx.EffectiveSubAgents = [];
+        ctx.EffectiveCatalogComputed = false;
+        ctx.DynamicActionLimits = {};
+        ctx.TaintedSources = [];
+        ctx.CatalogNarrowing = undefined;
+        ctx.OpeningRequest = '';
+        ctx.RunExecutionScope = undefined;
+        ctx.IsOpeningTurn = false;
+        ctx.ValidationRetryCount = 0;
+        ctx.GeneralValidationRetryCount = 0;
+        ctx.ContextRecoveryAttempts = 0;
+        ctx.TemplateEngineConfiguredForRun = false;
+        ctx.LastRuntimeStateDeliveryCache = null;
+    }
+
+    public override async ExecuteRun<C, R>(
+        ctx: AgentRunContext,
+        params: ExecuteAgentParams<C>
+    ): Promise<ExecuteAgentResult<R>> {
+        this.resetPerRunState(ctx, params);
         const policyResolution = await ctx.Hooks.ResolveServerUserPolicy(params);
         ctx.ResolvedUserPolicy = policyResolution.policy;
         ctx.ActiveLimitsResolution = ctx.Hooks.ResolveFullRunLimits(params);

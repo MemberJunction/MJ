@@ -13,10 +13,15 @@ import {
     BuildAgentConfigurationFromLegacyFields,
     BuildAgentTypeConfigurationFromLegacyFields,
     DeepMergeAgentConfigurations,
+    IsLegacyAIAgentConfigSqlDefault,
+    LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS,
     ParseAgentConfiguration,
+    ResolveAgentInstantiationConfig,
     SyncAgentLegacyColumnsAndConfiguration,
     SyncAgentTypeLegacyColumnsAndConfiguration,
     ValidateAgentConfigurationJson,
+    ValidateLegacyAgentConfigFields,
+    ValidateLegacyAgentTypeConfigFields,
     type IAgentConfiguration,
     type LegacyAIAgentConfigColumns,
     type LegacyAIAgentTypeConfigColumns,
@@ -702,5 +707,61 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
             expect(typeDefaults.has(col), `Missing generated getter for MJAIAgentTypeEntity.${col}`).toBe(true);
             expect(resetVal, `Reset default mismatch for MJAIAgentTypeEntity.${col}`).toEqual(typeDefaults.get(col));
         }
+    });
+
+    it('C-R1-1 / C-R1-5 / C-R1-7: validates SQL default matching, ResolveAgentInstantiationConfig precedence, and legacy patch validation', () => {
+        // C-R1-1: IsLegacyAIAgentConfigSqlDefault matches all 51 defaults (including bit 0/1)
+        const allKeys = Object.keys(LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS) as Array<keyof LegacyAIAgentConfigColumns>;
+        expect(allKeys).toHaveLength(51);
+        for (const key of allKeys) {
+            expect(IsLegacyAIAgentConfigSqlDefault(key, LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS[key])).toBe(true);
+        }
+        expect(IsLegacyAIAgentConfigSqlDefault('ModelSelectionMode', 'Agent')).toBe(false);
+        expect(IsLegacyAIAgentConfigSqlDefault('MaxNotesToInject', 12)).toBe(false);
+        expect(IsLegacyAIAgentConfigSqlDefault('EnableContextCompression', 0 as unknown as boolean)).toBe(true);
+        expect(IsLegacyAIAgentConfigSqlDefault('EnableContextCompression', 1 as unknown as boolean)).toBe(false);
+
+        // C-R1-5: ResolveAgentInstantiationConfig prefers canonical Configuration.instantiation over TypeConfiguration
+        const resolvedMerged = ResolveAgentInstantiationConfig(
+            JSON.stringify({
+                instantiation: {
+                    maxInstancesPerUser: 2,
+                    suggestedNames: ['Nova', 'Orion'],
+                },
+            }),
+            JSON.stringify({
+                instantiation: {
+                    maxInstancesPerUser: 5,
+                    onboardingGreeting: 'Hello!',
+                },
+            })
+        );
+        expect(resolvedMerged?.maxInstancesPerUser).toBe(2);
+        expect(resolvedMerged?.suggestedNames).toEqual(['Nova', 'Orion']);
+        expect(resolvedMerged?.onboardingGreeting).toBe('Hello!');
+        expect(ResolveAgentInstantiationConfig(null, null)).toBeNull();
+        expect(
+            ResolveAgentInstantiationConfig(
+                { instantiation: { maxInstancesPerUser: 3 } },
+                null
+            )?.maxInstancesPerUser
+        ).toBe(3);
+
+        // C-R1-7: ValidateLegacyAgentConfigFields & ValidateLegacyAgentTypeConfigFields catch bad legacy patches
+        const agentErrs = ValidateLegacyAgentConfigFields({
+            MaxExecutionsPerRun: 0,
+            CompactionTriggerPercent: 150,
+            RerankerConfiguration: '{bad',
+            ScopeConfig: '[1,2]',
+        });
+        expect(agentErrs.some((e) => /maxExecutionsPerRun/i.test(e))).toBe(true);
+        expect(agentErrs.some((e) => /compactionTriggerPercent/i.test(e))).toBe(true);
+        expect(agentErrs.some((e) => /RerankerConfiguration/i.test(e))).toBe(true);
+        expect(agentErrs.some((e) => /ScopeConfig/i.test(e))).toBe(true);
+        expect(ValidateLegacyAgentConfigFields({ MaxExecutionsPerRun: 3, RerankerConfiguration: '{"topK":5}' })).toEqual([]);
+
+        const typeErrs = ValidateLegacyAgentTypeConfigFields({ CompactionTriggerPercent: 150 });
+        expect(typeErrs.some((e) => /compactionTriggerPercent/i.test(e))).toBe(true);
+        expect(ValidateLegacyAgentTypeConfigFields({ CompactionTriggerPercent: 80 })).toEqual([]);
     });
 });

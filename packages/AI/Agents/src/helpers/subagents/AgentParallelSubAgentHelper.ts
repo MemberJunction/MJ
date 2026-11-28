@@ -428,8 +428,9 @@ export class AgentParallelSubAgentHelper {
                 } else if (isChat && question?.trim()) {
                     lines.push(`* Question: ${question}`);
                 }
-                if (execution.result.agentRun?.ErrorMessage) {
-                    lines.push(`* Error: ${execution.result.agentRun.ErrorMessage}`);
+                const execError = execution.result.errorMessage || execution.result.agentRun?.ErrorMessage;
+                if (execError) {
+                    lines.push(`* Error: ${execError}`);
                 }
                 return lines.join('\n');
             })
@@ -610,15 +611,16 @@ export class AgentParallelSubAgentHelper {
         if (!execution.stepEntity) return;
         execution.stepEntity.PayloadAtEnd = ctx.Hooks.SerializePayloadAtEnd(stepPayloadAtEnd);
         const shouldTerminate = execution.request.terminateAfter === true && !execution.consult;
+        const execError = execution.result.errorMessage || execution.result.agentRun?.ErrorMessage;
         await ctx.Hooks.FinalizeStepEntity(
             execution.stepEntity,
             execution.result.success,
-            execution.result.agentRun?.ErrorMessage ?? undefined,
+            execError ?? undefined,
             {
                 subAgentResult: {
                     success: execution.result.success,
                     finalStep: execution.result.agentRun?.FinalStep,
-                    errorMessage: execution.result.agentRun?.ErrorMessage,
+                    errorMessage: execError,
                     stepCount: execution.result.agentRun?.Steps?.length || 0,
                 },
                 shouldTerminate,

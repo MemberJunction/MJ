@@ -425,7 +425,7 @@ Then attach it on the target `MJ: AI Agents` row (or `MJ: AI Agent Categories.De
 }
 ```
 
-> **Security Rule Reminder:** `ResolveAgentHelper` and `ValidateAgentInheritanceAndSandbox` **reject** `helperPlugins` entries targeting `'limits'` or `'actionPolicy'`. Those two seams can **only** be overridden globally in server code via `@RegisterClass(BaseAgentLimitsHelper, 'Default', 100)` or `@RegisterClass(BaseAgentActionPolicyHelper, 'Default', 100)`.
+> **Security Rule Reminder:** `ResolveAgentHelper` and `ValidateAgentInheritanceAndSandbox` **reject** `helperPlugins` entries targeting any of the **6 code-only seams** (`'limits'`, `'actionPolicy'`, `'setup'`, `'steps'`, `'actions'`, `'subAgents'`). Those seams can **only** be overridden globally in server code via `@RegisterClass(BaseAgent<Seam>Helper, 'Default', 100)` (for example `@RegisterClass(BaseAgentLimitsHelper, 'Default', 100)` or `@RegisterClass(BaseAgentActionPolicyHelper, 'Default', 100)`).
 
 ---
 

@@ -29,6 +29,7 @@ import { BaseAgent } from '../base-agent';
 import { AgentLivenessWatchdog } from '../helpers/limits/AgentLivenessWatchdog';
 import {
     AgentStuckDetector,
+    ClassifyToolOrActionName,
     ComputeCanonicalToolFingerprint,
     IsReadOnlyToolOrActionName,
     StableSortedJSON,
@@ -1284,6 +1285,129 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
             expect(disabledWatchdog.IsRunning).toBe(true);
             expect(disabledWatchdog.IsLivenessEnabled).toBe(false);
             disabledWatchdog.Stop();
+        });
+
+        it('C-R1-6: avoids same-name batch result collisions and preserves read-only streak across neutral wait/sleep actions', () => {
+            const detector = new AgentStuckDetector();
+            const cfg = {
+                Enabled: true,
+                WindowSize: 10,
+                IdenticalToolCallThreshold: 3,
+                ReadOnlyStepThreshold: 5,
+                ReadOnlyPostDirectiveGraceSteps: 2,
+            };
+            const params: ExecuteAgentParams = {
+                agent: { ID: 'a1', Name: 'BatchPoller' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+
+            let turn3Directives: string[] = [];
+            for (let turn = 1; turn <= 3; turn++) {
+                const evalOut = detector.EvaluateStepDecision(
+                    params,
+                    {
+                        step: 'Actions',
+                        terminate: false,
+                        actions: [
+                            { name: 'GetJobStatus', params: { jobId: 'job-1' } },
+                            { name: 'GetJobStatus', params: { jobId: 'job-2' } },
+                        ],
+                    },
+                    cfg
+                );
+                if (turn === 3) {
+                    turn3Directives = evalOut.InjectedDirectives;
+                }
+                detector.EvaluateStepDecision(
+                    params,
+                    {
+                        step: 'Retry',
+                        terminate: false,
+                        priorStepResult: [
+                            { actionName: 'GetJobStatus', success: true, status: 'running' },
+                            { actionName: 'GetJobStatus', success: true, status: `progress-${turn}` },
+                        ],
+                    },
+                    cfg
+                );
+            }
+            // Only stuck job-1 should trigger a directive; progressing job-2 must NOT collide with priorArr[0]
+            expect(turn3Directives).toHaveLength(1);
+
+            // 3-way classification: neutral actions preserve read-only streak without resetting to 0
+            expect(ClassifyToolOrActionName('ReadFile')).toBe('read-only');
+            expect(ClassifyToolOrActionName('CreateRecord')).toBe('mutating');
+            expect(ClassifyToolOrActionName('WaitSeconds')).toBe('neutral');
+            expect(ClassifyToolOrActionName('Sleep')).toBe('neutral');
+            expect(ClassifyToolOrActionName('Delay')).toBe('neutral');
+            expect(ClassifyToolOrActionName('Ping')).toBe('neutral');
+
+            const streakDet = new AgentStuckDetector();
+            for (let i = 0; i < 4; i++) {
+                streakDet.RecordStepOutcome(
+                    {
+                        StepType: 'Actions',
+                        ActionNames: ['ReadFile'],
+                        HasPayloadMutation: false,
+                        HasSubAgentDelegation: false,
+                        IsTerminal: false,
+                    },
+                    cfg
+                );
+            }
+            expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(4);
+
+            // WaitSeconds is neutral -> preserves streak at 4 (does NOT reset to 0)
+            streakDet.RecordStepOutcome(
+                {
+                    StepType: 'Actions',
+                    ActionNames: ['WaitSeconds'],
+                    HasPayloadMutation: false,
+                    HasSubAgentDelegation: false,
+                    IsTerminal: false,
+                },
+                cfg
+            );
+            expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(4);
+
+            // Synthetic post-step Retry after neutral WaitSeconds also preserves streak at 4
+            streakDet.EvaluateStepDecision(
+                params,
+                {
+                    step: 'Retry',
+                    terminate: false,
+                    priorStepResult: [{ actionName: 'WaitSeconds', success: true }],
+                },
+                cfg
+            );
+            expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(4);
+
+            // Next ReadFile hits threshold 5 -> injects wrap-up directive
+            const fifth = streakDet.RecordStepOutcome(
+                {
+                    StepType: 'Actions',
+                    ActionNames: ['ReadFile'],
+                    HasPayloadMutation: false,
+                    HasSubAgentDelegation: false,
+                    IsTerminal: false,
+                },
+                cfg
+            );
+            expect(fifth.Action).toBe('inject-wrap-up-directive');
+            expect(fifth.ConsecutiveReadOnlySteps).toBe(5);
+
+            // Mutating action resets streak cleanly to 0
+            streakDet.RecordStepOutcome(
+                {
+                    StepType: 'Actions',
+                    ActionNames: ['UpdateRecord'],
+                    HasPayloadMutation: false,
+                    HasSubAgentDelegation: false,
+                    IsTerminal: false,
+                },
+                cfg
+            );
+            expect(streakDet.GetSnapshot().ConsecutiveReadOnlySteps).toBe(0);
         });
     });
 });

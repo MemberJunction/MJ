@@ -25,7 +25,7 @@ import {
   IAgentInstantiationConfig,
   IAgentPersonalityPreset,
   MJAIAgentEntityExtended,
-  ParseAgentInstantiationConfig,
+  ResolveAgentInstantiationConfig,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -266,7 +266,23 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
   }
 
   public get InstantiationConfig(): IAgentInstantiationConfig | null {
-    return ParseAgentInstantiationConfig(this.SelectedBaseAgent?.TypeConfiguration);
+    return this.resolveInstantiationConfigForTemplate(this.SelectedBaseAgent);
+  }
+
+  private resolveInstantiationConfigForTemplate(
+    template: MJAIAgentEntityExtended | null | undefined
+  ): IAgentInstantiationConfig | null {
+    if (!template) {
+      return null;
+    }
+    const effective =
+      typeof this.aiEngine.ResolveEffectiveAgentProperties === 'function'
+        ? this.aiEngine.ResolveEffectiveAgentProperties(template)
+        : null;
+    return ResolveAgentInstantiationConfig(
+      effective?.Configuration ?? template.Configuration,
+      effective?.TypeConfiguration ?? template.TypeConfiguration
+    );
   }
 
   public get SuggestedNames(): string[] {
@@ -450,7 +466,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
     this.SelectedTemplateCategory = 'All';
     this.updateSiblingCount();
     if (!this.IconClass || this.Mode === 'create') {
-      const cfg = ParseAgentInstantiationConfig(template.TypeConfiguration);
+      const cfg = this.resolveInstantiationConfigForTemplate(template);
       this.IconClass = cfg?.suggestedIcons?.[0] ?? template.IconClass ?? 'fa-solid fa-wand-magic-sparkles';
     }
     if (this.IsChiefOfStaffTemplate && !this.CoordinationMode) {
@@ -780,7 +796,7 @@ export class AgentInstanceEditorModalComponent extends BaseAngularComponent impl
         this.SelectedBaseAgentId = defaultTemplate?.ID ?? '';
         this.InstanceName = '';
         this.Description = '';
-        const cfg = ParseAgentInstantiationConfig(defaultTemplate?.TypeConfiguration);
+        const cfg = this.resolveInstantiationConfigForTemplate(defaultTemplate);
         this.IconClass = cfg?.suggestedIcons?.[0] ?? defaultTemplate?.IconClass ?? 'fa-solid fa-pepper-hot';
         this.LogoURL = '';
         this.AdditionalInstructions = '';

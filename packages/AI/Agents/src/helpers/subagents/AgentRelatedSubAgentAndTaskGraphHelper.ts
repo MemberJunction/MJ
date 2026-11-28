@@ -422,11 +422,12 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
             const subAgentParkedOnWorkflow = subAgentResult.agentRun?.Status === 'Paused';
             const shouldTerminate = subAgentRequest.terminateAfter === true || subAgentParkedOnWorkflow;
 
+            const subAgentError = subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage;
             const outputData: Record<string, unknown> = {
                 subAgentResult: {
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
-                    errorMessage: subAgentResult.agentRun?.ErrorMessage,
+                    errorMessage: subAgentError,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
                     hasMergedPayload: !!(
                         relationship.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload
@@ -462,7 +463,7 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
             await ctx.Hooks.FinalizeStepEntity(
                 stepEntity,
                 subAgentResult.success,
-                subAgentResult.agentRun?.ErrorMessage ?? undefined,
+                subAgentError ?? undefined,
                 outputData
             );
 
@@ -538,7 +539,7 @@ export class AgentRelatedSubAgentAndTaskGraphHelper {
                     : previousDecision?.message,
                 errorMessage: subAgentResult.success
                     ? undefined
-                    : subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message',
+                    : subAgentError || 'Related sub-agent failed with no error message',
                 retryReason: subAgentResult.success
                     ? `Reviewing results from ${subAgentRequest.name}`
                     : `Handling error from ${subAgentRequest.name}`,

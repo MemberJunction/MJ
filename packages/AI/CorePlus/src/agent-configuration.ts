@@ -13,7 +13,13 @@
 
 import type { MJAIAgentEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { IsPlainObject } from '@memberjunction/global';
-import { IsForbiddenMetadataHelperSeam, VALID_AGENT_HELPER_SEAMS } from './agent-instantiation';
+import {
+    IsForbiddenMetadataHelperSeam,
+    ParseAgentInstantiationConfig,
+    VALID_AGENT_HELPER_SEAMS,
+    type AgentConfigJsonObject,
+    type IAgentInstantiationConfig,
+} from './agent-instantiation';
 import type { IAgentConfiguration } from './JSONType-interfaces/IAgentConfiguration';
 
 export * from './JSONType-interfaces/IAgentConfiguration';
@@ -85,6 +91,185 @@ export type LegacyAIAgentTypeConfigColumns = Pick<
     | 'CompactionTargetPercent'
     | 'ConversationSummaryPromptID'
 >;
+
+/**
+ * Exact SQL column defaults for all 51 columns in {@link LegacyAIAgentConfigColumns}
+ * (matching `spCreateAIAgent` and `V202611271804` `NULLIF` backfill semantics).
+ * Used on `MJAIAgentEntityServer` creates so GraphQL `NewRecord() + SetMany(defaults)` payloads
+ * do not freeze untouched SQL defaults into `AIAgent.Configuration` or block base/category/type cascade.
+ */
+export const LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS: Readonly<LegacyAIAgentConfigColumns> = {
+    ModelSelectionMode: 'Agent Type',
+    DefaultPromptEffortLevel: null,
+    ChatHandlingOption: null,
+    SupportsPlanMode: true,
+    RequirePlanMode: false,
+    DeclareActionsAsNativeTools: true,
+    EnableContextCompression: false,
+    ContextCompressionMessageThreshold: null,
+    ContextCompressionPromptID: null,
+    ContextCompressionMessageRetentionCount: null,
+    ContextWindowMaxTokens: null,
+    CompactionTriggerPercent: null,
+    CompactionTargetPercent: null,
+    ConversationSummaryPromptID: null,
+    InjectNotes: true,
+    MaxNotesToInject: 5, // SQL schema default DF_AIAgent_MaxNotesToInject
+    NoteInjectionStrategy: 'Relevant',
+    InjectExamples: false,
+    MaxExamplesToInject: 3, // SQL schema default DF_AIAgent_MaxExamplesToInject
+    ExampleInjectionStrategy: 'Semantic',
+    NoteRetentionDays: 90, // SQL schema default DF_AIAgent_NoteRetentionDays
+    ExampleRetentionDays: 180, // SQL schema default DF_AIAgent_ExampleRetentionDays
+    AutoArchiveEnabled: true,
+    AllowMemoryWrite: true,
+    RerankerConfiguration: null,
+    PayloadDownstreamPaths: '["*"]',
+    PayloadUpstreamPaths: '["*"]',
+    PayloadSelfReadPaths: null,
+    PayloadSelfWritePaths: null,
+    PayloadScope: null,
+    StartingPayloadValidation: null,
+    StartingPayloadValidationMode: 'Fail',
+    FinalPayloadValidation: null,
+    FinalPayloadValidationMode: 'Retry',
+    FinalPayloadValidationMaxRetries: 3, // SQL schema default DF_AIAgent_FinalPayloadValidationMaxRetries
+    ExecutionMode: 'Sequential',
+    MinExecutionsPerRun: null,
+    MaxExecutionsPerRun: null,
+    MaxSubAgentConsultRounds: null,
+    MessageMode: 'None',
+    MaxMessages: null,
+    AttachmentRootPath: null,
+    InlineStorageThresholdBytes: null,
+    AcceptUnregisteredFiles: false,
+    ArtifactCreationMode: 'Always',
+    DefaultArtifactTypeID: null,
+    SearchScopeAccess: 'None',
+    ScopeConfig: null,
+    SkillActivationMode: 'RequestedOnly',
+    AllowEphemeralClientTools: true,
+    RecordingDefault: null,
+};
+
+/**
+ * Returns `true` when `value` equals the SQL column default for `fieldName` (or is `undefined`),
+ * handling SQL bit `0`/`1` representations equivalently to `false`/`true`.
+ */
+export function IsLegacyAIAgentConfigSqlDefault<K extends keyof LegacyAIAgentConfigColumns>(
+    fieldName: K,
+    value: LegacyAIAgentConfigColumns[K] | undefined
+): boolean {
+    if (value === undefined) {
+        return true;
+    }
+    const sqlDefault = LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS[fieldName];
+    if (typeof sqlDefault === 'boolean') {
+        if (typeof value === 'boolean') {
+            return value === sqlDefault;
+        }
+        const numericOrOther: unknown = value;
+        if (numericOrOther === 0 || numericOrOther === 1) {
+            return Boolean(numericOrOther) === sqlDefault;
+        }
+        return false;
+    }
+    return value === sqlDefault;
+}
+
+/**
+ * Resolves canonical agent instantiation config (`IAgentConfiguration.instantiation`) with
+ * fallback to legacy `TypeConfiguration.instantiation` (canonical keys take precedence per key).
+ */
+export function ResolveAgentInstantiationConfig(
+    configuration: IAgentConfiguration | string | null | undefined,
+    typeConfiguration?: AgentConfigJsonObject | string | null | undefined
+): IAgentInstantiationConfig | null {
+    const parsedConfig =
+        typeof configuration === 'string'
+            ? ParseAgentConfiguration(configuration)
+            : configuration && IsPlainObject(configuration)
+                ? configuration
+                : null;
+    const fromConfig = parsedConfig?.instantiation
+        ? ParseAgentInstantiationConfig(JSON.stringify({ instantiation: parsedConfig.instantiation }))
+        : null;
+    const fromTypeConfig =
+        typeof typeConfiguration === 'string'
+            ? ParseAgentInstantiationConfig(typeConfiguration)
+            : typeConfiguration && IsPlainObject(typeConfiguration)
+                ? ParseAgentInstantiationConfig(JSON.stringify(typeConfiguration))
+                : null;
+
+    if (!fromConfig && !fromTypeConfig) {
+        return null;
+    }
+    if (!fromConfig) {
+        return fromTypeConfig;
+    }
+    if (!fromTypeConfig) {
+        return fromConfig;
+    }
+    return {
+        ...fromTypeConfig,
+        ...fromConfig,
+    };
+}
+
+/**
+ * Validates ONLY the caller-dirty legacy `AIAgent` column subset (including raw JSON object columns
+ * `RerankerConfiguration` and `ScopeConfig`, plus mapped `IAgentConfiguration` range/enum checks)
+ * without re-validating untouched pre-existing sections of `AIAgent.Configuration`.
+ */
+export function ValidateLegacyAgentConfigFields(
+    dirtyValues: Partial<LegacyAIAgentConfigColumns>
+): string[] {
+    const errors: string[] = [];
+    const validateRawJsonObjectColumn = (colName: 'RerankerConfiguration' | 'ScopeConfig', raw: string | null | undefined): void => {
+        if (raw === undefined || raw === null || raw.trim().length === 0) {
+            return;
+        }
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (error) {
+            errors.push(`${colName} is not valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+            return;
+        }
+        if (!IsPlainObject(parsed)) {
+            errors.push(`${colName} must be a JSON object or null.`);
+            return;
+        }
+        collectForbiddenKeys(parsed, colName, errors);
+    };
+
+    if (Object.prototype.hasOwnProperty.call(dirtyValues, 'RerankerConfiguration')) {
+        validateRawJsonObjectColumn('RerankerConfiguration', dirtyValues.RerankerConfiguration);
+    }
+    if (Object.prototype.hasOwnProperty.call(dirtyValues, 'ScopeConfig')) {
+        validateRawJsonObjectColumn('ScopeConfig', dirtyValues.ScopeConfig);
+    }
+
+    const patch = BuildAgentConfigurationFromLegacyFields(dirtyValues);
+    if (Object.keys(patch).length > 0) {
+        errors.push(...ValidateAgentConfigurationJson(JSON.stringify(patch), 'Configuration'));
+    }
+    return errors;
+}
+
+/**
+ * Validates ONLY the caller-dirty legacy `AIAgentType` column subset against
+ * `ValidateAgentConfigurationJson` without re-validating untouched sections of `DefaultAgentConfiguration`.
+ */
+export function ValidateLegacyAgentTypeConfigFields(
+    dirtyValues: Partial<LegacyAIAgentTypeConfigColumns>
+): string[] {
+    const patch = BuildAgentTypeConfigurationFromLegacyFields(dirtyValues);
+    if (Object.keys(patch).length === 0) {
+        return [];
+    }
+    return ValidateAgentConfigurationJson(JSON.stringify(patch), 'DefaultAgentConfiguration');
+}
 
 const OBJECT_SECTION_KEYS: ReadonlyArray<keyof IAgentConfiguration> = [
     'execution',

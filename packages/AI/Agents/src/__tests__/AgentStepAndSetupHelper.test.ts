@@ -685,4 +685,311 @@ describe('BaseAgentStepExecutionHelper & BaseAgentRunSetupHelper (s11)', () => {
         expect(endCtx.CooperativePauseState).toBeNull();
         expect(finalizeRun).toHaveBeenCalledWith('success');
     });
+
+    it('C-R1-3: resets all per-run state across sequential ExecuteRun() calls while preserving caller hierarchy inputs', async () => {
+        const setup = new AgentRunSetupHelper();
+        const { AIAgentPermissionHelper } = await import('@memberjunction/ai-engine-base');
+        const permSpy = vi.spyOn(AIAgentPermissionHelper, 'HasPermission').mockResolvedValue(true);
+
+        try {
+            const runCtx = CreateMockAgentRunContext({
+                Depth: 2,
+                AgentHierarchy: ['RootAgent', 'ParentAgent'],
+                ParentStepCounts: [1, 3],
+                Hooks: {
+                    ExecuteAgentInternal: vi.fn(async () => ({
+                        finalStep: { step: 'Success' as const, terminate: true, message: 'done' },
+                        stepCount: 1,
+                    })),
+                    FinalizeAgentRun: vi.fn(async () => ({
+                        success: true,
+                        agentRun: makeRun({ Status: 'Completed' }),
+                    })),
+                },
+            });
+
+            // Simulate Run 1 polluting every mutable per-run field
+            runCtx.ExecutionCounts.set('act-1', 5);
+            runCtx.FileOutputs.push({ fileId: 'f1', fileName: 'out.pdf', mimeType: 'application/pdf', sizeBytes: 12 });
+            runCtx.FeedbackRequestId = 'feedback-run-1';
+            runCtx.ActivatedSkillIDs = ['skill-1'];
+            runCtx.ConversationSkillIDs = ['skill-conv-1'];
+            runCtx.SkillInvocations = [{ SkillID: 'skill-1', SkillName: 'S1', ActivationType: 'requested' } as never];
+            runCtx.SubAgentRuns.push({ success: true, agentRun: makeRun() });
+            runCtx.InjectedMemory = { notes: [{} as never], examples: [{} as never] };
+            runCtx.InjectedRAG = { formattedContext: 'rag-1', chunks: [], totalDurationMs: 1 } as never;
+            runCtx.HeldDecisions = { requests: [], heldAtStep: 1 } as never;
+            runCtx.HeldCompletionChanges = [{} as never];
+            runCtx.LastNativeTurnAppended = { sendResultsNatively: true } as never;
+            runCtx.PendingAgentToolResults = { results: [] };
+            runCtx.NativeToolBindings = new Map();
+            runCtx.ConversationToolTurn = { turn: 3, count: 2 };
+            runCtx.AgentTypePromptParams = { custom: 1 };
+            runCtx.AwaitingWorkflowTaskID = 'wf-1';
+            runCtx.ResolvedHandoffTarget = { agent: makeAgent() } as never;
+            runCtx.LastSubAgentArtifactDirective = { mode: 'create' } as never;
+            runCtx.LastSubAgentPayloadArtifactTypeID = 'art-type-1';
+            runCtx.OpenSubAgentConsults.set('run-c1', { childRunId: 'run-c1', subAgentId: 'sa1', subAgentName: 'SA', round: 1, question: 'q' });
+            runCtx.SubAgentConsultRounds.set('sa1', 2);
+            runCtx.LoggedConsultUnsupportedAgentType = true;
+            runCtx.RealtimeInFlightTurns.set('user', { id: 't1', open: true });
+            runCtx.RealtimePersistQueues.set('user', Promise.resolve());
+
+            const run2Observed: Record<string, unknown> = {};
+            runCtx.Hooks.ExecuteAgentInternal = vi.fn(async () => {
+                run2Observed.executionCountsSize = runCtx.ExecutionCounts.size;
+                run2Observed.fileOutputsLen = runCtx.FileOutputs.length;
+                run2Observed.feedbackRequestId = runCtx.FeedbackRequestId;
+                run2Observed.activatedSkills = [...runCtx.ActivatedSkillIDs];
+                run2Observed.convSkills = [...runCtx.ConversationSkillIDs];
+                run2Observed.skillInvocations = [...runCtx.SkillInvocations];
+                run2Observed.subAgentRunsLen = runCtx.SubAgentRuns.length;
+                run2Observed.injectedMemoryNotes = runCtx.InjectedMemory.notes.length;
+                run2Observed.injectedRag = runCtx.InjectedRAG;
+                run2Observed.heldDecisions = runCtx.HeldDecisions;
+                run2Observed.heldCompletionChanges = runCtx.HeldCompletionChanges.length;
+                run2Observed.lastNativeTurn = runCtx.LastNativeTurnAppended;
+                run2Observed.pendingAgentTools = runCtx.PendingAgentToolResults;
+                run2Observed.nativeToolBindings = runCtx.NativeToolBindings;
+                run2Observed.convToolTurn = runCtx.ConversationToolTurn;
+                run2Observed.agentTypePromptParams = runCtx.AgentTypePromptParams;
+                run2Observed.awaitingWorkflowTaskId = runCtx.AwaitingWorkflowTaskID;
+                run2Observed.resolvedHandoffTarget = runCtx.ResolvedHandoffTarget;
+                run2Observed.lastSubAgentArtifactDirective = runCtx.LastSubAgentArtifactDirective;
+                run2Observed.lastSubAgentPayloadArtifactTypeID = runCtx.LastSubAgentPayloadArtifactTypeID;
+                run2Observed.openConsultsSize = runCtx.OpenSubAgentConsults.size;
+                run2Observed.consultRoundsSize = runCtx.SubAgentConsultRounds.size;
+                run2Observed.loggedConsultUnsupported = runCtx.LoggedConsultUnsupportedAgentType;
+                run2Observed.realtimeTurnsSize = runCtx.RealtimeInFlightTurns.size;
+                run2Observed.realtimeQueuesSize = runCtx.RealtimePersistQueues.size;
+                // Caller hierarchy inputs MUST remain preserved
+                run2Observed.depth = runCtx.Depth;
+                run2Observed.hierarchy = [...runCtx.AgentHierarchy];
+                run2Observed.parentStepCounts = [...runCtx.ParentStepCounts];
+                return { finalStep: { step: 'Success' as const, terminate: true, message: 'run2' }, stepCount: 1 };
+            });
+
+            await setup.ExecuteRun(runCtx, makeParams({ contextUser: { ID: 'u1', Email: 'u1@test.com' } as never }));
+
+            expect(run2Observed.executionCountsSize).toBe(0);
+            expect(run2Observed.fileOutputsLen).toBe(0);
+            expect(run2Observed.feedbackRequestId).toBeUndefined();
+            expect(run2Observed.activatedSkills).toEqual([]);
+            expect(run2Observed.convSkills).toEqual([]);
+            expect(run2Observed.skillInvocations).toEqual([]);
+            expect(run2Observed.subAgentRunsLen).toBe(0);
+            expect(run2Observed.injectedMemoryNotes).toBe(0);
+            expect(run2Observed.injectedRag).toBeNull();
+            expect(run2Observed.heldDecisions).toBeUndefined();
+            expect(run2Observed.heldCompletionChanges).toBe(0);
+            expect(run2Observed.lastNativeTurn).toBeUndefined();
+            expect(run2Observed.pendingAgentTools).toBeUndefined();
+            expect(run2Observed.nativeToolBindings).toBeUndefined();
+            expect(run2Observed.convToolTurn).toBeUndefined();
+            expect(run2Observed.agentTypePromptParams).toBeUndefined();
+            expect(run2Observed.awaitingWorkflowTaskId).toBeNull();
+            expect(run2Observed.resolvedHandoffTarget).toBeNull();
+            expect(run2Observed.lastSubAgentArtifactDirective).toBeUndefined();
+            expect(run2Observed.lastSubAgentPayloadArtifactTypeID).toBeUndefined();
+            expect(run2Observed.openConsultsSize).toBe(0);
+            expect(run2Observed.consultRoundsSize).toBe(0);
+            expect(run2Observed.loggedConsultUnsupported).toBe(false);
+            expect(run2Observed.realtimeTurnsSize).toBe(0);
+            expect(run2Observed.realtimeQueuesSize).toBe(0);
+            expect(run2Observed.depth).toBe(2);
+            expect(run2Observed.hierarchy).toEqual(['RootAgent', 'ParentAgent']);
+            expect(run2Observed.parentStepCounts).toEqual([1, 3]);
+        } finally {
+            permSpy.mockRestore();
+        }
+    });
+
+    it('C-R1-4: routes Flow agents with Custom steps to inRun automatically, rejects explicit dispatch clearly, and validates Decision+Custom flows without UnsupportedStepType', async () => {
+        const { AIEngine } = await import('@memberjunction/aiengine');
+        const { CompileAndValidateFlowAgent, ResolveFlowExecutionMode } = await import('../agent-types/flow-graph-executor');
+        const flowAgentId = '40000000-0000-4000-8000-000000000001';
+        const customStepId = '40000000-0000-4000-8000-000000000010';
+        const decisionStepId = '40000000-0000-4000-8000-000000000011';
+        const endYesStepId = '40000000-0000-4000-8000-000000000012';
+        const endNoStepId = '40000000-0000-4000-8000-000000000013';
+
+        const steps = [
+            {
+                ID: customStepId,
+                AgentID: flowAgentId,
+                Name: 'Compliance Gate',
+                StepType: 'Custom',
+                StartingStep: true,
+                Status: 'Active',
+                Configuration: JSON.stringify({ stepType: 'ApprovalGate' }),
+            },
+            {
+                ID: decisionStepId,
+                AgentID: flowAgentId,
+                Name: 'Risk Check',
+                StepType: 'Decision',
+                StartingStep: false,
+                Status: 'Active',
+                Configuration: JSON.stringify({
+                    key: 'risk',
+                    questions: {
+                        approved: {
+                            kind: 'Choice',
+                            instructions: 'Is risk acceptable?',
+                            options: [
+                                { value: 'yes', description: 'Low risk' },
+                                { value: 'no', description: 'High risk' },
+                            ],
+                        },
+                    },
+                }),
+            },
+            {
+                ID: endYesStepId,
+                AgentID: flowAgentId,
+                Name: 'Finish Yes',
+                StepType: 'Custom',
+                StartingStep: false,
+                Status: 'Active',
+                Configuration: JSON.stringify({ stepType: 'ApprovalGate' }),
+            },
+            {
+                ID: endNoStepId,
+                AgentID: flowAgentId,
+                Name: 'Finish No',
+                StepType: 'Custom',
+                StartingStep: false,
+                Status: 'Active',
+                Configuration: JSON.stringify({ stepType: 'ApprovalGate' }),
+            },
+        ];
+        const paths = [
+            { ID: 'p1', OriginStepID: customStepId, DestinationStepID: decisionStepId, Condition: null, Priority: 0 },
+            { ID: 'p2', OriginStepID: decisionStepId, DestinationStepID: endYesStepId, Condition: "decisions.risk.approved.value === 'yes'", Priority: 0 },
+            { ID: 'p3', OriginStepID: decisionStepId, DestinationStepID: endNoStepId, Condition: "decisions.risk.approved.value === 'no'", Priority: 1 },
+        ];
+
+        const getStepsSpy = vi.spyOn(AIEngine.Instance, 'GetAgentSteps').mockReturnValue(steps as never);
+        const getPathsSpy = vi
+            .spyOn(AIEngine.Instance, 'GetPathsFromStep')
+            .mockImplementation((stepId: string) => paths.filter((p) => p.OriginStepID === stepId) as never);
+        const agentsSpy = vi.spyOn(AIEngine.Instance, 'Agents', 'get').mockReturnValue([]);
+        const promptsSpy = vi.spyOn(AIEngine.Instance, 'Prompts', 'get').mockReturnValue([]);
+
+        try {
+            // Default top-level run auto-selects 'inRun' because active Custom step exists
+            const autoMode = ResolveFlowExecutionMode(flowAgentId, false, undefined);
+            expect(autoMode.Mode).toBe('inRun');
+            expect(autoMode.Reason).toMatch(/custom step/i);
+
+            // Explicit 'dispatch' selects dispatch and CompileAndValidateFlowAgent fails loudly instructing 'inRun'
+            const explicitDispatch = ResolveFlowExecutionMode(flowAgentId, false, 'dispatch');
+            expect(explicitDispatch.Mode).toBe('dispatch');
+            const dispatchRes = CompileAndValidateFlowAgent(flowAgentId, 'Regulated Flow', undefined, undefined, {
+                AllowCustomStepPlaceholders: false,
+            });
+            expect('ErrorMessage' in dispatchRes).toBe(true);
+            if ('ErrorMessage' in dispatchRes) {
+                expect(dispatchRes.ErrorMessage).toMatch(/executionMode = 'inRun'/);
+            }
+
+            // In-run pre-flight Decision validation substitutes Custom placeholders and succeeds cleanly
+            const inRunRes = CompileAndValidateFlowAgent(flowAgentId, 'Regulated Flow', undefined, undefined, {
+                AllowCustomStepPlaceholders: true,
+            });
+            expect('Spec' in inRunRes).toBe(true);
+        } finally {
+            promptsSpy.mockRestore();
+            agentsSpy.mockRestore();
+            getPathsSpy.mockRestore();
+            getStepsSpy.mockRestore();
+        }
+    });
+
+    it('C-R1-7b: falls back to result.errorMessage when result.agentRun.ErrorMessage is absent across all sub-agent error sites', async () => {
+        const { AgentStepDispatcher } = await import('../AgentStepDispatcher');
+        const { AgentParallelSubAgentHelper } = await import('../helpers/subagents/AgentParallelSubAgentHelper');
+        const { AgentRelatedSubAgentAndTaskGraphHelper } = await import('../helpers/subagents/AgentRelatedSubAgentAndTaskGraphHelper');
+
+        const dispatcher = new AgentStepDispatcher();
+        const md = dispatcher.FormatSubAgentResultAsMarkdown('ChildWorker', {
+            success: false,
+            errorMessage: 'Top-level child error',
+            agentRun: { Status: 'Failed' } as MJAIAgentRunEntityExtended,
+        });
+        expect(md).toContain('**Error:** Top-level child error');
+
+        const parallelHelper = new AgentParallelSubAgentHelper();
+        const parallelMd = parallelHelper.BuildParallelSubAgentSummary([
+            {
+                request: { name: 'WorkerA', message: 'go' },
+                result: {
+                    success: false,
+                    errorMessage: 'Parallel worker error',
+                    agentRun: { Status: 'Failed' } as MJAIAgentRunEntityExtended,
+                },
+                subAgentEntity: makeAgent({ Name: 'WorkerA' }),
+                upstreamPaths: [],
+            },
+        ]);
+        expect(parallelMd).toContain('* Error: Parallel worker error');
+
+        const finalizeStepSpy = vi.fn(async () => undefined);
+        const pCtx = CreateMockAgentRunContext({ Hooks: { FinalizeStepEntity: finalizeStepSpy } });
+        await parallelHelper.RecordParallelStepCompletion(
+            pCtx,
+            {
+                request: { name: 'WorkerA', message: 'go' },
+                result: {
+                    success: false,
+                    errorMessage: 'Parallel step error',
+                    agentRun: { Status: 'Failed' } as MJAIAgentRunEntityExtended,
+                },
+                subAgentEntity: makeAgent({ Name: 'WorkerA' }),
+                stepEntity: {} as MJAIAgentRunStepEntityExtended,
+                upstreamPaths: [],
+            },
+            {}
+        );
+        expect(finalizeStepSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            false,
+            'Parallel step error',
+            expect.objectContaining({
+                subAgentResult: expect.objectContaining({ errorMessage: 'Parallel step error' }),
+            })
+        );
+
+        // Related sub-agent path propagates result.errorMessage
+        const relFinalizeSpy = vi.fn(async () => undefined);
+        const relCtx = CreateMockAgentRunContext({
+            Hooks: {
+                CreateStepEntity: vi.fn(async () => ({ ID: 'step-rel' } as MJAIAgentRunStepEntityExtended)),
+                FinalizeStepEntity: relFinalizeSpy,
+                ExecuteSubAgent: vi.fn(async () => ({
+                    success: false,
+                    errorMessage: 'Related sub-agent direct error',
+                    agentRun: { Status: 'Failed' } as MJAIAgentRunEntityExtended,
+                })),
+            },
+        });
+        const relatedHelper = new AgentRelatedSubAgentAndTaskGraphHelper();
+        const relOut = await relatedHelper.ExecuteRelatedSubAgentStep(
+            relCtx,
+            { IsSubAgentConsultActive: () => false } as never,
+            makeParams(),
+            { step: 'Sub-Agent', terminate: false, subAgent: { name: 'RelWorker', message: 'help' } },
+            makeAgent({ Name: 'RelWorker' }),
+            { SubAgentID: 'sa-rel', SubAgentInputMapping: null, SubAgentOutputMapping: null } as never
+        );
+        expect(relOut.errorMessage).toBe('Related sub-agent direct error');
+        expect(relFinalizeSpy).toHaveBeenCalledWith(
+            expect.anything(),
+            false,
+            'Related sub-agent direct error',
+            expect.objectContaining({
+                subAgentResult: expect.objectContaining({ errorMessage: 'Related sub-agent direct error' }),
+            })
+        );
+    });
 });

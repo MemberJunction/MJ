@@ -14,7 +14,7 @@ import {
     AgentUserPolicyEngine,
     ApplyDefaultAgentUserPolicyValues,
     MJAIAgentEntityExtended,
-    ParseAgentInstantiationConfig,
+    ResolveAgentInstantiationConfig,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -155,8 +155,13 @@ export class ManageMyAgentInstanceAction extends BaseAction {
             };
         }
 
-        // Check maxInstancesPerUser hint before DB roundtrip
-        const instConfig = ParseAgentInstantiationConfig(baseAgent.TypeConfiguration);
+        // Check maxInstancesPerUser hint before DB roundtrip (reads canonical Configuration.instantiation
+        // with multi-hop inheritance and fallback to legacy TypeConfiguration.instantiation, C-R1-5)
+        const effectiveBase = AIEngine.Instance.ResolveEffectiveAgentProperties(baseAgent);
+        const instConfig = ResolveAgentInstantiationConfig(
+            effectiveBase.Configuration ?? baseAgent.Configuration,
+            effectiveBase.TypeConfiguration ?? baseAgent.TypeConfiguration
+        );
         const maxPerUser = instConfig?.maxInstancesPerUser;
         if (maxPerUser != null && maxPerUser > 0) {
             const rootBase = AIEngine.Instance.GetRootAgent(baseAgent.ID) ?? baseAgent;
@@ -177,7 +182,6 @@ export class ManageMyAgentInstanceAction extends BaseAction {
             }
         }
 
-        const effectiveBase = AIEngine.Instance.ResolveEffectiveAgentProperties(baseAgent);
         const description = this.getStringParam(params, 'Description');
         const iconClass = this.getStringParam(params, 'IconClass');
         const logoUrl = this.getStringParam(params, 'LogoURL');

@@ -159,46 +159,64 @@ function tokenizeIdentifier(name: string): string[] {
         .filter((part) => part.length > 0);
 }
 
+/** 3-way classification for an action/tool used by read-only spiral and tool-loop tracking (C-R1-6). */
+export type ActionStepClassification = 'mutating' | 'read-only' | 'neutral';
+
+/**
+ * Classifies an action/tool into `'mutating'`, `'read-only'`, or `'neutral'` (e.g. `WaitSeconds`,
+ * `Sleep`, `Delay`, `Ping`). Prefers structured action metadata (`DisallowWhenTainted`, `Verb`)
+ * when available, falling back to token classification.
+ */
+export function ClassifyToolOrActionName(
+    name: string,
+    metadata?: ActionReadOnlyMetadata | null
+): ActionStepClassification {
+    if (metadata?.DisallowWhenTainted === true) {
+        return 'mutating';
+    }
+    const verb = metadata?.Verb?.trim().toLowerCase();
+    if (verb && verb.length > 0) {
+        if (MUTATING_ACTION_TOKENS.includes(verb) || LEADING_MUTATING_TOKENS.includes(verb)) {
+            return 'mutating';
+        }
+        if (READ_ONLY_ACTION_TOKENS.includes(verb)) {
+            return 'read-only';
+        }
+        return 'neutral';
+    }
+
+    const tokens = tokenizeIdentifier(name);
+    if (tokens.length === 0) {
+        return 'neutral';
+    }
+    if (tokens.some((t) => MUTATING_ACTION_TOKENS.includes(t))) {
+        return 'mutating';
+    }
+    if (LEADING_MUTATING_TOKENS.includes(tokens[0])) {
+        return 'mutating';
+    }
+    const firstReadIdx = tokens.findIndex((t) => READ_ONLY_ACTION_TOKENS.includes(t));
+    const leadingMutIdx = tokens.findIndex((t) => LEADING_MUTATING_TOKENS.includes(t));
+    // Treat 'run' as mutating if it appears before any read-only verb (or with no read-only verb at all).
+    if (leadingMutIdx !== -1 && (firstReadIdx === -1 || leadingMutIdx < firstReadIdx)) {
+        return 'mutating';
+    }
+    if (firstReadIdx !== -1) {
+        return 'read-only';
+    }
+    return 'neutral';
+}
+
 /**
  * Classifies whether an action/tool represents a read-only investigative operation.
  * Prefers structured action metadata (`DisallowWhenTainted`, `Verb`) when available, and falls
- * back to conservative token classification (fail-safe toward recognizing progress/mutation).
+ * back to conservative token classification.
  */
 export function IsReadOnlyToolOrActionName(
     name: string,
     metadata?: ActionReadOnlyMetadata | null
 ): boolean {
-    if (metadata?.DisallowWhenTainted === true) {
-        return false;
-    }
-    const verb = metadata?.Verb?.trim().toLowerCase();
-    if (verb && verb.length > 0) {
-        if (MUTATING_ACTION_TOKENS.includes(verb) || LEADING_MUTATING_TOKENS.includes(verb)) {
-            return false;
-        }
-        return READ_ONLY_ACTION_TOKENS.includes(verb);
-    }
-
-    const tokens = tokenizeIdentifier(name);
-    if (tokens.length === 0) {
-        return false;
-    }
-    if (tokens.some((t) => MUTATING_ACTION_TOKENS.includes(t))) {
-        return false;
-    }
-    if (LEADING_MUTATING_TOKENS.includes(tokens[0])) {
-        return false;
-    }
-    const firstReadIdx = tokens.findIndex((t) => READ_ONLY_ACTION_TOKENS.includes(t));
-    if (firstReadIdx === -1) {
-        return false;
-    }
-    // Only treat 'run' as mutating if it appears BEFORE any read-only verb (e.g. 'HubSpot - Run Sync').
-    const leadingMutIdx = tokens.findIndex((t) => LEADING_MUTATING_TOKENS.includes(t));
-    if (leadingMutIdx !== -1 && leadingMutIdx < firstReadIdx) {
-        return false;
-    }
-    return true;
+    return ClassifyToolOrActionName(name, metadata) === 'read-only';
 }
 
 /**
@@ -336,7 +354,8 @@ export class AgentStuckDetector {
             return { Action: 'none', Fingerprint: fingerprint, CountInWindow: 0, Threshold: threshold };
         }
 
-        const isReadOnly = IsReadOnlyToolOrActionName(toolName, actionMetadata);
+        const classification = ClassifyToolOrActionName(toolName, actionMetadata);
+        const isReadOnly = classification === 'read-only';
         if (isReadOnly) {
             this._readOnlyFingerprints.add(fingerprint);
         } else {
@@ -357,10 +376,11 @@ export class AgentStuckDetector {
             }
         }
 
-        // If a non-read-only (mutating) call ran with a fresh fingerprint (not itself repeating),
-        // clear ONLY older read-only fingerprints so `list -> create -> list` resets cleanly
-        // while preserving mutating fingerprints so alternating mutating loops (A-B-A-B) are caught!
-        if (countInWindow === 1 && !isReadOnly) {
+        // If a mutating call ran with a fresh fingerprint (not itself repeating), clear ONLY older
+        // read-only fingerprints so `list -> create -> list` resets cleanly while preserving
+        // mutating fingerprints (catches A-B-A-B loops) and leaving neutral calls (`WaitSeconds`)
+        // from prematurely wiping read-only loop history.
+        if (countInWindow === 1 && classification === 'mutating') {
             this._recentToolFingerprints = this._recentToolFingerprints.filter(
                 (fp) => !this._readOnlyFingerprints.has(fp)
             );
@@ -428,14 +448,20 @@ export class AgentStuckDetector {
 
         const actionNames = outcome.ActionNames ?? [];
         if (actionNames.length > 0) {
-            const allReadOnly = actionNames.every((name) =>
-                IsReadOnlyToolOrActionName(name, actionMetadataLookup?.(name))
+            const classifications = actionNames.map((name) =>
+                ClassifyToolOrActionName(name, actionMetadataLookup?.(name))
             );
-            if (!allReadOnly) {
+            if (classifications.some((c) => c === 'mutating')) {
                 this.resetReadOnlyStreak();
                 return { Action: 'none', ConsecutiveReadOnlySteps: 0, Threshold: threshold };
             }
-            this._consecutiveReadOnlySteps++;
+            if (classifications.some((c) => c === 'read-only')) {
+                this._consecutiveReadOnlySteps++;
+            } else {
+                // Neutral actions (e.g. WaitSeconds, Sleep, Delay, Ping): preserve current streak
+                // without resetting it to 0 or prematurely advancing it (C-R1-6).
+                return { Action: 'none', ConsecutiveReadOnlySteps: this._consecutiveReadOnlySteps, Threshold: threshold };
+            }
         } else if (stepType === 'Retry') {
             this._consecutiveReadOnlySteps++;
         } else {
@@ -586,21 +612,49 @@ export class AgentStuckDetector {
             const consumedEntries = this._lastInvokedEntries;
             this._lastInvokedEntries = [];
             const priorArr = Array.isArray(nextStep.priorStepResult) ? nextStep.priorStepResult : null;
+            const consumedPriorIndices = new Set<number>();
+            const getItemActionName = (item: unknown): string => {
+                if (!item || typeof item !== 'object') return '';
+                const rec = item as { actionName?: string; name?: string };
+                return (rec.actionName ?? rec.name ?? '').trim().toLowerCase();
+            };
+            const matchPriorIndex = (entry: InvokedToolEntry, idx: number): number => {
+                if (!priorArr || priorArr.length === 0) return -1;
+                // Prefer positional match when unconsumed and name matches (or item is unnamed),
+                // preventing same-name batch entries `[GetJobStatus(1), GetJobStatus(2)]` from
+                // colliding on `priorArr[0]` (C-R1-6).
+                if (idx < priorArr.length && !consumedPriorIndices.has(idx)) {
+                    const posName = getItemActionName(priorArr[idx]);
+                    if (posName.length === 0 || posName === entry.ActionNameLower) {
+                        consumedPriorIndices.add(idx);
+                        return idx;
+                    }
+                }
+                for (let j = 0; j < priorArr.length; j++) {
+                    if (consumedPriorIndices.has(j)) continue;
+                    const itemName = getItemActionName(priorArr[j]);
+                    if (itemName.length > 0 && itemName === entry.ActionNameLower) {
+                        consumedPriorIndices.add(j);
+                        return j;
+                    }
+                }
+                if (idx < priorArr.length && !consumedPriorIndices.has(idx)) {
+                    consumedPriorIndices.add(idx);
+                    return idx;
+                }
+                return -1;
+            };
             for (let idx = 0; idx < consumedEntries.length; idx++) {
                 const entry = consumedEntries[idx];
+                const matchedIdx = priorArr ? matchPriorIndex(entry, idx) : -1;
                 if (!entry.IsReadOnly) {
                     continue;
                 }
-                let matchedPayload: unknown = nextStep.priorStepResult;
-                if (priorArr) {
-                    const byName = priorArr.find((item) => {
-                        if (!item || typeof item !== 'object') return false;
-                        const rec = item as { actionName?: string; name?: string };
-                        const n = (rec.actionName ?? rec.name ?? '').trim().toLowerCase();
-                        return n.length > 0 && n === entry.ActionNameLower;
-                    });
-                    matchedPayload = byName !== undefined ? byName : priorArr[idx];
-                }
+                const matchedPayload: unknown = priorArr
+                    ? matchedIdx >= 0
+                        ? priorArr[matchedIdx]
+                        : undefined
+                    : nextStep.priorStepResult;
                 const resultHash = hashShortSignature(StableSortedJSON(matchedPayload));
                 const prevHash = this._lastResultHashByFingerprint.get(entry.BaseFp);
                 if (prevHash !== undefined && prevHash !== resultHash) {
@@ -631,7 +685,7 @@ export class AgentStuckDetector {
                     if (
                         summary.success !== false &&
                         executedName &&
-                        !IsReadOnlyToolOrActionName(executedName, actionMetadataLookup?.(executedName))
+                        ClassifyToolOrActionName(executedName, actionMetadataLookup?.(executedName)) === 'mutating'
                     ) {
                         priorMutated = true;
                         break;

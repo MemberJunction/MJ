@@ -21,7 +21,6 @@ import {
     ResolveDecisionState,
     ResolveDecisionStepAnswers,
     SelectOutgoingEdges,
-    ValidateTaskGraphSpec,
     type AgentDecisionAnswerSummary,
     type ConditionHold,
     type DecisionStepAnswers,
@@ -32,7 +31,11 @@ import {
     type TaskGraphSpec,
 } from '@memberjunction/ai-core-plus';
 import { AIEngineGraphRepository, SafeConditionEvaluator } from './flow-graph-adapters';
-import { CompileFlowAgentToTaskGraph, FormatFlowCompileErrors, FormatFlowValidationErrors } from './flow-graph-executor';
+import {
+    CompileAndValidateFlowAgent,
+    FormatFlowCompileErrors,
+    ResolveFlowExecutionMode,
+} from './flow-graph-executor';
 import { BaseAgentType, type AgentTypeExecutionRouting } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation, type LoopBodyActionStep } from '@memberjunction/ai-core-plus';
 import { SanitizeToolName } from '../native-tools/action-tool-builder';
@@ -1683,22 +1686,9 @@ export class FlowAgentType extends BaseAgentType {
         params: ExecuteAgentParams<P>,
         flowParams: FlowAgentExecuteParams | undefined
     ): void {
-        const requested = flowParams?.executionMode;
-        if (requested === 'inRun') {
-            flowState.executionMode = 'inRun';
-            flowState.executionModeReason = 'requested by the caller';
-        } else if (params.parentRun) {
-            flowState.executionMode = 'inRun';
-            flowState.executionModeReason = 'running as a sub-agent, so the calling run needs its result';
-        } else {
-            flowState.executionMode = 'dispatch';
-            flowState.executionModeReason = requested === 'dispatch'
-                ? 'requested by the caller'
-                // No parentRun: a top-level run, or a task-graph task whose submitting run could not be
-                // loaded (the runner logs that). The reason says both, so the recorded routing does
-                // not claim a nested flow was started at the top level (#4623).
-                : 'default for a run with no parent run (a top-level run, or a nested task whose submitting run did not resolve)';
-        }
+        const resolved = ResolveFlowExecutionMode(flowState.agentId, Boolean(params.parentRun), flowParams?.executionMode);
+        flowState.executionMode = resolved.Mode;
+        flowState.executionModeReason = resolved.Reason;
     }
 
     /**
@@ -1791,25 +1781,16 @@ export class FlowAgentType extends BaseAgentType {
      * IDs, and an incomplete fork, for one, is reported by its group, which is its origin's ID.
      */
     private compileAndValidateFlow<P>(
-        params: ExecuteAgentParams<P>
+        params: ExecuteAgentParams<P>,
+        allowCustomStepPlaceholders: boolean = false
     ): { Spec: TaskGraphSpec; Excluded: FlowCompileResult['Excluded'] } | { ErrorMessage: string } {
-        const compiled = CompileFlowAgentToTaskGraph(
+        return CompileAndValidateFlowAgent(
             params.agent.ID,
             params.agent.Name,
             params.agent.Description ?? undefined,
             params.agent.Isolation,
+            { AllowCustomStepPlaceholders: allowCustomStepPlaceholders }
         );
-        if (!compiled.Success || !compiled.Spec) {
-            return { ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowCompileErrors(compiled)}` };
-        }
-
-        const validation = ValidateTaskGraphSpec(compiled.Spec);
-        if (!validation.Valid) {
-            return {
-                ErrorMessage: `Workflow '${params.agent.Name}' could not be prepared to run:\n${FormatFlowValidationErrors(validation.Errors, compiled.Spec)}`
-            };
-        }
-        return { Spec: compiled.Spec, Excluded: compiled.Excluded };
     }
 
     /**
@@ -1870,7 +1851,7 @@ export class FlowAgentType extends BaseAgentType {
         // one the dispatcher would accept — which also rules out a loop drawn with a path back. A
         // flow without a Decision step is walked as it always was.
         if (activeSteps.some(s => s.StepType === 'Decision')) {
-            const prepared = this.compileAndValidateFlow(params);
+            const prepared = this.compileAndValidateFlow(params, true);
             if ('ErrorMessage' in prepared) return this.stopFlow(prepared.ErrorMessage, payloadToUse);
         }
 

@@ -514,7 +514,7 @@ export class AgentRealtimeHelper extends BaseAgentRealtimeHelper {
                 Success: result.success,
                 Output: result.success
                     ? result.agentRun?.Message || 'The target agent completed the request.'
-                    : result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.',
+                    : result.errorMessage || result.agentRun?.ErrorMessage || 'The target agent failed to complete the request.',
                 ...(result.agentRun?.ID ? { RunID: result.agentRun.ID } : {}),
                 ...(artifacts ? { Artifacts: artifacts } : {}),
             };

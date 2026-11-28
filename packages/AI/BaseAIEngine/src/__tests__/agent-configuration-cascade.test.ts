@@ -606,4 +606,47 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         expect(engine.GetAutoActivatableSkillsForAgent(agentInRestrictedCat)).toEqual([]);
         expect(engine.GetAutoActivatableSkillsForAgent(agentInOpenCat)).toHaveLength(1);
     });
+
+    it('C-R1-2: honors middle-ancestor SearchScopeAccess=None ceiling while still letting untouched non-instantiable leaves inherit', () => {
+        const l0 = makeAgent({
+            ID: AGENT_BASE,
+            Name: 'L0 Root',
+            InstantiationMode: 'Optional',
+            SearchScopeAccess: 'All',
+            Configuration: JSON.stringify({ scope: { searchScopeAccess: 'All' } }),
+        });
+        const l1 = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000011',
+            Name: 'L1 Restricted Dept Template',
+            BaseAgentID: l0.ID,
+            InstantiationMode: 'Optional',
+            SearchScopeAccess: 'None',
+            Configuration: null,
+        });
+        const l2UnderL1 = makeAgent({
+            ID: AGENT_LEAF,
+            Name: 'L2 Leaf Under L1',
+            BaseAgentID: l1.ID,
+            InstantiationMode: 'None',
+            SearchScopeAccess: 'All',
+            Configuration: JSON.stringify({ scope: { searchScopeAccess: 'All' } }),
+        });
+        const minimalLeafUnderL0 = makeAgent({
+            ID: 'a0000000-0000-4000-8000-000000000012',
+            Name: 'Minimal Leaf Under L0',
+            BaseAgentID: l0.ID,
+            InstantiationMode: 'None',
+            SearchScopeAccess: 'None',
+            Configuration: null,
+        });
+
+        const engine = seedEngine({
+            _agents: [l0, l1, l2UnderL1, minimalLeafUnderL0],
+        });
+
+        expect(engine.ResolveEffectiveAgentProperties(l1).SearchScopeAccess).toBe('None');
+        expect(engine.ResolveEffectiveAgentProperties(l2UnderL1).SearchScopeAccess).toBe('None');
+        // Minimal non-instantiable leaf with untouched legacy 'None' still inherits L0's 'All'
+        expect(engine.ResolveEffectiveAgentProperties(minimalLeafUnderL0).SearchScopeAccess).toBe('All');
+    });
 });

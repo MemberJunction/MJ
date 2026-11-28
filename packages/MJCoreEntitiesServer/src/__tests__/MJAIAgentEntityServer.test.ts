@@ -15,7 +15,17 @@ import {
     type AgentSandboxValidationTarget,
 } from '../custom/MJAIAgentEntityServer.server';
 import { ValidateAgentPersonaOwnership } from '../custom/MJAIAgentPersonaEntityServer.server';
-import { ValidateAgentScopedConfigurationJson } from '../custom/MJAIAgentCategoryEntityServer.server';
+import {
+    MJAIAgentCategoryEntityServer,
+    ValidateAgentCategoryDelete,
+    ValidateAgentCategoryMutation,
+    ValidateAgentScopedConfigurationJson,
+} from '../custom/MJAIAgentCategoryEntityServer.server';
+import {
+    MJAIAgentTypeEntityServer,
+    ValidateAgentTypeDelete,
+    ValidateAgentTypeMutation,
+} from '../custom/MJAIAgentTypeEntityServer.server';
 import {
     ValidateAgentStepTypeDelete,
     ValidateAgentStepTypeMutation,
@@ -981,6 +991,354 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
         } finally {
             baseSaveSpy.mockRestore();
             baseValidateSpy.mockRestore();
+        }
+    });
+
+    it('C-R1-1: GraphQL NewRecord() + SetMany(defaults) does not freeze SQL defaults into Configuration and still inherits from baseAgent', async () => {
+        // Simulate ResolverBase.CreateRecord: NewRecord() + SetMany(gqlPayload) sets NeverSet=false
+        // while keeping Dirty=false on every untouched column populated with its SQL default.
+        const fieldState = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        const addField = (name: string, dirty: boolean, neverSet: boolean): void => {
+            fieldState.set(name, { Name: name, Dirty: dirty, NeverSet: neverSet });
+        };
+        const defaultColumns: Record<string, unknown> = {
+            ModelSelectionMode: 'Agent Type',
+            SkillActivationMode: 'RequestedOnly',
+            SearchScopeAccess: 'None',
+            ArtifactCreationMode: 'Always',
+            MaxNotesToInject: 5,
+            EnableContextCompression: false,
+            MessageMode: 'None',
+            AcceptsSkills: 'None',
+            Isolation: 'InProcess',
+            AllowMemoryWrite: true,
+            SupportsPlanMode: true,
+            RequirePlanMode: false,
+            AllowEphemeralClientTools: true,
+            AcceptUnregisteredFiles: false,
+            Configuration: null,
+        };
+        for (const col of Object.keys(defaultColumns)) {
+            addField(col, false, false);
+        }
+
+        const server = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        server['GetFieldByName'] = (name: string) => fieldState.get(name);
+        Object.defineProperty(server, 'Fields', { get: () => Array.from(fieldState.values()), configurable: true });
+        Object.defineProperty(server, 'IsSaved', { get: () => false, configurable: true });
+        Object.defineProperty(server, 'ContextCurrentUser', { get: () => null, configurable: true });
+        Object.defineProperty(server, 'ID', { value: 'c1111111-1111-4111-8111-111111111111', writable: true, configurable: true });
+        Object.defineProperty(server, 'BaseAgentID', { value: COS_ID, writable: true, configurable: true });
+        Object.defineProperty(server, 'OwnerUserID', { value: ALICE, writable: true, configurable: true });
+        Object.defineProperty(server, 'TypeID', { value: null, writable: true, configurable: true });
+        Object.defineProperty(server, 'CategoryID', { value: null, writable: true, configurable: true });
+        Object.defineProperty(server, 'IsPrimaryInstance', { value: false, writable: true, configurable: true });
+        Object.defineProperty(server, 'TypeConfiguration', { value: null, writable: true, configurable: true });
+        for (const [k, v] of Object.entries(defaultColumns)) {
+            Object.defineProperty(server, k, { value: v, writable: true, configurable: true });
+        }
+
+        const base = {
+            ID: COS_ID,
+            Name: 'Chief of Staff',
+            BaseAgentID: null,
+            TypeID: '33333333-3333-4333-8333-333333333333',
+            CategoryID: '44444444-4444-4444-8444-444444444444',
+            ModelSelectionMode: 'Agent',
+            SkillActivationMode: 'Auto',
+            SearchScopeAccess: 'All',
+            ArtifactCreationMode: 'Never',
+            MaxNotesToInject: 12,
+            EnableContextCompression: true,
+            MessageMode: 'Latest',
+            AcceptsSkills: 'All',
+            Isolation: 'Worker',
+            AllowMemoryWrite: true,
+            SupportsPlanMode: true,
+            RequirePlanMode: false,
+            AllowEphemeralClientTools: true,
+            AcceptUnregisteredFiles: false,
+            Configuration: null,
+            Status: 'Active',
+        } as unknown as MJAIAgentEntity;
+
+        const loadAgentsSpy = vi
+            .spyOn(server as unknown as { loadAllAgentsForGuard(): Promise<MJAIAgentEntity[]> }, 'loadAllAgentsForGuard')
+            .mockResolvedValue([base]);
+        const loadCatsSpy = vi
+            .spyOn(server as unknown as { loadAllAgentCategoriesForGuard(): Promise<unknown[]> }, 'loadAllAgentCategoriesForGuard')
+            .mockResolvedValue([]);
+        const loadTypesSpy = vi
+            .spyOn(server as unknown as { loadAllAgentTypesForGuard(): Promise<unknown[]> }, 'loadAllAgentTypesForGuard')
+            .mockResolvedValue([]);
+        const clearPrimarySpy = vi
+            .spyOn(server as unknown as { clearOtherPrimaryInstances(): Promise<void> }, 'clearOtherPrimaryInstances')
+            .mockResolvedValue(undefined);
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockResolvedValue(true);
+        try {
+            const saved = await server.Save();
+            expect(saved).toBe(true);
+            // Must NOT freeze untouched SQL defaults into child.Configuration!
+            expect(server['Configuration']).toBeNull();
+            // Must inherit parent capability columns even though SetMany flipped NeverSet=false!
+            expect(server['ModelSelectionMode']).toBe('Agent');
+            expect(server['SkillActivationMode']).toBe('Auto');
+            expect(server['SearchScopeAccess']).toBe('All');
+            expect(server['ArtifactCreationMode']).toBe('Never');
+            expect(server['MaxNotesToInject']).toBe(12);
+            expect(server['EnableContextCompression']).toBe(true);
+            expect(server['AcceptsSkills']).toBe('All');
+        } finally {
+            baseSaveSpy.mockRestore();
+            clearPrimarySpy.mockRestore();
+            loadTypesSpy.mockRestore();
+            loadCatsSpy.mockRestore();
+            loadAgentsSpy.mockRestore();
+        }
+    });
+
+    it('C-R1-2: enforces admin-only on Category & AgentType mutations/deletes, blocks TypeID=null clear, middle-ancestor SearchScopeAccess=None bypass, and Category/AgentType narrow-only ceilings', async () => {
+        const devUser = makeUser(ALICE, 'User', ['Developer']);
+        const ownerUser = makeUser(ALICE, 'Owner');
+
+        // 1. Developer cannot wipe Category/Type DefaultConfiguration with '{}' or mutate/delete either entity
+        expect(
+            ValidateAgentScopedConfigurationJson('{}', 'DefaultConfiguration', 'AI Agent Category', devUser).length
+        ).toBeGreaterThan(0);
+        expect(ValidateAgentCategoryMutation('Finance', devUser).length).toBeGreaterThan(0);
+        expect(ValidateAgentCategoryDelete('cat-1', devUser).length).toBeGreaterThan(0);
+        expect(ValidateAgentTypeMutation('Loop', devUser).length).toBeGreaterThan(0);
+        expect(ValidateAgentTypeDelete('type-1', devUser).length).toBeGreaterThan(0);
+        // Admin and system context (null) stay allowed
+        expect(ValidateAgentCategoryMutation('Finance', ownerUser)).toEqual([]);
+        expect(ValidateAgentCategoryDelete('cat-1', null)).toEqual([]);
+        expect(ValidateAgentTypeMutation('Loop', ownerUser)).toEqual([]);
+        expect(ValidateAgentTypeDelete('type-1', null)).toEqual([]);
+
+        // Verify Delete() rejects non-admin on MJAIAgentCategoryEntityServer & MJAIAgentTypeEntityServer
+        const catServer = Object.create(MJAIAgentCategoryEntityServer.prototype) as MJAIAgentCategoryEntityServer & Record<string, unknown>;
+        Object.defineProperty(catServer, 'ContextCurrentUser', { get: () => devUser, configurable: true });
+        Object.defineProperty(catServer, 'ID', { get: () => 'cat-1', configurable: true });
+        Object.defineProperty(catServer, 'LatestResult', { get: () => ({ Errors: [] }), configurable: true });
+        expect(await catServer.Delete()).toBe(false);
+
+        const typeServer = Object.create(MJAIAgentTypeEntityServer.prototype) as MJAIAgentTypeEntityServer & Record<string, unknown>;
+        Object.defineProperty(typeServer, 'ContextCurrentUser', { get: () => devUser, configurable: true });
+        Object.defineProperty(typeServer, 'ID', { get: () => 'type-1', configurable: true });
+        Object.defineProperty(typeServer, 'LatestResult', { get: () => ({ Errors: [] }), configurable: true });
+        expect(await typeServer.Delete()).toBe(false);
+
+        // 2. Non-admin clearing TypeID = null on saved derived instance is blocked
+        const uiUser = makeUser(ALICE, 'User', ['UI']);
+        const L0 = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            TypeID: '33333333-3333-4333-8333-333333333333',
+            CategoryID: '44444444-4444-4444-8444-444444444444',
+            SearchScopeAccess: 'All',
+            Configuration: JSON.stringify({ scope: { searchScopeAccess: 'All' } }),
+        });
+        const L1 = baseAgentRow({
+            ID: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            Name: 'L1 Restricted Template',
+            BaseAgentID: L0.ID,
+            InstantiationMode: 'Optional',
+            TypeID: L0.TypeID,
+            CategoryID: L0.CategoryID,
+            SearchScopeAccess: 'None',
+            Configuration: null,
+        });
+        const makePerm = (agentId: string): MJAIAgentPermissionEntity => {
+            const p = Object.assign(Object.create(MJAIAgentPermissionEntity.prototype) as MJAIAgentPermissionEntity, {});
+            Object.defineProperties(p, {
+                AgentID: { value: agentId },
+                UserID: { value: ALICE },
+                RoleID: { value: null },
+                CanView: { value: true },
+                CanRun: { value: true },
+                CanEdit: { value: false },
+                CanDelete: { value: false },
+            });
+            return p;
+        };
+        const perm0 = makePerm(L0.ID);
+        const perm1 = makePerm(L1.ID);
+
+        const clearTypeErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                BaseAgentID: L0.ID,
+                PreSaveBaseAgentID: L0.ID,
+                OwnerUserID: ALICE,
+                PreSaveOwnerUserID: ALICE,
+                CategoryID: L0.CategoryID,
+                PreSaveCategoryID: L0.CategoryID,
+                TypeID: null,
+                PreSaveTypeID: L0.TypeID,
+                DirtyFields: new Set(['TypeID']),
+            }),
+            User: uiUser,
+            AllAgents: [L0],
+            AllPermissions: [perm0],
+        });
+        expect(clearTypeErrors.some((e) => e.Source === 'TypeID' && /clear TypeID/i.test(e.Message))).toBe(true);
+
+        // 3. Middle-ancestor SearchScopeAccess='None' (Configuration=null) blocks L2 widening to 'All'
+        const middleNoneErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: false,
+                BaseAgentID: L1.ID,
+                OwnerUserID: ALICE,
+                CategoryID: L1.CategoryID,
+                TypeID: L1.TypeID,
+                SearchScopeAccess: 'All',
+                Configuration: JSON.stringify({ scope: { searchScopeAccess: 'All' } }),
+            }),
+            User: uiUser,
+            AllAgents: [L0, L1],
+            AllPermissions: [perm0, perm1],
+        });
+        expect(middleNoneErrors.some((e) => e.Source === 'SearchScopeAccess')).toBe(true);
+
+        // 4. Category & AgentType narrow-only ceilings enforced on derived saves
+        const strictCategory = {
+            ID: L0.CategoryID!,
+            ParentID: null,
+            DefaultConfiguration: JSON.stringify({
+                execution: { requirePlanMode: true },
+                clientTools: { allowEphemeral: false },
+                scope: { searchScopeAccess: 'Assigned' },
+                subAgentExecution: { maxExecutionsPerRun: 2 },
+            }),
+        };
+        const strictType = {
+            ID: L0.TypeID!,
+            DefaultAgentConfiguration: JSON.stringify({
+                memory: { allowMemoryWrite: false },
+                skills: { activationMode: 'RequestedOnly' },
+                subAgentExecution: { maxConsultRounds: 1 },
+            }),
+        };
+        const policyViolationErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: false,
+                BaseAgentID: L0.ID,
+                OwnerUserID: ALICE,
+                CategoryID: L0.CategoryID,
+                TypeID: L0.TypeID,
+                Configuration: JSON.stringify({
+                    execution: { requirePlanMode: false },
+                    clientTools: { allowEphemeral: true },
+                    scope: { searchScopeAccess: 'All' },
+                    memory: { allowMemoryWrite: true },
+                    skills: { activationMode: 'Auto' },
+                    subAgentExecution: { maxExecutionsPerRun: 5, maxConsultRounds: 4 },
+                }),
+            }),
+            User: uiUser,
+            AllAgents: [L0],
+            AllPermissions: [perm0],
+            AllCategories: [strictCategory],
+            AllAgentTypes: [strictType],
+        });
+        const violatedSources = new Set(policyViolationErrors.map((e) => e.Source));
+        expect(violatedSources.has('RequirePlanMode')).toBe(true);
+        expect(violatedSources.has('AllowEphemeralClientTools')).toBe(true);
+        expect(violatedSources.has('SearchScopeAccess')).toBe(true);
+        expect(violatedSources.has('AllowMemoryWrite')).toBe(true);
+        expect(violatedSources.has('SkillActivationMode')).toBe(true);
+        expect(violatedSources.has('MaxExecutionsPerRun')).toBe(true);
+        expect(violatedSources.has('MaxSubAgentConsultRounds')).toBe(true);
+    });
+
+    it('C-R1-7a: rejects invalid caller-dirty legacy column edits on saved MJAIAgentEntityServer and MJAIAgentTypeEntityServer', async () => {
+        const agentFields = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        const configField = { Name: 'Configuration', Dirty: false, NeverSet: false, OldValue: null };
+        agentFields.set('Configuration', configField);
+        agentFields.set('MaxExecutionsPerRun', { Name: 'MaxExecutionsPerRun', Dirty: true, NeverSet: false, OldValue: 3 });
+        agentFields.set('CompactionTriggerPercent', { Name: 'CompactionTriggerPercent', Dirty: true, NeverSet: false, OldValue: 75 });
+        agentFields.set('RerankerConfiguration', { Name: 'RerankerConfiguration', Dirty: true, NeverSet: false, OldValue: null });
+
+        const agentServer = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        agentServer['GetFieldByName'] = (name: string) => agentFields.get(name);
+        Object.defineProperty(agentServer, 'Fields', { get: () => Array.from(agentFields.values()), configurable: true });
+        Object.defineProperty(agentServer, 'IsSaved', { get: () => true, configurable: true });
+        Object.defineProperty(agentServer, 'ContextCurrentUser', { get: () => null, configurable: true });
+        Object.defineProperty(agentServer, 'BaseAgentID', { get: () => null, configurable: true });
+        Object.defineProperty(agentServer, 'OwnerUserID', { get: () => null, configurable: true });
+        Object.defineProperty(agentServer, 'TypeConfiguration', { get: () => null, configurable: true });
+        let agentConfigVal: string | null = null;
+        Object.defineProperty(agentServer, 'Configuration', {
+            get: () => agentConfigVal,
+            set: (v: string | null) => {
+                agentConfigVal = v;
+                configField.Dirty = true;
+            },
+            configurable: true,
+        });
+        Object.defineProperty(agentServer, 'MaxExecutionsPerRun', { value: 0, writable: true, configurable: true });
+        Object.defineProperty(agentServer, 'CompactionTriggerPercent', { value: 150, writable: true, configurable: true });
+        Object.defineProperty(agentServer, 'RerankerConfiguration', { value: '{bad', writable: true, configurable: true });
+
+        let agentValResult: ValidationResult | null = null;
+        const okResult = new ValidationResult();
+        okResult.Success = true;
+        const baseValidateSpy = vi.spyOn(BaseEntity.prototype, 'ValidateAsync').mockResolvedValue(okResult);
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: MJAIAgentEntityServer) {
+            agentValResult = await this.ValidateAsync();
+            return agentValResult.Success;
+        });
+        try {
+            const saved = await agentServer.Save();
+            expect(saved).toBe(false);
+            expect(agentValResult?.Success).toBe(false);
+            const joined = (agentValResult?.Errors ?? []).map((e) => e.Message).join('\n');
+            expect(joined).toMatch(/maxExecutionsPerRun/i);
+            expect(joined).toMatch(/compactionTriggerPercent/i);
+            expect(joined).toMatch(/RerankerConfiguration/i);
+        } finally {
+            baseSaveSpy.mockRestore();
+            baseValidateSpy.mockRestore();
+        }
+
+        // Same check on MJAIAgentTypeEntityServer
+        const typeFields = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        const typeCfgField = { Name: 'DefaultAgentConfiguration', Dirty: false, NeverSet: false, OldValue: null };
+        typeFields.set('DefaultAgentConfiguration', typeCfgField);
+        typeFields.set('CompactionTriggerPercent', { Name: 'CompactionTriggerPercent', Dirty: true, NeverSet: false, OldValue: 75 });
+
+        const typeServer = Object.create(MJAIAgentTypeEntityServer.prototype) as MJAIAgentTypeEntityServer & Record<string, unknown>;
+        typeServer['GetFieldByName'] = (name: string) => typeFields.get(name);
+        Object.defineProperty(typeServer, 'IsSaved', { get: () => true, configurable: true });
+        Object.defineProperty(typeServer, 'ContextCurrentUser', { get: () => null, configurable: true });
+        Object.defineProperty(typeServer, 'Name', { get: () => 'Loop', configurable: true });
+        let typeConfigVal: string | null = null;
+        Object.defineProperty(typeServer, 'DefaultAgentConfiguration', {
+            get: () => typeConfigVal,
+            set: (v: string | null) => {
+                typeConfigVal = v;
+                typeCfgField.Dirty = true;
+            },
+            configurable: true,
+        });
+        Object.defineProperty(typeServer, 'CompactionTriggerPercent', { value: 150, writable: true, configurable: true });
+
+        let typeValResult: ValidationResult | null = null;
+        const okTypeResult = new ValidationResult();
+        okTypeResult.Success = true;
+        const typeValidateSpy = vi.spyOn(BaseEntity.prototype, 'ValidateAsync').mockResolvedValue(okTypeResult);
+        const typeSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: MJAIAgentTypeEntityServer) {
+            typeValResult = await this.ValidateAsync();
+            return typeValResult.Success;
+        });
+        try {
+            const saved = await typeServer.Save();
+            expect(saved).toBe(false);
+            expect(typeValResult?.Success).toBe(false);
+            expect((typeValResult?.Errors ?? []).some((e) => /compactionTriggerPercent/i.test(e.Message))).toBe(true);
+        } finally {
+            typeSaveSpy.mockRestore();
+            typeValidateSpy.mockRestore();
         }
     });
 });

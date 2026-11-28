@@ -11,18 +11,31 @@ import {
     ValidationResult,
 } from '@memberjunction/core';
 import { EscapeSQLString, IndexByUUID, RegisterClass, UUIDsEqual, UUIDSet } from '@memberjunction/global';
-import { MJAIAgentEntity, MJAIAgentPermissionEntity, MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import {
+    MJAIAgentCategoryEntity,
+    MJAIAgentEntity,
+    MJAIAgentPermissionEntity,
+    MJAIAgentTypeEntity,
+} from '@memberjunction/core-entities';
+import {
+    BuildAgentTypeConfigurationFromLegacyFields,
+    DeepMergeAgentConfigurations,
     IsForbiddenMetadataHelperSeam,
+    IsLegacyAIAgentConfigSqlDefault,
+    LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS,
     MAX_AGENT_INHERITANCE_DEPTH,
     MJAIAgentEntityExtended,
     ParseAgentConfiguration,
     ParseAgentHelperPlugins,
-    ParseAgentInstantiationConfig,
+    ResolveAgentInstantiationConfig,
     SyncAgentLegacyColumnsAndConfiguration,
     VALID_AGENT_HELPER_SEAMS,
     ValidateAgentConfigurationJson,
+    ValidateLegacyAgentConfigFields,
+    type IAgentConfiguration,
+    type IAgentInstantiationConfig,
     type LegacyAIAgentConfigColumns,
+    type LegacyAIAgentTypeConfigColumns,
 } from '@memberjunction/ai-core-plus';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { ValidateJsonAgainstSchemaLite } from './json-schema-lite';
@@ -181,6 +194,78 @@ export interface AgentSandboxValidationContext {
             >
     >;
     AllPermissions: ReadonlyArray<MJAIAgentPermissionEntity>;
+    /** Optional category rows used to enforce Category DefaultConfiguration narrow-only ceilings. */
+    AllCategories?: ReadonlyArray<Pick<MJAIAgentCategoryEntity, 'ID' | 'ParentID' | 'DefaultConfiguration'>>;
+    /** Optional agent type rows used to enforce AgentType DefaultAgentConfiguration narrow-only ceilings. */
+    AllAgentTypes?: ReadonlyArray<
+        Pick<MJAIAgentTypeEntity, 'ID' | 'DefaultAgentConfiguration'> & Partial<LegacyAIAgentTypeConfigColumns>
+    >;
+}
+
+/**
+ * Resolves ordered narrow-only default policy layers (`AgentType -> Category Parent Chains`)
+ * for an agent chain `[...ancestors, target]`, mirroring `BaseAIEngine.ResolveEffectiveAgentProperties`.
+ */
+function collectDefaultPolicyLayers(
+    chain: ReadonlyArray<{ CategoryID?: string | null; TypeID?: string | null }>,
+    allCategories: AgentSandboxValidationContext['AllCategories'],
+    allAgentTypes: AgentSandboxValidationContext['AllAgentTypes']
+): IAgentConfiguration[] {
+    const layers: IAgentConfiguration[] = [];
+
+    let effectiveTypeId: string | null = null;
+    for (let i = chain.length - 1; i >= 0; i--) {
+        if (chain[i].TypeID) {
+            effectiveTypeId = chain[i].TypeID ?? null;
+            break;
+        }
+    }
+    if (effectiveTypeId && allAgentTypes && allAgentTypes.length > 0) {
+        const agentType = allAgentTypes.find((at) => UUIDsEqual(at.ID, effectiveTypeId));
+        if (agentType) {
+            const typeLegacy = BuildAgentTypeConfigurationFromLegacyFields(agentType);
+            const typeJson = ParseAgentConfiguration(agentType.DefaultAgentConfiguration);
+            const typeLayer = DeepMergeAgentConfigurations(typeLegacy, typeJson);
+            if (Object.keys(typeLayer).length > 0) {
+                layers.push(typeLayer);
+            }
+        }
+    }
+
+    if (allCategories && allCategories.length > 0) {
+        const catsById = IndexByUUID(allCategories);
+        const seenCatIds = new UUIDSet();
+        for (const node of chain) {
+            if (!node.CategoryID) {
+                continue;
+            }
+            const catChain: Array<NonNullable<AgentSandboxValidationContext['AllCategories']>[number]> = [];
+            const walkVisited = new UUIDSet();
+            let curId: string | null = node.CategoryID;
+            while (curId && !walkVisited.Has(curId)) {
+                walkVisited.Add(curId);
+                const cat = catsById.Get(curId);
+                if (!cat) {
+                    break;
+                }
+                catChain.push(cat);
+                curId = cat.ParentID ?? null;
+            }
+            catChain.reverse();
+            for (const cat of catChain) {
+                if (seenCatIds.Has(cat.ID)) {
+                    continue;
+                }
+                seenCatIds.Add(cat.ID);
+                const catJson = ParseAgentConfiguration(cat.DefaultConfiguration);
+                if (catJson) {
+                    layers.push(catJson);
+                }
+            }
+        }
+    }
+
+    return layers;
 }
 
 /**
@@ -425,9 +510,13 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
-        const baseParsedConfig = ParseAgentConfiguration(baseAgent.Configuration);
-        const instCfg =
-            baseParsedConfig?.instantiation ?? ParseAgentInstantiationConfig(baseAgent.TypeConfiguration);
+        let instCfg: IAgentInstantiationConfig | null = null;
+        for (const anc of ancestors) {
+            const resolved = ResolveAgentInstantiationConfig(anc.Configuration, anc.TypeConfiguration);
+            if (resolved) {
+                instCfg = instCfg ? { ...instCfg, ...resolved } : resolved;
+            }
+        }
         const ownerId = Target.OwnerUserID ?? User?.ID ?? null;
         if (instCfg?.maxInstancesPerUser && ownerId) {
             const existingCount = AllAgents.filter(
@@ -594,8 +683,23 @@ export function ValidateAgentInheritanceAndSandbox(
                         ValidationErrorType.Failure
                     )
                 );
+            } else if (expectedType && Target.TypeID === null && Target.DirtyFields?.has('TypeID')) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        'TypeID',
+                        'Non-administrator users cannot clear TypeID on a derived agent instance.',
+                        null,
+                        ValidationErrorType.Failure
+                    )
+                );
             }
         }
+
+        const defaultPolicyLayers = collectDefaultPolicyLayers(
+            [...ancestors, Target],
+            ctx.AllCategories,
+            ctx.AllAgentTypes
+        );
 
         // Multi-hop upper-bound limit ceilings (B4):
         // - Exceeding an ancestor's finite ceiling is always rejected.
@@ -659,30 +763,49 @@ export function ValidateAgentInheritanceAndSandbox(
         checkMultiHopUpperBound('MaxIterationsPerRun', ancestors.map((a) => a.MaxIterationsPerRun), Target.MaxIterationsPerRun);
         checkMultiHopUpperBound(
             'MaxExecutionsPerRun',
-            ancestors.map((a, i) => ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun ?? a.MaxExecutionsPerRun),
+            [
+                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxExecutionsPerRun),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun, a.MaxExecutionsPerRun]),
+            ],
             targetConfig?.subAgentExecution?.maxExecutionsPerRun !== undefined
                 ? targetConfig.subAgentExecution.maxExecutionsPerRun
                 : Target.MaxExecutionsPerRun
         );
         checkMultiHopUpperBound(
             'MaxSubAgentConsultRounds',
-            ancestors.map((a, i) => ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds ?? a.MaxSubAgentConsultRounds),
+            [
+                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxConsultRounds),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds, a.MaxSubAgentConsultRounds]),
+            ],
             targetConfig?.subAgentExecution?.maxConsultRounds !== undefined
                 ? targetConfig.subAgentExecution.maxConsultRounds
                 : Target.MaxSubAgentConsultRounds
         );
 
-        // Narrow-only capabilities validated across BOTH Configuration JSON and legacy columns:
+        // Narrow-only capabilities validated across BOTH Configuration JSON and legacy columns
+        // as well as Category/AgentType default policy layers (C-R1-2):
         // 4a. SearchScopeAccess (None: 0 < Assigned: 1 < All: 2)
         let ancestorSearchAccess: MJAIAgentEntity['SearchScopeAccess'] | null = null;
-        for (let i = 0; i < ancestors.length; i++) {
-            const explicit = ancestorConfigs[i]?.scope?.searchScopeAccess;
-            const legacy = ancestors[i].SearchScopeAccess;
-            const val = explicit ?? (legacy && legacy !== 'None' ? legacy : (i === 0 ? legacy : null));
+        const applySearchAccessCeiling = (val: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
             if (val != null) {
                 if (ancestorSearchAccess === null || SEARCH_ACCESS_RANK[val] < SEARCH_ACCESS_RANK[ancestorSearchAccess]) {
                     ancestorSearchAccess = val;
                 }
+            }
+        };
+        for (const layer of defaultPolicyLayers) {
+            applySearchAccessCeiling(layer.scope?.searchScopeAccess);
+        }
+        for (let i = 0; i < ancestors.length; i++) {
+            const explicit = ancestorConfigs[i]?.scope?.searchScopeAccess ?? null;
+            const legacy = ancestors[i].SearchScopeAccess ?? null;
+            if (explicit != null && legacy != null) {
+                const stricter = SEARCH_ACCESS_RANK[legacy] < SEARCH_ACCESS_RANK[explicit] ? legacy : explicit;
+                applySearchAccessCeiling(stricter);
+            } else {
+                // Every entry in `ancestors` is an ancestor/template above Target, so `legacy === 'None'`
+                // is an active `'None'` ceiling even on middle ancestors where `Configuration` is null.
+                applySearchAccessCeiling(explicit ?? legacy);
             }
         }
         const targetSearchAccess = targetConfig?.scope?.searchScopeAccess ?? Target.SearchScopeAccess ?? null;
@@ -730,13 +853,19 @@ export function ValidateAgentInheritanceAndSandbox(
 
         // 4c. SkillActivationMode (RequestedOnly: 0 < Auto: 1)
         let ancestorSkillMode: MJAIAgentEntity['SkillActivationMode'] | null = null;
-        for (let i = 0; i < ancestors.length; i++) {
-            const val = ancestorConfigs[i]?.skills?.activationMode ?? ancestors[i].SkillActivationMode ?? null;
+        const applySkillModeCeiling = (val: MJAIAgentEntity['SkillActivationMode'] | null | undefined): void => {
             if (val != null) {
                 if (ancestorSkillMode === null || SKILL_ACTIVATION_RANK[val] < SKILL_ACTIVATION_RANK[ancestorSkillMode]) {
                     ancestorSkillMode = val;
                 }
             }
+        };
+        for (const layer of defaultPolicyLayers) {
+            applySkillModeCeiling(layer.skills?.activationMode);
+        }
+        for (let i = 0; i < ancestors.length; i++) {
+            applySkillModeCeiling(ancestorConfigs[i]?.skills?.activationMode);
+            applySkillModeCeiling(ancestors[i].SkillActivationMode);
         }
         const targetSkillMode = targetConfig?.skills?.activationMode ?? Target.SkillActivationMode ?? null;
         if (
@@ -755,10 +884,10 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
-        // 4d. RequirePlanMode (monotonic OR: once true on an ancestor, derived instances cannot set false)
-        const ancestorRequiresPlan = ancestors.some(
-            (a, i) => (ancestorConfigs[i]?.execution?.requirePlanMode ?? a.RequirePlanMode) === true
-        );
+        // 4d. RequirePlanMode (monotonic OR: once true on an ancestor/category/type, derived instances cannot set false)
+        const ancestorRequiresPlan =
+            defaultPolicyLayers.some((l) => l.execution?.requirePlanMode === true) ||
+            ancestors.some((a, i) => ancestorConfigs[i]?.execution?.requirePlanMode === true || a.RequirePlanMode === true);
         const targetRequirePlan = targetConfig?.execution?.requirePlanMode ?? Target.RequirePlanMode;
         if (shouldEnforceField('RequirePlanMode') && ancestorRequiresPlan && targetRequirePlan === false) {
             errors.push(
@@ -771,7 +900,7 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
-        // 4e. Narrow-only booleans (monotonic AND: once false on an ancestor, derived instances cannot set true)
+        // 4e. Narrow-only booleans (monotonic AND: once false on an ancestor/category/type, derived instances cannot set true)
         const checkNarrowBoolean = (
             fieldName: 'SupportsPlanMode' | 'AcceptUnregisteredFiles' | 'AllowEphemeralClientTools' | 'AllowMemoryWrite',
             ancestorVals: Array<boolean | null | undefined>,
@@ -791,22 +920,34 @@ export function ValidateAgentInheritanceAndSandbox(
 
         checkNarrowBoolean(
             'SupportsPlanMode',
-            ancestors.map((a, i) => ancestorConfigs[i]?.execution?.supportsPlanMode ?? a.SupportsPlanMode),
+            [
+                ...defaultPolicyLayers.map((l) => l.execution?.supportsPlanMode),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.execution?.supportsPlanMode, a.SupportsPlanMode]),
+            ],
             targetConfig?.execution?.supportsPlanMode ?? Target.SupportsPlanMode
         );
         checkNarrowBoolean(
             'AcceptUnregisteredFiles',
-            ancestors.map((a, i) => ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles ?? a.AcceptUnregisteredFiles),
+            [
+                ...defaultPolicyLayers.map((l) => l.attachments?.acceptUnregisteredFiles),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles, a.AcceptUnregisteredFiles]),
+            ],
             targetConfig?.attachments?.acceptUnregisteredFiles ?? Target.AcceptUnregisteredFiles
         );
         checkNarrowBoolean(
             'AllowEphemeralClientTools',
-            ancestors.map((a, i) => ancestorConfigs[i]?.clientTools?.allowEphemeral ?? a.AllowEphemeralClientTools),
+            [
+                ...defaultPolicyLayers.map((l) => l.clientTools?.allowEphemeral),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.clientTools?.allowEphemeral, a.AllowEphemeralClientTools]),
+            ],
             targetConfig?.clientTools?.allowEphemeral ?? Target.AllowEphemeralClientTools
         );
         checkNarrowBoolean(
             'AllowMemoryWrite',
-            ancestors.map((a, i) => ancestorConfigs[i]?.memory?.allowMemoryWrite ?? a.AllowMemoryWrite),
+            [
+                ...defaultPolicyLayers.map((l) => l.memory?.allowMemoryWrite),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.memory?.allowMemoryWrite, a.AllowMemoryWrite]),
+            ],
             targetConfig?.memory?.allowMemoryWrite ?? Target.AllowMemoryWrite
         );
     }
@@ -831,6 +972,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
      * mark `Configuration` dirty for narrow-only checks (R3-10).
      */
     private _configDirtyBeforeSync: boolean | null = null;
+    private _dirtyLegacyPatchForValidation: Partial<LegacyAIAgentConfigColumns> | null = null;
 
     /** Enable async validation so TypeConfiguration, BaseAgentID chain, and sandbox checks run. */
     public override get DefaultSkipAsyncValidation(): boolean {
@@ -846,6 +988,8 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         // defaults onto legacy columns so newly created derived instances do not freeze inherited
         // parent values into AIAgent.Configuration JSON.
         const callerDirtyLegacyFields = this.collectDirtyLegacyConfigFields(isCreate);
+        const callerLegacyPatch = this.buildLegacyPatchFromSet(callerDirtyLegacyFields);
+        this._dirtyLegacyPatchForValidation = Object.keys(callerLegacyPatch).length > 0 ? callerLegacyPatch : null;
         this._configDirtyBeforeSync = isCreate || (this.GetFieldByName('Configuration')?.Dirty ?? false);
 
         try {
@@ -854,12 +998,18 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             }
 
             if (this.BaseAgentID) {
-                const allAgents = await this.loadAllAgentsForGuard();
+                const [allAgents, allCategories, allAgentTypes] = isCreate
+                    ? await Promise.all([
+                          this.loadAllAgentsForGuard(),
+                          this.loadAllAgentCategoriesForGuard(),
+                          this.loadAllAgentTypesForGuard(),
+                      ])
+                    : [await this.loadAllAgentsForGuard(), undefined, undefined];
                 baseAgent = allAgents.find((a) => UUIDsEqual(a.ID, this.BaseAgentID)) ?? null;
                 if (baseAgent) {
                     resolvedRootBaseId = this.findRootBaseAgentId(baseAgent, allAgents);
                     if (isCreate) {
-                        this.inheritDefaultsFromBaseAgent(baseAgent, allAgents);
+                        this.inheritDefaultsFromBaseAgent(baseAgent, allAgents, allCategories, allAgentTypes);
                         const primaryDirty = this.GetFieldByName('IsPrimaryInstance')?.Dirty ?? false;
                         if (!primaryDirty && !this.IsPrimaryInstance && this.OwnerUserID) {
                             const existingSiblings = this.findActiveSiblingsForOwnerAndRoot(
@@ -893,6 +1043,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             return true;
         } finally {
             this._configDirtyBeforeSync = null;
+            this._dirtyLegacyPatchForValidation = null;
         }
     }
 
@@ -922,15 +1073,44 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         const result = await super.ValidateAsync();
         if (!result.Success) return result;
 
-        // 0. Configuration JSON syntax & scalar-type validation (R2-2 & R3-10: only on create or
-        // when the caller actually modified Configuration prior to legacy-column sync, so
-        // pre-existing legacy rows remain saveable on unrelated edits or legacy-column-only edits).
+        // 0. Configuration JSON syntax & scalar-type validation (R2-2, R3-10, C-R1-7):
+        //    - On create or when caller directly modified Configuration, validate the full Configuration JSON
+        //      (plus any caller-dirty raw JSON legacy columns such as RerankerConfiguration/ScopeConfig).
+        //    - When caller only modified legacy columns on a saved row, validate ONLY the caller-dirty
+        //      legacy patch so invalid legacy edits are caught without breaking unrelated saves on
+        //      pre-existing rows with older backfilled Configuration payloads.
         const configDirtyForValidation =
             this._configDirtyBeforeSync ?? (!this.IsSaved || (this.GetFieldByName('Configuration')?.Dirty ?? false));
+        const dirtyLegacyPatch =
+            this._dirtyLegacyPatchForValidation ?? this.buildLegacyPatchFromSet(this.collectDirtyLegacyConfigFields(!this.IsSaved));
         if (configDirtyForValidation) {
             const configErrors = ValidateAgentConfigurationJson(this.Configuration, 'Configuration');
+            if (
+                Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'RerankerConfiguration') ||
+                Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'ScopeConfig')
+            ) {
+                const rawJsonSubset: Partial<LegacyAIAgentConfigColumns> = {};
+                if (Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'RerankerConfiguration')) {
+                    rawJsonSubset.RerankerConfiguration = dirtyLegacyPatch.RerankerConfiguration;
+                }
+                if (Object.prototype.hasOwnProperty.call(dirtyLegacyPatch, 'ScopeConfig')) {
+                    rawJsonSubset.ScopeConfig = dirtyLegacyPatch.ScopeConfig;
+                }
+                configErrors.push(...ValidateLegacyAgentConfigFields(rawJsonSubset));
+            }
             if (configErrors.length > 0) {
                 for (const msg of configErrors) {
+                    result.Errors.push(
+                        new ValidationErrorInfo('Configuration', msg, this.Configuration, ValidationErrorType.Failure)
+                    );
+                }
+                result.Success = false;
+                return result;
+            }
+        } else if (Object.keys(dirtyLegacyPatch).length > 0) {
+            const legacyErrors = ValidateLegacyAgentConfigFields(dirtyLegacyPatch);
+            if (legacyErrors.length > 0) {
+                for (const msg of legacyErrors) {
                     result.Errors.push(
                         new ValidationErrorInfo('Configuration', msg, this.Configuration, ValidationErrorType.Failure)
                     );
@@ -958,9 +1138,11 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             hasHelperPluginsKey(this.Configuration) ||
             hasHelperPluginsKey(this.TypeConfiguration);
         if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins) {
-            const [allAgents, allPermissions] = await Promise.all([
+            const [allAgents, allPermissions, allCategories, allAgentTypes] = await Promise.all([
                 this.loadAllAgentsForGuard(),
                 this.loadAllAgentPermissionsForGuard(),
+                this.loadAllAgentCategoriesForGuard(),
+                this.loadAllAgentTypesForGuard(),
             ]);
             const dirtyFieldNames = new Set<string>();
             for (const f of this.Fields) {
@@ -1025,6 +1207,8 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                 User: user,
                 AllAgents: allAgents,
                 AllPermissions: allPermissions,
+                AllCategories: allCategories,
+                AllAgentTypes: allAgentTypes,
             });
             if (sandboxErrors.length > 0) {
                 result.Errors.push(...sandboxErrors);
@@ -1062,8 +1246,34 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
      */
     private inheritDefaultsFromBaseAgent(
         baseAgent: MJAIAgentEntity,
-        allAgents?: readonly MJAIAgentEntity[]
+        allAgents?: readonly MJAIAgentEntity[],
+        allCategories?: AgentSandboxValidationContext['AllCategories'],
+        allAgentTypes?: AgentSandboxValidationContext['AllAgentTypes']
     ): void {
+        const nonLegacySqlDefaults: Partial<Record<keyof MJAIAgentEntity, unknown>> = {
+            AcceptsSkills: 'None',
+            Isolation: 'InProcess',
+            MaxCostPerRun: null,
+            MaxTokensPerRun: null,
+            MaxTimePerRun: null,
+            MaxIterationsPerRun: null,
+        };
+        const isFieldAtSqlDefault = <K extends keyof MJAIAgentEntity>(fieldName: K): boolean => {
+            const currentVal = (this as MJAIAgentEntity)[fieldName];
+            const keyStr = String(fieldName);
+            if (Object.prototype.hasOwnProperty.call(LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS, keyStr)) {
+                const legacyKey = keyStr as keyof LegacyAIAgentConfigColumns;
+                return IsLegacyAIAgentConfigSqlDefault(
+                    legacyKey,
+                    currentVal as LegacyAIAgentConfigColumns[typeof legacyKey] | undefined
+                );
+            }
+            if (Object.prototype.hasOwnProperty.call(nonLegacySqlDefaults, keyStr)) {
+                return currentVal === nonLegacySqlDefaults[fieldName];
+            }
+            return false;
+        };
+
         const copyIfNotDirty = <K extends keyof MJAIAgentEntity>(
             fieldName: K,
             overrideVal?: MJAIAgentEntity[K],
@@ -1073,11 +1283,13 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             if (!field) return;
             const val = overrideVal !== undefined ? overrideVal : baseAgent[fieldName];
             if (val === undefined) return;
-            // On GraphQL/client creates, the client sends every writable field populated with its
-            // schema DB default (marking field.Dirty = true / field.NeverSet = false). For narrow-only
-            // security fields, auto-clamp incoming loose DB defaults to the stricter ancestor value
-            // so personal instances can be created cleanly from the Explorer modal (R2-3).
-            const isUntouched = !field.Dirty && field.NeverSet;
+            // On GraphQL/client creates (`NewRecord()` + `SetMany(defaults)`), ResolverBase populates
+            // every writable field with its schema SQL default, leaving `field.Dirty === false` while
+            // flipping `field.NeverSet` to `false`. Treat `!field.Dirty && (field.NeverSet || at SQL default)`
+            // as untouched so derived instances inherit parent defaults cleanly (C-R1-1).
+            // For narrow-only security fields, also auto-clamp incoming loose DB defaults even if
+            // marked dirty so personal instances can be created cleanly from the Explorer modal (R2-3).
+            const isUntouched = !field.Dirty && (field.NeverSet || isFieldAtSqlDefault(fieldName));
             const isLooseDbDefault =
                 clampLooseDbDefault !== undefined && (this as MJAIAgentEntity)[fieldName] === clampLooseDbDefault;
             if (isUntouched || isLooseDbDefault) {
@@ -1103,6 +1315,17 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             }
         }
         const ancestorConfigs = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
+        if (!this.TypeID && baseAgent.TypeID) {
+            this.TypeID = baseAgent.TypeID;
+        }
+        if (!this.CategoryID && baseAgent.CategoryID) {
+            this.CategoryID = baseAgent.CategoryID;
+        }
+        const defaultPolicyLayers = collectDefaultPolicyLayers(
+            [...ancestors, { CategoryID: this.CategoryID, TypeID: this.TypeID }],
+            allCategories,
+            allAgentTypes
+        );
         const minFinite = (vals: Array<number | null | undefined>): number | null => {
             let best: number | null = null;
             for (const v of vals) {
@@ -1113,13 +1336,38 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             return best;
         };
 
-        if (!this.TypeID && baseAgent.TypeID) {
-            this.TypeID = baseAgent.TypeID;
+        let strictestSkillMode: MJAIAgentEntity['SkillActivationMode'] = baseAgent.SkillActivationMode ?? 'RequestedOnly';
+        const foldSkillMode = (v: MJAIAgentEntity['SkillActivationMode'] | null | undefined): void => {
+            if (v != null && SKILL_ACTIVATION_RANK[v] < SKILL_ACTIVATION_RANK[strictestSkillMode]) {
+                strictestSkillMode = v;
+            }
+        };
+        for (const layer of defaultPolicyLayers) {
+            foldSkillMode(layer.skills?.activationMode);
         }
+        for (let i = 0; i < ancestors.length; i++) {
+            foldSkillMode(ancestorConfigs[i]?.skills?.activationMode);
+            foldSkillMode(ancestors[i].SkillActivationMode);
+        }
+
+        let strictestSearchAccess: MJAIAgentEntity['SearchScopeAccess'] = baseAgent.SearchScopeAccess ?? 'None';
+        const foldSearchAccess = (v: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
+            if (v != null && SEARCH_ACCESS_RANK[v] < SEARCH_ACCESS_RANK[strictestSearchAccess]) {
+                strictestSearchAccess = v;
+            }
+        };
+        for (const layer of defaultPolicyLayers) {
+            foldSearchAccess(layer.scope?.searchScopeAccess);
+        }
+        for (let i = 0; i < ancestors.length; i++) {
+            foldSearchAccess(ancestorConfigs[i]?.scope?.searchScopeAccess);
+            foldSearchAccess(ancestors[i].SearchScopeAccess);
+        }
+
         copyIfNotDirty('ModelSelectionMode');
         copyIfNotDirty('AcceptsSkills');
-        copyIfNotDirty('SkillActivationMode');
-        copyIfNotDirty('SearchScopeAccess');
+        copyIfNotDirty('SkillActivationMode', strictestSkillMode, 'Auto');
+        copyIfNotDirty('SearchScopeAccess', strictestSearchAccess);
         copyIfNotDirty('ArtifactCreationMode');
         copyIfNotDirty('DefaultArtifactTypeID');
         copyIfNotDirty('InjectNotes');
@@ -1130,7 +1378,8 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('ExampleInjectionStrategy');
         copyIfNotDirty(
             'AllowMemoryWrite',
-            ancestors.some((a, i) => (ancestorConfigs[i]?.memory?.allowMemoryWrite ?? a.AllowMemoryWrite) === false)
+            defaultPolicyLayers.some((l) => l.memory?.allowMemoryWrite === false) ||
+                ancestors.some((a, i) => ancestorConfigs[i]?.memory?.allowMemoryWrite === false || a.AllowMemoryWrite === false)
                 ? false
                 : baseAgent.AllowMemoryWrite,
             true
@@ -1146,28 +1395,32 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('Isolation', strictestIso, 'InProcess');
         copyIfNotDirty(
             'SupportsPlanMode',
-            ancestors.some((a, i) => (ancestorConfigs[i]?.execution?.supportsPlanMode ?? a.SupportsPlanMode) === false)
+            defaultPolicyLayers.some((l) => l.execution?.supportsPlanMode === false) ||
+                ancestors.some((a, i) => ancestorConfigs[i]?.execution?.supportsPlanMode === false || a.SupportsPlanMode === false)
                 ? false
                 : baseAgent.SupportsPlanMode,
             true
         );
         copyIfNotDirty(
             'RequirePlanMode',
-            ancestors.some((a, i) => (ancestorConfigs[i]?.execution?.requirePlanMode ?? a.RequirePlanMode) === true)
+            defaultPolicyLayers.some((l) => l.execution?.requirePlanMode === true) ||
+                ancestors.some((a, i) => ancestorConfigs[i]?.execution?.requirePlanMode === true || a.RequirePlanMode === true)
                 ? true
                 : baseAgent.RequirePlanMode,
             false
         );
         copyIfNotDirty(
             'AllowEphemeralClientTools',
-            ancestors.some((a, i) => (ancestorConfigs[i]?.clientTools?.allowEphemeral ?? a.AllowEphemeralClientTools) === false)
+            defaultPolicyLayers.some((l) => l.clientTools?.allowEphemeral === false) ||
+                ancestors.some((a, i) => ancestorConfigs[i]?.clientTools?.allowEphemeral === false || a.AllowEphemeralClientTools === false)
                 ? false
                 : baseAgent.AllowEphemeralClientTools,
             true
         );
         copyIfNotDirty(
             'AcceptUnregisteredFiles',
-            ancestors.some((a, i) => (ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles ?? a.AcceptUnregisteredFiles) === false)
+            defaultPolicyLayers.some((l) => l.attachments?.acceptUnregisteredFiles === false) ||
+                ancestors.some((a, i) => ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles === false || a.AcceptUnregisteredFiles === false)
                 ? false
                 : baseAgent.AcceptUnregisteredFiles
         );
@@ -1177,11 +1430,17 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('MaxIterationsPerRun', minFinite(ancestors.map((a) => a.MaxIterationsPerRun)));
         copyIfNotDirty(
             'MaxExecutionsPerRun',
-            minFinite(ancestors.map((a, i) => ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun ?? a.MaxExecutionsPerRun))
+            minFinite([
+                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxExecutionsPerRun),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun, a.MaxExecutionsPerRun]),
+            ])
         );
         copyIfNotDirty(
             'MaxSubAgentConsultRounds',
-            minFinite(ancestors.map((a, i) => ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds ?? a.MaxSubAgentConsultRounds))
+            minFinite([
+                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxConsultRounds),
+                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds, a.MaxSubAgentConsultRounds]),
+            ])
         );
         copyIfNotDirty('EnableContextCompression');
         copyIfNotDirty('ContextCompressionMessageThreshold');
@@ -1192,9 +1451,6 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('CompactionTriggerPercent');
         copyIfNotDirty('CompactionTargetPercent');
         copyIfNotDirty('ConversationSummaryPromptID');
-        if (!this.CategoryID && baseAgent.CategoryID) {
-            this.CategoryID = baseAgent.CategoryID;
-        }
     }
 
     private findRootBaseAgentId(
@@ -1293,6 +1549,30 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         return res.Success ? res.Results : [];
     }
 
+    private async loadAllAgentCategoriesForGuard(): Promise<MJAIAgentCategoryEntity[]> {
+        const rv = new RunView(this.RunViewProviderToUse);
+        const res = await rv.RunView<MJAIAgentCategoryEntity>(
+            {
+                EntityName: 'MJ: AI Agent Categories',
+                ResultType: 'entity_object',
+            },
+            this.ContextCurrentUser
+        );
+        return res.Success ? res.Results : [];
+    }
+
+    private async loadAllAgentTypesForGuard(): Promise<MJAIAgentTypeEntity[]> {
+        const rv = new RunView(this.RunViewProviderToUse);
+        const res = await rv.RunView<MJAIAgentTypeEntity>(
+            {
+                EntityName: 'MJ: AI Agent Types',
+                ResultType: 'entity_object',
+            },
+            this.ContextCurrentUser
+        );
+        return res.Success ? res.Results : [];
+    }
+
     private buildLegacyConfigValues(): LegacyAIAgentConfigColumns {
         return {
             ModelSelectionMode: this.ModelSelectionMode,
@@ -1354,22 +1634,67 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         if (!field) {
             return false;
         }
-        // On NewRecord(), EntityField.set Value() sets _oldValue = value on the first write
-        // when _neverSet === true (leaving Dirty === false while flipping NeverSet to false).
-        // Checking Dirty || !NeverSet on create accurately detects every caller-written field
-        // without treating untouched SQL metadata defaults (NeverSet === true) as dirty.
-        return isCreate ? (field.Dirty === true || field.NeverSet === false) : field.Dirty === true;
+        if (!isCreate) {
+            return field.Dirty === true;
+        }
+        if (field.Dirty === true) {
+            return true;
+        }
+        if (field.NeverSet !== false) {
+            return false;
+        }
+        // On GraphQL CreateRecord (`NewRecord()` + `SetMany(input)`), ResolverBase populates every
+        // writable field with its SQL default, leaving `Dirty === false` while flipping `NeverSet`
+        // to `false`. Treat `!Dirty` + SQL default value as untouched so defaults never freeze into
+        // `AIAgent.Configuration` and clobber BaseAgent / Category / AgentType cascade (C-R1-1).
+        if (fieldName === 'Configuration') {
+            return this.Configuration !== null && this.Configuration !== undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS, fieldName)) {
+            const legacyKey = fieldName as keyof LegacyAIAgentConfigColumns;
+            const legacyValues = this.buildLegacyConfigValues();
+            return !IsLegacyAIAgentConfigSqlDefault(legacyKey, legacyValues[legacyKey]);
+        }
+        return true;
     }
 
     private collectDirtyLegacyConfigFields(isCreate: boolean): Set<keyof LegacyAIAgentConfigColumns> {
         const dirtyLegacyFields = new Set<keyof LegacyAIAgentConfigColumns>();
-        const keys = Object.keys(this.buildLegacyConfigValues()) as Array<keyof LegacyAIAgentConfigColumns>;
+        const legacyValues = this.buildLegacyConfigValues();
+        const keys = Object.keys(legacyValues) as Array<keyof LegacyAIAgentConfigColumns>;
         for (const key of keys) {
-            if (this.isFieldExplicitlyWritten(key, isCreate)) {
+            const field = this.GetFieldByName(key);
+            if (!field) {
+                continue;
+            }
+            if (!isCreate) {
+                if (field.Dirty === true) {
+                    dirtyLegacyFields.add(key);
+                }
+            } else if (
+                field.Dirty === true ||
+                (field.NeverSet === false && !IsLegacyAIAgentConfigSqlDefault(key, legacyValues[key]))
+            ) {
                 dirtyLegacyFields.add(key);
             }
         }
         return dirtyLegacyFields;
+    }
+
+    private buildLegacyPatchFromSet(
+        dirtyFields: ReadonlySet<keyof LegacyAIAgentConfigColumns>
+    ): Partial<LegacyAIAgentConfigColumns> {
+        const patch: Partial<LegacyAIAgentConfigColumns> = {};
+        if (dirtyFields.size === 0) {
+            return patch;
+        }
+        const legacyValues = this.buildLegacyConfigValues();
+        for (const key of dirtyFields) {
+            if (legacyValues[key] !== undefined) {
+                (patch as Record<string, unknown>)[key] = legacyValues[key];
+            }
+        }
+        return patch;
     }
 
     private syncConfigurationWithLegacyColumns(

@@ -31,6 +31,7 @@ interface MockAgentRecord {
     IsPrimaryInstance: boolean;
     Status: MJAIAgentEntity['Status'];
     TypeID: string;
+    Configuration?: string | null;
     TypeConfiguration: string | null;
 }
 
@@ -125,6 +126,8 @@ const mockEngine = {
     }),
     ResolveEffectiveAgentProperties: vi.fn((agent: MockAgentRecord) => ({
         TypeID: agent.TypeID,
+        Configuration: agent.Configuration ? JSON.parse(agent.Configuration) : undefined,
+        TypeConfiguration: agent.TypeConfiguration ? JSON.parse(agent.TypeConfiguration) : undefined,
     })),
     CanUserRunAgent: vi.fn(() => true),
     GetUserDerivedAgents: vi.fn((user: UserInfo) =>
@@ -671,5 +674,46 @@ describe('ManageMyAgentInstanceAction', () => {
         expect(archRes.Success).toBe(true);
         expect(state.agents.find((a) => a.ID === PEPPER_ID)?.Status).toBe('Disabled');
         expect(state.agents.find((a) => a.ID === PEPPER_ID)?.IsPrimaryInstance).toBe(false);
+    });
+
+    it('C-R1-5: enforces maxInstancesPerUser from canonical Configuration.instantiation when TypeConfiguration is null', async () => {
+        state.agents[0].TypeConfiguration = null;
+        state.agents[0].Configuration = JSON.stringify({
+            instantiation: { maxInstancesPerUser: 1 },
+        });
+        state.agents.push({
+            ID: PEPPER_ID,
+            Name: 'Pepper',
+            Description: 'Alice CoS',
+            BaseAgentID: COS_ID,
+            OwnerUserID: ALICE_ID,
+            InstantiationMode: 'None',
+            IconClass: null,
+            LogoURL: null,
+            AdditionalInstructions: null,
+            IsPrimaryInstance: true,
+            Status: 'Active',
+            TypeID: 'type-loop',
+            TypeConfiguration: null,
+        });
+
+        const action = new ManageMyAgentInstanceAction();
+        const alice = makeUser(ALICE_ID, 'User');
+        const provider = createMockProvider();
+
+        const res = await action.Run(
+            makeRunParams(
+                [
+                    { Name: 'Operation', Value: 'Create' },
+                    { Name: 'BaseAgentID', Value: COS_ID },
+                    { Name: 'Name', Value: 'Second CoS' },
+                ],
+                alice,
+                provider
+            )
+        );
+        expect(res.Success).toBe(false);
+        expect(res.ResultCode).toBe('VALIDATION_ERROR');
+        expect(res.Message).toMatch(/Maximum of 1 active personal instances/i);
     });
 });

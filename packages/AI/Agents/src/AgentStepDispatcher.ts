@@ -187,8 +187,9 @@ export class AgentStepDispatcher {
             lines.push(`**Form:**\n${formSummary}`);
         }
 
-        if (!result.success && result.agentRun?.ErrorMessage) {
-            lines.push(`**Error:** ${result.agentRun.ErrorMessage}`);
+        const subAgentError = result.errorMessage || result.agentRun?.ErrorMessage;
+        if (!result.success && subAgentError) {
+            lines.push(`**Error:** ${subAgentError}`);
         }
 
         if (result.agentRun?.Message?.trim()) {

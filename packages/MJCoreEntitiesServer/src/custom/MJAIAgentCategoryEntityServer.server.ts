@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    EntityDeleteOptions,
     UserInfo,
     ValidationErrorInfo,
     ValidationErrorType,
@@ -15,9 +16,51 @@ import {
 import { IsAgentAdminOrOwnerUser } from './MJAIAgentEntityServer.server';
 
 /**
+ * Pure admin-only guard for creating or updating `MJ: AI Agent Categories` (`AIAgentCategory`).
+ * System contexts (`contextUser == null`) remain permitted.
+ */
+export function ValidateAgentCategoryMutation(
+    categoryName: string | null | undefined,
+    contextUser: UserInfo | null | undefined
+): ValidationErrorInfo[] {
+    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+        return [
+            new ValidationErrorInfo(
+                'Name',
+                'Only administrators may create or modify MJ: AI Agent Categories.',
+                categoryName,
+                ValidationErrorType.Failure
+            ),
+        ];
+    }
+    return [];
+}
+
+/**
+ * Pure admin-only guard for deleting `MJ: AI Agent Categories` (`AIAgentCategory`).
+ * System contexts (`contextUser == null`) remain permitted.
+ */
+export function ValidateAgentCategoryDelete(
+    categoryId: string | null | undefined,
+    contextUser: UserInfo | null | undefined
+): ValidationErrorInfo[] {
+    if (!IsAgentAdminOrOwnerUser(contextUser)) {
+        return [
+            new ValidationErrorInfo(
+                'ID',
+                'Only administrators may delete MJ: AI Agent Categories.',
+                categoryId,
+                ValidationErrorType.Failure
+            ),
+        ];
+    }
+    return [];
+}
+
+/**
  * Pure validation helper for `AIAgentCategory.DefaultConfiguration` (and `AIAgentType.DefaultAgentConfiguration`).
- * Checks JSON syntax/scalar types, blocks forbidden code-only seams for all users, and restricts
- * `helperPlugins` writes to administrators.
+ * Enforces admin-only mutations (blocking non-admin policy/helperPlugin wiping such as `{}`),
+ * checks JSON syntax/scalar types, and blocks forbidden code-only seams for all users.
  */
 export function ValidateAgentScopedConfigurationJson(
     configJson: string | null | undefined,
@@ -55,24 +98,35 @@ export function ValidateAgentScopedConfigurationJson(
             );
         }
     }
-    if (!isAdmin && contextUser && (declaredPlugins.length > 0 || hasHelperPluginsKey)) {
-        errors.push(
-            new ValidationErrorInfo(
-                fieldName,
-                `Only administrators may configure helperPlugins (including clearing/modifying the key) on an ${entityLabel}.`,
-                declaredPlugins.map((p) => `${p.seam}:${p.driverClass}`).join(', '),
-                ValidationErrorType.Failure
-            )
-        );
+    if (!isAdmin && contextUser) {
+        if (declaredPlugins.length > 0 || hasHelperPluginsKey) {
+            errors.push(
+                new ValidationErrorInfo(
+                    fieldName,
+                    `Only administrators may configure helperPlugins (including clearing/modifying the key) on an ${entityLabel}.`,
+                    declaredPlugins.map((p) => `${p.seam}:${p.driverClass}`).join(', '),
+                    ValidationErrorType.Failure
+                )
+            );
+        } else {
+            errors.push(
+                new ValidationErrorInfo(
+                    fieldName,
+                    `Only administrators may modify ${fieldName} on an ${entityLabel}.`,
+                    configJson,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
     }
 
     return errors;
 }
 
 /**
- * Server-side AI Agent Category entity enforcing valid `DefaultConfiguration` JSON syntax/types,
- * blocking forbidden code-only seams (`limits`, `actionPolicy`, `policy`, `permissions`) for all
- * users, and restricting `helperPlugins` configuration in categories to administrators.
+ * Server-side AI Agent Category entity restricting create/update/delete mutations to
+ * administrators, enforcing valid `DefaultConfiguration` JSON syntax/types, and blocking
+ * forbidden code-only seams for all users.
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Categories')
 export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
@@ -83,6 +137,13 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
     public override async ValidateAsync(): Promise<ValidationResult> {
         const result = await super.ValidateAsync();
         if (!result.Success) {
+            return result;
+        }
+
+        const authErrors = ValidateAgentCategoryMutation(this.Name, this.ContextCurrentUser);
+        if (authErrors.length > 0) {
+            result.Errors.push(...authErrors);
+            result.Success = false;
             return result;
         }
 
@@ -101,5 +162,14 @@ export class MJAIAgentCategoryEntityServer extends MJAIAgentCategoryEntity {
         result.Errors.push(...errors);
         result.Success = result.Errors.every((e) => e.Type !== ValidationErrorType.Failure);
         return result;
+    }
+
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+        const errors = ValidateAgentCategoryDelete(this.ID, this.ContextCurrentUser);
+        if (errors.length > 0) {
+            this.LatestResult?.Errors.push(...errors);
+            return false;
+        }
+        return super.Delete(options);
     }
 }
