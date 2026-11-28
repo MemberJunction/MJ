@@ -1,5 +1,6 @@
 import {
     BaseEntity,
+    BaseEntityResult,
     EntityDeleteOptions,
     UserInfo,
     ValidationErrorInfo,
@@ -87,7 +88,9 @@ export class MJAIAgentPersonaEntityServer extends MJAIAgentPersonaEntity {
             const targetAgent = preSaveAgentId ? await this.loadAgent(preSaveAgentId) : null;
             const errors = ValidateAgentPersonaOwnership(targetAgent, user, preSaveAgentId);
             if (errors.length > 0) {
-                this.LatestResult?.Errors.push(...errors);
+                const deleteResult = new BaseEntityResult(false, '', 'delete');
+                deleteResult.Errors = errors;
+                this.RegisterResultHistoryEntry(deleteResult);
                 return false;
             }
         }

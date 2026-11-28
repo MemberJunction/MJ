@@ -163,8 +163,22 @@ export class ConversationCompactionManager {
         let boundedBy: EffectiveContextBudget['BoundedBy'];
 
         const tuning = LimitsConfigResolver.Resolve().Limits.Tuning;
-        if (agent.ContextWindowMaxTokens) {
-            maxTokens = agent.ContextWindowMaxTokens;
+        let effectiveCompactionProps: ReturnType<typeof AIEngine.Instance.ResolveEffectiveAgentProperties> | null = null;
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                effectiveCompactionProps = AIEngine.Instance.ResolveEffectiveAgentProperties(agent);
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isUnconfigured = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+            if (!isUnconfigured) {
+                LogError(`ConversationCompactionManager: unexpected error resolving effective agent properties for '${agent.Name ?? agent.ID}': ${msg}`);
+            }
+            effectiveCompactionProps = null;
+        }
+        const effectiveMaxTokens = effectiveCompactionProps?.ContextWindowMaxTokens ?? agent.ContextWindowMaxTokens;
+        if (effectiveMaxTokens) {
+            maxTokens = effectiveMaxTokens;
             boundedBy = 'Agent';
         } else if (agentType?.ContextWindowMaxTokens) {
             maxTokens = agentType.ContextWindowMaxTokens;
@@ -189,8 +203,16 @@ export class ConversationCompactionManager {
         // NOT NULL there); AIAgent's nullable inherit semantics mean the EFFECTIVE pair
         // can only be validated here, after resolution — an inverted pair would make
         // every pass select a no-progress boundary and churn.
-        const rawTriggerPercent = agent.CompactionTriggerPercent || agentType?.CompactionTriggerPercent || tuning.CompactionDefaultTriggerPercent;
-        const rawTargetPercent = agent.CompactionTargetPercent || agentType?.CompactionTargetPercent || tuning.CompactionDefaultTargetPercent;
+        const rawTriggerPercent =
+            effectiveCompactionProps?.CompactionTriggerPercent ||
+            agent.CompactionTriggerPercent ||
+            agentType?.CompactionTriggerPercent ||
+            tuning.CompactionDefaultTriggerPercent;
+        const rawTargetPercent =
+            effectiveCompactionProps?.CompactionTargetPercent ||
+            agent.CompactionTargetPercent ||
+            agentType?.CompactionTargetPercent ||
+            tuning.CompactionDefaultTargetPercent;
         const triggerPercent = Math.min(Math.max(rawTriggerPercent, 1), 100);
         let targetPercent = Math.min(Math.max(rawTargetPercent, 1), 100);
         if (targetPercent >= triggerPercent) {
@@ -456,9 +478,23 @@ export class ConversationCompactionManager {
         return { success: true, summaryText, promptId: prompt.ID, promptRunId: result.promptRun?.ID, promptRun: result.promptRun };
     }
 
-    /** Prompt resolution: agent override, else type override, else the seeded system prompt by name. */
+    /** Prompt resolution: cascaded agent/category/type override, else the seeded system prompt by name. */
     private static resolveSummaryPrompt(input: CompactIfNeededInput) {
-        const overrideId = input.Agent.ConversationSummaryPromptID || input.AgentType?.ConversationSummaryPromptID;
+        let cascadedSummaryPromptId: string | null = null;
+        try {
+            if (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
+                cascadedSummaryPromptId =
+                    AIEngine.Instance.ResolveEffectiveAgentProperties(input.Agent)?.ConversationSummaryPromptID ?? null;
+            }
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            const isUnconfigured = !AIEngine.Instance?.Loaded || /not configured|Config\(\)/i.test(msg);
+            if (!isUnconfigured) {
+                LogError(`ConversationCompactionManager: error resolving cascaded ConversationSummaryPromptID: ${msg}`);
+            }
+        }
+        const overrideId =
+            cascadedSummaryPromptId || input.Agent.ConversationSummaryPromptID || input.AgentType?.ConversationSummaryPromptID;
         if (overrideId) {
             const overridePrompt = AIEngine.Instance.Prompts.find(p => UUIDsEqual(p.ID, overrideId));
             if (overridePrompt) {

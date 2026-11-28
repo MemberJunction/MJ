@@ -24,6 +24,7 @@ import { AgentContextInjector } from './agent-context-injector';
 import type { NotesObservabilityOptions } from './agent-context-injector';
 import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import { RerankerService } from '@memberjunction/ai-reranker';
+import { SafeResolveEffectiveAgentProperties } from './helpers/AgentHelperResolver';
 
 /**
  * Verbose-aware status logging callback. Mirrors `BaseAgent.logStatus(message, verboseOnly)`.
@@ -97,15 +98,19 @@ export class AgentMemoryContextBuilder {
         logStatus?: AgentMemoryStatusLogger,
         sharedOnly?: boolean
     ): Promise<{ notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] }> {
+        const effectiveMem = SafeResolveEffectiveAgentProperties(agent);
+        const injectNotes = effectiveMem?.InjectNotes ?? agent.InjectNotes;
+        const injectExamples = effectiveMem?.InjectExamples ?? agent.InjectExamples;
+
         // Check if injection is enabled
-        if (!agent.InjectNotes && !agent.InjectExamples) {
+        if (!injectNotes && !injectExamples) {
             return { notes: [], examples: [] };
         }
 
         const injector = new AgentContextInjector();
 
         // Parse reranker configuration if present
-        const rerankerConfigJson = agent.RerankerConfiguration;
+        const rerankerConfigJson = effectiveMem?.RerankerConfiguration ?? agent.RerankerConfiguration;
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
         const rerankObservability = this.rerankObservability(observability);
 
@@ -114,8 +119,8 @@ export class AgentMemoryContextBuilder {
             userId,
             companyId,
             currentInput: input,
-            strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
-            maxNotes: agent.MaxNotesToInject || 5,
+            strategy: (effectiveMem?.NoteInjectionStrategy ?? agent.NoteInjectionStrategy) as 'Relevant' | 'Recent' | 'All',
+            maxNotes: (effectiveMem?.MaxNotesToInject ?? agent.MaxNotesToInject) || 5,
             contextUser: contextUser!,
             rerankerConfig,
             primaryScopeEntityId,
@@ -132,8 +137,8 @@ export class AgentMemoryContextBuilder {
             userId,
             companyId,
             currentInput: input,
-            strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
-            maxExamples: agent.MaxExamplesToInject || 3,
+            strategy: (effectiveMem?.ExampleInjectionStrategy ?? agent.ExampleInjectionStrategy) as 'Semantic' | 'Recent' | 'Rated',
+            maxExamples: (effectiveMem?.MaxExamplesToInject ?? agent.MaxExamplesToInject) || 3,
             contextUser: contextUser!,
             // Examples are reranked only when the configuration sets rerankExamples
             rerankerConfig,
@@ -148,13 +153,13 @@ export class AgentMemoryContextBuilder {
 
         let notes: MJAIAgentNoteEntity[];
         let examples: MJAIAgentExampleEntity[];
-        if (agent.InjectNotes && agent.InjectExamples && !observability) {
+        if (injectNotes && injectExamples && !observability) {
             [notes, examples] = await Promise.all([fetchNotes(), fetchExamples()]);
             logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
         } else {
-            notes = agent.InjectNotes ? await fetchNotes() : [];
+            notes = injectNotes ? await fetchNotes() : [];
             logStatus?.(`BaseAgent: Got ${notes.length} notes from injector`, true);
-            examples = agent.InjectExamples ? await fetchExamples() : [];
+            examples = injectExamples ? await fetchExamples() : [];
         }
 
         // Format and inject memory context into conversation messages

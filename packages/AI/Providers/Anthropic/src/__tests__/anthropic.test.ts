@@ -37,6 +37,8 @@ vi.mock('@memberjunction/global', () => ({
     ToJSONSafe: (value: unknown) => value
 }));
 
+const mockGetLongRunningAIFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
+
 // Mock @memberjunction/ai
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
@@ -139,7 +141,8 @@ vi.mock('@memberjunction/ai', () => {
             }
             return null;
         },
-    NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
+        NormalizeFinishReason: actualChatTypes.NormalizeFinishReason,
+        GetLongRunningAIFetch: mockGetLongRunningAIFetch,
     };
 });
 
@@ -163,6 +166,19 @@ describe('AnthropicLLM', () => {
         it('should expose the Anthropic client via getter', () => {
             expect(instance.AnthropicClient).toBeDefined();
             expect(instance.AnthropicClient.messages).toBeDefined();
+        });
+
+        it('should forward GetLongRunningAIFetch to the Anthropic SDK constructor when configured (B6 / R2-15)', async () => {
+            const scopedFetch = vi.fn(async () => new Response('ok'));
+            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            vi.clearAllMocks();
+            new AnthropicLLM('test-key');
+            expect(MockAnthropic).toHaveBeenCalledTimes(1);
+            const passedOptions = MockAnthropic.mock.calls[0]?.[0] as { apiKey?: string; fetch?: (url: RequestInfo | URL, init?: RequestInit) => Promise<Response> };
+            expect(passedOptions.apiKey).toBe('test-key');
+            expect(passedOptions.fetch).toBeTypeOf('function');
+            await passedOptions.fetch!('https://api.anthropic.com/v1/messages', { method: 'POST' });
+            expect(scopedFetch).toHaveBeenCalledWith('https://api.anthropic.com/v1/messages', { method: 'POST' });
         });
     });
 

@@ -40,6 +40,8 @@ import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibl
 // its cancelled results from the real module rather than from a hand-copied shape.
 import * as actualCancellation from '../../../../Core/src/generic/cancellation';
 
+const mockGetLongRunningAIFetch = vi.hoisted(() => vi.fn<() => ((input: RequestInfo | URL, init?: RequestInit) => Promise<Response>) | undefined>(() => undefined));
+
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
@@ -153,7 +155,8 @@ vi.mock('@memberjunction/ai', () => {
         ErrorAnalyzer: { analyzeError: vi.fn() },
         GetUserMessageFromChatParams: (p: { messages: Array<{ role: string; content: unknown }> }) =>
             p.messages.find((m: { role: string }) => m.role === 'user')?.content,
-        parseBase64DataUrl: vi.fn()
+        parseBase64DataUrl: vi.fn(),
+        GetLongRunningAIFetch: mockGetLongRunningAIFetch
     };
 });
 
@@ -213,6 +216,17 @@ describe('OpenAILLM', () => {
         it('should expose the OpenAI client via getter', () => {
             expect(instance.OpenAI).toBeDefined();
             expect(instance.OpenAI.chat).toBeDefined();
+        });
+
+        it('should forward GetLongRunningAIFetch to the OpenAI SDK constructor when configured (B6 / R2-15)', () => {
+            const scopedFetch = vi.fn(async () => new Response('ok'));
+            mockGetLongRunningAIFetch.mockReturnValueOnce(scopedFetch);
+            vi.clearAllMocks();
+            new OpenAILLM('test-key');
+            expect(MockOpenAI).toHaveBeenCalledWith({
+                apiKey: 'test-key',
+                fetch: scopedFetch,
+            });
         });
     });
 

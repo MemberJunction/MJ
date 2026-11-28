@@ -14,7 +14,7 @@ import {
     AgentUserPolicyEngine,
     ApplyDefaultAgentUserPolicyValues,
     MJAIAgentEntityExtended,
-    ParseAgentInstantiationConfig,
+    ResolveAgentInstantiationConfig,
 } from '@memberjunction/ai-core-plus';
 import { AIEngine } from '@memberjunction/aiengine';
 
@@ -155,13 +155,26 @@ export class ManageMyAgentInstanceAction extends BaseAction {
             };
         }
 
-        // Check maxInstancesPerUser hint before DB roundtrip
-        const instConfig = ParseAgentInstantiationConfig(baseAgent.TypeConfiguration);
-        const maxPerUser = instConfig?.maxInstancesPerUser;
-        if (maxPerUser != null && maxPerUser > 0) {
+        // Check maxInstancesPerUser hint before DB roundtrip (reads canonical Configuration.instantiation
+        // with multi-hop inheritance and fallback to legacy TypeConfiguration.instantiation, C-R1-5)
+        const effectiveBase = AIEngine.Instance.ResolveEffectiveAgentProperties(baseAgent);
+        const instConfig = ResolveAgentInstantiationConfig(
+            effectiveBase.Configuration ?? baseAgent.Configuration,
+            effectiveBase.TypeConfiguration ?? baseAgent.TypeConfiguration
+        );
+        const rawMaxPerUser = instConfig?.maxInstancesPerUser;
+        const maxPerUser =
+            typeof rawMaxPerUser === 'number' && Number.isFinite(rawMaxPerUser) && Math.floor(rawMaxPerUser) >= 1
+                ? Math.floor(rawMaxPerUser)
+                : null;
+        if (maxPerUser != null) {
             const rootBase = AIEngine.Instance.GetRootAgent(baseAgent.ID) ?? baseAgent;
             const existingForRoot = AIEngine.Instance.GetUserDerivedAgents(contextUser).filter((a) => {
-                if (a.Status !== 'Active' || !UUIDsEqual(a.OwnerUserID, contextUser.ID)) {
+                if (
+                    a.Status !== 'Active' ||
+                    (a.InstantiationMode ?? 'None') !== 'None' ||
+                    !UUIDsEqual(a.OwnerUserID, contextUser.ID)
+                ) {
                     return false;
                 }
                 const r = AIEngine.Instance.GetRootAgent(a.ID);
@@ -177,7 +190,6 @@ export class ManageMyAgentInstanceAction extends BaseAction {
             }
         }
 
-        const effectiveBase = AIEngine.Instance.ResolveEffectiveAgentProperties(baseAgent);
         const description = this.getStringParam(params, 'Description');
         const iconClass = this.getStringParam(params, 'IconClass');
         const logoUrl = this.getStringParam(params, 'LogoURL');

@@ -2,6 +2,10 @@
 
 This guide explains how MemberJunction agents support multi-tenant scoping for memory (notes and examples), enabling multi-tenant applications to isolate agent memory by custom entity hierarchies.
 
+**Canonical Guides:** [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) · [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) · [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
+
+> **v6.x `IAgentConfiguration` Note:** `AIAgent.SearchScopeAccess` and `AIAgent.ScopeConfig` live canonically under `AIAgent.Configuration.scope` (`searchScopeAccess`, `secondaryScopeConfig`) with automatic bidirectional sync to the deprecated legacy columns throughout `v6.x` (removal slated for `v7.0`).
+
 ## Overview
 
 Agent memory scoping allows notes and examples to be filtered based on runtime context. This enables:
@@ -26,13 +30,13 @@ Any field can be `NULL`. NULL is how broader (less-specific) levels are represen
 
 #### Where they come from at runtime
 
-When `BaseAgent.executeAgent()` initializes a run (`packages/AI/Agents/src/base-agent.ts:1289-1290`):
+When `BaseAgentRunSetupHelper.InitializeAgentRun()` initializes a run (`packages/AI/Agents/src/helpers/setup/AgentRunInitializationHelper.ts`, with scope validation in `packages/AI/Agents/src/helpers/actions/AgentRunScopeAndAudienceHelper.ts`):
 
 - `userId = params.userId ?? params.contextUser?.ID` — `contextUser` is the implicit fallback. If the caller passes `userId` explicitly it wins; otherwise the user ID from `contextUser` is used.
 - `companyId = params.companyId` — explicit only, no fallback. `contextUser` does not auto-populate this. If you want company scoping you must pass it.
 - `agentId = params.agent.ID` — derived from the agent being executed.
 
-These flow into `AgentContextInjector` for retrieval and onto the `AIAgentRun` record (`UserID`, `CompanyID` columns at `base-agent.ts:5048-5049`) so that Memory Manager can copy them onto new notes when the run produces memory updates.
+These flow into `AgentContextInjector` for retrieval and onto the `AIAgentRun` record (`UserID`, `CompanyID` columns) so that Memory Manager can copy them onto new notes when the run produces memory updates.
 
 #### Note retrieval priority (8 levels)
 
@@ -269,7 +273,7 @@ If `allowSecondaryOnly: true` in the agent's config, you can omit primary scope:
 
 ## Sub-Agent Scope Propagation
 
-Scope is inherited by sub-agent invocations by default. When a parent agent (e.g., Sage) delegates to a sub-agent (e.g., Memory Manager, or any user-defined sub-agent), `BaseAgent` propagates `PrimaryScopeEntityName`, `PrimaryScopeRecordID`, and `SecondaryScopes` from the parent's `ExecuteAgentParams` onto the sub-agent's params before its run begins (see `ExecuteSubAgent` in `packages/AI/Agents/src/base-agent.ts`). It passes the parent's `data` and `TrustReservedRunData` along too, so a scope a trusted caller put in `data` reaches the sub-agent as well.
+Scope is inherited by sub-agent invocations by default. When a parent agent (e.g., Sage) delegates to a sub-agent (e.g., Memory Manager, or any user-defined sub-agent), `BaseAgentSubAgentHelper.ExecuteSubAgent` (`packages/AI/Agents/src/helpers/subagents/AgentSubAgentExecutionHelper.ts`) propagates `PrimaryScopeEntityName`, `PrimaryScopeRecordID`, and `SecondaryScopes` from the parent's `ExecuteAgentParams` onto the sub-agent's params before its run begins. It passes the parent's `data` and `TrustReservedRunData` along too, so a scope a trusted caller put in `data` reaches the sub-agent as well.
 
 This has two consequences:
 
@@ -405,5 +409,5 @@ Or simply don't set `ScopeConfig` on the agent. All notes are global and visible
 
 - `packages/AI/CorePlus/src/agent-types.ts`: `SecondaryScopeConfig`, `SecondaryDimension`, `SecondaryScopeValue` types
 - `packages/AI/Agents/src/agent-context-injector.ts`: Query building logic
-- `packages/AI/Agents/src/base-agent.ts`: Scope validation in `initializeAgentRun()`
+- `packages/AI/Agents/src/helpers/setup/AgentRunInitializationHelper.ts` & `packages/AI/Agents/src/helpers/actions/AgentRunScopeAndAudienceHelper.ts`: Scope validation and stamping during run initialization (`BaseAgentRunSetupHelper` / `BaseAgentActionPolicyHelper`)
 - `packages/AI/Agents/src/memory-manager-agent.ts`: Scope inheritance for note creation

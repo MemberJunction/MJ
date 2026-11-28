@@ -2,6 +2,8 @@
 
 Client tools let agents invoke browser-side operations — navigating to records, switching apps, copying to clipboard, toggling themes — without leaving the agent execution loop. The server publishes a request via PubSub, the browser executes it, and the agent continues with the result.
 
+**Canonical Guides:** [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) (`BaseAgentActionsHelper` & `ClientToolsStepHandler`) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) (`Configuration.clientTools.allowEphemeral` narrow-only governance) · [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
+
 ---
 
 ## Table of Contents

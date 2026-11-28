@@ -892,13 +892,17 @@ export class AgentRunner {
                     return [];
                 }
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
+                    const effectiveFileProps =
+                        typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function'
+                            ? AIEngine.Instance.ResolveEffectiveAgentProperties(params.agent)
+                            : null;
                     return this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
                         agentResponseDetailId,
                         contextUser,
                         agentResult.resolvedStorageAccountId,
                         md,
-                        params.agent.AcceptUnregisteredFiles
+                        effectiveFileProps?.AcceptUnregisteredFiles ?? params.agent.AcceptUnregisteredFiles
                     );
                 }
                 return [];

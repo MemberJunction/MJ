@@ -37,8 +37,10 @@ export interface InitAgentRunStepOptions {
     AgentRunID: string;
     /** Sequential step number within the run (1-based). */
     StepNumber: number;
-    /** The kind of step (`Prompt`, `Tool`, `Sub-Agent`, …). */
+    /** The kind of step (`Prompt`, `Tool`, `Sub-Agent`, `Custom`, …). */
     StepType: AgentRunStepType;
+    /** Optional foreign key to `MJ: AI Agent Step Types` (`AIAgentStepType.ID`), populated for custom/registered step types. */
+    StepTypeID?: string | null;
     /** Human-readable name (caller applies any hierarchy breadcrumb before passing it in). */
     StepName: string;
     /** Optional id of the targeted definition (AIPrompt.ID, AIAction.ID, AIAgent.ID, …). Stamped only when a valid UUID. */
@@ -79,6 +81,9 @@ export function InitAgentRunStep(step: MJAIAgentRunStepEntity, opts: InitAgentRu
     step.AgentRunID = opts.AgentRunID;
     step.StepNumber = opts.StepNumber;
     step.StepType = opts.StepType;
+    if (opts.StepTypeID && UUID_REGEX.test(opts.StepTypeID)) {
+        step.StepTypeID = opts.StepTypeID;
+    }
     step.StepName = opts.StepName;
     if (opts.TargetID && UUID_REGEX.test(opts.TargetID)) {
         step.TargetID = opts.TargetID;

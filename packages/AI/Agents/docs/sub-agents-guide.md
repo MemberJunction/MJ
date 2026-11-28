@@ -2,6 +2,8 @@
 
 Comprehensive guide to sub-agent orchestration in the MemberJunction agent framework, covering both child agents and related agents.
 
+**Canonical Guides:** [Agent Builder & Extension Guide](../../../../guides/AGENT_BUILDER_EXTENSION_GUIDE.md) (`BaseAgentSubAgentHelper` seam) · [Agent Administrator Guide](../../../../guides/AGENT_ADMINISTRATOR_GUIDE.md) (`IAgentConfiguration.payload` & `subAgentExecution`) · [Agent End-User Guide](../../../../guides/AGENT_END_USER_GUIDE.md) · [BaseAgent Rebase Map](../../../../guides/BASE_AGENT_REBASE_MAP.md).
+
 ## Overview
 
 Sub-agents allow a parent agent to delegate work to specialized agents. The MemberJunction framework supports two distinct sub-agent relationship types, each with different coupling characteristics:
@@ -50,10 +52,10 @@ Child agents are configured entirely on the `AIAgent` entity:
 | Field | Purpose |
 |---|---|
 | `ParentID` | Points to the parent agent (FK to `AIAgent.ID`) |
-| `PayloadDownstreamPaths` | JSON array of payload paths the child receives from the parent |
-| `PayloadUpstreamPaths` | JSON array of payload paths the child can write back to the parent |
-| `PayloadScope` | Optional nested path that wraps the child's view of the payload |
-| `MessageMode` | Controls conversation history passing (default: `None`) |
+| `Configuration.payload.downstreamPaths` *(legacy: `PayloadDownstreamPaths`)* | Array of payload paths the child receives from the parent (bidirectionally synced during `v6.x`) |
+| `Configuration.payload.upstreamPaths` *(legacy: `PayloadUpstreamPaths`)* | Array of payload paths the child can write back to the parent (bidirectionally synced during `v6.x`) |
+| `Configuration.payload.scope` *(legacy: `PayloadScope`)* | Optional nested path that wraps the child's view of the payload |
+| `Configuration.attachments.messageMode` *(legacy: `MessageMode`)* | Controls conversation history passing (default: `None`) |
 
 ### Payload Flow
 
