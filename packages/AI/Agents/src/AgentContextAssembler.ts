@@ -216,8 +216,12 @@ export class AgentContextAssembler {
         return subAgents
             .map((sa) => {
                 let line = `- **${sa.Name}** — ${sa.Description}`;
-                if (sa.ExecutionMode !== 'Sequential') {
-                    line += ` _(${sa.ExecutionMode}, order: ${sa.ExecutionOrder})_`;
+                const effectiveExecutionMode =
+                    (typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function'
+                        ? AIEngine.Instance.ResolveEffectiveAgentProperties(sa)?.ExecutionMode
+                        : undefined) ?? sa.ExecutionMode;
+                if (effectiveExecutionMode !== 'Sequential') {
+                    line += ` _(${effectiveExecutionMode}, order: ${sa.ExecutionOrder})_`;
                 }
                 const presets = AIEngine.Instance.GetAgentConfigurationPresets(sa.ID, true);
                 if (presets.length > 0) {

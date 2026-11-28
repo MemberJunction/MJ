@@ -24,6 +24,24 @@
  */
 export interface IAgentConfiguration {
     /**
+     * Opt-in escape hatch allowing an administrator-authored derived agent (`BaseAgentID != null`)
+     * to establish a wider baseline ceiling above its `BaseAgentID` ancestors.
+     *
+     * - `false` / `null` / omitted (default): strictly narrow-only across capabilities, scopes,
+     *   payload paths, persistence modes, validation rules, limit ceilings, and relational grants
+     *   (`Actions`, `SubAgents`, `Skills`, `ClientTools`, `Modalities`) down `BaseAgentID`.
+     * - `true` (Administrator / `AI: Agent Administration` roles only): explicit overrides and
+     *   active relational grants on this agent establish a new ceiling baseline above its
+     *   `BaseAgentID` ancestors while unset fields still inherit live. Downstream descendants
+     *   without `allowWidenFromBase: true` narrow strictly beneath this agent.
+     *
+     * Regardless of `allowWidenFromBase`, transitive ancestor `CanRun` checks, `Isolation`
+     * minimums (`InProcess < Worker < Process < Container`), and `mj.config.cjs` org ceilings
+     * ALWAYS apply unconditionally.
+     */
+    allowWidenFromBase?: boolean | null;
+
+    /**
      * Core execution, planning, model selection, and tool-calling protocol settings.
      * Set to `null` to explicitly clear overrides at this cascade tier.
      */

@@ -7,6 +7,7 @@
  */
 
 import {
+    ParseAgentConfiguration,
     WithoutHostOnlyAgentRunDataKeys,
     type AgentChatMessage,
     type AgentChatMessageMetadata,
@@ -492,10 +493,18 @@ export class AgentSubAgentExecutionHelper {
 
         const effectivePayload = SafeResolveEffectiveAgentProperties(subAgentEntity);
         try {
+            // Preserve legacy single-node malformed-JSON fail-open contract (PG9):
+            const subCfg = !subAgentEntity.BaseAgentID ? ParseAgentConfiguration(subAgentEntity.Configuration) : null;
+            if (!subAgentEntity.BaseAgentID && subCfg?.payload?.downstreamPaths === undefined && subAgentEntity.PayloadDownstreamPaths) {
+                JSON.parse(subAgentEntity.PayloadDownstreamPaths);
+            }
             if (effectivePayload?.PayloadDownstreamPaths) {
                 downstreamPaths = effectivePayload.PayloadDownstreamPaths;
             } else if (subAgentEntity.PayloadDownstreamPaths) {
                 downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
+            }
+            if (!subAgentEntity.BaseAgentID && subCfg?.payload?.upstreamPaths === undefined && subAgentEntity.PayloadUpstreamPaths) {
+                JSON.parse(subAgentEntity.PayloadUpstreamPaths);
             }
             if (effectivePayload?.PayloadUpstreamPaths) {
                 upstreamPaths = effectivePayload.PayloadUpstreamPaths;

@@ -616,6 +616,12 @@ export function ValidateAgentConfigurationJson(
     collectForbiddenKeys(parsed, fieldLabel, errors);
 
     const obj = parsed as { [key: string]: unknown };
+    const allowWidenVal = Object.prototype.hasOwnProperty.call(obj, 'allowWidenFromBase')
+        ? obj.allowWidenFromBase
+        : undefined;
+    if (allowWidenVal !== undefined && allowWidenVal !== null && typeof allowWidenVal !== 'boolean') {
+        errors.push(`${fieldLabel}.allowWidenFromBase must be a boolean or null.`);
+    }
     for (const key of OBJECT_SECTION_KEYS) {
         const val = Object.prototype.hasOwnProperty.call(obj, key) ? obj[key] : undefined;
         if (val !== undefined && val !== null && !IsPlainObject(val)) {

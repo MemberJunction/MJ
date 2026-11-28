@@ -462,7 +462,7 @@ async function checkAec2ThreeTableConfigCascadeAndNarrowOnly(ctx: IntegrationChe
         const childCatId = childCat.ID;
         cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agent Categories', childCatId));
 
-        // 3. Base agent locking down narrow-only invariants
+        // 3. Base agent locking down narrow-only invariants + JSON-only payload/artifacts/chatHandlingOption
         const baseAgent = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
         baseAgent.NewRecord();
         baseAgent.Name = `IT195-BaseCascade-${tag}`;
@@ -471,17 +471,54 @@ async function checkAec2ThreeTableConfigCascadeAndNarrowOnly(ctx: IntegrationChe
         baseAgent.CategoryID = childCatId;
         baseAgent.Status = 'Active';
         baseAgent.InstantiationMode = 'Optional';
+        baseAgent.MaxCostPerRun = 5.0;
         baseAgent.Configuration = JSON.stringify({
-            execution: { requirePlanMode: true },
+            execution: { requirePlanMode: true, chatHandlingOption: 'Consult' },
             skills: { activationMode: 'RequestedOnly' },
             clientTools: { allowEphemeral: false },
             subAgentExecution: { maxConsultRounds: 3 },
+            artifacts: { creationMode: 'System Only' },
+            payload: {
+                downstreamPaths: ['customer.*'],
+                upstreamPaths: ['analysis.*'],
+                scope: '/analysis',
+                startingValidationSchema: '{"type":"object","required":["customer"]}',
+            },
         });
         Assert(await baseAgent.Save(), `Failed to save base cascade agent: ${baseAgent.LatestResult?.CompleteMessage}`);
         const baseAgentId = baseAgent.ID;
         cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', baseAgentId));
 
-        // 4. Derived child agent trying to widen narrow-only settings while overriding maxMessages
+        // 4a. Admin save-time enforcement: attempting to widen narrow-only settings WITHOUT allowWidenFromBase MUST FAIL
+        const illegalWidenChild = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
+        illegalWidenChild.NewRecord();
+        illegalWidenChild.Name = `IT195-IllegalWiden-${tag}`;
+        illegalWidenChild.Description = `IT195 illegal widen attempt ${FIXTURE_TAG}`;
+        illegalWidenChild.TypeID = typeId;
+        illegalWidenChild.BaseAgentID = baseAgentId;
+        illegalWidenChild.Status = 'Active';
+        illegalWidenChild.Configuration = JSON.stringify({
+            execution: { requirePlanMode: false },
+            skills: { activationMode: 'Auto' },
+            clientTools: { allowEphemeral: true },
+            subAgentExecution: { maxConsultRounds: 9 },
+        });
+        const illegalWidenSaved = await illegalWidenChild.Save();
+        if (illegalWidenSaved && illegalWidenChild.ID) {
+            cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', illegalWidenChild.ID));
+        }
+        AssertEqual(
+            illegalWidenSaved,
+            false,
+            'Admin Save() MUST reject widening derived agent without Configuration.allowWidenFromBase = true'
+        );
+        const illegalMsg = illegalWidenChild.LatestResult?.CompleteMessage ?? '';
+        Assert(
+            /allowWidenFromBase/i.test(illegalMsg),
+            `Expected allowWidenFromBase guidance in save-time rejection message, got: ${illegalMsg}`
+        );
+
+        // 4b. Valid narrow-only derived child inherits JSON-only payload/artifacts/chatHandlingOption and narrows maxMessages & payload paths
         const childAgent = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
         childAgent.NewRecord();
         childAgent.Name = `IT195-ChildCascade-${tag}`;
@@ -490,15 +527,69 @@ async function checkAec2ThreeTableConfigCascadeAndNarrowOnly(ctx: IntegrationChe
         childAgent.BaseAgentID = baseAgentId;
         childAgent.Status = 'Active';
         childAgent.Configuration = JSON.stringify({
-            execution: { requirePlanMode: false },
-            skills: { activationMode: 'Auto' },
-            clientTools: { allowEphemeral: true },
-            subAgentExecution: { maxConsultRounds: 9 },
             attachments: { maxMessages: 10 },
+            payload: {
+                downstreamPaths: ['customer.name'],
+                scope: '/analysis/detail',
+                startingValidationSchema: '{"type":"object","required":["tenantId"]}',
+            },
         });
         Assert(await childAgent.Save(), `Failed to save child cascade agent: ${childAgent.LatestResult?.CompleteMessage}`);
         const childAgentId = childAgent.ID;
         cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', childAgentId));
+
+        // 4c. Live L0 -> L1 (allowWidenFromBase: true) -> L2 rebase + downstream narrowing
+        const l1Rebase = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
+        l1Rebase.NewRecord();
+        l1Rebase.Name = `IT195-L1Rebase-${tag}`;
+        l1Rebase.Description = `IT195 L1 allowWidenFromBase rebase tier ${FIXTURE_TAG}`;
+        l1Rebase.TypeID = typeId;
+        l1Rebase.BaseAgentID = baseAgentId;
+        l1Rebase.InstantiationMode = 'Optional';
+        l1Rebase.Status = 'Active';
+        l1Rebase.MaxCostPerRun = 20.0;
+        l1Rebase.Configuration = JSON.stringify({
+            allowWidenFromBase: true,
+            execution: { requirePlanMode: false },
+            skills: { activationMode: 'Auto' },
+            clientTools: { allowEphemeral: true },
+            subAgentExecution: { maxConsultRounds: 8 },
+            artifacts: { creationMode: 'Always' },
+        });
+        Assert(await l1Rebase.Save(), `Failed to save L1 allowWidenFromBase rebase tier: ${l1Rebase.LatestResult?.CompleteMessage}`);
+        const l1RebaseId = l1Rebase.ID;
+        cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', l1RebaseId));
+
+        // L2 under L1 without allowWidenFromBase: cannot exceed L1's rebased ceiling (8 -> 12 fails), CAN narrow (8 -> 5 succeeds)
+        const l2TooWide = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
+        l2TooWide.NewRecord();
+        l2TooWide.Name = `IT195-L2TooWide-${tag}`;
+        l2TooWide.TypeID = typeId;
+        l2TooWide.BaseAgentID = l1RebaseId;
+        l2TooWide.Status = 'Active';
+        l2TooWide.Configuration = JSON.stringify({
+            subAgentExecution: { maxConsultRounds: 12 },
+        });
+        const l2TooWideSaved = await l2TooWide.Save();
+        if (l2TooWideSaved && l2TooWide.ID) {
+            cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', l2TooWide.ID));
+        }
+        AssertEqual(l2TooWideSaved, false, 'L2 without allowWidenFromBase MUST NOT widen above L1 rebased ceiling (8)');
+
+        const l2Narrow = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
+        l2Narrow.NewRecord();
+        l2Narrow.Name = `IT195-L2Narrow-${tag}`;
+        l2Narrow.Description = `IT195 L2 narrowed under L1 rebase ${FIXTURE_TAG}`;
+        l2Narrow.TypeID = typeId;
+        l2Narrow.BaseAgentID = l1RebaseId;
+        l2Narrow.Status = 'Active';
+        l2Narrow.MaxCostPerRun = 12.0; // Above L0 (5.0), within L1 rebased baseline (20.0)!
+        l2Narrow.Configuration = JSON.stringify({
+            subAgentExecution: { maxConsultRounds: 5 },
+        });
+        Assert(await l2Narrow.Save(), `Failed to save L2 narrowed under L1 rebase: ${l2Narrow.LatestResult?.CompleteMessage}`);
+        const l2NarrowId = l2Narrow.ID;
+        cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', l2NarrowId));
 
         // 5. Refresh AIEngine from live SQL and resolve effective cascade properties
         await AIEngine.Instance.Config(true, ctx.User);
@@ -514,11 +605,34 @@ async function checkAec2ThreeTableConfigCascadeAndNarrowOnly(ctx: IntegrationChe
         // Leaf agent override over Category tier
         AssertEqual(eff.MaxMessages, 10, 'MaxMessages should be overridden by leaf agent over ChildCategory (25 -> 10)');
 
-        // Narrow-only security invariants cannot be loosened down the chain
-        AssertEqual(eff.RequirePlanMode, true, 'RequirePlanMode cannot be loosened from true to false');
-        AssertEqual(eff.SkillActivationMode, 'RequestedOnly', 'SkillActivationMode cannot be loosened from RequestedOnly to Auto');
-        AssertEqual(eff.AllowEphemeralClientTools, false, 'AllowEphemeralClientTools cannot be loosened from false to true');
-        AssertEqual(eff.MaxSubAgentConsultRounds, 3, 'MaxSubAgentConsultRounds cannot be loosened from 3 to 9');
+        // Narrow-only security invariants & JSON-only payload/artifacts/chatHandlingOption inheritance
+        AssertEqual(eff.RequirePlanMode, true, 'RequirePlanMode should inherit true from L0');
+        AssertEqual(eff.SkillActivationMode, 'RequestedOnly', 'SkillActivationMode should inherit RequestedOnly from L0');
+        AssertEqual(eff.AllowEphemeralClientTools, false, 'AllowEphemeralClientTools should inherit false from L0');
+        AssertEqual(eff.MaxSubAgentConsultRounds, 3, 'MaxSubAgentConsultRounds should inherit 3 from L0');
+        AssertEqual(eff.ChatHandlingOption, 'Consult', 'ChatHandlingOption should inherit Consult from L0 Configuration JSON');
+        AssertEqual(eff.ArtifactCreationMode, 'System Only', 'ArtifactCreationMode should inherit System Only from L0 Configuration JSON');
+        AssertEqual(JSON.stringify(eff.PayloadDownstreamPaths), JSON.stringify(['customer.name']), 'PayloadDownstreamPaths should narrow customer.* -> customer.name');
+        AssertEqual(JSON.stringify(eff.PayloadUpstreamPaths), JSON.stringify(['analysis.*']), 'PayloadUpstreamPaths should inherit analysis.* from L0');
+        AssertEqual(eff.PayloadScope, '/analysis/detail', 'PayloadScope should narrow /analysis -> /analysis/detail');
+        AssertEqual(eff.StartingPayloadValidationSchemas.length, 2, 'StartingPayloadValidationSchemas should accumulate L0 + child schemas');
+
+        // L1 rebase & L2 narrowing under L1
+        const l1Eff = AIEngine.Instance.ResolveEffectiveAgentProperties(l1RebaseId);
+        AssertEqual(l1Eff.RequirePlanMode, false, 'L1 with allowWidenFromBase should rebase RequirePlanMode to false');
+        AssertEqual(l1Eff.SkillActivationMode, 'Auto', 'L1 with allowWidenFromBase should rebase SkillActivationMode to Auto');
+        AssertEqual(l1Eff.AllowEphemeralClientTools, true, 'L1 with allowWidenFromBase should rebase AllowEphemeralClientTools to true');
+        AssertEqual(l1Eff.MaxSubAgentConsultRounds, 8, 'L1 with allowWidenFromBase should rebase MaxSubAgentConsultRounds to 8');
+        AssertEqual(l1Eff.ArtifactCreationMode, 'Always', 'L1 with allowWidenFromBase should rebase ArtifactCreationMode to Always');
+        // Unset fields on L1 still inherit live from L0!
+        AssertEqual(l1Eff.ChatHandlingOption, 'Consult', 'Unset ChatHandlingOption on L1 rebase tier must still inherit from L0');
+        AssertEqual(l1Eff.PayloadScope, '/analysis', 'Unset PayloadScope on L1 rebase tier must still inherit from L0');
+
+        const l2Eff = AIEngine.Instance.ResolveEffectiveAgentProperties(l2NarrowId);
+        AssertEqual(l2Eff.RequirePlanMode, false, 'L2 inherits L1 rebased RequirePlanMode=false');
+        AssertEqual(l2Eff.SkillActivationMode, 'Auto', 'L2 inherits L1 rebased SkillActivationMode=Auto');
+        AssertEqual(l2Eff.MaxSubAgentConsultRounds, 5, 'L2 narrows MaxSubAgentConsultRounds under L1 rebased ceiling (8 -> 5)');
+        AssertEqual(l2Eff.ArtifactCreationMode, 'Always', 'L2 inherits L1 rebased ArtifactCreationMode=Always');
     } finally {
         await runCleanups(cleanups);
         await AIEngine.Instance.Config(true, ctx.User).catch(() => undefined);

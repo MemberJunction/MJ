@@ -1267,21 +1267,25 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (102 classes)
+// @memberjunction/core-entities-server (106 classes)
 import {
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     GraphFindPathServerOperation,
+    MJAIAgentActionEntityServer,
     MJAIAgentCategoryEntityServer,
+    MJAIAgentClientToolEntityServer,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
+    MJAIAgentModalityEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentSkillEntityServer,
     MJAIAgentStepTypeEntityServer,
     MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
@@ -2659,16 +2663,20 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AgentChannelConversationDriver,
     FieldSuggestionCommentDriver,
     GraphFindPathServerOperation,
+    MJAIAgentActionEntityServer,
     MJAIAgentCategoryEntityServer,
+    MJAIAgentClientToolEntityServer,
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
     MJAIAgentExampleEntityServer,
+    MJAIAgentModalityEntityServer,
     MJAIAgentNoteEntityServer,
     MJAIAgentPersonaEntityServer,
     MJAIAgentRelationshipEntityServer,
     MJAIAgentSessionBridgeEntityServer,
     MJAIAgentSessionBridgeParticipantEntityServer,
     MJAIAgentSessionEntityServer,
+    MJAIAgentSkillEntityServer,
     MJAIAgentStepTypeEntityServer,
     MJAIAgentTypeEntityServer,
     MJAIAgentUserPolicyEntityServer,
@@ -2700,14 +2708,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJConversationEntityServer,
-    MJDashboardEntityServer,
-    MJDataContextItemEntityServer,
-    MJDuplicateRunEntityServer,
-    MJEntityAlternateBaseViewEntityServer,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    MJDashboardEntityServer,
+    MJDataContextItemEntityServer,
+    MJDuplicateRunEntityServer,
+    MJEntityAlternateBaseViewEntityServer,
     MJEntityDocumentEntityServer,
     MJEntityEntityServer,
     MJEntityFieldPermissionEntityServer,
@@ -2904,14 +2912,14 @@ const CLASS_REGISTRATIONS_5: any[] = [
     ModifyFormContributionAction,
     ModifyInteractiveFormAction,
     MoveListMembersAction,
-    MoveObjectAction,
-    MutateGovernedArtifactAction,
-    OAuthFlowAction,
-    ObjectExistsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_6: any[] = [
+    MoveObjectAction,
+    MutateGovernedArtifactAction,
+    OAuthFlowAction,
+    ObjectExistsAction,
     OpenAgentChannelAction,
     PDFExtractorAction,
     ParallelExecuteAction,
@@ -3057,7 +3065,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1328;
+export const CLASS_REGISTRATIONS_COUNT = 1332;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

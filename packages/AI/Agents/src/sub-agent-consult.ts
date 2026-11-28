@@ -153,14 +153,14 @@ export function CanAgentOwnSubAgentConsults(
     agentOrId: string | { ID: string; ChatHandlingOption?: string | null; Configuration?: string | null }
 ): boolean {
     if (typeof agentOrId === 'object' && agentOrId !== null) {
-        if (agentOrId.ChatHandlingOption === 'Consult') {
-            return true;
-        }
         if (agentOrId.ID && typeof AIEngine.Instance?.ResolveEffectiveAgentProperties === 'function') {
             const cached = AIEngine.Instance.Agents?.find(a => UUIDsEqual(a.ID, agentOrId.ID));
             if (cached && AIEngine.Instance.ResolveEffectiveAgentProperties(cached).ChatHandlingOption === 'Consult') {
                 return true;
             }
+        }
+        if (agentOrId.ChatHandlingOption === 'Consult') {
+            return true;
         }
     }
 
@@ -180,12 +180,13 @@ export function CanAgentOwnSubAgentConsults(
         }
     }
 
-    return AIEngine.Instance.AgentRelationships.some(
-        ar =>
-            ar.Status === 'Active' &&
-            ar.ChatHandlingOption === 'Consult' &&
-            UUIDsEqual(ar.AgentID, agentId)
-    );
+    const effectiveRels =
+        typeof AIEngine.Instance?.GetEffectiveAgentRelationships === 'function'
+            ? AIEngine.Instance.GetEffectiveAgentRelationships(agentId, 'Active')
+            : AIEngine.Instance.AgentRelationships.filter(
+                  ar => ar.Status === 'Active' && UUIDsEqual(ar.AgentID, agentId)
+              );
+    return effectiveRels.some(ar => ar.ChatHandlingOption === 'Consult');
 }
 
 /**

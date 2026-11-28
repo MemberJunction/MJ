@@ -470,6 +470,16 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetEffectiveAgentActions(agentId: string): MJAIAgentActionEntity[] {
         return this.Base.GetEffectiveAgentActions(agentId);
     }
+
+    /**
+     * Resolves effective `MJAIAgentRelationshipEntity` rows across `BaseAgentID` inheritance.
+     */
+    public GetEffectiveAgentRelationships(
+        agentID: string,
+        relationshipStatus?: MJAIAgentRelationshipEntity['Status']
+    ): MJAIAgentRelationshipEntity[] {
+        return this.Base.GetEffectiveAgentRelationships(agentID, relationshipStatus);
+    }
     public GetStackedAdditionalInstructions(agentId: string): StackedAdditionalInstruction[] {
         return this.Base.GetStackedAdditionalInstructions(agentId);
     }

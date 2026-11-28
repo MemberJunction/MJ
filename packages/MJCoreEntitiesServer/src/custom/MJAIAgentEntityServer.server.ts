@@ -25,13 +25,35 @@ import {
     MJAIAgentTypeEntity,
 } from '@memberjunction/core-entities';
 import {
+    AGENT_ACCEPTS_SKILLS_RANK,
+    AGENT_ARTIFACT_CREATION_MODE_RANK,
+    AGENT_FINAL_VALIDATION_MODE_RANK,
+    AGENT_ISOLATION_RANK,
+    AGENT_MESSAGE_MODE_RANK,
+    AGENT_SEARCH_SCOPE_ACCESS_RANK,
+    AGENT_SKILL_ACTIVATION_RANK,
+    AGENT_STARTING_VALIDATION_MODE_RANK,
     BuildAgentTypeConfigurationFromLegacyFields,
     DeepMergeAgentConfigurations,
+    DoesAgentAllowWidenFromBase,
+    FindScopeConfigWideningViolations,
+    FoldRebaseAwareChain,
+    HasPathTraversalSegment,
+    IntersectPayloadPathSets,
+    IsAttachmentRootPathWithinAncestor,
     IsForbiddenMetadataHelperSeam,
     IsLegacyAIAgentConfigSqlDefault,
+    IsPayloadPathSetWithinAncestor,
+    IsPayloadScopeWithinAncestor,
+    JsonHasAllowWidenFromBaseKey,
     LEGACY_AI_AGENT_CONFIG_SQL_DEFAULTS,
     MAX_AGENT_INHERITANCE_DEPTH,
     MJAIAgentEntityExtended,
+    NARROW_ONLY_PROMPT_PARAM_GATES,
+    NarrowAttachmentRootPath,
+    NarrowPayloadScope,
+    NarrowScopeConfigObjects,
+    ParseAgentConfigJsonObject,
     ParseAgentConfiguration,
     ParseAgentHelperPlugins,
     ParseAgentInstantiationConfig,
@@ -61,29 +83,10 @@ const ADMIN_ROLE_NAMES = new Set([
     'agent administrator',
 ]);
 
-const ISOLATION_RANK: Record<MJAIAgentEntity['Isolation'], number> = {
-    InProcess: 0,
-    Worker: 1,
-    Process: 2,
-    Container: 3,
-};
-
-const SEARCH_ACCESS_RANK: Record<MJAIAgentEntity['SearchScopeAccess'], number> = {
-    None: 0,
-    Assigned: 1,
-    All: 2,
-};
-
-const ACCEPTS_SKILLS_RANK: Record<MJAIAgentEntity['AcceptsSkills'], number> = {
-    None: 0,
-    Limited: 1,
-    All: 2,
-};
-
-const SKILL_ACTIVATION_RANK: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
-    RequestedOnly: 0,
-    Auto: 1,
-};
+const ISOLATION_RANK = AGENT_ISOLATION_RANK;
+const SEARCH_ACCESS_RANK = AGENT_SEARCH_SCOPE_ACCESS_RANK;
+const ACCEPTS_SKILLS_RANK = AGENT_ACCEPTS_SKILLS_RANK;
+const SKILL_ACTIVATION_RANK = AGENT_SKILL_ACTIVATION_RANK;
 
 /**
  * Type guard narrowing an `IEntityDataProvider` to `IMetadataProvider` when the provider
@@ -220,9 +223,34 @@ export interface AgentSandboxValidationTarget {
     SkillActivationMode?: MJAIAgentEntity['SkillActivationMode'] | null;
     AllowMemoryWrite?: boolean | null;
     MaxExecutionsPerRun?: number | null;
+    MinExecutionsPerRun?: number | null;
     MaxSubAgentConsultRounds?: number | null;
-    /** Optional JSON bag carrying `helperPlugins` and operational config (`Configuration`). */
+    /** Optional additional narrow-only columns validated across the BaseAgentID cascade. */
+    PayloadDownstreamPaths?: string | null;
+    PayloadUpstreamPaths?: string | null;
+    PayloadSelfReadPaths?: string | null;
+    PayloadSelfWritePaths?: string | null;
+    PayloadScope?: string | null;
+    StartingPayloadValidationMode?: MJAIAgentEntity['StartingPayloadValidationMode'] | null;
+    FinalPayloadValidationMode?: MJAIAgentEntity['FinalPayloadValidationMode'] | null;
+    FinalPayloadValidationMaxRetries?: number | null;
+    ArtifactCreationMode?: MJAIAgentEntity['ArtifactCreationMode'] | null;
+    MessageMode?: MJAIAgentEntity['MessageMode'] | null;
+    MaxMessages?: number | null;
+    AttachmentRootPath?: string | null;
+    InlineStorageThresholdBytes?: number | null;
+    ContextWindowMaxTokens?: number | null;
+    MaxNotesToInject?: number | null;
+    MaxExamplesToInject?: number | null;
+    NoteRetentionDays?: number | null;
+    ExampleRetentionDays?: number | null;
+    AutoArchiveEnabled?: boolean | null;
+    ScopeConfig?: string | null;
+    AgentTypePromptParams?: string | null;
+    /** Optional JSON bag carrying `helperPlugins`, `allowWidenFromBase`, and operational config (`Configuration`). */
     Configuration?: string | null;
+    /** Pre-save `Configuration` JSON (used to prevent non-admins from clearing `allowWidenFromBase`). */
+    PreSaveConfiguration?: string | null;
     /** Optional `TypeConfiguration` JSON (checked for `helperPlugins` fallback). */
     TypeConfiguration?: string | null;
     /** Optional CategoryID / TypeID + pre-save values to prevent non-admin sandbox escapes. */
@@ -239,7 +267,15 @@ export interface AgentSandboxValidationTarget {
             | 'MaxTimePerRun'
             | 'MaxIterationsPerRun'
             | 'MaxExecutionsPerRun'
-            | 'MaxSubAgentConsultRounds',
+            | 'MaxSubAgentConsultRounds'
+            | 'ContextWindowMaxTokens'
+            | 'MaxNotesToInject'
+            | 'MaxExamplesToInject'
+            | 'NoteRetentionDays'
+            | 'ExampleRetentionDays'
+            | 'MaxMessages'
+            | 'InlineStorageThresholdBytes'
+            | 'FinalPayloadValidationMaxRetries',
             number | null
         >
     >;
@@ -285,8 +321,30 @@ export interface AgentSandboxValidationContext {
                     | 'AcceptsSkills'
                     | 'SkillActivationMode'
                     | 'AllowMemoryWrite'
+                    | 'MinExecutionsPerRun'
                     | 'MaxExecutionsPerRun'
                     | 'MaxSubAgentConsultRounds'
+                    | 'PayloadDownstreamPaths'
+                    | 'PayloadUpstreamPaths'
+                    | 'PayloadSelfReadPaths'
+                    | 'PayloadSelfWritePaths'
+                    | 'PayloadScope'
+                    | 'StartingPayloadValidationMode'
+                    | 'FinalPayloadValidationMode'
+                    | 'FinalPayloadValidationMaxRetries'
+                    | 'ArtifactCreationMode'
+                    | 'MessageMode'
+                    | 'MaxMessages'
+                    | 'AttachmentRootPath'
+                    | 'InlineStorageThresholdBytes'
+                    | 'ContextWindowMaxTokens'
+                    | 'MaxNotesToInject'
+                    | 'MaxExamplesToInject'
+                    | 'NoteRetentionDays'
+                    | 'ExampleRetentionDays'
+                    | 'AutoArchiveEnabled'
+                    | 'ScopeConfig'
+                    | 'AgentTypePromptParams'
                 >
             >
     >;
@@ -379,30 +437,55 @@ function computeAncestorSearchScopeCeiling(
     ancestors: readonly Partial<Pick<MJAIAgentEntity, 'BaseAgentID' | 'InstantiationMode' | 'SearchScopeAccess'>>[],
     ancestorConfigs: readonly (IAgentConfiguration | null)[]
 ): MJAIAgentEntity['SearchScopeAccess'] | null {
-    let ceiling: MJAIAgentEntity['SearchScopeAccess'] | null = null;
-    const apply = (val: MJAIAgentEntity['SearchScopeAccess'] | null | undefined): void => {
-        if (val != null) {
-            if (ceiling === null || SEARCH_ACCESS_RANK[val] < SEARCH_ACCESS_RANK[ceiling]) {
-                ceiling = val;
-            }
+    const narrow = (
+        acc: MJAIAgentEntity['SearchScopeAccess'] | null,
+        val: MJAIAgentEntity['SearchScopeAccess'] | null | undefined
+    ): MJAIAgentEntity['SearchScopeAccess'] | null => {
+        if (val == null) return acc;
+        if (acc === null || SEARCH_ACCESS_RANK[val] < SEARCH_ACCESS_RANK[acc]) {
+            return val;
         }
+        return acc;
     };
+    let seed: MJAIAgentEntity['SearchScopeAccess'] | null = null;
     for (const layer of defaultPolicyLayers) {
-        apply(layer.scope?.searchScopeAccess);
+        seed = narrow(seed, layer.scope?.searchScopeAccess);
     }
-    for (let i = 0; i < ancestors.length; i++) {
-        const explicit = ancestorConfigs[i]?.scope?.searchScopeAccess ?? null;
-        const legacy = ancestors[i].SearchScopeAccess ?? null;
-        if (explicit != null && legacy != null) {
-            const stricter = SEARCH_ACCESS_RANK[legacy] < SEARCH_ACCESS_RANK[explicit] ? legacy : explicit;
-            apply(stricter);
-        } else {
-            const isNonInstantiableDerived =
-                Boolean(ancestors[i].BaseAgentID) && (ancestors[i].InstantiationMode ?? 'None') === 'None';
-            apply(explicit ?? (legacy && (legacy !== 'None' || !isNonInstantiableDerived) ? legacy : null));
-        }
+    if (ancestors.length === 0) {
+        return seed;
     }
-    return ceiling;
+    const exp0 = ancestorConfigs[0]?.scope?.searchScopeAccess ?? null;
+    const leg0 = ancestors[0].SearchScopeAccess ?? null;
+    if (exp0 != null && leg0 != null) {
+        seed = narrow(seed, SEARCH_ACCESS_RANK[leg0] < SEARCH_ACCESS_RANK[exp0] ? leg0 : exp0);
+    } else {
+        const isNonInst0 = Boolean(ancestors[0].BaseAgentID) && (ancestors[0].InstantiationMode ?? 'None') === 'None';
+        seed = narrow(seed, exp0 ?? (leg0 && (leg0 !== 'None' || !isNonInst0) ? leg0 : null));
+    }
+    return FoldRebaseAwareChain({
+        Nodes: ancestors,
+        NodeConfigs: ancestorConfigs,
+        Seed: seed,
+        GetNodeValue: (anc, cfg, idx) => {
+            const explicit = cfg?.scope?.searchScopeAccess ?? null;
+            const legacy = anc.SearchScopeAccess ?? null;
+            const canWiden = idx > 0 && cfg?.allowWidenFromBase === true;
+            if (canWiden) {
+                if (explicit != null) return explicit;
+                return legacy != null && legacy !== 'None' ? legacy : undefined;
+            }
+            if (explicit != null && legacy != null) {
+                return SEARCH_ACCESS_RANK[legacy] < SEARCH_ACCESS_RANK[explicit] ? legacy : explicit;
+            }
+            if (explicit != null) return explicit;
+            const isNonInst = Boolean(anc.BaseAgentID) && (anc.InstantiationMode ?? 'None') === 'None';
+            if (legacy != null && (legacy !== 'None' || !isNonInst)) {
+                return legacy;
+            }
+            return undefined;
+        },
+        Narrow: (acc, next) => narrow(acc, next),
+    });
 }
 
 /**
@@ -481,6 +564,59 @@ export function ValidateAgentInheritanceAndSandbox(
                 'Configuration',
                 'Only administrators may configure helperPlugins (including clearing/modifying the key) on an AI Agent.',
                 declaredHelperPlugins.map((p) => `${p.seam}:${p.driverClass}`).join(', '),
+                ValidationErrorType.Failure
+            )
+        );
+    }
+
+    // 0b. Admin-only Configuration.allowWidenFromBase guard:
+    //     Non-administrator users cannot set, modify, or clear `allowWidenFromBase` on save.
+    const configDirty =
+        !Target.IsSaved || !Target.DirtyFields || Target.DirtyFields.has('Configuration');
+    if (
+        !isAdmin &&
+        User &&
+        configDirty &&
+        (JsonHasAllowWidenFromBaseKey(Target.Configuration) ||
+            JsonHasAllowWidenFromBaseKey(Target.PreSaveConfiguration))
+    ) {
+        errors.push(
+            new ValidationErrorInfo(
+                'Configuration',
+                'Only administrators may set, modify, or clear Configuration.allowWidenFromBase on an AI Agent.',
+                Target.Configuration,
+                ValidationErrorType.Failure
+            )
+        );
+    }
+
+    // 0c. Path-traversal guard on PayloadScope and AttachmentRootPath (ALL users, root or derived,
+    //     even when allowWidenFromBase === true).
+    const preParsedTargetConfig = ParseAgentConfiguration(Target.Configuration);
+    const rawTargetPayloadScope =
+        preParsedTargetConfig?.payload?.scope !== undefined
+            ? preParsedTargetConfig.payload.scope
+            : Target.PayloadScope;
+    if (HasPathTraversalSegment(rawTargetPayloadScope)) {
+        errors.push(
+            new ValidationErrorInfo(
+                'PayloadScope',
+                `PayloadScope ('${rawTargetPayloadScope}') cannot contain '..' path traversal segments.`,
+                rawTargetPayloadScope,
+                ValidationErrorType.Failure
+            )
+        );
+    }
+    const rawTargetAttachRoot =
+        preParsedTargetConfig?.attachments?.rootPath !== undefined
+            ? preParsedTargetConfig.attachments.rootPath
+            : Target.AttachmentRootPath;
+    if (HasPathTraversalSegment(rawTargetAttachRoot)) {
+        errors.push(
+            new ValidationErrorInfo(
+                'AttachmentRootPath',
+                `AttachmentRootPath ('${rawTargetAttachRoot}') cannot contain '..' path traversal segments.`,
+                rawTargetAttachRoot,
                 ValidationErrorType.Failure
             )
         );
@@ -654,22 +790,41 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
-        let effectiveMaxPerUser: number | null = null;
-        const foldMaxPerUser = (candidate: number | null | undefined): void => {
-            if (typeof candidate === 'number' && Number.isFinite(candidate)) {
-                const floored = Math.floor(candidate);
-                if (floored >= 1) {
-                    effectiveMaxPerUser = effectiveMaxPerUser === null ? floored : Math.min(effectiveMaxPerUser, floored);
-                }
-            }
-        };
+        const ancestorConfigsForInst = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
+        const sanitizePosInt = (v: number | null | undefined): number | null =>
+            typeof v === 'number' && Number.isFinite(v) && Math.floor(v) >= 1 ? Math.floor(v) : null;
+        const minInstVal = (a: number | null, b: number | null): number | null =>
+            b === null ? a : a === null ? b : Math.min(a, b);
+        let seedMaxPerUser: number | null = null;
         for (const layer of defaultPolicyLayers) {
-            foldMaxPerUser(layer.instantiation?.maxInstancesPerUser);
+            seedMaxPerUser = minInstVal(seedMaxPerUser, sanitizePosInt(layer.instantiation?.maxInstancesPerUser));
         }
-        for (const anc of ancestors) {
-            foldMaxPerUser(ParseAgentConfiguration(anc.Configuration)?.instantiation?.maxInstancesPerUser);
-            foldMaxPerUser(ParseAgentInstantiationConfig(anc.TypeConfiguration)?.maxInstancesPerUser);
+        if (ancestors.length > 0) {
+            seedMaxPerUser = minInstVal(
+                seedMaxPerUser,
+                sanitizePosInt(ancestorConfigsForInst[0]?.instantiation?.maxInstancesPerUser)
+            );
+            seedMaxPerUser = minInstVal(
+                seedMaxPerUser,
+                sanitizePosInt(ParseAgentInstantiationConfig(ancestors[0].TypeConfiguration)?.maxInstancesPerUser)
+            );
         }
+        const effectiveMaxPerUser = FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigsForInst,
+            Seed: seedMaxPerUser,
+            GetNodeValue: (anc, cfg, idx) => {
+                const fromJson = sanitizePosInt(cfg?.instantiation?.maxInstancesPerUser);
+                const fromTypeCfg = sanitizePosInt(ParseAgentInstantiationConfig(anc.TypeConfiguration)?.maxInstancesPerUser);
+                if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                    if (fromJson !== null) return fromJson;
+                    return fromTypeCfg !== null ? fromTypeCfg : undefined;
+                }
+                const combined = minInstVal(fromJson, fromTypeCfg);
+                return combined !== null ? combined : undefined;
+            },
+            Narrow: (acc, next) => minInstVal(acc, next),
+        });
 
         const ownerId = Target.OwnerUserID ?? User?.ID ?? null;
         const isCreatingPersonalInstance = (Target.InstantiationMode ?? 'None') === 'None';
@@ -710,7 +865,31 @@ export function ValidateAgentInheritanceAndSandbox(
         }
     }
 
-    // 4. Non-admin runtime capability & multi-hop bounds sandbox against full ancestor chain
+    const ancestorConfigs = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
+    const targetConfig = preParsedTargetConfig;
+    const targetAllowsWiden = targetConfig?.allowWidenFromBase === true;
+    const baseAgentLabel = baseAgent.Name ?? baseAgent.ID;
+
+    // Helper for R2-3 & R3-5: on existing saved instances where DirtyFields is tracked, only
+    // re-check narrow-only columns and numeric ceilings that were actually modified (or when
+    // Configuration or BaseAgentID itself was modified) so an admin tightening a base agent
+    // never breaks unrelated edits (rename/persona) on pre-existing derived instances while
+    // attaching/re-parenting BaseAgentID enforces every invariant.
+    const shouldEnforceField = (fieldName: string): boolean => {
+        if (!Target.IsSaved || !Target.DirtyFields) {
+            return true;
+        }
+        return (
+            Target.DirtyFields.has(fieldName) ||
+            Target.DirtyFields.has('Configuration') ||
+            Target.DirtyFields.has('BaseAgentID')
+        );
+    };
+
+    const widenHint = (fieldName: string, detail: string): string =>
+        `Derived agent cannot widen ${fieldName} ${detail} beyond base agent '${baseAgentLabel}'. Set Configuration.allowWidenFromBase = true (Admin only) if intentional.`;
+
+    // 4A. Non-admin-only sandbox checks (CanRun, DriverClass, CategoryID, TypeID)
     if (!isAdmin && User) {
         const basePerms = AIAgentPermissionHelper.ComputeEffectivePermissionsSync(
             baseAgent,
@@ -722,7 +901,7 @@ export function ValidateAgentInheritanceAndSandbox(
             errors.push(
                 new ValidationErrorInfo(
                     'BaseAgentID',
-                    `You do not have permission to run base agent '${baseAgent.Name ?? baseAgent.ID}'.`,
+                    `You do not have permission to run base agent '${baseAgentLabel}'.`,
                     Target.BaseAgentID,
                     ValidationErrorType.Failure
                 )
@@ -749,46 +928,6 @@ export function ValidateAgentInheritanceAndSandbox(
                 )
             );
         }
-
-        // Helper for R2-3 & R3-5: on existing saved instances where DirtyFields is tracked, only
-        // re-check narrow-only columns and numeric ceilings that were actually modified (or when
-        // Configuration or BaseAgentID itself was modified) so an admin tightening a base agent
-        // never breaks unrelated edits (rename/persona) on pre-existing derived instances while
-        // attaching/re-parenting BaseAgentID enforces every invariant (critical for Isolation,
-        // which has no runtime clamp and is read directly from the leaf column).
-        const shouldEnforceField = (fieldName: string): boolean => {
-            if (!Target.IsSaved || !Target.DirtyFields) {
-                return true;
-            }
-            return (
-                Target.DirtyFields.has(fieldName) ||
-                Target.DirtyFields.has('Configuration') ||
-                Target.DirtyFields.has('BaseAgentID')
-            );
-        };
-
-        // Isolation: strictest across the entire ancestor chain
-        let strictestAncestorIsolation: MJAIAgentEntity['Isolation'] = 'InProcess';
-        for (const anc of ancestors) {
-            const ancIso = anc.Isolation ?? 'InProcess';
-            if ((ISOLATION_RANK[ancIso] ?? 0) > (ISOLATION_RANK[strictestAncestorIsolation] ?? 0)) {
-                strictestAncestorIsolation = ancIso;
-            }
-        }
-        const targetIsoRank = ISOLATION_RANK[Target.Isolation ?? 'InProcess'] ?? 0;
-        if (shouldEnforceField('Isolation') && targetIsoRank < (ISOLATION_RANK[strictestAncestorIsolation] ?? 0)) {
-            errors.push(
-                new ValidationErrorInfo(
-                    'Isolation',
-                    `Derived agent Isolation ('${Target.Isolation}') cannot be less strict than ancestor Isolation ('${strictestAncestorIsolation}').`,
-                    Target.Isolation,
-                    ValidationErrorType.Failure
-                )
-            );
-        }
-
-        const ancestorConfigs = ancestors.map((a) => ParseAgentConfiguration(a.Configuration));
-        const targetConfig = ParseAgentConfiguration(Target.Configuration);
 
         // CategoryID / TypeID sandbox (S2, R2-4): non-admins cannot re-point or assign a derived
         // instance's CategoryID or TypeID away from its base agent chain (or assign a loose category
@@ -865,11 +1004,140 @@ export function ValidateAgentInheritanceAndSandbox(
                 );
             }
         }
+    }
 
-        // Multi-hop upper-bound limit ceilings (B4):
-        // - Exceeding an ancestor's finite ceiling is always rejected.
-        // - `null` means "inherit ancestor ceiling" (enforced at runtime via Math.min), EXCEPT when
-        //   an existing instance explicitly dirties a previously non-null cap to clear it to null.
+    // 4B. Unconditional derived invariants (ALL users, including Admins AND even with allowWidenFromBase === true)
+    //     - Isolation minimum (InProcess < Worker < Process < Container)
+    //     - Cross-cascade effectiveMinExecutionsPerRun <= effectiveMaxExecutionsPerRun
+    let strictestAncestorIsolation: MJAIAgentEntity['Isolation'] = 'InProcess';
+    for (const anc of ancestors) {
+        const ancIso = anc.Isolation ?? 'InProcess';
+        if ((ISOLATION_RANK[ancIso] ?? 0) > (ISOLATION_RANK[strictestAncestorIsolation] ?? 0)) {
+            strictestAncestorIsolation = ancIso;
+        }
+    }
+    const targetIsoRank = ISOLATION_RANK[Target.Isolation ?? 'InProcess'] ?? 0;
+    if (shouldEnforceField('Isolation') && targetIsoRank < (ISOLATION_RANK[strictestAncestorIsolation] ?? 0)) {
+        errors.push(
+            new ValidationErrorInfo(
+                'Isolation',
+                `Derived agent Isolation ('${Target.Isolation}') cannot be less strict than ancestor Isolation ('${strictestAncestorIsolation}').`,
+                Target.Isolation,
+                ValidationErrorType.Failure
+            )
+        );
+    }
+
+    const computeRebaseAncestorMin = (
+        layerPicker: (l: IAgentConfiguration) => number | null | undefined,
+        nodeJsonPicker: (cfg: IAgentConfiguration | null) => number | null | undefined,
+        nodeLegacyPicker: (a: (typeof ancestors)[number]) => number | null | undefined,
+        sqlDefault: number | null = null
+    ): number | null => {
+        const minFin = (a: number | null, b: number | null | undefined): number | null => {
+            if (typeof b !== 'number' || !Number.isFinite(b)) return a;
+            return a === null ? b : Math.min(a, b);
+        };
+        let seed: number | null = null;
+        for (const layer of defaultPolicyLayers) {
+            seed = minFin(seed, layerPicker(layer));
+        }
+        if (ancestors.length > 0) {
+            const exp0 = nodeJsonPicker(ancestorConfigs[0]);
+            const leg0 = nodeLegacyPicker(ancestors[0]);
+            const leg0Eff =
+                exp0 === undefined && sqlDefault !== null && leg0 === sqlDefault && seed !== null ? null : leg0;
+            seed = minFin(seed, exp0);
+            seed = minFin(seed, leg0Eff);
+        }
+        return FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: seed,
+            GetNodeValue: (anc, cfg, idx) => {
+                const explicit = nodeJsonPicker(cfg);
+                const legacy = nodeLegacyPicker(anc);
+                if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                    if (explicit === null) return null;
+                    if (typeof explicit === 'number' && Number.isFinite(explicit)) return explicit;
+                    if (typeof legacy === 'number' && Number.isFinite(legacy) && legacy !== sqlDefault) return legacy;
+                    return undefined;
+                }
+                if (typeof explicit === 'number' && Number.isFinite(explicit)) {
+                    if (typeof legacy === 'number' && Number.isFinite(legacy) && legacy !== sqlDefault) {
+                        return Math.min(explicit, legacy);
+                    }
+                    return explicit;
+                }
+                if (typeof legacy === 'number' && Number.isFinite(legacy) && legacy !== sqlDefault) {
+                    return legacy;
+                }
+                return undefined;
+            },
+            Narrow: (acc, next) => minFin(acc, next),
+        });
+    };
+
+    // Cross-cascade effectiveMinExecutionsPerRun <= effectiveMaxExecutionsPerRun
+    const ancestorMaxExecutions = computeRebaseAncestorMin(
+        (l) => l.subAgentExecution?.maxExecutionsPerRun,
+        (cfg) => cfg?.subAgentExecution?.maxExecutionsPerRun,
+        (a) => a.MaxExecutionsPerRun
+    );
+    const targetMaxExecutions =
+        targetConfig?.subAgentExecution?.maxExecutionsPerRun !== undefined
+            ? targetConfig.subAgentExecution.maxExecutionsPerRun
+            : Target.MaxExecutionsPerRun;
+    const effectiveMaxExecAcrossCascade: number | null = targetAllowsWiden
+        ? targetMaxExecutions !== undefined
+            ? targetMaxExecutions
+            : ancestorMaxExecutions
+        : typeof targetMaxExecutions === 'number' && Number.isFinite(targetMaxExecutions)
+          ? ancestorMaxExecutions !== null
+              ? Math.min(ancestorMaxExecutions, targetMaxExecutions)
+              : targetMaxExecutions
+          : ancestorMaxExecutions;
+
+    let effectiveMinExecAcrossCascade: number | null = null;
+    for (const layer of defaultPolicyLayers) {
+        if (typeof layer.subAgentExecution?.minExecutionsPerRun === 'number') {
+            effectiveMinExecAcrossCascade = layer.subAgentExecution.minExecutionsPerRun;
+        }
+    }
+    for (let i = 0; i < ancestors.length; i++) {
+        const v = ancestorConfigs[i]?.subAgentExecution?.minExecutionsPerRun ?? ancestors[i].MinExecutionsPerRun;
+        if (typeof v === 'number' && Number.isFinite(v)) {
+            effectiveMinExecAcrossCascade = v;
+        }
+    }
+    const targetMinExec =
+        targetConfig?.subAgentExecution?.minExecutionsPerRun !== undefined
+            ? targetConfig.subAgentExecution.minExecutionsPerRun
+            : Target.MinExecutionsPerRun;
+    if (typeof targetMinExec === 'number' && Number.isFinite(targetMinExec)) {
+        effectiveMinExecAcrossCascade = targetMinExec;
+    } else if (targetMinExec === null && targetConfig?.subAgentExecution?.minExecutionsPerRun === null) {
+        effectiveMinExecAcrossCascade = null;
+    }
+    if (
+        (shouldEnforceField('MinExecutionsPerRun') || shouldEnforceField('MaxExecutionsPerRun')) &&
+        effectiveMinExecAcrossCascade !== null &&
+        effectiveMaxExecAcrossCascade !== null &&
+        effectiveMinExecAcrossCascade > effectiveMaxExecAcrossCascade
+    ) {
+        errors.push(
+            new ValidationErrorInfo(
+                'MinExecutionsPerRun',
+                `Effective MinExecutionsPerRun (${effectiveMinExecAcrossCascade}) across the BaseAgentID cascade cannot exceed effective MaxExecutionsPerRun (${effectiveMaxExecAcrossCascade}).`,
+                effectiveMinExecAcrossCascade,
+                ValidationErrorType.Failure
+            )
+        );
+    }
+
+    // 4C. Non-widening ceiling & capability enforcement for ALL users (including Admins!) unless
+    //     Configuration.allowWidenFromBase === true (eliminates save-time vs runtime split-brain).
+    if (!targetAllowsWiden) {
         const checkMultiHopUpperBound = (
             fieldName:
                 | 'MaxCostPerRun'
@@ -877,32 +1145,47 @@ export function ValidateAgentInheritanceAndSandbox(
                 | 'MaxTimePerRun'
                 | 'MaxIterationsPerRun'
                 | 'MaxExecutionsPerRun'
-                | 'MaxSubAgentConsultRounds',
-            ancestorValues: Array<number | null | undefined>,
-            childLimit: number | null | undefined
+                | 'MaxSubAgentConsultRounds'
+                | 'ContextWindowMaxTokens'
+                | 'MaxNotesToInject'
+                | 'MaxExamplesToInject'
+                | 'NoteRetentionDays'
+                | 'ExampleRetentionDays'
+                | 'MaxMessages'
+                | 'InlineStorageThresholdBytes'
+                | 'FinalPayloadValidationMaxRetries',
+            effectiveCeiling: number | null,
+            childLimit: number | null | undefined,
+            explicitJsonVal: number | null | undefined,
+            sqlDefault: number | null = null
         ): void => {
             if (!shouldEnforceField(fieldName)) {
                 return;
             }
-            let effectiveCeiling: number | null = null;
-            for (const v of ancestorValues) {
-                if (typeof v === 'number' && Number.isFinite(v)) {
-                    effectiveCeiling = effectiveCeiling === null ? v : Math.min(effectiveCeiling, v);
-                }
-            }
             if (effectiveCeiling === null) {
+                return;
+            }
+            // Ignore untouched SQL default values when JSON didn't set the key and the field wasn't dirtied
+            if (
+                sqlDefault !== null &&
+                explicitJsonVal === undefined &&
+                childLimit === sqlDefault &&
+                Target.DirtyFields &&
+                !Target.DirtyFields.has(fieldName)
+            ) {
                 return;
             }
             if (childLimit === null) {
                 const isExplicitClear =
-                    Target.IsSaved &&
-                    Target.DirtyFields?.has(fieldName) === true &&
-                    typeof Target.PreSaveLimits?.[fieldName] === 'number';
+                    (Target.IsSaved &&
+                        Target.DirtyFields?.has(fieldName) === true &&
+                        typeof Target.PreSaveLimits?.[fieldName] === 'number') ||
+                    explicitJsonVal === null;
                 if (isExplicitClear) {
                     errors.push(
                         new ValidationErrorInfo(
                             fieldName,
-                            `Derived agent ${fieldName} cannot be cleared to null when an ancestor enforces ceiling (${effectiveCeiling}).`,
+                            widenHint(fieldName, `(cleared to null vs ceiling ${effectiveCeiling})`),
                             null,
                             ValidationErrorType.Failure
                         )
@@ -914,7 +1197,7 @@ export function ValidateAgentInheritanceAndSandbox(
                 errors.push(
                     new ValidationErrorInfo(
                         fieldName,
-                        `Derived agent ${fieldName} (${childLimit}) cannot exceed ancestor ceiling (${effectiveCeiling}).`,
+                        widenHint(fieldName, `(${childLimit} > ceiling ${effectiveCeiling})`),
                         childLimit,
                         ValidationErrorType.Failure
                     )
@@ -922,33 +1205,184 @@ export function ValidateAgentInheritanceAndSandbox(
             }
         };
 
-        checkMultiHopUpperBound('MaxCostPerRun', ancestors.map((a) => a.MaxCostPerRun), Target.MaxCostPerRun);
-        checkMultiHopUpperBound('MaxTokensPerRun', ancestors.map((a) => a.MaxTokensPerRun), Target.MaxTokensPerRun);
-        checkMultiHopUpperBound('MaxTimePerRun', ancestors.map((a) => a.MaxTimePerRun), Target.MaxTimePerRun);
-        checkMultiHopUpperBound('MaxIterationsPerRun', ancestors.map((a) => a.MaxIterationsPerRun), Target.MaxIterationsPerRun);
+        checkMultiHopUpperBound(
+            'MaxCostPerRun',
+            computeRebaseAncestorMin(() => undefined, () => undefined, (a) => a.MaxCostPerRun),
+            Target.MaxCostPerRun,
+            undefined
+        );
+        checkMultiHopUpperBound(
+            'MaxTokensPerRun',
+            computeRebaseAncestorMin(() => undefined, () => undefined, (a) => a.MaxTokensPerRun),
+            Target.MaxTokensPerRun,
+            undefined
+        );
+        checkMultiHopUpperBound(
+            'MaxTimePerRun',
+            computeRebaseAncestorMin(() => undefined, () => undefined, (a) => a.MaxTimePerRun),
+            Target.MaxTimePerRun,
+            undefined
+        );
+        checkMultiHopUpperBound(
+            'MaxIterationsPerRun',
+            computeRebaseAncestorMin(() => undefined, () => undefined, (a) => a.MaxIterationsPerRun),
+            Target.MaxIterationsPerRun,
+            undefined
+        );
         checkMultiHopUpperBound(
             'MaxExecutionsPerRun',
-            [
-                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxExecutionsPerRun),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun, a.MaxExecutionsPerRun]),
-            ],
-            targetConfig?.subAgentExecution?.maxExecutionsPerRun !== undefined
-                ? targetConfig.subAgentExecution.maxExecutionsPerRun
-                : Target.MaxExecutionsPerRun
+            ancestorMaxExecutions,
+            targetMaxExecutions,
+            targetConfig?.subAgentExecution?.maxExecutionsPerRun
         );
         checkMultiHopUpperBound(
             'MaxSubAgentConsultRounds',
-            [
-                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxConsultRounds),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds, a.MaxSubAgentConsultRounds]),
-            ],
+            computeRebaseAncestorMin(
+                (l) => l.subAgentExecution?.maxConsultRounds,
+                (cfg) => cfg?.subAgentExecution?.maxConsultRounds,
+                (a) => a.MaxSubAgentConsultRounds
+            ),
             targetConfig?.subAgentExecution?.maxConsultRounds !== undefined
                 ? targetConfig.subAgentExecution.maxConsultRounds
-                : Target.MaxSubAgentConsultRounds
+                : Target.MaxSubAgentConsultRounds,
+            targetConfig?.subAgentExecution?.maxConsultRounds
+        );
+        checkMultiHopUpperBound(
+            'ContextWindowMaxTokens',
+            computeRebaseAncestorMin(
+                (l) => l.contextWindow?.maxTokens,
+                (cfg) => cfg?.contextWindow?.maxTokens,
+                (a) => a.ContextWindowMaxTokens
+            ),
+            targetConfig?.contextWindow?.maxTokens !== undefined
+                ? targetConfig.contextWindow.maxTokens
+                : Target.ContextWindowMaxTokens,
+            targetConfig?.contextWindow?.maxTokens
+        );
+        checkMultiHopUpperBound(
+            'MaxNotesToInject',
+            computeRebaseAncestorMin(
+                (l) => l.memory?.maxNotesToInject,
+                (cfg) => cfg?.memory?.maxNotesToInject,
+                (a) => a.MaxNotesToInject,
+                5 // SQL schema default DF_AIAgent_MaxNotesToInject
+            ),
+            targetConfig?.memory?.maxNotesToInject !== undefined
+                ? targetConfig.memory.maxNotesToInject
+                : Target.MaxNotesToInject,
+            targetConfig?.memory?.maxNotesToInject,
+            5 // SQL schema default DF_AIAgent_MaxNotesToInject
+        );
+        checkMultiHopUpperBound(
+            'MaxExamplesToInject',
+            computeRebaseAncestorMin(
+                (l) => l.memory?.maxExamplesToInject,
+                (cfg) => cfg?.memory?.maxExamplesToInject,
+                (a) => a.MaxExamplesToInject,
+                3 // SQL schema default DF_AIAgent_MaxExamplesToInject
+            ),
+            targetConfig?.memory?.maxExamplesToInject !== undefined
+                ? targetConfig.memory.maxExamplesToInject
+                : Target.MaxExamplesToInject,
+            targetConfig?.memory?.maxExamplesToInject,
+            3 // SQL schema default DF_AIAgent_MaxExamplesToInject
+        );
+        const ancestorNoteRetentionDays = computeRebaseAncestorMin(
+            (l) => l.memory?.noteRetentionDays,
+            (cfg) => cfg?.memory?.noteRetentionDays,
+            (a) => a.NoteRetentionDays,
+            90 // SQL schema default DF_AIAgent_NoteRetentionDays
+        );
+        checkMultiHopUpperBound(
+            'NoteRetentionDays',
+            ancestorNoteRetentionDays,
+            targetConfig?.memory?.noteRetentionDays !== undefined
+                ? targetConfig.memory.noteRetentionDays
+                : Target.NoteRetentionDays,
+            targetConfig?.memory?.noteRetentionDays,
+            90 // SQL schema default DF_AIAgent_NoteRetentionDays
+        );
+        const ancestorExampleRetentionDays = computeRebaseAncestorMin(
+            (l) => l.memory?.exampleRetentionDays,
+            (cfg) => cfg?.memory?.exampleRetentionDays,
+            (a) => a.ExampleRetentionDays,
+            180 // SQL schema default DF_AIAgent_ExampleRetentionDays
+        );
+        checkMultiHopUpperBound(
+            'ExampleRetentionDays',
+            ancestorExampleRetentionDays,
+            targetConfig?.memory?.exampleRetentionDays !== undefined
+                ? targetConfig.memory.exampleRetentionDays
+                : Target.ExampleRetentionDays,
+            targetConfig?.memory?.exampleRetentionDays,
+            180 // SQL schema default DF_AIAgent_ExampleRetentionDays
+        );
+        checkMultiHopUpperBound(
+            'MaxMessages',
+            computeRebaseAncestorMin(
+                (l) => l.attachments?.maxMessages,
+                (cfg) => cfg?.attachments?.maxMessages,
+                (a) => a.MaxMessages
+            ),
+            targetConfig?.attachments?.maxMessages !== undefined
+                ? targetConfig.attachments.maxMessages
+                : Target.MaxMessages,
+            targetConfig?.attachments?.maxMessages
+        );
+        checkMultiHopUpperBound(
+            'InlineStorageThresholdBytes',
+            computeRebaseAncestorMin(
+                (l) => l.attachments?.inlineStorageThresholdBytes,
+                (cfg) => cfg?.attachments?.inlineStorageThresholdBytes,
+                (a) => a.InlineStorageThresholdBytes
+            ),
+            targetConfig?.attachments?.inlineStorageThresholdBytes !== undefined
+                ? targetConfig.attachments.inlineStorageThresholdBytes
+                : Target.InlineStorageThresholdBytes,
+            targetConfig?.attachments?.inlineStorageThresholdBytes
+        );
+        checkMultiHopUpperBound(
+            'FinalPayloadValidationMaxRetries',
+            computeRebaseAncestorMin(
+                (l) => l.payload?.finalValidationMaxRetries,
+                (cfg) => cfg?.payload?.finalValidationMaxRetries,
+                (a) => a.FinalPayloadValidationMaxRetries,
+                3 // SQL schema default DF_AIAgent_FinalPayloadValidationMaxRetries
+            ),
+            targetConfig?.payload?.finalValidationMaxRetries !== undefined
+                ? targetConfig.payload.finalValidationMaxRetries
+                : Target.FinalPayloadValidationMaxRetries,
+            targetConfig?.payload?.finalValidationMaxRetries,
+            3 // SQL schema default DF_AIAgent_FinalPayloadValidationMaxRetries
         );
 
+        // instantiation.maxInstancesPerUser ceiling (cannot raise above ancestor ceiling)
+        const ancestorMaxInstances = computeRebaseAncestorMin(
+            (l) => l.instantiation?.maxInstancesPerUser,
+            (cfg) => cfg?.instantiation?.maxInstancesPerUser,
+            (a) => ParseAgentInstantiationConfig(a.TypeConfiguration)?.maxInstancesPerUser
+        );
+        const targetMaxInstances =
+            targetConfig?.instantiation?.maxInstancesPerUser ??
+            ParseAgentInstantiationConfig(Target.TypeConfiguration)?.maxInstancesPerUser;
+        if (
+            shouldEnforceField('Configuration') &&
+            ancestorMaxInstances !== null &&
+            typeof targetMaxInstances === 'number' &&
+            targetMaxInstances > ancestorMaxInstances
+        ) {
+            errors.push(
+                new ValidationErrorInfo(
+                    'Configuration',
+                    widenHint('instantiation.maxInstancesPerUser', `(${targetMaxInstances} > ceiling ${ancestorMaxInstances})`),
+                    targetMaxInstances,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
+
         // Narrow-only capabilities validated across BOTH Configuration JSON and legacy columns
-        // as well as Category/AgentType default policy layers (C-R1-2):
+        // as well as Category/AgentType default policy layers (rebase-aware across ancestors):
         // 4a. SearchScopeAccess (None: 0 < Assigned: 1 < All: 2)
         const ancestorSearchAccess = computeAncestorSearchScopeCeiling(defaultPolicyLayers, ancestors, ancestorConfigs);
         const targetSearchAccess = targetConfig?.scope?.searchScopeAccess ?? Target.SearchScopeAccess ?? null;
@@ -961,7 +1395,7 @@ export function ValidateAgentInheritanceAndSandbox(
             errors.push(
                 new ValidationErrorInfo(
                     'SearchScopeAccess',
-                    `Derived agent SearchScopeAccess ('${targetSearchAccess}') cannot widen ancestor SearchScopeAccess ('${ancestorSearchAccess}').`,
+                    widenHint('SearchScopeAccess', `('${targetSearchAccess}' > '${ancestorSearchAccess}')`),
                     targetSearchAccess,
                     ValidationErrorType.Failure
                 )
@@ -969,15 +1403,19 @@ export function ValidateAgentInheritanceAndSandbox(
         }
 
         // 4b. AcceptsSkills (None: 0 < Limited: 1 < All: 2)
-        let ancestorAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] | null = null;
-        for (const anc of ancestors) {
-            const val = anc.AcceptsSkills;
-            if (val != null) {
-                if (ancestorAcceptsSkills === null || ACCEPTS_SKILLS_RANK[val] < ACCEPTS_SKILLS_RANK[ancestorAcceptsSkills]) {
-                    ancestorAcceptsSkills = val;
-                }
-            }
-        }
+        const ancestorAcceptsSkills = FoldRebaseAwareChain<
+            (typeof ancestors)[number],
+            MJAIAgentEntity['AcceptsSkills'] | null
+        >({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: ancestors[0]?.AcceptsSkills ?? null,
+            GetNodeValue: (anc) => anc.AcceptsSkills ?? undefined,
+            Narrow: (acc, next) => {
+                if (next == null) return acc;
+                return acc === null || ACCEPTS_SKILLS_RANK[next] < ACCEPTS_SKILLS_RANK[acc] ? next : acc;
+            },
+        });
         if (
             shouldEnforceField('AcceptsSkills') &&
             ancestorAcceptsSkills !== null &&
@@ -987,7 +1425,7 @@ export function ValidateAgentInheritanceAndSandbox(
             errors.push(
                 new ValidationErrorInfo(
                     'AcceptsSkills',
-                    `Derived agent AcceptsSkills ('${Target.AcceptsSkills}') cannot widen ancestor AcceptsSkills ('${ancestorAcceptsSkills}').`,
+                    widenHint('AcceptsSkills', `('${Target.AcceptsSkills}' > '${ancestorAcceptsSkills}')`),
                     Target.AcceptsSkills,
                     ValidationErrorType.Failure
                 )
@@ -995,21 +1433,41 @@ export function ValidateAgentInheritanceAndSandbox(
         }
 
         // 4c. SkillActivationMode (RequestedOnly: 0 < Auto: 1)
-        let ancestorSkillMode: MJAIAgentEntity['SkillActivationMode'] | null = null;
-        const applySkillModeCeiling = (val: MJAIAgentEntity['SkillActivationMode'] | null | undefined): void => {
-            if (val != null) {
-                if (ancestorSkillMode === null || SKILL_ACTIVATION_RANK[val] < SKILL_ACTIVATION_RANK[ancestorSkillMode]) {
-                    ancestorSkillMode = val;
-                }
-            }
+        const narrowSkill = (
+            acc: MJAIAgentEntity['SkillActivationMode'] | null,
+            v: MJAIAgentEntity['SkillActivationMode'] | null | undefined
+        ): MJAIAgentEntity['SkillActivationMode'] | null => {
+            if (v == null) return acc;
+            return acc === null || SKILL_ACTIVATION_RANK[v] < SKILL_ACTIVATION_RANK[acc] ? v : acc;
         };
+        let seedAncSkill: MJAIAgentEntity['SkillActivationMode'] | null = null;
         for (const layer of defaultPolicyLayers) {
-            applySkillModeCeiling(layer.skills?.activationMode);
+            seedAncSkill = narrowSkill(seedAncSkill, layer.skills?.activationMode);
         }
-        for (let i = 0; i < ancestors.length; i++) {
-            applySkillModeCeiling(ancestorConfigs[i]?.skills?.activationMode);
-            applySkillModeCeiling(ancestors[i].SkillActivationMode);
+        if (ancestors.length > 0) {
+            seedAncSkill = narrowSkill(seedAncSkill, ancestorConfigs[0]?.skills?.activationMode);
+            seedAncSkill = narrowSkill(seedAncSkill, ancestors[0].SkillActivationMode);
         }
+        const ancestorSkillMode = FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: seedAncSkill,
+            GetNodeValue: (anc, cfg, idx) => {
+                const exp = cfg?.skills?.activationMode ?? null;
+                const leg = anc.SkillActivationMode ?? null;
+                if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                    if (exp != null) return exp;
+                    return leg != null && leg !== 'RequestedOnly' ? leg : undefined;
+                }
+                if (exp != null && leg != null) {
+                    return SKILL_ACTIVATION_RANK[leg] < SKILL_ACTIVATION_RANK[exp] ? leg : exp;
+                }
+                if (exp != null) return exp;
+                const isNonInst = Boolean(anc.BaseAgentID) && (anc.InstantiationMode ?? 'None') === 'None';
+                return leg != null && (leg !== 'RequestedOnly' || !isNonInst) ? leg : undefined;
+            },
+            Narrow: (acc, next) => narrowSkill(acc, next),
+        });
         const targetSkillMode = targetConfig?.skills?.activationMode ?? Target.SkillActivationMode ?? null;
         if (
             shouldEnforceField('SkillActivationMode') &&
@@ -1020,40 +1478,105 @@ export function ValidateAgentInheritanceAndSandbox(
             errors.push(
                 new ValidationErrorInfo(
                     'SkillActivationMode',
-                    `Derived agent SkillActivationMode ('${targetSkillMode}') cannot widen ancestor SkillActivationMode ('${ancestorSkillMode}').`,
+                    widenHint('SkillActivationMode', `('${targetSkillMode}' > '${ancestorSkillMode}')`),
                     targetSkillMode,
                     ValidationErrorType.Failure
                 )
             );
         }
 
-        // 4d. RequirePlanMode (monotonic OR: once true on an ancestor/category/type, derived instances cannot set false)
-        const ancestorRequiresPlan =
+        // 4d. RequirePlanMode (rebase-aware monotonic OR)
+        const seedAncRequirePlan =
             defaultPolicyLayers.some((l) => l.execution?.requirePlanMode === true) ||
-            ancestors.some((a, i) => ancestorConfigs[i]?.execution?.requirePlanMode === true || a.RequirePlanMode === true);
+            (ancestors.length > 0 &&
+                (ancestorConfigs[0]?.execution?.requirePlanMode === true || ancestors[0].RequirePlanMode === true));
+        const ancestorRequiresPlan = FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: seedAncRequirePlan,
+            GetNodeValue: (anc, cfg, idx) => {
+                const exp = cfg?.execution?.requirePlanMode;
+                const leg = anc.RequirePlanMode;
+                if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                    if (typeof exp === 'boolean') return exp;
+                    return leg === true ? true : undefined;
+                }
+                if (exp === true || leg === true) return true;
+                return typeof exp === 'boolean' ? exp : undefined;
+            },
+            Narrow: (acc, next) => acc || next,
+        });
         const targetRequirePlan = targetConfig?.execution?.requirePlanMode ?? Target.RequirePlanMode;
         if (shouldEnforceField('RequirePlanMode') && ancestorRequiresPlan && targetRequirePlan === false) {
             errors.push(
                 new ValidationErrorInfo(
                     'RequirePlanMode',
-                    'Derived agent cannot disable RequirePlanMode when an ancestor requires Plan Mode.',
+                    widenHint('RequirePlanMode', `(false vs required true)`),
                     false,
                     ValidationErrorType.Failure
                 )
             );
         }
 
-        // 4e. Narrow-only booleans (monotonic AND: once false on an ancestor/category/type, derived instances cannot set true)
-        const checkNarrowBoolean = (
+        // 4e. Narrow-only booleans (rebase-aware monotonic AND)
+        const computeRebaseAncestorBoolAnd = (
+            layerPicker: (l: IAgentConfiguration) => boolean | null | undefined,
+            nodeJsonPicker: (cfg: IAgentConfiguration | null) => boolean | null | undefined,
+            nodeLegacyPicker: (a: (typeof ancestors)[number]) => boolean | null | undefined,
+            sqlDefault: boolean
+        ): boolean | null => {
+            const foldAnd = (acc: boolean | null, v: boolean | null | undefined): boolean | null => {
+                if (typeof v !== 'boolean') return acc;
+                return acc === null ? v : acc && v;
+            };
+            let seed: boolean | null = null;
+            for (const layer of defaultPolicyLayers) {
+                seed = foldAnd(seed, layerPicker(layer));
+            }
+            if (ancestors.length > 0) {
+                const exp0 = nodeJsonPicker(ancestorConfigs[0]);
+                const leg0 = nodeLegacyPicker(ancestors[0]);
+                seed =
+                    typeof exp0 === 'boolean' && typeof leg0 === 'boolean'
+                        ? foldAnd(seed, exp0 && leg0)
+                        : foldAnd(seed, exp0 ?? leg0);
+            }
+            return FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seed,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = nodeJsonPicker(cfg);
+                    const leg = nodeLegacyPicker(anc);
+                    if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                        if (typeof exp === 'boolean') return exp;
+                        return typeof leg === 'boolean' && leg !== sqlDefault ? leg : undefined;
+                    }
+                    if (typeof exp === 'boolean' && typeof leg === 'boolean') return exp && leg;
+                    if (typeof exp === 'boolean') return exp;
+                    if (typeof leg === 'boolean') {
+                        if (sqlDefault === false && leg === false) {
+                            const isNonInst = Boolean(anc.BaseAgentID) && (anc.InstantiationMode ?? 'None') === 'None';
+                            return isNonInst ? undefined : false;
+                        }
+                        return leg !== sqlDefault ? leg : undefined;
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => foldAnd(acc, next),
+            });
+        };
+
+        const checkRebaseNarrowBoolean = (
             fieldName: 'SupportsPlanMode' | 'AcceptUnregisteredFiles' | 'AllowEphemeralClientTools' | 'AllowMemoryWrite',
-            ancestorVals: Array<boolean | null | undefined>,
+            ancestorEffective: boolean | null,
             targetVal: boolean | null | undefined
         ): void => {
-            if (shouldEnforceField(fieldName) && ancestorVals.some((v) => v === false) && targetVal === true) {
+            if (shouldEnforceField(fieldName) && ancestorEffective === false && targetVal === true) {
                 errors.push(
                     new ValidationErrorInfo(
                         fieldName,
-                        `Derived agent cannot enable ${fieldName} when an ancestor disables it.`,
+                        widenHint(fieldName, `(true vs disabled false)`),
                         true,
                         ValidationErrorType.Failure
                     )
@@ -1061,38 +1584,554 @@ export function ValidateAgentInheritanceAndSandbox(
             }
         };
 
-        checkNarrowBoolean(
+        checkRebaseNarrowBoolean(
             'SupportsPlanMode',
-            [
-                ...defaultPolicyLayers.map((l) => l.execution?.supportsPlanMode),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.execution?.supportsPlanMode, a.SupportsPlanMode]),
-            ],
+            computeRebaseAncestorBoolAnd(
+                (l) => l.execution?.supportsPlanMode,
+                (cfg) => cfg?.execution?.supportsPlanMode,
+                (a) => a.SupportsPlanMode,
+                true
+            ),
             targetConfig?.execution?.supportsPlanMode ?? Target.SupportsPlanMode
         );
-        checkNarrowBoolean(
+        checkRebaseNarrowBoolean(
             'AcceptUnregisteredFiles',
-            [
-                ...defaultPolicyLayers.map((l) => l.attachments?.acceptUnregisteredFiles),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles, a.AcceptUnregisteredFiles]),
-            ],
+            computeRebaseAncestorBoolAnd(
+                (l) => l.attachments?.acceptUnregisteredFiles,
+                (cfg) => cfg?.attachments?.acceptUnregisteredFiles,
+                (a) => a.AcceptUnregisteredFiles,
+                false
+            ),
             targetConfig?.attachments?.acceptUnregisteredFiles ?? Target.AcceptUnregisteredFiles
         );
-        checkNarrowBoolean(
+        checkRebaseNarrowBoolean(
             'AllowEphemeralClientTools',
-            [
-                ...defaultPolicyLayers.map((l) => l.clientTools?.allowEphemeral),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.clientTools?.allowEphemeral, a.AllowEphemeralClientTools]),
-            ],
+            computeRebaseAncestorBoolAnd(
+                (l) => l.clientTools?.allowEphemeral,
+                (cfg) => cfg?.clientTools?.allowEphemeral,
+                (a) => a.AllowEphemeralClientTools,
+                true
+            ),
             targetConfig?.clientTools?.allowEphemeral ?? Target.AllowEphemeralClientTools
         );
-        checkNarrowBoolean(
+        checkRebaseNarrowBoolean(
             'AllowMemoryWrite',
-            [
-                ...defaultPolicyLayers.map((l) => l.memory?.allowMemoryWrite),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.memory?.allowMemoryWrite, a.AllowMemoryWrite]),
-            ],
+            computeRebaseAncestorBoolAnd(
+                (l) => l.memory?.allowMemoryWrite,
+                (cfg) => cfg?.memory?.allowMemoryWrite,
+                (a) => a.AllowMemoryWrite,
+                true
+            ),
             targetConfig?.memory?.allowMemoryWrite ?? Target.AllowMemoryWrite
         );
+
+        // 4f. Ranked enum surfaces: ArtifactCreationMode, MessageMode, StartingPayloadValidationMode, FinalPayloadValidationMode
+        const checkRankedEnumSurface = <T extends string>(args: {
+            fieldName:
+                | 'ArtifactCreationMode'
+                | 'MessageMode'
+                | 'StartingPayloadValidationMode'
+                | 'FinalPayloadValidationMode';
+            ranks: Readonly<Record<T, number>>;
+            sqlDefault: T;
+            layerPicker: (l: IAgentConfiguration) => T | null | undefined;
+            jsonPicker: (cfg: IAgentConfiguration | null) => T | null | undefined;
+            legacyPicker: (a: (typeof ancestors)[number]) => T | null | undefined;
+            targetLegacy: T | null | undefined;
+        }): void => {
+            if (!shouldEnforceField(args.fieldName)) return;
+            const narrowEnum = (acc: T | null, v: T | null | undefined): T | null => {
+                if (v == null) return acc;
+                return acc === null || args.ranks[v] < args.ranks[acc] ? v : acc;
+            };
+            let seed: T | null = null;
+            for (const layer of defaultPolicyLayers) {
+                seed = narrowEnum(seed, args.layerPicker(layer));
+            }
+            if (ancestors.length > 0) {
+                const exp0 = args.jsonPicker(ancestorConfigs[0]);
+                const leg0 = args.legacyPicker(ancestors[0]);
+                if (exp0 != null && leg0 != null) {
+                    seed = narrowEnum(seed, args.ranks[leg0] < args.ranks[exp0] ? leg0 : exp0);
+                } else if (exp0 != null) {
+                    seed = narrowEnum(seed, exp0);
+                } else if (leg0 != null && leg0 !== args.sqlDefault) {
+                    seed = narrowEnum(seed, leg0);
+                } else if (seed === null && leg0 != null) {
+                    seed = leg0;
+                }
+            }
+            const ancestorEffective = FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seed,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = args.jsonPicker(cfg) ?? null;
+                    const leg = args.legacyPicker(anc) ?? null;
+                    if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                        if (exp != null) return exp;
+                        return leg != null && leg !== args.sqlDefault ? leg : undefined;
+                    }
+                    if (exp != null && leg != null) {
+                        return args.ranks[leg] < args.ranks[exp] ? leg : exp;
+                    }
+                    if (exp != null) return exp;
+                    return leg != null && leg !== args.sqlDefault ? leg : undefined;
+                },
+                Narrow: (acc, next) => narrowEnum(acc, next),
+            });
+            if (ancestorEffective === null) return;
+            const expTarget = args.jsonPicker(targetConfig);
+            if (
+                expTarget === undefined &&
+                args.targetLegacy === args.sqlDefault &&
+                Target.DirtyFields &&
+                !Target.DirtyFields.has(args.fieldName)
+            ) {
+                return;
+            }
+            const targetVal = expTarget ?? args.targetLegacy ?? null;
+            if (targetVal != null && args.ranks[targetVal] > args.ranks[ancestorEffective]) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        args.fieldName,
+                        widenHint(args.fieldName, `('${targetVal}' > '${ancestorEffective}')`),
+                        targetVal,
+                        ValidationErrorType.Failure
+                    )
+                );
+            }
+        };
+
+        checkRankedEnumSurface({
+            fieldName: 'ArtifactCreationMode',
+            ranks: AGENT_ARTIFACT_CREATION_MODE_RANK,
+            sqlDefault: 'Always',
+            layerPicker: (l) => l.artifacts?.creationMode,
+            jsonPicker: (cfg) => cfg?.artifacts?.creationMode,
+            legacyPicker: (a) => a.ArtifactCreationMode,
+            targetLegacy: Target.ArtifactCreationMode,
+        });
+        checkRankedEnumSurface({
+            fieldName: 'MessageMode',
+            ranks: AGENT_MESSAGE_MODE_RANK,
+            sqlDefault: 'None',
+            layerPicker: (l) => l.attachments?.messageMode,
+            jsonPicker: (cfg) => cfg?.attachments?.messageMode,
+            legacyPicker: (a) => a.MessageMode,
+            targetLegacy: Target.MessageMode,
+        });
+        checkRankedEnumSurface({
+            fieldName: 'StartingPayloadValidationMode',
+            ranks: AGENT_STARTING_VALIDATION_MODE_RANK,
+            sqlDefault: 'Fail',
+            layerPicker: (l) => l.payload?.startingValidationMode,
+            jsonPicker: (cfg) => cfg?.payload?.startingValidationMode,
+            legacyPicker: (a) => a.StartingPayloadValidationMode,
+            targetLegacy: Target.StartingPayloadValidationMode,
+        });
+        checkRankedEnumSurface({
+            fieldName: 'FinalPayloadValidationMode',
+            ranks: AGENT_FINAL_VALIDATION_MODE_RANK,
+            sqlDefault: 'Retry',
+            layerPicker: (l) => l.payload?.finalValidationMode,
+            jsonPicker: (cfg) => cfg?.payload?.finalValidationMode,
+            legacyPicker: (a) => a.FinalPayloadValidationMode,
+            targetLegacy: Target.FinalPayloadValidationMode,
+        });
+
+        // 4g. AutoArchiveEnabled: cannot flip true -> false when ancestor enforces finite retention
+        const ancestorHasFiniteRetention =
+            ancestorNoteRetentionDays !== null || ancestorExampleRetentionDays !== null;
+        const seedAncAutoArchive: boolean = (() => {
+            if (ancestors.length > 0) {
+                const exp0 = ancestorConfigs[0]?.memory?.autoArchiveEnabled;
+                if (typeof exp0 === 'boolean') return exp0;
+                const leg0 = ancestors[0].AutoArchiveEnabled;
+                if (typeof leg0 === 'boolean' && leg0 !== true) return leg0;
+            }
+            for (let i = defaultPolicyLayers.length - 1; i >= 0; i--) {
+                if (typeof defaultPolicyLayers[i].memory?.autoArchiveEnabled === 'boolean') {
+                    return defaultPolicyLayers[i].memory!.autoArchiveEnabled!;
+                }
+            }
+            return true;
+        })();
+        const ancestorAutoArchive = FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: seedAncAutoArchive,
+            GetNodeValue: (anc, cfg) => {
+                const exp = cfg?.memory?.autoArchiveEnabled;
+                if (typeof exp === 'boolean') return exp;
+                const leg = anc.AutoArchiveEnabled;
+                return typeof leg === 'boolean' && leg !== true ? leg : undefined;
+            },
+            Narrow: (acc, next) => (acc === true && ancestorHasFiniteRetention && next === false ? true : next),
+        });
+        const targetAutoArchive = targetConfig?.memory?.autoArchiveEnabled ?? Target.AutoArchiveEnabled;
+        if (
+            shouldEnforceField('AutoArchiveEnabled') &&
+            ancestorAutoArchive === true &&
+            ancestorHasFiniteRetention &&
+            targetAutoArchive === false
+        ) {
+            errors.push(
+                new ValidationErrorInfo(
+                    'AutoArchiveEnabled',
+                    widenHint('AutoArchiveEnabled', '(false while ancestor enforces finite retention)'),
+                    false,
+                    ValidationErrorType.Failure
+                )
+            );
+        }
+
+        // 4h. Payload path glob-sets (Downstream, Upstream, SelfRead, SelfWrite)
+        const parsePathList = (raw: string | null | undefined): string[] | null => {
+            if (!raw || raw.trim().length === 0) return null;
+            try {
+                const p: unknown = JSON.parse(raw);
+                if (Array.isArray(p) && p.every((item): item is string => typeof item === 'string')) {
+                    return p;
+                }
+            } catch {
+                return null;
+            }
+            return null;
+        };
+        const checkPayloadPathSurface = (args: {
+            fieldName:
+                | 'PayloadDownstreamPaths'
+                | 'PayloadUpstreamPaths'
+                | 'PayloadSelfReadPaths'
+                | 'PayloadSelfWritePaths';
+            jsonPicker: (cfg: IAgentConfiguration | null) => string[] | null | undefined;
+            legacyPicker: (a: (typeof ancestors)[number]) => string | null | undefined;
+            targetLegacy: string | null | undefined;
+            treatWildcardAsDbDefault: boolean;
+        }): void => {
+            if (!shouldEnforceField(args.fieldName)) return;
+            let seed: string[] | null = null;
+            for (const layer of defaultPolicyLayers) {
+                const lp = args.jsonPicker(layer);
+                if (Array.isArray(lp)) {
+                    seed = IntersectPayloadPathSets(seed, lp);
+                }
+            }
+            if (ancestors.length > 0) {
+                const exp0 = args.jsonPicker(ancestorConfigs[0]);
+                if (Array.isArray(exp0)) {
+                    seed = IntersectPayloadPathSets(seed, exp0);
+                } else {
+                    const leg0 = parsePathList(args.legacyPicker(ancestors[0]));
+                    if (leg0 !== null) {
+                        const isDbWildcard =
+                            args.treatWildcardAsDbDefault && leg0.length === 1 && leg0[0] === '*';
+                        if (!isDbWildcard) {
+                            seed = IntersectPayloadPathSets(seed, leg0);
+                        }
+                    }
+                }
+            }
+            const ancestorPaths = FoldRebaseAwareChain<
+                (typeof ancestors)[number],
+                string[] | null
+            >({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seed,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = args.jsonPicker(cfg);
+                    if (idx > 0 && cfg?.allowWidenFromBase === true && exp === null) {
+                        return null;
+                    }
+                    if (Array.isArray(exp)) return [...exp];
+                    const leg = parsePathList(args.legacyPicker(anc));
+                    if (leg !== null) {
+                        const isDbWildcard =
+                            args.treatWildcardAsDbDefault && leg.length === 1 && leg[0] === '*';
+                        if (!isDbWildcard) return leg;
+                    }
+                    return undefined;
+                },
+                Narrow: (acc, next) => IntersectPayloadPathSets(acc, next),
+                Rebase: (_acc, next) => (next === null ? null : [...next]),
+            });
+
+            const expTarget = args.jsonPicker(targetConfig);
+            let targetPaths: string[] | null | undefined;
+            if (expTarget !== undefined) {
+                targetPaths = expTarget;
+            } else {
+                const legTarget = parsePathList(args.targetLegacy);
+                if (legTarget !== null) {
+                    const isUntouchedWildcard =
+                        args.treatWildcardAsDbDefault &&
+                        legTarget.length === 1 &&
+                        legTarget[0] === '*' &&
+                        Target.DirtyFields &&
+                        !Target.DirtyFields.has(args.fieldName);
+                    if (!isUntouchedWildcard) {
+                        targetPaths = legTarget;
+                    }
+                }
+            }
+            if (targetPaths === undefined) return;
+            if (!IsPayloadPathSetWithinAncestor(ancestorPaths, targetPaths)) {
+                errors.push(
+                    new ValidationErrorInfo(
+                        args.fieldName,
+                        widenHint(
+                            args.fieldName,
+                            `(${JSON.stringify(targetPaths)} outside ${JSON.stringify(ancestorPaths)})`
+                        ),
+                        targetPaths,
+                        ValidationErrorType.Failure
+                    )
+                );
+            }
+        };
+
+        checkPayloadPathSurface({
+            fieldName: 'PayloadDownstreamPaths',
+            jsonPicker: (cfg) => cfg?.payload?.downstreamPaths,
+            legacyPicker: (a) => a.PayloadDownstreamPaths,
+            targetLegacy: Target.PayloadDownstreamPaths,
+            treatWildcardAsDbDefault: true,
+        });
+        checkPayloadPathSurface({
+            fieldName: 'PayloadUpstreamPaths',
+            jsonPicker: (cfg) => cfg?.payload?.upstreamPaths,
+            legacyPicker: (a) => a.PayloadUpstreamPaths,
+            targetLegacy: Target.PayloadUpstreamPaths,
+            treatWildcardAsDbDefault: true,
+        });
+        checkPayloadPathSurface({
+            fieldName: 'PayloadSelfReadPaths',
+            jsonPicker: (cfg) => cfg?.payload?.selfReadPaths,
+            legacyPicker: (a) => a.PayloadSelfReadPaths,
+            targetLegacy: Target.PayloadSelfReadPaths,
+            treatWildcardAsDbDefault: false,
+        });
+        checkPayloadPathSurface({
+            fieldName: 'PayloadSelfWritePaths',
+            jsonPicker: (cfg) => cfg?.payload?.selfWritePaths,
+            legacyPicker: (a) => a.PayloadSelfWritePaths,
+            targetLegacy: Target.PayloadSelfWritePaths,
+            treatWildcardAsDbDefault: false,
+        });
+
+        // 4i. PayloadScope subtree prefix lock
+        if (shouldEnforceField('PayloadScope')) {
+            let seedScope: string | null = null;
+            for (const layer of defaultPolicyLayers) {
+                if (typeof layer.payload?.scope === 'string' && layer.payload.scope.trim().length > 0) {
+                    seedScope = NarrowPayloadScope(seedScope, layer.payload.scope);
+                }
+            }
+            if (ancestors.length > 0) {
+                const s0 = ancestorConfigs[0]?.payload?.scope ?? ancestors[0].PayloadScope ?? null;
+                if (typeof s0 === 'string' && s0.trim().length > 0) {
+                    seedScope = NarrowPayloadScope(seedScope, s0);
+                }
+            }
+            const ancestorPayloadScope = FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seedScope,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = cfg?.payload?.scope;
+                    if (idx > 0 && cfg?.allowWidenFromBase === true && exp === null) return null;
+                    if (typeof exp === 'string' && exp.trim().length > 0) return exp.trim();
+                    const leg = anc.PayloadScope?.trim();
+                    return leg && leg.length > 0 ? leg : undefined;
+                },
+                Narrow: (acc, next) => NarrowPayloadScope(acc, next),
+                Rebase: (acc, next) => (next === null ? null : HasPathTraversalSegment(next) ? acc : next),
+            });
+            if (ancestorPayloadScope) {
+                const expScope = targetConfig?.payload?.scope;
+                const explicitNullClear =
+                    expScope === null || (Target.PayloadScope === null && Target.DirtyFields?.has('PayloadScope'));
+                const candidateScope =
+                    expScope !== undefined ? expScope : Target.PayloadScope !== undefined ? Target.PayloadScope : undefined;
+                if (explicitNullClear || (typeof candidateScope === 'string' && candidateScope.trim().length > 0)) {
+                    if (!IsPayloadScopeWithinAncestor(ancestorPayloadScope, candidateScope)) {
+                        errors.push(
+                            new ValidationErrorInfo(
+                                'PayloadScope',
+                                widenHint(
+                                    'PayloadScope',
+                                    `('${String(candidateScope)}' outside '${ancestorPayloadScope}')`
+                                ),
+                                candidateScope,
+                                ValidationErrorType.Failure
+                            )
+                        );
+                    }
+                }
+            }
+        }
+
+        // 4j. AttachmentRootPath subtree prefix lock
+        if (shouldEnforceField('AttachmentRootPath')) {
+            let seedAttachPath: string | null = null;
+            for (const layer of defaultPolicyLayers) {
+                if (typeof layer.attachments?.rootPath === 'string' && layer.attachments.rootPath.trim().length > 0) {
+                    seedAttachPath = NarrowAttachmentRootPath(seedAttachPath, layer.attachments.rootPath);
+                }
+            }
+            if (ancestors.length > 0) {
+                const r0 = ancestorConfigs[0]?.attachments?.rootPath ?? ancestors[0].AttachmentRootPath ?? null;
+                if (typeof r0 === 'string' && r0.trim().length > 0) {
+                    seedAttachPath = NarrowAttachmentRootPath(seedAttachPath, r0);
+                }
+            }
+            const ancestorAttachRoot = FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seedAttachPath,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = cfg?.attachments?.rootPath;
+                    if (idx > 0 && cfg?.allowWidenFromBase === true && exp === null) return null;
+                    if (typeof exp === 'string' && exp.trim().length > 0) return exp.trim();
+                    const leg = anc.AttachmentRootPath?.trim();
+                    return leg && leg.length > 0 ? leg : undefined;
+                },
+                Narrow: (acc, next) => NarrowAttachmentRootPath(acc, next),
+                Rebase: (acc, next) => (next === null ? null : HasPathTraversalSegment(next) ? acc : next),
+            });
+            if (ancestorAttachRoot) {
+                const expRoot = targetConfig?.attachments?.rootPath;
+                const explicitNullClear =
+                    expRoot === null ||
+                    (Target.AttachmentRootPath === null && Target.DirtyFields?.has('AttachmentRootPath'));
+                const candidateRoot =
+                    expRoot !== undefined
+                        ? expRoot
+                        : Target.AttachmentRootPath !== undefined
+                          ? Target.AttachmentRootPath
+                          : undefined;
+                if (explicitNullClear || (typeof candidateRoot === 'string' && candidateRoot.trim().length > 0)) {
+                    if (!IsAttachmentRootPathWithinAncestor(ancestorAttachRoot, candidateRoot)) {
+                        errors.push(
+                            new ValidationErrorInfo(
+                                'AttachmentRootPath',
+                                widenHint(
+                                    'AttachmentRootPath',
+                                    `('${String(candidateRoot)}' outside '${ancestorAttachRoot}')`
+                                ),
+                                candidateRoot,
+                                ValidationErrorType.Failure
+                            )
+                        );
+                    }
+                }
+            }
+        }
+
+        // 4k. ScopeConfig (`scope.secondaryScopeConfig`) per-key intersection
+        if (shouldEnforceField('ScopeConfig')) {
+            const parseScopeObj = (raw: string | null | undefined): Record<string, unknown> | null => {
+                if (!raw || raw.trim().length === 0) return null;
+                const parsed = ParseAgentConfigJsonObject(raw);
+                return parsed ? { ...parsed } : null;
+            };
+            let seedScopeObj: Record<string, unknown> | null = null;
+            for (const layer of defaultPolicyLayers) {
+                if (layer.scope?.secondaryScopeConfig) {
+                    seedScopeObj = NarrowScopeConfigObjects(seedScopeObj, layer.scope.secondaryScopeConfig);
+                }
+            }
+            if (ancestors.length > 0) {
+                const s0 = ancestorConfigs[0]?.scope?.secondaryScopeConfig ?? parseScopeObj(ancestors[0].ScopeConfig);
+                if (s0) {
+                    seedScopeObj = NarrowScopeConfigObjects(seedScopeObj, s0);
+                }
+            }
+            const ancestorScopeObj = FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seedScopeObj,
+                GetNodeValue: (anc, cfg, idx) => {
+                    if (idx > 0 && cfg?.allowWidenFromBase === true && cfg?.scope?.secondaryScopeConfig === null) {
+                        return null;
+                    }
+                    const exp = cfg?.scope?.secondaryScopeConfig;
+                    if (exp && typeof exp === 'object' && !Array.isArray(exp)) return exp;
+                    return parseScopeObj(anc.ScopeConfig) ?? undefined;
+                },
+                Narrow: (acc, next) => NarrowScopeConfigObjects(acc, next),
+                Rebase: (_acc, next) => (next ? { ...next } : null),
+            });
+            if (ancestorScopeObj && Object.keys(ancestorScopeObj).length > 0) {
+                const expScopeObj = targetConfig?.scope?.secondaryScopeConfig;
+                if (expScopeObj === null || (Target.ScopeConfig === null && Target.DirtyFields?.has('ScopeConfig'))) {
+                    errors.push(
+                        new ValidationErrorInfo(
+                            'ScopeConfig',
+                            widenHint('ScopeConfig', '(cleared to null when ancestor enforces scope config)'),
+                            null,
+                            ValidationErrorType.Failure
+                        )
+                    );
+                } else {
+                    const targetScopeObj = expScopeObj ?? parseScopeObj(Target.ScopeConfig);
+                    if (targetScopeObj) {
+                        const scopeViolations = FindScopeConfigWideningViolations(ancestorScopeObj, targetScopeObj);
+                        for (const msg of scopeViolations) {
+                            errors.push(
+                                new ValidationErrorInfo(
+                                    'ScopeConfig',
+                                    widenHint('ScopeConfig', `(${msg})`),
+                                    targetScopeObj,
+                                    ValidationErrorType.Failure
+                                )
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4l. AgentTypePromptParams gates (`enableHandoff: false`, `enableTaskGraphs: false`)
+        if (shouldEnforceField('AgentTypePromptParams')) {
+            const ancestorLockedFalseGates = new Set<string>();
+            const applyGateMap = (obj: Record<string, unknown> | null | undefined, allowRebase: boolean): void => {
+                if (!obj) return;
+                for (const gate of NARROW_ONLY_PROMPT_PARAM_GATES) {
+                    if (typeof obj[gate] === 'boolean') {
+                        if (obj[gate] === false) {
+                            ancestorLockedFalseGates.add(gate);
+                        } else if (allowRebase && obj[gate] === true) {
+                            ancestorLockedFalseGates.delete(gate);
+                        }
+                    }
+                }
+            };
+            for (const layer of defaultPolicyLayers) {
+                applyGateMap(layer.promptDefaults ?? null, false);
+            }
+            for (let i = 0; i < ancestors.length; i++) {
+                const parsed = ParseAgentConfigJsonObject(ancestors[i].AgentTypePromptParams);
+                applyGateMap(parsed, i > 0 && ancestorConfigs[i]?.allowWidenFromBase === true);
+            }
+            const targetPromptParams = ParseAgentConfigJsonObject(Target.AgentTypePromptParams);
+            if (targetPromptParams && ancestorLockedFalseGates.size > 0) {
+                for (const gate of ancestorLockedFalseGates) {
+                    if (targetPromptParams[gate] === true) {
+                        errors.push(
+                            new ValidationErrorInfo(
+                                'AgentTypePromptParams',
+                                widenHint(`AgentTypePromptParams.${gate}`, '(true vs disabled false)'),
+                                true,
+                                ValidationErrorType.Failure
+                            )
+                        );
+                    }
+                }
+            }
+        }
     }
 
     return errors;
@@ -1363,7 +2402,17 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             ParseAgentHelperPlugins(this.TypeConfiguration).length > 0 ||
             hasHelperPluginsKey(this.Configuration) ||
             hasHelperPluginsKey(this.TypeConfiguration);
-        if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins) {
+        const hasPathTraversal =
+            HasPathTraversalSegment(this.PayloadScope) ||
+            HasPathTraversalSegment(this.AttachmentRootPath) ||
+            HasPathTraversalSegment(ParseAgentConfiguration(this.Configuration)?.payload?.scope) ||
+            HasPathTraversalSegment(ParseAgentConfiguration(this.Configuration)?.attachments?.rootPath);
+        const hasAllowWidenKey =
+            JsonHasAllowWidenFromBaseKey(this.Configuration) ||
+            JsonHasAllowWidenFromBaseKey(
+                (this.GetFieldByName('Configuration')?.OldValue as string | null | undefined) ?? null
+            );
+        if (this.BaseAgentID || !isAdmin || hasDeclaredHelperPlugins || hasPathTraversal || hasAllowWidenKey) {
             const guardBatch = this._saveGuardCache ?? (await this.loadGuardMetadataBatch());
             if (guardBatch.ErrorMessage) {
                 result.Errors.push(
@@ -1429,9 +2478,33 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                     AcceptsSkills: this.AcceptsSkills,
                     SkillActivationMode: this.SkillActivationMode,
                     AllowMemoryWrite: this.AllowMemoryWrite,
+                    MinExecutionsPerRun: this.MinExecutionsPerRun,
                     MaxExecutionsPerRun: this.MaxExecutionsPerRun,
                     MaxSubAgentConsultRounds: this.MaxSubAgentConsultRounds,
+                    PayloadDownstreamPaths: this.PayloadDownstreamPaths,
+                    PayloadUpstreamPaths: this.PayloadUpstreamPaths,
+                    PayloadSelfReadPaths: this.PayloadSelfReadPaths,
+                    PayloadSelfWritePaths: this.PayloadSelfWritePaths,
+                    PayloadScope: this.PayloadScope,
+                    StartingPayloadValidationMode: this.StartingPayloadValidationMode,
+                    FinalPayloadValidationMode: this.FinalPayloadValidationMode,
+                    FinalPayloadValidationMaxRetries: this.FinalPayloadValidationMaxRetries,
+                    ArtifactCreationMode: this.ArtifactCreationMode,
+                    MessageMode: this.MessageMode,
+                    MaxMessages: this.MaxMessages,
+                    AttachmentRootPath: this.AttachmentRootPath,
+                    InlineStorageThresholdBytes: this.InlineStorageThresholdBytes,
+                    ContextWindowMaxTokens: this.ContextWindowMaxTokens,
+                    MaxNotesToInject: this.MaxNotesToInject,
+                    MaxExamplesToInject: this.MaxExamplesToInject,
+                    NoteRetentionDays: this.NoteRetentionDays,
+                    ExampleRetentionDays: this.ExampleRetentionDays,
+                    AutoArchiveEnabled: this.AutoArchiveEnabled,
+                    ScopeConfig: this.ScopeConfig,
+                    AgentTypePromptParams: this.AgentTypePromptParams,
                     Configuration: this.Configuration,
+                    PreSaveConfiguration:
+                        (this.GetFieldByName('Configuration')?.OldValue as string | null | undefined) ?? null,
                     TypeConfiguration: this.TypeConfiguration,
                     DirtyFields: dirtyFieldNames,
                     PreSaveLimits: {
@@ -1441,6 +2514,14 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
                         MaxIterationsPerRun: oldNum('MaxIterationsPerRun'),
                         MaxExecutionsPerRun: oldNum('MaxExecutionsPerRun'),
                         MaxSubAgentConsultRounds: oldNum('MaxSubAgentConsultRounds'),
+                        ContextWindowMaxTokens: oldNum('ContextWindowMaxTokens'),
+                        MaxNotesToInject: oldNum('MaxNotesToInject'),
+                        MaxExamplesToInject: oldNum('MaxExamplesToInject'),
+                        NoteRetentionDays: oldNum('NoteRetentionDays'),
+                        ExampleRetentionDays: oldNum('ExampleRetentionDays'),
+                        MaxMessages: oldNum('MaxMessages'),
+                        InlineStorageThresholdBytes: oldNum('InlineStorageThresholdBytes'),
+                        FinalPayloadValidationMaxRetries: oldNum('FinalPayloadValidationMaxRetries'),
                     },
                 },
                 User: user,
@@ -1583,40 +2664,164 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             allCategories,
             allAgentTypes
         );
-        const minFinite = (vals: Array<number | null | undefined>): number | null => {
-            let best: number | null = null;
-            for (const v of vals) {
-                if (typeof v === 'number' && Number.isFinite(v)) {
-                    best = best === null ? v : Math.min(best, v);
-                }
+        const minFiniteRebase = (
+            layerPicker: (l: IAgentConfiguration) => number | null | undefined,
+            jsonPicker: (cfg: IAgentConfiguration | null) => number | null | undefined,
+            legacyPicker: (a: MJAIAgentEntity) => number | null | undefined,
+            sqlDefault: number | null = null
+        ): number | null => {
+            const minVal = (a: number | null, b: number | null | undefined): number | null => {
+                if (typeof b !== 'number' || !Number.isFinite(b)) return a;
+                return a === null ? b : Math.min(a, b);
+            };
+            let seed: number | null = null;
+            for (const layer of defaultPolicyLayers) {
+                seed = minVal(seed, layerPicker(layer));
             }
-            return best;
+            if (ancestors.length > 0) {
+                const exp0 = jsonPicker(ancestorConfigs[0]);
+                const leg0 = legacyPicker(ancestors[0]);
+                const leg0Eff =
+                    exp0 === undefined && sqlDefault !== null && leg0 === sqlDefault && seed !== null ? null : leg0;
+                seed = minVal(seed, exp0);
+                seed = minVal(seed, leg0Eff);
+            }
+            return FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seed,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = jsonPicker(cfg);
+                    const leg = legacyPicker(anc);
+                    if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                        if (exp === null) return null;
+                        if (typeof exp === 'number' && Number.isFinite(exp)) return exp;
+                        if (typeof leg === 'number' && Number.isFinite(leg) && leg !== sqlDefault) return leg;
+                        return undefined;
+                    }
+                    if (typeof exp === 'number' && Number.isFinite(exp)) {
+                        if (typeof leg === 'number' && Number.isFinite(leg) && leg !== sqlDefault) {
+                            return Math.min(exp, leg);
+                        }
+                        return exp;
+                    }
+                    if (typeof leg === 'number' && Number.isFinite(leg) && leg !== sqlDefault) return leg;
+                    return undefined;
+                },
+                Narrow: (acc, next) => minVal(acc, next),
+            });
         };
 
-        let strictestSkillMode: MJAIAgentEntity['SkillActivationMode'] = baseAgent.SkillActivationMode ?? 'RequestedOnly';
-        const foldSkillMode = (v: MJAIAgentEntity['SkillActivationMode'] | null | undefined): void => {
-            if (v != null && SKILL_ACTIVATION_RANK[v] < SKILL_ACTIVATION_RANK[strictestSkillMode]) {
-                strictestSkillMode = v;
-            }
+        const narrowSkillMode = (
+            acc: MJAIAgentEntity['SkillActivationMode'] | null,
+            v: MJAIAgentEntity['SkillActivationMode'] | null | undefined
+        ): MJAIAgentEntity['SkillActivationMode'] | null => {
+            if (v == null) return acc;
+            return acc === null || SKILL_ACTIVATION_RANK[v] < SKILL_ACTIVATION_RANK[acc] ? v : acc;
         };
+        let seedSkill: MJAIAgentEntity['SkillActivationMode'] | null = null;
         for (const layer of defaultPolicyLayers) {
-            foldSkillMode(layer.skills?.activationMode);
+            seedSkill = narrowSkillMode(seedSkill, layer.skills?.activationMode);
         }
-        for (let i = 0; i < ancestors.length; i++) {
-            foldSkillMode(ancestorConfigs[i]?.skills?.activationMode);
-            foldSkillMode(ancestors[i].SkillActivationMode);
+        if (ancestors.length > 0) {
+            seedSkill = narrowSkillMode(seedSkill, ancestorConfigs[0]?.skills?.activationMode);
+            seedSkill = narrowSkillMode(seedSkill, ancestors[0].SkillActivationMode);
         }
+        const strictestSkillMode: MJAIAgentEntity['SkillActivationMode'] =
+            FoldRebaseAwareChain({
+                Nodes: ancestors,
+                NodeConfigs: ancestorConfigs,
+                Seed: seedSkill,
+                GetNodeValue: (anc, cfg, idx) => {
+                    const exp = cfg?.skills?.activationMode ?? null;
+                    const leg = anc.SkillActivationMode ?? null;
+                    if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                        if (exp != null) return exp;
+                        return leg != null && leg !== 'RequestedOnly' ? leg : undefined;
+                    }
+                    if (exp != null && leg != null) {
+                        return SKILL_ACTIVATION_RANK[leg] < SKILL_ACTIVATION_RANK[exp] ? leg : exp;
+                    }
+                    if (exp != null) return exp;
+                    const isNonInst = Boolean(anc.BaseAgentID) && (anc.InstantiationMode ?? 'None') === 'None';
+                    return leg != null && (leg !== 'RequestedOnly' || !isNonInst) ? leg : undefined;
+                },
+                Narrow: (acc, next) => narrowSkillMode(acc, next),
+            }) ?? baseAgent.SkillActivationMode ?? 'RequestedOnly';
 
         const ancestorSearchCeiling = computeAncestorSearchScopeCeiling(defaultPolicyLayers, ancestors, ancestorConfigs);
         const strictestSearchAccess: MJAIAgentEntity['SearchScopeAccess'] = ancestorSearchCeiling ?? 'None';
 
-        let strictestAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] = baseAgent.AcceptsSkills ?? 'None';
-        for (const anc of ancestors) {
-            const val = anc.AcceptsSkills;
-            if (val != null && ACCEPTS_SKILLS_RANK[val] < ACCEPTS_SKILLS_RANK[strictestAcceptsSkills]) {
-                strictestAcceptsSkills = val;
+        const strictestAcceptsSkills: MJAIAgentEntity['AcceptsSkills'] = FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: ancestors[0]?.AcceptsSkills ?? baseAgent.AcceptsSkills ?? 'None',
+            GetNodeValue: (anc) => anc.AcceptsSkills ?? undefined,
+            Narrow: (acc, next) => (ACCEPTS_SKILLS_RANK[next] < ACCEPTS_SKILLS_RANK[acc] ? next : acc),
+        });
+
+        const foldBoolAndRebase = (
+            layerPicker: (l: IAgentConfiguration) => boolean | null | undefined,
+            jsonPicker: (cfg: IAgentConfiguration | null) => boolean | null | undefined,
+            legacyPicker: (a: MJAIAgentEntity) => boolean | null | undefined,
+            sqlDefault: boolean,
+            fallback: boolean
+        ): boolean => {
+            const fAnd = (acc: boolean | null, v: boolean | null | undefined): boolean | null =>
+                typeof v !== 'boolean' ? acc : acc === null ? v : acc && v;
+            let seed: boolean | null = null;
+            for (const layer of defaultPolicyLayers) {
+                seed = fAnd(seed, layerPicker(layer));
             }
-        }
+            if (ancestors.length > 0) {
+                const exp0 = jsonPicker(ancestorConfigs[0]);
+                const leg0 = legacyPicker(ancestors[0]);
+                seed =
+                    typeof exp0 === 'boolean' && typeof leg0 === 'boolean'
+                        ? fAnd(seed, exp0 && leg0)
+                        : fAnd(seed, exp0 ?? leg0);
+            }
+            return (
+                FoldRebaseAwareChain({
+                    Nodes: ancestors,
+                    NodeConfigs: ancestorConfigs,
+                    Seed: seed,
+                    GetNodeValue: (anc, cfg, idx) => {
+                        const exp = jsonPicker(cfg);
+                        const leg = legacyPicker(anc);
+                        if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                            if (typeof exp === 'boolean') return exp;
+                            return typeof leg === 'boolean' && leg !== sqlDefault ? leg : undefined;
+                        }
+                        if (typeof exp === 'boolean' && typeof leg === 'boolean') return exp && leg;
+                        if (typeof exp === 'boolean') return exp;
+                        return typeof leg === 'boolean' && leg !== sqlDefault ? leg : undefined;
+                    },
+                    Narrow: (acc, next) => fAnd(acc, next),
+                }) ?? fallback
+            );
+        };
+
+        const seedReqPlan =
+            defaultPolicyLayers.some((l) => l.execution?.requirePlanMode === true) ||
+            (ancestors.length > 0 &&
+                (ancestorConfigs[0]?.execution?.requirePlanMode === true || ancestors[0].RequirePlanMode === true));
+        const strictestRequirePlan = FoldRebaseAwareChain({
+            Nodes: ancestors,
+            NodeConfigs: ancestorConfigs,
+            Seed: seedReqPlan,
+            GetNodeValue: (anc, cfg, idx) => {
+                const exp = cfg?.execution?.requirePlanMode;
+                const leg = anc.RequirePlanMode;
+                if (idx > 0 && cfg?.allowWidenFromBase === true) {
+                    if (typeof exp === 'boolean') return exp;
+                    return leg === true ? true : undefined;
+                }
+                if (exp === true || leg === true) return true;
+                return typeof exp === 'boolean' ? exp : undefined;
+            },
+            Narrow: (acc, next) => acc || next,
+        });
 
         copyIfNotDirty('ModelSelectionMode');
         copyIfNotDirty('AcceptsSkills', strictestAcceptsSkills);
@@ -1625,17 +2830,55 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('ArtifactCreationMode');
         copyIfNotDirty('DefaultArtifactTypeID');
         copyIfNotDirty('InjectNotes');
-        copyIfNotDirty('MaxNotesToInject');
+        copyIfNotDirty(
+            'MaxNotesToInject',
+            minFiniteRebase(
+                (l) => l.memory?.maxNotesToInject,
+                (cfg) => cfg?.memory?.maxNotesToInject,
+                (a) => a.MaxNotesToInject,
+                5 // SQL schema default DF_AIAgent_MaxNotesToInject
+            ) ?? baseAgent.MaxNotesToInject
+        );
         copyIfNotDirty('NoteInjectionStrategy');
         copyIfNotDirty('InjectExamples');
-        copyIfNotDirty('MaxExamplesToInject');
+        copyIfNotDirty(
+            'MaxExamplesToInject',
+            minFiniteRebase(
+                (l) => l.memory?.maxExamplesToInject,
+                (cfg) => cfg?.memory?.maxExamplesToInject,
+                (a) => a.MaxExamplesToInject,
+                3 // SQL schema default DF_AIAgent_MaxExamplesToInject
+            ) ?? baseAgent.MaxExamplesToInject
+        );
         copyIfNotDirty('ExampleInjectionStrategy');
         copyIfNotDirty(
+            'NoteRetentionDays',
+            minFiniteRebase(
+                (l) => l.memory?.noteRetentionDays,
+                (cfg) => cfg?.memory?.noteRetentionDays,
+                (a) => a.NoteRetentionDays,
+                90 // SQL schema default DF_AIAgent_NoteRetentionDays
+            )
+        );
+        copyIfNotDirty(
+            'ExampleRetentionDays',
+            minFiniteRebase(
+                (l) => l.memory?.exampleRetentionDays,
+                (cfg) => cfg?.memory?.exampleRetentionDays,
+                (a) => a.ExampleRetentionDays,
+                180 // SQL schema default DF_AIAgent_ExampleRetentionDays
+            )
+        );
+        copyIfNotDirty('AutoArchiveEnabled');
+        copyIfNotDirty(
             'AllowMemoryWrite',
-            defaultPolicyLayers.some((l) => l.memory?.allowMemoryWrite === false) ||
-                ancestors.some((a, i) => ancestorConfigs[i]?.memory?.allowMemoryWrite === false || a.AllowMemoryWrite === false)
-                ? false
-                : baseAgent.AllowMemoryWrite,
+            foldBoolAndRebase(
+                (l) => l.memory?.allowMemoryWrite,
+                (cfg) => cfg?.memory?.allowMemoryWrite,
+                (a) => a.AllowMemoryWrite,
+                true,
+                baseAgent.AllowMemoryWrite
+            ),
             true
         );
         copyIfNotDirty('DeclareActionsAsNativeTools');
@@ -1649,59 +2892,105 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         copyIfNotDirty('Isolation', strictestIso, 'InProcess');
         copyIfNotDirty(
             'SupportsPlanMode',
-            defaultPolicyLayers.some((l) => l.execution?.supportsPlanMode === false) ||
-                ancestors.some((a, i) => ancestorConfigs[i]?.execution?.supportsPlanMode === false || a.SupportsPlanMode === false)
-                ? false
-                : baseAgent.SupportsPlanMode,
+            foldBoolAndRebase(
+                (l) => l.execution?.supportsPlanMode,
+                (cfg) => cfg?.execution?.supportsPlanMode,
+                (a) => a.SupportsPlanMode,
+                true,
+                baseAgent.SupportsPlanMode
+            ),
             true
         );
-        copyIfNotDirty(
-            'RequirePlanMode',
-            defaultPolicyLayers.some((l) => l.execution?.requirePlanMode === true) ||
-                ancestors.some((a, i) => ancestorConfigs[i]?.execution?.requirePlanMode === true || a.RequirePlanMode === true)
-                ? true
-                : baseAgent.RequirePlanMode,
-            false
-        );
+        copyIfNotDirty('RequirePlanMode', strictestRequirePlan, false);
         copyIfNotDirty(
             'AllowEphemeralClientTools',
-            defaultPolicyLayers.some((l) => l.clientTools?.allowEphemeral === false) ||
-                ancestors.some((a, i) => ancestorConfigs[i]?.clientTools?.allowEphemeral === false || a.AllowEphemeralClientTools === false)
-                ? false
-                : baseAgent.AllowEphemeralClientTools,
+            foldBoolAndRebase(
+                (l) => l.clientTools?.allowEphemeral,
+                (cfg) => cfg?.clientTools?.allowEphemeral,
+                (a) => a.AllowEphemeralClientTools,
+                true,
+                baseAgent.AllowEphemeralClientTools
+            ),
             true
         );
         copyIfNotDirty(
             'AcceptUnregisteredFiles',
-            defaultPolicyLayers.some((l) => l.attachments?.acceptUnregisteredFiles === false) ||
-                ancestors.some((a, i) => ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles === false || a.AcceptUnregisteredFiles === false)
-                ? false
-                : baseAgent.AcceptUnregisteredFiles
+            foldBoolAndRebase(
+                (l) => l.attachments?.acceptUnregisteredFiles,
+                (cfg) => cfg?.attachments?.acceptUnregisteredFiles,
+                (a) => a.AcceptUnregisteredFiles,
+                false,
+                baseAgent.AcceptUnregisteredFiles
+            )
         );
-        copyIfNotDirty('MaxCostPerRun', minFinite(ancestors.map((a) => a.MaxCostPerRun)));
-        copyIfNotDirty('MaxTokensPerRun', minFinite(ancestors.map((a) => a.MaxTokensPerRun)));
-        copyIfNotDirty('MaxTimePerRun', minFinite(ancestors.map((a) => a.MaxTimePerRun)));
-        copyIfNotDirty('MaxIterationsPerRun', minFinite(ancestors.map((a) => a.MaxIterationsPerRun)));
+        copyIfNotDirty('MaxCostPerRun', minFiniteRebase(() => undefined, () => undefined, (a) => a.MaxCostPerRun));
+        copyIfNotDirty('MaxTokensPerRun', minFiniteRebase(() => undefined, () => undefined, (a) => a.MaxTokensPerRun));
+        copyIfNotDirty('MaxTimePerRun', minFiniteRebase(() => undefined, () => undefined, (a) => a.MaxTimePerRun));
+        copyIfNotDirty('MaxIterationsPerRun', minFiniteRebase(() => undefined, () => undefined, (a) => a.MaxIterationsPerRun));
         copyIfNotDirty(
             'MaxExecutionsPerRun',
-            minFinite([
-                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxExecutionsPerRun),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxExecutionsPerRun, a.MaxExecutionsPerRun]),
-            ])
+            minFiniteRebase(
+                (l) => l.subAgentExecution?.maxExecutionsPerRun,
+                (cfg) => cfg?.subAgentExecution?.maxExecutionsPerRun,
+                (a) => a.MaxExecutionsPerRun
+            )
         );
         copyIfNotDirty(
             'MaxSubAgentConsultRounds',
-            minFinite([
-                ...defaultPolicyLayers.map((l) => l.subAgentExecution?.maxConsultRounds),
-                ...ancestors.flatMap((a, i) => [ancestorConfigs[i]?.subAgentExecution?.maxConsultRounds, a.MaxSubAgentConsultRounds]),
-            ])
+            minFiniteRebase(
+                (l) => l.subAgentExecution?.maxConsultRounds,
+                (cfg) => cfg?.subAgentExecution?.maxConsultRounds,
+                (a) => a.MaxSubAgentConsultRounds
+            )
         );
+        copyIfNotDirty('MessageMode');
+        copyIfNotDirty(
+            'MaxMessages',
+            minFiniteRebase(
+                (l) => l.attachments?.maxMessages,
+                (cfg) => cfg?.attachments?.maxMessages,
+                (a) => a.MaxMessages
+            )
+        );
+        copyIfNotDirty('AttachmentRootPath');
+        copyIfNotDirty(
+            'InlineStorageThresholdBytes',
+            minFiniteRebase(
+                (l) => l.attachments?.inlineStorageThresholdBytes,
+                (cfg) => cfg?.attachments?.inlineStorageThresholdBytes,
+                (a) => a.InlineStorageThresholdBytes
+            )
+        );
+        copyIfNotDirty('PayloadDownstreamPaths');
+        copyIfNotDirty('PayloadUpstreamPaths');
+        copyIfNotDirty('PayloadSelfReadPaths');
+        copyIfNotDirty('PayloadSelfWritePaths');
+        copyIfNotDirty('PayloadScope');
+        copyIfNotDirty('StartingPayloadValidationMode');
+        copyIfNotDirty('FinalPayloadValidationMode');
+        copyIfNotDirty(
+            'FinalPayloadValidationMaxRetries',
+            minFiniteRebase(
+                (l) => l.payload?.finalValidationMaxRetries,
+                (cfg) => cfg?.payload?.finalValidationMaxRetries,
+                (a) => a.FinalPayloadValidationMaxRetries,
+                3 // SQL schema default DF_AIAgent_FinalPayloadValidationMaxRetries
+            ) ?? baseAgent.FinalPayloadValidationMaxRetries
+        );
+        copyIfNotDirty('ScopeConfig');
         copyIfNotDirty('EnableContextCompression');
         copyIfNotDirty('ContextCompressionMessageThreshold');
         copyIfNotDirty('ContextCompressionPromptID');
         copyIfNotDirty('ContextCompressionMessageRetentionCount');
         copyIfNotDirty('RerankerConfiguration');
-        copyIfNotDirty('ContextWindowMaxTokens');
+        copyIfNotDirty(
+            'ContextWindowMaxTokens',
+            minFiniteRebase(
+                (l) => l.contextWindow?.maxTokens,
+                (cfg) => cfg?.contextWindow?.maxTokens,
+                (a) => a.ContextWindowMaxTokens
+            )
+        );
         copyIfNotDirty('CompactionTriggerPercent');
         copyIfNotDirty('CompactionTargetPercent');
         copyIfNotDirty('ConversationSummaryPromptID');
@@ -1794,17 +3083,22 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             'ID', 'Name', 'BaseAgentID', 'RootBaseAgentID', 'OwnerUserID', 'Status',
             'CategoryID', 'TypeID', 'InstantiationMode', 'DriverClass', 'Isolation',
             'MaxCostPerRun', 'MaxTokensPerRun', 'MaxTimePerRun', 'MaxIterationsPerRun',
-            'Configuration', 'TypeConfiguration', 'ModelSelectionMode', 'AcceptsSkills',
-            'SkillActivationMode', 'SearchScopeAccess', 'ArtifactCreationMode',
+            'Configuration', 'TypeConfiguration', 'AgentTypePromptParams', 'ModelSelectionMode', 'AcceptsSkills',
+            'SkillActivationMode', 'SearchScopeAccess', 'ScopeConfig', 'ArtifactCreationMode',
             'DefaultArtifactTypeID', 'InjectNotes', 'MaxNotesToInject', 'NoteInjectionStrategy',
             'InjectExamples', 'MaxExamplesToInject', 'ExampleInjectionStrategy',
+            'NoteRetentionDays', 'ExampleRetentionDays', 'AutoArchiveEnabled',
             'AllowMemoryWrite', 'DeclareActionsAsNativeTools', 'SupportsPlanMode',
             'RequirePlanMode', 'AllowEphemeralClientTools', 'AcceptUnregisteredFiles',
-            'MaxExecutionsPerRun', 'MaxSubAgentConsultRounds', 'EnableContextCompression',
-            'ContextCompressionMessageThreshold', 'ContextCompressionPromptID',
-            'ContextCompressionMessageRetentionCount', 'RerankerConfiguration',
-            'ContextWindowMaxTokens', 'CompactionTriggerPercent', 'CompactionTargetPercent',
-            'ConversationSummaryPromptID',
+            'MinExecutionsPerRun', 'MaxExecutionsPerRun', 'MaxSubAgentConsultRounds',
+            'PayloadDownstreamPaths', 'PayloadUpstreamPaths', 'PayloadSelfReadPaths',
+            'PayloadSelfWritePaths', 'PayloadScope', 'StartingPayloadValidationMode',
+            'FinalPayloadValidationMode', 'FinalPayloadValidationMaxRetries',
+            'MessageMode', 'MaxMessages', 'AttachmentRootPath', 'InlineStorageThresholdBytes',
+            'EnableContextCompression', 'ContextCompressionMessageThreshold',
+            'ContextCompressionPromptID', 'ContextCompressionMessageRetentionCount',
+            'RerankerConfiguration', 'ContextWindowMaxTokens', 'CompactionTriggerPercent',
+            'CompactionTargetPercent', 'ConversationSummaryPromptID',
         ] as const;
         const PERMISSION_GUARD_FIELDS = [
             'ID', 'AgentID', 'UserID', 'RoleID', 'CanView', 'CanRun', 'CanEdit', 'CanDelete',

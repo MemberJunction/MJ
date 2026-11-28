@@ -4,6 +4,7 @@ export * from './prompt-run-messages.types';
 export * from './agent-types';
 export * from './agent-instantiation';
 export * from './agent-configuration';
+export * from './agent-configuration-narrowing';
 export * from './agent-run-data-keys';
 export * from './agent-failure-message';
 export * from './agent-reply-text';

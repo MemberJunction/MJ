@@ -13,6 +13,7 @@ import type { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import type { MJLimitsBudgetsConfig } from '@memberjunction/core';
 import {
     CreateWorkflowBudget,
+    DoesAgentAllowWidenFromBase,
     EvaluateWorkflowBudgetCaps,
     RecordWorkflowBudgetUsage,
     SynchronizeWorkflowBudget,
@@ -541,9 +542,10 @@ export class AgentTreeBudgetTracker {
     }
 
     /**
-     * Walks the `BaseAgentID` ancestor chain via `lookupAgent` and returns the strictest (minimum)
-     * finite positive `MaxIterationsPerRun` ceiling across leaf and all ancestors, or `null` when
-     * no node in the chain specifies a finite positive iteration limit.
+     * Walks the `BaseAgentID` ancestor chain root -> leaf via `lookupAgent` and returns the
+     * effective finite positive `MaxIterationsPerRun` ceiling across the chain (clamping via
+     * `Math.min` at every derived hop unless `Configuration.allowWidenFromBase === true`, which
+     * rebases the ceiling when a finite positive limit is set on that node).
      */
     public static ResolveEffectiveMaxIterationsPerRun(
         agent: MJAIAgentEntityExtended | null | undefined,
@@ -552,15 +554,14 @@ export class AgentTreeBudgetTracker {
         if (!agent) {
             return null;
         }
-        let best: number | null =
-            typeof agent.MaxIterationsPerRun === 'number' &&
-            Number.isFinite(agent.MaxIterationsPerRun) &&
-            agent.MaxIterationsPerRun > 0
-                ? agent.MaxIterationsPerRun
-                : null;
+        const finitePos = (val: number | null | undefined): number | null =>
+            typeof val === 'number' && Number.isFinite(val) && val > 0 ? val : null;
+
         if (!lookupAgent || !agent.BaseAgentID) {
-            return best;
+            return finitePos(agent.MaxIterationsPerRun);
         }
+
+        const chainLeafToRoot: MJAIAgentEntityExtended[] = [agent];
         const seen = new Set<string>([agent.ID?.toLowerCase() ?? '']);
         let curId: string | null | undefined = agent.BaseAgentID;
         while (curId) {
@@ -569,14 +570,23 @@ export class AgentTreeBudgetTracker {
             seen.add(key);
             const anc = lookupAgent(curId);
             if (!anc) break;
-            if (
-                typeof anc.MaxIterationsPerRun === 'number' &&
-                Number.isFinite(anc.MaxIterationsPerRun) &&
-                anc.MaxIterationsPerRun > 0
-            ) {
-                best = best === null ? anc.MaxIterationsPerRun : Math.min(best, anc.MaxIterationsPerRun);
-            }
+            chainLeafToRoot.push(anc);
             curId = anc.BaseAgentID;
+        }
+
+        const chainRootToLeaf = chainLeafToRoot.reverse();
+        let best: number | null = finitePos(chainRootToLeaf[0].MaxIterationsPerRun);
+        for (let i = 1; i < chainRootToLeaf.length; i++) {
+            const node = chainRootToLeaf[i];
+            const candidate = finitePos(node.MaxIterationsPerRun);
+            if (candidate === null) {
+                continue;
+            }
+            if (DoesAgentAllowWidenFromBase(node.Configuration)) {
+                best = candidate;
+            } else {
+                best = best === null ? candidate : Math.min(best, candidate);
+            }
         }
         return best;
     }
