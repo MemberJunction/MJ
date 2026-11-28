@@ -48,6 +48,7 @@ export class DurableTaskGraphSubmitter extends TaskGraphSubmitter {
             Invocation: request.Invocation,
             Debug: request.Debug,
             SecurityEnvelope: request.SecurityEnvelope,
+            ...(request.Isolation ? { Isolation: request.Isolation } : {}),
             Dispatch: request.Dispatch,
             QueueTopic: request.QueueTopic,
         });

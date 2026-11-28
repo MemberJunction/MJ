@@ -475,7 +475,7 @@ function parseIsolation(val: WorkJson | undefined): TaskGraphIsolationLevel {
     if (val === 'Worker' || val === 'Process' || val === 'Container' || val === 'InProcess') {
         return val;
     }
-    return 'InProcess';
+    return LimitsConfigResolver.Resolve().Limits.Isolation.DefaultIsolation;
 }
 
 function toRecord(val: WorkJson | undefined): Record<string, unknown> {

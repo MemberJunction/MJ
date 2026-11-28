@@ -74,6 +74,7 @@ without standing up the agent framework.
 | `TaskGraphSubmitterImpl.ts` | Registers the durable submitter under the `ClassFactory` seam. |
 | `operations/` | The `TaskGraph.*` remote operations. |
 | `debug-state.ts` | Durable `$.debug` bag — pause, breakpoints, step allowance, `skipBreakpointTaskID`, edge overrides. Pure claim-gate. |
+| `isolation.ts` | Execution isolation contracts (`InProcess`, `Worker`, `Process`, `Container`), fault-boundary guarantees, `InProcessIsolationRunner`, and `ResolveTaskGraphIsolation` (defaults to `'Worker'` via `LimitsConfigResolver`). |
 | `task-graph-kick.ts` | Process-local kick set. `Start()` registers; `Submit` pokes every running dispatcher so the first pass is immediate. |
 
 ---
