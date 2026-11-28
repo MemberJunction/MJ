@@ -534,7 +534,7 @@ Wave S0 extends `@memberjunction/interactive-component-types` with four framewor
 
 Components declaring `componentRole: 'widget'` target `WidgetHostProps<TSettings extends JsonObject = JsonObject>` across `'home' | 'dashboard' | 'tray' | 'desktop-widget' | 'companion'` surfaces:
 
-- **Placement & Layout**: `surface` (`WidgetSurface`), `placementId`, open-extensible `sizeClass` (`'sm' | 'md' | 'lg' | 'wide' | 'tall' | (string & {})`), and strongly typed `hostContext` (`WidgetHostContext`).
+- **Placement & Layout**: `surface` (`WidgetSurface`), `placementId`, open-extensible `sizeClass` (`'sm' | 'md' | 'lg' | 'wide' | 'tall' | (string & Record<never, never>)`), and strongly typed `hostContext` (`WidgetHostContext`).
 - **Settings & Persistence**: `userSettings` (hydrated by the host via `UserInfoEngine` / `MJ: User Settings`, never browser `localStorage`), optional JSON Schema `settingsSchema` (`WidgetSettingsSchema`), and `onSaveUserSettings(settings)`. Host implementations should debounce writes (`DEFAULT_WIDGET_SETTINGS_SAVE_DEBOUNCE_MS = 300`) and enforce payload ceilings (`MAX_WIDGET_SETTINGS_PAYLOAD_BYTES = 65536`).
 - **Upward Intents (Callbacks & Events)**: `onOpenRecord` / `WidgetEventNames.RecordOpenRequested`, `onInvokeAction` / `WidgetEventNames.ActionRequested`, `onNotify` / `WidgetEventNames.NotificationRequested`, and `onSaveUserSettings` / `WidgetEventNames.UserSettingsSaveRequested`.
 - **Runtime Validators**: `IsWidgetRole`, `IsWidgetSurface`, `IsWidgetSizeClass`, `IsWidgetHostContext`, `IsWidgetSettingsSchema`, `IsWidgetHostProps`, `ValidateWidgetHostProps`, `ValidateWidgetSettingsAgainstSchema`.
@@ -567,7 +567,7 @@ Provides one framework-free contract for Web (`SwUpdate`), Mobile (`expo-updates
 - **New TSX Widgets**: Set `componentRole: 'widget'`, `language: 'tsx'`, `erasableSyntaxOnly: true`, declare every required `BaseRemotableOperation` under `dataRequirements.operations`, and persist settings exclusively through `onSaveUserSettings` (`UserInfoEngine`).
 - **Platform Update Shells**: Implement `UpdateHostAdapter` with singleflight `checkForUpdates()` coalescing and throttled `downloadProgress` subscriber notifications (`DEFAULT_PROGRESS_EMIT_THROTTLE_MS = 250`).
 
-For the full Wave S0 specification, see `.mj/specs/one-contract-s0-types/README.md` in local spec storage.
+For the full Wave S0 specification, see [.mj/specs/one-contract-s0-types/README.md](../../.mj/specs/one-contract-s0-types/README.md).
 
 ## Dependencies
 
