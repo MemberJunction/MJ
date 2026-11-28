@@ -328,6 +328,8 @@ packages/MJCore/src/generic/providerBase.ts  (D-091 item 14)
 packages/MJCore/src/__tests__/providerBase.metadataMemberRefresh.test.ts  (D-091 item 14)
 # Owner-batch item 15: the BaseAgent override-hook tests' cold base-agent load counted inside a test (integrator, 2026-11-28)
 packages/AI/Agents/src/__tests__/AgentStepDispatcher.test.ts  (D-091 item 15)
+# Owner-batch item 16: an agent-presence test waited fixed sleeps for async states (controller, 2026-11-28)
+packages/MJServer/src/__tests__/artifact-collaboration-agent-presence.test.ts  (D-091 item 16)
 # B3's lease entity: TrackRecordChanges off, as PR 4's .entity-ml-scoring-runs.json (§9 D5-B3-1)
 metadata/entities/.entity-feature-pipeline-rederivation-leases.json  (D5-B3-1)
 # A4's decision log entity: CodeGen creates it, this record turns tracking off (§9 D5-A4-12, wave-3 integration)
@@ -5173,6 +5175,7 @@ The plan for this PR is `plans/predictive-studio/PR-5-agent-and-fp-input.md`.
   Final `milestone-exit --milestone A6` (full, with commands, the Python interpreters set) at `4e79ea374e`:
   **`# checks 48 · failed 0`**.
 - **Not run (D5-51, D5-53):** `ci-mirror` (the controller runs it at integration); no push.
+- 2026-11-28 — controller: owner-batch item 16. `MJServer/src/__tests__/artifact-collaboration-agent-presence.test.ts` waited fixed sleeps (40/45/95/85 ms) for asynchronous awareness states, so the final wave-4 mirror (`20261128-135651-88278`) went red with 'settled' not yet applied at load 43. Each wait is now `vi.waitFor` on the state itself (5 s bound); 8/8 three times alone and 4/4 concurrent copies.
 
 ## 12. Refresh log (append-only)
 

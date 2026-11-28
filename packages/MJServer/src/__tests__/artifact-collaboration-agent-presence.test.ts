@@ -8,6 +8,9 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
+
+/** Upper bound for awaiting an awareness/presence state: the decays are 40-80 ms, so this only bounds a hang. */
+const PRESENCE_WAIT_MS = 5_000;
 import { IMetadataProvider, IRunViewProvider, RunViewParams, UserInfo } from '@memberjunction/core';
 import { BaseRealtimeChannelServer } from '@memberjunction/ai';
 import {
@@ -274,12 +277,13 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
             syncProtocol.writeUpdate(enc, Y.encodeStateAsUpdate(doc));
             ws.send(encoding.toUint8Array(enc));
 
-            await new Promise((r) => setTimeout(r, 40));
-
+            // Wait for the server to apply the frame, not for a fixed time (a fixed sleep failed under load, D-091 item 16)
             const reader = GetArtifactLiveContentReaderHook();
             expect(reader).not.toBeNull();
-            const snap = await reader!(artifactId, editorUser);
-            expect(snap?.Content).toContain('Live uncompacted browser paragraph.');
+            await vi.waitFor(async () => {
+                const snap = await reader!(artifactId, editorUser);
+                expect(snap?.Content).toContain('Live uncompacted browser paragraph.');
+            }, { timeout: PRESENCE_WAIT_MS });
         } finally {
             ws.close();
         }
@@ -328,13 +332,12 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
                 },
             });
 
-            await new Promise((r) => setTimeout(r, 45));
-
-            const states = Array.from(awareness.getStates().entries());
-            const agentEntry = states.find(([cid, st]) => {
+            const findAgentEntry = () => Array.from(awareness.getStates().entries()).find(([cid, st]) => {
                 const userObj = (st as TestAwarenessState).user;
                 return cid >= AGENT_AWARENESS_CLIENT_ID_BASE && cid <= AGENT_AWARENESS_CLIENT_ID_MAX && userObj?.isAgent === true;
             });
+            await vi.waitFor(() => expect(findAgentEntry()).toBeDefined(), { timeout: PRESENCE_WAIT_MS });
+            const agentEntry = findAgentEntry();
             expect(agentEntry).toBeDefined();
             const agentUser = (agentEntry![1] as TestAwarenessState).user!;
             expect(agentUser.agentName).toBe('Sage');
@@ -346,10 +349,11 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
             // Cross-instance relay also received the awareness frame
             expect(relayedMessages.some((m) => m.MessageType === 'awareness')).toBe(true);
 
-            // Wait for 80ms decay to 'settled'
-            await new Promise((r) => setTimeout(r, 95));
-            const settledState = awareness.getStates().get(agentEntry![0]) as TestAwarenessState | undefined;
-            expect(settledState?.user?.agentPhase).toBe('settled');
+            // The 80 ms decay to 'settled': wait for the state itself (a fixed 95 ms sleep failed under load, D-091 item 16)
+            await vi.waitFor(() => {
+                const settledState = awareness.getStates().get(agentEntry![0]) as TestAwarenessState | undefined;
+                expect(settledState?.user?.agentPhase).toBe('settled');
+            }, { timeout: PRESENCE_WAIT_MS });
 
             // Emit 'exit' -> remains settled for 40ms grace, then removed cleanly
             await GovernedArtifactService.Instance.EmitAgentPresence({
@@ -359,8 +363,7 @@ describe('ArtifactCollaborationServer — Server-Owned Yjs Agent Presence, Live 
                 agentRunId: 'run-presence-1',
                 agentName: 'Sage',
             });
-            await new Promise((r) => setTimeout(r, 85));
-            expect(awareness.getStates().has(agentEntry![0])).toBe(false);
+            await vi.waitFor(() => expect(awareness.getStates().has(agentEntry![0])).toBe(false), { timeout: PRESENCE_WAIT_MS });
         } finally {
             unsubPeer();
             ws.close();
