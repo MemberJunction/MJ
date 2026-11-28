@@ -750,7 +750,8 @@ export class AgentSubAgentExecutionHelper {
                     }
                 }
             } else {
-                const msg = `Sub-agent '${subAgentRequest.name}' execution failed: ${subAgentResult.agentRun?.ErrorMessage || 'Unknown error'}`;
+                const errDetail = subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage || 'Unknown error';
+                const msg = `Sub-agent '${subAgentRequest.name}' execution failed: ${errDetail}`;
                 LogError(msg);
                 stepEntity.Success = false;
                 stepEntity.ErrorMessage = msg;
@@ -804,7 +805,7 @@ export class AgentSubAgentExecutionHelper {
                 subAgentResult: {
                     success: subAgentResult.success,
                     finalStep: subAgentResult.agentRun?.FinalStep,
-                    errorMessage: subAgentResult.agentRun?.ErrorMessage,
+                    errorMessage: subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
                 },
                 shouldTerminate,
@@ -832,7 +833,7 @@ export class AgentSubAgentExecutionHelper {
             await ctx.Hooks.FinalizeStepEntity(
                 stepEntity,
                 subAgentResult.success,
-                subAgentResult.agentRun?.ErrorMessage ?? undefined,
+                subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage || undefined,
                 outputData
             );
 
@@ -915,7 +916,7 @@ export class AgentSubAgentExecutionHelper {
                     : previousDecision?.message,
                 errorMessage: subAgentResult.success
                     ? undefined
-                    : subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message',
+                    : subAgentResult.errorMessage || subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message',
                 retryReason: subAgentResult.success
                     ? `Reviewing results from ${subAgentRequest.name}`
                     : `Handling error from ${subAgentRequest.name}`,

@@ -1015,6 +1015,24 @@ describe('BaseAgent Four Extension Points (s13)', () => {
                 await initHelper.RestorePausedRunFromCheckpoint(ctx, params, mockProvider);
                 expect(ctx.PlanModeActive).toBe(true);
                 expect(ctx.PlanApproved).toBe(true);
+
+                // R3-12: Also pin the RequirePlanMode=true case (even when AgentRun.PlanMode is false/unset)
+                restoredAgentRun.PlanMode = false;
+                const requiredParams: ExecuteAgentParams = {
+                    agent: {
+                        ID: 'agent-plan-req-1',
+                        Name: 'PlanRequiredAgent',
+                        RequirePlanMode: true,
+                        SupportsPlanMode: true,
+                    } as MJAIAgentEntityExtended,
+                    conversationMessages: [],
+                    resumeCheckpointRunId: resumedRunId,
+                };
+                ctx.PlanModeActive = false;
+                ctx.PlanApproved = false;
+                await initHelper.RestorePausedRunFromCheckpoint(ctx, requiredParams, mockProvider);
+                expect(ctx.PlanModeActive).toBe(true);
+                expect(ctx.PlanApproved).toBe(false);
             } finally {
                 runViewSpy.mockRestore();
             }
@@ -1070,11 +1088,30 @@ describe('BaseAgent Four Extension Points (s13)', () => {
                     expect(blockedRes.agentRun).toBeNull();
                 }
 
-                // R2-13: parity check between CODE_ONLY_HELPER_SEAMS (AI/Agents) and IsForbiddenMetadataHelperSeam (AI/CorePlus)
+                // R2-13 & R3-12: bidirectional parity check between CODE_ONLY_HELPER_SEAMS (AI/Agents)
+                // and IsForbiddenMetadataHelperSeam (AI/CorePlus) across ALL 13 AgentHelperSeamKey values
                 const { IsForbiddenMetadataHelperSeam } = await import('@memberjunction/ai-core-plus');
                 const { CODE_ONLY_HELPER_SEAMS } = await import('../helpers/base-agent-types');
+                const allHelperSeams = [
+                    'messaging',
+                    'payload',
+                    'compaction',
+                    'realtime',
+                    'iteration',
+                    'skills',
+                    'limits',
+                    'actionPolicy',
+                    'actions',
+                    'prompt',
+                    'subAgents',
+                    'steps',
+                    'setup',
+                ] as const;
                 for (const seam of CODE_ONLY_HELPER_SEAMS) {
                     expect(IsForbiddenMetadataHelperSeam(seam)).toBe(true);
+                }
+                for (const seam of allHelperSeams) {
+                    expect(IsForbiddenMetadataHelperSeam(seam)).toBe(CODE_ONLY_HELPER_SEAMS.has(seam));
                 }
 
                 // R2-12: Flow Custom step resolves active non-built-in Flow step and rejects built-in keys

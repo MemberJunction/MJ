@@ -20,6 +20,8 @@ import { ValidateAgentScopedConfigurationJson } from './MJAIAgentCategoryEntityS
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agent Types')
 export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
+    private _configDirtyBeforeSync: boolean | null = null;
+
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
     }
@@ -30,8 +32,9 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
             return result;
         }
 
-        // Only run strict JSON validation on creates or when DefaultAgentConfiguration was modified (R2-2)
-        const configDirty = !this.IsSaved || (this.GetFieldByName('DefaultAgentConfiguration')?.Dirty ?? false);
+        // Only run strict JSON validation on creates or when caller modified DefaultAgentConfiguration (R2-2 & R3-10)
+        const configDirty =
+            this._configDirtyBeforeSync ?? (!this.IsSaved || (this.GetFieldByName('DefaultAgentConfiguration')?.Dirty ?? false));
         if (!configDirty) {
             return result;
         }
@@ -49,8 +52,13 @@ export class MJAIAgentTypeEntityServer extends MJAIAgentTypeEntity {
 
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
         const isCreate = !this.IsSaved;
-        this.syncDefaultAgentConfigurationWithLegacyColumns(isCreate);
-        return super.Save(options);
+        this._configDirtyBeforeSync = isCreate || (this.GetFieldByName('DefaultAgentConfiguration')?.Dirty ?? false);
+        try {
+            this.syncDefaultAgentConfigurationWithLegacyColumns(isCreate);
+            return await super.Save(options);
+        } finally {
+            this._configDirtyBeforeSync = null;
+        }
     }
 
     private syncDefaultAgentConfigurationWithLegacyColumns(isCreate: boolean): void {

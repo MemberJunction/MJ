@@ -490,15 +490,21 @@ export function ValidateAgentInheritanceAndSandbox(
             );
         }
 
-        // Helper for R2-3: on existing saved instances where DirtyFields is tracked, only re-check
-        // narrow-only columns that were actually modified (or when Configuration itself was modified)
-        // so an admin tightening a base agent never breaks unrelated edits (rename/persona) on
-        // pre-existing derived instances (runtime cascade still enforces the tightened ancestor).
+        // Helper for R2-3 & R3-5: on existing saved instances where DirtyFields is tracked, only
+        // re-check narrow-only columns and numeric ceilings that were actually modified (or when
+        // Configuration or BaseAgentID itself was modified) so an admin tightening a base agent
+        // never breaks unrelated edits (rename/persona) on pre-existing derived instances while
+        // attaching/re-parenting BaseAgentID enforces every invariant (critical for Isolation,
+        // which has no runtime clamp and is read directly from the leaf column).
         const shouldEnforceField = (fieldName: string): boolean => {
             if (!Target.IsSaved || !Target.DirtyFields) {
                 return true;
             }
-            return Target.DirtyFields.has(fieldName) || Target.DirtyFields.has('Configuration');
+            return (
+                Target.DirtyFields.has(fieldName) ||
+                Target.DirtyFields.has('Configuration') ||
+                Target.DirtyFields.has('BaseAgentID')
+            );
         };
 
         // Isolation: strictest across the entire ancestor chain
@@ -606,6 +612,9 @@ export function ValidateAgentInheritanceAndSandbox(
             ancestorValues: Array<number | null | undefined>,
             childLimit: number | null | undefined
         ): void => {
+            if (!shouldEnforceField(fieldName)) {
+                return;
+            }
             let effectiveCeiling: number | null = null;
             for (const v of ancestorValues) {
                 if (typeof v === 'number' && Number.isFinite(v)) {
@@ -815,6 +824,14 @@ export function ValidateAgentInheritanceAndSandbox(
  */
 @RegisterClass(BaseEntity, 'MJ: AI Agents')
 export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
+    /**
+     * Captures whether the caller actually modified `Configuration` (or is creating a new record)
+     * BEFORE `syncConfigurationWithLegacyColumns` runs in `Save()`, so unrelated legacy-column
+     * edits on pre-existing rows do not trigger full-document JSON re-validation or spuriously
+     * mark `Configuration` dirty for narrow-only checks (R3-10).
+     */
+    private _configDirtyBeforeSync: boolean | null = null;
+
     /** Enable async validation so TypeConfiguration, BaseAgentID chain, and sandbox checks run. */
     public override get DefaultSkipAsyncValidation(): boolean {
         return false;
@@ -829,49 +846,54 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         // defaults onto legacy columns so newly created derived instances do not freeze inherited
         // parent values into AIAgent.Configuration JSON.
         const callerDirtyLegacyFields = this.collectDirtyLegacyConfigFields(isCreate);
+        this._configDirtyBeforeSync = isCreate || (this.GetFieldByName('Configuration')?.Dirty ?? false);
 
-        if (isCreate && !this.OwnerUserID && this.ContextCurrentUser) {
-            this.OwnerUserID = this.ContextCurrentUser.ID;
-        }
+        try {
+            if (isCreate && !this.OwnerUserID && this.ContextCurrentUser) {
+                this.OwnerUserID = this.ContextCurrentUser.ID;
+            }
 
-        if (this.BaseAgentID) {
-            const allAgents = await this.loadAllAgentsForGuard();
-            baseAgent = allAgents.find((a) => UUIDsEqual(a.ID, this.BaseAgentID)) ?? null;
-            if (baseAgent) {
-                resolvedRootBaseId = this.findRootBaseAgentId(baseAgent, allAgents);
-                if (isCreate) {
-                    this.inheritDefaultsFromBaseAgent(baseAgent, allAgents);
-                    const primaryDirty = this.GetFieldByName('IsPrimaryInstance')?.Dirty ?? false;
-                    if (!primaryDirty && !this.IsPrimaryInstance && this.OwnerUserID) {
-                        const existingSiblings = this.findActiveSiblingsForOwnerAndRoot(
-                            allAgents,
-                            this.OwnerUserID,
-                            resolvedRootBaseId,
-                            this.ID
-                        );
-                        if (existingSiblings.length === 0) {
-                            this.IsPrimaryInstance = true;
+            if (this.BaseAgentID) {
+                const allAgents = await this.loadAllAgentsForGuard();
+                baseAgent = allAgents.find((a) => UUIDsEqual(a.ID, this.BaseAgentID)) ?? null;
+                if (baseAgent) {
+                    resolvedRootBaseId = this.findRootBaseAgentId(baseAgent, allAgents);
+                    if (isCreate) {
+                        this.inheritDefaultsFromBaseAgent(baseAgent, allAgents);
+                        const primaryDirty = this.GetFieldByName('IsPrimaryInstance')?.Dirty ?? false;
+                        if (!primaryDirty && !this.IsPrimaryInstance && this.OwnerUserID) {
+                            const existingSiblings = this.findActiveSiblingsForOwnerAndRoot(
+                                allAgents,
+                                this.OwnerUserID,
+                                resolvedRootBaseId,
+                                this.ID
+                            );
+                            if (existingSiblings.length === 0) {
+                                this.IsPrimaryInstance = true;
+                            }
                         }
                     }
                 }
             }
+
+            // Bidirectional v6.x sync between AIAgent.Configuration JSON and deprecated legacy columns
+            this.syncConfigurationWithLegacyColumns(isCreate, callerDirtyLegacyFields);
+
+            const saved = await super.Save(options);
+            if (!saved) {
+                return false;
+            }
+
+            // Maintain single IsPrimaryInstance per (OwnerUserID, RootBaseAgentID)
+            if (this.BaseAgentID && this.OwnerUserID && this.IsPrimaryInstance === true) {
+                const rootId = this.RootBaseAgentID ?? resolvedRootBaseId ?? this.BaseAgentID;
+                await this.clearOtherPrimaryInstances(this.OwnerUserID, rootId, this.ID);
+            }
+
+            return true;
+        } finally {
+            this._configDirtyBeforeSync = null;
         }
-
-        // Bidirectional v6.x sync between AIAgent.Configuration JSON and deprecated legacy columns
-        this.syncConfigurationWithLegacyColumns(isCreate, callerDirtyLegacyFields);
-
-        const saved = await super.Save(options);
-        if (!saved) {
-            return false;
-        }
-
-        // Maintain single IsPrimaryInstance per (OwnerUserID, RootBaseAgentID)
-        if (this.BaseAgentID && this.OwnerUserID && this.IsPrimaryInstance === true) {
-            const rootId = this.RootBaseAgentID ?? resolvedRootBaseId ?? this.BaseAgentID;
-            await this.clearOtherPrimaryInstances(this.OwnerUserID, rootId, this.ID);
-        }
-
-        return true;
     }
 
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
@@ -900,10 +922,11 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
         const result = await super.ValidateAsync();
         if (!result.Success) return result;
 
-        // 0. Configuration JSON syntax & scalar-type validation (R2-2: only on create or when
-        // Configuration was actually modified, so pre-existing legacy rows remain saveable on
-        // unrelated edits such as renames).
-        const configDirtyForValidation = !this.IsSaved || (this.GetFieldByName('Configuration')?.Dirty ?? false);
+        // 0. Configuration JSON syntax & scalar-type validation (R2-2 & R3-10: only on create or
+        // when the caller actually modified Configuration prior to legacy-column sync, so
+        // pre-existing legacy rows remain saveable on unrelated edits or legacy-column-only edits).
+        const configDirtyForValidation =
+            this._configDirtyBeforeSync ?? (!this.IsSaved || (this.GetFieldByName('Configuration')?.Dirty ?? false));
         if (configDirtyForValidation) {
             const configErrors = ValidateAgentConfigurationJson(this.Configuration, 'Configuration');
             if (configErrors.length > 0) {
@@ -942,6 +965,9 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             const dirtyFieldNames = new Set<string>();
             for (const f of this.Fields) {
                 if (f.Dirty) {
+                    if (f.Name === 'Configuration' && this._configDirtyBeforeSync === false) {
+                        continue;
+                    }
                     dirtyFieldNames.add(f.Name);
                 }
             }
@@ -1143,8 +1169,7 @@ export class MJAIAgentEntityServer extends MJAIAgentEntityExtended {
             'AcceptUnregisteredFiles',
             ancestors.some((a, i) => (ancestorConfigs[i]?.attachments?.acceptUnregisteredFiles ?? a.AcceptUnregisteredFiles) === false)
                 ? false
-                : baseAgent.AcceptUnregisteredFiles,
-            false
+                : baseAgent.AcceptUnregisteredFiles
         );
         copyIfNotDirty('MaxCostPerRun', minFinite(ancestors.map((a) => a.MaxCostPerRun)));
         copyIfNotDirty('MaxTokensPerRun', minFinite(ancestors.map((a) => a.MaxTokensPerRun)));

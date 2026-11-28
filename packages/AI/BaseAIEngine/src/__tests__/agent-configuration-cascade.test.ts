@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
     MJAIAgentCategoryEntity,
     MJAIAgentTypeEntity,
+    MJAISkillEntity,
 } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '../BaseAIEngine';
@@ -72,12 +73,16 @@ function seedEngine(seed: {
     _agents?: MJAIAgentEntityExtended[];
     _agentCategories?: MJAIAgentCategoryEntity[];
     _agentTypes?: MJAIAgentTypeEntity[];
+    _skills?: MJAISkillEntity[];
 }): AIEngineBase {
     const engine = Object.create(AIEngineBase.prototype) as AIEngineBase & Record<string, unknown>;
     engine['_agents'] = seed._agents ?? [];
     engine['_agentCategories'] = seed._agentCategories ?? [];
     engine['_agentTypes'] = seed._agentTypes ?? [];
     engine['_agentPrompts'] = [];
+    engine['_skills'] = seed._skills ?? [];
+    engine['_agentSkills'] = [];
+    engine['_skillPermissions'] = [];
     engine['_agentInheritanceChainCache'] = new Map();
     engine['GetConfigData'] = <E>(prop: string): E[] => (engine[prop] as E[] | undefined) ?? [];
     return engine;
@@ -508,5 +513,97 @@ describe('AIEngineBase 3-Table IAgentConfiguration Cascade (s14)', () => {
         expect(eff.RequirePlanMode).toBe(true);
         expect(eff.AllowMemoryWrite).toBe(false);
         expect(eff.MaxSubAgentConsultRounds).toBe(2);
+    });
+
+    it('keeps last occurrence of category IDs so leaf category overrides base child category on overridable keys while still enforcing narrow-only policies (R3-8)', () => {
+        const parentCat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'ParentCategory',
+            ParentID: null,
+            DefaultConfiguration: JSON.stringify({
+                execution: { defaultPromptEffortLevel: 40 },
+            }),
+        });
+        const childCat = makeCategory({
+            ID: CAT_CHILD,
+            Name: 'ChildCategory',
+            ParentID: CAT_ROOT,
+            DefaultConfiguration: JSON.stringify({
+                execution: { defaultPromptEffortLevel: 90, requirePlanMode: true },
+                memory: { maxNotesToInject: 7 },
+            }),
+        });
+        const baseInChild = makeAgent({
+            ID: AGENT_BASE,
+            CategoryID: CAT_CHILD,
+            DefaultPromptEffortLevel: null,
+            MaxNotesToInject: null,
+            Configuration: null,
+        });
+        const leafInParent = makeAgent({
+            ID: AGENT_LEAF,
+            BaseAgentID: AGENT_BASE,
+            CategoryID: CAT_ROOT,
+            DefaultPromptEffortLevel: null,
+            MaxNotesToInject: null,
+            Configuration: null,
+        });
+        const engine = seedEngine({
+            _agentCategories: [parentCat, childCat],
+            _agents: [baseInChild, leafInParent],
+        });
+
+        const eff = engine.ResolveEffectiveAgentProperties(leafInParent);
+        // Leaf's own category (ParentCategory) MUST win for overridable keys
+        expect(eff.DefaultPromptEffortLevel).toBe(40);
+        // Ancestor's category (ChildCategory) narrow-only restriction MUST still be enforced
+        expect(eff.RequirePlanMode).toBe(true);
+        // Unique keys from base's category still flow to the leaf
+        expect(eff.MaxNotesToInject).toBe(7);
+    });
+
+    it('enforces category/type skills.activationMode RequestedOnly inside GetAutoActivatableSkillsForAgent (R3-9)', () => {
+        const restrictedCat = makeCategory({
+            ID: CAT_ROOT,
+            Name: 'RequestedOnlySkillsCat',
+            DefaultConfiguration: JSON.stringify({
+                skills: { activationMode: 'RequestedOnly' },
+            }),
+        });
+        const openCat = makeCategory({
+            ID: CAT_CHILD,
+            Name: 'AutoSkillsCat',
+            DefaultConfiguration: JSON.stringify({
+                skills: { activationMode: 'Auto' },
+            }),
+        });
+        const autoSkill = defineFields<MJAISkillEntity>(MJAISkillEntity.prototype, {
+            ID: 's0000000-0000-4000-8000-000000000001',
+            Name: 'AutoEligibleSkill',
+            Status: 'Active',
+            ActivationMode: 'Auto',
+        });
+        const agentInRestrictedCat = makeAgent({
+            ID: AGENT_BASE,
+            CategoryID: CAT_ROOT,
+            AcceptsSkills: 'All',
+            SkillActivationMode: 'Auto',
+            Configuration: null,
+        });
+        const agentInOpenCat = makeAgent({
+            ID: AGENT_LEAF,
+            CategoryID: CAT_CHILD,
+            AcceptsSkills: 'All',
+            SkillActivationMode: 'Auto',
+            Configuration: null,
+        });
+        const engine = seedEngine({
+            _agentCategories: [restrictedCat, openCat],
+            _agents: [agentInRestrictedCat, agentInOpenCat],
+            _skills: [autoSkill],
+        });
+
+        expect(engine.GetAutoActivatableSkillsForAgent(agentInRestrictedCat)).toEqual([]);
+        expect(engine.GetAutoActivatableSkillsForAgent(agentInOpenCat)).toHaveLength(1);
     });
 });

@@ -134,9 +134,11 @@ export const UNDICI_GLOBAL_DISPATCHER_SYMBOL: symbol = Symbol.for('undici.global
 const AI_SCOPED_FETCH_STORE_KEY = '___MJ_AI_LONG_RUNNING_FETCH___';
 
 interface ScopedAIFetchSlot {
-    Fetch: FetchFunction;
-    Dispatcher: FetchDispatcherLike;
+    Fetch: FetchFunction | undefined;
+    Dispatcher: FetchDispatcherLike | null;
     Options: ResolvedUndiciAgentOptions;
+    OwnsDispatcher: boolean;
+    Disabled?: boolean;
 }
 
 /**
@@ -291,12 +293,33 @@ export function ConfigureLongRunningAIFetch(
 ): GlobalFetchDispatcherInstallation {
     const resolved = ResolveLongRunningFetchDispatcherOptions(options);
     if (options?.disabled === true) {
+        const store = GetGlobalObjectStore();
+        const previousSlot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
+        const disabledSlot: ScopedAIFetchSlot = {
+            Fetch: undefined,
+            Dispatcher: null,
+            Options: resolved,
+            OwnsDispatcher: false,
+            Disabled: true,
+        };
+        store[AI_SCOPED_FETCH_STORE_KEY] = disabledSlot;
+        let restored = false;
         return {
             Installed: false,
             Options: resolved,
             Dispatcher: null,
             SkippedReason: 'Disabled via options.disabled',
-            Restore: async () => undefined,
+            Restore: async () => {
+                if (restored) return;
+                restored = true;
+                if (store[AI_SCOPED_FETCH_STORE_KEY] === disabledSlot) {
+                    if (previousSlot) {
+                        store[AI_SCOPED_FETCH_STORE_KEY] = previousSlot;
+                    } else {
+                        delete store[AI_SCOPED_FETCH_STORE_KEY];
+                    }
+                }
+            },
         };
     }
 
@@ -343,7 +366,12 @@ export function ConfigureLongRunningAIFetch(
     const scopedFetch = CreateLongRunningFetch(options, baseFetch, null, dispatcher);
     const store = GetGlobalObjectStore();
     const previousSlot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
-    const nextSlot: ScopedAIFetchSlot = { Fetch: scopedFetch, Dispatcher: dispatcher, Options: resolved };
+    const nextSlot: ScopedAIFetchSlot = {
+        Fetch: scopedFetch,
+        Dispatcher: dispatcher,
+        Options: resolved,
+        OwnsDispatcher: ownsDispatcher,
+    };
     store[AI_SCOPED_FETCH_STORE_KEY] = nextSlot;
 
     let restored = false;
@@ -371,23 +399,34 @@ export function ConfigureLongRunningAIFetch(
 }
 
 /**
+ * Returns `true` when {@link ConfigureLongRunningAIFetch} has already been called (either with a
+ * custom dispatcher/wrapper or with `{ disabled: true }`), allowing server startup to respect a
+ * host's pre-startup configuration rather than overwriting it.
+ */
+export function IsLongRunningAIFetchConfigured(): boolean {
+    const store = GetGlobalObjectStore();
+    return store[AI_SCOPED_FETCH_STORE_KEY] !== undefined;
+}
+
+/**
  * Returns the AI-scoped long-running `fetch` wrapper configured via {@link ConfigureLongRunningAIFetch},
- * or `undefined` when not configured (letting provider SDKs use default `globalThis.fetch`).
+ * or `undefined` when not configured or explicitly disabled (letting provider SDKs use default `globalThis.fetch`).
  */
 export function GetLongRunningAIFetch(): FetchFunction | undefined {
     const store = GetGlobalObjectStore();
     const slot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
-    return slot?.Fetch;
+    return slot?.Disabled ? undefined : slot?.Fetch;
 }
 
 /**
- * Clears any configured AI-scoped long-running `fetch` wrapper and closes its dispatcher.
+ * Clears any configured AI-scoped long-running `fetch` wrapper and closes its dispatcher ONLY when
+ * owned by MJ (never closes a host-supplied or global dispatcher).
  */
 export async function ResetLongRunningAIFetch(): Promise<void> {
     const store = GetGlobalObjectStore();
     const slot = store[AI_SCOPED_FETCH_STORE_KEY] as ScopedAIFetchSlot | undefined;
     delete store[AI_SCOPED_FETCH_STORE_KEY];
-    if (slot?.Dispatcher?.close) {
+    if (slot?.OwnsDispatcher && slot.Dispatcher?.close) {
         await slot.Dispatcher.close();
     }
 }

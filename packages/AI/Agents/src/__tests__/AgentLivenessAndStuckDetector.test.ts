@@ -1050,6 +1050,176 @@ describe('Slice s12 / A7b: AgentLivenessWatchdog, always-on streaming sink, Agen
                     cfg
                 );
             }
+
+            // R3-2: identical MUTATING calls whose result carries a fresh ID each time (Create Item / Send Email)
+            // MUST still trigger course-correction at 3 and StuckToolCallLoop pause at 4!
+            for (const [actionName, idField] of [
+                ['Create Item', 'PrimaryKey'],
+                ['Send Email', 'messageId'],
+            ] as const) {
+                const d = new AgentStuckDetector();
+                const p: ExecuteAgentParams = {
+                    agent: { Name: `MutVary-${actionName}` } as MJAIAgentEntityExtended,
+                    conversationMessages: [],
+                };
+                let sawDirective = false;
+                let sawPause = false;
+                for (let i = 1; i <= 4; i++) {
+                    const actRes = d.EvaluateStepDecision(
+                        p,
+                        { step: 'Actions', terminate: false, actions: [{ name: actionName, params: { key: 'same' } }] },
+                        cfg
+                    );
+                    if (actRes.InjectedDirectives.length > 0) sawDirective = true;
+                    if (actRes.PauseRequest?.PauseReason === 'StuckToolCallLoop') sawPause = true;
+                    d.EvaluateStepDecision(
+                        p,
+                        {
+                            step: 'Retry',
+                            terminate: false,
+                            priorStepResult: [{ actionName, success: true, [idField]: `fresh-id-${i}` }],
+                        },
+                        cfg
+                    );
+                }
+                expect(sawDirective).toBe(true);
+                expect(sawPause).toBe(true);
+            }
+
+            // R3-2: alternating MUTATING A-B-A-B (`Send Email` / `Post Message`) MUST NOT erase each other
+            const mutAlt = new AgentStuckDetector();
+            const mutAltParams: ExecuteAgentParams = {
+                agent: { Name: 'MutAltAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            let mutAltPaused = false;
+            for (let cycle = 1; cycle <= 5 && !mutAltPaused; cycle++) {
+                const aRes = mutAlt.EvaluateStepDecision(
+                    mutAltParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Send Email', params: { to: 'a@b.com' } }] },
+                    cfg
+                );
+                if (aRes.PauseRequest?.PauseReason === 'StuckToolCallLoop') {
+                    mutAltPaused = true;
+                    break;
+                }
+                mutAlt.EvaluateStepDecision(
+                    mutAltParams,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Send Email', messageId: `m-${cycle}` }] },
+                    cfg
+                );
+                const bRes = mutAlt.EvaluateStepDecision(
+                    mutAltParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Post Message', params: { ch: 'general' } }] },
+                    cfg
+                );
+                if (bRes.PauseRequest?.PauseReason === 'StuckToolCallLoop') {
+                    mutAltPaused = true;
+                    break;
+                }
+                mutAlt.EvaluateStepDecision(
+                    mutAltParams,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Post Message', ts: `t-${cycle}` }] },
+                    cfg
+                );
+            }
+            expect(mutAltPaused).toBe(true);
+
+            // R3-2: multi-action step `[Send Email (same), Get Job Status (changing)]` MUST still catch Send Email
+            const multiDet = new AgentStuckDetector();
+            const multiParams: ExecuteAgentParams = {
+                agent: { Name: 'MultiStepAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            let multiPaused = false;
+            for (let i = 1; i <= 5 && !multiPaused; i++) {
+                const actRes = multiDet.EvaluateStepDecision(
+                    multiParams,
+                    {
+                        step: 'Actions',
+                        terminate: false,
+                        actions: [
+                            { name: 'Send Email', params: { to: 'a@b.com' } },
+                            { name: 'Get Job Status', params: { jobId: 'j-1' } },
+                        ],
+                    },
+                    cfg
+                );
+                if (actRes.PauseRequest?.PauseReason === 'StuckToolCallLoop') {
+                    multiPaused = true;
+                    break;
+                }
+                multiDet.EvaluateStepDecision(
+                    multiParams,
+                    {
+                        step: 'Retry',
+                        terminate: false,
+                        priorStepResult: [
+                            { actionName: 'Send Email', success: true, messageId: `m-${i}` },
+                            { actionName: 'Get Job Status', success: true, progressPct: i * 10 },
+                        ],
+                    },
+                    cfg
+                );
+            }
+            expect(multiPaused).toBe(true);
+
+            // R3-2: per-fingerprint result hash cache stays memory-bounded to WindowSize with short hashes
+            const memDet = new AgentStuckDetector();
+            const memParams: ExecuteAgentParams = {
+                agent: { Name: 'MemBoundAgent' } as MJAIAgentEntityExtended,
+                conversationMessages: [],
+            };
+            const bigPayload = 'x'.repeat(4096);
+            for (let i = 0; i < 40; i++) {
+                memDet.EvaluateStepDecision(
+                    memParams,
+                    { step: 'Actions', terminate: false, actions: [{ name: 'Get Record', params: { id: i } }] },
+                    cfg
+                );
+                memDet.EvaluateStepDecision(
+                    memParams,
+                    { step: 'Retry', terminate: false, priorStepResult: [{ actionName: 'Get Record', body: `${bigPayload}-${i}` }] },
+                    cfg
+                );
+            }
+            const hashMap = (memDet as unknown as { _lastResultHashByFingerprint: Map<string, string> })._lastResultHashByFingerprint;
+            expect(hashMap.size).toBeLessThanOrEqual(cfg.WindowSize);
+            for (const hash of hashMap.values()) {
+                expect(hash.length).toBeLessThanOrEqual(16);
+            }
+        });
+
+        it('resumes custom-execute-agent-internal liveness suspension on super.ExecuteAgentInternal entry (R3-12)', async () => {
+            const { AgentStepExecutionHelper } = await import('../helpers/steps/AgentStepExecutionHelper');
+            const { CreateMockAgentRunContext } = await import('./helpers/mock-agent-run-context');
+            const stepHelper = new AgentStepExecutionHelper();
+            const watchdog = new AgentLivenessWatchdog({
+                AgentName: 'CustomSuperAgent',
+                Enabled: true,
+                InactivityTimeoutMs: 60_000,
+                OuterMaxWallClockMs: 300_000,
+            });
+            const ac = new AbortController();
+            watchdog.Start(ac);
+            try {
+                watchdog.SuspendForExternalWait('custom-execute-agent-internal', 'custom override');
+                expect(watchdog.GetSnapshot().SuspendedWaitCount).toBe(1);
+                const ctx = CreateMockAgentRunContext({ LivenessWatchdog: watchdog });
+                const resumeSpy = vi.spyOn(watchdog, 'ResumeFromExternalWait');
+                // Passing invalid params triggers an early exit right after super entry resumes the watchdog
+                await stepHelper
+                    .ExecuteAgentInternal(
+                        ctx,
+                        { agent: { ID: 'a1', Name: 'CustomSuperAgent' } as MJAIAgentEntityExtended, conversationMessages: [] },
+                        {} as unknown as Parameters<AgentStepExecutionHelper['ExecuteAgentInternal']>[2]
+                    )
+                    .catch(() => undefined);
+                expect(resumeSpy).toHaveBeenCalledWith('custom-execute-agent-internal');
+                expect(watchdog.GetSnapshot().SuspendedWaitCount).toBe(0);
+            } finally {
+                watchdog.Stop();
+            }
         });
 
         it('enforces MaxIterationsPerRun ancestor clamp at runtime and honors Liveness.Enabled=false & DefaultAgentTimeoutMS overrides (R2-3, R2-8)', async () => {

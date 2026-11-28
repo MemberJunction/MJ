@@ -10,6 +10,7 @@ import {
     DEFAULT_LONG_RUNNING_KEEP_ALIVE_TIMEOUT_MS,
     GetLongRunningAIFetch,
     InstallGlobalLongRunningFetchDispatcher,
+    IsLongRunningAIFetchConfigured,
     PrimeNodeBuiltinUndiciDispatcher,
     ResetLongRunningAIFetch,
     ResolveLongRunningFetchDispatcherOptions,
@@ -203,19 +204,44 @@ describe('httpDispatcher (long-running undici transport helpers)', () => {
         await scoped.Restore();
         expect(GetLongRunningAIFetch()).toBeUndefined();
 
-        // R2-9: explicit disabled opt-out, host-supplied custom dispatcher, and constructor error surfacing
+        // R2-9 & R3-7: explicit disabled opt-out sets IsLongRunningAIFetchConfigured() = true (so MJServer
+        // skips overwriting it at startup), leaves GetLongRunningAIFetch() undefined, and Restore() clears it.
+        expect(IsLongRunningAIFetchConfigured()).toBe(false);
         const disabledRes = ConfigureLongRunningAIFetch({ disabled: true }, fakeUndici, baseFetch);
         expect(disabledRes.Installed).toBe(false);
         expect(disabledRes.SkippedReason).toMatch(/disabled/i);
+        expect(IsLongRunningAIFetchConfigured()).toBe(true);
+        expect(GetLongRunningAIFetch()).toBeUndefined();
+        await disabledRes.Restore();
+        expect(IsLongRunningAIFetchConfigured()).toBe(false);
 
         const hostClose = vi.fn(async () => undefined);
         const hostDispatcher: FetchDispatcherLike = { close: hostClose };
         const hostRes = ConfigureLongRunningAIFetch({ dispatcher: hostDispatcher }, undefined, baseFetch);
         expect(hostRes.Installed).toBe(true);
         expect(hostRes.Dispatcher).toBe(hostDispatcher);
+        expect(IsLongRunningAIFetchConfigured()).toBe(true);
         await hostRes.Restore();
         // Must NOT close a host-supplied dispatcher on Restore
         expect(hostClose).not.toHaveBeenCalled();
+
+        // R3-7: ResetLongRunningAIFetch MUST NOT close a host-supplied dispatcher (only owned dispatchers)
+        ConfigureLongRunningAIFetch({ dispatcher: hostDispatcher }, undefined, baseFetch);
+        await ResetLongRunningAIFetch();
+        expect(hostClose).not.toHaveBeenCalled();
+        expect(IsLongRunningAIFetchConfigured()).toBe(false);
+
+        const ownedClose = vi.fn(async () => undefined);
+        const ownedUndici: UndiciModuleLike = {
+            Agent: class {
+                public constructor() {
+                    return { close: ownedClose };
+                }
+            },
+        };
+        ConfigureLongRunningAIFetch({}, ownedUndici, baseFetch);
+        await ResetLongRunningAIFetch();
+        expect(ownedClose).toHaveBeenCalledTimes(1);
 
         const throwingUndici: UndiciModuleLike = {
             Agent: class {

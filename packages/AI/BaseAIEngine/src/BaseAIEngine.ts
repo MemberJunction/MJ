@@ -1796,25 +1796,37 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         }
 
         // 2. Category chain layers (rootAgent's categories -> ... -> leafAgent's categories).
-        // Folding categories from every node along the BaseAgentID chain (deduplicated by ID)
-        // guarantees a derived instance's CategoryID can never drop narrow-only policies enforced
-        // by an ancestor's category (defense-in-depth alongside MJAIAgentEntityServer's lock).
-        const seenCategoryIds = new UUIDSet();
+        // Keep EVERY ancestor and leaf category in `orderedDefaultLayers` so narrow-only policies
+        // from any ancestor's category can never be dropped, while deduplicating `defaultsLayer`
+        // by keeping the LAST occurrence of each category ID so the leaf's own category chain
+        // takes precedence for overridable keys (e.g., leaf in parent P under base in child C) (R3-8).
+        const orderedCatEntries: Array<{ id: string; json: IAgentConfiguration }> = [];
         for (const node of nodes) {
             if (!node.CategoryID) {
                 continue;
             }
             const nodeCategoryChain = this.resolveCategoryChain(node.CategoryID);
             for (const cat of nodeCategoryChain) {
-                if (seenCategoryIds.Has(cat.ID)) {
-                    continue;
-                }
-                seenCategoryIds.Add(cat.ID);
                 const catJson = ParseAgentConfiguration(cat.DefaultConfiguration);
                 if (catJson) {
-                    orderedDefaultLayers.push(catJson);
-                    defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, catJson);
+                    orderedCatEntries.push({ id: cat.ID, json: catJson });
                 }
+            }
+        }
+        const seenForNarrow = new UUIDSet();
+        for (const entry of orderedCatEntries) {
+            if (!seenForNarrow.Has(entry.id)) {
+                seenForNarrow.Add(entry.id);
+                orderedDefaultLayers.push(entry.json);
+            }
+        }
+        const lastIndexByCatId = new Map<string, number>();
+        for (let i = 0; i < orderedCatEntries.length; i++) {
+            lastIndexByCatId.set(NormalizeUUID(orderedCatEntries[i].id), i);
+        }
+        for (let i = 0; i < orderedCatEntries.length; i++) {
+            if (lastIndexByCatId.get(NormalizeUUID(orderedCatEntries[i].id)) === i) {
+                defaultsLayer = DeepMergeAgentConfigurations(defaultsLayer, orderedCatEntries[i].json);
             }
         }
 
@@ -3029,23 +3041,12 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Resolves the effective narrowed `SkillActivationMode` value down the agent's `BaseAgentID`
-     * chain (`Auto` -> `RequestedOnly`).
+     * Resolves the effective narrowed `SkillActivationMode` across all configuration tiers
+     * (`AIAgentType` -> `AIAgentCategory` chain -> `BaseAgentID` chain -> leaf `AIAgent`,
+     * `Auto` -> `RequestedOnly`) by delegating to {@link ResolveEffectiveAgentProperties} (R3-9).
      */
     private resolveEffectiveSkillActivationMode(agent: MJAIAgentEntityExtended): MJAIAgentEntity['SkillActivationMode'] {
-        const nodes = this.resolveInheritanceNodesForAgent(agent);
-        const skillModeRank: Record<MJAIAgentEntity['SkillActivationMode'], number> = {
-            RequestedOnly: 0,
-            Auto: 1,
-        };
-        let effective: MJAIAgentEntity['SkillActivationMode'] = nodes[0]?.SkillActivationMode ?? 'RequestedOnly';
-        for (let i = 1; i < nodes.length; i++) {
-            const nodeMode = nodes[i].SkillActivationMode;
-            if (nodeMode != null && (skillModeRank[nodeMode] ?? 0) < (skillModeRank[effective] ?? 0)) {
-                effective = nodeMode;
-            }
-        }
-        return effective;
+        return this.ResolveEffectiveAgentProperties(agent).SkillActivationMode;
     }
 
     public GetSkillsForAgent(agent: MJAIAgentEntityExtended, user?: UserInfo): MJAISkillEntity[] {

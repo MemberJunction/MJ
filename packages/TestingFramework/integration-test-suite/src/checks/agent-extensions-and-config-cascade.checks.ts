@@ -732,7 +732,7 @@ async function checkAec5UiRoleRlsAndNonAdminSandbox(ctx: IntegrationCheckContext
     try {
         const loopTypeId = await getLoopAgentTypeId(ctx);
 
-        // 1. Admin creates instantiable base agent with strict bounds & Worker isolation
+        // 1. Admin creates instantiable base agent with strict bounds & Container isolation
         const baseAgent = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', ctx.User);
         baseAgent.NewRecord();
         baseAgent.Name = `IT195-SandboxBase-${tag}`;
@@ -740,7 +740,7 @@ async function checkAec5UiRoleRlsAndNonAdminSandbox(ctx: IntegrationCheckContext
         baseAgent.TypeID = loopTypeId;
         baseAgent.Status = 'Active';
         baseAgent.InstantiationMode = 'Optional';
-        baseAgent.Isolation = 'Worker';
+        baseAgent.Isolation = 'Container';
         baseAgent.MaxCostPerRun = 5.0;
         Assert(await baseAgent.Save(), `Failed to save sandbox base agent: ${baseAgent.LatestResult?.CompleteMessage}`);
         const baseAgentId = baseAgent.ID;
@@ -797,7 +797,7 @@ async function checkAec5UiRoleRlsAndNonAdminSandbox(ctx: IntegrationCheckContext
             },
             {
                 label: 'loosened Isolation',
-                mutate: (a) => { a.Isolation = 'InProcess'; },
+                mutate: (a) => { a.Isolation = 'Worker'; },
                 expectedPattern: /Isolation/i,
             },
             {
@@ -823,7 +823,7 @@ async function checkAec5UiRoleRlsAndNonAdminSandbox(ctx: IntegrationCheckContext
             candidate.TypeID = loopTypeId;
             candidate.BaseAgentID = baseAgentId;
             candidate.Status = 'Active';
-            candidate.Isolation = 'Worker';
+            candidate.Isolation = 'Container';
             tc.mutate(candidate);
             const saved = await candidate.Save();
             if (saved && candidate.ID) {
@@ -847,7 +847,8 @@ async function checkAec5UiRoleRlsAndNonAdminSandbox(ctx: IntegrationCheckContext
         }
         AssertEqual(bobSaved, false, 'UI user without CanRun on BaseAgentID MUST NOT instantiate a derived agent');
 
-        // 6. Alice CAN create a valid derived personal instance within bounds; OwnerUserID stamped to Alice
+        // 6. Alice CAN create a valid derived personal instance within bounds; OwnerUserID stamped
+        //    to Alice, and loose DB-default Isolation ('InProcess') is silently clamped to ancestor 'Container' (R3-1).
         const aliceInstance = await ctx.Provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', alice);
         aliceInstance.NewRecord();
         aliceInstance.Name = `IT195-AlicePrivate-${tag}`;
@@ -855,11 +856,16 @@ async function checkAec5UiRoleRlsAndNonAdminSandbox(ctx: IntegrationCheckContext
         aliceInstance.TypeID = loopTypeId;
         aliceInstance.BaseAgentID = baseAgentId;
         aliceInstance.Status = 'Active';
-        aliceInstance.Isolation = 'Worker';
+        aliceInstance.Isolation = 'InProcess';
         aliceInstance.MaxCostPerRun = 2.5;
         Assert(await aliceInstance.Save(), `Alice valid derived instance failed to save: ${aliceInstance.LatestResult?.CompleteMessage}`);
         const aliceInstanceId = aliceInstance.ID;
         cleanups.push(() => deleteEntityById(ctx, 'MJ: AI Agents', aliceInstanceId));
+        AssertEqual(
+            aliceInstance.Isolation,
+            'Container',
+            'Loose DB-default Isolation (InProcess) MUST be clamped to ancestor Container on create'
+        );
         Assert(
             UUIDsEqual(aliceInstance.OwnerUserID, alice.ID),
             `Expected OwnerUserID=${alice.ID}, got ${aliceInstance.OwnerUserID}`

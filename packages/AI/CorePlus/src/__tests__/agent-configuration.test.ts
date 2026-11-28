@@ -517,24 +517,24 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         });
         expect(nonLoosening.LegacyColumnUpdates.RequirePlanMode).toBeUndefined();
 
-        // R2-5: SyncAgentTypeLegacyColumnsAndConfiguration resets removed context-window keys
+        // R2-5 & R3-4: SyncAgentTypeLegacyColumnsAndConfiguration resets removed context-window keys to DDL defaults (75 / 30)
         const typeReset = SyncAgentTypeLegacyColumnsAndConfiguration({
             IsNewRecord: false,
             DefaultAgentConfigurationJson: JSON.stringify({ contextWindow: {} }),
             PreviousDefaultAgentConfigurationJson: JSON.stringify({
-                contextWindow: { maxTokens: 32000, compactionTriggerPercent: 75, compactionTargetPercent: 35 },
+                contextWindow: { maxTokens: 32000, compactionTriggerPercent: 85, compactionTargetPercent: 45 },
             }),
             DefaultAgentConfigurationDirty: true,
             LegacyValues: {
                 ContextWindowMaxTokens: 32000,
-                CompactionTriggerPercent: 75,
-                CompactionTargetPercent: 35,
+                CompactionTriggerPercent: 85,
+                CompactionTargetPercent: 45,
             },
             DirtyLegacyFields: new Set(),
         });
         expect(typeReset.LegacyColumnUpdates.ContextWindowMaxTokens).toBeNull();
-        expect(typeReset.LegacyColumnUpdates.CompactionTriggerPercent).toBe(80);
-        expect(typeReset.LegacyColumnUpdates.CompactionTargetPercent).toBe(40);
+        expect(typeReset.LegacyColumnUpdates.CompactionTriggerPercent).toBe(75);
+        expect(typeReset.LegacyColumnUpdates.CompactionTargetPercent).toBe(30);
 
         // R2-11: integer checks, maxExecutionsPerRun >= 1, and minExecutionsPerRun <= maxExecutionsPerRun
         const intErrors = ValidateAgentConfigurationJson(
@@ -545,5 +545,162 @@ describe('IAgentConfiguration parser, deep-merge, and bidirectional sync (s14)',
         expect(intErrors.some((e) => /maxExecutionsPerRun.*>= 1/i.test(e))).toBe(true);
         expect(intErrors.some((e) => /minExecutionsPerRun.*<= maxExecutionsPerRun/i.test(e))).toBe(true);
         expect(intErrors.some((e) => /maxConsultRounds.*integer/i.test(e))).toBe(true);
+    });
+
+    it('matches every SyncAgent / SyncAgentType reset default against generated CodeGen defaults in MJCoreEntities (R3-4)', () => {
+        const mjEntitiesPath = path.join(REPO_ROOT, 'packages/MJCoreEntities/src/generated/entities/__mj.ts');
+        const sourceText = fs.readFileSync(mjEntitiesPath, 'utf8');
+
+        const extractGeneratedDefaults = (className: string): Map<string, string | number | boolean | null> => {
+            const classStart = sourceText.indexOf(`export class ${className} extends BaseEntity`);
+            expect(classStart).toBeGreaterThan(-1);
+            const nextClass = sourceText.indexOf('\nexport class ', classStart + 1);
+            const classBody = nextClass > 0 ? sourceText.slice(classStart, nextClass) : sourceText.slice(classStart);
+
+            const defaults = new Map<string, string | number | boolean | null>();
+            const getterRe = /\/\*\*([\s\S]*?)\*\/\s*get\s+(\w+)\(\)\s*:\s*([^\{]+)\{/g;
+            let match: RegExpExecArray | null;
+            while ((match = getterRe.exec(classBody)) !== null) {
+                const doc = match[1];
+                const fieldName = match[2];
+                const returnType = match[3].trim();
+                const defaultMatch = doc.match(/\*\s*Default Value:\s*([^\r\n]+)/);
+                if (!defaultMatch) {
+                    defaults.set(fieldName, null);
+                    continue;
+                }
+                const raw = defaultMatch[1].trim();
+                if (returnType.startsWith('boolean')) {
+                    defaults.set(fieldName, raw === '1' || raw.toLowerCase() === 'true');
+                } else if (returnType.startsWith('number')) {
+                    const num = Number(raw.replace(/[()]/g, ''));
+                    defaults.set(fieldName, Number.isFinite(num) ? num : null);
+                } else {
+                    const stripped = raw.replace(/^'+|'+$/g, '').replace(/^N'+|'+$/g, '');
+                    defaults.set(fieldName, stripped);
+                }
+            }
+            return defaults;
+        };
+
+        // 1. Verify ALL 51 AIAgent legacy config column reset defaults against MJAIAgentEntity generated defaults
+        const agentDefaults = extractGeneratedDefaults('MJAIAgentEntity');
+        const fullPrevAgentCfg: IAgentConfiguration = {
+            execution: {
+                modelSelectionMode: 'Agent',
+                defaultPromptEffortLevel: 55,
+                chatHandlingOption: 'Consult',
+                supportsPlanMode: false,
+                requirePlanMode: true,
+                declareActionsAsNativeTools: false,
+            },
+            contextWindow: {
+                enableCompression: true,
+                compressionMessageThreshold: 25,
+                compressionPromptID: '11111111-1111-4111-8111-111111111111',
+                compressionMessageRetentionCount: 8,
+                maxTokens: 64000,
+                compactionTriggerPercent: 85,
+                compactionTargetPercent: 45,
+                summaryPromptID: '22222222-2222-4222-8222-222222222222',
+            },
+            memory: {
+                injectNotes: false,
+                maxNotesToInject: 12,
+                noteInjectionStrategy: 'Recent',
+                injectExamples: true,
+                maxExamplesToInject: 9,
+                exampleInjectionStrategy: 'Recent',
+                noteRetentionDays: 30,
+                exampleRetentionDays: 60,
+                autoArchiveEnabled: false,
+                allowMemoryWrite: false,
+                reranker: { enabled: true },
+            },
+            payload: {
+                downstreamPaths: ['a'],
+                upstreamPaths: ['b'],
+                selfReadPaths: ['c'],
+                selfWritePaths: ['d'],
+                scope: '/root',
+                startingValidationSchema: '{}',
+                startingValidationMode: 'Fail',
+                finalValidationSchema: '{}',
+                finalValidationMode: 'Retry',
+                finalValidationMaxRetries: 4,
+            },
+            subAgentExecution: {
+                mode: 'Parallel',
+                minExecutionsPerRun: 1,
+                maxExecutionsPerRun: 5,
+                maxConsultRounds: 6,
+            },
+            attachments: {
+                messageMode: 'None',
+                maxMessages: 10,
+                rootPath: '/tmp',
+                inlineStorageThresholdBytes: 1024,
+                acceptUnregisteredFiles: true,
+            },
+            artifacts: {
+                creationMode: 'Always',
+                defaultArtifactTypeID: '33333333-3333-4333-8333-333333333333',
+            },
+            scope: {
+                searchScopeAccess: 'All',
+                secondaryScopeConfig: { dimensions: [] },
+            },
+            skills: {
+                activationMode: 'Auto',
+            },
+            clientTools: {
+                allowEphemeral: false,
+            },
+            recording: {
+                defaultMode: 'Audio',
+            },
+        };
+        const resetAgent = SyncAgentLegacyColumnsAndConfiguration({
+            IsNewRecord: false,
+            ConfigurationJson: JSON.stringify({}),
+            PreviousConfigurationJson: JSON.stringify(fullPrevAgentCfg),
+            ConfigurationDirty: true,
+            LegacyValues: {},
+            DirtyLegacyFields: new Set(),
+        });
+        const agentResetEntries = Object.entries(resetAgent.LegacyColumnUpdates);
+        expect(agentResetEntries.length).toBe(51);
+        for (const [col, resetVal] of agentResetEntries) {
+            expect(agentDefaults.has(col), `Missing generated getter for MJAIAgentEntity.${col}`).toBe(true);
+            expect(resetVal, `Reset default mismatch for MJAIAgentEntity.${col}`).toEqual(agentDefaults.get(col));
+        }
+
+        // 2. Verify ALL 7 AIAgentType legacy config column reset defaults against MJAIAgentTypeEntity generated defaults
+        const typeDefaults = extractGeneratedDefaults('MJAIAgentTypeEntity');
+        const fullPrevTypeCfg: IAgentConfiguration = {
+            contextWindow: {
+                compressionMessageThreshold: 25,
+                compressionPromptID: '11111111-1111-4111-8111-111111111111',
+                compressionMessageRetentionCount: 8,
+                maxTokens: 64000,
+                compactionTriggerPercent: 85,
+                compactionTargetPercent: 45,
+                summaryPromptID: '22222222-2222-4222-8222-222222222222',
+            },
+        };
+        const resetType = SyncAgentTypeLegacyColumnsAndConfiguration({
+            IsNewRecord: false,
+            DefaultAgentConfigurationJson: JSON.stringify({}),
+            PreviousDefaultAgentConfigurationJson: JSON.stringify(fullPrevTypeCfg),
+            DefaultAgentConfigurationDirty: true,
+            LegacyValues: {},
+            DirtyLegacyFields: new Set(),
+        });
+        const typeResetEntries = Object.entries(resetType.LegacyColumnUpdates);
+        expect(typeResetEntries.length).toBe(7);
+        for (const [col, resetVal] of typeResetEntries) {
+            expect(typeDefaults.has(col), `Missing generated getter for MJAIAgentTypeEntity.${col}`).toBe(true);
+            expect(resetVal, `Reset default mismatch for MJAIAgentTypeEntity.${col}`).toEqual(typeDefaults.get(col));
+        }
     });
 });

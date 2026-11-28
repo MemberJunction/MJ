@@ -19,7 +19,7 @@
  *
  * **Single source of truth**: this file is canonical for both CodeGen (`MJCoreEntities`) and
  * `@memberjunction/ai-core-plus`, which auto-copies it into
- * `packages/AI/CorePlus/src/JSONType-interfaces/IAgentConfiguration.ts` during `prebuild`
+ * `packages/AI/CorePlus/src/JSONType-interfaces/` during `prebuild`
  * (`npm run sync:json-types`). Do not maintain separate physical copies.
  */
 export interface IAgentConfiguration {
@@ -78,7 +78,7 @@ export interface IAgentConfiguration {
         /**
          * When `true`, exposes available actions to the underlying LLM as native provider
          * function/tool declarations rather than relying solely on JSON-in-prompt action
-         * instructions. Default: `false`. Supersedes `AIAgent.DeclareActionsAsNativeTools`.
+         * instructions. Default: `true`. Supersedes `AIAgent.DeclareActionsAsNativeTools`.
          */
         declareActionsAsNativeTools?: boolean | null;
     } | null;
@@ -161,7 +161,7 @@ export interface IAgentConfiguration {
     memory?: {
         /**
          * When `true`, injects matching `MJ: AI Agent Notes` records into the agent's prompt
-         * context at run start. Default: `false`. Supersedes `AIAgent.InjectNotes`.
+         * context at run start. Default: `true`. Supersedes `AIAgent.InjectNotes`.
          */
         injectNotes?: boolean | null;
 
@@ -219,14 +219,14 @@ export interface IAgentConfiguration {
 
         /**
          * When `true`, enables automatic archiving of expired or superseded agent notes and
-         * examples according to `noteRetentionDays` and `exampleRetentionDays`. Default: `false`.
+         * examples according to `noteRetentionDays` and `exampleRetentionDays`. Default: `true`.
          * Supersedes `AIAgent.AutoArchiveEnabled`.
          */
         autoArchiveEnabled?: boolean | null;
 
         /**
          * Controls whether the agent is permitted to create, update, or persist new memory records
-         * (notes/examples) during execution. Default: `false`. Supersedes
+         * (notes/examples) during execution. Default: `true`. Supersedes
          * `AIAgent.AllowMemoryWrite`.
          */
         allowMemoryWrite?: boolean | null;

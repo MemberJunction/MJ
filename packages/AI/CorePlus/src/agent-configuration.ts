@@ -628,8 +628,9 @@ export function ValidateAgentConfigurationJson(
  * Pure bidirectional dirty-field sync core for `MJAIAgentEntityServer.Save()`:
  *
  * - If `Configuration` is dirty (and a legacy column is NOT dirty), JSON values write through
- *   to the corresponding legacy columns (resetting NOT NULL columns to their schema defaults when
- *   explicitly set to `null`) so older v6.x readers stay 100% consistent.
+ *   to the corresponding legacy columns (resetting non-security NOT NULL columns to their schema
+ *   defaults on explicit `null` or removal, and resetting narrow-only security columns only when
+ *   the key was previously set in `PreviousConfigurationJson`) so older v6.x readers stay consistent.
  * - If any legacy column IS dirty, each dirty legacy column writes its value into the
  *   corresponding `Configuration` section so legacy writers never drift from `Configuration`.
  * - Non-empty malformed `Configuration` JSON is NEVER overwritten silently (validation rejects it).
@@ -958,10 +959,10 @@ export function SyncAgentTypeLegacyColumnsAndConfiguration(args: {
         } else resetIfCleared('ContextWindowMaxTokens', cw?.maxTokens, pCw?.maxTokens, null);
         if (typeof cw?.compactionTriggerPercent === 'number') {
             setLegacy('CompactionTriggerPercent', cw.compactionTriggerPercent);
-        } else resetIfCleared('CompactionTriggerPercent', cw?.compactionTriggerPercent, pCw?.compactionTriggerPercent, 80);
+        } else resetIfCleared('CompactionTriggerPercent', cw?.compactionTriggerPercent, pCw?.compactionTriggerPercent, 75);
         if (typeof cw?.compactionTargetPercent === 'number') {
             setLegacy('CompactionTargetPercent', cw.compactionTargetPercent);
-        } else resetIfCleared('CompactionTargetPercent', cw?.compactionTargetPercent, pCw?.compactionTargetPercent, 40);
+        } else resetIfCleared('CompactionTargetPercent', cw?.compactionTargetPercent, pCw?.compactionTargetPercent, 30);
         if (cw?.summaryPromptID === null || typeof cw?.summaryPromptID === 'string') {
             setLegacy('ConversationSummaryPromptID', cw.summaryPromptID);
         } else resetIfCleared('ConversationSummaryPromptID', cw?.summaryPromptID, pCw?.summaryPromptID, null);

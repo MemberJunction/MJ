@@ -4,11 +4,12 @@
  * test style (entity instantiation needs live metadata, so the DB-coupled wrapper is thin and
  * the matrix lives here).
  */
-import { describe, it, expect } from 'vitest';
-import { UserInfo, ValidationErrorType } from '@memberjunction/core';
-import { MJAIAgentPermissionEntity } from '@memberjunction/core-entities';
+import { describe, it, expect, vi } from 'vitest';
+import { BaseEntity, UserInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { MJAIAgentEntity, MJAIAgentPermissionEntity } from '@memberjunction/core-entities';
 import {
     BuildTypeConfigurationValidationErrors,
+    MJAIAgentEntityServer,
     ValidateAgentInheritanceAndSandbox,
     type AgentSandboxValidationContext,
     type AgentSandboxValidationTarget,
@@ -800,5 +801,186 @@ describe('ValidateAgentInheritanceAndSandbox & ValidateAgentPersonaOwnership', (
             AllPermissions: [],
         });
         expect(badTypeConfigSeam.some((e) => /not a valid helper seam/i.test(e.Message))).toBe(true);
+
+        // R3-5a: unrelated rename (`DirtyFields = {'Name'}`) succeeds even after admin lowers numeric
+        // ceilings (`MaxCostPerRun`, `MaxIterationsPerRun`, `MaxExecutionsPerRun`, `MaxSubAgentConsultRounds`)
+        const loweredCeilingRoot = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            Isolation: 'Worker',
+            MaxCostPerRun: 2,
+            MaxIterationsPerRun: 10,
+            MaxExecutionsPerRun: 2,
+            MaxSubAgentConsultRounds: 2,
+            CategoryID: root.CategoryID,
+            TypeID: root.TypeID,
+        });
+        const renameAfterLoweredCeilings = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: COS_ID,
+                PreSaveOwnerUserID: ALICE,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Worker',
+                MaxCostPerRun: 5,
+                MaxIterationsPerRun: 20,
+                MaxExecutionsPerRun: 4,
+                MaxSubAgentConsultRounds: 5,
+                CategoryID: root.CategoryID,
+                PreSaveCategoryID: root.CategoryID,
+                TypeID: root.TypeID,
+                PreSaveTypeID: root.TypeID,
+                DirtyFields: new Set(['Name']),
+            }),
+            User: standardUser,
+            AllAgents: [loweredCeilingRoot],
+            AllPermissions: [perm],
+        });
+        expect(renameAfterLoweredCeilings).toEqual([]);
+
+        // R3-5b: attaching a previously unparented saved row (`DirtyFields = {'BaseAgentID'}`) MUST
+        // enforce ALL narrow-only fields including Isolation and numeric ceilings!
+        const attachBaseErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: null,
+                PreSaveOwnerUserID: ALICE,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'InProcess',
+                MaxCostPerRun: 10,
+                CategoryID: root.CategoryID,
+                PreSaveCategoryID: root.CategoryID,
+                TypeID: root.TypeID,
+                PreSaveTypeID: root.TypeID,
+                DirtyFields: new Set(['BaseAgentID']),
+            }),
+            User: standardUser,
+            AllAgents: [loweredCeilingRoot],
+            AllPermissions: [perm],
+        });
+        const attachSources = new Set(attachBaseErrors.map((e) => e.Source));
+        expect(attachSources.has('Isolation')).toBe(true);
+        expect(attachSources.has('MaxCostPerRun')).toBe(true);
+
+        // R3-12: no-ancestor-category branch (`PreSaveCategoryID: null`, base `CategoryID: null`, dirty `CategoryID`)
+        const catlessBase = baseAgentRow({
+            ID: COS_ID,
+            InstantiationMode: 'Optional',
+            Isolation: 'Worker',
+            CategoryID: null,
+            TypeID: root.TypeID,
+        });
+        const noAncCatErrors = ValidateAgentInheritanceAndSandbox({
+            Target: makeTarget({
+                IsSaved: true,
+                PreSaveBaseAgentID: COS_ID,
+                PreSaveOwnerUserID: ALICE,
+                BaseAgentID: COS_ID,
+                OwnerUserID: ALICE,
+                Isolation: 'Worker',
+                CategoryID: '00000000-0000-4000-8000-000000000777',
+                PreSaveCategoryID: null,
+                TypeID: root.TypeID,
+                PreSaveTypeID: root.TypeID,
+                DirtyFields: new Set(['CategoryID']),
+            }),
+            User: standardUser,
+            AllAgents: [catlessBase],
+            AllPermissions: [perm],
+        });
+        expect(noAncCatErrors.some((e) => e.Source === 'CategoryID')).toBe(true);
+    });
+
+    it('create clamp preserves strict AcceptUnregisteredFiles=false under true base while clamping loose Isolation=InProcess (R3-3)', () => {
+        const fields = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        const setField = (name: string, dirty: boolean, neverSet: boolean): void => {
+            fields.set(name, { Name: name, Dirty: dirty, NeverSet: neverSet });
+        };
+        setField('AcceptUnregisteredFiles', true, false);
+        setField('Isolation', true, false);
+        setField('AllowMemoryWrite', true, false);
+
+        const server = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        server['GetFieldByName'] = (name: string) => fields.get(name);
+        Object.defineProperties(server, {
+            AcceptUnregisteredFiles: { value: false, writable: true, configurable: true },
+            Isolation: { value: 'InProcess', writable: true, configurable: true },
+            AllowMemoryWrite: { value: true, writable: true, configurable: true },
+            TypeID: { value: 'type-1', writable: true, configurable: true },
+            CategoryID: { value: null, writable: true, configurable: true },
+        });
+
+        const base = {
+            ID: 'base-1',
+            BaseAgentID: null,
+            TypeID: 'type-1',
+            CategoryID: null,
+            Isolation: 'Container',
+            AcceptUnregisteredFiles: true,
+            AllowMemoryWrite: false,
+            Configuration: null,
+        } as unknown as MJAIAgentEntity;
+
+        (server as unknown as { inheritDefaultsFromBaseAgent(b: MJAIAgentEntity, all?: readonly MJAIAgentEntity[]): void })
+            .inheritDefaultsFromBaseAgent(base, [base]);
+
+        // R3-3: strict AcceptUnregisteredFiles=false MUST stay false (never widened to true!)
+        expect(server['AcceptUnregisteredFiles']).toBe(false);
+        // Loose DB defaults clamp to stricter ancestor values
+        expect(server['Isolation']).toBe('Container');
+        expect(server['AllowMemoryWrite']).toBe(false);
+    });
+
+    it('legacy-column-only edit on saved row with pre-existing invalid backfilled Configuration does not fail ValidateAsync (R3-10)', async () => {
+        const fields = new Map<string, { Name: string; Dirty: boolean; NeverSet: boolean; OldValue?: unknown }>();
+        const configField = {
+            Name: 'Configuration',
+            Dirty: false,
+            NeverSet: false,
+            OldValue: JSON.stringify({ contextWindow: { compactionTriggerPercent: 150 } }),
+        };
+        const injectNotesField = { Name: 'InjectNotes', Dirty: true, NeverSet: false, OldValue: true };
+        fields.set('Configuration', configField);
+        fields.set('InjectNotes', injectNotesField);
+
+        const server = Object.create(MJAIAgentEntityServer.prototype) as MJAIAgentEntityServer & Record<string, unknown>;
+        server['GetFieldByName'] = (name: string) => fields.get(name);
+        Object.defineProperty(server, 'Fields', { get: () => Array.from(fields.values()), configurable: true });
+        Object.defineProperty(server, 'IsSaved', { get: () => true, configurable: true });
+        Object.defineProperty(server, 'ContextCurrentUser', { get: () => null, configurable: true });
+        Object.defineProperty(server, 'BaseAgentID', { get: () => null, configurable: true });
+        Object.defineProperty(server, 'OwnerUserID', { get: () => null, configurable: true });
+        Object.defineProperty(server, 'TypeConfiguration', { get: () => null, configurable: true });
+        let configVal: string | null = configField.OldValue as string;
+        Object.defineProperty(server, 'Configuration', {
+            get: () => configVal,
+            set: (v: string | null) => {
+                configVal = v;
+                configField.Dirty = true; // simulate BaseEntity marking Configuration dirty during sync!
+            },
+            configurable: true,
+        });
+        Object.defineProperty(server, 'InjectNotes', { value: false, writable: true, configurable: true });
+
+        let observedValidationResult: ValidationResult | null = null;
+        const okResult = new ValidationResult();
+        okResult.Success = true;
+        const baseValidateSpy = vi.spyOn(BaseEntity.prototype, 'ValidateAsync').mockResolvedValue(okResult);
+        const baseSaveSpy = vi.spyOn(BaseEntity.prototype, 'Save').mockImplementation(async function (this: MJAIAgentEntityServer) {
+            observedValidationResult = await this.ValidateAsync();
+            return observedValidationResult.Success;
+        });
+        try {
+            const saved = await server.Save();
+            expect(saved).toBe(true);
+            expect(observedValidationResult?.Success).toBe(true);
+            // Sync still updated Configuration with the dirty legacy column
+            expect(JSON.parse(configVal ?? '{}').memory?.injectNotes).toBe(false);
+        } finally {
+            baseSaveSpy.mockRestore();
+            baseValidateSpy.mockRestore();
+        }
     });
 });

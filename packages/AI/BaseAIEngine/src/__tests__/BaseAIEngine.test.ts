@@ -104,24 +104,30 @@ vi.mock('@memberjunction/core-entities', () => {
     };
 });
 
-vi.mock('@memberjunction/ai-core-plus', () => ({
-    MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
-    MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
-    MJAIModelEntityExtended: class {
-        ID = ''; Name = ''; AIModelType = ''; AIModelTypeID = ''; Vendor = ''; PowerRank = 0;
-        IsActive = true; InheritTypeModalities = true; ModelVendors: unknown[] = [];
-    },
-    MJAIAgentEntityExtended: class {
-        ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null; BaseAgentID: string | null = null;
-        OwnerUserID = ''; InstantiationMode = 'None'; Actions: Array<{ ID: string }> = []; Notes: Array<{ ID: string }> = [];
-    },
-    MAX_AGENT_INHERITANCE_DEPTH: 5,
-    DeepMergeAgentConfigObjects: (base: Record<string, unknown>, over: Record<string, unknown>) => ({ ...base, ...over }),
-    ParseAgentConfigJsonObject: (raw: string | null | undefined) => {
-        if (!raw) return null;
-        try { return JSON.parse(raw); } catch { return null; }
-    },
-}));
+vi.mock('@memberjunction/ai-core-plus', async () => {
+    const agentConfig = await import('../../../CorePlus/src/agent-configuration');
+    const agentInstantiation = await import('../../../CorePlus/src/agent-instantiation');
+    return {
+        ...agentInstantiation,
+        ...agentConfig,
+        MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
+        MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
+        MJAIModelEntityExtended: class {
+            ID = ''; Name = ''; AIModelType = ''; AIModelTypeID = ''; Vendor = ''; PowerRank = 0;
+            IsActive = true; InheritTypeModalities = true; ModelVendors: unknown[] = [];
+        },
+        MJAIAgentEntityExtended: class {
+            ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null; BaseAgentID: string | null = null;
+            OwnerUserID = ''; InstantiationMode = 'None'; Actions: Array<{ ID: string }> = []; Notes: Array<{ ID: string }> = [];
+        },
+        MAX_AGENT_INHERITANCE_DEPTH: 5,
+        DeepMergeAgentConfigObjects: (base: Record<string, unknown>, over: Record<string, unknown>) => ({ ...base, ...over }),
+        ParseAgentConfigJsonObject: (raw: string | null | undefined) => {
+            if (!raw) return null;
+            try { return JSON.parse(raw); } catch { return null; }
+        },
+    };
+});
 
 vi.mock('../AIAgentPermissionHelper', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../AIAgentPermissionHelper')>();

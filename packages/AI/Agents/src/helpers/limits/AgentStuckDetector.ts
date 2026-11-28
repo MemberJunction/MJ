@@ -248,27 +248,47 @@ export function ComputeCanonicalToolFingerprint(toolName: string, args: unknown)
     return `${normalizedName}::${StableSortedJSON(args ?? {})}`;
 }
 
+/** Short deterministic FNV-1a 64-bit hex hash (16 hex chars) so result history stays O(1) memory per entry. */
+function hashShortSignature(text: string): string {
+    let h1 = 0x811c9dc5;
+    let h2 = 0x9e3779b9;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text.charCodeAt(i);
+        h1 = Math.imul(h1 ^ ch, 0x01000193) >>> 0;
+        h2 = Math.imul(h2 ^ ((ch + i) & 0xffff), 0x85ebca6b) >>> 0;
+    }
+    return `${h1.toString(16).padStart(8, '0')}${h2.toString(16).padStart(8, '0')}`;
+}
+
+interface InvokedToolEntry {
+    BaseFp: string;
+    ActionNameLower: string;
+    IsReadOnly: boolean;
+}
+
 /**
  * Per-run semantic stuck-run detector tracking repeated canonical tool calls and read-only spirals.
  */
 export class AgentStuckDetector {
     private _recentToolFingerprints: string[] = [];
+    private readonly _readOnlyFingerprints = new Set<string>();
     private readonly _directiveInjectedFingerprints = new Set<string>();
     private _pendingDirectives: string[] = [];
     private _consecutiveReadOnlySteps = 0;
     private _wrapUpDirectiveInjectedAtStep: number | null = null;
-    private _lastInvokedBaseFingerprints: string[] = [];
-    private readonly _lastResultSigByFingerprint = new Map<string, string>();
+    private _lastInvokedEntries: InvokedToolEntry[] = [];
+    private readonly _lastResultHashByFingerprint = new Map<string, string>();
 
     /** Clears all sliding windows and counters at run start or post-approval checkpoint resume. */
     public Reset(): void {
         this._recentToolFingerprints = [];
+        this._readOnlyFingerprints.clear();
         this._directiveInjectedFingerprints.clear();
         this._pendingDirectives = [];
         this._consecutiveReadOnlySteps = 0;
         this._wrapUpDirectiveInjectedAtStep = null;
-        this._lastInvokedBaseFingerprints = [];
-        this._lastResultSigByFingerprint.clear();
+        this._lastInvokedEntries = [];
+        this._lastResultHashByFingerprint.clear();
     }
 
     /**
@@ -316,6 +336,13 @@ export class AgentStuckDetector {
             return { Action: 'none', Fingerprint: fingerprint, CountInWindow: 0, Threshold: threshold };
         }
 
+        const isReadOnly = IsReadOnlyToolOrActionName(toolName, actionMetadata);
+        if (isReadOnly) {
+            this._readOnlyFingerprints.add(fingerprint);
+        } else {
+            this._readOnlyFingerprints.delete(fingerprint);
+        }
+
         const windowSize = Math.max(threshold, config.WindowSize);
         this._recentToolFingerprints.push(fingerprint);
         if (this._recentToolFingerprints.length > windowSize) {
@@ -331,9 +358,12 @@ export class AgentStuckDetector {
         }
 
         // If a non-read-only (mutating) call ran with a fresh fingerprint (not itself repeating),
-        // clear older read-only fingerprints so `list -> create -> list` resets cleanly.
-        if (countInWindow === 1 && !IsReadOnlyToolOrActionName(toolName, actionMetadata)) {
-            this._recentToolFingerprints = [fingerprint];
+        // clear ONLY older read-only fingerprints so `list -> create -> list` resets cleanly
+        // while preserving mutating fingerprints so alternating mutating loops (A-B-A-B) are caught!
+        if (countInWindow === 1 && !isReadOnly) {
+            this._recentToolFingerprints = this._recentToolFingerprints.filter(
+                (fp) => !this._readOnlyFingerprints.has(fp)
+            );
             this.pruneAgedDirectiveFingerprints();
         }
 
@@ -465,14 +495,19 @@ export class AgentStuckDetector {
         const injectedDirectives: string[] = [];
         let pauseRequest: StuckStepEvaluationOutcome['PauseRequest'] = null;
 
-        const invokedBaseFingerprints: string[] = [];
+        const invokedEntries: InvokedToolEntry[] = [];
         const recordToolInvocation = (name: string, args: unknown): void => {
             actionNames.push(name);
             if (circuitBrokenActionNames?.has(name)) {
                 return;
             }
-            invokedBaseFingerprints.push(ComputeCanonicalToolFingerprint(name, args));
-            const toolEval = this.RecordToolCall(name, args, config, undefined, actionMetadataLookup?.(name));
+            const meta = actionMetadataLookup?.(name);
+            invokedEntries.push({
+                BaseFp: ComputeCanonicalToolFingerprint(name, args),
+                ActionNameLower: name.trim().toLowerCase(),
+                IsReadOnly: IsReadOnlyToolOrActionName(name, meta),
+            });
+            const toolEval = this.RecordToolCall(name, args, config, undefined, meta);
             if (toolEval.Action === 'inject-directive' && toolEval.Directive) {
                 injectedDirectives.push(toolEval.Directive);
             } else if (toolEval.Action === 'pause' && toolEval.PauseReason && !pauseRequest) {
@@ -535,25 +570,43 @@ export class AgentStuckDetector {
             nextStep.priorStepResult !== undefined &&
             actionNames.length === 0;
 
-        if (invokedBaseFingerprints.length > 0) {
-            this._lastInvokedBaseFingerprints = invokedBaseFingerprints;
+        if (invokedEntries.length > 0) {
+            this._lastInvokedEntries = invokedEntries;
         }
 
-        // Per-fingerprint result tracking (R2-1): if a step carries `priorStepResult` (either on
-        // the synthetic post-action Retry continuation or directly on the step), compare the
-        // result signature ONLY against the previous result for the same canonical fingerprint(s).
-        // When a specific polled call returns a NEW result (e.g. job status queued -> running),
-        // evict prior entries for THAT fingerprint only — preserving other fingerprints in the
-        // window so two-call A-B-A-B oscillations and repeated identical mutating calls are still caught!
-        if (nextStep.priorStepResult !== undefined && this._lastInvokedBaseFingerprints.length > 0) {
-            const resultSig = StableSortedJSON(nextStep.priorStepResult);
-            for (const baseFp of this._lastInvokedBaseFingerprints) {
-                const prevSig = this._lastResultSigByFingerprint.get(baseFp);
-                if (prevSig !== undefined && prevSig !== resultSig) {
-                    // Keep only the latest entry for this advancing fingerprint so it counts as 1 fresh call.
+        // Per-action, read-only-only result tracking (R3-2):
+        // - Only READ-ONLY calls (e.g. `Get Job Status`) evict prior entries when their result
+        //   changes; mutating calls (`Create Item`, `Send Email`) ALWAYS count regardless of fresh
+        //   generated IDs in their result payload.
+        // - When `priorStepResult` is an array of per-action results, match each entry by
+        //   `actionName`/`name` (or positional index) so one action's changing result never evicts
+        //   a sibling action's history.
+        // - Store only a 16-char hash and clear `_lastInvokedEntries` immediately after consuming.
+        if (nextStep.priorStepResult !== undefined && this._lastInvokedEntries.length > 0) {
+            const consumedEntries = this._lastInvokedEntries;
+            this._lastInvokedEntries = [];
+            const priorArr = Array.isArray(nextStep.priorStepResult) ? nextStep.priorStepResult : null;
+            for (let idx = 0; idx < consumedEntries.length; idx++) {
+                const entry = consumedEntries[idx];
+                if (!entry.IsReadOnly) {
+                    continue;
+                }
+                let matchedPayload: unknown = nextStep.priorStepResult;
+                if (priorArr) {
+                    const byName = priorArr.find((item) => {
+                        if (!item || typeof item !== 'object') return false;
+                        const rec = item as { actionName?: string; name?: string };
+                        const n = (rec.actionName ?? rec.name ?? '').trim().toLowerCase();
+                        return n.length > 0 && n === entry.ActionNameLower;
+                    });
+                    matchedPayload = byName !== undefined ? byName : priorArr[idx];
+                }
+                const resultHash = hashShortSignature(StableSortedJSON(matchedPayload));
+                const prevHash = this._lastResultHashByFingerprint.get(entry.BaseFp);
+                if (prevHash !== undefined && prevHash !== resultHash) {
                     let keptLatest = false;
                     for (let i = this._recentToolFingerprints.length - 1; i >= 0; i--) {
-                        if (this._recentToolFingerprints[i] === baseFp) {
+                        if (this._recentToolFingerprints[i] === entry.BaseFp) {
                             if (!keptLatest) {
                                 keptLatest = true;
                             } else {
@@ -561,10 +614,11 @@ export class AgentStuckDetector {
                             }
                         }
                     }
-                    this._directiveInjectedFingerprints.delete(baseFp);
+                    this._directiveInjectedFingerprints.delete(entry.BaseFp);
                 }
-                this._lastResultSigByFingerprint.set(baseFp, resultSig);
+                this._lastResultHashByFingerprint.set(entry.BaseFp, resultHash);
             }
+            this.pruneAgedDirectiveFingerprints();
         }
 
         if (isSyntheticPostStepRetry) {
@@ -652,17 +706,34 @@ export class AgentStuckDetector {
 
     private resetToolLoopWindow(): void {
         this._recentToolFingerprints = [];
+        this._readOnlyFingerprints.clear();
+        this._lastInvokedEntries = [];
+        this._lastResultHashByFingerprint.clear();
         this._directiveInjectedFingerprints.clear();
     }
 
     private pruneAgedDirectiveFingerprints(): void {
-        if (this._directiveInjectedFingerprints.size === 0) {
+        if (
+            this._directiveInjectedFingerprints.size === 0 &&
+            this._lastResultHashByFingerprint.size === 0 &&
+            this._readOnlyFingerprints.size === 0
+        ) {
             return;
         }
         const active = new Set(this._recentToolFingerprints);
         for (const fp of this._directiveInjectedFingerprints) {
             if (!active.has(fp)) {
                 this._directiveInjectedFingerprints.delete(fp);
+            }
+        }
+        for (const fp of this._lastResultHashByFingerprint.keys()) {
+            if (!active.has(fp)) {
+                this._lastResultHashByFingerprint.delete(fp);
+            }
+        }
+        for (const fp of this._readOnlyFingerprints) {
+            if (!active.has(fp)) {
+                this._readOnlyFingerprints.delete(fp);
             }
         }
     }
