@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { DataSourceInfo, ProviderInfo } from './types';
 import sql from 'mssql';
 import { DatabaseProviderBase, GetDiagnosticContext, IsDiagnosticCaptureSuppressed } from '@memberjunction/core';
-import { GetGlobalObjectStore } from '@memberjunction/global';
+import { GetGlobalObjectStore, SanitizeForLog } from '@memberjunction/global';
 
 const gzip = promisify(gzipCallback);
 
@@ -105,7 +105,7 @@ export async function SendPostRequest(url: string, payload: any, useCompression:
         // Handle premature connection close (e.g., server crashes mid-response)
         stream.on('close', () => {
           if (!streamEnded) {
-            console.warn(`Stream closed prematurely for ${url}`);
+            console.warn(`Stream closed prematurely for ${SanitizeForLog(url)}`);
             handleStreamEnd();
           }
         });
@@ -113,7 +113,7 @@ export async function SendPostRequest(url: string, payload: any, useCompression:
         // Handle stream errors (decompression failures, etc.)
         stream.on('error', (e) => {
           if (!streamEnded) {
-            console.error(`Stream error for ${url}:`, e);
+            console.error(`Stream error for ${SanitizeForLog(url)}:`, e);
             reject(new Error(`Stream error: ${e.message}`));
           }
         });
@@ -122,7 +122,7 @@ export async function SendPostRequest(url: string, payload: any, useCompression:
       req.on('error', (e) => {
         const err = z.object({ message: z.string() }).safeParse(e);
         const errorMessage = err.success ? err.data.message : String(e);
-        console.error(`Error in sendPostRequest().req.on(error) for ${hostname}:${port}${pathname}: ${errorMessage}`);
+        console.error(`Error in sendPostRequest().req.on(error) for ${SanitizeForLog(`${hostname}:${port}${pathname}`)}: ${SanitizeForLog(errorMessage)}`);
 
         // Create a more informative error for the rejection
         const contextualError = new Error(`HTTP request failed to ${url}: ${errorMessage}`);

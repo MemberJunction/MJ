@@ -194,11 +194,9 @@ export class DataExplorerResourceComponent extends BaseResourceComponent impleme
         // over potentially stale workspace state from a prior session.
         const workspaceParams = (config['queryParams'] as Record<string, string>) || {};
         const browserParams = new URLSearchParams(window.location.search);
-        const merged = { ...workspaceParams };
-        browserParams.forEach((value, key) => {
-            merged[key] = value;
-        });
-        this.InitialQueryParams = merged;
+        // Object.fromEntries defines each URL key as an own property, so a `__proto__` key in the
+        // URL stays data instead of reaching the merged object's prototype setter.
+        this.InitialQueryParams = { ...workspaceParams, ...Object.fromEntries(browserParams) };
 
         this.cdr.detectChanges();
 
