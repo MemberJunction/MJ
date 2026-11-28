@@ -3993,7 +3993,7 @@ close of superseded rows, the narrowed `UQ_FeatureValue_ValueKey` and the open-r
 - Environment variables read by new code: <!-- gen:env -->DB_PORT, GRAPHQL_PORT, MJ_API_KEY, PREDICTIVE_STUDIO_SIDECAR_URL, PS_COMPUTE_USD_PER_SECOND<!-- /gen:env -->
 - Gate rows added (tagged `owner:PR5`): <!-- gen:gates -->9<!-- /gen:gates -->
 - Gate checks added (`ps-gate-*.checks.ts`): <!-- gen:checks -->9<!-- /gen:checks -->
-- Head: <!-- gen:head -->78da908d72<!-- /gen:head -->
+- Head: <!-- gen:head -->015235ed88<!-- /gen:head -->
 
 **Behaviour changes to note:** models trained on `llm-derived` features before this PR have no version pin and are
 refused at scoring until retrained; saved agent sessions with an `Approved` flag but no approval request are asked to
