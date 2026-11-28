@@ -417,3 +417,38 @@ describe('DD-10 (D5-A5-5): the memory sweep runs before the framework injects no
     expect(sweep).not.toHaveBeenCalled();
   });
 });
+
+describe('wave-4 integration: an unresolved target in gather is decided by code, whatever the prompt chose', () => {
+  const TARGET: PredictiveStudioBuilderPayload = {
+    Goal: 'Predict PhantomOutcomeScore',
+    TargetDefinition: { EntityName: 'Nonexistent Course Drop Reasons', TargetVariable: 'PhantomOutcomeScore', ProblemType: 'regression', SuccessMetric: 'RMSE' },
+  };
+  const UNRESOLVED = [
+    { path: 'TargetDefinition.EntityName', name: 'Nonexistent Course Drop Reasons', kind: 'entity' as const },
+    { path: 'TargetDefinition.TargetVariable', name: 'PhantomOutcomeScore', kind: 'field' as const },
+  ];
+  const gathered = (unresolved: typeof UNRESOLVED, repairs: number): AgentControlFacts => facts({
+    PlanComplete: false, PresentedPlanHash: null, Approval: { kind: 'no-request' },
+    Drafts: { UnitDraftCurrent: false, ProtocolDraftCurrent: false, Refusal: null, Unresolved: null, TargetUnresolved: unresolved, RepairsUsed: repairs },
+  });
+  const chat = (): BaseAgentNextStep => ({ step: 'Chat', terminate: true, message: 'Could you double-check the name?', newPayload: { ...TARGET } } as BaseAgentNextStep);
+
+  it("the prompt's chat reply after a sub-agent turn is replaced by the repair to the Goal Analyst", async () => {
+    const s = await new TestOrchestrator(gathered(UNRESOLVED, 1)).Next(params([], { ...TARGET }), chat());
+    expect(superNext).not.toHaveBeenCalled();
+    expect(s.step).toBe('Sub-Agent');
+    expect(s.subAgent?.name).toBe('Goal Analyst');
+    expect(s.subAgent?.message).toContain('Nonexistent Course Drop Reasons');
+  });
+
+  it('after the last repair the chat reply is replaced by the fixed decline listing the names', async () => {
+    const s = await new TestOrchestrator(gathered(UNRESOLVED, 2)).Next(params([], { ...TARGET }), chat());
+    expect(superNext).not.toHaveBeenCalled();
+    expect(s.message).toBe(AgentControlPath.DeclineUnresolvedMessage(UNRESOLVED));
+  });
+
+  it('a resolved target leaves the prompt its reply', async () => {
+    await new TestOrchestrator(gathered([], 0)).Next(params([], { ...TARGET }), chat());
+    expect(superNext).toHaveBeenCalledTimes(1);
+  });
+});

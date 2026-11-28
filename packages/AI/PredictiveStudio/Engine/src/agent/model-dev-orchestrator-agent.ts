@@ -434,6 +434,13 @@ export class PredictiveStudioModelDevAgent extends BaseAgent {
     const payload = this.payloadOf(params, decided);
     const facts = await this.LoadControlFacts(params, payload);
     const state = AgentControlPath.StateOf(facts);
+    // A gathered target naming what does not exist is repaired, then declined, by code whatever the prompt chose
+    // (D5-W4-1): after a sub-agent turn the framework runs the prompt, whose reply would otherwise end the turn.
+    const gathered = state === 'gather' ? AgentControlPath.Next(state, facts) : null;
+    if (gathered !== null && gathered.Kind !== 'prompt') {
+      const code = await this.codeStepFor<P>(params, payload, decided, gathered, facts);
+      if (code !== null) return code;
+    }
     // A complete plan not yet presented with this hash is presented by code whatever the prompt chose to say; the
     // prompt's message goes on the card.
     if (AgentControlPath.CODE_STATES.includes(state) && AgentControlPath.PRESENTABLE_STEPS.includes(String(decided.step))) {
