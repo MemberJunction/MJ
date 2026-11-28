@@ -93,6 +93,14 @@ describe('A3 attack 8: the Data Scout and Goal Analyst templates', () => {
     for (const word of ['DecisionDateColumn', 'LabelWindowDays', 'Censoring', 'GrainEntity']) expect(goal).toContain(word);
   });
 
+  it('the orchestrator calls the Goal Analyst before asking, and never judges data size or missing names in chat (wave-4 integration)', () => {
+    const orchestrator = template('model-development-agent');
+    expect(orchestrator).toMatch(/call \*\*Goal Analyst\*\* first/i);
+    expect(orchestrator).toMatch(/never decide in chat whether there is enough data/i);
+    expect(orchestrator).toMatch(/profiles the development rows/i);
+    expect(orchestrator).not.toMatch(/If it is vague \("predict churn"\), ask a couple of focused questions to ground it/);
+  });
+
   it('the Goal Analyst writes a name the user asked for as written when the catalog lacks it, so code can check it (wave-4 integration)', () => {
     const goal = template('goal-analyst');
     expect(goal).toMatch(/keep it as the user wrote it/i);
